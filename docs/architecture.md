@@ -25,7 +25,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `Storage` | nonisolated | GRDB | `AppDatabase` (migrations, async reads/writes), `HistoryVisit` |
 | `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`, warm-up), `NavigationSignposter` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
-| `Reader` | nonisolated | — | `ReaderWorld` (content world name) |
+| `Reader` | nonisolated; WebKit types MainActor | WebKit | `ReaderExtractor` (Readability in its own content world), `ReaderRenderer` (page template), `ReaderSchemeHandler` (`plain-reader:` scheme), `ReaderArticle` |
 | `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI | `BrowserViewController` (page, URL pill, search sheet, page buttons), `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
 | `TabGalleryUI` | MainActor | — | `TabGalleryLayout` (even-column rule) |
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
@@ -101,6 +101,18 @@ and compile to nothing on macOS.
   changes only once that item is recorded, so a title never renames an earlier visit. History
   reads and deletes first write what the shell has queued (`ShellHistoryStore`). `BrowserViewController.recordsHistory` is the seam for private tabs.
 
+### Reader
+
+1. At `didFinish` the shell calls `ReaderExtractor.prefetch(in:)`. In the reader content world it
+   installs Readability (once per document), runs `isProbablyReaderable`, and on pages under
+   4,000 elements runs the full parse. The result is kept for that web view and URL.
+2. On a reader request, `article(in:)` returns the kept result when the URL still matches, or
+   extracts now. The page returns one JSON string; it is decoded off the main thread.
+3. `ReaderSchemeHandler.install(in:)` sets up the reader web view's configuration (the
+   `plain-reader:` scheme, page JavaScript off) before the pool creates it. `show(_:in:)` renders
+   the template off the main thread and loads `plain-reader://article/<id>`. The page and
+   `reader.css` come from the handler, with a no-script content security policy.
+
 ## Signposts
 
 Subsystem `dev.abrahamgonzalez.plainbrowser`, category `perf`. Names live in
@@ -123,3 +135,6 @@ exactly what the app emits.
 | `share.open` | event | share sheet shown |
 | `page.favorite` | event | Add to / Remove from Favorites |
 | `settings.open` / `history.show` / `favorites.editorOpen` | event | sheet presented |
+| `reader.extract` | interval | reader request → article returned (or not readerable) |
+| `reader.show` | interval | show article → rendered page handed to the reader web view |
+

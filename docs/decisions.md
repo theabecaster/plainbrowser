@@ -149,3 +149,31 @@ Each entry: what was chosen, and why. Newest last.
 ## Deployment target iOS 27.2 (2026-11-26)
 
 - **Chosen:** iOS 27.2, up from 27.1, because `UIView.LayoutRegion.bar(onEdge:)` (Duo vertical bar layout) needs 27.2.
+## Reader: Mozilla Readability 0.6.0, own content world, no reader settings (2026-11-26)
+
+- **Chosen:** `mozilla/readability` 0.6.0 (latest release, 2025-03-03), Apache-2.0, bundled
+  unmodified as `Reader/Resources/Reader/Readability.js` and `Readability-readerable.js`, with
+  its license (`Readability-LICENSE.md`) and attribution (`NOTICE.txt`) shipped next to them.
+  Apache-2.0 code may be combined into an AGPL-3.0 work (Apache-2.0 is GPLv3-compatible).
+  SHA-256: `Readability.js` 34dcab3d…f174, `Readability-readerable.js` a98d2880…de65.
+- **Why Readability:** it is what Firefox uses, it is maintained, and it has a large test corpus.
+  Plain's tests use four of its saved pages (`Tests/ReaderTests/Fixtures`, from the same
+  release's `test/test-pages`) and its expected titles and bylines.
+- **Isolation:** it runs only in the `WKContentWorld` named in `ReaderWorld`, never the page
+  world, so page scripts cannot see or replace it. It is injected on demand (once per document),
+  not as a user script on every page, so pages that never use reader mode pay nothing.
+- **Main thread:** the page returns one JSON string; decoding runs `@concurrent`. Bundle reads and
+  template rendering run `@concurrent` too.
+- **Prefetch:** at `didFinish`, the readerable check always runs, and the full parse runs only on
+  pages under 4,000 elements (`ReaderExtractor.prefetchElementLimit`), so a reader tap is
+  usually instant without parsing huge pages nobody reads.
+- **Reader view:** a template and stylesheet served from the `plain-reader:` scheme, with page
+  JavaScript off and a content security policy that allows no scripts. No reader settings: text
+  size follows Dynamic Type (`-apple-system-body`), colors follow light and dark mode, the
+  measure is 66ch, and Lagoon Blue marks links, quotes and the header rule. Link text keeps the
+  body color, with the accent as the underline, because #2973FF on the paper background is
+  about 4:1, under the 4.5:1 body-text minimum.
+- **Perf cost:** 94 KB of JavaScript in the bundle, read on the first reader use. Simulator
+  (iPhone 17, iOS 27.2): first extraction on a page 11–66 ms including the injection, 6–52 ms
+  on the next page; a non-article page returns nil in 6–30 ms; a request after prefetch is
+  under 1 ms; rendering and loading the reader page about 70 ms warm.

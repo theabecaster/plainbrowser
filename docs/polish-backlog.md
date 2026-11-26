@@ -236,6 +236,13 @@ Newest feature last.
 - **Fixed choices.** The tabs tip's trigger (2 gallery opens) and display count, the bump's
   travel and the edge swipe's commit distance live in their files; move them to `FixedChoices`
   when that file is free of other lanes' edits. (Code review, round 1.)
+- **The bar on the start screen.** With nothing open, the full-width glass bar holds only More at
+  its right end. Start is its own mode, so the bar may change shape: a compact More capsule, as the
+  Duo's vertical bar shows it, would read better. (Design review, round 1.)
+- **Long page menu.** With every item that applies, More on a page runs past the screen and
+  History is cut at the bottom edge; the system menu scrolls, but nothing says so. Consider moving
+  the app section (Downloads, History, Edit Favorites, Settings) into a submenu. (Design review,
+  round 1.)
 - **Start screen recede values.** The 94 % scale and the drift live in `EmptyTabView.setReceded`;
   move them to `Motion` with the other motion values. (Code review, round 3.)
 - **Signposts.** New Tab reusing an empty tab emits no `tab.open`; the tip's display and

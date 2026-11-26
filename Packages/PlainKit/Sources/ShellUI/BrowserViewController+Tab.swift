@@ -305,6 +305,9 @@ extension BrowserViewController {
             tab?.setContentModeOverride(isDesktop ? .mobile : .desktop)
         }
         desktop.accessibilityIdentifier = "menu.desktopSite"
+        // The blocking allow-list is saved to disk: a private tab must not add its site to it.
+        // Private tabs follow the regular choice instead (polish backlog: a private-only toggle).
+        guard !tab.isPrivate else { return [desktop] }
 
         let blocking = session.isBlockingEnabled(for: url)
         let toggle = UIAction(

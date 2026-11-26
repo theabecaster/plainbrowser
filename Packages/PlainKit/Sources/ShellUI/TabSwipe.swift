@@ -72,7 +72,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
               let view = pan.view else { return false }
         let velocity = pan.velocity(in: view)
         if abs(velocity.x) > abs(velocity.y) {
-            return browser.currentTab != nil || swipe != nil
+            // Tab switching belongs to the pill; the glass bar takes the swipe up only.
+            return view === browser.pill && (browser.currentTab != nil || swipe != nil)
         }
         // Up only, and not while a sideways swipe is settling.
         return velocity.y < 0 && swipe == nil
@@ -146,7 +147,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         let swipe = Swipe(current: current)
         swipe.preview.clipsToBounds = true
         swipe.preview.backgroundColor = Palette.background
-        swipe.preview.frame = browser.webContainer.frame
+        swipe.preview.bounds = browser.webContainer.bounds
+        swipe.preview.center = browser.webContainer.center
         browser.view.insertSubview(swipe.preview, aboveSubview: browser.webContainer)
         self.swipe = swipe
         Haptic.selection.prepare()
@@ -201,8 +203,10 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         swipe.side = side
         let neighbours = browser.session.tabs.neighbours(of: swipe.current.id)
         let id = side > 0 ? neighbours.next : neighbours.previous
+        // From bounds and center: the page container is already moved by a transform here.
         swipe.preview.transform = .identity
-        swipe.preview.frame = browser.webContainer.frame
+        swipe.preview.bounds = browser.webContainer.bounds
+        swipe.preview.center = browser.webContainer.center
         if let id {
             let tab = browser.session.tabs.tab(id)
             swipe.neighbour = tab

@@ -12,6 +12,9 @@ final class TabsUIState {
     var gallery: TabGalleryViewController?
     /// The page ↔ card transition running now, if any.
     var galleryTransition: TabGalleryTransition?
+    /// Bumped whenever a running transition is replaced or dropped, so its late completion is
+    /// ignored instead of removing the gallery a newer transition uses.
+    var galleryGeneration = 0
     var galleryTabs: GalleryTabs?
     let swipe = TabSwipe()
     let toast = ShellToast()
@@ -64,11 +67,12 @@ extension BrowserViewController: GalleryHost {
         }
         // A fresh card for the page being left.
         session.pool.captureThumbnail(of: tab)
+        let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: tab.id, gallery: gallery, container: view, snapshot: snapshot,
             pageFrame: webContainer.frame, from: .page
         ) { [weak self] end in
-            self?.galleryTransitionEnded(at: end)
+            self?.galleryTransitionEnded(at: end, generation: generation)
         }
         // The chrome stays above the zooming page while it fades.
         view.bringSubviewToFront(chromeGlass)
@@ -114,7 +118,8 @@ extension BrowserViewController: GalleryHost {
         Motion.animate(Motion.galleryZoom, changes: { self.setChromeGalleryProgress(hidden ? 1 : 0) }, completion: finish)
     }
 
-    private func galleryTransitionEnded(at end: TabGalleryTransition.End) {
+    private func galleryTransitionEnded(at end: TabGalleryTransition.End, generation: Int) {
+        guard generation == tabsUI.galleryGeneration else { return }
         tabsUI.galleryTransition = nil
         switch end {
         case .gallery:
@@ -127,8 +132,7 @@ extension BrowserViewController: GalleryHost {
     /// Takes the gallery off screen at once; the page under it is already the selected tab.
     private func removeGallery() {
         guard let gallery = tabsUI.gallery else { return }
-        tabsUI.galleryTransition?.cancel()
-        tabsUI.galleryTransition = nil
+        dropGalleryTransition()
         gallery.willMove(toParent: nil)
         gallery.view.removeFromSuperview()
         gallery.removeFromParent()
@@ -138,10 +142,19 @@ extension BrowserViewController: GalleryHost {
         updatePageState()
     }
 
+    /// Ends a running transition where it was heading, without running its end (the caller
+    /// decides what happens next).
+    private func dropGalleryTransition() {
+        tabsUI.galleryGeneration += 1
+        let running = tabsUI.galleryTransition
+        tabsUI.galleryTransition = nil
+        running?.cancel()
+    }
+
     /// Fades the gallery out with no zoom (a new tab, the last tab closed).
     func dismissGalleryFading() {
         guard let gallery = tabsUI.gallery else { return }
-        tabsUI.galleryTransition?.cancel()
+        dropGalleryTransition()
         setChromeHiddenForGallery(false, animated: true)
         Motion.animate(Motion.quick, changes: { gallery.view.alpha = 0 }) { [weak self] in
             self?.removeGallery()
@@ -155,19 +168,17 @@ extension BrowserViewController: GalleryHost {
     /// leaves and the live page shows (motion table, "Open tab").
     func galleryOpenTab(_ id: TabID) {
         guard let gallery = tabsUI.gallery else { return }
-        // A page still zooming in lands first; the new zoom starts from the gallery.
-        if let running = tabsUI.galleryTransition {
-            tabsUI.galleryTransition = nil
-            running.cancel()
-        }
+        // A page still zooming lands at once, without its end; the new zoom starts from the gallery.
+        dropGalleryTransition()
         let tab = session.tabs.tab(id)
         show(tab)
         setChromeHiddenForGallery(false, animated: true)
+        let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: id, gallery: gallery, container: view, snapshot: cardPicture(for: id),
             pageFrame: webContainer.frame, from: .gallery
         ) { [weak self] end in
-            self?.galleryTransitionEnded(at: end)
+            self?.galleryTransitionEnded(at: end, generation: generation)
         }
         view.bringSubviewToFront(chromeGlass)
         view.bringSubviewToFront(tabsUI.toast)

@@ -241,6 +241,8 @@ final class EngineTabs {
     /// and thumbnails of tabs gone for good. Off the main thread, after launch.
     func pruneFiles() async {
         guard let database = await database() else { return }
+        // Rows of tabs opened since launch first: their files must not look orphaned.
+        await store.flush()
         let started = Date()
         try? await database.removeOrphanedTabStates()
         guard var keep = try? await database.referencedTabIDs() else { return }

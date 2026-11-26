@@ -650,6 +650,8 @@ public final class WebViewPool {
         Task { [weak self, weak slot] in
             var state = fallback
             if let file, let id {
+                // A close that just wrote this tab's latest state (Reopen right after) lands first.
+                await self?.stateWrites?.value
                 if let saved = await Self.readSavedState(id, from: file) { state = saved }
                 guard let slot, slot.pendingRestore != nil else { return }
                 slot.pendingRestore = state

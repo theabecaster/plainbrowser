@@ -379,6 +379,10 @@ extension BrowserViewController: GalleryHost {
         let recedes = ControlRules(state).startScreenRecedes
         let start = tabsUI.start
         guard recedes != start.isReceded else { return }
+        // The field closed because a page is on its way: the start screen leaves with it rather
+        // than bringing the mark back for a moment. The next empty field brings it back.
+        if !recedes, !isEditingAddress, let tab = currentTab,
+           !session.tabs.isEmpty(tab.id) || engineUI.typedVisitTabs.contains(tab.id) { return }
         start.setReceded(recedes, animated: true)
         guard !start.isHidden else { return }
         let paper: UIColor = recedes ? Palette.background : .clear

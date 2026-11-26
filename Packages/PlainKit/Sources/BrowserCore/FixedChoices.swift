@@ -55,6 +55,24 @@ public enum FixedChoices {
     /// that is not there. Both are built and tested; turn this on when the entitlement lands.
     public static let defaultBrowserPromptsEnabled = false
 
+    // MARK: Sign-in (docs/research/sign-in.md)
+
+    /// Passkeys (WebAuthn) in web pages. Off until Apple grants Plain the
+    /// `com.apple.developer.web-browser` entitlement and the build signs with
+    /// `Plain/Plain-WebBrowser.entitlements`: without it WebKit refuses every passkey request for
+    /// sites other than the app's own. With it `WKWebView` handles passkeys for every site itself
+    /// (on iOS no second key is needed; `...web-browser.public-key-credential` is macOS only).
+    /// While off, pages are told this browser has no passkey authenticator, so sites offer their
+    /// password sign-in instead of a passkey button that can only fail, and a request a site makes
+    /// anyway gets one short toast that says why. Turn it on in the same change as the
+    /// entitlement.
+    public static let passkeysEnabled = false
+    /// Passwords come from iOS AutoFill (the Passwords app and every password manager the user
+    /// turned on in Settings), in the keyboard's suggestion bar, as in Safari. Plain keeps no
+    /// password store of its own: a second place for passwords is one more to keep in sync, and
+    /// the system's already holds the user's passwords and passkeys.
+    public static let passwordsFromSystemAutoFill = true
+
     // MARK: Page
 
     /// Page zoom steps, Safari's set: fine steps near 100% where people adjust, bigger ones past

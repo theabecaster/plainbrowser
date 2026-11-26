@@ -116,6 +116,11 @@ final class FakeHost: EngineHost {
         return permissionAnswer
     }
 
+    var passkeyNotices: [String] = []
+    func tab(_ tab: Tab, couldNotUsePasskeysOn site: String) {
+        passkeyNotices.append(site)
+    }
+
     func downloadDidStart(_ download: Download) {
         startedDownloads.append(download)
     }
@@ -178,6 +183,7 @@ final class Harness {
         contentRules: (any UserContentRules)? = nil,
         tabStates: Bool = false,
         pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
+        passkeysEnabled: Bool = false,
         route: @escaping @Sendable (TestServer.Request) -> TestServer.Response = Pages.route
     ) async throws {
         server = try await TestServer(route: route)
@@ -189,7 +195,8 @@ final class Harness {
             contentRules: contentRules,
             thumbnailDirectory: directory.appending(path: "Thumbnails"),
             downloadDirectory: directory.appending(path: "Downloads"),
-            pageZooms: pageZooms
+            pageZooms: pageZooms,
+            passkeysEnabled: passkeysEnabled
         )
         pool.host = host
         host.pool = pool

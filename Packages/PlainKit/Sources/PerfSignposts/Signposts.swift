@@ -213,6 +213,9 @@ public enum Signposts {
     public static let downloadPreview: StaticString = "download.preview"
     /// Event: a tab's web content process terminated.
     public static let tabCrash: StaticString = "tab.crash"
+    /// Event: a page's passkey request failed because Plain can't use passkeys yet (no
+    /// web-browser entitlement); the message says whether the shell was told.
+    public static let passkeyUnavailable: StaticString = "signIn.passkeyUnavailable"
 
     // MARK: First-run intro (FeatureUI emits these)
 

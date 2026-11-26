@@ -115,6 +115,18 @@ import WebKit
         #expect(await allowList.sites == ["kept.example", "early.example"])
     }
 
+    /// An edit made before anything loaded is saved by `waitForPendingSaves()` alone.
+    @Test func savesEditsMadeBeforePrepare() async throws {
+        let (store, url) = try makeTemporaryStore()
+        defer { removeStore(at: url) }
+        let allowList = MemoryAllowListStore(["kept.example"])
+        let blocker = ContentBlocker(allowListStore: allowList, store: store)
+        blocker.setBlockingEnabled(false, forHost: "new.example")
+        await blocker.waitForPendingSaves()
+        #expect(await allowList.sites == ["kept.example", "new.example"])
+        #expect(!blocker.isBlockingEnabled(for: URL(string: "https://kept.example/")))
+    }
+
     /// A list whose file does not match the manifest's hash is skipped, not compiled.
     @Test func rejectsAListWithAWrongHash() async throws {
         let (store, url) = try makeTemporaryStore()

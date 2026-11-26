@@ -57,6 +57,7 @@ public final class ContentBlocker {
     /// Allow-list edits made before the stored list finished loading, replayed on top of it.
     private var editsBeforeLoad: [(inout Set<String>) -> Void] = []
     private var prepareTask: Task<PrepareReport, Never>?
+    private var allowListTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
     /// The controllers this blocker manages and what it attached to each. Weak keys: a controller
@@ -103,7 +104,7 @@ public final class ContentBlocker {
         let start = clock.now
         var report = PrepareReport()
 
-        await loadAllowList()
+        await ensureAllowListLoaded()
 
         guard let directory = resourceDirectory ?? RuleListManifest.bundledDirectory else {
             report.failures.append("resources: \(ContentBlockerError.missingResources)")
@@ -239,6 +240,8 @@ public final class ContentBlocker {
     /// back on also removes an entry for a parent domain that covered `host`.
     public func setBlockingEnabled(_ enabled: Bool, forHost host: String) {
         guard let site = SiteKey.site(forHost: host) else { return }
+        let signpost = Signposts.signposter.beginInterval("contentBlocking.siteToggle")
+        defer { Signposts.signposter.endInterval("contentBlocking.siteToggle", signpost) }
         let edit: (inout Set<String>) -> Void = { sites in
             if enabled {
                 sites = sites.filter { !SiteKey.host(site, isIn: [$0]) }
@@ -255,9 +258,18 @@ public final class ContentBlocker {
         syncAllControllers()
     }
 
-    /// Waits until every allow-list change so far is saved. For tests and app suspension.
+    /// Waits until every allow-list change so far is saved. For tests and app suspension. Loads
+    /// the stored allow-list first if `prepare()` has not, so edits made before it are saved too.
     public func waitForPendingSaves() async {
+        await ensureAllowListLoaded()
         await saveTask?.value
+    }
+
+    private func ensureAllowListLoaded() async {
+        if allowListTask == nil {
+            allowListTask = Task { await loadAllowList() }
+        }
+        await allowListTask?.value
     }
 
     private func loadAllowList() async {

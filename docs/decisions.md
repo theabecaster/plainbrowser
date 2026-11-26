@@ -385,6 +385,10 @@ Each entry: what was chosen, and why. Newest last.
   before the first frame; the preconnect (and the suggestion client's URL session) waits for
   `firstFrameDidCommit()`. Typed visits (`VisitKind.typed`) are the address bar's loads: an
   address, a search or a picked suggestion; a picked page suggestion is remembered for its input.
+- **Restore stops the warm-up load first.** A tab restored at launch takes the warm web view,
+  whose empty warm-up page may still be loading while its WebContent process starts (a second on
+  a loaded simulator). Committing after the restore, it left a blank page over the restored
+  history; the pool now stops any load in flight before applying `interactionState`.
 - **Fixed with it:** the geolocation delegate method had the wrong selector
   (`initiatedBy` instead of `initiatedByFrame`), so WebKit never asked; it now does.
 - **Perf cost:** after the first frame only. Lookups for compiled rule lists take about 1 ms; the

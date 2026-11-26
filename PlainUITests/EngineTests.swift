@@ -76,10 +76,12 @@ final class EngineTests: XCTestCase {
         app.terminate()
 
         app = try launch(["-PlainTestStore"])
-        // Search first: the field is focused, and the last page comes back under it.
+        // Search first: the field is focused, and the last page comes back under it. (Its text is
+        // checked after the sheet closes: WebKit doesn't always expose a covered page's text.)
         XCTAssertTrue(app.textFields["searchField"].hasKeyboardFocus)
-        waitForPage(app, "Page B")
+        Thread.sleep(forTimeInterval: 1)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        waitForPage(app, "Page B")
         let restoredPill = app.buttons["addressPill"]
         XCTAssertTrue(restoredPill.waitForExistence(timeout: 2))
         XCTAssertEqual(restoredPill.value as? String, "http://" + server.address("/b"))

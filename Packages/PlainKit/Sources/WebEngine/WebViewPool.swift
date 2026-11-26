@@ -583,6 +583,10 @@ public final class WebViewPool {
     }
 
     private static func apply(_ state: TabRestorationState, to webView: WKWebView, slot: Slot, resubmit: Bool) {
+        // The warm web view's empty warm-up page may still be loading (its WebContent process can
+        // take a second to start): if it commits after the restore, the tab shows a blank page
+        // over its restored history. Stop it first.
+        if webView.isLoading { webView.stopLoading() }
         if let interaction = state.interactionState {
             webView.interactionState = interaction
             if !resubmit {

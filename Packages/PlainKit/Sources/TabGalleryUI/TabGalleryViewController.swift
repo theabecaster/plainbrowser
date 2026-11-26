@@ -76,6 +76,8 @@ public final class TabGalleryViewController: UIViewController {
         root.addSubview(emptyView)
 
         bottomBar.newTabButton.addAction(UIAction { [weak self] _ in self?.newTab() }, for: .primaryActionTriggered)
+        bottomBar.privateButton.addAction(UIAction { [weak self] _ in self?.togglePrivate() }, for: .primaryActionTriggered)
+        bottomBar.showsPrivateButton = dataSource.supportsPrivateTabs
         bottomBar.doneButton.addAction(UIAction { [weak self] _ in self?.done() }, for: .primaryActionTriggered)
         bottomBar.menuButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             completion(self?.galleryMenuItems() ?? [])
@@ -229,9 +231,18 @@ public final class TabGalleryViewController: UIViewController {
     }
 
     private func updateChrome(animated: Bool) {
+        let isPrivate = dataSource.isShowingPrivateTabs
+        let background = isPrivate ? Palette.privateBackground : Palette.background
+        if view.backgroundColor != background {
+            view.backgroundColor = background
+            collectionView.backgroundColor = background
+            bottomBar.setPrivate(isPrivate)
+            emptyView.setPrivate(isPrivate)
+        }
         let isEmpty = items.isEmpty
         emptyView.isHidden = !isEmpty
-        bottomBar.isHidden = isEmpty
+        // With the private toggle, the bar stays: it is the way between regular and private tabs.
+        bottomBar.isHidden = isEmpty && !dataSource.supportsPrivateTabs
         bottomBar.doneButton.isEnabled = selectedID != nil
         if isEmpty { toast.hide(animated: false) }
     }
@@ -315,6 +326,21 @@ public final class TabGalleryViewController: UIViewController {
         dataSource.newTab()
     }
 
+    /// Regular or private tabs: the cards cross-fade to the other list.
+    private func togglePrivate() {
+        let isPrivate = !dataSource.isShowingPrivateTabs
+        Signposts.signposter.emitEvent(Signposts.privateMode, "\(isPrivate ? "on" : "off")")
+        Haptic.selection.play()
+        toast.hide(animated: true)
+        dataSource.setShowingPrivateTabs(isPrivate)
+        didScrollToSelection = false
+        Motion.crossfade(view, changes: { [weak self] in
+            self?.reloadTabs(animated: false)
+            self?.view.setNeedsLayout()
+            self?.view.layoutIfNeeded()
+        })
+    }
+
     /// - Parameter flick: the interval a flicked card already began; nil for a button or menu.
     private func closeTab(_ id: UUID, flick: OSSignpostIntervalState? = nil) {
         let state = flick ?? Signposts.signposter.beginInterval(Signposts.galleryCardClose)
@@ -364,6 +390,15 @@ public final class TabGalleryViewController: UIViewController {
                 self?.reopenClosedTab()
             })
         }
+        if dataSource.canShowArchive {
+            let archive = UIAction(title: "Archived Tabs", image: UIImage(systemName: "archivebox")) { [weak self] _ in
+                self?.toast.hide(animated: false)
+                self?.dataSource.showArchive()
+            }
+            archive.accessibilityIdentifier = "gallery.archive"
+            elements.append(archive)
+        }
+        guard !items.isEmpty else { return elements }
         let closeAll = UIAction(title: "Close All Tabs", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
             guard let self else { return }
             confirmCloseAll(from: bottomBar.menuButton)

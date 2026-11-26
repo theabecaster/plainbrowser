@@ -2,11 +2,20 @@
 import DesignSystem
 import UIKit
 
-/// The gallery's floating bar: the gallery menu, New Tab and Done, on one glass capsule.
+/// The gallery's floating bar: the gallery menu, the private toggle, New Tab and Done, on one
+/// glass capsule.
 final class GalleryBottomBar: UIView {
     let menuButton = UIButton(type: .system)
+    let privateButton = UIButton(type: .system)
     let newTabButton = UIButton(type: .system)
     let doneButton = UIButton(type: .system)
+    /// Whether the private toggle shows (the data source supports private tabs).
+    var showsPrivateButton = false {
+        didSet {
+            privateButton.isHidden = !showsPrivateButton
+            setNeedsLayout()
+        }
+    }
     private let glass = Glass.makeView(shape: .capsule, tint: Palette.glassTintOnPaper)
 
     private static let height: CGFloat = 52
@@ -38,7 +47,12 @@ final class GalleryBottomBar: UIView {
         doneButton.configuration = done
         doneButton.accessibilityIdentifier = "galleryDone"
 
-        for button in [menuButton, newTabButton, doneButton] {
+        privateButton.accessibilityLabel = "Private"
+        privateButton.accessibilityIdentifier = "galleryPrivate"
+        privateButton.isHidden = true
+        setPrivate(false)
+
+        for button in [menuButton, privateButton, newTabButton, doneButton] {
             button.tintColor = Palette.accentOnGlass
             glass.contentView.addSubview(button)
         }
@@ -47,9 +61,21 @@ final class GalleryBottomBar: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// The private toggle's look: a filled hand while the gallery shows private tabs.
+    func setPrivate(_ isPrivate: Bool) {
+        let symbols = UIImage.SymbolConfiguration(textStyle: .body, scale: .large)
+        privateButton.setImage(
+            UIImage(systemName: isPrivate ? "hand.raised.fill" : "hand.raised", withConfiguration: symbols), for: .normal
+        )
+        privateButton.accessibilityValue = isPrivate ? "On" : "Off"
+        privateButton.accessibilityTraits = isPrivate ? [.button, .selected] : .button
+    }
+
+    private var buttonCount: CGFloat { showsPrivateButton ? 3 : 2 }
+
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let done = max(Metrics.tapTarget, doneButton.sizeThatFits(size).width)
-        let width = Self.padding * 2 + Metrics.tapTarget * 2 + done + Spacing.xl * 2
+        let width = Self.padding * 2 + Metrics.tapTarget * buttonCount + done + Spacing.xl * buttonCount
         return CGSize(width: width, height: Self.height)
     }
 
@@ -59,7 +85,12 @@ final class GalleryBottomBar: UIView {
         let side = Metrics.tapTarget
         let y = ((bounds.height - side) / 2).rounded()
         menuButton.frame = CGRect(x: Self.padding, y: y, width: side, height: side)
-        newTabButton.frame = CGRect(x: menuButton.frame.maxX + Spacing.xl, y: y, width: side, height: side)
+        var next = menuButton.frame.maxX + Spacing.xl
+        if showsPrivateButton {
+            privateButton.frame = CGRect(x: next, y: y, width: side, height: side)
+            next = privateButton.frame.maxX + Spacing.xl
+        }
+        newTabButton.frame = CGRect(x: next, y: y, width: side, height: side)
         let doneX = newTabButton.frame.maxX + Spacing.xl
         doneButton.frame = CGRect(x: doneX, y: y, width: bounds.width - Self.padding - doneX, height: side)
     }
@@ -182,6 +213,15 @@ final class GalleryEmptyView: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    /// The sentence and button for regular or private tabs.
+    func setPrivate(_ isPrivate: Bool) {
+        label.text = isPrivate
+            ? "Private tabs show up here. Plain keeps no history of them."
+            : "Your open tabs show up here."
+        button.configuration?.title = isPrivate ? "New Private Tab" : "New Tab"
+        setNeedsLayout()
+    }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let text = label.sizeThatFits(CGSize(width: size.width, height: .greatestFiniteMagnitude))

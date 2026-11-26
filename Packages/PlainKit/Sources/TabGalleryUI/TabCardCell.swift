@@ -143,6 +143,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         if let host = item.host, host != label { label += ", " + host }
         if item.isPrivate { label += ", " + String(localized: "Private") }
         accessibilityLabel = label
+        accessibilityIdentifier = "tabCard"
         accessibilityTraits = isSelected ? [.button, .selected] : [.button]
         accessibilityHint = String(localized: "Opens the tab.")
         accessibilityCustomActions = [

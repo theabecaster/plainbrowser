@@ -367,7 +367,22 @@ extension BrowserViewController: GalleryHost {
             webContainer.bringSubviewToFront(start)
             webContainer.bringSubviewToFront(engineUI.pageState)
         }
-        sheet.backgroundColor = showsStart ? .clear : Palette.background
+        sheet.backgroundColor = showsStart && !start.isReceded ? .clear : Palette.background
+    }
+
+    /// The start screen while typing (state rules §3): with a query, the mark and its shortcuts
+    /// recede and the sheet takes the paper behind the suggestions; cleared, they come back.
+    func updateStartForTyping(query: String) {
+        var state = rules.state
+        state.isEditing = isEditingAddress
+        state.hasQuery = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let recedes = ControlRules(state).startScreenRecedes
+        let start = tabsUI.start
+        guard recedes != start.isReceded else { return }
+        start.setReceded(recedes, animated: true)
+        guard !start.isHidden else { return }
+        let paper: UIColor = recedes ? Palette.background : .clear
+        Motion.animate(Motion.reflow, crossfading: sheet) { self.sheet.backgroundColor = paper }
     }
 
     /// The start screen's shortcuts under the mark (state rules §3): a private tab always, Reopen

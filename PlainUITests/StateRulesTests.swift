@@ -225,4 +225,27 @@ final class StateRulesTests: XCTestCase {
         // Stopped before it committed: the tab stays on Page A.
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 3))
     }
+
+    /// Typing on the start screen: the mark steps back so suggestion rows never draw over it, and
+    /// it comes back when the query is cleared.
+    func testStartScreenYieldsToSuggestions() throws {
+        let app = try launch()
+        go(app, to: "/a")
+        waitForPage(app, "Page A")
+        tabsMenu(app, pick: "New Tab")
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        let mark = app.images["startMark"]
+        XCTAssertTrue(mark.waitForExistence(timeout: 2), "the mark shows above the empty field")
+
+        field.typeText("Plain Test")
+        let row = app.buttons["Plain Test A"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "history suggestion for page A")
+        XCTAssertTrue(row.isHittable, "rows sit above everything")
+        XCTAssertTrue(mark.waitForNonExistence(timeout: 2), "the mark recedes while there is a query")
+
+        // Cleared, the mark comes back.
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Plain Test".count))
+        XCTAssertTrue(mark.waitForExistence(timeout: 2), "the mark returns with an empty field")
+    }
 }

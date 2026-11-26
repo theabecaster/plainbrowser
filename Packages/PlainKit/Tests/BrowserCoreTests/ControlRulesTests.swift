@@ -258,6 +258,20 @@ import Testing
         #expect(ControlRules(Self.firstRun).barShown)
     }
 
+    @Test func theStartScreenRecedesWhileTyping() {
+        var state = Self.emptyTab()
+        state.isEditing = true
+        #expect(!ControlRules(state).startScreenRecedes, "an empty field keeps the mark")
+        state.hasQuery = true
+        #expect(ControlRules(state).startScreenRecedes)
+        state.isEditing = false
+        #expect(!ControlRules(state).startScreenRecedes, "the field closed: the mark comes back")
+        var page = Self.page()
+        page.isEditing = true
+        page.hasQuery = true
+        #expect(!ControlRules(page).startScreenRecedes, "no start screen on a page")
+    }
+
     @Test func downloadsOnlyAfterOneRan() {
         var state = Self.page()
         #expect(!ControlRules(state).downloads)

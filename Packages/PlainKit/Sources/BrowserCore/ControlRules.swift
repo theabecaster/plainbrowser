@@ -66,6 +66,8 @@ public struct ChromeState: Sendable, Equatable {
     public var isEditing = false
     /// Downloads ran or run this session.
     public var hasDownloads = false
+    /// The search field holds a query (not only spaces).
+    public var hasQuery = false
     /// Open tabs besides the one on screen, regular and private together. Empty tabs never count.
     public var others = 0
     /// Tabs in the on-screen tab's own list (regular or private), itself included.
@@ -243,6 +245,11 @@ public struct ControlRules: Sendable, Equatable {
     public var moreArchivedTabs: Bool { state.hasArchived }
 
     // MARK: The start screen (§3)
+
+    /// While a query is typed on the start screen, the mark, sentence and shortcuts recede (fade,
+    /// shrink a little, drift up) so suggestion rows never draw over them; they come back when the
+    /// query is cleared or the field closes (owner, 2026-11-26).
+    public var startScreenRecedes: Bool { isStart && state.isEditing && state.hasQuery }
 
     /// Small shortcuts under the mark on the start screen, only the ones that apply: a private tab
     /// always (a regular one from an empty private tab), Reopen Closed Tab with `closed`, Archived

@@ -456,6 +456,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func textFieldDidEndEditing(_ textField: UITextField) {
         suggestionTask?.cancel()
         data.cancelSuggestions()
+        updateStartForTyping(query: "")
         applyEditingLayout(false, animated: true)
     }
 
@@ -481,6 +482,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // empty field, until the user types.
         let isCurrentAddress = !query.isEmpty && query == currentTab?.url?.absoluteString
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
+        updateStartForTyping(query: query)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             sheet.show([])
             return

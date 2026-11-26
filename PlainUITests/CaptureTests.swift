@@ -336,6 +336,18 @@ final class CaptureTests: XCTestCase {
         field.typeText(server.address("/a") + "\n")
         pause(2)
         shot("s3-one-page")
+        // The start screen while typing: before (empty field) and after (a query with rows).
+        app.buttons["tabs"].tap()
+        pause(1.2)
+        shot("s7a-start-typing-before")
+        field.typeText("Plain Test")
+        pause(1.5)
+        shot("s7b-start-typing-after")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        pause(1)
+        // Back to the page: the empty tab goes away when left.
+        app.buttons["addressPill"].swipeRight(velocity: .fast)
+        pause(1.5)
         app.buttons["tabs"].press(forDuration: 1)
         pause(1)
         shot("s3b-one-page-tabs-menu")

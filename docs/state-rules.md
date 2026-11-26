@@ -160,7 +160,8 @@ Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen.
 | Bar gestures | Off | The field owns the touches. |
 | Favorites above the keyboard | Field empty, or still showing the page's own address, and at least one favorite | With none, the strip takes no space and says nothing; Edit Favorites is in the page menu. |
 | Suggestions | While typing | |
-| Start screen behind | Shown on Start (the sheet is clear) | The mark stays while typing. |
+| Start screen behind | Shown on Start while the field is empty (the sheet is clear) | The mark keeps the empty field company. |
+| Start screen while typing | With a query, the mark, sentence and shortcuts recede (fade, shrink to 94 %, drift up, with the snappy 0.3 spring; Reduce Motion: a crossfade) and the sheet takes the paper; cleared, or the field closed, they come back | Suggestion rows never draw over the mark (owner, 2026-11-26). The rows sit on the paper token themselves, so they read even mid-transition, in light and dark. |
 | Remote suggestions | Off in private tabs | FixedChoices. |
 | Tap outside the field | Closes the field. On a fresh launch this shows the start screen, never a blank page. | |
 

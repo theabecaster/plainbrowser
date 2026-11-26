@@ -71,6 +71,10 @@ public final class EmptyTabView: UIView {
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: EmptyTabView, _) in view.applyGlow() }
         mark.isSpinnable = true
         mark.translatesAutoresizingMaskIntoConstraints = false
+        mark.isAccessibilityElement = true
+        mark.accessibilityTraits = .image
+        mark.accessibilityLabel = "Plain"
+        mark.accessibilityIdentifier = "startMark"
 
         label.text = String(localized: "Start with a search or an address.")
         label.font = UIFont.preferredFont(forTextStyle: .body)
@@ -157,6 +161,30 @@ public final class EmptyTabView: UIView {
         }
         shortcutRow.isHidden = shortcuts.isEmpty
     }
+
+    /// Steps the mark, the sentence and the shortcuts back while suggestions take the space (they
+    /// fade, shrink a little and drift up with the shell's snappy spring), or brings them back.
+    /// Reduce Motion: a plain crossfade. Receded, they take no touches.
+    public func setReceded(_ receded: Bool, animated: Bool) {
+        guard receded != isReceded else { return }
+        isReceded = receded
+        stack.isUserInteractionEnabled = !receded
+        stack.accessibilityElementsHidden = receded
+        let changes = {
+            self.stack.alpha = receded ? 0 : 1
+            self.stack.transform = receded && !Motion.prefersCrossfade
+                ? CGAffineTransform(translationX: 0, y: -Spacing.l).scaledBy(x: 0.94, y: 0.94)
+                : .identity
+        }
+        guard animated, window != nil else {
+            UIView.performWithoutAnimation(changes)
+            return
+        }
+        Motion.animate(Motion.reflow, crossfading: self, changes: changes)
+    }
+
+    /// The mark and its company stepped back for typed suggestions.
+    public private(set) var isReceded = false
 
     /// A card that sits under the sentence, above the search field (a "Set as Default Browser"
     /// offer, say). One at most; nil removes it.

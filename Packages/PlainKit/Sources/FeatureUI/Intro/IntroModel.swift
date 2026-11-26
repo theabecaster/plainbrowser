@@ -26,6 +26,9 @@ final class IntroModel {
     var icon: AppIconChoice
     /// The previews, decoded off the main thread when the intro starts.
     var iconPreviews: [AppIconChoice: UIImage] = [:]
+    /// The safe area's height, set by the view controller: the steps leave room for the dawn
+    /// from it (`IntroLayout`).
+    var safeHeight: CGFloat = 0
 
     /// Runs on every step change, for the view controller's mark, field and VoiceOver.
     @ObservationIgnored var onStepChange: ((Step?) -> Void)?
@@ -101,11 +104,11 @@ final class IntroModel {
 
 /// The intro's motion, in one place (docs/research/intro.md has the reasoning).
 enum IntroMotion {
-    /// A step leaving: blur, fade and a slight shrink.
+    /// A step leaving: it lifts off like a sheet of paper, fading as it rises a little.
     static let exit = Animation.smooth(duration: 0.38)
     /// A step's parts arriving, one after another.
     static let enter = Animation.spring(duration: 0.52, bounce: 0)
-    /// The first part starts after the old step is half gone, so the field is never empty for long.
+    /// The first part starts after the old step is half gone, so the paper is never empty for long.
     static let enterDelay: Double = 0.16
     /// Between one part and the next.
     static let stagger: Double = 0.065
@@ -113,9 +116,11 @@ enum IntroMotion {
     static let stepSettle: Double = 0.85
     /// The Reduce Motion crossfade.
     static let crossfade = Animation.easeInOut(duration: 0.2)
-    /// How far a part rises as it arrives, and how blurred it starts.
-    static let rise: CGFloat = 18
-    static let blur: CGFloat = 12
+    /// How far a part rises as it arrives, and how far a leaving step lifts.
+    static let rise: CGFloat = 16
+    static let lift: CGFloat = 10
+    /// The dawn moving to a step's place (and the mark with it on the promise step).
+    static let dawn = Animation.spring(duration: 0.85, bounce: 0)
     /// The blocking demo's page reflow.
     static let reflow = Animation.spring(duration: 0.55, bounce: 0)
 }

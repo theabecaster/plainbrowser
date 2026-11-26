@@ -2,9 +2,9 @@
 import DesignSystem
 import SwiftUI
 
-/// The intro's steps after the splash. A step leaves with a blur dissolve; the next one's parts
-/// arrive one after another (headline, then rows or the demo, then the button), each rising out of
-/// a blur. The field behind them is `IntroBackdrop`, owned by the view controller.
+/// The intro's steps after the splash, on paper. A step lifts away like a sheet; the next one's
+/// parts arrive one after another (headline, then rows or the demo, then the button), each rising
+/// into place. The dawn behind them is `DawnView`, owned by the view controller.
 struct IntroStepsView: View {
     @Bindable var model: IntroModel
 
@@ -13,7 +13,7 @@ struct IntroStepsView: View {
             if let step = model.step {
                 StepView(step: step, model: model)
                     .id(step)
-                    .transition(.asymmetric(insertion: .identity, removal: .introDissolve))
+                    .transition(.asymmetric(insertion: .identity, removal: .introLift))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -24,21 +24,12 @@ private struct StepView: View {
     let step: IntroModel.Step
     @Bindable var model: IntroModel
 
-    private var ink: Color { step == .defaultBrowser ? IntroStyle.ink : IntroStyle.onField }
-
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Button("Skip") { model.skip() }
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(ink.opacity(0.8))
-                    .frame(minWidth: 44, minHeight: 44)
-                    .padding(.trailing, 8)
-                    .accessibilityIdentifier("introSkip")
-                    .accessibilityHint("Ends the introduction")
-            }
-            .entrance(0)
+            topRow
+                .entrance(0)
+            Color.clear
+                .frame(height: max(0, IntroLayout.reserve(step, safeHeight: model.safeHeight)))
             content
                 .frame(maxWidth: IntroStyle.contentWidth, maxHeight: .infinity)
                 .padding(.horizontal, 24)
@@ -48,9 +39,26 @@ private struct StepView: View {
                 .padding(.top, 14)
                 .padding(.bottom, 12)
         }
-        .foregroundStyle(ink)
+        .foregroundStyle(IntroStyle.text)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("intro.\(step.rawValue)")
+    }
+
+    /// The step rings and Skip, in white on the dawn window's sky.
+    private var topRow: some View {
+        HStack {
+            StepRings(count: model.steps.count, current: model.steps.firstIndex(of: step) ?? 0)
+                .padding(.leading, 30)
+            Spacer()
+            Button("Skip") { model.skip() }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(minWidth: 44, minHeight: 44)
+                .padding(.trailing, 20)
+                .accessibilityIdentifier("introSkip")
+                .accessibilityHint("Ends the introduction")
+        }
+        .frame(height: IntroLayout.topRow)
     }
 
     @ViewBuilder private var content: some View {
@@ -67,102 +75,126 @@ private struct StepView: View {
         switch step {
         case .defaultBrowser:
             VStack(spacing: 4) {
-                Button("Set as Default Browser") {
+                Button {
                     DefaultBrowserPrompts.openSettings()
                     model.finish()
+                } label: {
+                    IntroButtonLabel(title: "Set as Default Browser")
                 }
-                .buttonStyle(IntroPillStyle(kind: .lagoon))
+                .introPrimaryButton()
                 .accessibilityIdentifier("introSetDefault")
                 Button("Not Now") { model.finish() }
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(IntroStyle.ink.opacity(0.7))
+                    .foregroundStyle(IntroStyle.text.opacity(0.7))
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .accessibilityIdentifier("introNotNow")
             }
             .entrance(6)
         default:
-            Button(model.isLastStep ? "Let’s Go" : "Next") { model.next() }
-                .buttonStyle(IntroPillStyle(kind: .paper))
-                .accessibilityIdentifier(model.isLastStep ? "introLetsGo" : "introNext")
-                .entrance(step == .promise ? 3 : 6)
+            Button { model.next() } label: {
+                IntroButtonLabel(title: model.isLastStep ? "Let’s Go" : "Next")
+            }
+            .introPrimaryButton()
+            .accessibilityIdentifier(model.isLastStep ? "introLetsGo" : "introNext")
+            .entrance(step == .promise ? 3 : 6)
         }
+    }
+}
+
+/// Where the reader is in the intro: one small ring per step, like the mark's ring; the current
+/// one is filled.
+private struct StepRings: View {
+    let count: Int
+    let current: Int
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(0..<count, id: \.self) { index in
+                Circle()
+                    .strokeBorder(.white.opacity(index == current ? 1 : 0.5), lineWidth: 1.5)
+                    .background { if index == current { Circle().fill(.white) } }
+                    .frame(width: 9, height: 9)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(current + 1) of \(count)")
     }
 }
 
 // MARK: Steps
 
-/// "The web, plainly." under the mark (the mark is the splash's, held by the view controller).
+/// "The web, plainly." under the mark (the mark is the splash's, held by the view controller; the
+/// step view has already left room for it).
 private struct PromiseStep: View {
     var body: some View {
         VStack(spacing: 0) {
-            // The splash's mark rests here (IntroLayout).
-            Color.clear.frame(height: IntroLayout.promiseMarkTop + IntroLayout.promiseMarkSize - 44)
-            Spacer(minLength: 24)
-            DisplayText(lead: "The web,", emphasis: "plainly", trail: ".")
+            Spacer(minLength: 20)
+            DisplayText(lead: "The web, ", emphasis: "plainly", trail: ".")
                 .entrance(1)
             Text("Nothing in the way of the page.")
-                .font(.title3.weight(.medium))
-                .opacity(0.85)
+                .font(.title3)
+                .opacity(0.75)
                 .multilineTextAlignment(.center)
                 .padding(.top, 14)
                 .entrance(2)
-            Spacer(minLength: 24)
+            Spacer(minLength: 20)
             Spacer(minLength: 0)
         }
     }
 }
 
 private struct InsideStep: View {
-    private let rows: [(symbol: String, title: String, detail: String, tint: Color)] = [
-        ("shield.lefthalf.filled", "Blocking Everywhere", "Ads, trackers and cookie walls stay off every site.", IntroStyle.coral),
-        ("archivebox.fill", "Tabs Tidy Themselves", "Tabs you leave for a day move to a searchable archive.", IntroStyle.mint),
-        ("eye.slash.fill", "Private Tabs", "No history, and their site data goes when you close them.", IntroStyle.violet),
-        ("rectangle.split.2x1.fill", "Made for iPhone Duo", "Unfold for two pages side by side.", IntroStyle.lagoon),
+    private let rows: [(symbol: String, title: String, detail: String)] = [
+        ("shield.lefthalf.filled", "Blocking Everywhere", "Ads, trackers and cookie walls stay off every site."),
+        ("archivebox.fill", "Tabs Tidy Themselves", "Tabs you leave for a day move to a searchable archive."),
+        ("eye.slash.fill", "Private Tabs", "No history, and their site data goes when you close them."),
+        ("rectangle.split.2x1.fill", "Made for iPhone Duo", "Unfold for two pages side by side."),
     ]
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
-                DisplayText(lead: "Built to stay", emphasis: "out of your way", trail: "")
-                    .padding(.top, 12)
-                    .padding(.bottom, 14)
+            VStack(spacing: 10) {
+                DisplayText(lead: "Built to stay\n", emphasis: "out of your way", trail: "")
+                    .padding(.top, 14)
+                    .padding(.bottom, 16)
                     .entrance(1)
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                    FeatureRow(symbol: row.symbol, title: row.title, detail: row.detail, tint: row.tint)
+                    FeatureRow(symbol: row.symbol, title: row.title, detail: row.detail)
                         .entrance(2 + index)
                 }
             }
             .frame(maxWidth: .infinity)
+            .padding(.bottom, 8)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
     }
 }
 
+/// A sheet of paper with one feature on it: a small ring with the symbol, a title and one line.
 private struct FeatureRow: View {
     let symbol: String
     let title: String
     let detail: String
-    let tint: Color
 
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(IntroStyle.text.opacity(0.85))
                 .frame(width: 38, height: 38)
-                .background(tint.gradient, in: .circle)
+                .background(IntroStyle.text.opacity(0.05), in: .circle)
+                .overlay { Circle().strokeBorder(IntroStyle.text.opacity(0.22), lineWidth: 1.5) }
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.headline)
-                Text(detail).font(.subheadline).opacity(0.72)
+                Text(detail).font(.subheadline).opacity(0.68)
             }
-            .foregroundStyle(IntroStyle.ink)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(IntroStyle.card, in: .rect(cornerRadius: IntroStyle.cardRadius, style: .continuous))
+        .background(IntroStyle.sheet)
         .accessibilityElement(children: .combine)
     }
 }
@@ -176,12 +208,12 @@ private struct IconStep: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                DisplayText(lead: "Pick your", emphasis: "icon", trail: "")
-                    .padding(.top, 12)
+                DisplayText(lead: "Pick your ", emphasis: "icon", trail: "")
+                    .padding(.top, 14)
                     .entrance(1)
                 Text("For your Home Screen. Change it any time in Settings.")
-                    .font(.body.weight(.medium))
-                    .opacity(0.85)
+                    .font(.body)
+                    .opacity(0.72)
                     .multilineTextAlignment(.center)
                     .padding(.top, 10)
                     .entrance(2)
@@ -218,7 +250,7 @@ private struct IconTile: View {
                     if let image {
                         Image(uiImage: image).resizable().interpolation(.high)
                     } else {
-                        RoundedRectangle(cornerRadius: size * 0.225, style: .continuous).fill(.white.opacity(0.2))
+                        RoundedRectangle(cornerRadius: size * 0.225, style: .continuous).fill(IntroStyle.text.opacity(0.06))
                     }
                 }
                 .frame(width: size, height: size)
@@ -226,12 +258,12 @@ private struct IconTile: View {
                 .padding(5)
                 .overlay {
                     RoundedRectangle(cornerRadius: size * 0.225 + 5, style: .continuous)
-                        .strokeBorder(.white, lineWidth: selected ? 3 : 0)
+                        .strokeBorder(IntroStyle.lagoon, lineWidth: selected ? 2.5 : 0)
                 }
                 .scaleEffect(selected ? 1.04 : 1)
                 HStack(spacing: 6) {
                     ZStack {
-                        Circle().strokeBorder(.white.opacity(0.7), lineWidth: 1.5)
+                        Circle().strokeBorder(IntroStyle.text.opacity(0.35), lineWidth: 1.5)
                         if selected {
                             Circle().fill(IntroStyle.coral)
                             Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy)).foregroundStyle(.white)
@@ -255,8 +287,8 @@ private struct BlockingStep: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DisplayText(lead: "The page, minus the", emphasis: "junk", trail: "")
-                .padding(.top, 4)
+            DisplayText(lead: "The page, minus the ", emphasis: "junk", trail: "")
+                .padding(.top, 10)
                 .entrance(1)
             BlockingDemo(model: model)
                 .padding(.top, 18)
@@ -268,18 +300,17 @@ private struct BlockingStep: View {
 private struct DefaultBrowserStep: View {
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 12)
+            // The mark rests on the window's sill, like the promise step's.
             StemMark()
-                .frame(width: 112, height: 116)
-                // A soft ink shadow keeps the cream ring's edge on the cream field.
-                .shadow(color: IntroStyle.ink.opacity(0.22), radius: 14, y: 6)
+                .frame(width: IntroLayout.markSize, height: IntroLayout.markSize)
+                .padding(.top, -(IntroLayout.markSize / 2 + IntroLayout.markLift))
                 .entrance(1)
-            DisplayText(lead: "Make Plain your", emphasis: "default", trail: "")
-                .padding(.top, 26)
+            Spacer(minLength: 16)
+            DisplayText(lead: "Make Plain your ", emphasis: "default", trail: "")
                 .entrance(2)
             Text("Links from Mail, Messages and every other app open in Plain, with blocking on.")
-                .font(.body.weight(.medium))
-                .opacity(0.75)
+                .font(.body)
+                .opacity(0.72)
                 .multilineTextAlignment(.center)
                 .padding(.top, 12)
                 .entrance(3)
@@ -291,87 +322,117 @@ private struct DefaultBrowserStep: View {
 
 // MARK: Shared pieces
 
-/// The intro's display line: big and heavy, with the emphasis in italics. SF Pro, not SF Rounded:
-/// the rounded design has no italic, so the emphasis would not show.
+/// The intro's display line, set in New York (the serif the Reader reads in), with the one word
+/// that matters underlined by a coral stroke cut like the mark's fold. `lead` ends in its own space
+/// or line break.
 struct DisplayText: View {
     let lead: String
     let emphasis: String
     let trail: String
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 38
+    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 36
 
     var body: some View {
-        // After a comma the italic leans back into it, so the gap gets a hair space more.
-        let gap = lead.hasSuffix(",") ? " \u{200A}" : " "
-        Text("\(lead)\(gap)\(Text(emphasis).italic())\(trail)")
-            .font(.system(size: size, weight: .heavy))
-            .tracking(-0.4)
+        Text("\(lead)\(Text(emphasis).customAttribute(FoldEmphasis()))\(trail)")
+            .font(.system(size: size, weight: .semibold, design: .serif))
+            .tracking(-0.3)
             .multilineTextAlignment(.center)
-            .lineSpacing(-2)
             .minimumScaleFactor(0.7)
             .fixedSize(horizontal: false, vertical: true)
+            .textRenderer(FoldUnderline(color: IntroStyle.coral))
             .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// The big capsule buttons.
-struct IntroPillStyle: ButtonStyle {
-    enum Kind { case paper, lagoon }
-    let kind: Kind
+/// Marks the emphasized word of a display line.
+struct FoldEmphasis: TextAttribute {}
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundStyle(kind == .paper ? IntroStyle.lagoon : .white)
-            .frame(maxWidth: .infinity, minHeight: 54)
-            .background(kind == .paper ? IntroStyle.paper : IntroStyle.lagoon, in: .capsule)
-            .shadow(color: .black.opacity(kind == .paper ? 0.12 : 0.18), radius: 12, y: 6)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(Motion.quick, value: configuration.isPressed)
+/// Draws a coral stroke under each emphasized run, below the baseline and behind the letters, with
+/// its trailing end cut at the fold's 45 degrees.
+struct FoldUnderline: TextRenderer {
+    let color: Color
+
+    var displayPadding: EdgeInsets { EdgeInsets(top: 0, leading: 2, bottom: 10, trailing: 10) }
+
+    func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+        for line in layout {
+            for run in line where run[FoldEmphasis.self] != nil {
+                let bounds = run.typographicBounds
+                let thickness = max(3, bounds.ascent * 0.13)
+                let top = bounds.origin.y + bounds.descent * 0.32
+                let left = bounds.origin.x - 1
+                let right = bounds.origin.x + bounds.width + 1
+                var stroke = Path()
+                stroke.move(to: CGPoint(x: left, y: top))
+                stroke.addLine(to: CGPoint(x: right + thickness, y: top))
+                stroke.addLine(to: CGPoint(x: right, y: top + thickness))
+                stroke.addLine(to: CGPoint(x: left, y: top + thickness))
+                stroke.closeSubpath()
+                context.fill(stroke, with: .color(color))
+            }
+        }
+        for line in layout { context.draw(line) }
     }
 }
 
-/// The static Stem mark, for SwiftUI.
+/// The main button's label: full width.
+struct IntroButtonLabel: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .frame(maxWidth: .infinity, minHeight: 36)
+    }
+}
+
+extension View {
+    /// The intro's one main button: Lagoon Blue Liquid Glass, the app's one action color.
+    func introPrimaryButton() -> some View {
+        buttonStyle(.glassProminent)
+            .tint(IntroStyle.action)
+            .controlSize(.large)
+    }
+}
+
+/// The static Stem mark, for SwiftUI, with its paper shadow so the ring holds its edge on paper.
 struct StemMark: UIViewRepresentable {
-    func makeUIView(context: Context) -> StemMarkView { StemMarkView() }
+    var shadowed = true
+    func makeUIView(context: Context) -> StemMarkView { StemMarkView(shadowed: shadowed) }
     func updateUIView(_ view: StemMarkView, context: Context) {}
 }
 
 enum IntroStyle {
-    static let ink = Color(uiColor: BrandArt.ink)
-    static let onField = Color(uiColor: BrandArt.onField)
-    static let paper = Color(uiColor: BrandArt.paperField)
-    static let card = Color(uiColor: BrandArt.paperField).opacity(0.94)
+    static let text = Color(uiColor: BrandArt.text)
     static let lagoon = Color(uiColor: BrandArt.lagoon)
+    /// Lagoon a step deeper for the main button's fill, so its white label holds 4.5:1.
+    static let action = Color(red: 0x23 / 255, green: 0x66 / 255, blue: 0xF0 / 255)
     static let mint = Color(uiColor: BrandArt.mint)
     static let coral = Color(uiColor: BrandArt.coral)
-    static let violet = Color(uiColor: BrandArt.bloomViolet)
+    /// A sheet of paper on the paper: white by day, a lifted night blue by night, with a hairline
+    /// edge and a soft shadow.
+    static var sheet: some View {
+        let shape = RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
+        return shape
+            .fill(Color(uiColor: Palette.surface).shadow(.drop(color: Color(uiColor: Palette.floatingShadow).opacity(0.08), radius: 10, y: 4)))
+            .overlay { shape.strokeBorder(text.opacity(0.07), lineWidth: 1) }
+    }
     /// The column the steps keep to on wide screens (the Duo's inner screen).
     static let contentWidth: CGFloat = 440
-    static let cardRadius: CGFloat = 18
-}
-
-/// Where the splash's mark comes to rest on the promise step, shared by the view controller (which
-/// moves the mark there) and `PromiseStep` (which leaves the room for it).
-enum IntroLayout {
-    /// From the safe area's top to the mark's top.
-    static let promiseMarkTop: CGFloat = 76
-    static let promiseMarkSize: CGFloat = 96
+    static let cardRadius: CGFloat = 16
 }
 
 // MARK: Motion
 
-/// A part of a step arriving: it rises a little out of a blur, after the parts before it.
+/// A part of a step arriving: it rises a little into place, after the parts before it.
 private struct Entrance: ViewModifier {
     let index: Int
     @State private var shown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        let still = shown || reduceMotion
         content
             .opacity(shown ? 1 : 0)
-            .blur(radius: still ? 0 : IntroMotion.blur)
-            .offset(y: still ? 0 : IntroMotion.rise)
+            .offset(y: shown || reduceMotion ? 0 : IntroMotion.rise)
             .onAppear {
                 let animation = reduceMotion
                     ? IntroMotion.crossfade
@@ -385,22 +446,23 @@ extension View {
     fileprivate func entrance(_ index: Int) -> some View { modifier(Entrance(index: index)) }
 }
 
-/// A step leaving: it blurs, fades and shrinks a little. Under Reduce Motion, a plain fade.
-private struct Dissolve: ViewModifier {
+/// A step leaving: it lifts off like a sheet of paper, rising a little as it fades. Under Reduce
+/// Motion, a plain fade.
+private struct Lift: ViewModifier {
     let active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
             .opacity(active ? 0 : 1)
-            .blur(radius: active && !reduceMotion ? IntroMotion.blur : 0)
-            .scaleEffect(active && !reduceMotion ? 0.96 : 1)
+            .offset(y: active && !reduceMotion ? -IntroMotion.lift : 0)
+            .scaleEffect(active && !reduceMotion ? 0.985 : 1)
     }
 }
 
 extension AnyTransition {
-    static var introDissolve: AnyTransition {
-        .modifier(active: Dissolve(active: true), identity: Dissolve(active: false))
+    static var introLift: AnyTransition {
+        .modifier(active: Lift(active: true), identity: Lift(active: false))
     }
 }
 #endif

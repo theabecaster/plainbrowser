@@ -19,6 +19,8 @@ public enum BrandArt {
     public static let dawnSky = [UIColor(rgb: 0x3A2FCF), UIColor(rgb: 0x3F86FF), UIColor(rgb: 0xFFC08E)]
     /// The same sky before the sun is up (the splash starts here).
     public static let nightSky = [UIColor(rgb: 0x0B0A3A), UIColor(rgb: 0x1B1D6E), UIColor(rgb: 0x3A2FCF)]
+    /// The same sky once the sun is well up (the intro's last steps).
+    public static let morningSky = [UIColor(rgb: 0x2F6BFF), UIColor(rgb: 0x7FB4FF), UIColor(rgb: 0xFFE3C8)]
     /// Night Lagoon, the planet: its top to its far side.
     public static let planet = [UIColor(rgb: 0x1B2A8F), UIColor(rgb: 0x121552)]
     /// The planet's thin mint atmosphere.
@@ -48,5 +50,7 @@ public enum BrandArt {
     public static let ink = UIColor(rgb: 0x0A2133)
     /// Text on the vivid field.
     public static let onField = UIColor.white
+    /// The intro's text on its paper: ink by day, paper on the night paper.
+    public static let text = UIColor(light: ink, dark: paperField)
 }
 #endif

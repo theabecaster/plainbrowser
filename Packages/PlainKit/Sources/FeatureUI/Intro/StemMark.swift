@@ -193,12 +193,17 @@ final class StemMarkView: UIView {
     private let drawMask = CALayer()
     private let stemStroke = CAShapeLayer()
     private let bowlStroke = CAShapeLayer()
+    /// The ring's soft shadow on the paper under it, so cream paper holds its edge on cream paper.
+    private let shade = CALayer()
+    private let shadowed: Bool
 
     /// Total length of `assemble()`: under the 1.2 s budget.
     static let assembleDuration: CFTimeInterval = 1.12
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    /// - Parameter shadowed: casts the ring's shadow on the paper under it (the intro's paper).
+    init(shadowed: Bool = false) {
+        self.shadowed = shadowed
+        super.init(frame: .zero)
         isUserInteractionEnabled = false
         isAccessibilityElement = true
         accessibilityLabel = "Plain"
@@ -232,6 +237,20 @@ final class StemMarkView: UIView {
         let g = geometry
         let c = StemGeometry.center
         let r = StemGeometry.inner + 10
+
+        if shadowed {
+            // A shadow path, not the layers' alpha: no offscreen pass.
+            let outline = CGMutablePath()
+            outline.addPath(g.paper)
+            outline.addPath(g.flap)
+            shade.frame = full
+            shade.shadowPath = outline
+            shade.shadowColor = BrandArt.ink.cgColor
+            shade.shadowOpacity = 0.14
+            shade.shadowRadius = 40
+            shade.shadowOffset = CGSize(width: 0, height: 22)
+            canvas.addSublayer(shade)
+        }
 
         // The view: sky, the sun's glow, the sun, the planet's mint rim and the planet.
         viewLayer.frame = full
@@ -378,7 +397,7 @@ final class StemMarkView: UIView {
         pending = []
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for layer in [stage, canvas, viewLayer, sky, glow, sun, ringGroup, flap, flapShadow, stemStroke, bowlStroke] as [CALayer] {
+        for layer in [stage, canvas, viewLayer, sky, glow, sun, ringGroup, flap, flapShadow, stemStroke, bowlStroke, shade] as [CALayer] {
             layer.removeAllAnimations()
         }
         ringGroup.mask = nil
@@ -454,6 +473,8 @@ final class StemMarkView: UIView {
         CATransaction.commit()
         flap.add(fold, forKey: "fold")
         add(basic("opacity", from: 0, to: 1, at: foldStart + 0.32, duration: 0.2), to: flapShadow)
+        // The ring's shadow comes as the paper lands.
+        add(basic("opacity", from: 0, to: 1, at: foldStart, duration: 0.45), to: shade)
 
         // The drawing mask must be gone before the flap swings inside the band.
         // The swing stays inside the stroke's wide band until well past a quarter turn.
@@ -465,6 +486,12 @@ final class StemMarkView: UIView {
         }
         after(foldStart + 0.4 - now, onLanded)
         after(Self.assembleDuration, completion)
+    }
+
+    /// The window's circle, where the dawn shows through the ring, in `target`'s coordinates.
+    func windowRect(in target: UIView) -> CGRect {
+        let c = StemGeometry.center, r = StemGeometry.inner
+        return canvas.convert(CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r), to: target.layer)
     }
 
     /// Runs `body` after `seconds` unless a skip (`showAssembled`) cancels it first.

@@ -12,6 +12,8 @@ public enum Haptic {
     case threshold
     /// Something worked that leaves nothing on screen (Copy Link).
     case success
+    /// A soft impact: a thrown card closing its tab (the plan's motion table, "Close tab").
+    case close
     /// A soft bump when there is nothing to do (Return in an empty field). Rate-limited, so
     /// repeated presses never buzz.
     case nothingThere
@@ -25,6 +27,7 @@ public enum Haptic {
         case .selection: Generators.selection.selectionChanged()
         case .threshold: Generators.rigid.impactOccurred(intensity: 0.7)
         case .success: Generators.notification.notificationOccurred(.success)
+        case .close: Generators.soft.impactOccurred()
         case .nothingThere:
             let now = CACurrentMediaTime()
             guard now - Generators.lastNothingThere >= Self.nothingThereInterval else { return }
@@ -37,6 +40,7 @@ public enum Haptic {
     public func prepare() {
         switch self {
         case .selection: Generators.selection.prepare()
+        case .close: Generators.soft.prepare()
         default: break
         }
     }

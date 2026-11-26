@@ -103,6 +103,13 @@ public protocol UserContentRules: AnyObject {
     func release(_ controller: WKUserContentController)
 }
 
+/// User scripts the shell adds to every tab's own `WKUserContentController` (Reader's readerable
+/// check). The pool calls `install` once, when it makes the controller, before the web view's
+/// first navigation. It must be synchronous and cheap: read any script source ahead of time.
+public protocol PageScripts: AnyObject {
+    func install(in controller: WKUserContentController)
+}
+
 // MARK: - Shell seams
 
 /// Child tabs, close requests and crashes. The shell owns the tab list (`TabStore`), so it decides

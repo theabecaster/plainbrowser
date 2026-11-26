@@ -33,6 +33,15 @@ public protocol AddressBarData: AnyObject {
     func pageVisited(url: URL, title: String?)
     /// A visited page's title arrived or changed.
     func pageTitleChanged(url: URL, title: String)
+    /// The address field took focus: typing is likely next. A chance to preconnect to the
+    /// suggestion host (docs/plan.md, data rule 6). Called on the main thread on every focus,
+    /// including at launch before the first frame, so it must return at once and start any work
+    /// off the main thread.
+    func prepareForTyping()
+}
+
+extension AddressBarData {
+    public func prepareForTyping() {}
 }
 
 /// The app's address-bar data: GRDB history and favorites (Storage), the user's engine

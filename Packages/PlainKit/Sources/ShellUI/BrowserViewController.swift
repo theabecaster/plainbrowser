@@ -31,7 +31,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Chrome). It covers the view but takes no touches of its own.
     private let chromeGlass = Glass.makeContainer(spacing: ChromeGeometry.glassMergeSpacing)
     /// The system scroll edge effect under the chrome, so page text under the bar stays readable.
-    private let pageEdgeEffect = UIScrollEdgeElementContainerInteraction()
+    /// One per control, not on `chromeGlass`: the effect reaches as high as its container, and
+    /// `chromeGlass` covers the whole screen. WebKit hides it by itself where it extends a fixed
+    /// footer's color to the edge instead.
+    private let pageEdgeEffects = [UIScrollEdgeElementContainerInteraction(), UIScrollEdgeElementContainerInteraction()]
     private let pill = AddressPill()
     private let buttonBar = ButtonBar()
     private let sheet = SearchSheet()
@@ -104,8 +107,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             chromeGlass.contentView.addSubview(subview)
         }
         webContainer.clipsToBounds = true
-        pageEdgeEffect.edge = .bottom
-        chromeGlass.addInteraction(pageEdgeEffect)
+        for (effect, control) in zip(pageEdgeEffects, [pill, buttonBar] as [UIView]) {
+            effect.edge = .bottom
+            control.addInteraction(effect)
+        }
 
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
@@ -461,7 +466,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         webView.isFindInteractionEnabled = true
         webView.scrollView.delegate = self
         webView.scrollView.alwaysBounceVertical = true
-        pageEdgeEffect.scrollView = webView.scrollView
+        for effect in pageEdgeEffects { effect.scrollView = webView.scrollView }
         webView.translatesAutoresizingMaskIntoConstraints = false
         webContainer.addSubview(webView)
         NSLayoutConstraint.activate([

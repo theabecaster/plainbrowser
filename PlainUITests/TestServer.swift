@@ -9,6 +9,7 @@ import Network
 /// - `/b`: "Page B".
 /// - `/count`: "Load N", where N counts this page's loads (pull to refresh reloads it).
 /// - `/long`: a long article, for scrolling and the toolbar collapse.
+/// - `/footer`: a long page with a `position: fixed` footer, for the page's bottom inset.
 final class TestServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "TestServer")
@@ -84,6 +85,15 @@ final class TestServer: @unchecked Sendable {
                 "<p>Paragraph \($0). A browser shows pages, and Plain promises nothing extra: the page gets the screen, and the chrome steps aside while you read.</p>"
             }
             return ("200 OK", html("Plain Long Read", "<h1>Long Read</h1>" + paragraphs.joined()))
+        case "/footer":
+            // A long page with a fixed footer, like a cookie bar or an app's tab bar: the resting
+            // toolbar must never cover it.
+            let paragraphs = (1...60).map {
+                "<p>Line \($0). Fixed page footers sit on the page's bottom edge, which the toolbar covers unless the page knows about it.</p>"
+            }
+            let footer = "<div style=\"position:fixed;left:0;right:0;bottom:0;padding:14px 20px;"
+                + "background:#2973FF;color:#fff;font-weight:600\">Fixed Footer</div>"
+            return ("200 OK", html("Plain Footer", "<h1>Footer Page</h1>" + paragraphs.joined() + "<p>End of page.</p>" + footer))
         default:
             return ("404 Not Found", html("Not Found", "<h1>Not Found</h1>"))
         }

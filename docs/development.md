@@ -78,4 +78,14 @@ Set the fold state from the Device Hub (Closed / Partially Open / Open); there i
 
 It reads `ASC_KEY_ID`, `ASC_ISS`, `ASC_KEY`, `TESTFLIGHT_APP_ID` and `TESTFLIGHT_GROUP_ID` from the environment or `scripts/local.env` (see `scripts/local.env.example`). `--dry-run` checks the key, app and group with read-only calls. `scripts/asc.mjs METHOD PATH [BODY]` makes one App Store Connect API call for anything else.
 
+**Notes for testers.** Every build gets notes written for the people testing it, not for developers. List what changed since the last build: `git log --first-parent $(git describe --tags --match 'tf/*' --abbrev=0)..HEAD` (the script tags each upload `tf/<build>`). Use these sections, each a list of short lines in plain words:
+
+- **NEW:** what testers can now do, and where to find it.
+- **IMPROVED:** what feels or works better.
+- **FIXED:** bugs testers could have hit.
+- **NOT IN YET:** big things still missing, so nobody reports them.
+- **WHAT TO TEST:** two or three things to try in this build.
+
+Leave out internal work (refactors, tests, scripts, docs). Skip a section that would be empty.
+
 The API can't create the app record, so a person makes it once in App Store Connect. Every other step runs through the API.

@@ -118,6 +118,8 @@ EOF
       -exportPath $OUT/export "${AUTH[@]}" > $OUT/upload.log 2>&1 \
     || { grep -iE 'error' $OUT/upload.log | sort -u | head -20; die "upload failed"; }
   rm -rf $OUT/Plain.xcarchive $OUT/export
+  # The tag marks what each build contains, so the next build's notes start from it.
+  git tag "tf/$BUILD" HEAD && git push -q origin "tf/$BUILD" || say "note: could not tag tf/$BUILD"
 fi
 
 ID="" ST=""

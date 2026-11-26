@@ -45,6 +45,10 @@ public final class Tab: Identifiable {
     public let id: UUID
     /// The tab whose page opened this one (popup, `window.open`, `target=_blank`).
     public let openerID: UUID?
+    /// A private tab: its pages use a separate non-persistent website data store shared by every
+    /// private tab, and nothing about it is written to disk (state files, thumbnails, per-site
+    /// choices).
+    public let isPrivate: Bool
 
     public internal(set) var url: URL?
     public internal(set) var title = ""
@@ -105,10 +109,14 @@ public final class Tab: Identifiable {
     @ObservationIgnored var restoration: TabRestorationState?
     /// The current page came from a form submission (POST).
     @ObservationIgnored var isFormResult = false
+    /// `restoration` holds only the address: the full state (history, scroll, sessionStorage) is
+    /// in the tab's saved file, read off the main thread when the tab first gets a web view.
+    @ObservationIgnored var readsSavedState = false
 
-    init(id: UUID, openerID: UUID?, pool: WebViewPool, restoring state: TabRestorationState?) {
+    init(id: UUID, openerID: UUID?, isPrivate: Bool = false, pool: WebViewPool, restoring state: TabRestorationState?) {
         self.id = id
         self.openerID = openerID
+        self.isPrivate = isPrivate
         self.pool = pool
         restoration = state
         if let state {

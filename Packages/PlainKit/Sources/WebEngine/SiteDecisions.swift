@@ -77,4 +77,53 @@ public final class InMemorySitePageZoomStore: SitePageZoomStore {
         zooms[site] = zoom
     }
 }
+
+// MARK: - Private tabs
+
+/// The per-site stores one kind of tab uses. Regular tabs use the pool's persistent ones; private
+/// tabs get in-memory ones for their private session, so nothing they choose reaches disk.
+struct SiteChoices {
+    let contentModes: any SiteContentModeStore
+    let pageZooms: any SitePageZoomStore
+    let permissions: any SitePermissionStore
+}
+
+/// A private session's Desktop Site choices over the persistent ones: it reads them, and keeps its
+/// own changes in memory. An explicit "automatic" (nil) choice hides the persistent one.
+final class LayeredContentModeStore: SiteContentModeStore {
+    private let base: any SiteContentModeStore
+    private var own: [String: ContentMode?] = [:]
+
+    init(base: any SiteContentModeStore) {
+        self.base = base
+    }
+
+    func contentMode(forSite site: String) -> ContentMode? {
+        if let mine = own[site] { return mine }
+        return base.contentMode(forSite: site)
+    }
+
+    func setContentMode(_ mode: ContentMode?, forSite site: String) {
+        own[site] = .some(mode)
+    }
+}
+
+/// A private session's page zooms over the persistent ones: read through, written in memory.
+final class LayeredPageZoomStore: SitePageZoomStore {
+    private let base: any SitePageZoomStore
+    private var own: [String: Double?] = [:]
+
+    init(base: any SitePageZoomStore) {
+        self.base = base
+    }
+
+    func pageZoom(forSite site: String) -> Double? {
+        if let mine = own[site] { return mine }
+        return base.pageZoom(forSite: site)
+    }
+
+    func setPageZoom(_ zoom: Double?, forSite site: String) {
+        own[site] = .some(zoom)
+    }
+}
 #endif

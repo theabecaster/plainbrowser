@@ -26,6 +26,9 @@ import WebKit
 public final class WebViewPool {
     /// The shell. Without one, popups are refused, dialogs dismissed and permissions denied.
     public weak var host: (any EngineHost)?
+    /// Called on a memory warning, before hidden tabs are discarded: the shell drops what it keeps
+    /// for them (swipe previews).
+    public var onMemoryWarning: (() -> Void)?
 
     /// The size of a page pane when the tab is not attached: the shell sets it to its main pane's
     /// size. Attached tabs use their container's bounds. Desktop or mobile is decided from it when
@@ -49,6 +52,12 @@ public final class WebViewPool {
     let trustExceptions = ServerTrustExceptions()
 
     private var slots: [UUID: Slot] = [:]
+    /// Private tabs' website data store: one non-persistent store shared by every private tab, made
+    /// with the first one and dropped by `endPrivateSession()`, so the next private tab starts with
+    /// no cookies or storage.
+    private var privateDataStore: WKWebsiteDataStore?
+    /// What private tabs answer and choose per site, kept in memory for the private session only.
+    private var privateSiteChoices: SiteChoices?
     private var warm: (webView: WKWebView, controller: WKUserContentController)?
     private var useClock: UInt64 = 0
     private var popupLimiter = RateLimiter(limit: EngineChoices.popupLimit, window: EngineChoices.popupWindow)
@@ -149,8 +158,9 @@ public final class WebViewPool {
 
     /// Every web view gets its own copy of the configuration and its own
     /// `WKUserContentController`, so per-site content-blocking changes stay in one tab.
-    private func makeConfiguration() -> (WKWebViewConfiguration, WKUserContentController) {
+    private func makeConfiguration(isPrivate: Bool = false) -> (WKWebViewConfiguration, WKUserContentController) {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
+        if isPrivate { configuration.websiteDataStore = privateStore() }
         let controller = makeController()
         configuration.userContentController = controller
         return (configuration, controller)
@@ -181,8 +191,9 @@ public final class WebViewPool {
 
     /// A web view for a link preview: no engine scripts, no delegates. The caller applies and
     /// releases the content rules on the returned controller.
-    func makePreviewWebView() -> (WKWebView, WKUserContentController) {
+    func makePreviewWebView(isPrivate: Bool = false) -> (WKWebView, WKUserContentController) {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
+        if isPrivate { configuration.websiteDataStore = privateStore() }
         let controller = WKUserContentController()
         configuration.userContentController = controller
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -207,13 +218,14 @@ public final class WebViewPool {
         Signposts.signposter.endInterval(Signposts.webViewWarmUp, state)
     }
 
-    /// Takes the warmed web view, or makes a new one.
-    private func takeWebView() -> (WKWebView, WKUserContentController) {
-        if let warm {
+    /// Takes the warmed web view, or makes a new one. Private tabs never take the warm one: it
+    /// uses the persistent data store.
+    private func takeWebView(isPrivate: Bool) -> (WKWebView, WKUserContentController) {
+        if !isPrivate, let warm {
             self.warm = nil
             return warm
         }
-        let (configuration, controller) = makeConfiguration()
+        let (configuration, controller) = makeConfiguration(isPrivate: isPrivate)
         return (makeWebView(configuration: configuration, controller: controller), controller)
     }
 
@@ -221,8 +233,9 @@ public final class WebViewPool {
     /// the tabs' data store and identity, gets no content rules, page scripts or tab handler, and
     /// `configure` runs on its configuration first (custom schemes, JavaScript off). The caller
     /// shows it while its page is up and releases it after; it never becomes a tab.
-    public func makeAuxiliaryWebView(configure: (WKWebViewConfiguration) -> Void) -> WKWebView {
+    public func makeAuxiliaryWebView(isPrivate: Bool = false, configure: (WKWebViewConfiguration) -> Void) -> WKWebView {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
+        if isPrivate { configuration.websiteDataStore = privateStore() }
         configuration.userContentController = WKUserContentController()
         configure(configuration)
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -244,8 +257,19 @@ public final class WebViewPool {
     /// A new tab, without a web view until it is attached or loads something. Pass `restoring` to
     /// bring back a tab from a previous launch: it restores history, scroll and sessionStorage on
     /// first attach.
-    public func makeTab(id: UUID = UUID(), restoring state: TabRestorationState? = nil) -> Tab {
-        Tab(id: id, openerID: nil, pool: self, restoring: state)
+    public func makeTab(id: UUID = UUID(), restoring state: TabRestorationState? = nil, isPrivate: Bool = false) -> Tab {
+        Tab(id: id, openerID: nil, isPrivate: isPrivate, pool: self, restoring: state)
+    }
+
+    /// A tab saved earlier (a relaunch, Reopen Closed Tab, the archive) that shows `url` and
+    /// `title` until it is opened. Its history, scroll and sessionStorage come from its state file
+    /// in `tabStates`, read and decoded off the main thread when it first gets a web view; without
+    /// a readable file, `url` loads.
+    public func makeSavedTab(id: UUID, url: URL?, title: String) -> Tab {
+        let state = TabRestorationState(url: url, title: title, interactionState: nil, sessionStorage: nil)
+        let tab = Tab(id: id, openerID: nil, pool: self, restoring: state)
+        tab.readsSavedState = tabStates != nil
+        return tab
     }
 
     /// Puts `tab`'s page into `container`, filling it, and makes it live. A discarded tab is
@@ -293,23 +317,71 @@ public final class WebViewPool {
     }
 
     /// Releases everything the pool holds for `tab`: web view, thumbnail and saved state.
-    public func close(_ tab: Tab) {
+    ///
+    /// - Parameter keepingSavedState: keeps the tab's state file and thumbnail on disk, with its
+    ///   latest history and scroll written first, so Reopen Closed Tab and the archive bring it
+    ///   back where it was (`makeSavedTab`). Storage deletes the file once no row names the tab.
+    ///   Private tabs keep nothing.
+    public func close(_ tab: Tab, keepingSavedState: Bool = false) {
+        let keep = keepingSavedState && !tab.isPrivate && tabStates != nil
         if let slot = slots.removeValue(forKey: tab.id) {
+            // A saved file still being read holds more than the web view does: leave it as it is.
+            if keep, !tab.readsSavedState, let tabStates {
+                let state = currentState(of: slot, tab: tab, sessionStorage: nil)
+                let id = tab.id
+                enqueueStateWork {
+                    guard let data = try? await Self.encode(state) else { return }
+                    try? await tabStates.write(data, for: id)
+                }
+            }
             tearDown(slot)
         }
         tab.restoration = nil
         tab.tier = .discarded
         tab.pool = nil
-        thumbnails.remove(tab.id)
+        if keep {
+            thumbnails.forget(tab.id)
+        } else {
+            thumbnails.remove(tab.id)
+        }
         popupLimiter.reset(tab.id)
         dialogLimiter.reset(tab.id)
         externalLimiter.reset(tab.id)
         crashLimiter.reset(tab.id)
-        if let tabStates {
+        if !keep, !tab.isPrivate, let tabStates {
             let id = tab.id
             enqueueStateWork { await tabStates.delete([id]) }
         }
         enforceTiers()
+    }
+
+    /// Ends the private session once no private tab is left: the private data store (cookies,
+    /// caches, storage) and the per-site answers given in private tabs are dropped. Call it after
+    /// closing the last private tab.
+    public func endPrivateSession() {
+        guard let store = privateDataStore else { return }
+        privateDataStore = nil
+        privateSiteChoices = nil
+        Task { await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) }
+    }
+
+    /// A picture of the attached tab's page at `width` points and
+    /// `EngineChoices.swipeSnapshotPixelsPerPoint`, for a full-screen preview (the bar swipe's
+    /// neighbour). Nil when the tab is not on screen or the page does not answer in time.
+    public func snapshot(of tab: Tab, width: CGFloat) async -> UIImage? {
+        guard let slot = slots[tab.id], slot.container != nil, slot.webView.url != nil, width > 0 else { return nil }
+        let webView = slot.webView
+        let configuration = WKSnapshotConfiguration()
+        // WebKit multiplies `snapshotWidth` by the screen scale.
+        let scale = max(1, webView.traitCollection.displayScale)
+        configuration.snapshotWidth = NSNumber(value: Double(width * EngineChoices.swipeSnapshotPixelsPerPoint / scale))
+        configuration.afterScreenUpdates = false
+        let signposter = Signposts.signposter
+        let interval = signposter.beginInterval(Signposts.tabSnapshot, id: signposter.makeSignpostID(), "full")
+        defer { signposter.endInterval(Signposts.tabSnapshot, interval) }
+        return await withWebKitTimeout(fallback: nil) { done in
+            webView.takeSnapshot(with: configuration) { image, _ in done(image) }
+        }
     }
 
     /// Stores a thumbnail of an attached tab now, for example before the gallery opens over it.
@@ -346,6 +418,7 @@ public final class WebViewPool {
     /// `UIApplication.didReceiveMemoryWarningNotification`.
     public func handleMemoryWarning() {
         warm = nil
+        onMemoryWarning?()
         thumbnails.dropMemoryCache()
         // No sessionStorage fetch: it would wake every suspended process at the worst moment.
         for slot in slots.values where slot.container == nil && !slot.isBusy(in: self) {
@@ -358,7 +431,7 @@ public final class WebViewPool {
     public func saveAllTabs() async {
         let background = BackgroundWork.begin("Plain.saveTabs")
         defer { background?.end() }
-        for slot in slots.values {
+        for slot in slots.values where slot.tab?.isPrivate == false {
             slot.pendingSave?.cancel()
             await save(slot, fetchingSessionStorage: true)
         }
@@ -429,7 +502,7 @@ public final class WebViewPool {
         // A choice that matches what the pane would pick anyway is no override: the site goes back
         // to the automatic choice, so it follows the pane again (Duo inner vs outer screen).
         let automatic = NavigationRules.contentMode(forPaneSize: paneSize(of: tab))
-        contentModes.setContentMode(mode == automatic ? nil : mode, forSite: site)
+        siteChoices(for: tab).contentModes.setContentMode(mode == automatic ? nil : mode, forSite: site)
         reload(tab)
     }
 
@@ -438,7 +511,7 @@ public final class WebViewPool {
     func setPageZoom(_ zoom: Double, for tab: Tab) {
         guard tab.pool === self else { return }
         if let site = NavigationRules.siteKey(for: tab.url) {
-            pageZooms.setPageZoom(zoom == PageZoom.actualSize ? nil : zoom, forSite: site)
+            siteChoices(for: tab).pageZooms.setPageZoom(zoom == PageZoom.actualSize ? nil : zoom, forSite: site)
         }
         tab.set(\.pageZoom, zoom)
         if let webView = slots[tab.id]?.webView, webView.pageZoom != zoom { webView.pageZoom = zoom }
@@ -450,7 +523,8 @@ public final class WebViewPool {
     /// site without a remembered zoom.
     func applyRememberedZoom(to webView: WKWebView, in tab: Tab) {
         let site = NavigationRules.siteKey(for: webView.url)
-        let zoom = site.flatMap(pageZooms.pageZoom(forSite:)).map(PageZoom.nearestStep(to:)) ?? PageZoom.actualSize
+        let zooms = siteChoices(for: tab).pageZooms
+        let zoom = site.flatMap(zooms.pageZoom(forSite:)).map(PageZoom.nearestStep(to:)) ?? PageZoom.actualSize
         if webView.pageZoom != zoom { webView.pageZoom = zoom }
         tab.set(\.pageZoom, zoom)
     }
@@ -510,7 +584,7 @@ public final class WebViewPool {
     /// Saves the tab a second after its last main-frame load or detach, so a burst of loads
     /// writes once. `interactionState` is UI-process data: reading it wakes nothing.
     func scheduleSave(_ slot: Slot) {
-        guard tabStates != nil else { return }
+        guard tabStates != nil, slot.tab?.isPrivate == false else { return }
         slot.pendingSave?.cancel()
         slot.pendingSave = Task { [weak self, weak slot] in
             try? await Task.sleep(for: EngineChoices.saveDebounce)
@@ -520,7 +594,9 @@ public final class WebViewPool {
     }
 
     private func save(_ slot: Slot, fetchingSessionStorage: Bool) async {
-        guard let tabStates, let tab = slot.tab, slots[tab.id] === slot else { return }
+        // A tab whose saved file is still being read must not overwrite it with less.
+        guard let tabStates, let tab = slot.tab, slots[tab.id] === slot, !tab.isPrivate, !tab.readsSavedState
+        else { return }
         let session = fetchingSessionStorage ? await fetchSessionStorage(slot.webView) : nil
         // Closed or discarded meanwhile: a write now would bring its file back.
         guard slots[tab.id] === slot else { return }
@@ -543,27 +619,39 @@ public final class WebViewPool {
     @discardableResult
     private func ensureSlot(for tab: Tab) -> Slot {
         if let slot = slots[tab.id] { return slot }
-        let (webView, controller) = takeWebView()
+        let (webView, controller) = takeWebView(isPrivate: tab.isPrivate)
         let slot = Slot(tab: tab, webView: webView, controller: controller, pool: self)
         slot.lastUse = tick()
         slots[tab.id] = slot
         tab.set(\.tier, .live)
         if let state = tab.restoration {
             tab.restoration = nil
-            restore(state, into: slot)
+            restore(state, into: slot, readingSavedFile: tab.readsSavedState ? tabStates : nil)
         }
         return slot
     }
 
     /// Brings a discarded tab back: sessionStorage first (it must be in place before the page
-    /// loads), then `interactionState`, which loads the current history item.
-    private func restore(_ state: TabRestorationState, into slot: Slot) {
+    /// loads), then `interactionState`, which loads the current history item. With
+    /// `readingSavedFile`, the state comes from the tab's file (`makeSavedTab`), read off the main
+    /// thread first; `fallback` (the address) stands in until then and when there is no file.
+    private func restore(_ fallback: TabRestorationState, into slot: Slot, readingSavedFile file: TabStateStore? = nil) {
         let signposter = Signposts.signposter
         slot.restoreInterval = signposter.beginInterval(Signposts.tabRestore, id: signposter.makeSignpostID())
-        slot.pendingRestore = state
-        slot.lastSessionStorage = state.sessionStorage
+        slot.pendingRestore = fallback
+        slot.lastSessionStorage = fallback.sessionStorage
         let webView = slot.webView
+        let id = slot.tab?.id
         Task { [weak self, weak slot] in
+            var state = fallback
+            if let file, let id {
+                if let saved = await Self.readSavedState(id, from: file) { state = saved }
+                guard let slot, slot.pendingRestore != nil else { return }
+                slot.pendingRestore = state
+                slot.lastSessionStorage = state.sessionStorage
+                slot.tab?.readsSavedState = false
+                if state.isFormResult { slot.tab?.isFormResult = true }
+            }
             if let session = state.sessionStorage {
                 await withWebKitTimeout(fallback: ()) { done in webView.restoreData(session) { _ in done(()) } }
             }
@@ -658,7 +746,7 @@ public final class WebViewPool {
             tab.set(\.tier, .discarded)
             tab.set(\.isLoading, false)
             tab.setProgress(0)
-            if let tabStates = self.tabStates {
+            if let tabStates = self.tabStates, !tab.isPrivate, !tab.readsSavedState {
                 let id = tab.id
                 self.enqueueStateWork {
                     guard let data = try? await Self.encode(state) else { return }
@@ -691,6 +779,35 @@ public final class WebViewPool {
         try state.encoded()
     }
 
+    @concurrent
+    private nonisolated static func readSavedState(_ id: UUID, from store: TabStateStore) async -> TabRestorationState? {
+        guard let data = try? await store.read(for: id) else { return nil }
+        return try? TabRestorationState(encoded: data)
+    }
+
+    /// The per-site stores a tab reads and writes: the persistent ones, or for a private tab
+    /// in-memory ones for this private session (reading falls back to the persistent choices).
+    private func siteChoices(for tab: Tab) -> SiteChoices {
+        guard tab.isPrivate else {
+            return SiteChoices(contentModes: contentModes, pageZooms: pageZooms, permissions: permissionStore)
+        }
+        if let privateSiteChoices { return privateSiteChoices }
+        let choices = SiteChoices(
+            contentModes: LayeredContentModeStore(base: contentModes),
+            pageZooms: LayeredPageZoomStore(base: pageZooms),
+            permissions: InMemorySitePermissionStore()
+        )
+        privateSiteChoices = choices
+        return choices
+    }
+
+    private func privateStore() -> WKWebsiteDataStore {
+        if let privateDataStore { return privateDataStore }
+        let store = WKWebsiteDataStore.nonPersistent()
+        privateDataStore = store
+        return store
+    }
+
     private func tearDown(_ slot: Slot) {
         let tab = slot.tab
         slot.pendingSave?.cancel()
@@ -720,7 +837,8 @@ public final class WebViewPool {
         let controller = makeController()
         configuration.userContentController = controller
         let webView = makeWebView(configuration: configuration, controller: controller)
-        let child = Tab(id: UUID(), openerID: opener.id, pool: self, restoring: nil)
+        // WebKit's configuration carries the opener's data store: a private opener's child is private.
+        let child = Tab(id: UUID(), openerID: opener.id, isPrivate: opener.isPrivate, pool: self, restoring: nil)
         let slot = Slot(tab: child, webView: webView, controller: controller, pool: self)
         slot.lastUse = tick()
         slots[child.id] = slot
@@ -750,7 +868,8 @@ public final class WebViewPool {
     /// The content mode for a navigation starting now: the site's remembered choice, otherwise
     /// the pane's size.
     func contentMode(for url: URL, in tab: Tab) -> ContentMode {
-        if let site = NavigationRules.siteKey(for: url), let mode = contentModes.contentMode(forSite: site) {
+        if let site = NavigationRules.siteKey(for: url),
+           let mode = siteChoices(for: tab).contentModes.contentMode(forSite: site) {
             return mode
         }
         return NavigationRules.contentMode(forPaneSize: paneSize(of: tab))
@@ -796,6 +915,8 @@ public final class WebViewPool {
     /// Asks once per site and permission, then answers from `permissionStore`. Only the tab on
     /// screen can ask; background requests are denied without being remembered.
     func decide(_ permissions: [SitePermission], site: String, for tab: Tab) async -> Bool {
+        // A private tab's answers last for its private session and never reach disk.
+        let permissionStore = siteChoices(for: tab).permissions
         var unknown: [SitePermission] = []
         for permission in permissions {
             switch await permissionStore.isAllowed(permission, forSite: site) {
@@ -806,7 +927,7 @@ public final class WebViewPool {
         }
         guard !unknown.isEmpty else { return true }
         guard isAttached(tab), let host else { return false }
-        let key = unknown.map(\.rawValue).joined(separator: ",") + " " + site
+        let key = unknown.map(\.rawValue).joined(separator: ",") + " " + site + (tab.isPrivate ? " private" : "")
         if let pending = pendingPermissionAsks[key] { return await pending.value }
         let store = permissionStore
         let ask = Task {

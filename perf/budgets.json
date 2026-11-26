@@ -1,0 +1,21 @@
+{
+  "comment": "Device budgets from docs/plan.md section 2. Absolute limits apply on the device only; on a simulator the gate fails on a regression larger than simRegressionTolerance against the previous sim row instead.",
+  "simRegressionTolerance": 0.20,
+  "metrics": {
+    "launchMs": {
+      "label": "Cold launch until responsive (ms)",
+      "target": 300,
+      "fail": 400
+    },
+    "searchFieldMs": {
+      "label": "main() to search field focused (ms)",
+      "target": 300,
+      "fail": 400
+    },
+    "hitchMsPerS": {
+      "label": "Page scroll hitch ratio (ms/s)",
+      "target": 5,
+      "fail": 10
+    }
+  }
+}

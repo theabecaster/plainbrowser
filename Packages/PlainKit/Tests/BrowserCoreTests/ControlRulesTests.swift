@@ -57,19 +57,31 @@ import Testing
         #expect(rules.reload == .hidden)
     }
 
-    @Test func noTabsButClosedOrArchivedPutsThemInThePageMenu() {
+    @Test func noTabsButClosedOrArchivedOffersThemOnTheStartScreenAndInMore() {
         var state = Self.firstRun
         state.hasClosed = true
         state.hasArchived = true
         let rules = ControlRules(state)
         #expect(rules.tabsSlot == .hidden)
-        #expect(rules.startNewTabOpensPrivate == true)
-        #expect(rules.startReopenClosedTab)
-        #expect(rules.startArchivedTabs)
-        // Without them, only New Private Tab.
+        #expect(rules.moreNewTabOpensPrivate)
+        #expect(rules.moreReopenClosedTab)
+        #expect(rules.moreArchivedTabs)
+        #expect(rules.startShortcuts == [.privateTab, .reopenClosedTab, .archivedTabs])
+        // Without them, only the private tab.
         let bare = ControlRules(Self.firstRun)
-        #expect(!bare.startReopenClosedTab)
-        #expect(!bare.startArchivedTabs)
+        #expect(!bare.moreReopenClosedTab)
+        #expect(!bare.moreArchivedTabs)
+        #expect(bare.startShortcuts == [.privateTab])
+    }
+
+    @Test func moreCarriesTheTabItemsInEveryStateWhereTheyApply() {
+        var state = Self.page(others: 3)
+        state.hasClosed = true
+        let rules = ControlRules(state)
+        #expect(rules.moreNewTabOpensPrivate)
+        #expect(rules.moreReopenClosedTab)
+        #expect(!rules.moreArchivedTabs)
+        #expect(rules.startShortcuts.isEmpty, "shortcuts are for the start screen only")
     }
 
     @Test func emptyTabWithOthersShowsTabsAndTheGallery() {
@@ -81,7 +93,7 @@ import Testing
         #expect(rules.forward == .hidden)
         #expect(rules.share == .hidden)
         #expect(!rules.offersNewTabCard, "swiping past an empty tab would make a second empty tab")
-        #expect(rules.startNewTabOpensPrivate == nil, "the tabs slot shows, so its menu has these items")
+        #expect(rules.startShortcuts == [.privateTab])
         #expect(!rules.menuNewTab, "New Tab would reuse the empty tab on screen")
         #expect(rules.menuNewPrivateTab)
         #expect(!rules.menuCloseTab)
@@ -96,12 +108,13 @@ import Testing
         #expect(rules.barSwipeSwitchesTabs)
         #expect(!rules.offersNewTabCard)
         #expect(rules.menuPreviousTab == .hidden)
-        #expect(rules.startNewTabOpensPrivate == true)
+        #expect(rules.startShortcuts == [.privateTab])
     }
 
     @Test func emptyPrivateTabOffersARegularNewTab() {
         let rules = ControlRules(Self.emptyTab(isPrivate: true))
-        #expect(rules.startNewTabOpensPrivate == false)
+        #expect(!rules.moreNewTabOpensPrivate)
+        #expect(rules.startShortcuts == [.regularTab])
         #expect(rules.menuNewTab)
         #expect(!rules.menuNewPrivateTab)
     }
@@ -120,7 +133,7 @@ import Testing
         #expect(rules.menuNextTab == .hidden)
         #expect(rules.menuCloseTab)
         #expect(rules.menuNewTab && rules.menuNewPrivateTab)
-        #expect(rules.startNewTabOpensPrivate == nil)
+        #expect(rules.startShortcuts.isEmpty)
     }
 
     @Test func backDimsAndForwardHidesInPlace() {
@@ -260,8 +273,7 @@ import Testing
         state.hasArchived = true
         #expect(ControlRules(state).menuReopenClosedTab)
         #expect(ControlRules(state).menuArchivedTabs)
-        // A page on screen: the page menu never carries the tabs items.
-        #expect(!ControlRules(state).startReopenClosedTab)
+        #expect(ControlRules(state).moreReopenClosedTab)
     }
 
     // MARK: Gallery (§6)

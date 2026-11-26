@@ -219,16 +219,34 @@ public struct ControlRules: Sendable, Equatable {
 
     public var openInOtherPane: Bool { state.canSplit && isPageShowing && !state.isReaderOpen }
 
-    /// The tabs menu's items move into the page menu while the tabs slot is hidden, so none is
-    /// ever out of reach. Nil when they don't show; else whether the new-tab item opens a private
-    /// tab (on an empty private tab it reads "New Tab" and turns this tab regular).
-    public var startNewTabOpensPrivate: Bool? {
-        guard tabsSlot == .hidden else { return nil }
-        return !(state.hasTab && state.isPrivate)
-    }
+    // The tabs menu's other items sit in More's top section in every state where they apply, one
+    // visible tap away; the long press on the tabs slot is a shortcut, never the only way (owner,
+    // 2026-11-26).
 
-    public var startReopenClosedTab: Bool { tabsSlot == .hidden && state.hasClosed }
-    public var startArchivedTabs: Bool { tabsSlot == .hidden && state.hasArchived }
+    /// Whether More's new-tab item opens a private tab. Always shown; on an empty private tab it
+    /// reads "New Tab" and turns this tab regular (nothing is added).
+    public var moreNewTabOpensPrivate: Bool { !(state.hasTab && !state.hasPage && state.isPrivate) }
+
+    public var moreReopenClosedTab: Bool { state.hasClosed }
+    public var moreArchivedTabs: Bool { state.hasArchived }
+
+    // MARK: The start screen (§3)
+
+    /// Small shortcuts under the mark on the start screen, only the ones that apply: a private tab
+    /// always (a regular one from an empty private tab), Reopen Closed Tab with `closed`, Archived
+    /// Tabs with `archived`.
+    public var startShortcuts: [StartShortcut] {
+        guard isStart else { return [] }
+        var shortcuts: [StartShortcut] = [moreNewTabOpensPrivate ? .privateTab : .regularTab]
+        if state.hasClosed { shortcuts.append(.reopenClosedTab) }
+        if state.hasArchived { shortcuts.append(.archivedTabs) }
+        return shortcuts
+    }
+}
+
+/// A shortcut under the start screen's mark.
+public enum StartShortcut: Sendable, Equatable {
+    case privateTab, regularTab, reopenClosedTab, archivedTabs
 }
 
 // MARK: - Tab gallery (§6)

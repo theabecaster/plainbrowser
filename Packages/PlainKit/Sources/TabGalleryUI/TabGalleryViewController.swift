@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import os
 import PerfSignposts
@@ -477,8 +478,24 @@ public final class TabGalleryViewController: UIViewController {
         emptyView.isHidden = !isEmpty || isLeavingEmpty
         // With the private toggle, the bar stays: it is the way between regular and private tabs.
         bottomBar.isHidden = isEmpty && !dataSource.supportsPrivateTabs
-        bottomBar.doneButton.isEnabled = selectedID != nil
+        // Each control by docs/state-rules.md §6, hidden in place (the bar keeps its shape).
+        let rules = GalleryRules(galleryState)
+        bottomBar.newTabButton.isHidden = !rules.newTabButton
+        bottomBar.doneButton.isHidden = !rules.done
+        bottomBar.menuButton.isHidden = !rules.more
         if isEmpty { toast.hide(animated: false) }
+    }
+
+    /// The shown list in the terms of the state rules.
+    private var galleryState: GalleryState {
+        var state = GalleryState()
+        state.listCount = items.count
+        state.closableCount = items.values.count { !$0.isPinned }
+        state.isPrivateList = dataSource.isShowingPrivateTabs
+        state.selectionInList = selectedID.map { items[$0] != nil } ?? false
+        state.hasClosed = dataSource.canReopenClosedTab
+        state.hasArchived = dataSource.canShowArchive
+        return state
     }
 
     private func configure(_ card: TabCardView, id: UUID) {
@@ -555,8 +572,9 @@ public final class TabGalleryViewController: UIViewController {
         reloadTabs(animated: false)
     }
 
+    /// Done, or the empty space: back to the tab on screen, by its card when it has one here.
     private func done() {
-        guard let selectedID else { return }
+        guard let selectedID, items[selectedID] != nil else { return dataSource.returnToPage() }
         open(selectedID)
     }
 
@@ -597,6 +615,8 @@ public final class TabGalleryViewController: UIViewController {
             motion.forget(id)
             depart(card, animated: true)
         }
+        // Read before the close: private tabs never come back, so they get no Reopen offer.
+        let offersReopen = GalleryRules(galleryState).reopenToastAfterClose
         dataSource.closeTab(id)
         if dataSource.tabs.isEmpty {
             reloadTabs(animated: false)
@@ -607,6 +627,12 @@ public final class TabGalleryViewController: UIViewController {
         reloadTabs(animated: true) {
             Signposts.signposter.endInterval(Signposts.galleryCardClose, state)
         }
+        if offersReopen { toast.show(animated: true) } else { toast.hide(animated: true) }
+    }
+
+    /// The shell switched lists after the last card of the other one closed: the Reopen offer
+    /// moves with it.
+    public func showReopenToast() {
         toast.show(animated: true)
     }
 
@@ -627,7 +653,9 @@ public final class TabGalleryViewController: UIViewController {
     }
 
     private func confirmCloseAll(from source: UIView) {
-        let count = items.count
+        // Only the tabs it closes: pinned ones stay.
+        let count = galleryState.closableCount
+        let offersReopen = GalleryRules(galleryState).reopenToastAfterClose
         let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
         let title = count == 1 ? "Close 1 Tab" : "Close All \(count) Tabs"
         sheet.addAction(UIAlertAction(title: title, style: .destructive) { [weak self] _ in
@@ -635,7 +663,11 @@ public final class TabGalleryViewController: UIViewController {
             Signposts.signposter.emitEvent(Signposts.galleryCloseAll)
             dataSource.closeAllTabs()
             reloadTabs(animated: false)
-            if dataSource.tabs.isEmpty { leaveEmpty() }
+            if dataSource.tabs.isEmpty {
+                leaveEmpty()
+            } else if offersReopen {
+                toast.show(animated: true)
+            }
         })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         sheet.popoverPresentationController?.sourceView = source
@@ -645,12 +677,13 @@ public final class TabGalleryViewController: UIViewController {
     private func galleryMenuItems() -> [UIMenuElement] {
         Signposts.signposter.emitEvent(Signposts.galleryMenu)
         var elements: [UIMenuElement] = []
-        if dataSource.canReopenClosedTab {
+        let rules = GalleryRules(galleryState)
+        if rules.reopenClosedTab {
             elements.append(UIAction(title: "Reopen Closed Tab", image: UIImage(systemName: "arrow.uturn.backward")) { [weak self] _ in
                 self?.reopenClosedTab()
             })
         }
-        if dataSource.canShowArchive {
+        if rules.archivedTabs {
             let archive = UIAction(title: "Archived Tabs", image: UIImage(systemName: "archivebox")) { [weak self] _ in
                 self?.toast.hide(animated: false)
                 self?.dataSource.showArchive()
@@ -658,7 +691,7 @@ public final class TabGalleryViewController: UIViewController {
             archive.accessibilityIdentifier = "gallery.archive"
             elements.append(archive)
         }
-        guard !items.isEmpty else { return elements }
+        guard rules.closeAllTabs else { return elements }
         let closeAll = UIAction(title: "Close All Tabs", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
             guard let self else { return }
             confirmCloseAll(from: bottomBar.menuButton)
@@ -802,7 +835,7 @@ extension TabGalleryViewController: UIGestureRecognizerDelegate {
     }
 
     @objc func backgroundTapped() {
-        guard selectedID != nil, reorder == nil else { return }
+        guard reorder == nil else { return }
         Signposts.signposter.emitEvent(Signposts.galleryBack)
         done()
     }

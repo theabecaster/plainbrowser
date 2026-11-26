@@ -18,6 +18,7 @@ protocol GalleryHost: AnyObject {
     var galleryCanShowArchive: Bool { get }
     var galleryCanOpenInOtherPane: Bool { get }
     func galleryOpenInOtherPane(_ id: TabID)
+    func galleryReturnToPage()
 }
 
 /// The tab gallery's data source over `EngineTabs` (and so BrowserCore's `TabStore`, the one owner
@@ -33,6 +34,7 @@ final class GalleryTabs: TabGalleryDataSource {
         engineTabs = tabs
     }
 
+    /// The shown list's cards. An empty tab is never a card (docs/state-rules.md, principle 7).
     var tabs: [TabGalleryItem] {
         engineTabs.galleryItems(private: isShowingPrivateTabs)
     }
@@ -86,6 +88,10 @@ final class GalleryTabs: TabGalleryDataSource {
 
     func showArchive() {
         host?.galleryShowArchive()
+    }
+
+    func returnToPage() {
+        host?.galleryReturnToPage()
     }
 }
 #endif

@@ -38,6 +38,8 @@ final class EngineTabs {
     private var changeScheduled = false
     /// The saved session is in the store (after `restoreSession()`).
     private(set) var isSessionLoaded = false
+    /// The archive holds at least one tab (read off the main thread; `refreshArchiveState()`).
+    private(set) var hasArchivedTabs = false
 
     /// - Parameter windowID: the window the scene showed last time, when it has one; the saved
     ///   session's first window otherwise.
@@ -93,6 +95,39 @@ final class EngineTabs {
     }
 
     var canReopenClosedTab: Bool { !store.recentlyClosed.isEmpty }
+
+    /// The newest batch on the recently closed stack: what a Reopen offer made right after a close
+    /// brings back.
+    var lastClosedBatchID: UUID? { store.recentlyClosed.last?.id }
+
+    // MARK: Empty tabs (docs/state-rules.md, principle 7)
+
+    /// A tab with nothing in it: no address, not loading, no failed load. An empty tab never counts
+    /// as a tab: it is not a card, a neighbour or one of the "others".
+    func isEmpty(_ id: TabID) -> Bool {
+        if let tab = engineTabs[id] { return tab.url == nil && !tab.isLoading && tab.loadError == nil }
+        return store.tabs[id]?.url == nil
+    }
+
+    /// The window's tabs in order, regular or private, without empty tabs: the gallery's cards.
+    func pageEntries(private isPrivate: Bool) -> [TabEntry] {
+        entries(private: isPrivate).filter { !isEmpty($0.id) }
+    }
+
+    /// Open tabs besides `id`, regular and private together, empty tabs left out (the rules'
+    /// `others`).
+    func otherTabCount(besides id: TabID?) -> Int {
+        var count = 0
+        for isPrivate in [false, true] {
+            for entry in entries(private: isPrivate) where entry.id != id && !isEmpty(entry.id) { count += 1 }
+        }
+        return count
+    }
+
+    /// The tab of a list the user saw last, empty tabs left out.
+    func mostRecent(private isPrivate: Bool) -> TabID? {
+        pageEntries(private: isPrivate).max { $0.lastActiveAt < $1.lastActiveAt }?.id
+    }
 
     /// The engine tab for a store id, made on first use from what the store knows. A tab with an
     /// address reads its state file when it first gets a web view.
@@ -181,6 +216,14 @@ final class EngineTabs {
         if wasPrivate { endPrivateSessionIfEmpty() }
     }
 
+    /// Removes an empty tab the user left, with no Reopen (docs/state-rules.md, principle 7).
+    func discard(_ id: TabID) {
+        let wasPrivate = store.tabs[id]?.isPrivate == true
+        store.discard(id)
+        drop(id)
+        if wasPrivate { endPrivateSessionIfEmpty() }
+    }
+
     /// Close All Tabs: every regular tab except pinned ones, or every private tab, as one batch that
     /// Reopen Closed Tab brings back (private tabs never come back).
     func closeAll(private isPrivate: Bool) {
@@ -199,6 +242,13 @@ final class EngineTabs {
         return store.reopenLastClosed()
     }
 
+    /// Reopens exactly the batch a Reopen offer was made for; nothing if it is gone.
+    @discardableResult
+    func reopenClosed(_ batchID: UUID) -> [TabID] {
+        Signposts.signposter.emitEvent(Signposts.tabReopen)
+        return store.reopenClosed(batchID)
+    }
+
     /// Moves `id` to `index` in its list.
     func move(_ id: TabID, to index: Int) {
         store.move(id, to: index)
@@ -208,11 +258,25 @@ final class EngineTabs {
     @discardableResult
     func restoreArchived(_ archived: ArchivedTab) -> Tab {
         Signposts.signposter.emitEvent(Signposts.tabUnarchive)
+        defer { refreshArchiveState() }
         return tab(store.restoreArchived(archived.entry, in: window))
     }
 
     func deleteArchived(_ ids: [TabID]) {
         store.deleteArchived(ids)
+        refreshArchiveState()
+    }
+
+    /// Reads whether the archive holds anything, off the main thread (one indexed count, after the
+    /// pending tab writes), so Archived Tabs shows only when it leads somewhere.
+    func refreshArchiveState() {
+        Task { [weak self, database] in
+            guard let database = await database() else { return }
+            let count = (try? await database.archivedTabCount()) ?? 0
+            guard let self, hasArchivedTabs != (count > 0) else { return }
+            hasArchivedTabs = count > 0
+            scheduleChange()
+        }
     }
 
     /// Moves tabs not opened for `setting`'s interval to the archive (launch and each return to
@@ -228,6 +292,7 @@ final class EngineTabs {
         }
         let archived = await store.archiveIdleTabs(after: setting)
         for id in archived { drop(id) }
+        if !archived.isEmpty { refreshArchiveState() }
         signposter.endInterval(Signposts.tabArchive, interval, "\(archived.count)")
     }
 
@@ -268,6 +333,8 @@ final class EngineTabs {
         store = TabStore(session: session, persistence: database.tabSession)
         windowID = savedIndex.map { session.windows[$0].id } ?? store.windows[0].id
         wireStore()
+        // Empty tabs are never left behind: a blank saved tab (an older build kept them) goes.
+        for entry in saved.tabs where entry.url == nil { store.discard(entry.id) }
         // Private tabs opened before the session loaded stay (the store never saves them).
         for entry in mine.tabs(in: myWindow, private: true) {
             store.open(entry.url, title: entry.title, in: window, isPrivate: true, id: entry.id)
@@ -276,6 +343,7 @@ final class EngineTabs {
             store.select(id)
         }
         isSessionLoaded = true
+        refreshArchiveState()
         scheduleChange()
         guard !openedMeanwhile, let id = selectedID, store.tabs[id]?.url != nil else { return nil }
         return tab(id)

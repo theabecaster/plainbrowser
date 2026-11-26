@@ -14,5 +14,15 @@ extension Motion {
         let relative = distance != 0 ? velocity / distance : 0
         return UISpringTimingParameters(duration: 0.3, bounce: 0.15, initialVelocity: CGVector(dx: relative, dy: 0))
     }
+
+    /// A card swiped up and away: it keeps the finger's velocity (pt/s) over `distance` points and
+    /// leaves without bounce, since it ends off screen. Both vector parts carry the velocity, so
+    /// it applies whichever axis the animated property uses.
+    public static func cardThrowTiming(distance: CGFloat, velocity: CGFloat) -> UISpringTimingParameters {
+        // Capped like the fluid-interfaces samples: a tiny distance would make the relative
+        // velocity explode.
+        let relative = distance != 0 ? min(max(velocity / distance, -30), 30) : 0
+        return UISpringTimingParameters(duration: 0.3, bounce: 0, initialVelocity: CGVector(dx: relative, dy: relative))
+    }
 }
 #endif

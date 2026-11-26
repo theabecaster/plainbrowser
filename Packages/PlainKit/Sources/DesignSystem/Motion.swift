@@ -28,6 +28,12 @@ public enum Motion {
     public static let throwClose = Animation.spring(duration: 0.3, bounce: 0.15)
     /// Cards reflowing after a close (M2).
     public static let reflow = Animation.snappy(duration: 0.3)
+    /// Tab gallery cards closing a gap or making room, run frame by frame so a scroll or another
+    /// close can join in mid-flight. Damping 0.9: the neighbors settle with the faintest give.
+    public static let cardReflow = Spring(duration: 0.35, bounce: 0.1)
+    /// A card that was swiped up but not far or fast enough springs back, with the release
+    /// velocity. Slight bounce: momentum drives it (WWDC18, "Designing Fluid Interfaces").
+    public static let cardReturn = Animation.spring(duration: 0.32, bounce: 0.12)
     /// The Reduce Motion replacement for any movement.
     public static let crossfadeDuration: TimeInterval = 0.2
 

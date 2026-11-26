@@ -4,11 +4,18 @@ import os
 import PerfSignposts
 import UIKit
 
-/// The tab gallery: every open tab as a card (docs/plan.md, sections 5 and 6).
+/// The tab gallery: every open tab as a card (docs/plan.md, sections 5 and 6;
+/// docs/research/arc-tab-switcher.md).
 ///
-/// Compact width shows one column of large cards; regular width shows an even-column grid. Tap a
-/// card to open it, flick it sideways to close it, long-press to reorder or for its menu. The
-/// gallery reads tabs from its `TabGalleryDataSource` and sends every change back to it.
+/// Compact width shows the app-switcher cascade: one row of page-shaped cards, later tabs on top,
+/// scrolling sideways and resting with a card in the middle. Regular width shows pages of an
+/// even-column grid that also scroll sideways. Everywhere: tap a card to open it, swipe it up to
+/// close it, long-press it for its menu or to drag it to a new place. The gallery reads tabs from
+/// its `TabGalleryDataSource` and sends every change back to it.
+///
+/// A plain scroll view supplies the physics (deceleration, rubber band, the system's projected
+/// stop). The cards are its subviews, placed from the scroll offset on every frame with `center`
+/// and `transform` only, so scrolling never runs a layout pass (docs/decisions.md).
 ///
 /// The shell runs the open and close animations with `TabGalleryTransition`, which uses
 /// `prepareForTransition(to:)`, `thumbnailFrame(for:in:)` and `setThumbnailHidden(for:)`.
@@ -19,23 +26,38 @@ public final class TabGalleryViewController: UIViewController {
     /// (docs/ui-reference.md: no empty screen in between).
     public var onLastTabClosed: (() -> Void)?
 
-    private(set) var collectionView: UICollectionView!
-    private var diffable: UICollectionViewDiffableDataSource<Int, UUID>!
-    /// The list last applied, by id.
+    private(set) var scrollView: GalleryScrollView!
+    /// The tabs in order, as last read from the data source.
+    private(set) var order: [UUID] = []
     private var items: [UUID: TabGalleryItem] = [:]
+    /// Where each tab shows: its index, or its place in a reorder that is being dragged.
+    private var slots: [UUID: Int] = [:]
     private var selectedID: UUID?
     /// The card whose preview the transition stands in for.
     private var hiddenThumbnailID: UUID?
     private let pipeline = ThumbnailPipeline()
     private(set) var metrics = TabGalleryMetrics(width: 0, height: 0, isCompactWidth: true, titleLineHeight: 20)
 
+    /// Cards on screen, by tab.
+    private(set) var cards: [UUID: TabCardView] = [:]
+    /// Hidden cards ready for reuse.
+    private var pool: [TabCardView] = []
+    let motion = CardMotion()
+    private var warmedRange: ClosedRange<Int>?
+    private var dragStartOffset: CGFloat = 0
+    /// Where the scroll is heading after a release, so a release with no speed still snaps.
+    private var snapTarget: CGFloat?
+    /// The tab being dragged to a new place, and where it would land.
+    var reorder: (id: UUID, slot: Int)?
+    var autoScroll: AutoScroller?
+    /// The card a drag lifted: hidden until its preview lands.
+    private var liftedID: UUID?
+
     private let bottomBar = GalleryBottomBar()
-    /// An empty view over the status bar that carries the top scroll edge effect.
-    private let statusBarEdge = UIView()
     private let toast = ReopenToast()
     private let emptyView = GalleryEmptyView()
     private var scrollInterval: OSSignpostIntervalState?
-    private var didScrollToSelection = false
+    private var didFocusSelection = false
 
     public init(dataSource: any TabGalleryDataSource) {
         self.dataSource = dataSource
@@ -52,52 +74,34 @@ public final class TabGalleryViewController: UIViewController {
         root.backgroundColor = Palette.background
         view = root
 
-        let layout = UICollectionViewCompositionalLayout { [unowned self] _, environment in
-            makeSection(environment)
-        }
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.backgroundColor = Palette.background
-        collectionView.alwaysBounceVertical = true
-        collectionView.delegate = self
-        collectionView.prefetchDataSource = self
-        collectionView.dragDelegate = self
-        collectionView.dropDelegate = self
-        collectionView.dragInteractionEnabled = true
-        collectionView.reorderingCadence = .fast
-        collectionView.accessibilityIdentifier = "tabGallery"
-        root.addSubview(collectionView)
+        let scroll = GalleryScrollView()
+        scroll.backgroundColor = .clear
+        scroll.delegate = self
+        scroll.decelerationRate = .normal
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.showsVerticalScrollIndicator = false
+        scroll.alwaysBounceHorizontal = true
+        scroll.alwaysBounceVertical = false
+        scroll.contentInsetAdjustmentBehavior = .never
+        scroll.delaysContentTouches = false
+        scroll.accessibilityIdentifier = "tabGallery"
+        scroll.accessibilityProvider = self
+        root.addSubview(scroll)
+        scrollView = scroll
+        root.addInteraction(UIDropInteraction(delegate: self))
 
-        let registration = UICollectionView.CellRegistration<TabCardCell, UUID> { [unowned self] cell, _, id in
-            configure(cell, id: id)
-        }
-        diffable = UICollectionViewDiffableDataSource(collectionView: collectionView) { collection, indexPath, id in
-            collection.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: id)
-        }
+        motion.onFrame = { [weak self] in self?.layoutCards() }
 
         emptyView.button.addAction(UIAction { [weak self] _ in self?.newTab() }, for: .primaryActionTriggered)
         root.addSubview(emptyView)
 
         bottomBar.newTabButton.addAction(UIAction { [weak self] _ in self?.newTab() }, for: .primaryActionTriggered)
-        bottomBar.privateButton.addAction(UIAction { [weak self] _ in self?.togglePrivate() }, for: .primaryActionTriggered)
-        bottomBar.showsPrivateButton = dataSource.supportsPrivateTabs
         bottomBar.doneButton.addAction(UIAction { [weak self] _ in self?.done() }, for: .primaryActionTriggered)
         bottomBar.menuButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             completion(self?.galleryMenuItems() ?? [])
         }])
         bottomBar.menuButton.showsMenuAsPrimaryAction = true
         root.addSubview(bottomBar)
-        // The system's scroll edge effect softens the cards passing under the floating bar.
-        let edge = UIScrollEdgeElementContainerInteraction()
-        edge.scrollView = collectionView
-        edge.edge = .bottom
-        bottomBar.addInteraction(edge)
-        // And under the status bar, so cards scrolling up never sit behind the clock.
-        statusBarEdge.isUserInteractionEnabled = false
-        root.addSubview(statusBarEdge)
-        let topEdge = UIScrollEdgeElementContainerInteraction()
-        topEdge.scrollView = collectionView
-        topEdge.edge = .top
-        statusBarEdge.addInteraction(topEdge)
 
         toast.button.addAction(UIAction { [weak self] _ in self?.reopenClosedTab() }, for: .primaryActionTriggered)
         root.addSubview(toast)
@@ -107,22 +111,21 @@ public final class TabGalleryViewController: UIViewController {
         super.viewDidLoad()
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self, UITraitHorizontalSizeClass.self]) {
             (gallery: TabGalleryViewController, _) in
-            gallery.reconfigureAll()
+            gallery.view.setNeedsLayout()
         }
         reloadTabs(animated: false)
     }
 
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        didScrollToSelection = false
+        didFocusSelection = false
     }
 
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let bounds = view.bounds
-        if collectionView.frame != bounds { collectionView.frame = bounds }
+        if scrollView.frame != bounds { scrollView.frame = bounds }
         let safe = view.safeAreaInsets
-        statusBarEdge.frame = CGRect(x: 0, y: 0, width: bounds.width, height: safe.top)
 
         // Floating controls center on the safe area: on the Duo's outer screen the system's
         // vertical bar takes one side.
@@ -143,51 +146,162 @@ public final class TabGalleryViewController: UIViewController {
             x: (midX - emptySize.width / 2).rounded(), y: ((bounds.height - emptySize.height) / 2).rounded(),
             width: emptySize.width, height: emptySize.height
         )
-        // The cards scroll under the floating bar and end above it.
-        let bottomInset = bounds.height - bottomBar.frame.minY + Spacing.s - safe.bottom
-        if collectionView.contentInset.bottom != bottomInset {
-            collectionView.contentInset.bottom = bottomInset
-            collectionView.verticalScrollIndicatorInsets.bottom = bottomInset
+
+        let next = TabGalleryMetrics(
+            width: bounds.width, height: bounds.height,
+            safeTop: safe.top, safeLeft: safe.left, safeBottom: safe.bottom, safeRight: safe.right,
+            isCompactWidth: traitCollection.horizontalSizeClass != .regular,
+            titleLineHeight: TabCardView.titleFont(for: traitCollection).lineHeight,
+            bottomChrome: max(0, bounds.height - safe.bottom - bottomBar.frame.minY)
+        )
+        if next != metrics { apply(next) }
+        if !didFocusSelection, bounds.width > 0 {
+            didFocusSelection = true
+            if let selectedID, let slot = slots[selectedID] { scroll(to: metrics.restingOffset(for: slot), animated: false) }
         }
-        if !didScrollToSelection, bounds.width > 0, let selectedID {
-            didScrollToSelection = true
-            collectionView.layoutIfNeeded()
-            scrollToTab(selectedID, animated: false)
+        layoutCards()
+    }
+
+    /// New bounds, size class or text size: same tab in focus, every card resized.
+    private func apply(_ next: TabGalleryMetrics) {
+        let anchor = metrics.width > 0 ? focusedSlot() : nil
+        let oldThumbnail = CGSize(width: metrics.cardWidth, height: metrics.thumbnailHeight)
+        metrics = next
+        motion.reset()
+        updateContentSize()
+        if let anchor { scroll(to: metrics.restingOffset(for: anchor), animated: false) }
+        for card in Array(cards.values) + pool {
+            card.setSize(metrics.cardSize, headerHeight: metrics.headerHeight)
+        }
+        if oldThumbnail != CGSize(width: metrics.cardWidth, height: metrics.thumbnailHeight) {
+            for (id, card) in cards { configure(card, id: id) }
         }
     }
 
-    private func makeSection(_ environment: any NSCollectionLayoutEnvironment) -> NSCollectionLayoutSection {
-        let traits = environment.traitCollection
-        let insets = collectionView.safeAreaInsets
-        let next = TabGalleryMetrics(
-            width: environment.container.contentSize.width - insets.left - insets.right,
-            height: view.bounds.height,
-            isCompactWidth: traits.horizontalSizeClass != .regular,
-            titleLineHeight: TabCardCell.titleFont(for: traits).lineHeight
-        )
-        if next != metrics {
-            let resized = metrics.cardSize != next.cardSize && metrics.width > 0
-            metrics = next
-            // Cards already on screen keep their old preview height until configured again.
-            // Not inside this layout pass: on the next turn of the main loop.
-            if resized { Task { @MainActor [weak self] in self?.reconfigureAll() } }
+    private func updateContentSize() {
+        let size = CGSize(width: metrics.contentWidth(for: order.count), height: max(1, metrics.height))
+        if scrollView.contentSize != size { scrollView.contentSize = size }
+    }
+
+    /// The slot at rest in the middle (cascade) or first on the page (grid).
+    private func focusedSlot() -> Int {
+        guard !order.isEmpty else { return 0 }
+        let stop = Int((scrollView.contentOffset.x / metrics.snapUnit).rounded())
+        let slot = metrics.style == .cascade ? stop : stop * metrics.cardsPerPage
+        return min(max(slot, 0), order.count - 1)
+    }
+
+    /// Jumps or scrolls to `offset`, stopping any scroll in flight.
+    private func scroll(to offset: CGFloat, animated: Bool) {
+        let clamped = min(max(offset, 0), metrics.maxOffset(for: order.count))
+        snapTarget = nil
+        scrollView.setContentOffset(CGPoint(x: clamped, y: 0), animated: animated)
+    }
+
+    // MARK: Placing cards
+
+    /// Places every card that shows at the current scroll offset, from its slot and the motion
+    /// still running. Runs on every scroll frame: position, transform, z order, a title's alpha
+    /// and a mask width only, and only for the few cards on screen.
+    func layoutCards() {
+        guard metrics.width > 0, isViewLoaded else { return }
+        let offset = scrollView.contentOffset.x + motion.scrollShift
+        let contentX = scrollView.contentOffset.x
+        var shown = Set<UUID>()
+        shown.reserveCapacity(12)
+
+        func place(_ id: UUID) {
+            guard !shown.contains(id), let index = slots[id] else { return }
+            let slot = CGFloat(index) + motion.slotOffset(id)
+            let placement = metrics.placement(slot: slot, offset: offset)
+            let appear = motion.appearance(id)
+            let scale = placement.scale * (0.92 + 0.08 * appear)
+            let halfWidth = metrics.cardWidth * scale / 2
+            guard placement.center.x + halfWidth > -1, placement.center.x - halfWidth < metrics.width + 1 else { return }
+            if metrics.style == .cascade, !CascadeCurve.visibleRange.contains(placement.r) { return }
+            shown.insert(id)
+            let card = cards[id] ?? dequeueCard(for: id)
+            let center = CGPoint(x: (placement.center.x + contentX).rounded(toScale: 3), y: placement.center.y)
+            if card.center != center { card.center = center }
+            let transform = scale == 1 ? CGAffineTransform.identity : CGAffineTransform(scaleX: scale, y: scale)
+            if card.transform != transform { card.transform = transform }
+            if card.alpha != appear { card.alpha = appear }
+            let bodyAlpha: CGFloat = liftedID == id ? 0 : 1
+            if card.body.alpha != bodyAlpha { card.body.alpha = bodyAlpha }
+            // Later tabs lie on top; a card being dragged rides above everything.
+            let z = reorder?.id == id ? 10_000 : slot
+            if card.layer.zPosition != z { card.layer.zPosition = z }
+
+            if metrics.style == .cascade {
+                // The part of the card not under the next one, and on screen.
+                let left = placement.center.x - halfWidth
+                var right = min(placement.center.x + halfWidth, metrics.width - metrics.safeRight)
+                if index + 1 < order.count {
+                    let next = metrics.placement(slot: slot + 1, offset: offset)
+                    right = min(right, next.center.x - metrics.cardWidth * next.scale / 2)
+                }
+                let visible = max(0, right - max(left, metrics.safeLeft))
+                let fraction = visible / max(1, halfWidth * 2)
+                card.setHeader(titleAlpha: CardTitle.alpha(visibleFraction: fraction), visibleWidth: visible / scale)
+            } else {
+                card.setHeader(titleAlpha: 1, visibleWidth: metrics.cardWidth)
+            }
         }
-        let size = next.cardSize
-        let item = NSCollectionLayoutItem(layoutSize: .init(widthDimension: .absolute(size.width), heightDimension: .absolute(size.height)))
-        let rowWidth = size.width * CGFloat(next.columns) + TabGalleryMetrics.spacing * CGFloat(next.columns - 1)
-        let group = NSCollectionLayoutGroup.horizontal(
-            layoutSize: .init(widthDimension: .absolute(rowWidth), heightDimension: .absolute(size.height)),
-            repeatingSubitem: item, count: next.columns
-        )
-        group.interItemSpacing = .fixed(TabGalleryMetrics.spacing)
-        let section = NSCollectionLayoutSection(group: group)
-        section.interGroupSpacing = TabGalleryMetrics.spacing
-        section.contentInsetsReference = .safeArea
-        section.contentInsets = .init(
-            top: TabGalleryMetrics.margin, leading: next.sideInset,
-            bottom: TabGalleryMetrics.margin, trailing: next.sideInset
-        )
-        return section
+
+        let range = metrics.candidateRange(offset: offset, count: order.count)
+        if let range {
+            for index in range { place(order[index]) }
+        }
+        if reorder != nil || motion.hasMovingCards {
+            // Cards moving between places, and every card while a reorder shuffles slots: their
+            // slot can be far from their index.
+            motion.forEachMovingCard { id, _ in place(id) }
+            if let reorder { place(reorder.id) }
+        }
+        for (id, card) in cards where !shown.contains(id) && !card.isSwiping {
+            recycle(card, id: id)
+        }
+        if let range { warm(around: range) }
+    }
+
+    private func dequeueCard(for id: UUID) -> TabCardView {
+        let card: TabCardView
+        if let reused = pool.popLast() {
+            card = reused
+            card.isHidden = false
+        } else {
+            card = TabCardView()
+            card.body.addInteraction(UIContextMenuInteraction(delegate: self))
+            let drag = UIDragInteraction(delegate: self)
+            drag.isEnabled = true
+            card.body.addInteraction(drag)
+            scrollView.addSubview(card)
+        }
+        card.setSize(metrics.cardSize, headerHeight: metrics.headerHeight)
+        cards[id] = card
+        configure(card, id: id)
+        return card
+    }
+
+    private func recycle(_ card: TabCardView, id: UUID) {
+        cards[id] = nil
+        card.prepareForReuse()
+        card.isHidden = true
+        pool.append(card)
+    }
+
+    /// Starts decoding the previews a scroll is about to reach.
+    private func warm(around range: ClosedRange<Int>) {
+        guard warmedRange != range else { return }
+        warmedRange = range
+        let lo = max(0, range.lowerBound - 4), hi = min(order.count - 1, range.upperBound + 4)
+        guard lo <= hi else { return }
+        for index in lo...hi {
+            let id = order[index]
+            guard let item = items[id] else { continue }
+            pipeline.warm(thumbnailKey(for: item)) { [dataSource] in await dataSource.thumbnail(for: id) }
+            pipeline.warm(faviconKey(for: item)) { [dataSource] in await dataSource.favicon(for: id) }
+        }
     }
 
     // MARK: Data
@@ -203,99 +317,130 @@ public final class TabGalleryViewController: UIViewController {
         let state = Signposts.signposter.beginInterval(Signposts.galleryReload)
         let tabs = dataSource.tabs
         let previous = items
-        var next: [UUID: TabGalleryItem] = [:]
-        next.reserveCapacity(tabs.count)
-        for tab in tabs { next[tab.id] = tab }
-        items = next
+        let previousSlots = slots
         let oldSelection = selectedID
+        order = tabs.map(\.id)
+        var nextItems: [UUID: TabGalleryItem] = [:]
+        nextItems.reserveCapacity(tabs.count)
+        var nextSlots: [UUID: Int] = [:]
+        nextSlots.reserveCapacity(tabs.count)
+        for (index, tab) in tabs.enumerated() {
+            nextItems[tab.id] = tab
+            nextSlots[tab.id] = index
+        }
+        items = nextItems
+        slots = nextSlots
         selectedID = dataSource.selectedTabID
+        reorder = nil
 
-        var snapshot = NSDiffableDataSourceSnapshot<Int, UUID>()
-        snapshot.appendSections([0])
-        snapshot.appendItems(tabs.map(\.id))
-        // Cards whose content changed keep their cell and get configured again.
-        let changed = tabs.filter { tab in
-            guard let old = previous[tab.id] else { return false }
-            return old != tab || tab.id == oldSelection || tab.id == selectedID
-        }.map(\.id)
-        snapshot.reconfigureItems(changed)
+        let oldOffset = scrollView.contentOffset.x
+        updateContentSize()
+        let maxOffset = metrics.maxOffset(for: order.count)
+        let moves = animated && !Motion.prefersCrossfade && metrics.width > 0
 
-        let apply = { [diffable] in diffable!.apply(snapshot, animatingDifferences: animated) {
+        // Cards whose tab left the list: they rise away when animated (a close from elsewhere).
+        for (id, card) in cards where nextItems[id] == nil {
+            cards[id] = nil
+            motion.forget(id)
+            if moves {
+                card.throwAway(velocity: 0) { [weak self, weak card] in
+                    guard let self, let card else { return }
+                    self.retire(card)
+                }
+            } else {
+                retire(card)
+            }
+        }
+
+        if moves {
+            // Each card shows where it was and springs to its new place.
+            for (id, slot) in nextSlots {
+                if let old = previousSlots[id] {
+                    motion.displace(id, by: CGFloat(old - slot))
+                } else if !previousSlots.isEmpty {
+                    motion.grow(id)
+                }
+            }
+            if oldOffset > maxOffset {
+                // The content got shorter under the scroll position: the cards stay where they
+                // are and ease into the new resting place.
+                scroll(to: maxOffset, animated: false)
+                motion.shiftScroll(by: oldOffset - maxOffset)
+            }
+        } else {
+            motion.reset()
+            if oldOffset > maxOffset { scroll(to: maxOffset, animated: false) }
+        }
+
+        // Cards whose content changed are configured again.
+        for (id, card) in cards {
+            guard let item = nextItems[id] else { continue }
+            if previous[id] != item || id == oldSelection || id == selectedID { configure(card, id: id) }
+        }
+        let finish = {
             Signposts.signposter.endInterval(Signposts.galleryReload, state)
             completion?()
-        } }
-        if animated, !Motion.prefersCrossfade {
-            UIView.animate(Motion.reflow, changes: apply)
-        } else if animated {
-            Motion.animate(Motion.reflow, crossfading: collectionView, changes: apply)
+        }
+        if animated, Motion.prefersCrossfade {
+            Motion.crossfade(scrollView, changes: { self.layoutCards() }, completion: finish)
         } else {
-            apply()
+            layoutCards()
+            motion.run(in: view, completion: finish)
         }
-        updateChrome(animated: animated)
+        updateChrome()
     }
 
-    private func reconfigureAll() {
-        var snapshot = diffable.snapshot()
-        snapshot.reconfigureItems(snapshot.itemIdentifiers)
-        diffable.apply(snapshot, animatingDifferences: false)
+    /// A card that left for good goes back to the pool.
+    private func retire(_ card: TabCardView) {
+        card.prepareForReuse()
+        card.isHidden = true
+        pool.append(card)
     }
 
-    private func updateChrome(animated: Bool) {
-        let isPrivate = dataSource.isShowingPrivateTabs
-        let background = isPrivate ? Palette.privateBackground : Palette.background
-        if view.backgroundColor != background {
-            view.backgroundColor = background
-            collectionView.backgroundColor = background
-            bottomBar.setPrivate(isPrivate)
-            emptyView.setPrivate(isPrivate)
-        }
+    private func updateChrome() {
         let isEmpty = items.isEmpty
-        // VoiceOver hears how many tabs there are, cards off screen included.
-        collectionView.accessibilityValue = items.count == 1 ? "1 tab" : "\(items.count) tabs"
         emptyView.isHidden = !isEmpty
-        // With the private toggle, the bar stays: it is the way between regular and private tabs.
-        bottomBar.isHidden = isEmpty && !dataSource.supportsPrivateTabs
+        bottomBar.isHidden = isEmpty
         bottomBar.doneButton.isEnabled = selectedID != nil
         if isEmpty { toast.hide(animated: false) }
     }
 
-    private func configure(_ cell: TabCardCell, id: UUID) {
+    private func configure(_ card: TabCardView, id: UUID) {
         guard let item = items[id] else { return }
-        cell.configure(
-            item: item, isSelected: id == selectedID,
-            thumbnailHeight: metrics.thumbnailHeight, hidesThumbnail: id == hiddenThumbnailID,
-            showsPrivateBadge: !dataSource.isShowingPrivateTabs
-        )
-        cell.onClose = { [weak self] interval in self?.closeTab(id, flick: interval) }
+        card.configure(item: item, isSelected: id == selectedID, hidesThumbnail: id == hiddenThumbnailID)
+        card.onOpen = { [weak self] in self?.open(id) }
+        card.onClose = { [weak self] in self?.closeTab(id) }
+        card.onSwipeAway = { [weak self] velocity in self?.closeTab(id, velocity: velocity) }
 
         let thumbKey = thumbnailKey(for: item)
-        if cell.thumbnailKey != thumbKey {
-            cell.thumbnailKey = thumbKey
+        if card.thumbnailKey != thumbKey {
+            card.thumbnailKey = thumbKey
             if let image = pipeline.cached(thumbKey) {
-                cell.setThumbnail(image)
+                card.setThumbnail(image)
             } else {
-                Task { [weak self, weak cell] in
+                Task { [weak self, weak card] in
                     guard let self else { return }
                     let image = await pipeline.image(for: thumbKey) { [dataSource] in await dataSource.thumbnail(for: id) }
-                    guard let cell, cell.thumbnailKey == thumbKey else { return }
+                    guard let card, card.thumbnailKey == thumbKey else { return }
                     // Nothing yet: forget the request, so the next configure asks again.
-                    if image == nil { cell.thumbnailKey = nil }
-                    cell.setThumbnail(image)
+                    if image == nil { card.thumbnailKey = nil }
+                    card.setThumbnail(image)
                 }
             }
         }
         let iconKey = faviconKey(for: item)
-        if cell.faviconKey != iconKey {
-            cell.faviconKey = iconKey
+        if card.faviconKey != iconKey {
+            card.faviconKey = iconKey
             if let image = pipeline.cached(iconKey) {
-                cell.setFavicon(image)
+                card.setFavicon(image)
             } else {
-                Task { [weak self, weak cell] in
+                card.setFavicon(nil)
+                Task { [weak self, weak card] in
                     guard let self else { return }
                     let image = await pipeline.image(for: iconKey) { [dataSource] in await dataSource.favicon(for: id) }
-                    guard let cell, cell.faviconKey == iconKey else { return }
-                    if image == nil { cell.faviconKey = nil }
-                    cell.setFavicon(image)
+                    guard let card, card.faviconKey == iconKey else { return }
+                    if image == nil { card.faviconKey = nil }
+                    card.setFavicon(image)
                 }
             }
         }
@@ -316,7 +461,10 @@ public final class TabGalleryViewController: UIViewController {
         var hasher = Hasher()
         hasher.combine(item.host)
         hasher.combine(item.faviconRevision)
-        return .init(id: item.id, revision: hasher.finalize(), pixelWidth: Int(18 * scale), maxAspectPermille: 0, kind: .favicon)
+        return .init(
+            id: item.id, revision: hasher.finalize(), pixelWidth: Int(TabGalleryMetrics.faviconSize * scale),
+            maxAspectPermille: 0, kind: .favicon
+        )
     }
 
     // MARK: Actions
@@ -339,25 +487,21 @@ public final class TabGalleryViewController: UIViewController {
         dataSource.newTab()
     }
 
-    /// Regular or private tabs: the cards cross-fade to the other list.
-    private func togglePrivate() {
-        let isPrivate = !dataSource.isShowingPrivateTabs
-        Signposts.signposter.emitEvent(Signposts.privateMode, "\(isPrivate ? "on" : "off")")
-        Haptic.selection.play()
-        toast.hide(animated: true)
-        dataSource.setShowingPrivateTabs(isPrivate)
-        didScrollToSelection = false
-        Motion.crossfade(view, changes: { [weak self] in
-            self?.reloadTabs(animated: false)
-            self?.view.setNeedsLayout()
-            self?.view.layoutIfNeeded()
-        })
-    }
-
-    /// - Parameter flick: the interval a flicked card already began; nil for a button or menu.
-    private func closeTab(_ id: UUID, flick: OSSignpostIntervalState? = nil) {
-        let state = flick ?? Signposts.signposter.beginInterval(Signposts.galleryCardClose)
-        if flick == nil { Haptic.close.play() }
+    /// Closes a tab: its card rises away (with the swipe's velocity when swiped), the cards after
+    /// it slide into the gap, and the Reopen toast shows.
+    /// - Parameter velocity: the swipe's release velocity in pt/s; nil for a button, menu or VoiceOver.
+    func closeTab(_ id: UUID, velocity: CGFloat? = nil) {
+        let state = Signposts.signposter.beginInterval(Signposts.galleryCardClose)
+        Haptic.close.play()
+        if let card = cards[id] {
+            // The card leaves on its own; the gallery no longer places it.
+            cards[id] = nil
+            motion.forget(id)
+            card.throwAway(velocity: velocity ?? 0) { [weak self, weak card] in
+                guard let self, let card else { return }
+                retire(card)
+            }
+        }
         dataSource.closeTab(id)
         if dataSource.tabs.isEmpty {
             reloadTabs(animated: false)
@@ -403,15 +547,6 @@ public final class TabGalleryViewController: UIViewController {
                 self?.reopenClosedTab()
             })
         }
-        if dataSource.canShowArchive {
-            let archive = UIAction(title: "Archived Tabs", image: UIImage(systemName: "archivebox")) { [weak self] _ in
-                self?.toast.hide(animated: false)
-                self?.dataSource.showArchive()
-            }
-            archive.accessibilityIdentifier = "gallery.archive"
-            elements.append(archive)
-        }
-        guard !items.isEmpty else { return elements }
         let closeAll = UIAction(title: "Close All Tabs", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
             guard let self else { return }
             confirmCloseAll(from: bottomBar.menuButton)
@@ -429,99 +564,182 @@ public final class TabGalleryViewController: UIViewController {
 
     // MARK: Scrolling and transitions
 
-    /// Scrolls so the tab's card is fully on screen. A card already visible does not move.
+    /// Brings the tab's card to rest on screen: in the middle of the cascade, or its grid page. A
+    /// grid card already on screen does not move.
     public func scrollToTab(_ id: UUID, animated: Bool) {
-        guard let indexPath = diffable.indexPath(for: id),
-              let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { return }
-        let visible = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
-        guard !visible.contains(attributes.frame) else { return }
-        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
+        guard let slot = slots[id] else { return }
+        if metrics.style == .grid, let card = cards[id], scrollView.bounds.contains(card.frame) { return }
+        scroll(to: metrics.restingOffset(for: slot), animated: animated)
     }
 
-    /// Gets the tab's card on screen and laid out before a transition measures it.
-    /// - Parameter revealFully: scroll a partly hidden card fully into view. True when the gallery
-    ///   is about to appear; false when the user just tapped a card, which must not jump.
+    /// Gets the tab's card on screen and placed before a transition measures it.
+    /// - Parameter revealFully: bring the card to its resting place. True when the gallery is about
+    ///   to appear (the current tab sits in the middle, as in the app switcher); false when the
+    ///   user just tapped a card, which must not jump.
     public func prepareForTransition(to id: UUID, revealFully: Bool = true) {
         loadViewIfNeeded()
         view.layoutIfNeeded()
-        if revealFully {
-            scrollToTab(id, animated: false)
-        } else if let indexPath = diffable.indexPath(for: id),
-                  let attributes = collectionView.layoutAttributesForItem(at: indexPath),
-                  !collectionView.bounds.intersects(attributes.frame) {
-            collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: false)
+        if revealFully || cards[id] == nil {
+            motion.reset()
+            if let slot = slots[id] { scroll(to: metrics.restingOffset(for: slot), animated: false) }
         }
-        collectionView.layoutIfNeeded()
+        layoutCards()
     }
 
-    /// The card's page preview, in `view`'s coordinates.
+    /// The card's page preview, in `target`'s coordinates.
     public func thumbnailFrame(for id: UUID, in target: UIView) -> CGRect? {
-        guard let indexPath = diffable.indexPath(for: id),
-              let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { return nil }
-        let frame = CGRect(origin: attributes.frame.origin, size: CGSize(width: attributes.frame.width, height: metrics.thumbnailHeight))
-        return collectionView.convert(frame, to: target)
+        guard let card = cards[id] else { return nil }
+        let preview = card.thumbnailContainer
+        return preview.convert(preview.bounds, to: target)
     }
 
     /// Hides the preview of `id`'s card (and shows every other) while a transition stands in for
     /// it. `nil` shows them all.
     public func setThumbnailHidden(for id: UUID?) {
         hiddenThumbnailID = id
-        for case let cell as TabCardCell in collectionView.visibleCells {
-            cell.setThumbnailHidden(cell.tabID != nil && cell.tabID == id)
+        for (cardID, card) in cards {
+            card.setThumbnailHidden(cardID == id)
         }
     }
 
-    /// The views a transition fades and scales with the zoom: the cards and the floating bar.
-    var transitionContent: [UIView] { [collectionView, bottomBar, toast] }
+    /// The views a transition zooms and fades: the cards, then the floating controls.
+    var transitionContent: [UIView] { [scrollView, bottomBar, toast] }
+
+    // MARK: Reorder support
+
+    func tabItem(_ id: UUID) -> TabGalleryItem? { items[id] }
+    func slotOf(_ id: UUID) -> Int? { slots[id] }
+    func setSlot(_ slot: Int, for id: UUID) { slots[id] = slot }
+
+    func hideDraggedCard(_ card: TabCardView, hidden: Bool) {
+        if hidden {
+            liftedID = card.tabID
+        } else if liftedID == card.tabID {
+            liftedID = nil
+        }
+        card.body.alpha = hidden ? 0 : 1
+    }
+
+    /// Keeps the dropped card hidden through the reload, until the drop preview lands on it.
+    func keepDraggedCardHidden(_ id: UUID?) {
+        liftedID = id
+    }
+
+    func dismissToastForReorder() {
+        toast.hide(animated: true)
+    }
+
+    // MARK: VoiceOver
+
+    /// Cards on screen in tab order, for VoiceOver.
+    func accessibilityCards() -> [TabCardView] {
+        cards.compactMap { id, card in slots[id].map { ($0, card) } }.sorted { $0.0 < $1.0 }.map(\.1)
+    }
+
+    /// A three-finger swipe moves a screenful of cards.
+    func accessibilityScroll(forward: Bool) -> Bool {
+        guard !order.isEmpty else { return false }
+        let perScreen = metrics.style == .cascade ? 2 : metrics.cardsPerPage
+        let current = focusedSlot()
+        let next = min(max(current + (forward ? perScreen : -perScreen), 0), order.count - 1)
+        guard next != current else { return false }
+        scroll(to: metrics.restingOffset(for: next), animated: false)
+        layoutCards()
+        UIAccessibility.post(notification: .pageScrolled, argument: "Tab \(next + 1) of \(order.count)")
+        return true
+    }
 }
 
-// MARK: - Collection view delegate
+// MARK: - Scroll physics
 
-extension TabGalleryViewController: UICollectionViewDelegate, UICollectionViewDataSourcePrefetching {
-    public func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        collectionView.deselectItem(at: indexPath, animated: false)
-        guard let id = diffable.itemIdentifier(for: indexPath) else { return }
-        open(id)
+extension TabGalleryViewController: UIScrollViewDelegate {
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        layoutCards()
     }
 
-    public func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
-        for indexPath in indexPaths {
-            guard let id = diffable.itemIdentifier(for: indexPath), let item = items[id] else { continue }
-            pipeline.warm(thumbnailKey(for: item)) { [dataSource] in await dataSource.thumbnail(for: id) }
-            pipeline.warm(faviconKey(for: item)) { [dataSource] in await dataSource.favicon(for: id) }
+    // Scroll signposts: one interval per scroll, finger down to rest.
+    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        if scrollInterval == nil { scrollInterval = Signposts.signposter.beginInterval(Signposts.galleryScroll) }
+        dragStartOffset = scrollView.contentOffset.x
+        snapTarget = nil
+        toast.hide(animated: true)
+    }
+
+    /// Lets the system project where the flick stops (its normal deceleration), then rounds that
+    /// to a card or a page. The scroll view decelerates onto it with the flick's own speed.
+    public func scrollViewWillEndDragging(
+        _ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>
+    ) {
+        let target = metrics.snappedOffset(
+            projected: targetContentOffset.pointee.x, current: dragStartOffset, velocity: velocity.x, count: order.count
+        )
+        targetContentOffset.pointee.x = target
+        snapTarget = target
+    }
+
+    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            // Released without speed: the system does not move to the target on its own.
+            if let snapTarget, abs(snapTarget - scrollView.contentOffset.x) > 0.5 {
+                scrollView.setContentOffset(CGPoint(x: snapTarget, y: 0), animated: true)
+            } else {
+                endScrollInterval()
+            }
         }
     }
 
-    public func collectionView(
-        _ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint
+    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        endScrollInterval()
+    }
+
+    public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        endScrollInterval()
+    }
+
+    private func endScrollInterval() {
+        snapTarget = nil
+        guard let state = scrollInterval else { return }
+        Signposts.signposter.endInterval(Signposts.galleryScroll, state)
+        scrollInterval = nil
+    }
+}
+
+// MARK: - Card menu
+
+extension TabGalleryViewController: UIContextMenuInteractionDelegate {
+    private func card(for interaction: UIContextMenuInteraction) -> (UUID, TabCardView)? {
+        guard let card = interaction.view?.superview as? TabCardView, let id = card.tabID, cards[id] === card else { return nil }
+        return (id, card)
+    }
+
+    public func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
-        guard indexPaths.count == 1, let indexPath = indexPaths.first,
-              let id = diffable.itemIdentifier(for: indexPath), let item = items[id] else { return nil }
+        guard let (id, _) = card(for: interaction), let item = items[id] else { return nil }
         Signposts.signposter.emitEvent(Signposts.galleryMenu)
         return UIContextMenuConfiguration(identifier: id as NSUUID, previewProvider: nil) { [weak self] _ in
             self?.cardMenu(for: item)
         }
     }
 
-    public func collectionView(
-        _ collectionView: UICollectionView, contextMenuConfiguration configuration: UIContextMenuConfiguration,
-        highlightPreviewForItemAt indexPath: IndexPath
+    public func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
+        highlightPreviewForItemWithIdentifier identifier: any NSCopying
     ) -> UITargetedPreview? {
-        cardPreview(at: indexPath)
+        card(for: interaction).map { cardPreview($0.1) }
     }
 
-    public func collectionView(
-        _ collectionView: UICollectionView, contextMenuConfiguration configuration: UIContextMenuConfiguration,
-        dismissalPreviewForItemAt indexPath: IndexPath
+    public func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration,
+        dismissalPreviewForItemWithIdentifier identifier: any NSCopying
     ) -> UITargetedPreview? {
-        cardPreview(at: indexPath)
+        card(for: interaction).map { cardPreview($0.1) }
     }
 
-    private func cardPreview(at indexPath: IndexPath) -> UITargetedPreview? {
-        guard let cell = collectionView.cellForItem(at: indexPath) as? TabCardCell else { return nil }
+    private func cardPreview(_ card: TabCardView) -> UITargetedPreview {
         let parameters = UIPreviewParameters()
-        parameters.visiblePath = UIBezierPath(roundedRect: cell.thumbnailContainer.bounds, cornerRadius: Radius.large)
-        return UITargetedPreview(view: cell.thumbnailContainer, parameters: parameters)
+        parameters.visiblePath = UIBezierPath(roundedRect: card.thumbnailContainer.bounds, cornerRadius: Radius.large)
+        return UITargetedPreview(view: card.thumbnailContainer, parameters: parameters)
     }
 
     private func cardMenu(for item: TabGalleryItem) -> UIMenu {
@@ -541,83 +759,76 @@ extension TabGalleryViewController: UICollectionViewDelegate, UICollectionViewDa
             })
             top.append(UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
                 guard let self else { return }
-                let source = diffable.indexPath(for: id).flatMap { self.collectionView.cellForItem(at: $0) } ?? view
                 Signposts.signposter.emitEvent(Signposts.galleryShare)
-                share(item, from: source ?? view)
+                share(item, from: cards[id] ?? view)
             })
         }
-        let close = UIAction(title: "Close Tab", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
+        // Names the gesture: menus teach the shortcut (docs/ui-reference.md).
+        let close = UIAction(
+            title: "Close Tab", subtitle: "Or swipe the card up", image: UIImage(systemName: "xmark"), attributes: .destructive
+        ) { [weak self] _ in
             self?.closeTab(id)
         }
         return UIMenu(children: top + [UIMenu(options: .displayInline, children: [close])])
     }
+}
 
-    // Scroll signposts: one interval per scroll, finger down to rest.
-    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        if scrollInterval == nil { scrollInterval = Signposts.signposter.beginInterval(Signposts.galleryScroll) }
+// MARK: - Scroll view
+
+/// What the scroll view asks the gallery for.
+@MainActor
+protocol GalleryAccessibilityProvider: AnyObject {
+    func accessibilityCards() -> [TabCardView]
+    func accessibilityScroll(forward: Bool) -> Bool
+}
+
+extension TabGalleryViewController: GalleryAccessibilityProvider {}
+
+/// The gallery's scroll view: sideways only, leaving vertical swipes to the cards, and touches
+/// to the card on top where cards overlap.
+final class GalleryScrollView: UIScrollView {
+    weak var accessibilityProvider: (any GalleryAccessibilityProvider)?
+
+    override func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+        if gesture === panGestureRecognizer {
+            let velocity = panGestureRecognizer.velocity(in: self)
+            // A mostly vertical move belongs to the card under the finger (swipe up to close).
+            if abs(velocity.y) > abs(velocity.x) { return false }
+        }
+        return super.gestureRecognizerShouldBegin(gesture)
     }
 
-    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        if !decelerate { endScrollInterval() }
+    /// Cards overlap in the cascade; the one drawn on top (highest z) takes the touch, whatever
+    /// the order of the subviews.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, self.point(inside: point, with: event) else { return nil }
+        var best: (z: CGFloat, view: UIView)?
+        for case let card as TabCardView in subviews where !card.isHidden && card.isUserInteractionEnabled {
+            let local = card.convert(point, from: self)
+            guard let hit = card.hitTest(local, with: event) else { continue }
+            if best == nil || card.layer.zPosition > best!.z { best = (card.layer.zPosition, hit) }
+        }
+        return best?.view ?? self
     }
 
-    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        endScrollInterval()
+    override var accessibilityElements: [Any]? {
+        get { accessibilityProvider?.accessibilityCards() }
+        set {}
     }
 
-    private func endScrollInterval() {
-        guard let state = scrollInterval else { return }
-        Signposts.signposter.endInterval(Signposts.galleryScroll, state)
-        scrollInterval = nil
+    override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
+        switch direction {
+        case .left, .next: return accessibilityProvider?.accessibilityScroll(forward: true) ?? false
+        case .right, .previous: return accessibilityProvider?.accessibilityScroll(forward: false) ?? false
+        default: return false
+        }
     }
 }
 
-// MARK: - Reorder by drag
-
-extension TabGalleryViewController: UICollectionViewDragDelegate, UICollectionViewDropDelegate {
-    public func collectionView(
-        _ collectionView: UICollectionView, itemsForBeginning session: any UIDragSession, at indexPath: IndexPath
-    ) -> [UIDragItem] {
-        guard let id = diffable.itemIdentifier(for: indexPath), let item = items[id] else { return [] }
-        toast.hide(animated: true)
-        let provider = item.url.map { NSItemProvider(object: $0 as NSURL) } ?? NSItemProvider()
-        let dragItem = UIDragItem(itemProvider: provider)
-        dragItem.localObject = id
-        return [dragItem]
-    }
-
-    public func collectionView(
-        _ collectionView: UICollectionView, dragPreviewParametersForItemAt indexPath: IndexPath
-    ) -> UIDragPreviewParameters? {
-        guard let cell = collectionView.cellForItem(at: indexPath) as? TabCardCell else { return nil }
-        let parameters = UIDragPreviewParameters()
-        parameters.visiblePath = UIBezierPath(roundedRect: cell.thumbnailContainer.frame, cornerRadius: Radius.large)
-        return parameters
-    }
-
-    public func collectionView(
-        _ collectionView: UICollectionView, dragSessionIsRestrictedToDraggingApplication session: any UIDragSession
-    ) -> Bool {
-        true
-    }
-
-    public func collectionView(
-        _ collectionView: UICollectionView, dropSessionDidUpdate session: any UIDropSession,
-        withDestinationIndexPath destinationIndexPath: IndexPath?
-    ) -> UICollectionViewDropProposal {
-        guard session.localDragSession != nil else { return UICollectionViewDropProposal(operation: .forbidden) }
-        return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
-    }
-
-    public func collectionView(_ collectionView: UICollectionView, performDropWith coordinator: any UICollectionViewDropCoordinator) {
-        guard let drop = coordinator.items.first, let id = drop.dragItem.localObject as? UUID,
-              let destination = coordinator.destinationIndexPath else { return }
-        let count = diffable.snapshot().numberOfItems
-        let index = min(destination.item, count - 1)
-        Signposts.signposter.emitEvent(Signposts.galleryReorder)
-        dataSource.moveTab(id, to: index)
-        reloadTabs(animated: false)
-        coordinator.drop(drop.dragItem, toItemAt: IndexPath(item: index, section: 0))
+extension CGFloat {
+    /// Rounded to the nearest pixel at `scale`, so cards never land between pixels and blur.
+    func rounded(toScale scale: CGFloat) -> CGFloat {
+        (self * scale).rounded() / scale
     }
 }
 #endif

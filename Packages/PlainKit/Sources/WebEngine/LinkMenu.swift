@@ -66,8 +66,8 @@ extension WebViewPool {
         var element = LinkElement(linkURL: linkURL, imageURL: nil)
         if let pressed = await pressedImage(in: webView) {
             // The last finger down may have been somewhere else; keep the image only when it is
-            // the link's own image, or when WebKit reported no link at all.
-            if linkURL == nil || pressed.link == nil || pressed.link == linkURL {
+            // the link's own image, or, with no link reported, an image outside any link.
+            if pressed.link == linkURL {
                 element.imageURL = pressed.image
             }
         }

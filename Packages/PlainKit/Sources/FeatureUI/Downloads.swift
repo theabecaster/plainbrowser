@@ -99,6 +99,7 @@ public struct DownloadsView<Source: DownloadListSource>: View {
     }
 
     private func showInFiles(_ url: URL) {
+        Signposts.signposter.emitEvent(Signposts.downloadShowInFiles)
         let folder = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
         if let files = DownloadStatusText.filesAppURL(for: folder) { openURL(files) }
     }
@@ -121,8 +122,10 @@ struct DownloadRow<Item: DownloadListItem>: View {
                         .foregroundStyle(file == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Style.accent))
                         .frame(width: 32)
                     VStack(alignment: .leading, spacing: 4) {
+                        // An ended download with no file (failed, cancelled) reads as inactive,
+                        // but stays legible: secondary, not the disabled dimming.
                         Text(item.filename)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(file == nil && !item.isInProgress ? .secondary : .primary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         if item.isInProgress {
@@ -144,7 +147,6 @@ struct DownloadRow<Item: DownloadListItem>: View {
                 .contentShape(.rect)
             }
             .tint(.primary)
-            .disabled(file == nil && !item.isInProgress)
             if item.isInProgress {
                 Button("Cancel Download", systemImage: "xmark.circle.fill") { item.cancel() }
                     .labelStyle(.iconOnly)

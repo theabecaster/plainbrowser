@@ -115,6 +115,8 @@ public enum Signposts {
     public static let savePage: StaticString = "page.save"
     /// Event: the Downloads list opened.
     public static let downloadsShow: StaticString = "downloads.show"
+    /// Event: Show in Files from the Downloads list.
+    public static let downloadShowInFiles: StaticString = "download.showInFiles"
     /// Event: a finished download opened in Quick Look.
     public static let downloadPreview: StaticString = "download.preview"
     /// Event: a tab's web content process terminated.

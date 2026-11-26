@@ -141,6 +141,13 @@ public final class Tab: Identifiable {
         pool?.setContentModeOverride(mode, for: self)
     }
 
+    /// Asks WebKit whether anything plays and updates `isPlayingMedia`. The flags follow the
+    /// page's play and pause events; call this before an automatic rule (archive, close) acts, so
+    /// players the page never put in its document count too.
+    public func refreshMediaState() async {
+        await pool?.slot(for: self)?.refreshMediaPlayback()
+    }
+
     /// One step larger (`FixedChoices.pageZoomSteps`), remembered for the site.
     public func zoomIn() {
         if let zoom = PageZoom.zoomedIn(from: pageZoom) { pool?.setPageZoom(zoom, for: self) }

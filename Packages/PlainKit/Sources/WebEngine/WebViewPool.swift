@@ -862,17 +862,22 @@ extension WebViewPool {
                 frameMedia[id] = nil
             }
             publishMedia()
+            // The scripts can't see every player (`new Audio()` never added to the page, media in
+            // a shadow root), so each report also asks WebKit, which knows them all. One IPC per
+            // play or pause.
+            Task { [weak self] in await self?.refreshMediaPlayback() }
         }
 
         /// A new main-frame document committed (the old frames are gone) or the process died.
         func clearMediaReports() {
             frameMedia = [:]
+            media = .idle
             publishMedia()
         }
 
         private func publishMedia() {
             guard let tab else { return }
-            let playing = frameMedia.values.contains { $0.playing }
+            let playing = media == .playing || frameMedia.values.contains { $0.playing }
             tab.set(\.isPlayingMedia, playing)
             tab.set(\.isInPictureInPicture, frameMedia.values.contains { $0.pictureInPicture })
         }
@@ -949,6 +954,7 @@ extension WebViewPool {
                 webView.requestMediaPlaybackState(completionHandler: done)
             }
             media = state == .playing ? .playing : .idle
+            publishMedia()
         }
 
         /// Runs `work` once a pending restore has applied its history, so a load issued meanwhile

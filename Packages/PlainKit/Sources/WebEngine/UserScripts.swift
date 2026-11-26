@@ -38,8 +38,10 @@ enum UserScripts {
     /// passive listener storing a reference; nothing crosses to the app until a menu asks.
     static let pressedElementSource = """
         (() => {
-          addEventListener('pointerdown', (event) => { globalThis.__plainPressed = event.target; },
-                           { passive: true, capture: true });
+          addEventListener('pointerdown', (event) => {
+            globalThis.__plainPressed = event.target;
+            globalThis.__plainPressedAt = Date.now();
+          }, { passive: true, capture: true });
         })();
         """
 
@@ -49,6 +51,9 @@ enum UserScripts {
 
     /// Asked when a link menu opens: the pressed image's address and its enclosing link, if any.
     static let pressedImageQuery = """
+        // A press in an iframe never reaches this document, so an old press here is not this
+        // menu's: only one from the last two seconds (a long press takes about half of one).
+        if (!globalThis.__plainPressedAt || Date.now() - globalThis.__plainPressedAt > 2000) return null;
         const target = globalThis.__plainPressed;
         const image = target && target.closest ? target.closest('img') : null;
         if (!image || !image.isConnected) return null;

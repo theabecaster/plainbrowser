@@ -63,6 +63,25 @@ struct CompletenessTests {
         _ = try await harness.evaluate(M4Pages.press("#pic"), in: tab)
         let menu = try #require(await harness.pool.linkMenu(for: harness.server.url("/a"), in: tab))
         #expect(menu.element.imageURL == nil)
+        // An unlinked image pressed last is not a link's image either (a press inside an iframe
+        // never reaches the main document).
+        _ = try await harness.evaluate(M4Pages.press("#lone"), in: tab)
+        let framed = try #require(await harness.pool.linkMenu(for: harness.server.url("/b"), in: tab))
+        #expect(framed.element.imageURL == nil)
+    }
+
+    @Test func playersOutsideTheDocumentCountAfterARefresh() async throws {
+        let harness = try await Harness(route: M4Pages.route)
+        defer { harness.cleanUp() }
+        let tab = try await harness.loadedTab("/media")
+        _ = try await harness.evaluate("window.detached = new Audio('/tone.wav'); detached.loop = true; detached.play(); 0", in: tab)
+        try await Task.sleep(for: .milliseconds(500))
+        await tab.refreshMediaState()
+        #expect(tab.isPlayingMedia && tab.isBusy)
+        _ = try await harness.evaluate("detached.pause(); 0", in: tab)
+        try await Task.sleep(for: .milliseconds(300))
+        await tab.refreshMediaState()
+        #expect(!tab.isPlayingMedia)
     }
 
     @Test func appLinkMenuHasNoOpenItemsAndNoPreview() async throws {

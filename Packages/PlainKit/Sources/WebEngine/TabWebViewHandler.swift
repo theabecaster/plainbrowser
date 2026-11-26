@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import Foundation
 import PerfSignposts
+import UIKit
 import WebKit
 
 /// The navigation and UI delegate of one tab's web view. It routes each WebKit callback to the
@@ -85,10 +86,14 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void
     ) {
         let disposition = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")
-        switch NavigationRules.responseDecision(
+        let decision = NavigationRules.responseDecision(
             isMainFrame: response.isForMainFrame, canShowMIMEType: response.canShowMIMEType,
             contentDisposition: disposition
-        ) {
+        )
+        if response.isForMainFrame, decision == .allow, let tab, let slot = pool?.slot(for: tab) {
+            slot.pendingNavigationIsPDF = NavigationRules.isPDF(mimeType: response.response.mimeType)
+        }
+        switch decision {
         case .allow: decisionHandler(.allow)
         case .download: decisionHandler(.download)
         case .cancel: decisionHandler(.cancel)
@@ -112,9 +117,14 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         signposter.webView(webView, didCommit: navigation)
-        if let tab, let slot = pool?.slot(for: tab) {
+        if let tab, let pool, let slot = pool.slot(for: tab) {
             tab.isFormResult = slot.pendingNavigationIsFormSubmission
             tab.set(\.isAwaitingResubmit, false)
+            tab.set(\.isPDF, slot.pendingNavigationIsPDF)
+            slot.pendingNavigationIsPDF = false
+            // The old document's frames, and their media, are gone.
+            slot.clearMediaReports()
+            pool.applyRememberedZoom(to: webView, in: tab)
         }
         updateSecurity(of: webView)
         endRestore()
@@ -233,6 +243,23 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webViewDidClose(_ webView: WKWebView) {
         guard let tab else { return }
         pool?.childRequestsClose(tab)
+    }
+
+    // MARK: - Link context menu
+
+    func webView(
+        _ webView: WKWebView, contextMenuConfigurationFor elementInfo: WKContextMenuElementInfo
+    ) async -> UIContextMenuConfiguration? {
+        guard let tab, let pool else { return nil }
+        return await pool.contextMenuConfiguration(for: elementInfo.linkURL, in: tab)
+    }
+
+    func webView(
+        _ webView: WKWebView, contextMenuForElement elementInfo: WKContextMenuElementInfo,
+        willCommitWithAnimator animator: any UIContextMenuInteractionCommitAnimating
+    ) {
+        guard let tab, let pool else { return }
+        pool.commitPreview(of: elementInfo.linkURL, in: tab, animator: animator)
     }
 
     // MARK: - JavaScript dialogs

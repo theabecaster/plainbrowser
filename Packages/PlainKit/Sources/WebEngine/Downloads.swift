@@ -41,27 +41,40 @@ public final class Download: Identifiable {
         guard state == .inProgress, let download = webKitDownload else { return }
         coordinator?.cancel(download)
     }
+
+    // MARK: For the downloads list and Quick Look
+
+    /// The saved file once the download finished: open it in Quick Look, share it or show it in
+    /// Files. Nil while in progress and after a failure or cancel.
+    public var fileURL: URL? {
+        if case .finished(let url) = state { url } else { nil }
+    }
+
+    public var isInProgress: Bool { state == .inProgress }
+
+    public var isCancelled: Bool { state == .cancelled }
 }
 
 /// Runs every `WKDownload` (docs/plan.md, M4): picks a unique file name in the downloads folder,
 /// reports start and end to the shell, and falls back to reading `blob:` URLs from the page when
 /// WebKit can't download them itself (a page that revokes the blob URL too early, for one).
+@Observable
 public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
-    public let directory: URL
-    /// Downloads since launch, newest last.
+    @ObservationIgnored public let directory: URL
+    /// Downloads since launch, newest last. Observed, so a downloads list updates as they start.
     public private(set) var downloads: [Download] = []
 
-    weak var pool: WebViewPool?
-    private var active: [ObjectIdentifier: Download] = [:]
-    private var frames: [ObjectIdentifier: WKFrameInfo] = [:]
+    @ObservationIgnored weak var pool: WebViewPool?
+    @ObservationIgnored private var active: [ObjectIdentifier: Download] = [:]
+    @ObservationIgnored private var frames: [ObjectIdentifier: WKFrameInfo] = [:]
     /// Blob fallbacks in progress (they no longer have a `WKDownload`).
     /// Download id to tab id.
-    private var blobReads: [UUID: UUID?] = [:]
+    @ObservationIgnored private var blobReads: [UUID: UUID?] = [:]
     /// Destinations handed to WebKit but not written yet, so two downloads of the same name in
     /// flight get different files.
-    private var reserved: Set<URL> = []
+    @ObservationIgnored private var reserved: Set<URL> = []
     /// Keeps the app running while downloads are in progress after it leaves the screen.
-    private var backgroundTask: BackgroundWork?
+    @ObservationIgnored private var backgroundTask: BackgroundWork?
 
     init(directory: URL) {
         self.directory = directory
@@ -146,9 +159,10 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
                     throw URLError(.cannotCreateFile)
                 }
                 item.destination = destination
-                try await Self.write(base64: base64, to: destination)
-                item.progress.totalUnitCount = 1
-                item.progress.completedUnitCount = 1
+                let bytes = try await Self.write(base64: base64, to: destination)
+                // The list shows the size from the progress, as for WebKit's downloads.
+                item.progress.totalUnitCount = Int64(bytes)
+                item.progress.completedUnitCount = Int64(bytes)
                 end(item, .finished(destination))
             } catch {
                 end(item, .failed(error.localizedDescription))
@@ -228,9 +242,10 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     }
 
     @concurrent
-    nonisolated static func write(base64: String, to destination: URL) async throws {
+    nonisolated static func write(base64: String, to destination: URL) async throws -> Int {
         guard let data = Data(base64Encoded: base64) else { throw URLError(.cannotDecodeContentData) }
         try data.write(to: destination, options: .withoutOverwriting)
+        return data.count
     }
 }
 #endif

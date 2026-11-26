@@ -1,5 +1,7 @@
 #if canImport(UIKit)
 import Foundation
+import PerfSignposts
+import UIKit
 import WebKit
 
 // The seams the engine needs from the layers around it. Storage implements the stores; the shell
@@ -78,6 +80,15 @@ nonisolated public protocol SitePermissionStore: Sendable {
 public protocol SiteContentModeStore: AnyObject {
     func contentMode(forSite site: String) -> ContentMode?
     func setContentMode(_ mode: ContentMode?, forSite site: String)
+}
+
+/// The page zoom the page menu set for a site, remembered automatically (docs/plan.md, 4b).
+///
+/// Read when each main-frame page commits, so `pageZoom(forSite:)` must answer from memory: load
+/// the stored map at launch and write changes behind it. Nil means 100%.
+public protocol SitePageZoomStore: AnyObject {
+    func pageZoom(forSite site: String) -> Double?
+    func setPageZoom(_ zoom: Double?, forSite site: String)
 }
 
 /// Rules applied to each web view's own `WKUserContentController`: content blocking.
@@ -171,7 +182,59 @@ public protocol DownloadPresenter: AnyObject {
     func downloadDidEnd(_ download: Download)
 }
 
-/// Everything the shell implements for the engine.
+/// Where a link from the link context menu opens.
+public enum LinkOpenPlacement: Sendable, Equatable {
+    /// A new tab, shown at once.
+    case newTab
+    /// A new tab behind the current one; the current tab stays on screen.
+    case backgroundTab
+    /// The other pane of a split (iPhone Duo). Offered only when `canOpenInOtherPane` is true.
+    case otherPane
+}
+
+/// The link context menu's actions that need the shell: new tabs and panes, and the share sheet.
+/// Copy Link, Download Linked File, Save Image and Copy Image run in the engine, which reports
+/// them through `tab(_:didComplete:succeeded:)`.
+///
+/// Every requirement has a default, so a shell that predates the menu keeps compiling.
+public protocol LinkMenuPresenter: AnyObject {
+    /// Whether "Open in Other Pane" applies to links in `tab`: a second pane is on screen.
+    /// Default: false.
+    func canOpenInOtherPane(from tab: Tab) -> Bool
+    /// Open in New Tab, Open in Background, Open in Other Pane. Default: loads `url` in `tab`.
+    func tab(_ tab: Tab, open url: URL, placement: LinkOpenPlacement)
+    /// Share for a link. Default: the system share sheet from the view controller that holds
+    /// `sourceView`, anchored at `sourceRect`.
+    func tab(_ tab: Tab, share url: URL, from sourceView: UIView, sourceRect: CGRect)
+    /// An action the engine ran has finished: for a confirmation (haptic or toast) or an error
+    /// message. Default: nothing.
+    func tab(_ tab: Tab, didComplete action: LinkMenuItem, succeeded: Bool)
+}
+
+extension LinkMenuPresenter {
+    public func canOpenInOtherPane(from tab: Tab) -> Bool { false }
+
+    public func tab(_ tab: Tab, open url: URL, placement: LinkOpenPlacement) {
+        tab.load(url)
+    }
+
+    public func tab(_ tab: Tab, share url: URL, from sourceView: UIView, sourceRect: CGRect) {
+        Signposts.signposter.emitEvent(Signposts.share)
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        sheet.popoverPresentationController?.sourceView = sourceView
+        sheet.popoverPresentationController?.sourceRect = sourceRect
+        var responder: UIResponder? = sourceView
+        while let next = responder, !(next is UIViewController) { responder = next.next }
+        guard var presenter = responder as? UIViewController else { return }
+        while let presented = presenter.presentedViewController { presenter = presented }
+        presenter.present(sheet, animated: true)
+    }
+
+    public func tab(_ tab: Tab, didComplete action: LinkMenuItem, succeeded: Bool) {}
+}
+
+/// Everything the shell implements for the engine. `LinkMenuPresenter` has defaults for every
+/// requirement.
 public typealias EngineHost = TabPresenter & JavaScriptDialogPresenter & AuthenticationPresenter
-    & ExternalAppPresenter & PermissionPresenter & DownloadPresenter
+    & ExternalAppPresenter & PermissionPresenter & DownloadPresenter & LinkMenuPresenter
 #endif

@@ -102,6 +102,21 @@ public enum Signposts {
     public static let enginePrompt: StaticString = "engine.prompt"
     /// Event: a download started or ended; the message says which and how.
     public static let download: StaticString = "download"
+    /// Interval: a long press on a link or image, from WebKit asking for the menu until the menu
+    /// is built (it includes one round trip to the page to find a pressed image).
+    public static let linkMenu: StaticString = "linkMenu.build"
+    /// Event: a link menu action; the message names it.
+    public static let linkMenuAction: StaticString = "linkMenu.action"
+    /// Interval: a link preview's web view being made and its load started.
+    public static let linkPreview: StaticString = "linkMenu.preview"
+    /// Event: page zoom changed from the page menu; the message is the new percentage.
+    public static let pageZoom: StaticString = "page.zoom"
+    /// Event: the page's file (a PDF) was handed to Downloads.
+    public static let savePage: StaticString = "page.save"
+    /// Event: the Downloads list opened.
+    public static let downloadsShow: StaticString = "downloads.show"
+    /// Event: a finished download opened in Quick Look.
+    public static let downloadPreview: StaticString = "download.preview"
     /// Event: a tab's web content process terminated.
     public static let tabCrash: StaticString = "tab.crash"
 

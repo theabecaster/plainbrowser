@@ -22,6 +22,11 @@ nonisolated public enum EngineChoices {
     /// goes on without sessionStorage or the thumbnail.
     public static let webKitReplyTimeout: Duration = .milliseconds(400)
 
+    /// The link menu waits this long for the page to say which image was pressed. The menu opens
+    /// after the long-press delay anyway; past this it opens without the image items rather than
+    /// hold the finger on a busy page.
+    public static let pressedElementTimeout: Duration = .milliseconds(120)
+
     // MARK: Thumbnails (docs/plan.md, "Engine rules" 3)
 
     /// Thumbnails are stored at this many pixels per point of `FixedChoices.thumbnailWidth`: sharp

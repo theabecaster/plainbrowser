@@ -1,6 +1,8 @@
 #if canImport(UIKit)
+import BrowserCore
 import Foundation
 import Observation
+import PerfSignposts
 import UIKit
 
 /// How much a tab costs right now (docs/plan.md, "Engine rules" 2).
@@ -60,6 +62,32 @@ public final class Tab: Identifiable {
     /// A restored form result is waiting: history is back but the page is not loaded. The shell
     /// shows "Reload to send the form again"; `reload()` sends it.
     public internal(set) var isAwaitingResubmit = false
+    /// The page's zoom (1 is 100%), remembered per site. Change it with `zoomIn()`, `zoomOut()`
+    /// and `resetZoom()`.
+    public internal(set) var pageZoom = PageZoom.actualSize
+    /// The page is a PDF WebKit shows inline. The page menu offers "Save PDF to Files"
+    /// (`saveToDownloads()`).
+    public internal(set) var isPDF = false
+    /// Audio or video is playing in the page or one of its frames.
+    public internal(set) var isPlayingMedia = false
+    /// A video from this page is in picture in picture.
+    public internal(set) var isInPictureInPicture = false
+    /// The page, or a video in it, is fullscreen.
+    public internal(set) var isFullscreen = false
+    /// The page is using the camera or microphone.
+    public internal(set) var isCapturingMedia = false
+
+    /// Playing, in picture in picture, fullscreen, capturing or downloading. The pool never
+    /// discards such a tab, and the shell must not archive or close it automatically.
+    public var isBusy: Bool {
+        isPlayingMedia || isInPictureInPicture || isFullscreen || isCapturingMedia
+            || (pool?.downloads.hasActiveDownload(fromTab: id) ?? false)
+    }
+
+    /// The zoom as the page menu shows it, for example 115.
+    public var zoomPercent: Int { PageZoom.percent(pageZoom) }
+    public var canZoomIn: Bool { PageZoom.zoomedIn(from: pageZoom) != nil }
+    public var canZoomOut: Bool { PageZoom.zoomedOut(from: pageZoom) != nil }
 
     /// Load progress from 0 to 1. Not observed: read it from `onProgress`.
     @ObservationIgnored public internal(set) var progress: Double = 0
@@ -113,6 +141,37 @@ public final class Tab: Identifiable {
         pool?.setContentModeOverride(mode, for: self)
     }
 
+    /// One step larger (`FixedChoices.pageZoomSteps`), remembered for the site.
+    public func zoomIn() {
+        if let zoom = PageZoom.zoomedIn(from: pageZoom) { pool?.setPageZoom(zoom, for: self) }
+    }
+
+    /// One step smaller, remembered for the site.
+    public func zoomOut() {
+        if let zoom = PageZoom.zoomedOut(from: pageZoom) { pool?.setPageZoom(zoom, for: self) }
+    }
+
+    /// Back to 100%; the site forgets its zoom.
+    public func resetZoom() {
+        pool?.setPageZoom(PageZoom.actualSize, for: self)
+    }
+
+    /// The page menu's "Find on Page": the system find bar (`UIFindInteraction`) over this tab's
+    /// page. It sits above the keyboard; matches scroll into view clear of the insets the shell set
+    /// with `WebViewPool.setInsets`. Does nothing for a tab without a page on screen.
+    public func beginFind() {
+        pool?.beginFind(in: self)
+    }
+
+    /// "Save PDF to Files": downloads the page's own file into the downloads folder through the
+    /// normal download path, so the shell hears `downloadDidStart` and `downloadDidEnd` and can
+    /// share or preview the finished file. Meant for PDF tabs (`isPDF`); works for any page URL.
+    public func saveToDownloads() {
+        guard let url else { return }
+        Signposts.signposter.emitEvent(Signposts.savePage)
+        pool?.startDownload(url, from: self)
+    }
+
     /// The tab's state for session restore after the app quits. Live tabs read it from their web
     /// view; discarded tabs return what they hold.
     public func restorationState() async -> TabRestorationState {
@@ -124,6 +183,13 @@ public final class Tab: Identifiable {
 
     func set<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<Tab, Value>, _ value: Value) {
         if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
+    }
+
+    func resetMediaState() {
+        set(\.isPlayingMedia, false)
+        set(\.isInPictureInPicture, false)
+        set(\.isFullscreen, false)
+        set(\.isCapturingMedia, false)
     }
 
     func setProgress(_ value: Double) {

@@ -51,7 +51,7 @@ body > article {
 }
 
 /* Header: site and byline, title, a short accent rule. */
-body > article > header { margin-bottom: 2rem; }
+body > article > header { margin-bottom: 1.5rem; }
 body > article > header::after {
   content: "";
   display: block;

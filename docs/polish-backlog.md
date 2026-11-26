@@ -118,3 +118,13 @@ Newest feature last.
   in progress or past ones yet. M4 can add one in the page menu.
 - **Restored tabs beyond the last.** Only the last selected tab comes back after a relaunch; the
   other rows stay in Storage for M2's tab gallery.
+- **Zoom in the page menu.** Not built yet; the reference menu lists it. (Design review, round 1.)
+- **Back and Forward when unavailable.** They stay visible and disabled (system style, stable
+  layout); the design review asked to hide them. Decide with the shell lane.
+- **Page menu on the Duo outer screen.** The last section (Edit Favorites, Settings) scrolls below
+  the fold of the menu with no cue. (Design review, round 2.)
+- **Geolocation and motion prompts on the simulator.** WebKit never asked the UI delegate for
+  `http://localhost` test pages (not a secure context), so the captured prompt is the camera one,
+  shown through a debug launch argument. Check location and camera prompts on the device.
+- **Duo inner screen captures.** The simulator's fold state is set only in Device Hub, so this
+  round has iPhone 17 and Duo outer screenshots only.

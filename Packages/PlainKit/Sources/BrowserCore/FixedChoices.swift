@@ -124,6 +124,34 @@ public enum FixedChoices {
     public static let extraLiveTabs = 3
     /// Tab thumbnails are this wide in points; full-size snapshots cost 70+ MiB (research notes).
     public static let thumbnailWidth: Double = 200
+    /// Panes per window: one, or two side by side on the Duo's inner screen. A third would leave
+    /// each page narrower than the outer screen.
+    public static let maxPanesPerWindow = 2
+    /// Close actions Reopen Closed Tab can undo, newest first. Chrome keeps 25 entries
+    /// (`TabRestoreService`); more is never reached by hand, fewer loses a Close All Tabs.
+    public static let recentlyClosedLimit = 25
+    /// A page's links and popups open right after it, after the tabs it already opened, so a
+    /// reading session stays together (Chrome and Firefox do the same).
+    public static let childTabsOpenNextToOpener = true
+    /// Closing a tab another tab opened goes back to that opener when it is still open, so a
+    /// quick look at a link returns where it started.
+    public static let closingChildSelectsOpener = true
+    /// New tabs without an opener go at the end of the list, like Safari, so the order reads as
+    /// the order they were opened.
+    public static let newTabsOpenAtEnd = true
+    /// Pinned means kept: Close All Tabs leaves pinned tabs open.
+    public static let closeAllKeepsPinnedTabs = true
+    /// A closed private tab leaves no trace, not even in Reopen Closed Tab.
+    public static let privateTabsSkipRecentlyClosed = true
+    /// Tab changes are written this long after the last one, so a drag or a page's title changes
+    /// cost one write. A crash loses at most this much; the app also writes on going to the
+    /// background.
+    public static let tabSaveDelay = Duration.milliseconds(500)
+    /// Archived tabs kept; the oldest are deleted beyond it, with their state files (a few KB
+    /// each). Months of tabs at the 1-day default, and the size the archive search is tested on.
+    public static let archivedTabLimit = 1_000
+    /// Archive search results shown per query: more than fits on screen, cheap to fetch.
+    public static let archiveSearchLimit = 200
 
     // MARK: Tab gallery
 

@@ -6,7 +6,7 @@ public nonisolated struct AboutInfo: Sendable {
     public struct Document: Sendable, Hashable, Identifiable {
         public var title: String
         public var fileURL: URL
-        public var id: URL { fileURL }
+        public var id: String { title }
 
         public init(title: String, fileURL: URL) {
             self.title = title

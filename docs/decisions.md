@@ -556,6 +556,7 @@ Each entry: what was chosen, and why. Newest last.
   colors on purpose.
 - **Perf cost:** after the intro was seen, one defaults read on the launch path. FeatureUI's
   resource bundle adds four 180 px PNGs (150 KB), read only by the picker.
+
 ## M3 Duo layouts: panes, side tabs, folds (2026-11-26)
 
 - **One layout model, from geometry only.** `DuoLayout` (ShellUI, plain values tested on macOS)

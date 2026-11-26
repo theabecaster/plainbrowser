@@ -57,7 +57,7 @@ public final class BrowserSession {
         _ = await (modes, scripts)
         // A restored page loads only with its rules attached: lookups of compiled lists take
         // about 1 ms, and an update keeps the previous lists attached while it compiles.
-        if restored != nil { await blocker.prepare() }
+        if restored != nil { await blocker.firstRulesAttached() }
         // Files of tabs that never got a row (a crash between the two writes).
         Task { [database] in try? await database()?.removeOrphanedTabStates() }
         return restored

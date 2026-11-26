@@ -44,15 +44,15 @@ body {
 
 ::selection { background: var(--selection); }
 
-article {
+body > article {
   max-width: 66ch;
   margin: 0 auto;
   padding: 1.75rem 1.25rem 4rem;
 }
 
 /* Header: site and byline, title, a short accent rule. */
-article > header { margin-bottom: 2rem; }
-article > header::after {
+body > article > header { margin-bottom: 2rem; }
+body > article > header::after {
   content: "";
   display: block;
   width: 2.5rem;
@@ -69,7 +69,7 @@ article > header::after {
   margin: 0 0 0.6rem;
 }
 .meta .site { font-weight: 600; }
-article > header h1 {
+body > article > header h1 {
   font-size: 1.65em;
   line-height: 1.18;
   font-weight: 700;

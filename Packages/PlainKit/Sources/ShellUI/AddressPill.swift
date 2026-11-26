@@ -203,7 +203,10 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
         guard !isEditing, !isCompact, let menu = menuProvider() else { return nil }
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
+        let configuration = UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
+        // The same top-to-bottom order wherever the menu opens, app items last.
+        configuration.preferredMenuElementOrder = .fixed
+        return configuration
     }
 }
 #endif

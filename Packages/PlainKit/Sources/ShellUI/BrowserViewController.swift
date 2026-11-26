@@ -220,9 +220,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             case .more:
                 button.menu = pageMenu()
                 button.showsMenuAsPrimaryAction = true
+                // The same top-to-bottom order wherever the menu opens, app items last.
+                button.preferredMenuElementOrder = .fixed
                 item = UIBarButtonItem(
                     title: kind.title, image: UIImage(systemName: kind.symbol), primaryAction: nil, menu: pageMenu()
                 )
+                item.preferredMenuElementOrder = .fixed
             case .share:
                 button.addAction(UIAction { [weak self, weak button] _ in
                     guard let button else { return }

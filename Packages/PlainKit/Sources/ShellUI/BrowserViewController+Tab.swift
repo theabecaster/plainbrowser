@@ -87,6 +87,8 @@ extension BrowserViewController {
             session.pool.detach(current)
         }
         self.currentTab = tab
+        // A typed load that ended while the tab was off screen left its marker behind.
+        if !tab.isLoading { engineUI.typedVisitTabs.remove(tab.id) }
         session.tabs.select(tab)
         session.pool.attach(tab, to: webContainer)
         webContainer.bringSubviewToFront(engineUI.pageState)
@@ -136,6 +138,7 @@ extension BrowserViewController {
             self.currentTab = nil
         }
         engineUI.crashedTabs.remove(tab.id)
+        engineUI.typedVisitTabs.remove(tab.id)
         let next = session.tabs.close(tab)
         guard wasShown else { return }
         if let next {

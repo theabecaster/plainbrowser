@@ -203,12 +203,35 @@ public final class ContentBlocker {
     private func publish(_ lists: [WKContentRuleList]) {
         ruleLists = lists
         syncAllControllers()
+        if !lists.isEmpty { resumeWaitersForFirstRules() }
+    }
+
+    /// Waiting for `firstRulesAttached()`.
+    private var firstRulesWaiters: [CheckedContinuation<Void, Never>] = []
+    private var hasPublishedRules = false
+
+    /// Returns once the first lists are attached (on a warm launch, right after the lookups, about
+    /// 1 ms; during an update, the previous lists standing in), or once `prepare()` has finished
+    /// without any. Starts `prepare()` if it has not run. For loads that must not go out
+    /// unblocked, such as a tab restored at launch.
+    public func firstRulesAttached() async {
+        if hasPublishedRules || isReady { return }
+        if prepareTask == nil { Task { await prepare() } }
+        await withCheckedContinuation { firstRulesWaiters.append($0) }
+    }
+
+    private func resumeWaitersForFirstRules() {
+        hasPublishedRules = true
+        let waiters = firstRulesWaiters
+        firstRulesWaiters = []
+        waiters.forEach { $0.resume() }
     }
 
     private func finish(_ report: PrepareReport, start: ContinuousClock.Instant) -> PrepareReport {
         var report = report
         report.duration = ContinuousClock.now - start
         isReady = true
+        resumeWaitersForFirstRules()
         let compiled = report.lists.filter(\.compiled).count
         logger.info(
             "Content blocking ready: \(report.lists.count) lists (\(compiled) compiled) in \(report.duration)")

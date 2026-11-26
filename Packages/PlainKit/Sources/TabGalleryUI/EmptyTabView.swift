@@ -192,7 +192,8 @@ public final class EmptyTabView: UIView {
         accessory?.removeFromSuperview()
         accessory = view
         guard let view else { return }
-        stack.insertArrangedSubview(view, at: stack.arrangedSubviews.count - 1)
+        // Above the main button (the shortcuts stay last, under it).
+        stack.insertArrangedSubview(view, at: stack.arrangedSubviews.firstIndex(of: button) ?? stack.arrangedSubviews.count)
         stack.setCustomSpacing(Spacing.xl, after: label)
     }
 

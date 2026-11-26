@@ -149,6 +149,7 @@ Each entry: what was chosen, and why. Newest last.
 ## Deployment target iOS 27.2 (2026-11-26)
 
 - **Chosen:** iOS 27.2, up from 27.1, because `UIView.LayoutRegion.bar(onEdge:)` (Duo vertical bar layout) needs 27.2.
+
 ## Reader: Mozilla Readability 0.6.0, own content world, no reader settings (2026-11-26)
 
 - **Chosen:** `mozilla/readability` 0.6.0 (latest release, 2025-03-03), Apache-2.0, bundled

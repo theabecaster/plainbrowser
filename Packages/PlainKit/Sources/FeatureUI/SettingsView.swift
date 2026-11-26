@@ -2,13 +2,15 @@
 import BrowserCore
 import SwiftUI
 
-/// The Settings sheet: five rows, each showing its value, and one Done button.
+/// The Settings sheet: six rows, each showing its value, and one Done button.
 ///
 /// Present it in a sheet. `onDone` runs when Done is tapped; without it the view dismisses itself.
 public struct SettingsView: View {
     @Bindable private var model: SettingsModel
     private let onDone: (() -> Void)?
     @State private var confirmingClear = false
+    /// The Home Screen icon. Read from the system, not stored: the system owns it.
+    @State private var appIcon = AppIcons.current
 
     public init(model: SettingsModel, onDone: (() -> Void)? = nil) {
         self.model = model
@@ -51,6 +53,15 @@ public struct SettingsView: View {
                     .disabled(!model.isLoaded)
                 } footer: {
                     Text(model.settings.archiveAfter.footer)
+                }
+
+                Section {
+                    NavigationLink {
+                        AppIconView(current: $appIcon)
+                    } label: {
+                        LabeledContent("App Icon", value: appIcon.title)
+                    }
+                    .accessibilityIdentifier("settingsAppIcon")
                 }
 
                 Section {

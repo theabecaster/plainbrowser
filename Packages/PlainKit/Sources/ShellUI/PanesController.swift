@@ -145,6 +145,11 @@ final class PanesController {
             }
             arrangementValue.setViewProperties(primary, for: .primary)
             arrangementValue.setViewProperties(secondary, for: .secondary)
+        } else {
+            // Alone, the primary pane takes the whole width (by default it keeps half).
+            var primary = arrangementValue.defaultViewProperties
+            primary.width.preferred = .fractional(1)
+            arrangementValue.setViewProperties(primary, for: .primary)
         }
         // Only places whose slot changes are touched, so a pane that stays keeps its view in the
         // window (its web view never leaves it).

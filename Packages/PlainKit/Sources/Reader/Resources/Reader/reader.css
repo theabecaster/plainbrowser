@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light dark;
-  --bg: #FFFCF7;
+  --bg: #FFF6E6; /* Paper, the app background (DesignSystem Palette.background) */
   --text: #1F1B16;
   --secondary: #6A6259;
   --rule: rgba(31, 27, 22, 0.12);
@@ -15,7 +15,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0E1A24;
+    --bg: #0A2133; /* Deep Lagoon */
     --text: #E3E7EB;
     --secondary: #95A2AD;
     --rule: rgba(227, 231, 235, 0.14);
@@ -63,7 +63,7 @@ article > header::after {
 }
 .meta {
   font-family: system-ui, -apple-system, sans-serif;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   line-height: 1.4;
   color: var(--secondary);
   margin: 0 0 0.6rem;
@@ -83,12 +83,13 @@ article > header h1 {
 .content h2, .content h3, .content h4, .content h5, .content h6 {
   line-height: 1.25;
   font-weight: 700;
-  margin: 1.8em 0 0.55em;
-  text-wrap: balance;
+  margin: 1.25em 0 0.5em;
+  text-wrap: pretty;
 }
 .content h2 { font-size: 1.3em; }
 .content h3 { font-size: 1.12em; }
 .content h4, .content h5, .content h6 { font-size: 1em; }
+.content > :first-child, .content > div > :first-child { margin-top: 0; }
 
 .content a {
   color: inherit;
@@ -123,7 +124,7 @@ article > header h1 {
 .content figure img, .content p > img:only-child { display: block; margin: 0 auto; }
 .content figcaption, .content .caption {
   font-family: system-ui, -apple-system, sans-serif;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   line-height: 1.4;
   color: var(--secondary);
   margin-top: 0.6em;
@@ -140,7 +141,7 @@ article > header h1 {
   padding: 0.1em 0.3em;
 }
 .content pre {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   background: var(--tint);
   border-radius: 8px;

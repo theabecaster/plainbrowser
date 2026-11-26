@@ -363,6 +363,45 @@ enum CardSwipe {
     }
 }
 
+/// The swipe up from the address bar into the gallery, modeled on the home-indicator swipe into
+/// the app switcher (docs/research/arc-tab-switcher.md). The page shrinks with the distance the
+/// finger travels and reaches its card's size a little under halfway up; past that it resists.
+/// On release the movement is projected like a scroll view's; the thresholds are the shell's
+/// (`FixedChoices.gallerySwipeCommit`, `galleryFlickSpeed`).
+enum SwitcherSwipe {
+    /// The page is card-sized after the finger travels this share of the page's height.
+    static let travel: CGFloat = 0.4
+    /// How far past the card's size a long drag can shrink the page.
+    static let overshoot: CGFloat = 0.15
+    /// `UIScrollView.DecelerationRate.fast`: a slow release does not carry far.
+    static let decelerationRate: CGFloat = 0.99
+    static var commit: CGFloat { CGFloat(FixedChoices.gallerySwipeCommit) }
+    /// A swipe up on the gallery's empty space this long goes back to the page, like a swipe up
+    /// in the app switcher goes home.
+    static let backTravel: CGFloat = 40
+    static var flickSpeed: CGFloat { CGFloat(FixedChoices.galleryFlickSpeed) }
+
+    /// 0 (the page) to 1 (the card) for a finger `translationY` points down (negative is up).
+    static func progress(translationY: CGFloat, pageHeight: CGFloat) -> CGFloat {
+        let raw = -translationY / max(1, pageHeight * travel)
+        if raw <= 0 { return max(-0.05, raw * 0.1) }
+        if raw <= 1 { return raw }
+        // UIScrollView's rubber band past the card's size.
+        let excess = raw - 1
+        return 1 + (1 - 1 / (excess * CardSwipe.rubberBand / overshoot + 1)) * overshoot
+    }
+
+    /// Whether a release at `progress` moving at `velocityY` (pt/s, negative up) lands in the
+    /// gallery: any clear flick up does, a release moving down never does, else the projection
+    /// must pass `commit`.
+    static func opensGallery(progress: CGFloat, velocityY: CGFloat, pageHeight: CGFloat) -> Bool {
+        if velocityY < -flickSpeed { return true }
+        if velocityY > flickSpeed / 2 { return false }
+        let projected = -(velocityY / 1000) * decelerationRate / (1 - decelerationRate)
+        return progress + projected / max(1, pageHeight * travel) > commit
+    }
+}
+
 /// When a card's title shows. Covered cards in the cascade show only their icon, as in Arc: a
 /// title needs most of the card's width to say anything.
 enum CardTitle {

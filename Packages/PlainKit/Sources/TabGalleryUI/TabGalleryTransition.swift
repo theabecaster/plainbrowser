@@ -39,6 +39,10 @@ public final class TabGalleryTransition {
     private var generation = 0
     private let signpostName: StaticString
     private let signpostState: OSSignpostIntervalState
+    /// Where a finger has moved the page off its path (`track(translation:)`); springs back to
+    /// zero when the transition runs to an end.
+    private var offset: CGPoint = .zero
+    private var lastProgress: CGFloat = 0
 
     /// - Parameters:
     ///   - container: the view both the gallery and the page sit in; the snapshot moves in it.
@@ -98,12 +102,49 @@ public final class TabGalleryTransition {
         guard !isFinished, !Motion.prefersCrossfade else { return }
         generation += 1
         let clamped = min(max(progress, -0.1), 1.1)
+        lastProgress = clamped
         UIView.animate(Motion.tracking) { self.apply(progress: clamped, crossfade: false) }
     }
 
     /// Ends a gesture-driven run: springs to `end` with the gesture's velocity.
     public func finish(at end: End) {
         animate(to: end)
+    }
+
+    /// Follows a finger that drags the page up from the bar, the way the home-indicator swipe
+    /// pulls an app into the app switcher: the page shrinks with the distance travelled, its
+    /// bottom edge stays under the finger, it moves sideways with the finger, and the other cards
+    /// slide in around it. `translation` is the finger's, in points, negative upward.
+    /// - Returns: the progress shown, 0 (the page) to 1 (the card), for chrome that fades along.
+    @discardableResult
+    public func track(translation: CGPoint) -> CGFloat {
+        guard !isFinished else { return progress(of: destination) }
+        let progress = SwitcherSwipe.progress(translationY: translation.y, pageHeight: pageFrame.height)
+        guard !Motion.prefersCrossfade else { return progress }
+        generation += 1
+        lastProgress = progress
+        // The bottom edge where the finger is; sideways 1:1.
+        let bottom = lerp(pageFrame.maxY, cardFrame.maxY, progress)
+        let offset = CGPoint(x: translation.x, y: pageFrame.maxY + min(0, translation.y) - bottom)
+        UIView.animate(Motion.tracking) {
+            self.offset = offset
+            self.apply(progress: progress, crossfade: false)
+        }
+        return progress
+    }
+
+    /// Ends a `track(translation:)` run. The release is projected the way a scroll view would
+    /// carry it: past `SwitcherSwipe.commit` of the way, or any clear flick up, lands in the
+    /// gallery; a release moving down, or short of the mark, goes back to the page. The spring
+    /// continues from the finger's own motion.
+    /// - Returns: where it is heading.
+    @discardableResult
+    public func release(velocity: CGPoint) -> End {
+        let end: End = SwitcherSwipe.opensGallery(
+            progress: lastProgress, velocityY: velocity.y, pageHeight: pageFrame.height
+        ) ? .gallery : .page
+        animate(to: end)
+        return end
     }
 
     /// Ends at once where it is heading, with no animation (the gallery is going away).
@@ -142,7 +183,9 @@ public final class TabGalleryTransition {
             )
         } else {
             animateRing(toward: end)
+            lastProgress = progress(of: end)
             UIView.animate(Motion.galleryZoom, changes: {
+                self.offset = .zero
                 self.apply(progress: self.progress(of: end), crossfade: false, setsRing: false)
             }, completion: finish)
         }
@@ -160,11 +203,12 @@ public final class TabGalleryTransition {
             for view in content { view.transform = .identity; view.alpha = 1 }
             // The card shows under the fading page, so there is no gap.
             gallery.setThumbnailHidden(for: nil)
+            gallery.setHeaderFade(1)
             return
         }
         let frame = CGRect(
-            x: lerp(pageFrame.minX, cardFrame.minX, progress),
-            y: lerp(pageFrame.minY, cardFrame.minY, progress),
+            x: lerp(pageFrame.minX, cardFrame.minX, progress) + offset.x,
+            y: lerp(pageFrame.minY, cardFrame.minY, progress) + offset.y,
             width: max(1, lerp(pageFrame.width, cardFrame.width, progress)),
             height: max(1, lerp(pageFrame.height, cardFrame.height, progress))
         )
@@ -181,10 +225,15 @@ public final class TabGalleryTransition {
         }
         wrapper.alpha = 1
         if let cards = content.first {
+            // The other cards move with the finger too: the stack is one surface.
             cards.transform = zoomTransform(for: cards, progress: progress)
+                .concatenating(CGAffineTransform(translationX: offset.x, y: offset.y))
             cards.alpha = 1
         }
         for view in content.dropFirst() { view.alpha = min(1, max(0, progress)) }
+        // Titles stay out of the status bar while the cards are zoomed in: they fade in over the
+        // last part of the way.
+        gallery.setHeaderFade(min(1, max(0, (progress - 0.6) / 0.4)))
     }
 
     private static let ringKey = "selectionRing"
@@ -247,6 +296,7 @@ public final class TabGalleryTransition {
             view.alpha = 1
         }
         gallery.setThumbnailHidden(for: nil)
+        gallery.setHeaderFade(1)
         Signposts.signposter.endInterval(signpostName, signpostState)
         completion(end)
     }

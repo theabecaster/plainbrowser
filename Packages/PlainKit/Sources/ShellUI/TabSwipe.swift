@@ -95,13 +95,13 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         case .changed:
             switch mode {
             case .tabs: track(startOffset + translation.x)
-            case .gallery: trackGallery(translation.y)
+            case .gallery: trackGallery(translation)
             case .none: break
             }
         case .ended, .cancelled, .failed:
             switch mode {
             case .tabs: release(velocity: pan.state == .ended ? velocity.x : 0)
-            case .gallery: releaseGallery(translation: translation.y, velocity: pan.state == .ended ? velocity.y : 0)
+            case .gallery: releaseGallery(velocity: pan.state == .ended ? velocity : .zero)
             case .none: break
             }
             mode = .none
@@ -112,20 +112,17 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
 
     // MARK: Swipe up: the gallery
 
-    private func trackGallery(_ translationY: CGFloat) {
+    /// The page follows the finger as a card, like the swipe up into the app switcher; the
+    /// transition decides the shape and, on release, where it lands.
+    private func trackGallery(_ translation: CGPoint) {
         guard let browser, let transition = galleryTransition else { return }
-        let progress = -translationY / max(1, browser.view.bounds.height * 0.5)
-        transition.update(progress: progress)
-        browser.setChromeGalleryProgress(progress)
+        browser.setChromeGalleryProgress(transition.track(translation: translation))
     }
 
-    private func releaseGallery(translation: CGFloat, velocity: CGFloat) {
+    private func releaseGallery(velocity: CGPoint) {
         guard let browser, let transition = galleryTransition else { return }
         galleryTransition = nil
-        let progress = -translation / max(1, browser.view.bounds.height * 0.5)
-        let opens = velocity < -FixedChoices.galleryFlickSpeed
-            || (progress > FixedChoices.gallerySwipeCommit && velocity < FixedChoices.galleryFlickSpeed / 2)
-        transition.finish(at: opens ? .gallery : .page)
+        let opens = transition.release(velocity: velocity) == .gallery
         browser.setChromeHiddenForGallery(opens, animated: true)
     }
 

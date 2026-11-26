@@ -52,6 +52,8 @@ public final class TabGalleryViewController: UIViewController {
     var autoScroll: AutoScroller?
     /// The card a drag lifted: hidden until its preview lands.
     private var liftedID: UUID?
+    /// A swipe up on the empty space: back to the page.
+    private var backgroundSwipe: UIPanGestureRecognizer?
     /// Cards rising away after a close, with where they sit on screen.
     private var departing: [ObjectIdentifier: (card: TabCardView, screenX: CGFloat)] = [:]
 
@@ -91,6 +93,15 @@ public final class TabGalleryViewController: UIViewController {
         root.addSubview(scroll)
         scrollView = scroll
         root.addInteraction(UIDropInteraction(delegate: self))
+        // Like the app switcher: a tap or a swipe up on the space around the cards goes back to
+        // the tab on screen.
+        let backgroundTap = UITapGestureRecognizer(target: self, action: #selector(backgroundTapped))
+        backgroundTap.delegate = self
+        scroll.addGestureRecognizer(backgroundTap)
+        let backgroundSwipe = UIPanGestureRecognizer(target: self, action: #selector(backgroundSwiped(_:)))
+        backgroundSwipe.delegate = self
+        scroll.addGestureRecognizer(backgroundSwipe)
+        self.backgroundSwipe = backgroundSwipe
 
         motion.onFrame = { [weak self] in self?.layoutCards() }
 
@@ -291,6 +302,7 @@ public final class TabGalleryViewController: UIViewController {
             scrollView.addSubview(card)
         }
         card.setSize(metrics.cardSize, headerHeight: metrics.headerHeight)
+        card.setHeaderFade(headerFade)
         cards[id] = card
         configure(card, id: id)
         return card
@@ -678,6 +690,15 @@ public final class TabGalleryViewController: UIViewController {
         }
     }
 
+    /// How visible the cards' title rows are, 0...1: a transition fades them while the cards are
+    /// zoomed in, so they never cross the status bar.
+    private(set) var headerFade: CGFloat = 1
+
+    func setHeaderFade(_ fade: CGFloat) {
+        headerFade = fade
+        for card in cards.values { card.setHeaderFade(fade) }
+    }
+
     /// The views a transition zooms and fades: the cards, then the floating controls.
     var transitionContent: [UIView] { [scrollView, bottomBar, toast] }
 
@@ -737,6 +758,33 @@ public final class TabGalleryViewController: UIViewController {
 }
 
 // MARK: - Scroll physics
+
+// MARK: - Back to the page from the empty space
+
+extension TabGalleryViewController: UIGestureRecognizerDelegate {
+    /// Only touches on the space between and around cards; a card handles its own.
+    public func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        touch.view === scrollView
+    }
+
+    public func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+        guard gesture === backgroundSwipe, let pan = gesture as? UIPanGestureRecognizer else { return true }
+        let velocity = pan.velocity(in: view)
+        return velocity.y < 0 && abs(velocity.y) > abs(velocity.x)
+    }
+
+    @objc func backgroundTapped() {
+        guard selectedID != nil, reorder == nil else { return }
+        done()
+    }
+
+    @objc func backgroundSwiped(_ pan: UIPanGestureRecognizer) {
+        guard pan.state == .ended else { return }
+        let travel = pan.translation(in: view).y
+        let velocity = pan.velocity(in: view).y
+        if travel < -SwitcherSwipe.backTravel || velocity < -SwitcherSwipe.flickSpeed { backgroundTapped() }
+    }
+}
 
 extension TabGalleryViewController: UIScrollViewDelegate {
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {

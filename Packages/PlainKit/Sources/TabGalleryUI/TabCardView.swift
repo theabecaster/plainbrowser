@@ -51,7 +51,7 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
     /// Set while the card flies off; it no longer belongs to a tab.
     private(set) var isLeaving = false
 
-    static let selectionWidth: CGFloat = 3
+    static let selectionWidth: CGFloat = 2
     private static let iconGap: CGFloat = 8
 
     override init(frame: CGRect) {
@@ -178,6 +178,11 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
             thumbnailContainer.alpha = alpha
             shadowView.alpha = alpha
         }
+    }
+
+    /// The whole title row's visibility, for transitions (see `TabGalleryViewController.headerFade`).
+    func setHeaderFade(_ fade: CGFloat) {
+        if header.alpha != fade { header.alpha = fade }
     }
 
     /// How much of the title shows (0 under a covering card) and how wide the uncovered part is.

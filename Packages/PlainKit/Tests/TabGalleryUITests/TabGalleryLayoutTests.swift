@@ -197,6 +197,33 @@ struct CardSwipeTests {
 }
 
 @MainActor
+struct SwitcherSwipeTests {
+    let height: CGFloat = 874
+
+    @Test func thePageShrinksWithTheFingerAndResistsPastTheCard() {
+        #expect(SwitcherSwipe.progress(translationY: 0, pageHeight: height) == 0)
+        #expect(abs(SwitcherSwipe.progress(translationY: -height * 0.2, pageHeight: height) - 0.5) < 0.001)
+        #expect(SwitcherSwipe.progress(translationY: -height * 0.4, pageHeight: height) == 1)
+        let far = SwitcherSwipe.progress(translationY: -height * 2, pageHeight: height)
+        #expect(far > 1 && far < 1 + SwitcherSwipe.overshoot)
+        // Down barely moves it.
+        #expect(SwitcherSwipe.progress(translationY: 300, pageHeight: height) >= -0.05)
+    }
+
+    @Test func releaseDecidesByProjection() {
+        // A clear flick up opens, however short.
+        #expect(SwitcherSwipe.opensGallery(progress: 0.05, velocityY: -900, pageHeight: height))
+        // Paused past the mark opens; short of it goes back.
+        #expect(SwitcherSwipe.opensGallery(progress: 0.5, velocityY: 0, pageHeight: height))
+        #expect(!SwitcherSwipe.opensGallery(progress: 0.15, velocityY: 0, pageHeight: height))
+        // Moving back down goes back, even from far up.
+        #expect(!SwitcherSwipe.opensGallery(progress: 0.8, velocityY: 500, pageHeight: height))
+        // A slow push up near the mark is carried over it.
+        #expect(SwitcherSwipe.opensGallery(progress: 0.25, velocityY: -400, pageHeight: height))
+    }
+}
+
+@MainActor
 struct TabGalleryItemTests {
     @Test func displayTitleFallsBackToHostThenNewTab() {
         let id = UUID()

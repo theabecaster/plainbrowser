@@ -146,6 +146,39 @@ final class TabGalleryViewTests: XCTestCase {
         XCTAssertNil(page.superview?.superview, "the moving snapshot is gone")
     }
 
+    func testSwipeUpTracksTheFingerAndReleaseDecides() {
+        let data = TabGalleryDemoData(count: 10, selectedIndex: 4)
+        let gallery = show(data)
+        let id = data.tabs[4].id
+        let page = UIView(frame: gallery.view.bounds)
+        var ended: TabGalleryTransition.End?
+        let transition = TabGalleryTransition(
+            tabID: id, gallery: gallery, container: gallery.view, snapshot: page,
+            pageFrame: gallery.view.bounds, from: .page
+        ) { ended = $0 }
+        let progress = transition.track(translation: CGPoint(x: 30, y: -175))
+        XCTAssertEqual(progress, 0.5, accuracy: 0.01)
+        // The moving page's bottom edge sits under the finger, and it moved sideways with it.
+        let wrapper = page.superview!
+        XCTAssertEqual(wrapper.frame.maxY, gallery.view.bounds.height - 175, accuracy: 1)
+        XCTAssertEqual(wrapper.frame.midX, gallery.view.bounds.midX + 30, accuracy: 1)
+        // Titles stay hidden while the cards are zoomed in.
+        XCTAssertEqual(gallery.headerFade, 0)
+        XCTAssertEqual(transition.release(velocity: CGPoint(x: 0, y: -100)), .gallery)
+        transition.cancel()
+        XCTAssertEqual(ended, .gallery)
+        XCTAssertEqual(gallery.headerFade, 1)
+
+        // A short drag let go slowly goes back to the page.
+        let back = TabGalleryTransition(
+            tabID: id, gallery: gallery, container: gallery.view, snapshot: UIView(frame: gallery.view.bounds),
+            pageFrame: gallery.view.bounds, from: .page
+        ) { _ in }
+        back.track(translation: CGPoint(x: 0, y: -40))
+        XCTAssertEqual(back.release(velocity: .zero), .page)
+        back.cancel()
+    }
+
     /// An image that is not there yet is asked for again once the tab says it has one.
     func testAFaviconThatArrivesLaterShows() async throws {
         let data = LateIconData()

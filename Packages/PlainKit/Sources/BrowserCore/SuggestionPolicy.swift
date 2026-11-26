@@ -27,11 +27,13 @@ public enum SuggestionPolicy {
         if hasScheme(lower) { return false }
         if isIPv6(lower) || lower.hasPrefix("[") { return false }
         if let space = lower.firstIndex(where: \.isWhitespace) {
-            // Words after an address: still held back when the address names a path, a port or a
-            // local machine ("localhost/admin notes", "nas:8080 login", "10.0.0.1 router"). A bare
-            // public domain followed by words ("github.com down") is a search about that site.
+            // Words after an address: still held back when the address names a path, a query, a
+            // port or a local machine ("localhost/admin notes", "example.com?token=x note",
+            // "nas:8080 login", "10.0.0.1 router"). A bare public domain followed by words
+            // ("github.com down") is a search about that site.
             let first = String(lower[..<space])
-            return !(isLocal(first) || (looksLikeHost(first) && (first.contains("/") || first.contains(":"))))
+            let hasMore = first.contains { $0 == "/" || $0 == ":" || $0 == "?" || $0 == "#" }
+            return !(isLocal(first) || (looksLikeHost(first) && hasMore))
         }
 
         if case .url = AddressBarInput(trimmed) { return false }
@@ -40,9 +42,9 @@ public enum SuggestionPolicy {
         return true
     }
 
-    /// `localhost` or an IP address, with or without a port or path.
+    /// `localhost` or an IP address, with or without a port, path or query.
     private static func isLocal(_ token: String) -> Bool {
-        let host = token.split(whereSeparator: { $0 == "/" || $0 == ":" }).first.map(String.init) ?? token
+        let host = token.split(whereSeparator: { "/:?#".contains($0) }).first.map(String.init) ?? token
         if host == "localhost" || host.hasSuffix(".localhost") || isIPv6(token) { return true }
         let parts = host.split(separator: ".", omittingEmptySubsequences: false)
         return parts.count == 4 && parts.allSatisfy { !$0.isEmpty && $0.count <= 3 && $0.allSatisfy(\.isNumber) }
@@ -69,9 +71,10 @@ public enum SuggestionPolicy {
 
     /// A host, possibly with a port and a path, as people type it on the way to an address.
     private static func looksLikeHost(_ text: String) -> Bool {
-        // Split off the path, then the port.
-        let hostAndPort = text.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? text
-        let hasPath = hostAndPort.count < text.count
+        // Split off the path, query or fragment, then the port.
+        let hostAndPort = String(text.prefix { !"/?#".contains($0) })
+        let rest = text.dropFirst(hostAndPort.count)
+        let hasPath = !rest.isEmpty
         var host = Substring(hostAndPort)
         var hasPort = false
         if let colon = host.lastIndex(of: ":") {
@@ -88,8 +91,9 @@ public enum SuggestionPolicy {
         }
 
         if labels.count == 1 {
-            // "intranet/", "nas:8080": a bare word is a search, a word with a port or path is not.
-            return hasPort || hasPath
+            // "intranet/", "localhost?x", "nas:8080": a word with a port, or followed by only a
+            // slash, query or fragment, is a host. "and/or" and "AC/DC" are words.
+            return hasPort || (hasPath && (rest == "/" || rest.first == "?" || rest.first == "#"))
         }
         if labels.allSatisfy({ $0.allSatisfy(\.isNumber) }) {
             // "3.14" is a number; "192.168." and "10.0.0" are addresses being typed.

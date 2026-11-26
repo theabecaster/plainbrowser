@@ -117,8 +117,15 @@ extension AppDatabase {
     ///
     /// The check runs inside the serialized maintenance task, so two callers never both run it.
     @discardableResult
-    public func runDailyMaintenanceIfDue(now: Date = Date()) async throws -> MaintenanceReport? {
+    public func runDailyMaintenanceIfDue() async throws -> MaintenanceReport? {
+        try await runDailyMaintenanceIfDue(clock: { Date() })
+    }
+
+    /// `clock` is read inside the serialized task, so a caller that queued earlier can never see
+    /// a later caller's run as a clock moved back. Tests pass a fixed clock.
+    func runDailyMaintenanceIfDue(clock: @escaping @Sendable () -> Date) async throws -> MaintenanceReport? {
         try await maintenance.run {
+            let now = clock()
             let lastRun = try await self.lastMaintenance()
             if let lastRun, lastRun <= now, now.timeIntervalSince(lastRun) < FixedChoices.maintenanceInterval {
                 return nil

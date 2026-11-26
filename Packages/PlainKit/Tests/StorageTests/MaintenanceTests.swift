@@ -81,20 +81,22 @@ import Testing
     @Test func runsAtMostOncePerInterval() async throws {
         let database = try AppDatabase.inMemory()
         #expect(try await database.lastMaintenance() == nil)
-        #expect(try await database.runDailyMaintenanceIfDue(now: t0) != nil)
+        #expect(try await database.runDailyMaintenanceIfDue(clock: { t0 }) != nil)
         #expect(try await database.lastMaintenance() == t0)
-        #expect(try await database.runDailyMaintenanceIfDue(now: t0.addingTimeInterval(FixedChoices.maintenanceInterval - 1)) == nil)
-        #expect(try await database.runDailyMaintenanceIfDue(now: t0.addingTimeInterval(FixedChoices.maintenanceInterval)) != nil)
+        #expect(try await database.runDailyMaintenanceIfDue(clock: { t0.addingTimeInterval(FixedChoices.maintenanceInterval - 1) }) == nil)
+        #expect(try await database.runDailyMaintenanceIfDue(clock: { t0.addingTimeInterval(FixedChoices.maintenanceInterval) }) != nil)
         // A clock set back is not a reason to wait a long time.
-        #expect(try await database.runDailyMaintenanceIfDue(now: t0) != nil)
+        #expect(try await database.runDailyMaintenanceIfDue(clock: { t0 }) != nil)
         // The marker is not a setting.
         #expect(try await database.settings() == BrowserSettings.defaults)
     }
 
     @Test func concurrentCallersRunItOnce() async throws {
         let database = try AppDatabase.inMemory()
-        async let first = database.runDailyMaintenanceIfDue(now: t0)
-        async let second = database.runDailyMaintenanceIfDue(now: t0)
+        // The second caller's clock reads later than the first's, as a real clock would.
+        let ticks = Ticks()
+        async let first = database.runDailyMaintenanceIfDue(clock: { ticks.next() })
+        async let second = database.runDailyMaintenanceIfDue(clock: { ticks.next() })
         let reports = try await [first, second]
         #expect(reports.compactMap(\.self).count == 1)
     }
@@ -140,6 +142,18 @@ import Testing
         try await database.clearHistory(since: t0)
         await database.waitForMaintenance()
         #expect(try await counts(database).visits == 0)
+    }
+
+    /// A clock that moves one second on each read.
+    final class Ticks: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        func next() -> Date {
+            lock.withLock {
+                count += 1
+                return t0.addingTimeInterval(Double(count))
+            }
+        }
     }
 
     func size(_ url: URL) throws -> Int {

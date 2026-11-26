@@ -11,12 +11,13 @@ import Testing
         "https://example.com/private?token=1", "http://intranet", "https://x.example/a look at this",
         "about:config", "file:///etc/hosts", "mailto:me@example.com",
         // Intranet and local names.
-        "localhost", "localhost:3000", "intranet/", "wiki/team", "nas:8080", "[::1]", "[fe80::1]:80",
+        "localhost", "localhost:3000", "intranet/", "intranet?q=1", "nas:8080", "[::1]", "[fe80::1]:80",
         // IP addresses, whole or partial.
         "192.168.1.1", "192.168.", "10.0.0", "127.0.0.1:8080", "8.8.8.8", "::1", "fe80::1%en0",
         // An address with a path, port or local host, followed by words.
         "localhost/private note", "localhost login", "nas:8080 login", "10.0.0.1 router",
-        "github.com/me/secret-repo issues", "::1 admin",
+        "github.com/me/secret-repo issues", "::1 admin", "localhost?token=secret note",
+        "example.com?token=secret note", "example.com#private note", "example.com?token=x",
     ])
     func addressesStayLocal(text: String) {
         #expect(!SuggestionPolicy.allowsRemote(text), "\(text)")
@@ -24,7 +25,8 @@ import Testing
 
     @Test(arguments: [
         "swift", "swift ui", "weather tomorrow", "c++", "define:", "3.14", "v1.2", "how to use github.com",
-        "U.S. election", "node js", "café", "what is 192 168", "github.com down", "c++ tips",
+        "U.S. election", "node js", "café", "what is 192 168", "github.com down", "c++ tips", "and/or examples",
+        "ac/dc songs", "AC/DC", "24/7 pharmacy", "1/2 cup in grams",
     ])
     func searchesGoToTheEngine(text: String) {
         #expect(SuggestionPolicy.allowsRemote(text), "\(text)")

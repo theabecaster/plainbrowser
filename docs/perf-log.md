@@ -14,3 +14,4 @@ hitch = page scroll hitch ratio (ms/s).
 | Date | SHA | Target | Launch ms | Field ms | Hitch ms/s | Result |
 |---|---|---|---|---|---|---|
 | 2026-11-26 05:23 | 9b9ba4e | sim | 3353.9 | 2064.4 | n/a | pass |
+| 2026-11-26 06:16 | 6ba5947 | sim | 3578.5 | 2035.5 | n/a | pass |

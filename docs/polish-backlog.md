@@ -19,3 +19,5 @@ Newest feature last.
   precedent); the shell follows `verticalBarEdge` everywhere for now (M3).
 - **Shell constants.** The pull-to-refresh threshold, collapse distance and compact pill scale live
   in `ShellUI/ChromeModel.swift`. Move any that count as product decisions to `FixedChoices`.
+- **Sheet close.** While the sheet fades out, the favorites briefly overlap the page coming back.
+  Fade the favorites out first. (Design review, round 3.)

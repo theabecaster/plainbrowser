@@ -520,8 +520,8 @@ Each entry: what was chosen, and why. Newest last.
 - **Chosen:** a short intro on first launch only, replacing "no onboarding" (the owner's choice;
   docs/ui-reference.md, "First run"). Steps: the Stem mark assembling, the promise, what's inside,
   pick your icon, the blocking demo, the default-browser step (gated), then a dissolve into the
-  search field. Skip on every step. Motion and look follow Arc Search's intro in Plain's identity;
-  the reasoning is in docs/research/intro.md.
+  search field. Skip on every step. Structure and rhythm follow Arc Search's intro; the look is
+  Plain's own (below, "Intro styling"). The reasoning is in docs/research/intro.md.
 - **Its own window above the browser's.** On first launch the scene shows only the intro; the
   browser is built when the intro finishes, so its search field takes focus and the keyboard rises
   while the intro fades off the top. After the intro was seen, launch runs one user-defaults read
@@ -551,7 +551,7 @@ Each entry: what was chosen, and why. Newest last.
   FeatureUI for the start screen to host: ShellUI installs the start screen (`EmptyTabView`) and
   already imports FeatureUI, so it can place `makeDefaultBrowserCard` there when
   `DefaultBrowserPrompts.showsEmptyTabCard()` says so. No module dependency changes.
-- **Brand art colors** (`DesignSystem.BrandArt`): the mark's and the field's colors live in
+- **Brand art colors** (`DesignSystem.BrandArt`): the mark's and the dawn's colors live in
   DesignSystem, used only by the mark and the intro. The demo page's fake ads keep their own loud
   colors on purpose.
 - **Perf cost:** after the intro was seen, one defaults read on the launch path. FeatureUI's
@@ -629,3 +629,29 @@ Each entry: what was chosen, and why. Newest last.
   split keeps two attached web views (both live; the pool already never discards attached tabs).
   Layout runs one `DuoLayout` value computation per layout pass and touches constraints only when
   it changes. The sidebar is built only when side tabs show.
+
+## Intro styling: paper and a dawn window (2026-11-26)
+
+- **Chosen:** the owner said the first intro copied Arc's look. The steps, words and rhythm stay;
+  the look is Plain's. Paper is the ground (the launch color, so launch hands over with no change).
+  The dawn from the mark (sky, coral sun, deep-blue planet, mint rim) shows through a window cut
+  in the paper at the top. It is tall on the promise and default steps, with the mark on its sill,
+  and a 56–76 pt band on the busy steps, and its sun climbs a little each step. Headlines are New
+  York, the Reader's serif, with a coral stroke under the one word, cut at the fold's angle.
+  Feature cards are paper sheets, small rings show the step, and the main button is Lagoon Liquid
+  Glass.
+- **Rejected: the horizon** (the dawn as a planet and sun at the foot of the paper, SF Pro
+  Expanded). It felt closer to Arc's full-screen atmosphere, and the sun and dark planet fought the
+  buttons. Codex compared both mockups against Brand/identity.md and Arc's frames and picked the
+  window.
+- **One signature motion:** after the splash the dawn opens out of the mark's own window into the
+  page's window while the mark settles on its sill. Steps lift away like a sheet instead of
+  blurring, so there is no blur pass at all now.
+- **Core Animation for the dawn** (`DawnView`): the window and its sky, sun and planet are views
+  whose frames move in one UIKit spring, and the sky's colors in a matching layer animation, so
+  the render server runs them. The old field's drifting blooms are gone: nothing animates while a
+  step is still.
+- **Contrast:** the main button's fill is Lagoon a step deeper (`#2366F0`), so its white label
+  holds 4.5:1 (Lagoon itself gives 4.2:1). The demo's tracker badge uses ink text on mint and coral.
+- **The mark's shadow** on paper comes from a shadow path on its own layer
+  (`StemMarkView(shadowed:)`), not a SwiftUI shadow, so it needs no offscreen pass.

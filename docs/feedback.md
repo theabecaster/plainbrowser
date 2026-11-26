@@ -8,8 +8,6 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Paper texture:** a subtle, elegant paper texture on the app's own surfaces, never costing frames or quality, never called out in the UI. (Paper lane.)
 
-- **Intro styling:** keep the intro's steps, words and simplicity, but restyle it in Plain's own colors and look (paper, dawn, coral fold) so it no longer reads as Arc's. (Intro restyle lane.)
-
 - **Suggestions over the start-screen mark:** typing in a new tab can draw suggestion rows over the white mark, making them unreadable. Keep the design; the mark should yield smoothly while suggestions show. (State fix lane.)
 
 - **Discoverable tab features:** with one tab the tabs button becomes "+"; New Private Tab, Reopen Closed Tab and Archived Tabs must stay obviously reachable (More menu, start-screen shortcuts), not only behind a long press. (State fix lane.)
@@ -17,6 +15,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 - **State-aware controls:** a control appears only when it does something useful in the current state, for example no tab switcher or new-tab button with a single empty tab. Rules in `docs/state-rules.md`. (State audit, then a fix lane.)
 
 ## Done
+
+- **Intro styling:** the intro keeps its steps, words and simplicity in Plain's own look: paper, a dawn window with the mark on its sill, New York headlines with a coral fold underline. (dev, next build.)
 
 - **Tab Layout values:** Above (tab strip), Left and Right (sidebar), on the Duo inner screen. (dev, next build.)
 

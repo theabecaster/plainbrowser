@@ -39,6 +39,30 @@ public enum Signposts {
     /// Event: the user reordered, renamed or deleted favorites.
     public static let favoritesEdit: StaticString = "favorites.edit"
 
+    // MARK: Shell (address bar, toolbar, page)
+
+    /// Interval from a tap on the URL pill to the field being first responder with the search
+    /// sheet's layout applied (the first visual response).
+    public static let urlBarFocus: StaticString = "urlBar.focus"
+    /// Interval from a keystroke in the address bar to its local suggestions (history and
+    /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
+    public static let suggestionsShown: StaticString = "search.suggestions"
+    /// Event: an address or search was submitted (Return or a suggestion tap).
+    public static let searchSubmit: StaticString = "search.submit"
+    /// Interval from the toolbar starting to collapse or expand to it settling.
+    public static let toolbarCollapse: StaticString = "toolbar.collapse"
+    /// Event: pull to refresh crossed its threshold and is armed.
+    public static let pullToRefreshArm: StaticString = "ptr.arm"
+    /// Event: pull to refresh was released armed and the page reloads.
+    public static let pullToRefresh: StaticString = "ptr.refresh"
+    /// Event: the page menu opened.
+    public static let pageMenu: StaticString = "pageMenu.open"
+    /// Event: Back or Forward from a button (the swipe gestures show up as navigations).
+    public static let navBack: StaticString = "nav.back"
+    public static let navForward: StaticString = "nav.forward"
+    /// Event: the share sheet opened.
+    public static let share: StaticString = "share.open"
+
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {
         name.description

@@ -38,6 +38,12 @@ public enum FixedChoices {
     public static let maxSearchSuggestions = 6
     /// History and favorite rows per keystroke, so pages never push search suggestions off screen.
     public static let maxPageSuggestions = 4
+    /// History rows fetched per keystroke: twice the rows shown, so http/https and www variants
+    /// of one page can be merged without leaving the list short.
+    public static let historyCandidates = 2 * maxPageSuggestions
+    /// One typed character means a site ("g" for github.com), not a word in a page title, so
+    /// shorter input matches only addresses that start with it.
+    public static let minTitleSearchLength = 2
     /// Total rows in the suggestion list; fits above the keyboard on the Duo's outer screen.
     public static let maxAddressBarSuggestions = 8
 

@@ -35,7 +35,7 @@ func visit(_ url: String, _ title: String? = nil, at offset: TimeInterval = 0) -
         #expect(places.map(\.address) == ["github.com/apple/swift", "example.com"])
 
         let found = try await queue.read { db in
-            try AppDatabase.historyMatches(FTS5Pattern(matchingAllPrefixesIn: "git sw")!, limit: 5, in: db)
+            try AppDatabase.historyMatches(HistoryQuery("git sw").pattern!, addressPrefix: nil, limit: 5, in: db)
         }
         #expect(found.map(\.url.absoluteString) == ["https://github.com/apple/swift"])
     }
@@ -83,6 +83,48 @@ func visit(_ url: String, _ title: String? = nil, at offset: TimeInterval = 0) -
         #expect(try await urls("zzz").isEmpty)
         #expect(try await urls("  ").isEmpty)
         #expect(try await urls("\"*:(") .isEmpty)
+        // One character matches only addresses that start with it, never title words.
+        #expect(try await urls("s") == ["https://www.swift.org/documentation/"])
+        #expect(try await urls("G") == ["https://github.com/apple/swift-testing"])
+        #expect(try await urls("c").isEmpty)
+        #expect(try await urls("/").isEmpty)
+        // Typed schemes and www. are dropped, as the index holds addresses without them.
+        #expect(try await urls("https://www.swift.org/doc") == ["https://www.swift.org/documentation/"])
+        #expect(try await urls("HTTP://github.com/apple") == ["https://github.com/apple/swift-testing"])
+    }
+
+    @Test func addressPrefixMatchesAreNotCrowdedOutByFrecency() async throws {
+        let database = try AppDatabase.inMemory()
+        var changes: [HistoryChange] = (0..<6).flatMap { index in
+            (0..<10).map { _ in .visit(visit("https://blog.example/git-tip-\(index)", "Git tip \(index)")) }
+        }
+        changes.append(.visit(visit("https://github.com/", "GitHub", at: -30 * 86_400)))
+        try await database.apply(changes)
+
+        let found = try await database.searchHistory("git", limit: 4)
+        #expect(found.first?.url.absoluteString == "https://github.com/")
+        #expect(found.count == 4)
+
+        // End to end through the merge: github.com is the top hit.
+        let candidates = try await database.addressBarCandidates(for: "git")
+        let merged = AddressBarSuggestions.merge(
+            query: "git", history: candidates.history, favorites: candidates.favorites, searches: []
+        )
+        #expect(merged.first == .page(url: URL(string: "https://github.com/")!, title: "GitHub", isFavorite: false))
+    }
+
+    @Test func urlVariantsDoNotShortenTheMergedList() async throws {
+        let database = try AppDatabase.inMemory()
+        var changes: [HistoryChange] = []
+        for host in ["a", "b", "c", "d"] {
+            for variant in ["https://\(host).example/news", "http://\(host).example/news", "https://www.\(host).example/news/"] {
+                changes.append(.visit(visit(variant)))
+            }
+        }
+        try await database.apply(changes)
+        let candidates = try await database.addressBarCandidates(for: "news")
+        let merged = AddressBarSuggestions.merge(query: "news", history: candidates.history, favorites: [], searches: [])
+        #expect(merged.count >= 3)
     }
 
     @Test func resultsAreRankedByFrecency() async throws {
@@ -135,22 +177,60 @@ func visit(_ url: String, _ title: String? = nil, at offset: TimeInterval = 0) -
         #expect(try await database.searchHistory("example").map(\.title) == ["Example Domain"])
     }
 
-    @Test func fullBufferFlushesAtOnce() async throws {
+    /// Waits up to 5 s for `count` visits to be on disk, without calling `flush()`.
+    func waitForVisits(_ count: Int, in database: AppDatabase) async throws -> Int {
+        let deadline = ContinuousClock.now + .seconds(5)
+        var found = 0
+        while ContinuousClock.now < deadline {
+            found = try await database.recentVisits(limit: 100).count
+            if found >= count { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return found
+    }
+
+    @Test func fullBufferIsWrittenWithoutAFlush() async throws {
         let database = try AppDatabase.inMemory()
         let recorder = HistoryRecorder(database: database, interval: .seconds(60), batchSize: 3)
         for index in 0..<3 { await recorder.record(visit("https://e.example/\(index)")) }
-        #expect(try await database.recentVisits(limit: 10).count == 3)
+        #expect(try await waitForVisits(3, in: database) == 3)
     }
 
     @Test func timerFlushesAfterTheInterval() async throws {
         let database = try AppDatabase.inMemory()
         let recorder = HistoryRecorder(database: database, interval: .milliseconds(20), batchSize: 100)
         await recorder.record(visit("https://e.example"))
-        let deadline = ContinuousClock.now + .seconds(5)
-        while try await database.recentVisits(limit: 1).isEmpty, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(try await database.recentVisits(limit: 1).count == 1)
+        #expect(try await waitForVisits(1, in: database) == 1)
         #expect(await recorder.lastError == nil)
+    }
+
+    @Test func clearDropsBufferedAndInFlightVisits() async throws {
+        let database = try AppDatabase.inMemory()
+        let recorder = HistoryRecorder(database: database, interval: .seconds(60), batchSize: 2)
+        // The first two start writing; the third waits in the buffer.
+        for index in 0..<3 { await recorder.record(visit("https://e.example/\(index)")) }
+        try await recorder.clearHistory()
+        await recorder.flush()
+        #expect(try await database.recentVisits(limit: 10).isEmpty)
+
+        await recorder.record(visit("https://after.example"))
+        await recorder.flush()
+        #expect(try await database.recentVisits(limit: 10).map(\.url.host) == ["after.example"])
+    }
+
+    @Test func deleteDropsBufferedChangesForThatPageOnly() async throws {
+        let database = try AppDatabase.inMemory()
+        let recorder = HistoryRecorder(database: database, interval: .seconds(60), batchSize: 100)
+        let gone = URL(string: "https://gone.example")!
+        await recorder.record(visit(gone.absoluteString))
+        await recorder.flush()
+        await recorder.record(visit(gone.absoluteString, at: 10))
+        await recorder.recordTitle("Gone", for: gone)
+        await recorder.record(visit("https://kept.example", at: 20))
+
+        try await recorder.deleteHistory(for: gone)
+        await recorder.flush()
+        #expect(try await database.recentVisits(limit: 10).map(\.url.host) == ["kept.example"])
+        #expect(try await database.searchHistory("gone").isEmpty)
     }
 }

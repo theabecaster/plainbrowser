@@ -50,10 +50,7 @@ extension AppDatabase {
     public func searchArchivedTabs(_ text: String) async throws -> [TabRecord] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return try await archivedTabs() }
-        let escaped = trimmed.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "%", with: "\\%")
-            .replacingOccurrences(of: "_", with: "\\_")
-        let like = "%\(escaped)%"
+        let like = "%\(HistoryQuery.escapeLike(trimmed))%"
         return try await writer.read { db in
             try TabRecord.fetchAll(
                 db,
@@ -100,11 +97,18 @@ extension AppDatabase {
 
     /// Deletes state files that no tab row refers to (left behind by a crash between the two
     /// writes). Run once at launch, off the critical path.
+    ///
+    /// Safe alongside tab saves: it holds the write lock, so no tab row can be saved between
+    /// reading the ids and deleting files, and it skips files written after it started, so a
+    /// state file saved just before its row is kept. Contract for callers: save a tab's row
+    /// before its first state file.
     public func removeOrphanedTabStates() async throws {
-        let ids = try await writer.read { db in
-            try UUID.fetchSet(db, sql: "SELECT id FROM \(Schema.tab)")
+        let started = Date()
+        let tabStates = tabStates
+        try await writer.write { db in
+            let ids = try UUID.fetchSet(db, sql: "SELECT id FROM \(Schema.tab)")
+            tabStates.removeOrphans(keeping: ids, writtenBefore: started)
         }
-        await tabStates.removeAll(except: ids)
     }
 }
 
@@ -148,15 +152,17 @@ public struct TabStateStore: Sendable {
         }
     }
 
-    /// Removes every state file except those of `keep`.
-    @concurrent
-    public func removeAll(except keep: Set<UUID>) async {
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+    /// Removes state files of tabs not in `keep` that were last written before `cutoff`.
+    /// Synchronous: called from `AppDatabase.removeOrphanedTabStates` on GRDB's writer queue.
+    func removeOrphans(keeping keep: Set<UUID>, writtenBefore cutoff: Date) {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.contentModificationDateKey]
+        )) ?? []
         for file in files where file.pathExtension == "state" {
-            let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent)
-            if id.map({ !keep.contains($0) }) ?? true {
-                try? FileManager.default.removeItem(at: file)
-            }
+            if let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent), keep.contains(id) { continue }
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            guard let modified, modified < cutoff else { continue }
+            try? FileManager.default.removeItem(at: file)
         }
     }
 }

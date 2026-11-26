@@ -155,6 +155,9 @@ if (( ! INTERNAL )); then
         && break
       grep -q "already in beta review" $OUT_ERR || { cat $OUT_ERR >&2; die "could not submit for Beta App Review"; }
       (( i == 1 )) && say "another build is in review; waiting to submit"
+      # Testers only need the newest build: a newer upload takes over this build's place in line.
+      NEWEST=$(asc GET "/v1/builds?filter%5Bapp%5D=$APP_ID&sort=-version&fields%5Bbuilds%5D=version&limit=1" | json 'd.data?.[0]?.attributes.version')
+      if (( NEWEST > BUILD )); then say "build $NEWEST is newer; not submitting $BUILD"; exit 0; fi
       sleep 120
     done
     grep -q "already in beta review" $OUT_ERR 2>/dev/null && [[ -z $(review_state $ID) ]] && die "the build ahead stayed in review for 4 hours; rerun with --skip-upload --build $BUILD"

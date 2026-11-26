@@ -97,6 +97,6 @@ It reads `ASC_KEY_ID`, `ASC_ISS`, `ASC_KEY`, `TESTFLIGHT_APP_ID` and `TESTFLIGHT
 - **NOT IN YET:** big things still missing, so nobody reports them.
 - **WHAT TO TEST:** two or three things to try in this build.
 
-Leave out internal work (refactors, tests, scripts, docs). Skip a section that would be empty.
+Testers outside the team only get builds that passed Beta App Review, and only one build is in review at a time. A newer upload replaces any build still waiting to be submitted, so write each build's notes to cover everything since the last build the external group received, not just since the last upload. Leave out internal work (refactors, tests, scripts, docs). Skip a section that would be empty.
 
 The API can't create the app record, so a person makes it once in App Store Connect. Every other step runs through the API.

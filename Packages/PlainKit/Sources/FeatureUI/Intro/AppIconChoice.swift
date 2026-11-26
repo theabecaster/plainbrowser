@@ -55,7 +55,8 @@ public enum AppIcons {
     /// Switches the icon. Returns false when the system refused (it then keeps the old icon).
     @discardableResult
     public static func set(_ choice: AppIconChoice) async -> Bool {
-        guard UIApplication.shared.supportsAlternateIcons, choice != current else { return true }
+        guard choice != current else { return true }
+        guard UIApplication.shared.supportsAlternateIcons else { return false }
         let interval = Signposts.signposter.beginInterval(Signposts.appIconChange)
         defer { Signposts.signposter.endInterval(Signposts.appIconChange, interval) }
         do {

@@ -33,6 +33,8 @@ public struct DefaultBrowserCard: View {
         VStack(spacing: 14) {
             StemMark()
                 .frame(width: 76, height: 80)
+                // Keeps the cream ring's edge on the cream start screen.
+                .shadow(color: Color(uiColor: Palette.floatingShadow).opacity(0.25), radius: 10, y: 4)
             Text("Open links from every app in Plain, with blocking on.")
                 .font(.body.weight(.medium))
                 .foregroundStyle(Color(uiColor: Palette.textPrimary))

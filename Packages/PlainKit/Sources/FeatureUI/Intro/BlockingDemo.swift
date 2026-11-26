@@ -216,20 +216,22 @@ struct BlockingDemo: View {
     }
 
     private var cookie: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("We value your privacy").font(.system(size: 14, weight: .bold)).foregroundStyle(.black)
-            Text("We and 214 partners use cookies to follow you across sites.")
-                .font(.system(size: 10.5)).foregroundStyle(.black.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
-                Text("Accept All").frame(maxWidth: .infinity, minHeight: 30)
-                    .background(Color(red: 0.1, green: 0.4, blue: 0.95), in: .rect(cornerRadius: 6)).foregroundStyle(.white)
-                Text("Options").frame(maxWidth: .infinity, minHeight: 30)
-                    .background(.black.opacity(0.06), in: .rect(cornerRadius: 6)).foregroundStyle(.black)
+        // One compact row, so a short page (the Duo's outer screen) still shows the photo above it.
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("We value your privacy").font(.system(size: 13, weight: .bold)).foregroundStyle(.black)
+                Text("We and 214 partners use cookies to follow you.")
+                    .font(.system(size: 10)).foregroundStyle(.black.opacity(0.6)).lineLimit(2)
             }
-            .font(.system(size: 11, weight: .bold))
+            Spacer(minLength: 0)
+            Text("Accept All")
+                .font(.system(size: 11, weight: .bold))
+                .padding(.horizontal, 12)
+                .frame(minHeight: 30)
+                .background(Color(red: 0.1, green: 0.4, blue: 0.95), in: .rect(cornerRadius: 6)).foregroundStyle(.white)
         }
         .padding(12)
-        .padding(.bottom, 24)
+        .padding(.bottom, 22)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .overlay(alignment: .top) { Rectangle().fill(.black.opacity(0.08)).frame(height: 1) }
@@ -264,9 +266,17 @@ struct BlockingDemo: View {
         autoPlay?.cancel()
         guard on != model.blockingOn else { return }
         if byUser { Haptic.selection.play() }
-        model.blockingOn = on
         let interval = Signposts.signposter.beginAnimationInterval(Signposts.introBlockingDemo, "\(on ? "clean" : "cluttered", privacy: .public)")
-        apply(on, animated: true)
+        if reduceMotion {
+            // The page's identity follows `blockingOn`: change both in one crossfade.
+            withAnimation(IntroMotion.crossfade) {
+                model.blockingOn = on
+                apply(on, animated: false)
+            }
+        } else {
+            model.blockingOn = on
+            apply(on, animated: true)
+        }
         Task {
             try? await Task.sleep(for: .seconds(0.8))
             Signposts.signposter.endInterval(Signposts.introBlockingDemo, interval)
@@ -280,9 +290,9 @@ struct BlockingDemo: View {
         let steps: [(Double, () -> Void)] = [
             (0.0, { cookieWall = !on }),
             (0.05, { videoAd = !on }),
-            (0.08, { trackersBlocked = on }),
-            (0.1, { bannerAd = !on }),
-            (0.15, { inlineAd = !on }),
+            (0.08, { inlineAd = !on }),
+            (0.1, { trackersBlocked = on }),
+            (0.12, { bannerAd = !on }),
         ]
         if !animated {
             steps.forEach { $0.1() }

@@ -169,7 +169,7 @@ private struct FeatureRow: View {
 
 private struct IconStep: View {
     @Bindable var model: IntroModel
-    @ScaledMetric(relativeTo: .body) private var tile: CGFloat = 84
+    @ScaledMetric(relativeTo: .body) private var tile: CGFloat = 92
     /// Two columns while two tiles fit; one at the largest text sizes.
     private var columns: [GridItem] { [GridItem(.adaptive(minimum: tile + 40), spacing: 20)] }
 
@@ -271,6 +271,8 @@ private struct DefaultBrowserStep: View {
             Spacer(minLength: 12)
             StemMark()
                 .frame(width: 112, height: 116)
+                // A soft ink shadow keeps the cream ring's edge on the cream field.
+                .shadow(color: IntroStyle.ink.opacity(0.22), radius: 14, y: 6)
                 .entrance(1)
             DisplayText(lead: "Make Plain your", emphasis: "default", trail: "")
                 .padding(.top, 26)
@@ -298,7 +300,9 @@ struct DisplayText: View {
     @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 38
 
     var body: some View {
-        Text("\(lead) \(Text(emphasis).italic())\(trail)")
+        // After a comma the italic leans back into it, so the gap gets a hair space more.
+        let gap = lead.hasSuffix(",") ? " \u{200A}" : " "
+        Text("\(lead)\(gap)\(Text(emphasis).italic())\(trail)")
             .font(.system(size: size, weight: .heavy))
             .tracking(-0.4)
             .multilineTextAlignment(.center)

@@ -23,3 +23,9 @@ swipe = bar swipe to page settled (`tab.swipe`, ms). Rows before the M2 shell wi
 | 2026-11-26 13:01 | 2d4189d | sim | 3257.5 | 491.5 | n/a | pass |
 | 2026-11-26 15:12 | 448bd31 | sim | — | 436.3 | n/a | 1481.8 | — | FAIL |
 | 2026-11-26 15:17 | 2ced874 | sim | 3271.3 | 441 | n/a | 1480.7 | — | FAIL |
+| 2026-11-26 15:23 | ebab6bf | sim | — | 447.6 | n/a | 1482.9 | — | FAIL |
+
+Note, M2 shell wiring rows (2026-11-26 15:12–15:23): machine load average 70–130 on 14 cores (other
+lanes building), so these are noise. Launch reported no measurement in two of three runs; the bar
+swipe (`tab.swipe`) recorded no XCTOSSignpostMetric value in any run (the swipe UI tests pass), to
+investigate before relying on it. Gallery ends at the spring settle (see perf/budgets.json).

@@ -131,6 +131,10 @@ Newest feature last.
   and update).
 - **Blocking per site in private tabs.** Hidden: the allow-list is persistent. A memory-only
   private allow-list in `ContentBlocker` would bring the toggle back. (Code review, round 1.)
+- **gallery.show measures the spring's settle, not what the eye sees.** `TabGalleryTransition`
+  completes when Core Animation settles the 0.42 s spring, a steady ~1.48 s (perf gate, sim), so the
+  budget is set to it and the metric catches stalls on top. End the interval (and drop the snapshot)
+  at the perceptual duration instead, then tighten the budget.
 - **Gallery selection ring weight.** The blue ring reads strong in the calm gallery; try a thinner
   ring or the on-glass blue. (Design review, round 1.)
 - **Inner screen and device checks.** No Duo inner screen captures (fold not settable from the

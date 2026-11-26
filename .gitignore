@@ -5,4 +5,5 @@ DerivedData/
 *.xcodeproj
 xcuserdata/
 scripts/local.env
+Config/Signing.local.xcconfig
 .claude/worktrees/

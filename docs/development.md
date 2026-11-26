@@ -23,7 +23,14 @@ The device scripts read the phone's UDID from `PLAIN_DEVICE`, or from `scripts/l
 cp scripts/local.env.example scripts/local.env   # then set PLAIN_DEVICE
 ```
 
-Signing is automatic with team R2PVQ496X7; the scripts pass `-allowProvisioningUpdates
+Signing is automatic. The team ID is personal, so it lives in the gitignored
+`Config/Signing.local.xcconfig`:
+
+```sh
+cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig   # then set DEVELOPMENT_TEAM
+```
+
+Simulator builds work without it. The device scripts pass `-allowProvisioningUpdates
 -allowProvisioningDeviceRegistration`. For perf runs keep the phone awake and unlocked
 (Settings > Display & Brightness > Auto-Lock > Never).
 

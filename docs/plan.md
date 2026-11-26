@@ -200,7 +200,7 @@ Dropped: outer-screen "peek" (no API), hinge gestures (gimmick).
 ### Overnight (v0.1, in order; each milestone ends with build, tests, perf gate, install, commit)
 
 **M0 — Skeleton and pipeline**
-- Repo, XcodeGen spec, package targets, signing with team R2PVQ496X7.
+- Repo, XcodeGen spec, package targets, signing (team in the gitignored `Config/Signing.local.xcconfig`).
 - Scripts: `build.sh`, `install-duo.sh` (devicectl install + launch), `shot.sh` (device screenshot per screen), `perf-gate.sh` (xcresult metrics vs budgets).
 - Launch-time and hitch tests running on the Duo from the first milestone.
 

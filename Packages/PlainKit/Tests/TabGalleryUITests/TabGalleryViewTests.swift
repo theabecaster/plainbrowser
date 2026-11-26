@@ -103,7 +103,11 @@ final class TabGalleryViewTests: XCTestCase {
         let gallery = show(data)
         let previous = data.tabs[3].id
         let before = screenX(gallery.cards[previous]!, in: gallery)
+        let leaving = gallery.cards[data.tabs[4].id]!
+        let leavingX = screenX(leaving, in: gallery)
         gallery.closeTab(data.tabs[4].id)
+        // The closing card rises straight up: the scroll moving back does not carry it along.
+        XCTAssertEqual(screenX(leaving, in: gallery), leavingX, accuracy: 0.5)
         // The scroll offset moved back one card, but the cards have not jumped.
         XCTAssertEqual(gallery.scrollView.contentOffset.x, gallery.metrics.restingOffset(for: 3), accuracy: 0.5)
         XCTAssertGreaterThan(gallery.motion.scrollShift, 0)

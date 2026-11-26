@@ -234,8 +234,8 @@ final class CaptureTests: XCTestCase {
         app.buttons["tabs"].tap()
         pause(1.5)
         shot("t2-gallery")
-        let cards = app.collectionViews["tabGallery"].cells.matching(identifier: "tabCard")
-        app.collectionViews["tabGallery"].swipeDown(velocity: .fast)
+        let cards = app.scrollViews["tabGallery"].descendants(matching: .any).matching(identifier: "tabCard")
+        app.scrollViews["tabGallery"].swipeRight(velocity: .fast)
         cards.matching(NSPredicate(format: "label BEGINSWITH %@", "Hacker News")).firstMatch.tap()
         pause(1.5)
 

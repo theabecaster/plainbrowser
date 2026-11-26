@@ -123,7 +123,9 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
 
     // MARK: Content
 
-    func configure(item: TabGalleryItem, isSelected: Bool, hidesThumbnail: Bool) {
+    /// - Parameter showsPrivateBadge: false where the whole list is private (its tint says so);
+    ///   VoiceOver still hears "Private".
+    func configure(item: TabGalleryItem, isSelected: Bool, hidesThumbnail: Bool, showsPrivateBadge: Bool = true) {
         if tabID != item.id {
             imageView.image = nil
             faviconView.image = nil
@@ -134,10 +136,12 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         isSelectedTab = isSelected
         titleLabel.text = item.displayTitle
         let font = Self.titleFont(for: traitCollection)
-        if titleLabel.font != font { titleLabel.font = font }
-        let privateChanged = privateIcon.isHidden == item.isPrivate
-        privateIcon.isHidden = !item.isPrivate
-        if privateChanged { layoutHeader() }
+        let fontChanged = titleLabel.font != font
+        if fontChanged { titleLabel.font = font }
+        let badge = item.isPrivate && showsPrivateBadge
+        let privateChanged = privateIcon.isHidden == badge
+        privateIcon.isHidden = !badge
+        if privateChanged || fontChanged { layoutHeader() }
         setThumbnailHidden(hidesThumbnail)
         updatePlaceholder()
         applyColors()

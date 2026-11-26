@@ -52,6 +52,8 @@ public final class TabGalleryViewController: UIViewController {
     var autoScroll: AutoScroller?
     /// The card a drag lifted: hidden until its preview lands.
     private var liftedID: UUID?
+    /// Cards rising away after a close, with where they sit on screen.
+    private var departing: [ObjectIdentifier: (card: TabCardView, screenX: CGFloat)] = [:]
 
     private let bottomBar = GalleryBottomBar()
     private let toast = ReopenToast()
@@ -96,6 +98,8 @@ public final class TabGalleryViewController: UIViewController {
         root.addSubview(emptyView)
 
         bottomBar.newTabButton.addAction(UIAction { [weak self] _ in self?.newTab() }, for: .primaryActionTriggered)
+        bottomBar.privateButton.addAction(UIAction { [weak self] _ in self?.togglePrivate() }, for: .primaryActionTriggered)
+        bottomBar.showsPrivateButton = dataSource.supportsPrivateTabs
         bottomBar.doneButton.addAction(UIAction { [weak self] _ in self?.done() }, for: .primaryActionTriggered)
         bottomBar.menuButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             completion(self?.galleryMenuItems() ?? [])
@@ -199,7 +203,8 @@ public final class TabGalleryViewController: UIViewController {
     private func scroll(to offset: CGFloat, animated: Bool) {
         let clamped = min(max(offset, 0), metrics.maxOffset(for: order.count))
         snapTarget = nil
-        scrollView.setContentOffset(CGPoint(x: clamped, y: 0), animated: animated)
+        // Under Reduce Motion a jump the user did not drive lands at once.
+        scrollView.setContentOffset(CGPoint(x: clamped, y: 0), animated: animated && !Motion.prefersCrossfade)
     }
 
     // MARK: Placing cards
@@ -264,6 +269,10 @@ public final class TabGalleryViewController: UIViewController {
         }
         for (id, card) in cards where !shown.contains(id) && !card.isSwiping {
             recycle(card, id: id)
+        }
+        for (_, leaving) in departing {
+            let x = contentX + leaving.screenX
+            if leaving.card.center.x != x { leaving.card.center.x = x }
         }
         if let range { warm(around: range) }
     }
@@ -332,10 +341,21 @@ public final class TabGalleryViewController: UIViewController {
             nextItems[tab.id] = tab
             nextSlots[tab.id] = index
         }
+        if let current = reorder {
+            if nextItems[current.id] != nil {
+                // A drag is under way (a title changed meanwhile): the cards keep making room.
+                var arranged = order.filter { $0 != current.id }
+                let slot = min(current.slot, arranged.count)
+                arranged.insert(current.id, at: slot)
+                for (index, id) in arranged.enumerated() { nextSlots[id] = index }
+                reorder = (current.id, slot)
+            } else {
+                cancelReorder()
+            }
+        }
         items = nextItems
         slots = nextSlots
         selectedID = dataSource.selectedTabID
-        reorder = nil
 
         let oldOffset = scrollView.contentOffset.x
         updateContentSize()
@@ -346,20 +366,17 @@ public final class TabGalleryViewController: UIViewController {
         for (id, card) in cards where nextItems[id] == nil {
             cards[id] = nil
             motion.forget(id)
-            if moves {
-                card.throwAway { [weak self, weak card] in
-                    guard let self, let card else { return }
-                    self.retire(card)
-                }
-            } else {
-                retire(card)
-            }
+            depart(card, animated: moves)
         }
 
         if moves {
-            // Each card shows where it was and springs to its new place.
+            // Each card near the screen shows where it was and springs to its new place. Cards
+            // far off screen just take their place: nobody sees them move.
+            let near = metrics.candidateRange(offset: min(oldOffset, maxOffset), count: order.count)
+                .map { ($0.lowerBound - 6)...($0.upperBound + 6) }
             for (id, slot) in nextSlots {
                 if let old = previousSlots[id] {
+                    guard old != slot, let near, near.contains(slot) || near.contains(old) else { continue }
                     motion.displace(id, by: CGFloat(old - slot))
                 } else if !previousSlots.isEmpty {
                     motion.grow(id)
@@ -372,7 +389,9 @@ public final class TabGalleryViewController: UIViewController {
                 motion.shiftScroll(by: oldOffset - maxOffset)
             }
         } else {
-            motion.reset()
+            // Only a change of order lands at once; a new title or selection leaves running
+            // motion alone (a card tapped mid-reflow opens from where it is on screen).
+            if previousSlots != nextSlots { motion.reset() }
             if oldOffset > maxOffset { scroll(to: maxOffset, animated: false) }
         }
 
@@ -394,6 +413,21 @@ public final class TabGalleryViewController: UIViewController {
         updateChrome()
     }
 
+    /// A card whose tab is gone rises off the screen, then goes back to the pool. While it flies
+    /// it keeps its place on screen, even when the scroll offset moves under it.
+    private func depart(_ card: TabCardView, animated: Bool) {
+        guard animated else {
+            retire(card)
+            return
+        }
+        departing[ObjectIdentifier(card)] = (card, card.center.x - scrollView.contentOffset.x)
+        card.throwAway { [weak self, weak card] in
+            guard let self, let card else { return }
+            departing[ObjectIdentifier(card)] = nil
+            retire(card)
+        }
+    }
+
     /// A card that left for good goes back to the pool.
     private func retire(_ card: TabCardView) {
         card.prepareForReuse()
@@ -402,16 +436,29 @@ public final class TabGalleryViewController: UIViewController {
     }
 
     private func updateChrome() {
+        let isPrivate = dataSource.isShowingPrivateTabs
+        let background = isPrivate ? Palette.privateBackground : Palette.background
+        if view.backgroundColor != background {
+            view.backgroundColor = background
+            bottomBar.setPrivate(isPrivate)
+            emptyView.setPrivate(isPrivate)
+        }
         let isEmpty = items.isEmpty
+        // VoiceOver hears how many tabs there are, cards off screen included.
+        scrollView.accessibilityValue = items.count == 1 ? "1 tab" : "\(items.count) tabs"
         emptyView.isHidden = !isEmpty
-        bottomBar.isHidden = isEmpty
+        // With the private toggle, the bar stays: it is the way between regular and private tabs.
+        bottomBar.isHidden = isEmpty && !dataSource.supportsPrivateTabs
         bottomBar.doneButton.isEnabled = selectedID != nil
         if isEmpty { toast.hide(animated: false) }
     }
 
     private func configure(_ card: TabCardView, id: UUID) {
         guard let item = items[id] else { return }
-        card.configure(item: item, isSelected: id == selectedID, hidesThumbnail: id == hiddenThumbnailID)
+        card.configure(
+            item: item, isSelected: id == selectedID, hidesThumbnail: id == hiddenThumbnailID,
+            showsPrivateBadge: !dataSource.isShowingPrivateTabs
+        )
         card.onOpen = { [weak self] in self?.open(id) }
         card.onClose = { [weak self] in self?.closeTab(id) }
         card.onSwipeAway = { [weak self] in self?.closeTab(id) }
@@ -491,6 +538,26 @@ public final class TabGalleryViewController: UIViewController {
         dataSource.newTab()
     }
 
+    /// Regular or private tabs: the cards cross-fade to the other list, which opens on its
+    /// selected tab.
+    private func togglePrivate() {
+        let isPrivate = !dataSource.isShowingPrivateTabs
+        Signposts.signposter.emitEvent(Signposts.privateMode, "\(isPrivate ? "on" : "off")")
+        Haptic.selection.play()
+        toast.hide(animated: true)
+        dataSource.setShowingPrivateTabs(isPrivate)
+        Motion.crossfade(view, changes: { [weak self] in
+            guard let self else { return }
+            reloadTabs(animated: false)
+            if let selectedID, let slot = slots[selectedID] {
+                scroll(to: metrics.restingOffset(for: slot), animated: false)
+            } else {
+                scroll(to: 0, animated: false)
+            }
+            layoutCards()
+        })
+    }
+
     /// Closes a tab: its card rises away (keeping the swipe's velocity when swiped), the cards
     /// after it slide into the gap, and the Reopen toast shows.
     func closeTab(_ id: UUID) {
@@ -500,10 +567,7 @@ public final class TabGalleryViewController: UIViewController {
             // The card leaves on its own; the gallery no longer places it.
             cards[id] = nil
             motion.forget(id)
-            card.throwAway { [weak self, weak card] in
-                guard let self, let card else { return }
-                retire(card)
-            }
+            depart(card, animated: true)
         }
         dataSource.closeTab(id)
         if dataSource.tabs.isEmpty {
@@ -550,6 +614,15 @@ public final class TabGalleryViewController: UIViewController {
                 self?.reopenClosedTab()
             })
         }
+        if dataSource.canShowArchive {
+            let archive = UIAction(title: "Archived Tabs", image: UIImage(systemName: "archivebox")) { [weak self] _ in
+                self?.toast.hide(animated: false)
+                self?.dataSource.showArchive()
+            }
+            archive.accessibilityIdentifier = "gallery.archive"
+            elements.append(archive)
+        }
+        guard !items.isEmpty else { return elements }
         let closeAll = UIAction(title: "Close All Tabs", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
             guard let self else { return }
             confirmCloseAll(from: bottomBar.menuButton)
@@ -628,6 +701,14 @@ public final class TabGalleryViewController: UIViewController {
         liftedID = id
     }
 
+    /// The dragged tab left the list (closed elsewhere): the drag's state goes with it.
+    func cancelReorder() {
+        reorder = nil
+        liftedID = nil
+        autoScroll?.stop()
+        autoScroll = nil
+    }
+
     func dismissToastForReorder() {
         toast.hide(animated: true)
     }
@@ -645,8 +726,10 @@ public final class TabGalleryViewController: UIViewController {
         let perScreen = metrics.style == .cascade ? 2 : metrics.cardsPerPage
         let current = focusedSlot()
         let next = min(max(current + (forward ? perScreen : -perScreen), 0), order.count - 1)
-        guard next != current else { return false }
-        scroll(to: metrics.restingOffset(for: next), animated: false)
+        let target = min(metrics.restingOffset(for: next), metrics.maxOffset(for: order.count))
+        // The last grid page can be part full: moving within it is no scroll.
+        guard abs(target - scrollView.contentOffset.x) > 0.5 else { return false }
+        scroll(to: target, animated: false)
         layoutCards()
         UIAccessibility.post(notification: .pageScrolled, argument: "Tab \(next + 1) of \(order.count)")
         return true

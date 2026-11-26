@@ -78,6 +78,7 @@ extension TabGalleryViewController: UIDragInteractionDelegate, UIDropInteraction
         autoScroll = nil
         guard let reorder else { return }
         Signposts.signposter.emitEvent(Signposts.galleryReorder)
+        self.reorder = nil
         dataSource.moveTab(reorder.id, to: reorder.slot)
         // The cards already stand in their new places, so nothing moves again.
         keepDraggedCardHidden(reorder.id)

@@ -56,7 +56,7 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.galleryShow)
         )
-        let gallery = app.collectionViews["tabGallery"]
+        let gallery = app.scrollViews["tabGallery"]
         measure(metrics: [metric], options: options) {
             app.buttons["tabs"].tap()
             XCTAssertTrue(gallery.waitForExistence(timeout: 3))

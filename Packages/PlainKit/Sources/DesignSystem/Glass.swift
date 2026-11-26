@@ -15,9 +15,13 @@ public enum Glass {
 
     /// A glass background for a floating control. Put the control's content in `contentView`.
     /// - Parameter interactive: the glass reacts to touches (a control that is itself the button).
-    public static func makeView(shape: Shape = .capsule, interactive: Bool = false) -> UIVisualEffectView {
+    /// - Parameter tint: the color mixed into the glass; `Palette.glassTint` unless the control
+    ///   floats over a surface that already has it.
+    public static func makeView(
+        shape: Shape = .capsule, interactive: Bool = false, tint: UIColor = Palette.glassTint
+    ) -> UIVisualEffectView {
         let effect = UIGlassEffect(style: .regular)
-        effect.tintColor = Palette.glassTint
+        effect.tintColor = tint
         effect.isInteractive = interactive
         let view = UIVisualEffectView(effect: effect)
         switch shape {

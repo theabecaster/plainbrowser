@@ -27,7 +27,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
 | `Reader` | nonisolated; WebKit types MainActor | WebKit | `ReaderExtractor` (Readability in its own content world), `ReaderRenderer` (page template), `ReaderSchemeHandler` (`plain-reader:` scheme), `ReaderArticle` |
 | `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI | `BrowserViewController` (page, URL pill, search sheet, page buttons), `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
-| `TabGalleryUI` | MainActor | — | `TabGalleryLayout` (even-column rule) |
+| `TabGalleryUI` | MainActor | UIKit | `TabGalleryViewController` (cards, grid, flick to close, reorder, menus), `TabGalleryDataSource` seam (the shell implements it over `TabStore`) + `TabGalleryDemoData` fake, `TabGalleryTransition` (snapshot animator page <-> card), `ThumbnailPipeline` (off-main decode), `TabGalleryLayout`/`TabGalleryMetrics`/`CardFlick` (plain values tested on macOS) |
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `SpringDriver` (frame-by-frame spring at 80–120 Hz), `Haptic`, `Glass` (the one Liquid Glass helper and its container) |
 | `PerfSignposts` | nonisolated | os | signpost subsystem, category and names |

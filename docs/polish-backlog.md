@@ -91,3 +91,25 @@ Newest feature last.
   element info for an unlinked image), the find bar above the keyboard with the bottom pill, PiP
   and fullscreen flags with a real video, `<input type=file>` and `capture` pickers.
 - **Downloads title.** The "Downloads" title sits beside Show in Files instead of centered. (Lead review.)
+
+## M2b tab gallery (2026-11-26)
+
+- **Decided values outside FixedChoices.** `TabGalleryChoices` (Reopen toast 4 s, 64 MB preview
+  cache, 180 pt minimum grid card) and `TabGalleryMetrics.gridAspect` (0.62–1.1) belong in
+  `FixedChoices`; the gallery signposts (`TabGallerySignposts.swift`) belong in `PerfSignposts`.
+  Kept in TabGalleryUI because this lane could not edit BrowserCore or PerfSignposts.
+- **Blurry previews on big cards.** `ThumbnailService` captures 200 pt wide; a compact card is
+  about 370 pt wide, so its preview is upscaled. Capture visible and neighbour tabs at card width.
+- **Bar over a dense grid.** In the inner-landscape grid, titles and close buttons still show
+  through the floating bar; the scroll edge effect could suppress more there. (Design review,
+  round 2.)
+- **XCUITest after a card's long press.** With drag-to-reorder on, XCUITest reports "App
+  animations complete notification not received" after the context menu (60 s waits; the app's
+  CPU stays at 0). Without the drag interaction it does not happen. Check on the Duo that no drag
+  lift animation stays open.
+- **Not captured yet.** Duo inner screen on the device (simulated with a 951x669 / 669x951
+  container on an iPad simulator; Device Hub has no CLI), Reduce Motion crossfade, accessibility
+  text sizes, a tap that reverses a moving page (unit-tested only: XCUITest waits for idle), and
+  the 120 Hz hitch numbers on the device.
+- **Context menu on a partly hidden card** lifts its preview over the next card. System
+  behavior; scrolling the card into view first would avoid it.

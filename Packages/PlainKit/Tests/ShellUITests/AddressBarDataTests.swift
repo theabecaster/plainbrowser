@@ -81,6 +81,39 @@ struct AddressBarDataTests {
         #expect(try await database.visits(matching: "example x", limit: 10).map(\.title) == ["Example X"])
     }
 
+    @Test func historyScreenSeesAndDeletesVisitsStillQueuedInTheShell() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData()
+        await data.attach(database)
+        let sheets = FeatureSheets(addressBar: data)
+        sheets.attach(database)
+        let store = try #require(sheets.makeHistoryStore())
+
+        let url = URL(string: "https://just.example/now")!
+        data.pageVisited(url: url, title: "Just Now")
+        // No flush and no wait: the screen still shows the page.
+        #expect(try await store.visits(matching: "", limit: 10).map(\.url) == [url])
+
+        data.pageVisited(url: url, title: "Again")
+        try await store.deleteHistory(for: url)
+        await data.flush()
+        #expect(try await database.recentVisits(limit: 10).isEmpty, "a queued visit must not come back after a delete")
+
+        data.pageVisited(url: url, title: "Third")
+        try await store.clearHistory(since: nil)
+        await data.flush()
+        #expect(try await database.recentVisits(limit: 10).isEmpty)
+    }
+
+    @Test func settingsModelIsSharedAcrossPresentations() async throws {
+        let database = try AppDatabase.inMemory()
+        let sheets = FeatureSheets(addressBar: LiveAddressBarData())
+        #expect(sheets.makeSettingsModel() == nil, "nothing before the database opens")
+        sheets.attach(database)
+        let first = try #require(sheets.makeSettingsModel())
+        #expect(sheets.makeSettingsModel() === first)
+    }
+
     @Test func onlyWebPagesAreRecorded() {
         #expect(LiveAddressBarData.isRecordable(URL(string: "https://example.com")!))
         #expect(LiveAddressBarData.isRecordable(URL(string: "http://localhost:8080/a")!))

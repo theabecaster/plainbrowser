@@ -11,7 +11,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private let addressBarData = LiveAddressBarData()
     /// Settings, History and the favorites editor. A saved setting goes straight to the address
     /// bar, so the next search uses it.
-    private lazy var sheets = FeatureSheets { [addressBarData] settings in addressBarData.apply(settings) }
+    private lazy var sheets = FeatureSheets(addressBar: addressBarData)
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }

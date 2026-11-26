@@ -677,10 +677,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 guard let url = self.webView?.url, LiveAddressBarData.isRecordable(url) else {
                     return completion(self.pageMenuElements(isFavorite: nil))
                 }
-                // One indexed read off the main thread; the menu shows when it answers.
+                // One indexed read off the main thread; the menu shows when it answers. If the
+                // page changed meanwhile, the answer is for another page: leave the item out.
                 Task { [weak self, data] in
                     let isFavorite = await data.isFavorite(url)
-                    completion(self?.pageMenuElements(isFavorite: isFavorite) ?? [])
+                    guard let self else { return completion([]) }
+                    completion(self.pageMenuElements(isFavorite: self.webView?.url == url ? isFavorite : nil))
                 }
             },
         ])

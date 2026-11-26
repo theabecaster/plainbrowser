@@ -74,8 +74,7 @@ final class FeatureSheetTests: XCTestCase {
         go(app, to: "/a", heading: "Page A")
         go(app, to: "/b", heading: "Page B")
 
-        // History is written in batches (FixedChoices.historyFlushInterval, 2 s).
-        Thread.sleep(forTimeInterval: 2.5)
+        // No wait for the 2 s history batch: History writes what is queued before it reads.
         pageMenu(app, pick: "History")
         let sheet = app.otherElements["historySheet"]
         XCTAssertTrue(sheet.staticTexts["Plain Test A"].waitForExistence(timeout: 5))

@@ -46,6 +46,19 @@ import Testing
         #expect(place?.frecency == Frecency.adding(visitAt: t0, to: nil))
     }
 
+    @Test func clearSinceRestoresTheTitleOfTheNewestKeptVisit() async throws {
+        let database = try AppDatabase.inMemory()
+        let url = "https://news.example/today"
+        try await database.apply([
+            .visit(visit(url, "Monday Headlines", at: 0)),
+            .visit(visit(url, "Secret Plans", at: 100)),
+        ])
+        #expect(try await database.searchHistory("secret").count == 1)
+        try await database.clearHistory(since: t0 + 50)
+        #expect(try await database.searchHistory("secret").isEmpty)
+        #expect(try await database.searchHistory("monday").map(\.title) == ["Monday Headlines"])
+    }
+
     @Test func clearSinceNilRemovesEverything() async throws {
         let database = try AppDatabase.inMemory()
         try await database.apply([.visit(visit("https://a.example/", "A"))])

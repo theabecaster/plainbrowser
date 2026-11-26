@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import BrowserCore
 import DesignSystem
+import PerfSignposts
 import UIKit
 
 /// What a row or tile in the search sheet opens.
@@ -298,6 +299,7 @@ final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate {
         _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
         UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            Signposts.signposter.emitEvent(Signposts.favoritesMenu)
             let edit = UIAction(title: "Edit Favorites", image: UIImage(systemName: "pencil")) { _ in
                 self?.onEdit()
             }

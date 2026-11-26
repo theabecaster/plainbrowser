@@ -74,6 +74,8 @@ public enum Signposts {
     public static let settingsOpen: StaticString = "settings.open"
     /// Event: History opened from the page menu.
     public static let historyShow: StaticString = "history.show"
+    /// Event: the favorites strip's long-press menu opened.
+    public static let favoritesMenu: StaticString = "favorites.menu"
     /// Event: the favorites editor opened from the favorites strip.
     public static let favoritesEditorOpen: StaticString = "favorites.editorOpen"
 

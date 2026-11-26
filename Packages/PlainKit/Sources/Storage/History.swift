@@ -157,9 +157,20 @@ extension AppDatabase {
                     continue
                 }
                 let frecency = left.reduce(nil as Double?) { Frecency.adding(visitAt: $1, to: $0) } ?? 0
+                // The title the page had at its newest kept visit, so a title seen only in the
+                // cleared time is no longer searchable.
+                let title = try String.fetchOne(
+                    db,
+                    sql: """
+                    SELECT title FROM \(Schema.historyVisit)
+                    WHERE url = ? AND title IS NOT NULL AND title != ''
+                    ORDER BY visitedAt DESC LIMIT 1
+                    """,
+                    arguments: [url]
+                )
                 try db.execute(
-                    sql: "UPDATE \(Schema.historyPlace) SET visitCount = ?, lastVisitedAt = ?, frecency = ? WHERE url = ?",
-                    arguments: [left.count, last, frecency, url]
+                    sql: "UPDATE \(Schema.historyPlace) SET visitCount = ?, lastVisitedAt = ?, frecency = ?, title = ? WHERE url = ?",
+                    arguments: [left.count, last, frecency, title, url]
                 )
             }
         }

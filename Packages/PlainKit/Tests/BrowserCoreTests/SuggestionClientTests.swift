@@ -123,9 +123,28 @@ final class FakeHTTP: HTTPLoading {
         #expect(ContinuousClock.now - start < .seconds(5))
     }
 
+    @Test func deadlineHoldsEvenIfTheLoaderIgnoresCancellation() async {
+        let http = FakeHTTP { request in
+            // Not cancellable: resumes after 3 s whatever happens to the task.
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global().asyncAfter(deadline: .now() + 3) { continuation.resume() }
+            }
+            return try await FakeHTTP.ok(SuggestionFixtures.google)(request)
+        }
+        let client = SuggestionClient(http: http, timeout: .milliseconds(50))
+        let start = ContinuousClock.now
+        await #expect(throws: SuggestionError.timedOut) {
+            try await client.suggestions(for: "a", engine: .google)
+        }
+        #expect(ContinuousClock.now - start < .seconds(1))
+    }
+
     @Test func newKeystrokeCancelsThePreviousRequest() async throws {
         let http = FakeHTTP { request in
-            if request.url!.query()!.contains("q=s&") {
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "q" }?.value
+            if query == "s" {
+                // Hold the first keystroke's request until it is cancelled.
                 try await Task.sleep(for: .seconds(30))
             }
             return try await FakeHTTP.ok(SuggestionFixtures.google)(request)

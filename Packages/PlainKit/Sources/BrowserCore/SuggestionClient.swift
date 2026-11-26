@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Loads one HTTP request. `URLSession` conforms; tests inject a fake so they never touch the
 /// network.
@@ -166,20 +167,64 @@ public actor SuggestionClient {
         return String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(cfEncoding))
     }
 
-    /// Runs `operation`, throwing `SuggestionError.timedOut` if it takes longer than `timeout`.
-    private static func withTimeout<T: Sendable>(
+    /// Runs `operation`, throwing `SuggestionError.timedOut` once `timeout` passes and
+    /// `CancellationError` as soon as the caller is cancelled. Either way it returns at once and
+    /// cancels `operation`, without waiting for it to wind down, so a loader that ignores
+    /// cancellation cannot hold the deadline up.
+    static func withTimeout<T: Sendable>(
         _ timeout: Duration,
         _ operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask { try await operation() }
-            group.addTask {
-                try await Task.sleep(for: timeout)
-                throw SuggestionError.timedOut
-            }
-            defer { group.cancelAll() }
-            return try await group.next()!
+        let outcome = FirstOutcome<T>()
+        let work = Task {
+            do { outcome.resolve(.success(try await operation())) } catch { outcome.resolve(.failure(error)) }
         }
+        let timer = Task {
+            try? await Task.sleep(for: timeout)
+            outcome.resolve(.failure(SuggestionError.timedOut))
+        }
+        defer {
+            work.cancel()
+            timer.cancel()
+        }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                outcome.attach(continuation)
+            }
+        } onCancel: {
+            outcome.resolve(.failure(CancellationError()))
+        }
+    }
+}
+
+/// The first of several racing results, handed to one waiting continuation exactly once.
+private final class FirstOutcome<T: Sendable>: Sendable {
+    private struct State {
+        var result: Result<T, any Error>?
+        var continuation: CheckedContinuation<T, any Error>?
+    }
+
+    private let state = Mutex(State())
+
+    /// Records `result` if nothing was recorded yet, and resumes the waiter if there is one.
+    func resolve(_ result: Result<T, any Error>) {
+        let waiter = state.withLock { state -> CheckedContinuation<T, any Error>? in
+            guard state.result == nil else { return nil }
+            state.result = result
+            defer { state.continuation = nil }
+            return state.continuation
+        }
+        waiter?.resume(with: result)
+    }
+
+    /// Waits for the first result; resumes at once if it is already in.
+    func attach(_ continuation: CheckedContinuation<T, any Error>) {
+        let ready = state.withLock { state -> Result<T, any Error>? in
+            if let result = state.result { return result }
+            state.continuation = continuation
+            return nil
+        }
+        if let ready { continuation.resume(with: ready) }
     }
 }
 

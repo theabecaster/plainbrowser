@@ -65,6 +65,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         // The stack hangs from the bottom; rows that do not fit leave at the top.
         let stackTop = rowsStack.topAnchor.constraint(greaterThanOrEqualTo: rowsClip.topAnchor)
         stackTop.priority = .defaultHigh
+        // The clip hugs the rows when they fit, so rows never stretch apart to fill it.
+        let hug = rowsClip.heightAnchor.constraint(equalTo: rowsStack.heightAnchor)
+        hug.priority = .defaultLow
         NSLayoutConstraint.activate([
             rowsClip.topAnchor.constraint(equalTo: content.topAnchor),
             rowsClip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
@@ -74,6 +77,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             rowsStack.trailingAnchor.constraint(equalTo: rowsClip.trailingAnchor),
             rowsStack.bottomAnchor.constraint(equalTo: rowsClip.bottomAnchor),
             stackTop,
+            hug,
             favoritesStrip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             favoritesStrip.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             favoritesStrip.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -187,6 +191,12 @@ final class SuggestionRow: UIControl {
         }
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.rowHeight),
+            {
+                // Rows keep their natural height (taller only for larger text).
+                let natural = heightAnchor.constraint(equalToConstant: Metrics.rowHeight)
+                natural.priority = .defaultLow + 1
+                return natural
+            }(),
             icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Spacing.m),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 24),

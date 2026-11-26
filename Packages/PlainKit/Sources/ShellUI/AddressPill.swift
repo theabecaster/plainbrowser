@@ -147,8 +147,11 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     /// animation block to cross over with the move.
     func setEditing(_ editing: Bool) {
         isEditing = editing
-        hostLabel.alpha = editing ? 0 : 1
-        textField.alpha = editing ? 1 : 0
+        // The host and the full address swap at once: crossfading them reads as doubled text.
+        UIView.performWithoutAnimation {
+            hostLabel.alpha = editing ? 0 : 1
+            textField.alpha = editing ? 1 : 0
+        }
         textField.isUserInteractionEnabled = editing
         rim.alpha = editing ? 1 : 0
         progressBar.isHidden = editing

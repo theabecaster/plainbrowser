@@ -241,13 +241,15 @@ final class EngineTabs {
     /// and thumbnails of tabs gone for good. Off the main thread, after launch.
     func pruneFiles() async {
         guard let database = await database() else { return }
-        // Rows of tabs opened since launch first: their files must not look orphaned.
+        // Only files older than this may go: a tab made from here on keeps its new files.
+        let cutoff = Date()
         await store.flush()
-        let started = Date()
-        try? await database.removeOrphanedTabStates()
-        guard var keep = try? await database.referencedTabIDs() else { return }
-        keep.formUnion(store.tabs.keys)
-        await pool.thumbnails.prune(keeping: keep, writtenBefore: started)
+        // Tabs in the store are kept even when their row is not written yet (a tab opened before
+        // the session loaded is saved with the next change).
+        let open = Set(store.tabs.keys)
+        try? await database.removeOrphanedTabStates(alsoKeeping: open, writtenBefore: cutoff)
+        guard let referenced = try? await database.referencedTabIDs() else { return }
+        await pool.thumbnails.prune(keeping: referenced.union(open), writtenBefore: cutoff)
     }
 
     // MARK: Private

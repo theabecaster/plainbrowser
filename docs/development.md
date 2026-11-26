@@ -65,3 +65,17 @@ get your own set. Delete yours when you finish
 
 Duo simulator: device type `iPhone Duo`, runtime `com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4`.
 Set the fold state from the Device Hub (Closed / Partially Open / Open); there is no CLI for it.
+
+## TestFlight
+
+`scripts/testflight.sh <notes-file> [--build N] [--skip-upload] [--dry-run]` ships the current checkout:
+
+1. It archives a Release build on this Mac and uploads it with the App Store Connect API key.
+2. It waits until App Store Connect marks the build `VALID` (up to 45 minutes).
+3. It sets "What to Test" from the notes file.
+4. For an external group, it submits the build to Beta App Review and waits for approval (up to 2 hours).
+5. It adds the build to the group.
+
+It reads `ASC_KEY_ID`, `ASC_ISS`, `ASC_KEY`, `TESTFLIGHT_APP_ID` and `TESTFLIGHT_GROUP_ID` from the environment or `scripts/local.env` (see `scripts/local.env.example`). `--dry-run` checks the key, app and group with read-only calls. `scripts/asc.mjs METHOD PATH [BODY]` makes one App Store Connect API call for anything else.
+
+The API can't create the app record, so a person makes it once in App Store Connect. Every other step runs through the API.

@@ -16,7 +16,7 @@ let mainActorByDefault: [SwiftSetting] = [.defaultIsolation(MainActor.self)]
 
 let package = Package(
     name: "PlainKit",
-    platforms: [.iOS("27.1"), .macOS(.v15)],
+    platforms: [.iOS("27.2"), .macOS(.v15)],
     products: [
         .library(name: "ShellUI", targets: ["ShellUI"]),
         .library(name: "TabGalleryUI", targets: ["TabGalleryUI"]),

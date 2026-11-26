@@ -1,6 +1,6 @@
 # Plain
 
-Plain is an iOS web browser built for speed and feel. It has a UIKit shell, uses `WKWebView`, and is designed for iPhone Duo first while working on every iPhone. Swift 6, iOS 27.1+.
+Plain is an iOS web browser built for speed and feel. It has a UIKit shell, uses `WKWebView`, and is designed for iPhone Duo first while working on every iPhone. Swift 6, iOS 27.2+.
 
 ## Layout
 
@@ -8,7 +8,7 @@ Plain is an iOS web browser built for speed and feel. It has a UIKit shell, uses
 - `Packages/PlainKit`: all code, split into modules. The app target is a thin wrapper.
 - `Brand/`: app icon (Icon Composer `.icon`) and color identity.
 - `scripts/`: build, test, install, screenshot and perf gate. See `docs/development.md`.
-- `docs/`: `architecture.md` (modules and data flow), `decisions.md` (what was chosen and why), `development.md` (commands and device setup), `perf-log.md` (perf numbers per merge), `research/notes.md` (verified API facts), `ui-reference.md` (interface rules: settings, menus, chrome, wording).
+- `docs/`: `architecture.md` (modules and data flow), `decisions.md` (what was chosen and why), `development.md` (commands and device setup), `perf-log.md` (perf numbers per merge), `research/notes.md` (verified API facts), `research/design-audit.md` (comparison with reference browsers), `ui-reference.md` (interface rules: settings, menus, chrome, wording).
 
 ## Rules
 

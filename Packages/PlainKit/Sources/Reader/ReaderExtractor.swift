@@ -29,6 +29,7 @@ import WebKit
     private struct Kept {
         weak var webView: WKWebView?
         let url: URL?
+        let document: Int
         let article: ReaderArticle?
     }
 
@@ -37,6 +38,8 @@ import WebKit
     private let world = WKContentWorld.world(name: ReaderWorld.contentWorldName)
     private var availability: [ObjectIdentifier: Availability] = [:]
     private var kept: [ObjectIdentifier: Kept] = [:]
+    /// Counts documents per web view: each readerable report is a new document (a reload too).
+    private var documents: [ObjectIdentifier: Int] = [:]
 
     public override init() {}
 
@@ -77,7 +80,8 @@ import WebKit
         prune()
         availability[key] = Availability(webView: webView, url: webView.url, available: available)
         // Every document reports once, including a reload of the same URL, so a new report means
-        // the kept article may be out of date.
+        // the kept article is out of date, and any extraction still running belongs to the old one.
+        documents[key, default: 0] += 1
         kept[key] = nil
         onAvailability?(webView, available)
     }
@@ -94,14 +98,15 @@ import WebKit
 
         let key = ObjectIdentifier(webView)
         let url = webView.url
-        if let entry = kept[key], entry.webView === webView, entry.url == url {
+        let document = documents[key, default: 0]
+        if let entry = kept[key], entry.webView === webView, entry.url == url, entry.document == document {
             return entry.article
         }
         let article = try await extract(in: webView)
-        // The page navigated while extracting: the result belongs to a page no longer shown.
-        guard webView.url == url else { throw CancellationError() }
+        // The page navigated or reloaded while extracting: the result belongs to a page no longer shown.
+        guard webView.url == url, documents[key, default: 0] == document else { throw CancellationError() }
         prune()
-        kept[key] = Kept(webView: webView, url: url, article: article)
+        kept[key] = Kept(webView: webView, url: url, document: document, article: article)
         return article
     }
 
@@ -109,6 +114,7 @@ import WebKit
     public func forget(_ webView: WKWebView) {
         availability[ObjectIdentifier(webView)] = nil
         kept[ObjectIdentifier(webView)] = nil
+        documents[ObjectIdentifier(webView)] = nil
     }
 
     /// Runs the check and the parse in the reader world, installing Readability first when this
@@ -168,6 +174,12 @@ import WebKit
               }
             }
           }
+          // Heading permalinks ("#", "¶", "§") are page chrome, not text.
+          t.content.querySelectorAll("h1 a, h2 a, h3 a, h4 a, h5 a, h6 a").forEach(link => {
+            const text = link.textContent.trim();
+            if ((text === "" || text === "#" || text === "¶" || text === "§")
+                && (link.getAttribute("href") || "").startsWith("#")) link.remove();
+          });
           const box = document.createElement("div");
           box.appendChild(t.content);
           return JSON.stringify({
@@ -194,6 +206,7 @@ import WebKit
     private func prune() {
         availability = availability.filter { $0.value.webView != nil }
         kept = kept.filter { $0.value.webView != nil }
+        documents = documents.filter { availability[$0.key] != nil }
     }
 }
 

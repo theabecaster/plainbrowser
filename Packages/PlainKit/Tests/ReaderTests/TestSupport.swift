@@ -14,12 +14,16 @@ import WebKit
     /// A portal home page: navigation, a search form and link lists. Not an article.
     nonisolated static let nonArticle = "portal"
 
+    /// Serves another fixture's page at a name's URL, to change a page's content in place.
+    var replacements: [String: String] = [:]
+
     static func url(_ name: String) -> URL {
         URL(string: "\(scheme)://\(name)/index.html")!
     }
 
     func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
-        guard let url = urlSchemeTask.request.url, let name = url.host(),
+        guard let url = urlSchemeTask.request.url, let host = url.host(),
+              case let name = replacements[host] ?? host,
               url.path() == "/index.html",
               let file = Bundle.module.url(forResource: "source", withExtension: "html", subdirectory: "Fixtures/\(name)"),
               let data = try? Data(contentsOf: file)

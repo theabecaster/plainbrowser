@@ -103,6 +103,7 @@ import WebKit
         #expect(html.contains("https://example.com/ok"))
         #expect(html.contains("data:image/png"))
         #expect(html.contains("after the trap"))
+        #expect(!html.contains(">#</a>"))
     }
 
     /// A reload of the same URL is a new document, so the kept article is dropped.
@@ -115,17 +116,18 @@ import WebKit
         for _ in 0..<100 where reports == 0 { try await Task.sleep(for: .milliseconds(10)) }
         let first = try #require(try await extractor.article(in: webView))
 
-        // Change the live page, then reload: the reload must parse the reloaded document.
-        _ = try await webView.evaluateJavaScript("document.title = 'changed'; true")
         #expect(try await extractor.article(in: webView) == first)
+
+        // The same URL now serves another article: the reload must give the new one.
+        server.replacements["v8-blog"] = "ars-1"
         try await waiter.run(in: webView) { webView.reload() }
         for _ in 0..<100 where reports < 2 { try await Task.sleep(for: .milliseconds(10)) }
         #expect(reports == 2)
-        #expect(extractor.isAvailable(in: webView) == true)
-        let types = try await webView.evaluateJavaScript(
-            "typeof Readability", in: nil, contentWorld: .world(name: ReaderWorld.contentWorldName)) as? String
-        #expect(types == "undefined", "a reload starts without full Readability")
-        #expect(try await extractor.article(in: webView) == first)
+        #expect(webView.url == FixtureServer.url("v8-blog"))
+        let reloaded = try await extractor.article(in: webView)
+        let expected = try FixtureServer.expected("ars-1").title
+        #expect(reloaded?.title == expected)
+        #expect(reloaded?.title != first.title)
     }
 
     /// Readability lives in the reader world: the page's own scripts cannot see it.

@@ -92,6 +92,9 @@ let package = Package(
         // The shell's chrome rules (collapse, pull to refresh, geometry) and the address bar's
         // data seam; plain values, so they run on macOS.
         .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "FeatureUI", "BrowserCore", "Storage"]),
+        // The gallery's geometry and flick rules run on macOS; its UIKit behavior and the 100-tab
+        // scroll perf test run on an iOS simulator (xcodebuild), like the WebKit tests.
+        .testTarget(name: "TabGalleryUITests", dependencies: ["TabGalleryUI", "DesignSystem", "PerfSignposts"]),
         // Reader extraction and rendering on saved article pages; iOS simulator only, like above.
         .testTarget(name: "ReaderTests", dependencies: ["Reader"], resources: [.copy("Fixtures")]),
         // WebKit tests against a local HTTP server; they run on an iOS simulator (xcodebuild).

@@ -70,7 +70,7 @@ public final class TabGalleryTransition {
 
         wrapper.clipsToBounds = true
         wrapper.layer.cornerCurve = .continuous
-        wrapper.layer.borderColor = Palette.accent.cgColor
+        wrapper.layer.borderColor = Palette.coral.cgColor
         wrapper.backgroundColor = Palette.surface
         wrapper.accessibilityElementsHidden = true
         snapshot.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
@@ -222,7 +222,7 @@ public final class TabGalleryTransition {
         // A spring would interpolate the width over the whole run, so `animateRing` times it then.
         if setsRing {
             wrapper.layer.removeAnimation(forKey: Self.ringKey)
-            wrapper.layer.borderWidth = TabCardView.selectionWidth * max(0, (t - 0.7) / 0.3)
+            wrapper.layer.borderWidth = gallery.selectionRingWidth * max(0, (t - 0.7) / 0.3)
         }
         wrapper.alpha = 1
         if let cards = content.first {
@@ -232,12 +232,16 @@ public final class TabGalleryTransition {
             cards.alpha = 1
         }
         for view in content.dropFirst() { view.alpha = min(1, max(0, progress)) }
-        // Titles stay out of the status bar while the cards are zoomed in: they fade in over the
-        // last part of the way.
-        gallery.setHeaderFade(min(1, max(0, (progress - 0.6) / 0.4)))
+        // Titles stay out of the status bar while the cards are zoomed in, or lifted by the finger
+        // (a swipe up holds the card high): they fade in over the last part of the way down.
+        let zoomFade = min(1, max(0, (progress - 0.6) / 0.4))
+        let liftFade = min(1, max(0, 1 + offset.y / Self.liftFadeDistance))
+        gallery.setHeaderFade(zoomFade * liftFade)
     }
 
     private static let ringKey = "selectionRing"
+    /// Lifted this far above its resting place, a card's title is gone.
+    private static let liftFadeDistance: CGFloat = 60
 
     /// The whole gallery zooms with the card, as the app switcher does: at the page end, the cards
     /// are scaled up around the card so that it covers the page, and its neighbors sit just off
@@ -266,7 +270,7 @@ public final class TabGalleryTransition {
     private func animateRing(toward end: End) {
         let layer = wrapper.layer
         let from = layer.presentation()?.borderWidth ?? layer.borderWidth
-        let to: CGFloat = end == .gallery ? TabCardView.selectionWidth : 0
+        let to: CGFloat = end == .gallery ? gallery.selectionRingWidth : 0
         let animation = CABasicAnimation(keyPath: "borderWidth")
         animation.fromValue = from
         animation.toValue = to

@@ -55,6 +55,8 @@ public final class TabGalleryViewController: UIViewController {
     /// The blurred, dimmed page behind the cards.
     private let backdrop = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
     private var isShowingPrivate = false
+    /// The last tab just closed and the shell is taking the gallery away: no empty state meanwhile.
+    private var isLeavingEmpty = false
     /// A swipe up on the empty space: back to the page.
     private var backgroundSwipe: UIPanGestureRecognizer?
     /// Cards rising away after a close, with where they sit on screen.
@@ -471,7 +473,8 @@ public final class TabGalleryViewController: UIViewController {
         let isEmpty = items.isEmpty
         // VoiceOver hears how many tabs there are, cards off screen included.
         scrollView.accessibilityValue = items.count == 1 ? "1 tab" : "\(items.count) tabs"
-        emptyView.isHidden = !isEmpty
+        if !isEmpty { isLeavingEmpty = false }
+        emptyView.isHidden = !isEmpty || isLeavingEmpty
         // With the private toggle, the bar stays: it is the way between regular and private tabs.
         bottomBar.isHidden = isEmpty && !dataSource.supportsPrivateTabs
         bottomBar.doneButton.isEnabled = selectedID != nil
@@ -482,7 +485,7 @@ public final class TabGalleryViewController: UIViewController {
         guard let item = items[id] else { return }
         card.configure(
             item: item, isSelected: id == selectedID, hidesThumbnail: id == hiddenThumbnailID,
-            showsPrivateBadge: !dataSource.isShowingPrivateTabs
+            showsPrivateBadge: !dataSource.isShowingPrivateTabs, marksSelection: selectionRingWidth > 0
         )
         card.onOpen = { [weak self] in self?.open(id) }
         card.onClose = { [weak self] in self?.closeTab(id) }
@@ -598,13 +601,21 @@ public final class TabGalleryViewController: UIViewController {
         if dataSource.tabs.isEmpty {
             reloadTabs(animated: false)
             Signposts.signposter.endInterval(Signposts.galleryCardClose, state)
-            onLastTabClosed?()
+            leaveEmpty()
             return
         }
         reloadTabs(animated: true) {
             Signposts.signposter.endInterval(Signposts.galleryCardClose, state)
         }
         toast.show(animated: true)
+    }
+
+    /// The list just emptied: the shell takes over (search, or the other list). The gallery never
+    /// shows its empty state on the way out (Arc: closing the last tab goes straight to search).
+    private func leaveEmpty() {
+        isLeavingEmpty = true
+        emptyView.isHidden = true
+        onLastTabClosed?()
     }
 
     private func reopenClosedTab() {
@@ -624,7 +635,7 @@ public final class TabGalleryViewController: UIViewController {
             Signposts.signposter.emitEvent(Signposts.galleryCloseAll)
             dataSource.closeAllTabs()
             reloadTabs(animated: false)
-            if dataSource.tabs.isEmpty { onLastTabClosed?() }
+            if dataSource.tabs.isEmpty { leaveEmpty() }
         })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         sheet.popoverPresentationController?.sourceView = source
@@ -702,6 +713,10 @@ public final class TabGalleryViewController: UIViewController {
             card.setThumbnailHidden(cardID == id)
         }
     }
+
+    /// The active tab's ring: only in the grid. In the cascade the tab on screen rests in the
+    /// middle, as in the app switcher, which marks nothing.
+    var selectionRingWidth: CGFloat { metrics.style == .grid ? TabCardView.selectionWidth : 0 }
 
     /// How visible the cards' title rows are, 0...1: a transition fades them while the cards are
     /// zoomed in, so they never cross the status bar.

@@ -42,6 +42,7 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
     private(set) var size: CGSize = .zero
     private var headerHeight: CGFloat = 0
     private var isSelectedTab = false
+    private var marksSelection = true
     /// The tab has no page yet (a new tab).
     private var isBlankTab = false
     private let blankMark = MarkView()
@@ -130,7 +131,11 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
 
     /// - Parameter showsPrivateBadge: false where the whole list is private (its tint says so);
     ///   VoiceOver still hears "Private".
-    func configure(item: TabGalleryItem, isSelected: Bool, hidesThumbnail: Bool, showsPrivateBadge: Bool = true) {
+    /// - Parameter marksSelection: whether the active tab gets its ring (the grid only).
+    func configure(
+        item: TabGalleryItem, isSelected: Bool, hidesThumbnail: Bool, showsPrivateBadge: Bool = true, marksSelection: Bool = true
+    ) {
+        self.marksSelection = marksSelection
         if tabID != item.id {
             imageView.image = nil
             faviconView.image = nil
@@ -237,9 +242,11 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         shadowView.layer.shadowColor = Palette.floatingShadow.resolvedColor(with: traitCollection).cgColor
         shadowView.layer.shadowOpacity = dark ? 0.5 : 0.16
         let layer = thumbnailContainer.layer
-        if isSelectedTab {
+        if isSelectedTab, marksSelection {
+            // Coral marks the active tab (Brand/identity.md), and only in the grid: in the cascade
+            // the tab on screen is the one in the middle, as in the app switcher.
             layer.borderWidth = Self.selectionWidth
-            layer.borderColor = Palette.accent.cgColor
+            layer.borderColor = Palette.coral.cgColor
         } else {
             layer.borderWidth = dark ? 1 : 0
             layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor

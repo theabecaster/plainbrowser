@@ -47,7 +47,10 @@ final class PerfTests: XCTestCase {
 
         let options = self.options
         options.invocationOptions = [.manuallyStop]
-        measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric], options: options) {
+        // XCTHitchMetric gives the hitch time ratio (ms/s) the budget is set in;
+        // scrollingAndDecelerationMetric adds the scroll's duration and, on a device, its frame stats.
+        let metrics: [any XCTMetric] = [XCTHitchMetric(application: app), XCTOSSignpostMetric.scrollingAndDecelerationMetric]
+        measure(metrics: metrics, options: options) {
             webView.swipeUp(velocity: .fast)
             stopMeasuring()
             webView.swipeDown(velocity: .fast)

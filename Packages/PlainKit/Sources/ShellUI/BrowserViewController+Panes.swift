@@ -179,8 +179,13 @@ extension BrowserViewController {
         updatePaneLooks()
     }
 
-    /// `id`'s web view is now in pane slot `slot` (and in no other).
+    /// `id`'s web view is now in pane slot `slot` (and in no other). A tab it displaced there, on
+    /// screen nowhere else, leaves the screen (detached, so the pool's tiers can reclaim it).
     func record(_ id: TabID, inSlot slot: Int) {
+        if let displaced = duo.slotTabs[slot], displaced != id, displaced != currentTab?.id,
+           !isShownInOtherPane(displaced), let tab = session.tabs.existingTab(displaced) {
+            session.pool.detach(tab)
+        }
         for (index, tab) in duo.slotTabs where tab == id && index != slot { duo.slotTabs[index] = nil }
         duo.slotTabs[slot] = id
     }
@@ -193,7 +198,8 @@ extension BrowserViewController {
     /// The other pane has no chrome over it, but it keeps the expanded bar's inset: switching focus
     /// then never relayouts either page.
     func applyOtherPaneInsets(to tab: Tab) {
-        guard view.bounds.height > 0 else { return }
+        // During a fold the transition's completion applies them.
+        guard view.bounds.height > 0, !duo.isResizing else { return }
         let bottom = panes.view.frame.maxY
         let geometry = ChromeGeometry(
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar
@@ -240,6 +246,7 @@ extension BrowserViewController {
         let focused = session.tabs.focusedPane
         Signposts.signposter.emitEvent(Signposts.paneFocus, "\(focused)")
         updatePaneLooks()
+        duo.sidebar?.reloadTabs()
         view.setNeedsLayout()
         Motion.animate(Motion.urlFocus) { self.view.layoutIfNeeded() }
         expandChrome(animated: true)

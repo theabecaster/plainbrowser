@@ -307,6 +307,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 item = UIBarButtonItem(primaryAction: action)
             }
             item.axisBehavior = .verticalPreferred
+            // Back, Forward and Tabs overflow last (docs/research/design-audit.md, Duo).
+            item.visibilityPriority = kind == .share ? .low : (kind == .more ? .standard : .high)
             item.accessibilityIdentifier = kind.identifier
             item.isEnabled = false
             barItems[kind] = item
@@ -623,7 +625,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// never relayouts during the motion. The viewport insets span collapsed to expanded, so CSS
     /// `svh`/`lvh` stay put.
     func updatePageInsets() {
-        guard view.bounds.height > 0 else { return }
+        // During a fold or rotation the insets wait for the transition's completion.
+        guard view.bounds.height > 0, !duo.isResizing else { return }
         let pageBottom = panes.view.frame.maxY
         let collapsed = geometry.collapsedInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)

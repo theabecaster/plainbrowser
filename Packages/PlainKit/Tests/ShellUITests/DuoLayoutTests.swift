@@ -100,6 +100,7 @@ struct DuoLayoutTests {
         #expect(expanded.sidebar == .expanded)
         #expect(expanded.sidebarFloats)
         #expect(expanded.sidebarDockWidth == 64)
+        #expect(expanded.chromeLane == 260...Self.innerLandscape.maxX, "the pill stays clear of the floating sidebar")
 
         // A window with room beside it docks Expanded.
         let wide = DuoLayout(DuoLayoutInput(

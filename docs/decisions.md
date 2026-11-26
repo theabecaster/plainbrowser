@@ -605,7 +605,10 @@ Each entry: what was chosen, and why. Newest last.
   at navigation start; a tab opened into a pane is attached before it loads, so the choice uses
   that pane's width.
 - **Per-window state.** Each scene keeps its `TabStore` window id and its sidebar state in
-  `UISceneSession.userInfo`; `EngineTabs` acts on that window only. No multi-window UI yet.
+  `UISceneSession.userInfo`; `EngineTabs` acts on that window only. No multi-window UI yet
+  (`UIApplicationSupportsMultipleScenes` is off), so a scene without a saved id, or whose window
+  is gone, takes the first saved window: that is the one scene's tabs. "Open in New Window" will
+  need one app-wide `TabStore` and a new window for an unmatched scene (polish backlog).
 - **Perf cost:** one more view controller (the arrangement) and two pane slots, made once. A
   split keeps two attached web views (both live; the pool already never discards attached tabs).
   Layout runs one `DuoLayout` value computation per layout pass and touches constraints only when

@@ -133,6 +133,10 @@ struct DuoLayout: Equatable {
         }
 
         var lane = focusedPaneFrame.minX...focusedPaneFrame.maxX
+        // Expanded floating over the page: the pill stays clear of it.
+        if sidebarFloats {
+            lane = Self.lane(lane, avoiding: area.minX...(area.minX + SidebarState.expanded.width))
+        }
         // Book pose: the pill and toasts keep off the fold. A flat fold has no width and is
         // only used for its position (the split above).
         if input.isDivisionActive, let fold = vertical {

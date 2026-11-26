@@ -19,7 +19,7 @@ enum PageButton: CaseIterable {
         case .forward: "chevron.forward"
         case .tabs: "square.on.square"
         case .share: "square.and.arrow.up"
-        case .more: "ellipsis.circle"
+        case .more: "line.3.horizontal.circle"
         }
     }
 

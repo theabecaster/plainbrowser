@@ -110,6 +110,10 @@ extension BrowserViewController {
         duo.sidebar?.view.isHidden = false
         view.setNeedsLayout()
         Motion.animate(Motion.sidebarSettle(flicked: flicked), crossfading: view, changes: {
+            self.updateDuoLayout()
+            // Back to the resting width even when the state did not change (a short drag).
+            if let layout = self.duo.layout { self.applySidebarLayout(layout) }
+            self.duo.sidebar?.view.isHidden = false
             self.view.layoutIfNeeded()
         }, completion: { [weak self] in
             guard let self, duo.sidebarInterval === interval else { return }

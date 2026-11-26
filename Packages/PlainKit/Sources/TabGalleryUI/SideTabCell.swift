@@ -59,8 +59,15 @@ final class SideTabCell: UICollectionViewCell {
         isAccessibilityElement = true
         accessibilityIdentifier = "sideTab"
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (cell: SideTabCell, _) in
-            cell.highlight.layer.borderColor = Palette.accentOnGlass.resolvedColor(with: cell.traitCollection).cgColor
+            cell.resolveBorder()
         }
+    }
+
+    private var isInOtherPane = false
+
+    private func resolveBorder() {
+        let color = isInOtherPane ? UIColor.separator : Palette.accentOnGlass
+        highlight.layer.borderColor = color.resolvedColor(with: traitCollection).cgColor
     }
 
     @available(*, unavailable)
@@ -79,9 +86,12 @@ final class SideTabCell: UICollectionViewCell {
             symbol.image = UIImage(systemName: item.isPrivate ? "hand.raised" : "globe")
         }
         tile.backgroundColor = item.isPrivate ? Palette.privateBackground : Palette.surface
+        // The focused pane's tab is the strong mark (tinted, with the pane ring's color); the other
+        // pane's only a quiet outline.
         highlight.backgroundColor = isFocused ? Palette.pressed : .clear
-        highlight.layer.borderWidth = isInOtherPane ? 1.5 : 0
-        highlight.layer.borderColor = Palette.accentOnGlass.resolvedColor(with: traitCollection).cgColor
+        highlight.layer.borderWidth = isFocused ? 1.5 : (isInOtherPane ? 1 : 0)
+        self.isInOtherPane = isInOtherPane && !isFocused
+        resolveBorder()
         // Hidden behind the clip in the rail anyway; out of the accessibility tree there too.
         titleLabel.isHidden = !showsTitle
         closeButton.isHidden = !showsTitle

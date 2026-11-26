@@ -146,10 +146,11 @@ public final class TabStore {
     ///   private when the opener is.
     /// - Other tabs go at the end of the window's list.
     /// - In the foreground it shows in `pane` (default: the focused pane).
+    /// - `id` is for a tab the engine already made (a popup); new tabs get a fresh one.
     @discardableResult
     public func open(
         _ url: URL? = nil, title: String? = nil, in window: WindowID? = nil, opener: TabID? = nil,
-        inBackground: Bool = false, isPrivate: Bool = false, pane: Int? = nil
+        inBackground: Bool = false, isPrivate: Bool = false, pane: Int? = nil, id: TabID = TabID()
     ) -> TabID {
         let openerEntry = opener.flatMap { tabs[$0] }
         let isPrivate = isPrivate || openerEntry?.isPrivate == true
@@ -158,7 +159,9 @@ public final class TabStore {
             ?? windows[0].id
         let index = windowIndex(windowID)!
         let date = now()
-        let entry = TabEntry(url: url, title: title, openerID: openerEntry?.id, isPrivate: isPrivate, createdAt: date)
+        let entry = TabEntry(
+            id: id, url: url, title: title, openerID: openerEntry?.id, isPrivate: isPrivate, createdAt: date
+        )
         tabs[entry.id] = entry
         windowOfTab[entry.id] = windowID
 

@@ -158,6 +158,9 @@ extension BrowserViewController {
 
     /// Follows the tab's observed state: the pill, the buttons, progress and the page's state.
     private func tabChanged(from old: TabSnapshot?, to new: TabSnapshot) {
+        if let tab = currentTab, old?.url != new.url || old?.title != new.title {
+            session.tabs.pageChanged(tab)
+        }
         if old?.url != new.url || old?.security != new.security {
             pill.display(url: new.url, notSecure: new.security == .notSecure || new.security == .certificateBypassed)
             if !isEditingAddress { pill.textField.text = new.url?.absoluteString }
@@ -245,11 +248,14 @@ extension BrowserViewController {
         }
     }
 
+    /// Find on Page: in the reader while it shows, else on the page (`Tab.beginFind`, which emits
+    /// the signpost itself).
     func findOnPage() {
         if let reader = engineUI.reader.webView {
+            Signposts.signposter.emitEvent(Signposts.findOnPage)
             reader.findInteraction?.presentFindNavigator(showingReplace: false)
         } else {
-            currentTab?.findOnPage()
+            currentTab?.beginFind()
         }
     }
 
@@ -347,6 +353,7 @@ extension BrowserViewController {
 /// The tab values the chrome shows, compared to find what changed.
 struct TabSnapshot: Equatable {
     var url: URL?
+    var title: String
     var isLoading: Bool
     var canGoBack: Bool
     var canGoForward: Bool
@@ -356,6 +363,7 @@ struct TabSnapshot: Equatable {
 
     init(_ tab: Tab) {
         url = tab.url
+        title = tab.title
         isLoading = tab.isLoading
         canGoBack = tab.canGoBack
         canGoForward = tab.canGoForward

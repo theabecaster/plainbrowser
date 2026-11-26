@@ -338,13 +338,15 @@ Each entry: what was chosen, and why. Newest last.
 ## Integration 2: the shell on the web engine (2026-11-26)
 
 - **`BrowserSession` wires the engine once.** It builds the pool with Storage-backed stores,
-  `ContentBlocker` as its `UserContentRules`, Reader's check as its `PageScripts`, and the
-  `TabStore`. The app target only passes the database task and the tab-state folder. A plain
+  `ContentBlocker` as its `UserContentRules`, Reader's check as its `PageScripts`, and
+  `EngineTabs`, which keeps engine `Tab`s in step with BrowserCore's `TabStore` (the one owner of
+  the list) by id. Before the database opens the store is in memory; tabs opened then join the
+  loaded session. The app target only passes the database task and the tab-state folder. A plain
   type with initializer injection, no container.
 - **Adapters live in ShellUI.** `SitePermissionStore`, `SiteContentModeStore` (WebEngine) and
   `SiteAllowListStore` (ContentBlocking) are implemented over Storage in the shell, the one layer
   that sees both: Storage stores plain strings and never imports the engine. Three tables in one
-  migration (`v3.siteSettings`). The content-mode map loads once after launch and answers from
+  migration (`v5.siteSettings`). The content-mode map loads once after launch and answers from
   memory, as the engine reads it at every navigation start.
 - **The shell never keeps a page's web view.** It follows the `Tab` with Observation (coalesced
   per run loop turn); the engine reports visits (`Tab.onVisit`, once per back-forward item),

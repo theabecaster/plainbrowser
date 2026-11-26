@@ -44,7 +44,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private let pullIndicator = PullIndicator()
     var barItems: [PageButton: UIBarButtonItem] = [:]
 
-    /// The tab on screen (`TabStore` owns it).
+    /// The tab on screen (BrowserCore's `TabStore` owns the list; `EngineTabs` keeps it in step).
     var currentTab: Tab?
     /// The tab's observation, the reader view, the page's error state and the prompt queue.
     let engineUI = EngineUIState()
@@ -823,7 +823,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self?.reloadPage()
         }
         let find = UIAction(title: "Find on Page", image: UIImage(systemName: "doc.text.magnifyingglass")) { [weak self] _ in
-            Signposts.signposter.emitEvent(Signposts.findOnPage)
             self?.findOnPage()
         }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in

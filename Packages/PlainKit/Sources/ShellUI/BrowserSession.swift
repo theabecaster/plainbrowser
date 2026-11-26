@@ -14,7 +14,7 @@ import WebEngine
 /// frame: warm-up, rule lists, the reader check and the last session's tab.
 public final class BrowserSession {
     public let pool: WebViewPool
-    let tabs: TabStore
+    let tabs: EngineTabs
     let blocker: ContentBlocker
     let reader = ReaderExtractor()
     private let readerScripts: ReaderPageScripts
@@ -38,7 +38,7 @@ public final class BrowserSession {
             contentRules: blocker,
             pageScripts: readerScripts
         )
-        tabs = TabStore(pool: pool, database: database, tabStates: tabStates)
+        tabs = EngineTabs(pool: pool, database: database, tabStates: tabStates)
     }
 
     /// After the first frame: warms the first web view at once, then loads the per-site choices,
@@ -58,14 +58,13 @@ public final class BrowserSession {
         // A restored page loads only with its rules attached: lookups of compiled lists take
         // about 1 ms, and an update keeps the previous lists attached while it compiles.
         if restored != nil { await blocker.firstRulesAttached() }
-        // Files of tabs that never got a row (a crash between the two writes).
-        Task { [database] in try? await database()?.removeOrphanedTabStates() }
         return restored
     }
 
-    /// Writes the tabs' rows. The pool saves their state on its own when the app resigns active.
-    public func saveTabs() {
-        tabs.saveAll()
+    /// Writes the tab list now. The pool saves each tab's page state on its own when the app
+    /// resigns active.
+    public func saveTabs() async {
+        await tabs.flush()
     }
 
     /// Whether blocking is on for `url`'s site.

@@ -26,7 +26,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`: warm-up, tiers, popups, crash recovery), `Tab` (observed page state), `TabWebViewHandler` (navigation/UI delegate), `NavigationRules` (pure policy), `DownloadCoordinator`, `ThumbnailService`, `EngineChoices`, seams in `EngineProtocols` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
 | `Reader` | nonisolated; WebKit types MainActor | WebKit | `ReaderExtractor` (Readability in its own content world), `ReaderRenderer` (page template), `ReaderSchemeHandler` (`plain-reader:` scheme), `ReaderArticle` |
-| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI, WebEngine, ContentBlocking, Reader | `BrowserViewController` (page, URL pill, search sheet, page buttons; the tab on screen in `+Tab`, the engine's questions in `+EngineHost`), `BrowserSession` (pool, `TabStore`, `ContentBlocker`, `ReaderExtractor`, wired once), `TabStore`, Storage adapters for the engine seams (`SiteStores`), `ReaderPresenter`, `PageStateView`, `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
+| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI, WebEngine, ContentBlocking, Reader | `BrowserViewController` (page, URL pill, search sheet, page buttons; the tab on screen in `+Tab`, the engine's questions in `+EngineHost`), `BrowserSession` (pool, `EngineTabs`, `ContentBlocker`, `ReaderExtractor`, wired once), `EngineTabs` (engine `Tab`s in step with BrowserCore's `TabStore` by id), Storage adapters for the engine seams (`SiteStores`), `ReaderPresenter`, `PageStateView`, `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
 | `TabGalleryUI` | MainActor | UIKit | `TabGalleryViewController` (cards, grid, flick to close, reorder, menus), `TabGalleryDataSource` seam (the shell implements it over `TabStore`) + `TabGalleryDemoData` fake, `TabGalleryTransition` (snapshot animator page <-> card), `ThumbnailPipeline` (off-main decode), `TabGalleryLayout`/`TabGalleryMetrics`/`CardFlick` (plain values tested on macOS) |
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `SpringDriver` (frame-by-frame spring at 80–120 Hz), `Haptic`, `Glass` (the one Liquid Glass helper and its container) |
@@ -51,7 +51,8 @@ and compile to nothing on macOS.
    warms one offscreen `WKWebView`, which starts the WebContent and Networking processes, then,
    off the main thread: the remembered Desktop Site choices, the reader check's source, the rule
    lists (`ContentBlocker.prepare()`, compiled only on a miss) and the last session's tab
-   (`TabStore.restoreLastTab()`, `launch.restoreTab`).
+   (`EngineTabs.restoreLastTab()`: `loadTabSession`, then `TabStore(session:persistence:)`,
+   then the selected tab's state file; `launch.restoreTab`).
 5. Search stays first: the field keeps focus. The restored tab is attached under the search sheet
    (it gets the warm web view and restores history, scroll and sessionStorage), so closing the
    sheet shows the page; a submitted address loads in it, on top of its history.
@@ -66,7 +67,7 @@ and compile to nothing on macOS.
    The best row sits nearest the field. An empty field shows favorites above the keyboard.
 3. Return or a row tap → `AddressBarInput(text)` → `destination(searchingWith:)` with the saved
    engine.
-4. The first load goes to the tab on screen, or a new one from `TabStore` that the pool attaches
+4. The first load goes to the tab on screen, or a new one (`TabStore.open` through `EngineTabs`) that the pool attaches
    to the page container (it takes the warm web view). The shell never holds the web view: it
    follows the `Tab` (`TabObservation`, Observation tracking, at most once per run loop turn) for
    the pill, the buttons and the page state, and `Tab.onProgress` for the progress bar.
@@ -218,7 +219,9 @@ exactly what the app emits.
 The shell creates one `WebViewPool` and sets itself as `pool.host` (`EngineHost`: child tabs,
 JavaScript dialogs, HTTP auth and certificate errors, external apps and universal links,
 permission prompts, downloads, form resubmission; `BrowserViewController+EngineHost.swift`,
-system alerts one at a time). Tabs come from `pool.makeTab(id:restoring:)`; `TabStore` keeps them.
+system alerts one at a time). Engine tabs come from `pool.makeTab(id:restoring:)` with the
+`TabStore`'s ids; `EngineTabs` maps them and reports page changes (`updatePage`). A popup the pool
+made joins the store with its own id (`TabStore.open(id:)`).
 `BrowserSession` builds the pool with Storage-backed stores (`SiteStores.swift`): permissions
 (`StorageSitePermissionStore`), Desktop Site (`StorageSiteContentModeStore`, an in-memory map
 loaded after launch), content blocking (`ContentBlocker` as `UserContentRules`, its allow-list in

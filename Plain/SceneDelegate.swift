@@ -45,14 +45,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         attachDatabase(to: browser)
     }
 
-    func sceneWillResignActive(_ scene: UIScene) {
-        // The pool saves every tab's state on its own (willResignActive); this writes their rows.
-        session.saveTabs()
-    }
-
     func sceneDidEnterBackground(_ scene: UIScene) {
         let data = addressBarData
         Task { await data.flush() }
+        // The pool saves every tab's page state on its own (willResignActive); this writes the
+        // tab list.
+        let session = session
+        Task { await session.saveTabs() }
     }
 
     /// Hands the database to the address bar and the sheets once it is open.

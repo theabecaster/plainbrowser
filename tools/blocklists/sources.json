@@ -1,0 +1,26 @@
+[
+  {
+    "name": "EasyList",
+    "url": "https://easylist.to/easylist/easylist.txt",
+    "homepage": "https://easylist.to/",
+    "license": "GPL-3.0-or-later OR CC-BY-SA-3.0",
+    "licenseURL": "https://easylist.to/pages/licence.html",
+    "attribution": "The EasyList authors (https://easylist.to/)"
+  },
+  {
+    "name": "EasyPrivacy",
+    "url": "https://easylist.to/easylist/easyprivacy.txt",
+    "homepage": "https://easylist.to/",
+    "license": "GPL-3.0-or-later OR CC-BY-SA-3.0",
+    "licenseURL": "https://easylist.to/pages/licence.html",
+    "attribution": "The EasyList authors (https://easylist.to/)"
+  },
+  {
+    "name": "EasyList Cookie List",
+    "url": "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt",
+    "homepage": "https://easylist.to/",
+    "license": "CC-BY-3.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/3.0/",
+    "attribution": "The EasyList authors (https://easylist.to/)"
+  }
+]

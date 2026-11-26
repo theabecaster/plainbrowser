@@ -134,7 +134,14 @@ if (( ! SKIP_UPLOAD )); then
 fi
 export TESTFLIGHT_APP_ID XCODE_CLOUD_PRODUCT_ID XCODE_CLOUD_WORKFLOW_ID
 # Xcode Cloud uploads internal-only builds, which only internal groups can test.
-if [[ $WHERE == cloud ]]; then use_group $TESTFLIGHT_INTERNAL_GROUP_ID; else use_group $TESTFLIGHT_GROUP_ID; fi
+if [[ $WHERE == cloud ]]; then
+  use_group $TESTFLIGHT_INTERNAL_GROUP_ID
+  if (( ! INTERNAL )); then
+    (( CLOUD_FALLBACK )) || die "TESTFLIGHT_INTERNAL_GROUP_ID is an external group; Xcode Cloud builds are internal-only"
+    WHERE=local; say "TESTFLIGHT_INTERNAL_GROUP_ID is not internal: archiving here"
+  fi
+fi
+[[ $WHERE == cloud ]] || use_group $TESTFLIGHT_GROUP_ID
 if [[ $WHERE == cloud ]]; then say "Xcode Cloud build of $BRANCH $(git rev-parse --short HEAD) for $APP, group ${GROUP% *}"
 else say "build $BUILD of $BRANCH $(git rev-parse --short HEAD) for $APP, group ${GROUP% *}"; fi
 
@@ -167,13 +174,10 @@ if [[ $WHERE == cloud ]]; then
   BUILD=$(tail -1 $OUT/cloud-wait.log); BUILD=${BUILD#build }
   BUILT=$(tail -2 $OUT/cloud-wait.log | head -1); BUILT=${BUILT#commit }
   [[ $BUILD =~ '^[0-9]+$' ]] || die "run $RUN gave no build number"
-  # Ship only what the notes and the tf/ tag describe: the run must have built this HEAD.
-  if [[ $BUILT == unknown ]]; then
-    [[ $(git ls-remote origin "refs/heads/$BRANCH" | cut -f1) == $(git rev-parse HEAD) ]] \
-      || die "origin/$BRANCH moved during run $RUN, so build $BUILD may not be HEAD; check it before testers get it"
-  else
-    [[ $BUILT == $(git rev-parse HEAD) ]] || die "run $RUN built $BUILT, not HEAD; check build $BUILD before testers get it"
-  fi
+  # Ship only what the notes and the tf/ tag describe: the run must have built this HEAD. Until
+  # the build is added to the group below, no tester has it.
+  [[ $BUILT == $(git rev-parse HEAD) ]] \
+    || die "run $RUN built ${BUILT/unknown/an unreported commit}, not HEAD; build $BUILD went to no group"
   say "Xcode Cloud uploaded build $BUILD"
   git tag "tf/$BUILD" HEAD && git push -q origin "tf/$BUILD" || say "note: could not tag tf/$BUILD"
   rm -rf $OUT
@@ -261,8 +265,9 @@ if (( ! INTERNAL )); then
   [[ $RS == APPROVED ]] || die "not approved in 2 hours; rerun with --skip-upload --build $BUILD"
 fi
 
-# An internal group set to "all builds" gets every valid build by itself.
-if (( INTERNAL )); then
+# An internal group set to "all builds" gets every valid build by itself, except Xcode Cloud
+# builds: Apple says those are always added by hand.
+if (( INTERNAL )) && [[ $WHERE != cloud ]]; then
   rm -rf build/testflight
   say "done: build $BUILD is available to ${GROUP% *}"
   exit 0

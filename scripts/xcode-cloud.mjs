@@ -68,9 +68,10 @@ async function all(p) {
 // ---- Budget ---------------------------------------------------------------------------------
 
 const hours = ms => ms / 3_600_000;
-// Compute time of one run: the sum of its actions (Apple bills each action), running ones up to
-// now. A run that has not started counts as one estimate, since it will use about that much.
-export function runHours(run, actions, now) {
+// Compute time of one run since `from`: the sum of its actions (Apple bills each action), running
+// ones up to now, each cut at `from`. A run that has not started counts as one estimate, since it
+// will use about that much.
+export function runHours(run, actions, now, from = 0) {
   const a = run.attributes;
   if (a.executionProgress === 'PENDING' || !a.startedDate) return RUN_ESTIMATE_HOURS;
   const spans = actions?.length ? actions.map(x => x.attributes) : [a];
@@ -78,20 +79,21 @@ export function runHours(run, actions, now) {
   for (const s of spans) {
     if (!s.startedDate) continue;
     const end = s.finishedDate ? Date.parse(s.finishedDate) : now;
-    ms += Math.max(0, end - Date.parse(s.startedDate));
+    ms += Math.max(0, end - Math.max(from, Date.parse(s.startedDate)));
   }
   return hours(ms);
 }
 export function monthStart(now) { const d = new Date(now); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); }
 export function windowStart(now) { return now - WINDOW_DAYS * 86_400_000; }
+// Runs are listed from this far before the window, so one that began earlier still counts for the
+// part it ran inside the window. Two days is far longer than any archive run takes.
+const LOOKBACK_MS = 2 * 86_400_000;
 // runs: [{ run, actions }]. Returns hours for the calendar month and for the trailing window.
 export function usageHours(runs, now) {
   let month = 0, window = 0;
   for (const { run, actions } of runs) {
-    const created = Date.parse(run.attributes.createdDate);
-    const h = runHours(run, actions, now);
-    if (created >= windowStart(now)) window += h;
-    if (created >= monthStart(now)) month += h;
+    window += runHours(run, actions, now, windowStart(now));
+    month += runHours(run, actions, now, monthStart(now));
   }
   return { month, window };
 }
@@ -111,7 +113,7 @@ async function recentRuns(now) {
       + `&fields${q('[ciWorkflows]')}=name`;
     while (next) {
       const page = await api('GET', next);
-      const fresh = page.data.filter(r => Date.parse(r.attributes.createdDate) >= windowStart(now));
+      const fresh = page.data.filter(r => Date.parse(r.attributes.createdDate) >= windowStart(now) - LOOKBACK_MS);
       runs.push(...fresh);
       // Newest first: once a page ends before the window, older pages are all outside it.
       next = fresh.length === page.data.length ? page.links?.next : null;
@@ -156,7 +158,11 @@ export const WORKFLOW = {
 };
 // The attributes that differ from WORKFLOW, ignoring the API's read-only extras.
 export function workflowDiff(actual) {
-  const norm = v => JSON.stringify(v ?? null);
+  // Key order doesn't matter, and a missing field equals null.
+  const canon = v => Array.isArray(v) ? v.map(canon)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().filter(k => v[k] != null).map(k => [k, canon(v[k])]))
+    : v ?? null;
+  const norm = v => JSON.stringify(canon(v));
   return Object.keys(WORKFLOW).filter(k => norm(actual[k]) !== norm(WORKFLOW[k]));
 }
 

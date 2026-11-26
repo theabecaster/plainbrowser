@@ -10,7 +10,7 @@ public struct SearchEngine: Equatable, Sendable {
         self.template = template
     }
 
-    /// The first-launch default (docs/plan.md, section 11).
+    /// Google. The first-launch default is `FixedChoices.defaultSearchEngine`.
     public static let google = SearchEngine(name: "Google", template: "https://www.google.com/search?q=%s")
 
     /// The results page for `query`. The query is percent-encoded so that `&`, `=`, `+` and `#`

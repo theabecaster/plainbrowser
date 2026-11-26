@@ -25,7 +25,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate 
     private var didWarmUp = false
 
     /// - Parameter onSearchFieldReady: called once, when the field first becomes first responder.
-    public init(pool: WebViewPool, searchEngine: SearchEngine = .google, onSearchFieldReady: @escaping () -> Void) {
+    public init(pool: WebViewPool, searchEngine: SearchEngine = FixedChoices.defaultSearchEngine, onSearchFieldReady: @escaping () -> Void) {
         self.pool = pool
         self.searchEngine = searchEngine
         self.onSearchFieldReady = onSearchFieldReady

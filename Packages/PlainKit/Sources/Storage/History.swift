@@ -144,7 +144,7 @@ extension AppDatabase {
     /// whose address starts with the typed text come first, so the address bar's top hit is never
     /// crowded out; the rest follow by frecency. This is the address bar's query; it must stay
     /// under 16 ms at p95 with 100k pages (docs/plan.md, section 2).
-    public func searchHistory(_ text: String, limit: Int = FixedChoices.historyCandidates) async throws -> [PageCandidate] {
+    public func searchHistory(_ text: String, limit: Int = FixedChoices.maxPageSuggestions) async throws -> [PageCandidate] {
         let query = HistoryQuery(text)
         guard let pattern = query.pattern else { return [] }
         return try await writer.read { db in
@@ -156,7 +156,7 @@ extension AppDatabase {
     /// result to `AddressBarSuggestions.merge` with the engine's suggestions; it deduplicates and
     /// trims to the final page count.
     public func addressBarCandidates(
-        for text: String, historyLimit: Int = FixedChoices.historyCandidates
+        for text: String, historyLimit: Int = FixedChoices.maxPageSuggestions
     ) async throws -> (history: [PageCandidate], favorites: [PageCandidate]) {
         let query = HistoryQuery(text)
         return try await writer.read { db in
@@ -168,28 +168,40 @@ extension AppDatabase {
         }
     }
 
+    /// Up to `limit` pages with distinct addresses, best first. Variants of one page (http and
+    /// https, with and without www., fragments) share an address and count once, so they can't
+    /// crowd other pages out.
     static func historyMatches(
         _ pattern: String, addressPrefix: String?, limit: Int, in db: Database
     ) throws -> [PageCandidate] {
-        // The FTS match yields the rows, then SQLite keeps only the `limit` best in one pass.
-        // `LIKE NULL` is NULL for every row when there is no address prefix, so the order falls
-        // back to frecency alone.
+        guard limit > 0 else { return [] }
+        // The FTS match yields the rows, then SQLite keeps only the best `fetch` in one pass
+        // (a top-N sort, never a full one). `LIKE NULL` is NULL for every row when there is no
+        // address prefix, so the order falls back to frecency alone.
         let like = addressPrefix.map { HistoryQuery.escapeLike($0) + "%" }
-        let rows = try Row.fetchAll(
-            db,
-            sql: """
-            SELECT p.url, p.title, p.frecency
+        let statement = try db.cachedStatement(sql: """
+            SELECT p.url, p.title, p.frecency, p.address
             FROM \(Schema.historySearch) s
             JOIN \(Schema.historyPlace) p ON p.id = s.rowid
             WHERE \(Schema.historySearch) MATCH ?
             ORDER BY (p.address LIKE ? ESCAPE '\\') DESC, p.frecency DESC
             LIMIT ?
-            """,
-            arguments: [pattern, like, limit]
-        )
-        return rows.compactMap { row in
-            guard let url = URL(string: row["url"]) else { return nil }
-            return PageCandidate(url: url, title: row["title"], frecency: row["frecency"], isFavorite: false)
+            """)
+        // Twice the rows needed almost always holds enough distinct pages. When variants eat into
+        // it, fetch again with a bigger window; the cost grows only for that rare case.
+        var fetch = 2 * limit
+        while true {
+            let rows = try Row.fetchAll(statement, arguments: [pattern, like, fetch])
+            var seen = Set<String>()
+            var pages: [PageCandidate] = []
+            for row in rows {
+                let address: String = row["address"]
+                guard seen.insert(address.lowercased()).inserted, let url = URL(string: row["url"]) else { continue }
+                pages.append(PageCandidate(url: url, title: row["title"], frecency: row["frecency"], isFavorite: false))
+                if pages.count == limit { return pages }
+            }
+            if rows.count < fetch { return pages }
+            fetch *= 4
         }
     }
 }
@@ -204,7 +216,10 @@ struct HistoryQuery {
     let addressPrefix: String?
 
     init(_ typed: String) {
-        var text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Control characters (NUL ends an FTS5 string early) become spaces.
+        var text = String(String.UnicodeScalarView(typed.unicodeScalars.map {
+            CharacterSet.controlCharacters.contains($0) ? " " : $0
+        })).trimmingCharacters(in: .whitespacesAndNewlines)
         for scheme in ["https://", "http://"] {
             if let range = text.range(of: scheme, options: [.anchored, .caseInsensitive]) {
                 text.removeSubrange(range)

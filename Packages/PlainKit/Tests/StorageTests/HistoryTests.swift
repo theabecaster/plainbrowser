@@ -116,15 +116,29 @@ func visit(_ url: String, _ title: String? = nil, at offset: TimeInterval = 0) -
     @Test func urlVariantsDoNotShortenTheMergedList() async throws {
         let database = try AppDatabase.inMemory()
         var changes: [HistoryChange] = []
+        // Twenty well-visited variants of one page outrank everything else.
+        for index in 0..<20 {
+            for _ in 0..<5 { changes.append(.visit(visit("https://top.example/news#section-\(index)"))) }
+        }
         for host in ["a", "b", "c", "d"] {
             for variant in ["https://\(host).example/news", "http://\(host).example/news", "https://www.\(host).example/news/"] {
-                changes.append(.visit(visit(variant)))
+                changes.append(.visit(visit(variant, at: -86_400)))
             }
         }
         try await database.apply(changes)
         let candidates = try await database.addressBarCandidates(for: "news")
+        #expect(candidates.history.count == FixedChoices.maxPageSuggestions)
+        #expect(Set(candidates.history.compactMap { $0.url.host() }).count == FixedChoices.maxPageSuggestions)
         let merged = AddressBarSuggestions.merge(query: "news", history: candidates.history, favorites: [], searches: [])
-        #expect(merged.count >= 3)
+        #expect(merged.count == FixedChoices.maxPageSuggestions)
+    }
+
+    @Test func controlCharactersInInputAreHarmless() async throws {
+        let database = try AppDatabase.inMemory()
+        try await database.record(visit("https://a.example/b", "A B"))
+        #expect(try await database.searchHistory("a\u{0000}b").map(\.title) == ["A B"])
+        #expect(try await database.searchHistory("\u{0000}").isEmpty)
+        #expect(try await database.searchHistory("\"a\" OR NEAR(b) *").isEmpty)
     }
 
     @Test func resultsAreRankedByFrecency() async throws {

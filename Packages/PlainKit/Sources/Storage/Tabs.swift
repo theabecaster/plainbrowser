@@ -98,17 +98,16 @@ extension AppDatabase {
     /// Deletes state files that no tab row refers to (left behind by a crash between the two
     /// writes). Run once at launch, off the critical path.
     ///
-    /// Safe alongside tab saves: it holds the write lock, so no tab row can be saved between
-    /// reading the ids and deleting files, and it skips files written after it started, so a
-    /// state file saved just before its row is kept. Contract for callers: save a tab's row
-    /// before its first state file.
+    /// Safe alongside tab saves, given the callers' contract: save a tab's row before its first
+    /// state file. Files written after cleanup started are skipped. A file written before that
+    /// belongs to a row saved before that, which the id snapshot (taken after the start) holds.
+    /// File work runs off GRDB's queues, so other writes never wait for it.
     public func removeOrphanedTabStates() async throws {
         let started = Date()
-        let tabStates = tabStates
-        try await writer.write { db in
-            let ids = try UUID.fetchSet(db, sql: "SELECT id FROM \(Schema.tab)")
-            tabStates.removeOrphans(keeping: ids, writtenBefore: started)
+        let ids = try await writer.read { db in
+            try UUID.fetchSet(db, sql: "SELECT id FROM \(Schema.tab)")
         }
+        await tabStates.removeOrphans(keeping: ids, writtenBefore: started)
     }
 }
 
@@ -153,8 +152,8 @@ public struct TabStateStore: Sendable {
     }
 
     /// Removes state files of tabs not in `keep` that were last written before `cutoff`.
-    /// Synchronous: called from `AppDatabase.removeOrphanedTabStates` on GRDB's writer queue.
-    func removeOrphans(keeping keep: Set<UUID>, writtenBefore cutoff: Date) {
+    @concurrent
+    func removeOrphans(keeping keep: Set<UUID>, writtenBefore cutoff: Date) async {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: [.contentModificationDateKey]
         )) ?? []

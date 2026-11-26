@@ -43,6 +43,10 @@ import Testing
         #expect(candidates.favorites.first?.frecency != nil)
         #expect(candidates.history.isEmpty)
 
+        // One letter matches the start of the address only, never title words.
+        #expect(try await database.addressBarCandidates(for: "m").favorites.isEmpty)
+        #expect(try await database.addressBarCandidates(for: "N").favorites.map(\.url.host) == ["news.example"])
+
         let byAddress = try await database.addressBarCandidates(for: "news")
         #expect(byAddress.favorites.count == 1)
         #expect(byAddress.history.map(\.url.host) == ["news.example"])

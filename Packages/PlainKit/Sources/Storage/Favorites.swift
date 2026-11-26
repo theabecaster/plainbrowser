@@ -75,10 +75,12 @@ extension AppDatabase {
     }
 
     /// Favorites whose title or address contains every typed word, in favorites order, with the
-    /// page's history frecency attached when it has one.
+    /// page's history frecency attached when it has one. Like history, input shorter than
+    /// `FixedChoices.minTitleSearchLength` matches only addresses that start with it.
     static func favoriteMatches(_ text: String, in db: Database) throws -> [PageCandidate] {
         let words = fold(text).split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return [] }
+        let addressOnly = text.count < FixedChoices.minTitleSearchLength
         let rows = try Row.fetchAll(
             db,
             sql: """
@@ -92,8 +94,13 @@ extension AppDatabase {
         return rows.compactMap { row in
             guard let url = URL(string: row["url"]) else { return nil }
             let title: String? = row["title"]
-            let haystack = fold(HistoryPlace.searchableAddress(url) + " " + (title ?? ""))
-            guard words.allSatisfy({ haystack.contains($0) }) else { return nil }
+            let address = fold(HistoryPlace.searchableAddress(url))
+            if addressOnly {
+                guard address.hasPrefix(words[0]) else { return nil }
+            } else {
+                let haystack = address + " " + fold(title ?? "")
+                guard words.allSatisfy({ haystack.contains($0) }) else { return nil }
+            }
             return PageCandidate(url: url, title: title, frecency: row["frecency"], isFavorite: true)
         }
     }

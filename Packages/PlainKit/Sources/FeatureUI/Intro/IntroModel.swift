@@ -121,6 +121,9 @@ enum IntroMotion {
     static let lift: CGFloat = 10
     /// The dawn moving to a step's place (and the mark with it on the promise step).
     static let dawn = Animation.spring(duration: 0.85, bounce: 0)
+    /// The window changing shape between steps: quicker, so it is out of the way before the next
+    /// step's headline arrives under it.
+    static let dawnStep = Animation.spring(duration: 0.5, bounce: 0)
     /// The blocking demo's page reflow.
     static let reflow = Animation.spring(duration: 0.55, bounce: 0)
 }

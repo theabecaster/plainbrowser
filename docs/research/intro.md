@@ -97,7 +97,7 @@ lost contrast over the planet).
 
 Numbers: step exit `.smooth(0.38)` (fade, 10 pt lift, 0.985 scale); parts enter on
 `.spring(0.52, bounce 0)`, starting 0.16 s after the exit begins and 0.065 s apart, rising 16 pt;
-the dawn window and the mark move on one `.spring(0.85, bounce 0)` (UIKit animations of layer
+the dawn window opens and the mark settles on one `.spring(0.85, bounce 0)`, and the window changes shape between steps on a quicker `.spring(0.5, bounce 0)` so it is out of the way before the next headline (UIKit animations of layer
 frames, so the render server runs them) and the sky's colors on a matching 0.9 s layer animation;
 the demo's reflow `.spring(0.55, bounce 0)` with the clutter leaving 0.07 s apart. Under Reduce
 Motion every move is a 0.2 s crossfade, the window cuts to its place inside a crossfade and the

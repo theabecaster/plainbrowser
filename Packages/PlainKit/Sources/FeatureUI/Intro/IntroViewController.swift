@@ -145,7 +145,7 @@ public final class IntroViewController: UIViewController {
         if dawn.scene == nil, let step {
             openDawn(on: step)
         } else if let step {
-            dawn.apply(scene(step), animation: IntroMotion.dawn)
+            dawn.apply(scene(step), animation: IntroMotion.dawnStep)
         }
         switch step {
         case .promise: moveMark(to: .promise)

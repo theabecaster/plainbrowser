@@ -130,19 +130,20 @@ func isException(_ line: String) -> Bool {
 struct Chunk {
     let json: String
     let ruleCount: Int
+    /// Rules the converter dropped because the part went over WebKit's 150k limit.
+    let discarded: Int
 }
 
-func convert(_ lines: [String]) throws -> Chunk {
+func convert(_ lines: [String]) -> Chunk {
     let result = ContentBlockerConverter().convertArray(
         rules: lines,
         // Safari 26 is the newest engine the converter knows; Plain needs iOS 27.1, which has it.
         safariVersion: .safari26,
         advancedBlocking: false
     )
-    guard result.discardedSafariRules == 0 else {
-        throw ToolError("converter discarded \(result.discardedSafariRules) rules")
-    }
-    return Chunk(json: result.safariRulesJSON, ruleCount: result.safariRulesCount)
+    return Chunk(
+        json: result.safariRulesJSON, ruleCount: result.safariRulesCount,
+        discarded: result.discardedSafariRules)
 }
 
 /// Splits `blocking` into the fewest parts whose converted lists each hold at most `maxRules`
@@ -155,9 +156,10 @@ func split(blocking: [String], exceptions: [String], maxRules: Int) throws -> [C
     while true {
         var groups = Array(repeating: [String](), count: parts)
         for (index, line) in blocking.enumerated() { groups[index % parts].append(line) }
-        let chunks = try groups.map { try convert($0 + exceptions) }
-        let largest = chunks.map(\.ruleCount).max() ?? 0
-        if largest <= maxRules { return chunks }
+        let chunks = groups.map { convert($0 + exceptions) }
+        // A part that lost rules to the converter's own limit counts as over the limit too.
+        let largest = chunks.map { $0.ruleCount + $0.discarded }.max() ?? 0
+        if largest <= maxRules && chunks.allSatisfy({ $0.discarded == 0 }) { return chunks }
         // Grow by the overshoot, at least one part, so this converges in a couple of passes.
         parts = max(parts + 1, Int((Double(parts) * Double(largest) / Double(maxRules)).rounded(.up)))
         if parts > blocking.count { throw ToolError("--max-rules \(maxRules) is too small") }

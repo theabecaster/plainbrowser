@@ -7,8 +7,8 @@ import UIKit
 import WebEngine
 import WebKit
 
-/// The browser's root screen (one tab for now): the page, the URL pill at the bottom, the page's
-/// buttons, and the search sheet the pill grows into.
+/// The browser's root screen: the page, the URL pill at the bottom, the page's buttons, and the
+/// search sheet the pill grows into.
 ///
 /// Launch order (docs/plan.md, "Engine rules"):
 /// 1. The first frame shows the search sheet with the field already first responder, keyboard up.
@@ -16,8 +16,10 @@ import WebKit
 ///    (`BrowserSession.start()`), and the last session's tab, if any, comes back under the sheet.
 /// 3. The first submitted address goes to that tab, or to a new one that gets the warm web view.
 ///
-/// The tab, its page state and the engine's questions (dialogs, sign-in, permissions, downloads)
-/// live in `BrowserViewController+Tab.swift` and `BrowserViewController+EngineHost.swift`.
+/// The tab on screen and its page state live in `+Tab`, the engine's questions (dialogs, sign-in,
+/// permissions) in `+EngineHost`, the tab gallery in `+Gallery`, the tabs button, bar swipe
+/// hand-offs, archive and link menu in `+Tabs`, and zoom, PDF and downloads in `+PageFeatures`.
+/// The bar swipe itself is `TabSwipe`.
 ///
 /// Embed it in a `UINavigationController` with a hidden navigation bar: where the system has a
 /// vertical bar (iPhone Duo), the page buttons are the navigation controller's toolbar items and
@@ -26,13 +28,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     UIAdaptivePresentationControllerDelegate {
     let session: BrowserSession
     let data: any AddressBarData
-    private let sheets: FeatureSheets
+    let sheets: FeatureSheets
     private let onSearchFieldReady: () -> Void
 
     let webContainer = UIView()
     /// The pill and the button bar, rendered as one glass surface (docs/plan.md, section 5,
     /// Chrome). It covers the view but takes no touches of its own.
-    private let chromeGlass = Glass.makeContainer(spacing: ChromeGeometry.glassMergeSpacing)
+    let chromeGlass = Glass.makeContainer(spacing: ChromeGeometry.glassMergeSpacing)
     /// The system scroll edge effect under the chrome, so page text under the bar stays readable.
     /// One per control, not on `chromeGlass`: the effect reaches as high as its container, and
     /// `chromeGlass` covers the whole screen. WebKit hides it by itself where it extends a fixed
@@ -48,6 +50,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     var currentTab: Tab?
     /// The tab's observation, the reader view, the page's error state and the prompt queue.
     let engineUI = EngineUIState()
+    /// The gallery, the bar swipe, neighbour previews and the toast.
+    let tabsUI = TabsUIState()
+    /// The page menu's last Add to / Remove from Favorites answer, for rebuilding the open menu.
+    var lastFavoriteAnswer: Bool?
 
     // Layout.
     private var pillOnBar: NSLayoutConstraint!
@@ -108,7 +114,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         view.backgroundColor = Palette.background
         view.tintColor = Palette.accent
 
-        for subview in [webContainer, pullIndicator, sheet, chromeGlass] as [UIView] {
+        for subview in [webContainer, pullIndicator, sheet, chromeGlass, tabsUI.toast] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
@@ -125,7 +131,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
-        pill.menuProvider = { [weak self] in self?.pageMenu() }
+        pill.menuProvider = { [weak self] in self?.pageMenu(source: .pill) }
 
         sheet.onPick = { [weak self] pick in self?.open(pick) }
         sheet.onDismiss = { [weak self] in self?.endEditing() }
@@ -143,6 +149,22 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         registerForTraitChanges(traits) { (controller: BrowserViewController, _) in
             controller.updateBarMode()
         }
+
+        tabsUI.swipe.browser = self
+        tabsUI.swipe.install(on: [pill, buttonBar])
+        session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        session.pool.onMemoryWarning = { [weak self] in
+            self?.tabsUI.previews = [:]
+            self?.tabsUI.fullPreviews = []
+        }
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil
+        )
+    }
+
+    /// Back from the background: idle tabs move to the archive.
+    @objc private func willEnterForeground() {
+        archiveIdleTabs()
     }
 
     private func layOut() {
@@ -203,6 +225,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             sheet.content.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s),
 
             pill.heightAnchor.constraint(equalToConstant: ChromeGeometry.pillHeight),
+
+            // The toast floats just above the pill, centered on it.
+            tabsUI.toast.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s),
+            tabsUI.toast.centerXAnchor.constraint(equalTo: pill.centerXAnchor),
+            tabsUI.toast.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
+            tabsUI.toast.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
         ] + capWidth(pill) + capWidth(sheet.content))
 
         buttonBarConstraints = [
@@ -218,14 +246,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             let item: UIBarButtonItem
             switch kind {
             case .more:
-                button.menu = pageMenu()
+                button.menu = pageMenu(source: .button)
                 button.showsMenuAsPrimaryAction = true
                 // The same top-to-bottom order wherever the menu opens, app items last.
                 button.preferredMenuElementOrder = .fixed
                 item = UIBarButtonItem(
-                    title: kind.title, image: UIImage(systemName: kind.symbol), primaryAction: nil, menu: pageMenu()
+                    title: kind.title, image: UIImage(systemName: kind.symbol), primaryAction: nil, menu: pageMenu(source: .barItem)
                 )
                 item.preferredMenuElementOrder = .fixed
+            case .tabs:
+                // A tap shows the gallery; a long press, the tabs menu.
+                let action = UIAction(title: kind.title, image: UIImage(systemName: kind.symbol)) { [weak self] _ in
+                    self?.tabsButtonTapped()
+                }
+                button.addAction(action, for: .primaryActionTriggered)
+                button.menu = tabsMenu()
+                button.showsMenuAsPrimaryAction = false
+                item = UIBarButtonItem(primaryAction: action, menu: tabsMenu())
             case .share:
                 button.addAction(UIAction { [weak self, weak button] _ in
                     guard let button else { return }
@@ -327,6 +364,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Call when the address bar's data changed outside the shell (the database opened), so an
     /// open search sheet shows the favorites.
     public func addressBarDataDidChange() {
+        // The settings are in: idle tabs can move to the archive.
+        archiveIdleTabs()
         guard isEditingAddress else { return }
         loadFavorites()
     }
@@ -425,7 +464,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             url = page
             // What the user typed, unless the field still shows the page's own address.
             let input = pill.textField.text ?? ""
-            if input != currentTab?.url?.absoluteString { data.suggestionPicked(input: input, url: page) }
+            // A private tab teaches the address bar nothing.
+            if input != currentTab?.url?.absoluteString, currentTab?.isPrivate != true {
+                data.suggestionPicked(input: input, url: page)
+            }
         case .search(let query): url = data.searchEngine.resultsURL(for: query)
         }
         guard let url else { return }
@@ -438,6 +480,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private func endEditing() {
         applyEditingLayout(false, animated: true)
         pill.textField.resignFirstResponder()
+    }
+
+    /// Closes the search sheet, if it is open.
+    func endAddressEditing() {
+        guard isEditingAddress else { return }
+        endEditing()
+    }
+
+    /// Opens the search sheet with the field focused (a new tab, the last tab closed).
+    func beginAddressEditing() {
+        pill.textField.text = currentTab?.url?.absoluteString ?? ""
+        applyEditingLayout(true, animated: true)
+        if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
+    }
+
+    /// The bar is collapsed, or on its way there.
+    var isChromeCollapsed: Bool {
+        (snap.isRunning ? snap.target : collapse.progress) > 0
     }
 
     /// Moves between the resting pill and the open search sheet. The pill itself grows into the
@@ -493,20 +553,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if isEditingAddress { endEditing() }
     }
 
-    // MARK: History
-
-    /// Whether this page's visits go into history. The seam for private browsing: a private tab
-    /// answers false, and then neither visits nor titles are recorded.
-    var recordsHistory: Bool { true }
+    // MARK: Buttons
 
     func updateButtons() {
         let hasPage = currentTab?.url != nil
+        // Under the gallery the page's own buttons rest; Tabs goes back to the page.
+        let onPage = !isShowingGallery
         let enabled: [PageButton: Bool] = [
-            .back: canGoBack,
-            .forward: !isShowingReader && (currentTab?.canGoForward ?? false),
-            .share: hasPage,
+            .back: onPage && canGoBack,
+            .forward: onPage && !isShowingReader && (currentTab?.canGoForward ?? false),
+            .tabs: true,
+            .share: onPage && hasPage,
             // More always opens: History and Settings apply with or without a page.
-            .more: true,
+            .more: onPage,
         ]
         for (kind, isEnabled) in enabled {
             buttonBar.button(kind).isEnabled = isEnabled
@@ -778,27 +837,30 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// The page menu (docs/ui-reference.md): built when it opens, with only the items that apply
     /// now, in the reference's order, then History and Settings in their own last section. Zoom,
     /// blocking and other pane arrive with their features.
-    private func pageMenu() -> UIMenu {
+    private func pageMenu(source: PageMenuSource) -> UIMenu {
         UIMenu(children: [
             UIDeferredMenuElement.uncached { [weak self] completion in
                 Signposts.signposter.emitEvent(Signposts.pageMenu)
                 guard let self else { return completion([]) }
                 guard let url = self.currentTab?.url, LiveAddressBarData.isRecordable(url) else {
-                    return completion(self.pageMenuElements(isFavorite: nil))
+                    self.lastFavoriteAnswer = nil
+                    return completion(self.pageMenuElements(isFavorite: nil, source: source))
                 }
                 // One indexed read off the main thread; the menu shows when it answers. If the
                 // page changed meanwhile, the answer is for another page: leave the item out.
                 Task { [weak self, data] in
                     let isFavorite = await data.isFavorite(url)
                     guard let self else { return completion([]) }
-                    completion(self.pageMenuElements(isFavorite: self.currentTab?.url == url ? isFavorite : nil))
+                    let answer = self.currentTab?.url == url ? isFavorite : nil
+                    self.lastFavoriteAnswer = answer
+                    completion(self.pageMenuElements(isFavorite: answer, source: source))
                 }
             },
         ])
     }
 
     /// The menu's items. `isFavorite` is nil when there is no page that can be a favorite.
-    private func pageMenuElements(isFavorite: Bool?) -> [UIMenuElement] {
+    func pageMenuElements(isFavorite: Bool?, source: PageMenuSource) -> [UIMenuElement] {
         let history = UIAction(title: "History", image: UIImage(systemName: "clock")) { [weak self] _ in
             self?.showHistory()
         }
@@ -816,7 +878,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // The database is still opening (the first moments after launch).
             for item in [history, favorites, settings] { item.attributes = .disabled }
         }
-        let app = UIMenu(options: .displayInline, children: [history, favorites, settings])
+        let app = UIMenu(options: .displayInline, children: downloadsMenuItems() + [history, favorites, settings])
         guard let tab = currentTab, let url = tab.url else { return [app] }
         let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
             Signposts.signposter.emitEvent(Signposts.reload)
@@ -849,8 +911,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             siteItems.append(favorite)
         }
         return [
-            UIMenu(options: .displayInline, children: [reload, find] + readerMenuItems(for: tab)),
+            UIMenu(options: .displayInline, children: [reload, find] + readerMenuItems(for: tab) + pdfMenuItems(for: tab)),
             UIMenu(options: .displayInline, children: [share, copy]),
+            zoomMenu(for: tab, source: source),
             UIMenu(options: .displayInline, children: siteItems),
             app,
         ]
@@ -896,7 +959,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
     }
 
-    private func present(_ controller: UIViewController?, signpost: StaticString, onClose: (() -> Void)? = nil) {
+    func present(_ controller: UIViewController?, signpost: StaticString, onClose: (() -> Void)? = nil) {
         guard let controller, presentedViewController == nil else { return }
         Signposts.signposter.emitEvent(signpost)
         controller.presentationController?.delegate = self
@@ -905,7 +968,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     /// Dismisses the feature sheet, then runs `completion` and the sheet's close action.
-    private func closeSheet(then completion: (() -> Void)? = nil) {
+    func closeSheet(then completion: (() -> Void)? = nil) {
         guard presentedViewController != nil else { return }
         let closed = sheetClosed
         sheetClosed = nil

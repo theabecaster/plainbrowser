@@ -367,9 +367,12 @@ public final class WebViewPool {
 
     /// A picture of the attached tab's page at `width` points and
     /// `EngineChoices.swipeSnapshotPixelsPerPoint`, for a full-screen preview (the bar swipe's
-    /// neighbour). Nil when the tab is not on screen or the page does not answer in time.
-    public func snapshot(of tab: Tab, width: CGFloat) async -> UIImage? {
-        guard let slot = slots[tab.id], slot.container != nil, slot.webView.url != nil, width > 0 else { return nil }
+    /// neighbour). The snapshot starts at once, so call it before taking the tab off screen.
+    /// `completion` gets nil when the tab is not on screen or the page does not answer in time.
+    public func snapshot(of tab: Tab, width: CGFloat, completion: @escaping (UIImage?) -> Void) {
+        guard let slot = slots[tab.id], slot.container != nil, slot.webView.url != nil, width > 0 else {
+            return completion(nil)
+        }
         let webView = slot.webView
         let configuration = WKSnapshotConfiguration()
         // WebKit multiplies `snapshotWidth` by the screen scale.
@@ -378,9 +381,11 @@ public final class WebViewPool {
         configuration.afterScreenUpdates = false
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.tabSnapshot, id: signposter.makeSignpostID(), "full")
-        defer { signposter.endInterval(Signposts.tabSnapshot, interval) }
-        return await withWebKitTimeout(fallback: nil) { done in
+        callWithWebKitTimeout(fallback: nil) { done in
             webView.takeSnapshot(with: configuration) { image, _ in done(image) }
+        } completion: { (image: UIImage?) in
+            signposter.endInterval(Signposts.tabSnapshot, interval)
+            completion(image)
         }
     }
 

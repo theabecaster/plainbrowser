@@ -70,6 +70,11 @@ public final class ThumbnailService {
         }
     }
 
+    /// The tab's thumbnail if it is decoded in memory now, else nil. Never touches the disk.
+    public func cachedThumbnail(for id: UUID) -> UIImage? {
+        cache.object(forKey: id as NSUUID)
+    }
+
     /// The tab's thumbnail, ready to draw without a decode on the main thread.
     public func thumbnail(for id: UUID) async -> UIImage? {
         if let image = cache.object(forKey: id as NSUUID) { return image }

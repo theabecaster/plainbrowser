@@ -2,7 +2,8 @@
 import DesignSystem
 import UIKit
 
-/// The page's buttons: Back, Forward, Share and More (the page menu).
+/// The page's buttons: Back, Forward, Tabs (the gallery; a long press for the tab menu), Share and
+/// More (the page menu).
 ///
 /// Where the system has a vertical bar (the iPhone Duo's outer screen), they are the navigation
 /// controller's toolbar items with `.verticalPreferred`, so the system places them in its side
@@ -10,12 +11,13 @@ import UIKit
 /// collapses with the pill as the page scrolls. A system toolbar would change the page's safe
 /// area as it hides, which relayouts the page; this bar moves by transform only.
 enum PageButton: CaseIterable {
-    case back, forward, share, more
+    case back, forward, tabs, share, more
 
     var symbol: String {
         switch self {
         case .back: "chevron.backward"
         case .forward: "chevron.forward"
+        case .tabs: "square.on.square"
         case .share: "square.and.arrow.up"
         case .more: "ellipsis.circle"
         }
@@ -25,6 +27,7 @@ enum PageButton: CaseIterable {
         switch self {
         case .back: "Back"
         case .forward: "Forward"
+        case .tabs: "Tabs"
         case .share: "Share"
         case .more: "More"
         }
@@ -34,6 +37,7 @@ enum PageButton: CaseIterable {
         switch self {
         case .back: "back"
         case .forward: "forward"
+        case .tabs: "tabs"
         case .share: "share"
         case .more: "more"
         }
@@ -43,13 +47,13 @@ enum PageButton: CaseIterable {
 /// The glass button bar under the pill on iPhones without a vertical bar.
 final class ButtonBar: UIView {
     private let glass = Glass.makeView(shape: .capsule)
+    private(set) var stack = UIStackView()
     private(set) var buttons: [PageButton: UIButton] = [:]
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
-        let stack = UIStackView()
         stack.axis = .horizontal
         stack.distribution = .fillEqually
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -83,6 +87,13 @@ final class ButtonBar: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     func button(_ kind: PageButton) -> UIButton { buttons[kind]! }
+
+    /// The glass tint: Paper, or the quiet private tint while a private tab is on screen.
+    func setPrivate(_ isPrivate: Bool) {
+        let effect = UIGlassEffect(style: .regular)
+        effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
+        glass.effect = effect
+    }
 }
 
 /// The pull-to-refresh indicator: an arrow that turns as the page is pulled and fills with the

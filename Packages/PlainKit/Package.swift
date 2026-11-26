@@ -68,8 +68,12 @@ let package = Package(
             name: "ShellUI",
             dependencies: [
                 "WebEngine", "ContentBlocking", "Reader", "Storage", "BrowserCore", "DesignSystem", "PerfSignposts",
-                // The shell presents Settings, History and the favorites editor as sheets.
+                // The shell presents Settings, History, the favorites editor, Downloads and the
+                // archive as sheets.
                 "FeatureUI",
+                // The tab gallery: the shell implements its data source over TabStore and runs its
+                // open and close transitions.
+                "TabGalleryUI",
             ],
             swiftSettings: mainActorByDefault
         ),

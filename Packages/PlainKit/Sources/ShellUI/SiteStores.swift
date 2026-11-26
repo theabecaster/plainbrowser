@@ -71,6 +71,48 @@ final class StorageSiteContentModeStore: SiteContentModeStore {
     }
 }
 
+/// Page zoom per site. The engine reads it at every page commit, so answers come from an in-memory
+/// map loaded once from Storage after launch; changes go to the map at once and to Storage behind
+/// it, in order. Private tabs never reach it (the pool keeps their zooms in memory).
+final class StorageSitePageZoomStore: SitePageZoomStore {
+    private var zooms: [String: Double] = [:]
+    /// Choices made before the stored map arrived, applied on top of it.
+    private var editsBeforeLoad: [String: Double?] = [:]
+    private var isLoaded = false
+    private var lastWrite: Task<Void, Never>?
+    private let database: DatabaseProvider
+
+    init(database: @escaping DatabaseProvider) {
+        self.database = database
+    }
+
+    /// Reads the stored zooms off the main thread. Call once, after the first frame.
+    func load() async {
+        guard !isLoaded, let database = await database() else { return }
+        let stored = (try? await database.sitePageZooms()) ?? [:]
+        guard !isLoaded else { return }
+        zooms = stored
+        for (site, zoom) in editsBeforeLoad { zooms[site] = zoom }
+        editsBeforeLoad = [:]
+        isLoaded = true
+    }
+
+    func pageZoom(forSite site: String) -> Double? {
+        zooms[site]
+    }
+
+    func setPageZoom(_ zoom: Double?, forSite site: String) {
+        zooms[site] = zoom
+        if !isLoaded { editsBeforeLoad[site] = .some(zoom) }
+        let previous = lastWrite
+        let database = database
+        lastWrite = Task {
+            await previous?.value
+            try? await database()?.setSitePageZoom(zoom, forSite: site)
+        }
+    }
+}
+
 /// The sites where blocking is off, in Storage.
 nonisolated struct StorageSiteAllowListStore: SiteAllowListStore {
     let database: DatabaseProvider

@@ -1,12 +1,12 @@
 #if canImport(UIKit)
 import DesignSystem
 import Foundation
-import QuickLook
 import UIKit
 import WebEngine
 
 /// The shell's answers to the engine (`EngineHost`): child tabs, JavaScript dialogs, sign-in,
-/// certificate warnings, form resubmission, other apps, permissions, downloads and crashes.
+/// certificate warnings, form resubmission, other apps, permissions and crashes. Downloads and
+/// the link menu are in `+PageFeatures` and `+Tabs`.
 ///
 /// Every question is a system alert with one sentence (docs/ui-reference.md, "Wording"), shown
 /// one at a time over whatever is on screen. Answers to permission prompts are remembered per
@@ -16,8 +16,8 @@ extension BrowserViewController: EngineHost {
 
     public func pool(_ pool: WebViewPool, didOpen child: Tab, from opener: Tab) {
         session.tabs.add(child, after: opener)
-        // One tab on screen for now: the popup takes it; Back (or the page's window.close())
-        // returns to the opener.
+        // The popup takes the screen; Back (or the page's window.close()) returns to the opener.
+        if isShowingGallery { dismissGalleryFading() }
         show(child)
     }
 
@@ -131,51 +131,6 @@ extension BrowserViewController: EngineHost {
             "Allow \(Self.displaySite(site)) to use \(Self.describe(permissions))?",
             message: nil, cancel: "Don't Allow", confirm: "Allow"
         )
-    }
-
-    // MARK: DownloadPresenter
-
-    public func downloadDidStart(_ download: Download) {
-        Haptic.tap.play()
-    }
-
-    public func downloadDidEnd(_ download: Download) {
-        switch download.state {
-        case .finished(let file):
-            Task { [weak self] in
-                await self?.presentPrompt { finish in
-                    let alert = UIAlertController(
-                        title: "Downloaded", message: "\(download.filename) is in Files, in Plain's Downloads folder.",
-                        preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .cancel) { _ in finish(()) })
-                    alert.addAction(UIAlertAction(title: "Open", style: .default) { _ in
-                        finish(())
-                        self?.preview(file)
-                    })
-                    return (alert, ())
-                }
-            }
-        case .failed:
-            Task {
-                await presentPrompt { finish in
-                    let alert = UIAlertController(
-                        title: nil, message: "\(download.filename) didn't download.", preferredStyle: .alert
-                    )
-                    alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in finish(()) })
-                    return (alert, ())
-                }
-            }
-        case .inProgress, .cancelled:
-            break
-        }
-    }
-
-    private func preview(_ file: URL) {
-        engineUI.preview.file = file
-        let controller = QLPreviewController()
-        controller.dataSource = engineUI.preview
-        topPresenter.present(controller, animated: true)
     }
 
     #if DEBUG

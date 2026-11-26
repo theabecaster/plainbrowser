@@ -3,31 +3,38 @@
 # for App Store Connect to process it, set "What to Test", and give it to the beta group. For an
 # external group it also submits the build to Beta App Review and waits for approval.
 #
-# Usage: scripts/testflight.sh <notes-file> [--build N] [--skip-upload] [--dry-run]
+# Usage: scripts/testflight.sh <notes-file> [--build N] [--skip-upload] [--cloud | --auto] [--dry-run]
 #   notes-file     the "What to Test" text (at most 4000 characters)
 #   --build N      build number (default yyMMddHHmm); must be higher than the last upload
 #   --skip-upload  continue with build N, already uploaded (needs --build)
+#   --cloud        archive the pushed branch head on Xcode Cloud instead of this Mac
+#   --auto         --cloud when this Mac is busy and Xcode Cloud can take it, else local
 #   --dry-run      check the setup with read-only calls; builds, uploads and changes nothing
 #
 # Settings come from the environment or scripts/local.env: ASC_KEY_ID, ASC_ISS, optional ASC_KEY,
-# TESTFLIGHT_APP_ID, TESTFLIGHT_GROUP_ID. See docs/development.md, TestFlight.
+# TESTFLIGHT_APP_ID, TESTFLIGHT_GROUP_ID, and for --cloud and --auto XCODE_CLOUD_WORKFLOW_ID and
+# TESTFLIGHT_INTERNAL_GROUP_ID. See docs/development.md, TestFlight and Xcode Cloud.
 set -euo pipefail
 source "${0:A:h}/lib/common.zsh"
 # scripts/local.env fills in what the environment leaves unset; the environment wins.
 typeset -A _env
-for v in ASC_KEY_ID ASC_ISS ASC_KEY TESTFLIGHT_APP_ID TESTFLIGHT_GROUP_ID; do [[ -n ${(P)v:-} ]] && _env[$v]=${(P)v}; done
+for v in ASC_KEY_ID ASC_ISS ASC_KEY TESTFLIGHT_APP_ID TESTFLIGHT_GROUP_ID TESTFLIGHT_INTERNAL_GROUP_ID XCODE_CLOUD_PRODUCT_ID XCODE_CLOUD_WORKFLOW_ID; do
+  [[ -n ${(P)v:-} ]] && _env[$v]=${(P)v}
+done
 [[ -f scripts/local.env ]] && source scripts/local.env
 for v in ${(k)_env}; do typeset -g $v=${_env[$v]}; done
 
-usage() { print -u2 "usage: scripts/testflight.sh <notes-file> [--build N] [--skip-upload] [--dry-run]"; exit 2; }
+usage() { print -u2 "usage: scripts/testflight.sh <notes-file> [--build N] [--skip-upload] [--cloud | --auto] [--dry-run]"; exit 2; }
 die() { print -u2 "testflight.sh: $*"; exit 1; }
 say() { print -r -- "$(date +%H:%M:%S) $*"; }
 
-NOTES_FILE="" BUILD="" SKIP_UPLOAD=0 DRY=0
+NOTES_FILE="" BUILD="" SKIP_UPLOAD=0 DRY=0 WHERE=local
 while (( $# )); do
   case $1 in
     --build) (( $# >= 2 )) || usage; BUILD=$2; shift 2 ;;
     --skip-upload) SKIP_UPLOAD=1; shift ;;
+    --cloud) [[ $WHERE == local ]] || usage; WHERE=cloud; shift ;;
+    --auto) [[ $WHERE == local ]] || usage; WHERE=auto; shift ;;
     --dry-run) DRY=1; shift ;;
     -*) usage ;;
     *) [[ -z $NOTES_FILE ]] || usage; NOTES_FILE=$1; shift ;;
@@ -35,6 +42,8 @@ while (( $# )); do
 done
 [[ -n $NOTES_FILE ]] || usage
 (( SKIP_UPLOAD )) && [[ -z $BUILD ]] && die "--skip-upload needs --build"
+(( SKIP_UPLOAD )) && [[ $WHERE != local ]] && die "--skip-upload builds nothing, so it takes no --cloud or --auto"
+[[ -n $BUILD && $WHERE != local ]] && die "--build is for local builds; Xcode Cloud numbers its own"
 BUILD=${BUILD:-$(date +%y%m%d%H%M)}
 [[ $BUILD =~ '^[0-9]+$' ]] || die "build number '$BUILD' must be digits"
 [[ -f $NOTES_FILE ]] || die "no notes file at $NOTES_FILE"
@@ -77,25 +86,107 @@ review_state() {
 
 APP=$(asc GET "/v1/apps/$APP_ID?fields%5Bapps%5D=name,bundleId" | json 'd.data.attributes.name+" ("+d.data.attributes.bundleId+")"') \
   || die "App Store Connect has no app $APP_ID for this key"
-GROUP=$(asc GET "/v1/betaGroups/$GROUP_ID?fields%5BbetaGroups%5D=name,isInternalGroup" \
-  | json 'd.data.attributes.name+(d.data.attributes.isInternalGroup?" internal":" external")') \
-  || die "App Store Connect has no beta group $GROUP_ID"
-INTERNAL=0; [[ $GROUP == *" internal" ]] && INTERNAL=1
-say "build $BUILD of $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short HEAD) for $APP, group ${GROUP% *}"
+# Sets GROUP_ID, GROUP ("<name> internal|external") and INTERNAL for the group id given.
+use_group() {
+  GROUP_ID=$1
+  GROUP=$(asc GET "/v1/betaGroups/$GROUP_ID?fields%5BbetaGroups%5D=name,isInternalGroup" \
+    | json 'd.data.attributes.name+(d.data.attributes.isInternalGroup?" internal":" external")') \
+    || die "App Store Connect has no beta group $GROUP_ID"
+  INTERNAL=0; [[ $GROUP == *" internal" ]] && INTERNAL=1
+  return 0
+}
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Why this Mac is too busy to archive, or nothing. Two xcodebuilds already compete for the CPU.
+# A 1-minute load above 1.5x the core count means every core already has more work queued than it
+# runs (one archive alone sits near 1x), so a local archive would take far longer and slow the rest.
+busy_reason() {
+  local cores load builds
+  cores=$(sysctl -n hw.ncpu); load=$(sysctl -n vm.loadavg | awk '{print $2}')
+  builds=$({ pgrep -x xcodebuild || true; } | wc -l | tr -d ' ')
+  if (( builds >= 2 )); then print -r -- "$builds xcodebuild processes running"
+  elif (( load > cores * 1.5 )); then print -r -- "1-minute load $load is over 1.5 x $cores cores"
+  fi
+}
+# Why Xcode Cloud can't build what this checkout would ship, or nothing. It builds the pushed head.
+cloud_blocker() {
+  [[ -n ${XCODE_CLOUD_WORKFLOW_ID:-} ]] || { print "Xcode Cloud is not set up (no XCODE_CLOUD_WORKFLOW_ID)"; return; }
+  [[ -n ${TESTFLIGHT_INTERNAL_GROUP_ID:-} ]] || { print "no TESTFLIGHT_INTERNAL_GROUP_ID for Xcode Cloud's internal-only builds"; return; }
+  [[ $BRANCH != HEAD ]] || { print "HEAD is detached"; return; }
+  [[ -z $(git status --porcelain) ]] || { print "uncommitted changes would not ship"; return; }
+  [[ $(git ls-remote origin "refs/heads/$BRANCH" | cut -f1) == $(git rev-parse HEAD) ]] \
+    || print "HEAD is not the pushed head of origin/$BRANCH"
+}
+CLOUD_FALLBACK=0
+if (( ! SKIP_UPLOAD )); then
+  if [[ $WHERE == auto ]]; then
+    WHY=$(busy_reason)
+    if [[ -z $WHY ]]; then
+      WHERE=local; say "this Mac is free: archiving here"
+    elif B=$(cloud_blocker); [[ -n $B ]]; then
+      WHERE=local; say "busy ($WHY), but $B: archiving here"
+    else
+      WHERE=cloud CLOUD_FALLBACK=1; say "busy ($WHY): archiving on Xcode Cloud"
+    fi
+  elif [[ $WHERE == cloud ]]; then
+    B=$(cloud_blocker); [[ -z $B ]] || die "--cloud: $B"
+  fi
+fi
+export TESTFLIGHT_APP_ID XCODE_CLOUD_PRODUCT_ID XCODE_CLOUD_WORKFLOW_ID
+# Xcode Cloud uploads internal-only builds, which only internal groups can test.
+if [[ $WHERE == cloud ]]; then
+  use_group $TESTFLIGHT_INTERNAL_GROUP_ID
+  if (( ! INTERNAL )); then
+    (( CLOUD_FALLBACK )) || die "TESTFLIGHT_INTERNAL_GROUP_ID is an external group; Xcode Cloud builds are internal-only"
+    WHERE=local; say "TESTFLIGHT_INTERNAL_GROUP_ID is not internal: archiving here"
+  fi
+fi
+[[ $WHERE == cloud ]] || use_group $TESTFLIGHT_GROUP_ID
+if [[ $WHERE == cloud ]]; then say "Xcode Cloud build of $BRANCH $(git rev-parse --short HEAD) for $APP, group ${GROUP% *}"
+else say "build $BUILD of $BRANCH $(git rev-parse --short HEAD) for $APP, group ${GROUP% *}"; fi
 
 if (( DRY )); then
   [[ -z $(git status --porcelain) ]] || say "note: uncommitted changes would ship"
-  (( SKIP_UPLOAD )) || [[ -z $(build_state) ]] || die "build $BUILD already exists; pick a higher number"
+  [[ $WHERE == cloud ]] || (( SKIP_UPLOAD )) || [[ -z $(build_state) ]] || die "build $BUILD already exists; pick a higher number"
+  if [[ $WHERE == cloud ]] && ! node scripts/xcode-cloud.mjs start "$BRANCH" --dry-run; then
+    (( CLOUD_FALLBACK )) || die "Xcode Cloud can't start"
+    say "Xcode Cloud can't start; would archive here"
+  fi
   say "dry run: setup is fine; nothing built or changed"
   exit 0
 fi
 
-if (( ! SKIP_UPLOAD )); then
+OUT=build/testflight
+if [[ $WHERE == cloud ]]; then
+  rm -rf $OUT; mkdir -p $OUT
+  if node scripts/xcode-cloud.mjs start "$BRANCH" > $OUT/cloud.log 2>&1; then
+    cat $OUT/cloud.log; RUN=$(tail -1 $OUT/cloud.log)
+  else
+    cat $OUT/cloud.log >&2
+    (( CLOUD_FALLBACK )) || die "Xcode Cloud did not start"
+    WHERE=local; use_group $TESTFLIGHT_GROUP_ID
+    say "Xcode Cloud did not start: build $BUILD here, group ${GROUP% *}"
+  fi
+fi
+if [[ $WHERE == cloud ]]; then
+  # Xcode Cloud archives and uploads; the steps below take it from there.
+  node scripts/xcode-cloud.mjs wait "$RUN" | tee $OUT/cloud-wait.log || die "no cloud build; see run $RUN"
+  BUILD=$(tail -1 $OUT/cloud-wait.log); BUILD=${BUILD#build }
+  BUILT=$(tail -2 $OUT/cloud-wait.log | head -1); BUILT=${BUILT#commit }
+  [[ $BUILD =~ '^[0-9]+$' ]] || die "run $RUN gave no build number"
+  # Ship only what the notes and the tf/ tag describe: the run must have built this HEAD. Until
+  # the build is added to the group below, no tester has it.
+  [[ $BUILT == $(git rev-parse HEAD) ]] \
+    || die "run $RUN built ${BUILT/unknown/an unreported commit}, not HEAD; build $BUILD went to no group"
+  say "Xcode Cloud uploaded build $BUILD"
+  git tag "tf/$BUILD" HEAD && git push -q origin "tf/$BUILD" || say "note: could not tag tf/$BUILD"
+  rm -rf $OUT
+elif (( ! SKIP_UPLOAD )); then
   [[ -z $(build_state) ]] || die "build $BUILD already exists; pick a higher number"
   TEAM=$(sed -n 's/^DEVELOPMENT_TEAM *= *//p' Config/Signing.local.xcconfig 2>/dev/null | head -1)
   [[ -n $TEAM ]] || die "no DEVELOPMENT_TEAM in Config/Signing.local.xcconfig"
   AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISS")
-  OUT=build/testflight; rm -rf $OUT; mkdir -p $OUT
+  rm -rf $OUT; mkdir -p $OUT
   cat > $OUT/ExportOptions.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -174,8 +265,9 @@ if (( ! INTERNAL )); then
   [[ $RS == APPROVED ]] || die "not approved in 2 hours; rerun with --skip-upload --build $BUILD"
 fi
 
-# An internal group set to "all builds" gets every valid build by itself.
-if (( INTERNAL )); then
+# An internal group set to "all builds" gets every valid build by itself, except Xcode Cloud
+# builds: Apple says those are always added by hand.
+if (( INTERNAL )) && [[ $WHERE != cloud ]]; then
   rm -rf build/testflight
   say "done: build $BUILD is available to ${GROUP% *}"
   exit 0

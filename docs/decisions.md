@@ -394,3 +394,22 @@ Each entry: what was chosen, and why. Newest last.
 - **Perf cost:** after the first frame only. Lookups for compiled rule lists take about 1 ms; the
   content-mode map and the tab restore are single reads off main. No work added before the
   search field is focused.
+
+## Xcode Cloud as the TestFlight fallback, free tier only (2026-11-26)
+
+- **Chosen:** `scripts/testflight.sh --cloud` / `--auto` archive on Xcode Cloud when this Mac is
+  busy with builds, tests and perf runs. Local archiving stays the default. Only the 25 compute
+  hours a month included in the developer membership are used, never a paid plan.
+- **Why Xcode Cloud:** it is the only hosted macOS builder that costs nothing on top of the
+  membership. It signs with the team's cloud-managed certificates, so it needs no secrets in the
+  repo.
+- **Xcode Cloud uploads, internal only.** The cloud build goes straight to TestFlight, so a busy
+  Mac does no signing, export or upload. Internal-only builds skip Beta App Review but can't reach
+  external groups; those still get local builds.
+- **Cost: build numbers.** Xcode Cloud stamps every build it uploads with its own counter
+  (1, 2, 3...), which sorts below our `yyMMddHHmm` local builds. App Store Connect accepts it for
+  iOS. Setting the next cloud build number above the local ones (App Store Connect only, no API)
+  keeps TestFlight in order.
+- **Manual start only, guarded.** The workflow has no triggers, so it never spends hours on its
+  own. `setup` disables every other workflow, and `start` refuses past 20 hours in the last 31
+  days. Without a subscription Apple can't bill: at 25 hours, builds stop until the next month.

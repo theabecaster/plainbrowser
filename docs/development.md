@@ -79,9 +79,9 @@ Set the fold state from the Device Hub (Closed / Partially Open / Open); there i
 
 ## TestFlight
 
-`scripts/testflight.sh <notes-file> [--build N] [--skip-upload] [--dry-run]` ships the current checkout:
+`scripts/testflight.sh <notes-file> [--build N] [--skip-upload] [--cloud | --auto] [--dry-run]` ships the current checkout:
 
-1. It archives a Release build on this Mac and uploads it with the App Store Connect API key.
+1. It archives a Release build on this Mac (or on Xcode Cloud, see below) and uploads it with the App Store Connect API key.
 2. It waits until App Store Connect marks the build `VALID` (up to 45 minutes).
 3. It sets "What to Test" from the notes file.
 4. For an external group, it submits the build to Beta App Review and waits for approval (up to 2 hours).
@@ -100,3 +100,33 @@ It reads `ASC_KEY_ID`, `ASC_ISS`, `ASC_KEY`, `TESTFLIGHT_APP_ID` and `TESTFLIGHT
 Testers outside the team only get builds that passed Beta App Review, and only one build is in review at a time. A newer upload replaces any build still waiting to be submitted, so write each build's notes to cover everything since the last build the external group received, not just since the last upload. Leave out internal work (refactors, tests, scripts, docs). Skip a section that would be empty.
 
 The API can't create the app record, so a person makes it once in App Store Connect. Every other step runs through the API.
+
+## Xcode Cloud
+
+Xcode Cloud builds for TestFlight when this Mac is busy. It uses only the 25 compute hours a month included in the Apple Developer Program. Never subscribe to an Xcode Cloud plan. Without a subscription Apple has nothing to bill: at 25 hours, Xcode Cloud stops running builds until the next month.
+
+- `scripts/testflight.sh <notes> --cloud` builds on Xcode Cloud. `--auto` does so only when this Mac is busy: two or more `xcodebuild` processes, or a 1-minute load above 1.5 × the core count. `--auto` builds locally when the Mac is free, when Xcode Cloud is not set up, when the checkout is not the pushed head of its branch, or when Xcode Cloud can't start (for example, the budget guard says no). Without either flag, nothing changes.
+- Xcode Cloud archives and uploads the build itself, for internal testing only. So a cloud build goes to `TESTFLIGHT_INTERNAL_GROUP_ID` (it must be an internal group), never to an external one. The script waits for the run and stops unless Apple reports that it built this `HEAD`. Then it tags `tf/<build>`, sets the notes, and adds the build to the group: Xcode Cloud builds never join a group by themselves, even one set to all builds.
+- Xcode Cloud builds the branch head on GitHub, so push first. `ci_scripts/ci_post_clone.sh` generates the project there: it installs XcodeGen, writes `DEVELOPMENT_TEAM = $CI_TEAM_ID`, sets `CURRENT_PROJECT_VERSION`, and copies PlainKit's package pins into the project, because Xcode Cloud does not resolve packages itself.
+- **Build numbers.** Xcode Cloud replaces `CFBundleVersion` with its own counter (1, 2, 3...) on every build it uploads, whatever the project says. Local builds use `yyMMddHHmm`, so cloud builds sort below them in TestFlight. App Store Connect accepts this for iOS (each version and build pair only has to be unique). To keep them in order, set Xcode Cloud > Settings > Build Number > Next Build Number in App Store Connect above the latest local build; the API can't set it.
+- The workflow `TestFlight` starts only by hand: no branch, pull request, tag or schedule trigger. It has one Archive action (any iOS device, scheme Plain, Release, internal-only TestFlight upload), no tests, and a clean build.
+
+`node scripts/xcode-cloud.mjs` (settings from the environment or `scripts/local.env`):
+
+| Command | What it does |
+|---|---|
+| `setup [--dry-run]` | Checks the workflow (`XCODE_CLOUD_WORKFLOW_ID`) against the settings above and repairs what differs, after disabling the product's other workflows. Changes nothing when all is right. Creates the workflow only if it is gone. |
+| `usage` | Compute hours used across all the team's Xcode Cloud products: this calendar month and the last 31 days. |
+| `start [branch] [--dry-run]` | Starts the workflow on the branch (default `dev`) and prints the run id. Exit 3: budget guard refused. Exit 4: not set up. |
+| `wait <run-id>` | Polls until the run ends, then prints the commit it built and its App Store Connect build number. Fails unless the run succeeded. |
+
+**Budget guard.** `start` refuses when the hours used in the last 31 days plus 0.25 h for the new run would pass 20 h, leaving 5 h of margin under the 25. The API has no usage endpoint, so the script adds up the time every action of every run spent inside the window. It counts 31 days back because Apple does not say on which day the month resets, and those 31 days contain any monthly cycle. `start` also refuses while another run of the workflow is still going.
+
+**One-time setup by the owner** (done 2026-11-26; repeat only if the Xcode Cloud product is deleted). The API can't create the product:
+
+1. Run `xcodegen generate` and open `Plain.xcodeproj` in Xcode, signed in with the team's Admin or Account Holder Apple Account.
+2. Choose Integrate > Create Workflow (or Product > Xcode Cloud > Create Workflow) and select the Plain app.
+3. Keep the default workflow and continue. Grant Xcode Cloud access to the GitHub repo `theabecaster/plainbrowser` only, and pick the existing Plain app record in App Store Connect.
+4. Stop there. Don't press Start Build, and push nothing until the next step: the default workflow builds on every change to the default branch.
+
+Then right away put the product and workflow ids in `scripts/local.env` and run `node scripts/xcode-cloud.mjs setup`. It disables any other workflow first, then makes this one manual-only. Check with `scripts/testflight.sh <notes> --cloud --dry-run`.

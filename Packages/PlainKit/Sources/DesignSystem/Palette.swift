@@ -14,6 +14,32 @@ public enum Palette {
     /// Curl Coral, used sparingly: the one thing that matters on screen (the progress bar's tip).
     public static let coral = UIColor(rgb: 0xFF6E5E)
 
+    /// The app mark's colors (Brand/identity.md), for the mark drawn in the app: the start screen
+    /// and a new tab's card.
+    public enum Mark {
+        /// The paper ring.
+        public static let paper = UIColor(rgb: 0xFFF6E6)
+        /// The dawn sky, top to horizon.
+        public static let sky: [UIColor] = [UIColor(rgb: 0x3A2FCF), UIColor(rgb: 0x3F86FF), UIColor(rgb: 0xFFC08E)]
+        /// The planet, rim to depth, and its thin atmosphere line.
+        public static let planet: [UIColor] = [UIColor(rgb: 0x1B2A8F), UIColor(rgb: 0x121552)]
+        public static let atmosphere = UIColor(rgb: 0x9CFFE8)
+        /// The rising sun, core to edge.
+        public static let sun: [UIColor] = [UIColor(rgb: 0xFFF8E8), UIColor(rgb: 0xFF5A4C)]
+        /// The ring's shadow on the page under it.
+        public static let shadow = UIColor(rgb: 0x0A2133)
+        /// The coral fold, crease to free edge.
+        public static let fold: [UIColor] = [UIColor(rgb: 0xFFB096), UIColor(rgb: 0xFF6E5E), UIColor(rgb: 0xEC4A57)]
+    }
+
+    /// The start screen's quiet dawn: the background warming toward Lagoon at the bottom, behind
+    /// the mark.
+    public static let startGlow = UIColor(
+        light: UIColor(rgb: 0x33DBC7, alpha: 0.16), dark: UIColor(rgb: 0x3A2FCF, alpha: 0.28)
+    )
+    /// What dims the page behind the tab gallery's blur, as the app switcher dims the Home Screen.
+    public static let galleryDim = UIColor(rgb: 0x0A2133, alpha: 0.42)
+
     // MARK: Surfaces
 
     /// The window background: Paper in light mode, Deep Lagoon in dark mode.

@@ -229,6 +229,7 @@ extension BrowserViewController {
             state.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             webContainer.addSubview(state)
         }
+        updateStartScreen()
         guard let tab = currentTab else { return state.show(nil) }
         if engineUI.crashedTabs.contains(tab.id) {
             state.show(.init(message: "This page stopped working.", button: "Reload") { [weak tab] in

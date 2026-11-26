@@ -14,5 +14,9 @@ extension Motion {
         let relative = distance != 0 ? velocity / distance : 0
         return UISpringTimingParameters(duration: 0.3, bounce: 0.15, initialVelocity: CGVector(dx: relative, dy: 0))
     }
+
+    /// A card swiped up and away. Started right after `tracking`, it keeps the finger's velocity;
+    /// no bounce, since it ends off screen.
+    public static let cardThrow = Animation.spring(duration: 0.3, bounce: 0)
 }
 #endif

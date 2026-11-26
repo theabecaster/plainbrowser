@@ -25,6 +25,8 @@ final class TabsUIState {
     var fullPreviews: Set<TabID> = []
     /// A launch or foreground archive pass is running.
     var isArchiving = false
+    /// What an empty tab shows: the mark above the search field (TabGalleryUI's `EmptyTabView`).
+    let start = EmptyTabView()
 }
 
 // MARK: - The tab gallery
@@ -39,11 +41,17 @@ extension BrowserViewController: GalleryHost {
     @discardableResult
     func presentGallery(source: StaticString, interactive: Bool = false) -> TabGalleryTransition? {
         guard !isShowingGallery, presentedViewController == nil else { return nil }
+        let tabs = galleryTabs()
+        tabs.setShowingPrivateTabs(currentTab?.isPrivate ?? false)
+        // No tabs at all: there is nothing to switch to, so the search field (like Arc, never an
+        // empty switcher; docs/ui-reference.md).
+        guard !tabs.tabs.isEmpty || tabs.isShowingPrivateTabs else {
+            if !isEditingAddress { beginAddressEditing() }
+            return nil
+        }
         Signposts.signposter.emitEvent(Signposts.galleryOpen, "\(source)")
         if isEditingAddress { endAddressEditing() }
         tabsUI.toast.hide(animated: false)
-        let tabs = galleryTabs()
-        tabs.setShowingPrivateTabs(currentTab?.isPrivate ?? false)
         let gallery = TabGalleryViewController(dataSource: tabs)
         gallery.onLastTabClosed = { [weak self] in self?.galleryLastTabClosed() }
         addChild(gallery)
@@ -255,6 +263,34 @@ extension BrowserViewController: GalleryHost {
         } else {
             beginAddressEditing()
         }
+    }
+
+    // MARK: The start screen
+
+    /// An empty tab (or no tab) shows the start screen instead of bare paper: the mark, which a
+    /// finger can spin, in the space above the search field, and a Search button while the
+    /// keyboard is down. The search sheet goes clear over it, so it shows with the keyboard up too.
+    func updateStartScreen() {
+        let start = tabsUI.start
+        // In the page's own container: it moves with a bar swipe and is in the page's snapshot
+        // when the page zooms into its card.
+        if start.superview !== webContainer {
+            start.frame = webContainer.bounds
+            start.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            start.buttonTitle = String(localized: "Search")
+            // The field and the favorites strip sit in this space above the keyboard or the bar.
+            start.bottomReserve = Metrics.favoriteTile + Metrics.rowHeight * 2
+            start.onAction = { [weak self] in self?.beginAddressEditing() }
+            webContainer.addSubview(start)
+        }
+        let showsStart = currentTab.map { $0.url == nil && !$0.isLoading } ?? true
+        start.isHidden = !showsStart
+        // Over a blank tab's web view, under the page-state message.
+        if showsStart {
+            webContainer.bringSubviewToFront(start)
+            webContainer.bringSubviewToFront(engineUI.pageState)
+        }
+        sheet.backgroundColor = showsStart ? .clear : Palette.background
     }
 
     /// The tabs changed outside the gallery (a title, a thumbnail, the archive): it shows them.

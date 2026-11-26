@@ -173,6 +173,12 @@ public enum Signposts {
     public static let galleryCopyLink: StaticString = "gallery.copyLink"
     public static let galleryShare: StaticString = "gallery.share"
     public static let galleryOtherPane: StaticString = "gallery.otherPane"
+    /// Event: a swipe on a gallery card that let go before closing it.
+    public static let galleryCardKept: StaticString = "gallery.cardKept"
+    /// Event: tap or swipe up on the gallery's empty space, back to the tab on screen.
+    public static let galleryBack: StaticString = "gallery.back"
+    /// Event: a finger spun the mark on the start screen.
+    public static let startMarkSpin: StaticString = "start.markSpin"
 
     /// Interval: putting a tab's page on screen (tab switch). Restoring a discarded tab starts here
     /// too; its page coming back is `tab.restore`.

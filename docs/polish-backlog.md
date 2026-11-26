@@ -136,8 +136,38 @@ Newest feature last.
   budget is set to it and the metric catches stalls on top. End the interval (and drop the snapshot)
   at the perceptual duration instead, then tighten the budget.
 - **Gallery selection ring weight.** The blue ring reads strong in the calm gallery; try a thinner
-  ring or the on-glass blue. (Design review, round 1.)
+  ring or the on-glass blue. (Design review, round 1.) Now 2 pt (app-switcher gallery, below).
 - **Inner screen and device checks.** No Duo inner screen captures (fold not settable from the
   CLI). Check on the device: the bar swipe at 120 Hz with a live neighbour, a swipe started on a
   page still loading, the swipe-up gallery with the system's vertical bar, private tint in dark
   mode.
+
+## Tab gallery as the app switcher, start screen (2026-11-26)
+
+- **Tune on the Duo.** The swipe-up numbers (card-sized at 40% of the height, commit at 30% or
+  600 pt/s), the cascade curve and the close thresholds come from the research and the simulator.
+  Feel them on the device; 120 Hz and hitches need the device perf gate (simulator p95 is 1.4–1.6 ms
+  of main-thread work per scroll frame with 100 tabs).
+- **Duo outer screen.** The status bar's camera bubble overlaps the top corner of the card to the
+  right of the focus. Safe area does not include it; `reservedRegions(kind: .occlusion)` could.
+- **Grid pages give no hint of the next page.** The inner screen's grid pages fill the width
+  exactly (columns even, the fold in the middle gap), so nothing peeks. Consider a page indicator
+  in the bar, or a narrow peek on both sides.
+- **Corner radius.** Cards keep `Radius.large` (10 pt, ui-reference). The app switcher's cards
+  follow the display corners (about 24 pt at card size); revisit with the reference rule.
+- **Spin the mark with the keyboard up.** The clear search sheet takes touches over the mark, so a
+  tap there closes search (as in Arc: tap the background, then spin). Route touches on the mark to
+  it if spinning with the keyboard up is wanted. (Code review, round 2.)
+- **Signposts.** Drag lift and cancel in a reorder, and VoiceOver page scrolls, have none. (Code
+  review, round 1.)
+- **A new tab's zoom.** Opening a new tab's card grows the shell's card picture (`cardPicture`:
+  the thumbnail or plain surface), then the start screen appears. Grow the mark instead.
+- **Unused motion values.** `Motion.throwClose` and `Motion.throwCloseTiming` no longer have a
+  user; drop them once no lane needs them.
+- **XCUITest after a long press** still waits for idle up to a minute (M2b item above).
+- **A new tab's card after an appearance change.** Its paper resolves from the window scene's
+  appearance when shown; switching the system appearance while the always-dark gallery is open
+  leaves it stale until the card is configured again. (Code review, round 3.)
+- **Dark band at the bottom of page previews.** The shell's thumbnails include the area under the
+  resting bar, which shows as a solid dark footer on the cards. Crop it in `ThumbnailService`.
+  (Design review, round 3.)

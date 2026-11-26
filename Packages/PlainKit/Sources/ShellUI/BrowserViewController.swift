@@ -45,7 +45,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let pageEdgeEffects = [UIScrollEdgeElementContainerInteraction(), UIScrollEdgeElementContainerInteraction()]
     let pill = AddressPill()
     let buttonBar = ButtonBar()
-    private let sheet = SearchSheet()
+    let sheet = SearchSheet()
     private let pullIndicator = PullIndicator()
     var barItems: [PageButton: UIBarButtonItem] = [:]
 
@@ -116,6 +116,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         super.viewDidLoad()
         view.backgroundColor = Palette.background
         view.tintColor = Palette.accent
+        defer { updateStartScreen() }
 
         for subview in [pageClip, pullIndicator, sheet, chromeGlass, tabsUI.toast] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false

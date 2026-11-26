@@ -64,13 +64,13 @@ final class TabsTests: XCTestCase {
 
     private func openGallery(_ app: XCUIApplication) -> XCUIElement {
         app.buttons["tabs"].tap()
-        let gallery = app.collectionViews["tabGallery"]
+        let gallery = app.scrollViews["tabGallery"]
         XCTAssertTrue(gallery.waitForExistence(timeout: 3))
         return gallery
     }
 
     private func card(_ gallery: XCUIElement, _ title: String) -> XCUIElement {
-        gallery.cells.matching(identifier: "tabCard").matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        gallery.descendants(matching: .any).matching(identifier: "tabCard").matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
     }
 
     /// Waits until the gallery says it holds `count` tabs (its accessibility value), cards off
@@ -88,12 +88,12 @@ final class TabsTests: XCTestCase {
         let gallery = openGallery(app)
         XCTAssertTrue(waitForTabCount(gallery, 3), "the gallery holds \(String(describing: gallery.value)), not 3 tabs")
 
-        // Flick Page A's card sideways (scrolled to the top: on a small screen the gallery opens
-        // on the selected, last card): it closes, and the toast offers it back.
-        gallery.swipeDown(velocity: .fast)
+        // Swipe Page A's card up (scrolled back to the first card: the gallery opens on the
+        // selected, last one): it closes, and the toast offers it back.
+        gallery.swipeRight(velocity: .fast)
         let first = card(gallery, "Plain Test A")
         XCTAssertTrue(first.waitForExistence(timeout: 2))
-        first.swipeLeft(velocity: .fast)
+        first.swipeUp(velocity: .fast)
         XCTAssertTrue(waitForTabCount(gallery, 2))
         let reopen = app.buttons["reopenTab"]
         XCTAssertTrue(reopen.waitForExistence(timeout: 2))
@@ -145,7 +145,7 @@ final class TabsTests: XCTestCase {
         let gallery = openGallery(app)
         XCTAssertTrue(waitForTabCount(gallery, 3), "\(String(describing: gallery.value)) came back, not 3 tabs")
         // A tab that was never on screen this launch opens with its page.
-        gallery.swipeDown(velocity: .fast)
+        gallery.swipeRight(velocity: .fast)
         let first = card(gallery, "Plain Test A")
         XCTAssertTrue(first.waitForExistence(timeout: 2))
         first.tap()

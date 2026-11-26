@@ -473,3 +473,29 @@ Each entry: what was chosen, and why. Newest last.
   view; a tab switch adds one WebKit snapshot of the page leaving (2x, kept only for the two
   neighbours, about 5 MB each decoded). The gallery is built when opened and released when it
   closes. Engine-tab watches are one Observation per tab with an engine tab.
+## Tab gallery: the app-switcher cascade on a plain scroll view (2026-11-26)
+
+- **Chosen:** the gallery works like Arc Search's switcher, which copies the iPhone app switcher:
+  one row of page-shaped cards, later tabs on top, the left ones bunched and slightly smaller,
+  swipe a card up to close, tap to zoom in. Numbers and sources: `docs/research/arc-tab-switcher.md`.
+- **Built on a `UIScrollView`, not a `UICollectionViewLayout`.** Every card's position depends on
+  the scroll offset, so a collection layout would have to invalidate on every bounds change and
+  re-apply attributes to every visible cell each frame. Here the scroll view only supplies the
+  physics (deceleration, rubber band, the projected stop rounded to a card), and the gallery
+  places its few visible cards itself from `scrollViewDidScroll`: `center`, `transform`, z order,
+  a title's alpha and a mask width, no layout pass. Cards are pooled views. Main-thread work per
+  120 Hz frame while scrolling 100 tabs: p95 1.6 ms on the simulator.
+- **What it costs:** the gallery does its own reuse, prefetch, hit testing (the top card takes the
+  touch where cards overlap), VoiceOver order and three-finger scroll, and drag-to-reorder with a
+  drop interaction instead of the collection view's. Changes animate with `CardMotion` (one spring
+  per moving value, stepped on one update link), so a scroll or a second close joins a running
+  reflow without a jump; a diffable data source would animate each change on its own.
+- **Regular width keeps a grid, now paged sideways.** Arc has no big-screen layout; the iPad app
+  switcher is a sideways grid. Four columns by two rows in landscape (two by two in portrait), one
+  page per flick, columns even so the middle gap sits on the fold. The same swipe up closes.
+- **The open zoom scales the cards with the page.** At the page end the cards are scaled about the
+  tapped card until it covers the page, so its neighbors slide past the screen edges as it grows,
+  the way the app switcher reads as a zoomed-out view of the apps.
+- **Close by swiping up, not sideways.** Sideways now scrolls. Close also stays in the card menu
+  ("Close Tab — or swipe the card up") and as a VoiceOver action; the card has no X button, as in
+  Arc and the app switcher.

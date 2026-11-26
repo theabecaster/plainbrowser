@@ -82,7 +82,7 @@ final class TabGalleryViewTests: XCTestCase {
         gallery.onLastTabClosed = { emptied = true }
         let first = data.tabs[0].id
         let second = data.tabs[1].id
-        gallery.closeTab(first, velocity: -1500)
+        gallery.closeTab(first)
         XCTAssertFalse(data.tabs.contains { $0.id == first })
         XCTAssertEqual(gallery.order.count, 2)
         // The next card starts where it was and springs into the gap.
@@ -219,7 +219,7 @@ final class TabGalleryViewTests: XCTestCase {
         // Scrolling back while closed cards' neighbors spring into their gaps.
         var reflow: [Duration] = []
         for round in 0..<40 {
-            if round % 8 == 0, let id = gallery.cards.keys.first { gallery.closeTab(id, velocity: -1200) }
+            if round % 8 == 0, let id = gallery.cards.keys.first { gallery.closeTab(id) }
             let start = clock.now
             offset = max(0, offset - step)
             scroll.contentOffset.x = offset

@@ -124,7 +124,11 @@ public final class TabGalleryViewController: UIViewController {
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let bounds = view.bounds
-        if scrollView.frame != bounds { scrollView.frame = bounds }
+        // Size and center, not the frame: the open and close transitions zoom the scroll view
+        // with a transform, and a layout pass mid-zoom must not undo it.
+        if scrollView.bounds.size != bounds.size { scrollView.bounds.size = bounds.size }
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        if scrollView.center != center { scrollView.center = center }
         let safe = view.safeAreaInsets
 
         // Floating controls center on the safe area: on the Duo's outer screen the system's
@@ -343,7 +347,7 @@ public final class TabGalleryViewController: UIViewController {
             cards[id] = nil
             motion.forget(id)
             if moves {
-                card.throwAway(velocity: 0) { [weak self, weak card] in
+                card.throwAway { [weak self, weak card] in
                     guard let self, let card else { return }
                     self.retire(card)
                 }
@@ -410,7 +414,7 @@ public final class TabGalleryViewController: UIViewController {
         card.configure(item: item, isSelected: id == selectedID, hidesThumbnail: id == hiddenThumbnailID)
         card.onOpen = { [weak self] in self?.open(id) }
         card.onClose = { [weak self] in self?.closeTab(id) }
-        card.onSwipeAway = { [weak self] velocity in self?.closeTab(id, velocity: velocity) }
+        card.onSwipeAway = { [weak self] in self?.closeTab(id) }
 
         let thumbKey = thumbnailKey(for: item)
         if card.thumbnailKey != thumbKey {
@@ -487,17 +491,16 @@ public final class TabGalleryViewController: UIViewController {
         dataSource.newTab()
     }
 
-    /// Closes a tab: its card rises away (with the swipe's velocity when swiped), the cards after
-    /// it slide into the gap, and the Reopen toast shows.
-    /// - Parameter velocity: the swipe's release velocity in pt/s; nil for a button, menu or VoiceOver.
-    func closeTab(_ id: UUID, velocity: CGFloat? = nil) {
+    /// Closes a tab: its card rises away (keeping the swipe's velocity when swiped), the cards
+    /// after it slide into the gap, and the Reopen toast shows.
+    func closeTab(_ id: UUID) {
         let state = Signposts.signposter.beginInterval(Signposts.galleryCardClose)
         Haptic.close.play()
         if let card = cards[id] {
             // The card leaves on its own; the gallery no longer places it.
             cards[id] = nil
             motion.forget(id)
-            card.throwAway(velocity: velocity ?? 0) { [weak self, weak card] in
+            card.throwAway { [weak self, weak card] in
                 guard let self, let card else { return }
                 retire(card)
             }

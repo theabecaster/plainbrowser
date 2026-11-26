@@ -1,0 +1,124 @@
+# Arc Search's tab switcher, and the spec Plain builds from it (2026-11-26)
+
+The owner asked for the tab gallery to work like Arc Search's, which is modeled on the iPhone app
+switcher. This note records what is known about Arc's switcher, what was measured, the iOS
+physics behind it, and the numbers Plain uses. Plain reproduces the interaction model and the feel,
+not Arc's assets, colors or exact visuals: cards, bar and background use Plain's own look
+(`Brand/identity.md`, `DesignSystem`, Liquid Glass only on the floating bar).
+
+Tags: **[C]** confirmed by a source, **[M]** measured from a screenshot, **[I]** inferred.
+
+## 1. What Arc Search does
+
+**Layout**
+- Tabs sit in one horizontal row, oldest on the left and newest on the right. MacStories calls it
+  "modeled after the typical multitasking UI" and says it "looks like an iPhone app switcher". It
+  shows fewer tabs at once than Safari's grid, and its animations are "fluid and snappy", faster
+  than Safari's. **[C]** [MacStories]
+- The Android version shows "each shrunken tab window … one at a time" and scrolls sideways.
+  **[C]** [Android Authority]
+- Measured from the App Store screenshot "No more 100+ tab chaos" (phone screen 808 px wide):
+  - A card is about **0.66 of the screen**, in the screen's own proportions, centered. **[M]**
+  - Later tabs lie **on top**: the card to the right starts **0.78 card widths** right of the
+    centered card's left edge, so it covers the centered card's right 22%. **[M]**
+  - The first card to the left peeks **0.21 card width**, the second only **~0.045**, pinned at
+    the screen edge. **[M]**
+  - Left cards shrink to about **0.95** (scaled about their center); right cards keep full size.
+    **[M]**
+  - About four cards show at once. **[M]**
+  - Each card has a small rounded-square site icon and the title **above** it, left-aligned. A
+    title shows only on the card with room for it; covered cards show just the icon. **[M]**
+  - A soft shadow separates overlapping cards. **[M]**
+  - The background is Arc's theme gradient, not a blur of the page. **[M]**
+- Controls in the switcher: an Archive button that opens a searchable list grouped by day, a
+  Settings gear, a new-tab button. **[C]** [TidBITS], [Arc hidden features]
+
+**Gestures**
+- Open the switcher by tapping the tab button at the bottom, or by swiping up on it. **[C]**
+  [TidBITS], [Arc blog]
+- Swipe a card up to close (MacStories) or archive (TidBITS) it. **[C]**
+- Tap a card to open it. **[C]** The zoom itself, scroll physics, haptics and how neighbors close a
+  gap are not described anywhere. Plain takes those from the iOS app switcher.
+
+## 2. The iOS physics it imitates
+
+From WWDC18 "Designing Fluid Interfaces" (session 803) and the reference code that implements it
+(nathangitter/fluid-interfaces). **[C]**
+- Start with no bounce (damping 1.0). Add a little bounce only when the gesture carries momentum
+  (Music: 1.0 to open Now Playing, 0.8 to swipe it away).
+- Lock a gesture's axis after about 10 pt of movement (hysteresis).
+- Project where a flick ends with the scroll view's deceleration and decide from that:
+  `projection = (v / 1000) · d / (1 − d)`, with d = 0.998 (`.normal`) or 0.99 (`.fast`).
+- Spring from response and damping ratio: stiffness `(2π / response)²`, damping `4πζ / response`.
+- Rubber band: `(1 − 1 / (x · c / d + 1)) · d`, c = 0.55 (UIScrollView, reverse-engineered).
+- Every animation must be redirectable mid-flight, starting from what is on screen.
+
+Open-source recreations of the app switcher (StackSwipe, crafterm/swiftui-app-switcher) use the
+same shape: a card about 66% of the screen, left cards stacking geometrically (each step about
+0.28 of the one before), right cards spreading faster than linear, left scale down to 0.90–0.94.
+They agree with the Arc measurements. Apple has not published its own numbers. **[C]**
+
+## 3. Plain's spec
+
+**Compact width (phones, the Duo's outer screen): the cascade**
+- Card: the page's shape, `min(0.66 × safe width, height left between the status bar and the
+  floating bar)`. On iPhone 17 that is 265 × 576 pt. Title row above it: 20 pt icon, title in
+  Subheadline semibold, 8 pt gap. Corner radius `Radius.large` (10 pt, ui-reference).
+- Position of a card at `r = index − scroll position` (in cards), in card widths from the focus:
+  - left (`r < 0`): `−0.294 · (1 − e^(1.252 r))` → −0.21 at r = −1, −0.27 at r = −2, limit −0.29;
+  - right (`r ≥ 0`): `0.368 r + 0.412 r²` → 0.78 at r = 1, off screen by r = 2.
+  - Both sides have slope 0.368 at r = 0, so a card never jerks as it passes the middle. Cards to
+    the right move faster than the finger, cards to the left slower: the app switcher's parallax.
+- Scale: 1 at and right of the focus; left `1 − 0.05 · depth / depth(−1)` → 0.95, then 0.93.
+- Z order: later tabs on top. Touches go to the card drawn on top.
+- Title shows when 55–70% of the card is uncovered (fades in between), masked to the uncovered
+  width; the icon fades out when its strip is narrower than the icon.
+- Scroll: one card per 0.78 card widths (207 pt on iPhone 17), so the focused card follows the
+  finger on average. Free scroll with `UIScrollView`'s `.normal` deceleration (0.998) and its
+  rubber band; on release the system's projected stop is rounded to the nearest card, and a flick
+  faster than 0.3 pt/ms always moves at least one card. The selected tab rests in the focus when
+  the gallery opens.
+
+**Regular width (the Duo's inner screen): pages of an even grid**
+- Arc Search has no large-screen layout. The cascade shows four cards on 951 pt; the iPad app
+  switcher, Apple's answer for big screens, is a grid that scrolls sideways. Plain uses that: 4
+  columns × 2 rows in landscape (217 pt cards), 2 × 2 in portrait, one page per flick. Columns
+  stay even and centered, so the middle gap sits on the fold at rest. Same swipe up to close.
+
+**Close: swipe a card up**
+- The axis locks on the first movement: mostly vertical moves the card, mostly sideways scrolls.
+- Up tracks 1:1; down rubber-bands (c = 0.55 over the card's height).
+- Closes when the projection (d = 0.99) passes **40% of the card's height**, or the flick is
+  faster than **800 pt/s** up; a release moving down faster than 300 pt/s keeps the card.
+- Otherwise it springs back: `.spring(duration: 0.32, bounce: 0.12)` (momentum earns the bounce).
+- A closing card flies up off the screen with `.spring(duration: 0.3, bounce: 0)`, continuing
+  the finger's tracking spring, so it keeps the release velocity with no hand-off.
+- The cards after it slide into the gap at once: `Spring(duration: 0.35, bounce: 0.1)` (damping
+  0.9), frame by frame, so a scroll or a second close joins in without a jump. Closing the last
+  card slides the stack right instead. Soft impact haptic on commit; the Reopen Tab toast shows.
+
+**Open: tap a card**
+- The page grows from the card with `.spring(duration: 0.42, bounce: 0)` (plan motion table), and
+  the whole cascade zooms with it about the card, so the neighbors slide out past the screen edges
+  exactly as the app switcher does. The reverse plays when the gallery opens; either way can be
+  reversed mid-flight. Reduce Motion: 0.2 s crossfade.
+
+**Other**
+- Long-press a card: its menu (Open in Other Pane, Copy Link, Share, Close Tab "Or swipe the card
+  up"). Move the finger and the card lifts to be dragged to a new place; the cards make room with
+  the same springs, and the gallery scrolls at the edges (up to 900 pt/s).
+- Floating glass bar: More (Reopen Closed Tab, Close All Tabs), New Tab, Done.
+- Haptics: soft impact when a close commits, selection tick when a dragged card takes a new place.
+
+## Sources
+
+- [MacStories] https://www.macstories.net/reviews/arc-search-for-iphone/
+- [Android Authority] https://www.androidauthority.com/arc-search-browser-3488152/
+- [TidBITS] https://tidbits.com/2024/02/15/arc-gains-instant-links-tab-grouping-and-arc-search-iphone-app/
+- [Arc hidden features] https://arc.net/blog/arc-search-hidden-features
+- [App Store] https://apps.apple.com/us/app/arc-search-modern-ai-browser/id6472513080 (screenshot "No more 100+ tab chaos")
+- [WWDC18 803] https://developer.apple.com/videos/play/wwdc2018/803/
+- [fluid-interfaces] https://github.com/nathangitter/fluid-interfaces
+- [Rubber band] https://gist.github.com/originell/6961057, https://www.holko.pl/2014/07/06/inertia-bouncing-rubber-banding-uikit-dynamics/
+- [StackSwipe] https://github.com/SoxiaLiSA/StackSwipe
+- [swiftui-app-switcher] https://github.com/crafterm/swiftui-app-switcher

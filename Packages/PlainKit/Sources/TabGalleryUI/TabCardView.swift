@@ -19,8 +19,8 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
 
     /// The user tapped the card.
     var onOpen: (() -> Void)?
-    /// The card was swiped up far or fast enough; `velocity` is the release's, in pt/s (negative up).
-    var onSwipeAway: ((_ velocity: CGFloat) -> Void)?
+    /// The card was swiped up far or fast enough.
+    var onSwipeAway: (() -> Void)?
     /// Close from VoiceOver.
     var onClose: (() -> Void)?
 
@@ -184,6 +184,12 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
             titleLabel.alpha = alpha
             privateIcon.alpha = alpha
         }
+        // Deep in the stack the uncovered strip is narrower than the icon: icons there would pile
+        // on top of each other, so they fade out.
+        let iconAlpha = ((width - MetricsValues.favicon - Self.iconGap) / Self.iconGap).clamped(to: 0...1)
+        if abs(iconAlpha - faviconView.alpha) > 0.01 || (iconAlpha != faviconView.alpha && (iconAlpha == 0 || iconAlpha == 1)) {
+            faviconView.alpha = iconAlpha
+        }
         let maskWidth = max(Self.iconGap + MetricsValues.favicon, width - Self.iconGap)
         if abs(maskWidth - visibleWidth) > 0.5 {
             visibleWidth = maskWidth
@@ -313,7 +319,7 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
             let y = CardSwipe.offset(translation: swipeStart + gesture.translation(in: self).y, cardHeight: height)
             let velocity = gesture.state == .ended ? gesture.velocity(in: self).y : 0
             if gesture.state == .ended, CardSwipe.shouldClose(translation: y, velocity: velocity, cardHeight: height) {
-                onSwipeAway?(velocity)
+                onSwipeAway?()
             } else {
                 Motion.animate(Motion.cardReturn) {
                     self.body.transform = .identity
@@ -324,28 +330,22 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         }
     }
 
-    /// Sends the card up and off the screen with the release velocity, then calls `completion`.
-    /// From a button or menu the velocity is 0 and it simply rises away.
-    func throwAway(velocity: CGFloat, completion: @escaping () -> Void) {
+    /// Sends the card up and off the screen, then calls `completion`. After a swipe the spring
+    /// carries on from the finger's tracking animation, so the card keeps the release velocity
+    /// with no hand-off (WWDC24, "Enhance your UI animations and transitions"). From a button or
+    /// menu the card is at rest and simply rises away.
+    func throwAway(completion: @escaping () -> Void) {
         isLeaving = true
         isUserInteractionEnabled = false
-        let presented = body.layer.presentation()?.affineTransform().ty ?? body.transform.ty
-        body.layer.removeAllAnimations()
-        body.transform = CGAffineTransform(translationX: 0, y: presented)
         if Motion.prefersCrossfade {
             UIView.animate(withDuration: Motion.crossfadeDuration, animations: { self.alpha = 0 }, completion: { _ in completion() })
             return
         }
         // Far enough that the card's bottom edge clears the top of the screen.
         let bottomOnScreen = superview.map { convert(CGPoint(x: 0, y: bounds.maxY), to: $0).y - $0.bounds.minY } ?? frame.maxY
-        let travel = -(bottomOnScreen + presented + Spacing.xl)
-        let timing = Motion.cardThrowTiming(distance: travel, velocity: min(velocity, 0))
-        let animator = UIViewPropertyAnimator(duration: 0, timingParameters: timing)
-        animator.addAnimations {
-            self.body.transform = CGAffineTransform(translationX: 0, y: presented + travel)
-        }
-        animator.addCompletion { _ in completion() }
-        animator.startAnimation()
+        UIView.animate(Motion.cardThrow, changes: {
+            self.body.transform = CGAffineTransform(translationX: 0, y: -(bottomOnScreen + Spacing.xl))
+        }, completion: completion)
     }
 
     func gestureRecognizer(

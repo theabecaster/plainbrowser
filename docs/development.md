@@ -127,6 +127,6 @@ Xcode Cloud archives TestFlight builds when this Mac is busy. It uses only the 2
 1. Run `xcodegen generate` and open `Plain.xcodeproj` in Xcode, signed in with the team's Admin or Account Holder Apple Account.
 2. Choose Integrate > Create Workflow (or Product > Xcode Cloud > Create Workflow) and select the Plain app.
 3. Keep the default workflow and continue. Grant Xcode Cloud access to the GitHub repo `theabecaster/plainbrowser` only, and pick the existing Plain app record in App Store Connect.
-4. Stop there. If Xcode starts a first build, cancel it in the Report navigator. `setup` adds Plain's manual workflow and disables the default one.
+4. Stop there. Don't press Start Build, and push nothing until the next step: the default workflow builds on every change to the default branch. `setup` disables it first, then adds Plain's manual workflow.
 
-Then run `node scripts/xcode-cloud.mjs setup`, add the printed `XCODE_CLOUD_WORKFLOW_ID` to `scripts/local.env`, and check with `scripts/testflight.sh <notes> --cloud --dry-run`.
+Then right away run `node scripts/xcode-cloud.mjs setup`, add the printed `XCODE_CLOUD_WORKFLOW_ID` to `scripts/local.env`, and check with `scripts/testflight.sh <notes> --cloud --dry-run`.

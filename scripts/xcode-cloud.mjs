@@ -9,7 +9,8 @@
 //   start [branch] [--dry-run]
 //                          start the workflow on the branch's pushed head (default dev); prints
 //                          the run id on the last line. Exit 3: budget guard said no. Exit 4: not set up.
-//   wait <run-id>          poll until the run finishes; exit 0 only if it succeeded
+//   wait <run-id>          poll until the run finishes; exit 0 only if it succeeded; the last
+//                          line is `commit <sha>` (or `commit unknown`)
 //   fetch <run-id> <dir>   download the run's archive into dir; prints the .xcarchive path
 //
 // Settings come from the environment or scripts/local.env (the environment wins): ASC_KEY_ID,
@@ -121,7 +122,7 @@ async function recentRuns(now) {
   const out = [];
   for (let i = 0; i < runs.length; i += 5) {
     out.push(...await Promise.all(runs.slice(i, i + 5).map(async run => {
-      const acts = await api('GET', `/v1/ciBuildRuns/${run.id}/actions?limit=50&fields${q('[ciBuildActions]')}=name,startedDate,finishedDate`);
+      const acts = await all(`/v1/ciBuildRuns/${run.id}/actions?limit=200&fields${q('[ciBuildActions]')}=name,startedDate,finishedDate`);
       return { run, actions: acts.data };
     })));
   }
@@ -161,6 +162,16 @@ async function setup() {
   const repos = (await api('GET', `/v1/ciProducts/${prod.id}/primaryRepositories?limit=10&fields${q('[scmRepositories]')}=ownerName,repositoryName`)).data;
   const repo = repos.find(r => r.attributes.repositoryName === 'plainbrowser') || repos[0];
   if (!repo) die('the Xcode Cloud product has no repository; grant Xcode Cloud access to the GitHub repo', 4);
+
+  // First, before anything can fail: any other workflow (Xcode's default one starts on every
+  // push) would spend hours on its own.
+  const flows = (await all(`/v1/ciProducts/${prod.id}/workflows?limit=200&fields${q('[ciWorkflows]')}=name,isEnabled`)).data;
+  for (const f of flows) {
+    if (f.attributes.name === WORKFLOW_NAME || !f.attributes.isEnabled) continue;
+    await api('PATCH', `/v1/ciWorkflows/${f.id}`, { data: { type: 'ciWorkflows', id: f.id, attributes: { isEnabled: false } } });
+    say(`disabled workflow "${f.attributes.name}"`);
+  }
+
   // "Latest Release" follows each new Xcode release, so the workflow never needs an edit for it.
   const xcode = (await api('GET', `/v1/ciXcodeVersions?limit=50&fields${q('[ciXcodeVersions]')}=name,version`)).data.find(x => x.attributes.name === 'Latest Release');
   const macos = (await api('GET', `/v1/ciMacOsVersions?limit=50&fields${q('[ciMacOsVersions]')}=name,version`)).data.find(x => x.attributes.name === 'Latest Release');
@@ -170,7 +181,6 @@ async function setup() {
     macOsVersion: { data: { type: 'ciMacOsVersions', id: macos.id } },
   };
 
-  const flows = (await all(`/v1/ciProducts/${prod.id}/workflows?limit=200&fields${q('[ciWorkflows]')}=name,isEnabled`)).data;
   let flow = flows.find(f => f.attributes.name === WORKFLOW_NAME);
   if (flow) {
     const cleared = { branchStartCondition: null, tagStartCondition: null, pullRequestStartCondition: null, scheduledStartCondition: null };
@@ -182,12 +192,6 @@ async function setup() {
       relationships: { ...rel, product: { data: { type: 'ciProducts', id: prod.id } }, repository: { data: { type: 'scmRepositories', id: repo.id } } },
     } })).data;
     say(`created workflow "${WORKFLOW_NAME}"`);
-  }
-  // Any other workflow (Xcode's default one starts on every push) would spend hours on its own.
-  for (const f of flows) {
-    if (f.id === flow.id || !f.attributes.isEnabled) continue;
-    await api('PATCH', `/v1/ciWorkflows/${f.id}`, { data: { type: 'ciWorkflows', id: f.id, attributes: { isEnabled: false } } });
-    say(`disabled workflow "${f.attributes.name}"`);
   }
   say(`Xcode ${xcode.attributes.version}, macOS ${macos.attributes.version}, repo ${repo.attributes.ownerName}/${repo.attributes.repositoryName}`);
   say(`add to scripts/local.env:\nXCODE_CLOUD_WORKFLOW_ID=${flow.id}`);
@@ -236,11 +240,13 @@ async function wait(id) {
   const deadline = Date.now() + WAIT_MINUTES * 60_000;
   let last = '';
   for (;;) {
-    const a = (await api('GET', `/v1/ciBuildRuns/${id}?fields${q('[ciBuildRuns]')}=number,executionProgress,completionStatus`)).data.attributes;
+    const a = (await api('GET', `/v1/ciBuildRuns/${id}?fields${q('[ciBuildRuns]')}=number,executionProgress,completionStatus,sourceCommit`)).data.attributes;
     const state = a.executionProgress === 'COMPLETE' ? a.completionStatus : a.executionProgress;
     if (state !== last) { say(`${new Date().toTimeString().slice(0, 8)} run #${a.number}: ${state}`); last = state; }
     if (a.executionProgress === 'COMPLETE') {
       if (a.completionStatus !== 'SUCCEEDED') die(`run #${a.number} ended ${a.completionStatus}; see Xcode > Report navigator > Cloud`);
+      // Last line: the commit the run built, when Apple reports it, so callers can check it.
+      say(`commit ${a.sourceCommit?.commitSha || 'unknown'}`);
       return;
     }
     if (Date.now() > deadline) die(`run #${a.number} still ${state} after ${WAIT_MINUTES} minutes; rerun wait ${id}`);

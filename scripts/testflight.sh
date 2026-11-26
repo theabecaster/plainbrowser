@@ -165,7 +165,15 @@ EOF
     fi
   fi
   if [[ $WHERE == cloud ]]; then
-    node scripts/xcode-cloud.mjs wait "$RUN" || die "no cloud archive; see run $RUN"
+    node scripts/xcode-cloud.mjs wait "$RUN" | tee $OUT/cloud-wait.log || die "no cloud archive; see run $RUN"
+    # Ship only what the notes and the tf/ tag describe: the run must have built this HEAD.
+    BUILT=$(tail -1 $OUT/cloud-wait.log); BUILT=${BUILT#commit }
+    if [[ $BUILT == unknown ]]; then
+      [[ $(git ls-remote origin "refs/heads/$BRANCH" | cut -f1) == $(git rev-parse HEAD) ]] \
+        || die "origin/$BRANCH moved during run $RUN, so it may not have built HEAD; rerun"
+    else
+      [[ $BUILT == $(git rev-parse HEAD) ]] || die "run $RUN built $BUILT, not HEAD; rerun"
+    fi
     ARCHIVE=$(node scripts/xcode-cloud.mjs fetch "$RUN" $OUT/cloud | tail -1) || die "could not download the archive of run $RUN"
     # Xcode Cloud builds with its own number; the upload gets this script's, so the order holds.
     # The export below re-signs the app, so changing its Info.plist here is safe.

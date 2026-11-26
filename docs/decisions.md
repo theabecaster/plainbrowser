@@ -104,3 +104,27 @@ Each entry: what was chosen, and why. Newest last.
   persist through the small `SiteAllowListStore` protocol, which a Storage adapter implements.
 - **Perf cost:** 16 MB of JSON in the app bundle (about 8x smaller compressed in the IPA). The JSON is
   read only to compile, never on a warm launch.
+
+## Shell chrome: bottom pill, vertical bar, no-relayout collapse (2026-11-26)
+
+- **Chosen:** the root is a `UINavigationController` with its navigation bar hidden. The page
+  buttons are its toolbar items with `axisBehavior = .verticalPreferred`, and the toolbar shows
+  only where `verticalBarEdge` is not `.unspecified`.
+- **Why:** only bars a navigation or tab bar controller owns move into the Duo's vertical bar; a
+  custom view or standalone `UIToolbar` never does (Apple's vertical bar guidance). Checked on the
+  iOS 27.2 Duo simulator: the four items land in the trailing column, with the keyboard up too.
+- **Elsewhere a custom glass bar, not the system toolbar:** hiding a system toolbar changes the
+  page's safe area, which relayouts the page on every collapse. The custom bar moves by transform
+  and alpha only, and the page's `obscuredContentInsets` stays at the collapsed size
+  (docs/plan.md, engine rule 4).
+- **Address bar data behind a protocol (`AddressBarData`):** the shell never touches GRDB or the
+  network. `LiveAddressBarData` joins Storage, settings and `SuggestionClient`; tests and later
+  wiring (tabs, private mode) can swap it.
+- **Desktop Site (stopgap):** a desktop Safari user agent on the tab's web view, until WebEngine's
+  navigation delegate sets `preferredContentMode` per navigation and the choice is remembered per
+  site.
+- **ATS:** `NSAllowsArbitraryLoadsInWebContent`, because a browser opens http pages. The app's own
+  requests (suggestions) stay under ATS.
+- **Perf cost:** DesignSystem links SwiftUI for `UIView.animate(_: Animation)` (system framework,
+  in the shared cache). No work added before the first frame: the database opens off main after
+  the window shows, and haptic generators and the suggestion client are made on first use.

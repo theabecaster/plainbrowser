@@ -171,6 +171,15 @@ struct PageInsetStateTests {
         #expect(inset.collapsed)
     }
 
+    @Test func aNewMoveDropsAChangeThatWaitedForABounce() {
+        var inset = PageInsetState()
+        inset.barRested(collapsed: true)
+        #expect(inset.applyIfSettled(offset: 2030, top: 0, bottom: 2000) == false)
+        inset.barMoved()
+        #expect(inset.applyIfSettled(offset: 1990, top: 0, bottom: 2000) == false)
+        #expect(inset.collapsed == false)
+    }
+
     @Test func aShortPageRestsAtItsTop() {
         var inset = PageInsetState()
         inset.barRested(collapsed: true)

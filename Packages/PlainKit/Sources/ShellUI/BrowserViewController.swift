@@ -66,6 +66,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var snapInterval: OSSignpostIntervalState?
     /// Which resting state the page's bottom inset follows, and a change waiting for a bounce.
     private var pageInset = PageInsetState()
+    /// A page started loading under the finger: the bar comes back when the finger lifts.
+    private var expandOnRelease = false
+    /// Counts Reduce Motion crossfades, so only the newest one ends the snap.
+    private var crossfades = 0
     private var pullTracker = PullToRefreshTracker()
     private var suggestionTask: Task<Void, Never>?
     private var favoritesTask: Task<Void, Never>?
@@ -480,6 +484,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         webView.scrollView.delegate = self
         webView.scrollView.alwaysBounceVertical = true
         for effect in pageEdgeEffects { effect.scrollView = webView.scrollView }
+        // Soft, named outright: on WebKit's scroll view `.automatic` showed no effect at all.
+        webView.scrollView.bottomEdgeEffect.style = .soft
         webView.translatesAutoresizingMaskIntoConstraints = false
         webContainer.addSubview(webView)
         NSLayoutConstraint.activate([
@@ -513,7 +519,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         on(\.isLoading) { controller, webView in
             if webView.isLoading {
                 // A new load brings the bar back. Same-document URL changes (pushState) do not.
-                controller.expandChrome(animated: true)
+                controller.expandForNewPage()
                 controller.pill.progressBar.begin()
                 controller.pill.progressBar.setProgress(max(0.1, webView.estimatedProgress))
             } else {
@@ -639,6 +645,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         settleCollapse(at: 0, animated: animated)
     }
 
+    /// A new page brings the bar back. A finger on the page keeps the bar until it lifts, and then
+    /// the snap expands it.
+    private func expandForNewPage() {
+        if webView?.scrollView.isDragging == true {
+            expandOnRelease = true
+        } else {
+            expandChrome(animated: true)
+        }
+    }
+
     /// Snaps the bar to `target` (0 expanded, 1 collapsed) with `.smooth(0.25)`, from where it is
     /// on screen. A snap already running retargets and keeps its velocity unless `velocity`
     /// (progress per second, from the release) is given. When the bar rests, the page's inset
@@ -652,6 +668,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let signposter = Signposts.signposter
         if collapseInterval == nil { collapseInterval = signposter.beginInterval(Signposts.toolbarCollapse) }
         if snapInterval == nil { snapInterval = signposter.beginInterval(Signposts.toolbarSnap) }
+        // A rest that waited for a bounce is stale now that the bar moves again.
+        pageInset.barMoved()
+        if animated, Motion.prefersCrossfade {
+            // Reduce Motion: the bar crossfades to its place instead of sliding.
+            snap.jump(to: target)
+            crossfades += 1
+            let crossfade = crossfades
+            Motion.crossfade(chromeGlass, changes: {
+                self.collapse.settle(at: target)
+                self.applyCollapse(target)
+            }, completion: { [weak self] in
+                // A newer settle owns the end.
+                guard let self, crossfade == self.crossfades else { return }
+                self.snapEnded(at: target)
+            })
+            return
+        }
         guard animated else {
             snap.jump(to: target)
             collapse.settle(at: target)
@@ -736,13 +769,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         } else {
             pullIndicator.hide()
         }
+        defer { expandOnRelease = false }
         guard !isEditingAddress else { return }
         // The snap starts as the finger lifts, toward the release velocity when it is clear, and
         // runs alongside the page's deceleration instead of waiting for it to end.
         let (top, bottom) = scrollRange(scrollView)
         let collapsible = bottom - top > collapse.distance * 2
         let target: CGFloat
-        if !collapsible || scrollView.contentOffset.y <= top {
+        if !collapsible || scrollView.contentOffset.y <= top || expandOnRelease {
             target = 0
         } else {
             target = collapse.settleTarget(velocity: velocity.y)

@@ -50,7 +50,8 @@ public final class SpringDriver {
     ///   - onFrame: applies a value; runs once per frame, and once with `target` at the end.
     ///   - completion: runs when the spring settles, not when it is stopped or retargeted.
     ///
-    /// Under Reduce Motion, or with the view off screen, the value jumps to `target`.
+    /// Under Reduce Motion, or with the view off screen, the value jumps to `target`; under Reduce
+    /// Motion the caller wraps the call in `Motion.crossfade`.
     public func animate(
         to target: CGFloat, velocity: CGFloat? = nil, in view: UIView,
         onFrame: @escaping (CGFloat) -> Void, completion: (() -> Void)? = nil

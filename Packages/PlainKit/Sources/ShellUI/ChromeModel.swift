@@ -178,6 +178,11 @@ struct PageInsetState: Equatable {
         pending = collapsed == self.collapsed ? nil : collapsed
     }
 
+    /// The bar is on the move again: a change still waiting for a bounce is stale.
+    mutating func barMoved() {
+        pending = nil
+    }
+
     /// Applies a waiting change when the page is within its scroll range: `offset` is the content
     /// offset, `top` and `bottom` the smallest and largest offsets at rest. Returns true when the
     /// inset should change now.

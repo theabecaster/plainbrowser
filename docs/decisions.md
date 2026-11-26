@@ -283,10 +283,12 @@ Each entry: what was chosen, and why. Newest last.
   the scroll already does 1:1.
 - **Snap starts at release** (`scrollViewWillEndDragging`), toward the release velocity when it is
   clear (0.2 pt/ms), with the bar's own speed under the finger carried over (capped at 8 progress/s).
-  It runs alongside the page's deceleration; coasting into the top brings the bar back.
+  It runs alongside the page's deceleration; coasting into the top brings the bar back. A page
+  that starts loading under the finger brings the bar back when the finger lifts, so the drag
+  keeps the bar. Under Reduce Motion the snap is a 0.2 s crossfade of the chrome.
 - **Page inset follows the resting bar** (plan, engine rule 4): `PageInsetState` switches
   `obscuredContentInsets.bottom` between the collapsed and expanded chrome once per rest, and
-  waits while the page is pulled past its top or bottom. WebKit already extends a fixed footer's
+  waits while the page is pulled past its top or bottom; a new snap drops a change still waiting. WebKit already extends a fixed footer's
   background to the screen edge under the bar (measured on the simulator).
 - **One glass container, no shadow.** `Glass.makeContainer` wraps `UIGlassContainerEffect` in a
   view that passes touches through, so it can cover the screen. Merge spacing 4 pt, under the
@@ -294,7 +296,9 @@ Each entry: what was chosen, and why. Newest last.
 - **Scroll edge effect per control.** An interaction on the full-screen container stretched the
   edge effect over the whole page (seen with the hard style), so the pill and the bar each carry
   one. WebKit hides the bottom effect itself where it shows a fixed footer's color extension. The
-  default (automatic) style left no visible trace on the simulator; check it on the device.
+  style is `.soft`, named outright: on WebKit's scroll view `.automatic` showed no effect at all.
+- **Glass tint 0.88 (light) / 0.84 (dark), up from 0.78 / 0.72:** the design review saw body
+  text refracted through the pill as ghost lettering; the denser paper tint keeps the host legible.
 - **Collapsed pill: taps only.** `AddressPill.isCompact` turns away every recognizer except its
   own tap, and the page menu waits for the expanded pill.
 

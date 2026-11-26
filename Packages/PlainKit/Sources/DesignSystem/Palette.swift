@@ -28,7 +28,7 @@ public enum Palette {
     /// "paper-tinted glass capsule" of the brand. Strong enough that the host stays legible over
     /// body text scrolling underneath.
     public static let glassTint = UIColor(
-        light: UIColor(rgb: 0xFFF6E6, alpha: 0.78), dark: UIColor(rgb: 0x16344A, alpha: 0.72)
+        light: UIColor(rgb: 0xFFF6E6, alpha: 0.88), dark: UIColor(rgb: 0x16344A, alpha: 0.84)
     )
 
     /// A row or button under the finger.

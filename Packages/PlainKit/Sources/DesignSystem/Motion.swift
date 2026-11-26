@@ -41,18 +41,24 @@ public enum Motion {
         completion: (() -> Void)? = nil
     ) {
         if prefersCrossfade, let view {
-            UIView.transition(
-                with: view, duration: crossfadeDuration,
-                options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState],
-                animations: changes,
-                completion: { _ in completion?() }
-            )
+            crossfade(view, changes: changes, completion: completion)
         } else if prefersCrossfade {
             UIView.performWithoutAnimation(changes)
             completion?()
         } else {
             UIView.animate(animation, changes: changes, completion: completion)
         }
+    }
+
+    /// Applies `changes` at once inside a 0.2 s crossfade of `view`: the Reduce Motion form of a
+    /// move, for motion that is not a `UIView` animation (a `SpringDriver`).
+    public static func crossfade(_ view: UIView, changes: @escaping () -> Void, completion: (() -> Void)? = nil) {
+        UIView.transition(
+            with: view, duration: crossfadeDuration,
+            options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState],
+            animations: changes,
+            completion: { _ in completion?() }
+        )
     }
 }
 #endif

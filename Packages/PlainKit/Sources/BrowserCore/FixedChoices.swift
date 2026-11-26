@@ -17,6 +17,15 @@ public enum FixedChoices {
 
     /// Ads, trackers and cookie banners are blocked everywhere; the page menu can turn it off per site.
     public static let contentBlockingAlwaysOn = true
+    /// The content-blocking list compiled first on first launch (and after an update changes it):
+    /// the highest-value network rules, third-party ad and tracker domains plus EasyPrivacy,
+    /// filled to the rule limit by tools/blocklists. Trackers leak data on every page, so they
+    /// are blocked after the first compile (about 2 s), not after all of them (about 8 s).
+    public static let priorityBlocklist = "blocklist-01"
+    /// Every cosmetic (element-hiding) rule lives in this one list, compiled second: ads still
+    /// show until it lands, but hiding is visible polish next to stopping the requests. One list
+    /// means one `display: none` stylesheet per frame, and cosmetic churn recompiles one list.
+    public static let cosmeticBlocklist = "blocklist-02"
     /// HTTPS is always tried first; nobody wants plain HTTP when HTTPS works.
     public static let httpsUpgradeAlwaysOn = true
     /// Haptics follow the iOS system setting, so there is no second switch to find.

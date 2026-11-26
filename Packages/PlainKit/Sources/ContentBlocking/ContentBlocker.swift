@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 import os
 import PerfSignposts
@@ -11,6 +12,14 @@ import WebKit
 ///    `WKContentRuleListStore` by `<name>-<hash>` and compiles only the ones that are missing
 ///    (first launch, or after an app update that changed a list), then removes old versions.
 ///    Disk reads and hashing run off the main thread; WebKit compiles on its own queue.
+///    - **No gap on update:** while new lists compile, the previously compiled `blocklist-*`
+///      lists stay attached as stand-ins. When every new list is in, the stand-ins are detached
+///      in one step and deleted from the store. Swapping all at once, not list by list, matters
+///      because an update can move rules between lists. If a compile fails, the stand-ins stay
+///      (attached and stored) and the next launch tries again.
+///    - **Most valuable first:** `FixedChoices.priorityBlocklist` compiles first, then
+///      `FixedChoices.cosmeticBlocklist`, then the rest in manifest order. Each list is attached
+///      as soon as it is ready.
 /// 3. Call `apply(to:forMainFrameURL:)` for a web view's `WKUserContentController` before its
 ///    first real navigation and again in `decidePolicyFor navigationAction` for each main-frame
 ///    navigation. It attaches the lists, or detaches them on a site where blocking is off.
@@ -38,6 +47,8 @@ public final class ContentBlocker {
         public internal(set) var failures: [String] = []
         /// Old list versions removed from the store.
         public internal(set) var removedStale: [String] = []
+        /// Previously compiled lists kept attached while the new ones compiled.
+        public internal(set) var standIns: [String] = []
         /// From the start of `prepare()` until every list was available.
         public internal(set) var duration: Duration = .zero
     }
@@ -118,24 +129,80 @@ public final class ContentBlocker {
             return finish(report, start: start)
         }
 
-        for list in manifest.lists {
+        let ordered = Self.compileOrder(manifest.lists)
+        let currentIdentifiers = Set(manifest.lists.map(\.identifier))
+
+        // 1. Every list already compiled is attached at once.
+        var ready: [String: WKContentRuleList] = [:]
+        var missing: [RuleListManifest.List] = []
+        for list in ordered {
+            let lookupStart = clock.now
+            if let found = try? await store.contentRuleList(forIdentifier: list.identifier) {
+                ready[list.identifier] = found
+                report.lists.append(.init(
+                    identifier: list.identifier, ruleCount: list.ruleCount, compiled: false,
+                    duration: clock.now - lookupStart))
+            } else {
+                missing.append(list)
+            }
+        }
+
+        // 2. While anything has to compile, the previous versions stand in, so pages are never
+        //    unblocked during an update.
+        var standIns: [WKContentRuleList] = []
+        if !missing.isEmpty {
+            for identifier in await staleIdentifiers(keeping: currentIdentifiers) {
+                if let old = try? await store.contentRuleList(forIdentifier: identifier) { standIns.append(old) }
+            }
+            report.standIns = standIns.compactMap(\.identifier)
+        }
+        publish(ordered.compactMap { ready[$0.identifier] } + standIns)
+
+        // 3. Compile what is missing, most valuable first, attaching each as it lands.
+        var compileFailed = false
+        for list in missing {
             let listStart = clock.now
             do {
-                let (ruleList, compiled) = try await lookUpOrCompile(list, in: directory)
-                ruleLists.append(ruleList)
-                syncAllControllers()
+                ready[list.identifier] = try await compile(list, in: directory)
+                publish(ordered.compactMap { ready[$0.identifier] } + standIns)
                 report.lists.append(.init(
-                    identifier: list.identifier, ruleCount: list.ruleCount, compiled: compiled,
+                    identifier: list.identifier, ruleCount: list.ruleCount, compiled: true,
                     duration: clock.now - listStart))
             } catch {
+                compileFailed = true
                 report.failures.append("\(list.name): \(error)")
                 logger.error("Content rule list \(list.identifier, privacy: .public) failed: \(error)")
             }
         }
-        report = finish(report, start: start)
 
-        report.removedStale = await removeStaleLists(keeping: Set(manifest.lists.map(\.identifier)))
+        // 4. Swap: every new list is in, so the stand-ins go. After a failure they stay.
+        if !compileFailed {
+            publish(ordered.compactMap { ready[$0.identifier] })
+        }
+        report = finish(report, start: start)
+        if !compileFailed {
+            report.removedStale = await removeStaleLists(keeping: currentIdentifiers)
+        }
         return report
+    }
+
+    /// `lists` in compile order: the priority list, the cosmetic list, then the rest in manifest
+    /// order (`FixedChoices.priorityBlocklist`, `cosmeticBlocklist`).
+    nonisolated static func compileOrder(_ lists: [RuleListManifest.List]) -> [RuleListManifest.List] {
+        func rank(_ list: RuleListManifest.List) -> Int {
+            switch list.name {
+            case FixedChoices.priorityBlocklist: 0
+            case FixedChoices.cosmeticBlocklist: 1
+            default: 2
+            }
+        }
+        return lists.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
+    }
+
+    /// Makes `lists` the attached set for every managed controller.
+    private func publish(_ lists: [WKContentRuleList]) {
+        ruleLists = lists
+        syncAllControllers()
     }
 
     private func finish(_ report: PrepareReport, start: ContinuousClock.Instant) -> PrepareReport {
@@ -148,14 +215,9 @@ public final class ContentBlocker {
         return report
     }
 
-    private func lookUpOrCompile(
-        _ list: RuleListManifest.List, in directory: URL
-    ) async throws -> (WKContentRuleList, compiled: Bool) {
-        // A miss throws (WKError.contentRuleListStoreLookUpFailed), as does a list compiled by an
-        // older WebKit (contentRuleListStoreVersionMismatch). Both mean: compile it.
-        if let found = try? await store.contentRuleList(forIdentifier: list.identifier) {
-            return (found, false)
-        }
+    // A lookup miss throws (WKError.contentRuleListStoreLookUpFailed), as does a list compiled by
+    // an older WebKit (contentRuleListStoreVersionMismatch). Both mean: compile it.
+    private func compile(_ list: RuleListManifest.List, in directory: URL) async throws -> WKContentRuleList {
         let signpost = Signposts.signposter.beginInterval("contentBlocking.compile")
         defer { Signposts.signposter.endInterval("contentBlocking.compile", signpost) }
         let json = try await RuleListManifest.readJSON(of: list, in: directory)
@@ -165,15 +227,13 @@ public final class ContentBlocker {
         else {
             throw ContentBlockerError.missingResources
         }
-        return (compiled, true)
+        return compiled
     }
 
     /// Removes store entries for bundled lists that the manifest no longer names: old hashes and
     /// lists that are no longer produced. Entries other code added (other prefixes) are left alone.
     private func removeStaleLists(keeping current: Set<String>) async -> [String] {
-        let stale = (await store.availableIdentifiers() ?? []).filter {
-            $0.hasPrefix(RuleListManifest.namePrefix) && !current.contains($0)
-        }
+        let stale = await staleIdentifiers(keeping: current)
         var removed: [String] = []
         for identifier in stale {
             do {
@@ -184,6 +244,13 @@ public final class ContentBlocker {
             }
         }
         return removed
+    }
+
+    /// Bundled-list entries in the store that the manifest no longer names, sorted.
+    private func staleIdentifiers(keeping current: Set<String>) async -> [String] {
+        (await store.availableIdentifiers() ?? []).filter {
+            $0.hasPrefix(RuleListManifest.namePrefix) && !current.contains($0)
+        }.sorted()
     }
 
     // MARK: - Attaching

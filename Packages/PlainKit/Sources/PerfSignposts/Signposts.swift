@@ -137,9 +137,11 @@ public enum Signposts {
     /// Interval: one batched tab write, off the main thread (Storage emits it).
     public static let tabSave: StaticString = "tab.save"
     /// Interval: a swipe along the expanded address bar, from the finger starting to move until the
-    /// page settles on the neighbour tab ("switched"), back on its own tab ("stayed") or on a new
-    /// tab past the last one ("newTab").
+    /// page settles. Exclusive and without an end message, so XCTOSSignpostMetric measures it.
     public static let tabSwipe: StaticString = "tab.swipe"
+    /// Event right after `tab.swipe` ends: where it landed, "switched" (the neighbour tab),
+    /// "stayed", "newTab" (past the last tab) or "cancelled".
+    public static let tabSwipeEnd: StaticString = "tab.swipeEnd"
     /// Event: the tab gallery opened from the tabs button ("button") or a swipe up from the address
     /// bar ("swipe"); the page then zooms into its card under `gallery.show`.
     public static let galleryOpen: StaticString = "gallery.open"

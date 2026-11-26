@@ -308,15 +308,18 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             // The neighbour's web view moves from the preview to the page container (no reload).
             browser.completeTabSwipe(to: neighbour, cover: cover)
             reset(swipe, browser: browser, detachingNeighbour: false)
-            signposter.endInterval(Signposts.tabSwipe, swipe.interval, "switched")
+            signposter.endInterval(Signposts.tabSwipe, swipe.interval)
+            signposter.emitEvent(Signposts.tabSwipeEnd, "switched")
         } else if target != 0, swipe.isNewTabCard {
             Haptic.tap.play()
             reset(swipe, browser: browser, detachingNeighbour: false)
             browser.openNewTabFromSwipe()
-            signposter.endInterval(Signposts.tabSwipe, swipe.interval, "newTab")
+            signposter.endInterval(Signposts.tabSwipe, swipe.interval)
+            signposter.emitEvent(Signposts.tabSwipeEnd, "newTab")
         } else {
             reset(swipe, browser: browser, detachingNeighbour: true)
-            signposter.endInterval(Signposts.tabSwipe, swipe.interval, "stayed")
+            signposter.endInterval(Signposts.tabSwipe, swipe.interval)
+            signposter.emitEvent(Signposts.tabSwipeEnd, "stayed")
         }
     }
 
@@ -352,7 +355,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         self.swipe = nil
         mode = .none
         reset(swipe, browser: browser, detachingNeighbour: true)
-        Signposts.signposter.endInterval(Signposts.tabSwipe, swipe.interval, "cancelled")
+        Signposts.signposter.endInterval(Signposts.tabSwipe, swipe.interval)
+        Signposts.signposter.emitEvent(Signposts.tabSwipeEnd, "cancelled")
     }
 }
 

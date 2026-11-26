@@ -22,3 +22,4 @@ swipe = bar swipe to page settled (`tab.swipe`, ms). Rows before the M2 shell wi
 | 2026-11-26 12:26 | 77d08f4 | sim | 3570.7 | 507.9 | n/a | pass |
 | 2026-11-26 13:01 | 2d4189d | sim | 3257.5 | 491.5 | n/a | pass |
 | 2026-11-26 15:12 | 448bd31 | sim | — | 436.3 | n/a | 1481.8 | — | FAIL |
+| 2026-11-26 15:17 | 2ced874 | sim | 3271.3 | 441 | n/a | 1480.7 | — | FAIL |

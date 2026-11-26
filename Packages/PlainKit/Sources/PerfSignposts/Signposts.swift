@@ -216,6 +216,9 @@ public enum Signposts {
     /// Event: a page's passkey request failed because Plain can't use passkeys yet (no
     /// web-browser entitlement); the message says whether the shell was told.
     public static let passkeyUnavailable: StaticString = "signIn.passkeyUnavailable"
+    /// Event: another app opened a web link in Plain (as the default browser); its tab's open is
+    /// the `tab.open` interval that follows.
+    public static let linkFromOtherApp: StaticString = "link.fromOtherApp"
 
     // MARK: First-run intro (FeatureUI emits these)
 

@@ -103,68 +103,95 @@ final class TouchReportingView: UIView {
     }
 }
 
-/// The page panes, in one `UIArrangementViewController` (`.split`, horizontal axis): one pane, or
-/// two side by side in a split. Slot `i` always shows the window's pane `i`; when only one pane
-/// can show (the outer screen), the focused pane's slot takes the primary place on its own, so its
-/// web view never changes parent through a fold.
+/// The page panes. A split's two panes live in one `UIArrangementViewController` (`.split`,
+/// horizontal axis), which places them on either side of a partly folded crease. A lone pane lives
+/// beside it in a plain container that fills the area: the arrangement never lets a view cross an
+/// active fold (it shrinks it to one side, or hides it), and a single page keeps spanning the
+/// screen in book pose (docs/plan.md, section 6).
+///
+/// Slot `i` always shows the window's pane `i`. Where only one pane can show (the outer screen,
+/// inner portrait), the focused pane's slot shows alone, so its web view keeps its parent (the
+/// slot's container) through a fold; only the slot moves between the two hosts.
 final class PanesController {
     let arrangement = UIArrangementViewController()
+    /// Holds a lone pane, filling `view`.
+    private let single = UIViewController()
     let slots = [PaneSlot(), PaneSlot()]
     /// Which slots are on screen, in arrangement order.
     private(set) var shown: [Int] = []
     private var primaryWidth: CGFloat?
-
-    /// The arrangement's view, laid out by the browser.
-    var view: UIView { arrangement.view }
+    /// The panes' area, laid out by the browser.
+    let view = UIView()
 
     func install(in parent: UIViewController) {
-        parent.addChild(arrangement)
-        arrangement.view.translatesAutoresizingMaskIntoConstraints = false
-        arrangement.view.backgroundColor = .clear
-        arrangement.didMove(toParent: parent)
+        view.backgroundColor = .clear
+        for host in [arrangement, single] {
+            parent.addChild(host)
+            host.view.frame = view.bounds
+            host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            host.view.backgroundColor = .clear
+            view.addSubview(host.view)
+            host.didMove(toParent: parent)
+        }
     }
 
-    /// Shows `slotsToShow` (one or two slot indices) with the first `primaryWidth` wide (nil: an
-    /// even split). Does nothing when nothing changed.
+    /// Shows `slotsToShow` (one or two slot indices), a split's primary `primaryWidth` wide (nil:
+    /// the arrangement decides, beside the fold when it is active). Does nothing when nothing
+    /// changed.
     func show(_ slotsToShow: [Int], primaryWidth: CGFloat?) {
         guard slotsToShow != shown || (slotsToShow.count == 2 && primaryWidth != self.primaryWidth) else { return }
         let previous = shown
         shown = slotsToShow
         self.primaryWidth = primaryWidth
-        var arrangementValue = UISplitArrangement.split.axes(.horizontal)
-        if slotsToShow.count == 2 {
-            var primary = arrangementValue.defaultViewProperties
-            var secondary = arrangementValue.defaultViewProperties
-            if let primaryWidth {
-                primary.width.minimum = .absolute(primaryWidth)
-                primary.width.preferred = .absolute(primaryWidth)
-                primary.width.maximum = .absolute(primaryWidth)
-            } else {
-                primary.width.preferred = .fractional(0.5)
-                secondary.width.preferred = .fractional(0.5)
+
+        guard slotsToShow.count == 2 else {
+            // Alone: out of the arrangement, into the full-size container.
+            if previous.count == 2 {
+                arrangement.setViewController(nil, for: .secondary)
+                arrangement.setViewController(nil, for: .primary)
             }
-            arrangementValue.setViewProperties(primary, for: .primary)
-            arrangementValue.setViewProperties(secondary, for: .secondary)
-        } else {
-            // Alone, the primary pane takes the whole width (by default it keeps half).
-            var primary = arrangementValue.defaultViewProperties
-            primary.width.preferred = .fractional(1)
-            arrangementValue.setViewProperties(primary, for: .primary)
+            let slot = slots[slotsToShow[0]]
+            if slot.parent !== single {
+                for other in slots where other.parent === single { remove(other) }
+                single.addChild(slot)
+                slot.view.frame = single.view.bounds
+                slot.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                single.view.addSubview(slot.view)
+                slot.didMove(toParent: single)
+            }
+            arrangement.view.isHidden = true
+            single.view.isHidden = false
+            return
         }
-        // Only places whose slot changes are touched, so a pane that stays keeps its view in the
-        // window (its web view never leaves it).
-        let newSecondary = slotsToShow.count == 2 ? slotsToShow[1] : nil
-        let oldSecondary = previous.count == 2 ? previous[1] : nil
-        if previous.first != slotsToShow[0] || oldSecondary != newSecondary {
-            if oldSecondary != newSecondary { arrangement.setViewController(nil, for: .secondary) }
-            if previous.first != slotsToShow[0] {
-                arrangement.setViewController(slots[slotsToShow[0]], for: .primary)
-            }
-            if let newSecondary, oldSecondary != newSecondary {
-                arrangement.setViewController(slots[newSecondary], for: .secondary)
-            }
+
+        var arrangementValue = UISplitArrangement.split.axes(.horizontal)
+        var primary = arrangementValue.defaultViewProperties
+        var secondary = arrangementValue.defaultViewProperties
+        if let primaryWidth {
+            primary.width.minimum = .absolute(primaryWidth)
+            primary.width.preferred = .absolute(primaryWidth)
+            primary.width.maximum = .absolute(primaryWidth)
+        } else {
+            primary.width.preferred = .fractional(0.5)
+            secondary.width.preferred = .fractional(0.5)
+        }
+        arrangementValue.setViewProperties(primary, for: .primary)
+        arrangementValue.setViewProperties(secondary, for: .secondary)
+        if previous != slotsToShow {
+            for slot in slots where slot.parent === single { remove(slot) }
+            arrangement.setViewController(nil, for: .secondary)
+            arrangement.setViewController(slots[slotsToShow[0]], for: .primary)
+            arrangement.setViewController(slots[slotsToShow[1]], for: .secondary)
         }
         arrangement.updateArrangement(arrangementValue, animated: false)
+        arrangement.view.isHidden = false
+        single.view.isHidden = true
+    }
+
+    private func remove(_ slot: PaneSlot) {
+        slot.willMove(toParent: nil)
+        slot.view.removeFromSuperview()
+        slot.removeFromParent()
     }
 }
 #endif

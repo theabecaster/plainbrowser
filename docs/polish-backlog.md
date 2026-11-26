@@ -108,3 +108,13 @@ Newest feature last.
   the 120 Hz hitch numbers on the device.
 - **Context menu on a partly hidden card** lifts its preview over the next card. System
   behavior; scrolling the card into view first would avoid it.
+
+## Integration 2: shell on the engine (2026-11-26)
+
+- **Reader web view ownership.** The pool makes the reader's web view (`makeAuxiliaryWebView`) but
+  `ReaderPresenter` holds it while it shows. Move holding and release into the pool (an
+  auxiliary slot per pane) if a second auxiliary view appears. (Code review, round 1.)
+- **Downloads list.** A finished download is an alert with Open; there is no list of downloads
+  in progress or past ones yet. M4 can add one in the page menu.
+- **Restored tabs beyond the last.** Only the last selected tab comes back after a relaunch; the
+  other rows stay in Storage for M2's tab gallery.

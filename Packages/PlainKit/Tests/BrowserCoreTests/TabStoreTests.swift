@@ -48,6 +48,15 @@ final class RecordingPersistence: TabPersistence {
         #expect(persistence.lastSession?.windows[0].panes == [c])
     }
 
+    @Test func aTabTheEngineMadeKeepsItsID() {
+        let store = makeStore()
+        let opener = store.open(url("a"))
+        let popup = UUID()
+        #expect(store.open(url("b"), opener: opener, id: popup) == popup)
+        #expect(store.tabs[popup]?.openerID == opener)
+        #expect(store.windows[0].tabIDs == [opener, popup])
+    }
+
     @Test func selectingStampsBothTabsAsSeen() {
         let store = makeStore()
         let a = store.open(url("a"))

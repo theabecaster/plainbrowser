@@ -109,8 +109,8 @@ public final class ContentBlocker {
     }
 
     private func load() async -> PrepareReport {
-        let signpost = Signposts.signposter.beginInterval("contentBlocking.prepare")
-        defer { Signposts.signposter.endInterval("contentBlocking.prepare", signpost) }
+        let signpost = Signposts.signposter.beginInterval(Signposts.contentBlockingPrepare)
+        defer { Signposts.signposter.endInterval(Signposts.contentBlockingPrepare, signpost) }
         let clock = ContinuousClock()
         let start = clock.now
         var report = PrepareReport()
@@ -203,12 +203,35 @@ public final class ContentBlocker {
     private func publish(_ lists: [WKContentRuleList]) {
         ruleLists = lists
         syncAllControllers()
+        if !lists.isEmpty { resumeWaitersForFirstRules() }
+    }
+
+    /// Waiting for `firstRulesAttached()`.
+    private var firstRulesWaiters: [CheckedContinuation<Void, Never>] = []
+    private var hasPublishedRules = false
+
+    /// Returns once the first lists are attached (on a warm launch, right after the lookups, about
+    /// 1 ms; during an update, the previous lists standing in), or once `prepare()` has finished
+    /// without any. Starts `prepare()` if it has not run. For loads that must not go out
+    /// unblocked, such as a tab restored at launch.
+    public func firstRulesAttached() async {
+        if hasPublishedRules || isReady { return }
+        if prepareTask == nil { Task { await prepare() } }
+        await withCheckedContinuation { firstRulesWaiters.append($0) }
+    }
+
+    private func resumeWaitersForFirstRules() {
+        hasPublishedRules = true
+        let waiters = firstRulesWaiters
+        firstRulesWaiters = []
+        waiters.forEach { $0.resume() }
     }
 
     private func finish(_ report: PrepareReport, start: ContinuousClock.Instant) -> PrepareReport {
         var report = report
         report.duration = ContinuousClock.now - start
         isReady = true
+        resumeWaitersForFirstRules()
         let compiled = report.lists.filter(\.compiled).count
         logger.info(
             "Content blocking ready: \(report.lists.count) lists (\(compiled) compiled) in \(report.duration)")
@@ -218,8 +241,8 @@ public final class ContentBlocker {
     // A lookup miss throws (WKError.contentRuleListStoreLookUpFailed), as does a list compiled by
     // an older WebKit (contentRuleListStoreVersionMismatch). Both mean: compile it.
     private func compile(_ list: RuleListManifest.List, in directory: URL) async throws -> WKContentRuleList {
-        let signpost = Signposts.signposter.beginInterval("contentBlocking.compile")
-        defer { Signposts.signposter.endInterval("contentBlocking.compile", signpost) }
+        let signpost = Signposts.signposter.beginInterval(Signposts.contentBlockingCompile)
+        defer { Signposts.signposter.endInterval(Signposts.contentBlockingCompile, signpost) }
         let json = try await RuleListManifest.readJSON(of: list, in: directory)
         guard
             let compiled = try await store.compileContentRuleList(
@@ -307,8 +330,8 @@ public final class ContentBlocker {
     /// back on also removes an entry for a parent domain that covered `host`.
     public func setBlockingEnabled(_ enabled: Bool, forHost host: String) {
         guard let site = SiteKey.site(forHost: host) else { return }
-        let signpost = Signposts.signposter.beginInterval("contentBlocking.siteToggle")
-        defer { Signposts.signposter.endInterval("contentBlocking.siteToggle", signpost) }
+        let signpost = Signposts.signposter.beginInterval(Signposts.contentBlockingSiteToggle)
+        defer { Signposts.signposter.endInterval(Signposts.contentBlockingSiteToggle, signpost) }
         let edit: (inout Set<String>) -> Void = { sites in
             if enabled {
                 sites = sites.filter { !SiteKey.host(site, isIn: [$0]) }

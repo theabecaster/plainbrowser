@@ -334,3 +334,63 @@ Each entry: what was chosen, and why. Newest last.
 - **Perf (macOS `swift test`, file database, 100 open + 1,000 archived, median of 30):**
   `loadTabSession` 1.5–1.6 ms off main; `TabStore(session:)` 0.14 ms on main (p95 0.17 ms, budget
   5 ms); archive search over 1,000 rows 1.3–1.4 ms.
+
+## Integration 2: the shell on the web engine (2026-11-26)
+
+- **`BrowserSession` wires the engine once.** It builds the pool with Storage-backed stores,
+  `ContentBlocker` as its `UserContentRules`, Reader's check as its `PageScripts`, and
+  `EngineTabs`, which keeps engine `Tab`s in step with BrowserCore's `TabStore` (the one owner of
+  the list) by id. Before the database opens the store is in memory; tabs opened then join the
+  loaded session. The app target only passes the database task and the tab-state folder. A plain
+  type with initializer injection, no container.
+- **Adapters live in ShellUI.** `SitePermissionStore`, `SiteContentModeStore` (WebEngine) and
+  `SiteAllowListStore` (ContentBlocking) are implemented over Storage in the shell, the one layer
+  that sees both: Storage stores plain strings and never imports the engine. Three tables in one
+  migration (`v5.siteSettings`). The content-mode map loads once after launch and answers from
+  memory, as the engine reads it at every navigation start.
+- **The shell never keeps a page's web view.** It follows the `Tab` with Observation (coalesced
+  per run loop turn); the engine reports visits (`Tab.onVisit`, once per back-forward item),
+  finds on page and sets insets. `pool.webView(for:)` exists only to hand a page to Reader's
+  extractor, which needs a `WKWebView`.
+- **The reader view is not a tab.** The pool makes it (`makeAuxiliaryWebView`, same data store
+  and identity, no content rules or tab handler) so configuration stays in one place; the shell
+  holds it only while it shows and releases it on close (about 2-8 ms to make one again).
+  Shown over the page in the same container, so closing it returns to the page untouched.
+- **Readerable check installed synchronously.** `PageScripts.install` runs while the pool builds a
+  controller, so the 4 KB source is read once off the main thread (`ReaderExtractor.prepare()`);
+  the warm web view, made before that read ends, gets the script when it is ready.
+- **Last tab restored after the first frame, under the search sheet.** Launch stays search-first
+  (docs/plan.md, engine rule 1): the field is focused in the first frame. The last selected tab's
+  row and state file are read off the main thread after warm-up; the tab attaches under the
+  sheet (taking the warm web view), so closing the sheet shows the page already back. A page the
+  user opens before that wins and nothing is restored. Only the selected tab comes back until M2.
+- **Desktop Site per site through `setContentModeOverride`.** The desktop user-agent stopgap is
+  gone. A choice equal to what the pane picks anyway is stored as no choice, so a site follows
+  the pane again (Duo inner vs outer).
+- **Blocking toggle reloads.** WebKit applies rule lists per navigation, so "Turn Off Blocking on
+  This Site" detaches the lists from every controller at once and reloads the page.
+- **Engine questions are system alerts, one at a time** (`PromptQueue`), over any sheet. If an
+  alert can't be presented, its safe answer (cancel, deny) returns, so the engine never waits
+  forever. Permission answers are remembered per origin by the pool; the app asks iOS only when a
+  site first needs camera, microphone or location (usage strings in Info.plist).
+- **A page that can't show says so in one sentence** (`PageStateView`): crashed again after the
+  engine's reloads, failed to load (Plain's words per error code), or a restored form result
+  waiting. One button: Reload or Try Again.
+- **Downloads in Files.** `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` make
+  Documents/Downloads Plain's folder in the Files app. A finished download says where it is and
+  offers Quick Look.
+- **Popups become tabs in the store and take the screen** (one tab on screen until M2); Back on a
+  popup's first page closes it and returns to its opener.
+- **Suggestion preconnect after the first frame.** The launch focus calls `prepareForTyping()`
+  before the first frame; the preconnect (and the suggestion client's URL session) waits for
+  `firstFrameDidCommit()`. Typed visits (`VisitKind.typed`) are the address bar's loads: an
+  address, a search or a picked suggestion; a picked page suggestion is remembered for its input.
+- **Restore stops the warm-up load first.** A tab restored at launch takes the warm web view,
+  whose empty warm-up page may still be loading while its WebContent process starts (a second on
+  a loaded simulator). Committing after the restore, it left a blank page over the restored
+  history; the pool now stops any load in flight before applying `interactionState`.
+- **Fixed with it:** the geolocation delegate method had the wrong selector
+  (`initiatedBy` instead of `initiatedByFrame`), so WebKit never asked; it now does.
+- **Perf cost:** after the first frame only. Lookups for compiled rule lists take about 1 ms; the
+  content-mode map and the tab restore are single reads off main. No work added before the
+  search field is focused.

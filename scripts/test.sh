@@ -60,5 +60,7 @@ for name in $PREFIX-duo $PREFIX-17; do
     grep -E 'error:|failed' build/test/$name.log | head -20 || true
     print -u2 "UI smoke failed on $name; log: build/test/$name.log"
   fi
+  # One booted simulator at a time: the machine is shared.
+  xcrun simctl shutdown "$udid" 2>/dev/null || true
 done
 exit $failed

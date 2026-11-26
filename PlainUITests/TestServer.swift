@@ -10,6 +10,12 @@ import Network
 /// - `/count`: "Load N", where N counts this page's loads (pull to refresh reloads it).
 /// - `/long`: a long article, for scrolling and the toolbar collapse.
 /// - `/footer`: a long page with a `position: fixed` footer, for the page's bottom inset.
+/// - `/ua`: "Desktop UA" or "Mobile UA", from the request's user agent (Desktop Site).
+/// - `/blocking`: "Ad blocked" or "Ad loaded", whether `/jquery.overlayad.js` (an EasyList rule
+///   that matches any site) was blocked.
+/// - `/article`: a readerable article (Reader), with a link to `/b`.
+/// - `/location`: asks for the location (a permission prompt).
+/// - `/motion`: a button that asks for motion sensors (a permission prompt after a tap).
 final class TestServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "TestServer")
@@ -53,10 +59,13 @@ final class TestServer: @unchecked Sendable {
                 return
             }
             let path = request.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
-            let (status, body) = self.page(for: path)
+            let agent = request.split(separator: "\r\n")
+                .first { $0.lowercased().hasPrefix("user-agent:") }.map(String.init) ?? ""
+            let (status, body) = self.page(for: path, userAgent: agent)
+            let type = path.hasSuffix(".js") ? "application/javascript" : "text/html; charset=utf-8"
             let header = """
             HTTP/1.1 \(status)\r
-            Content-Type: text/html; charset=utf-8\r
+            Content-Type: \(type)\r
             Content-Length: \(body.utf8.count)\r
             Cache-Control: no-store\r
             Connection: close\r
@@ -69,7 +78,7 @@ final class TestServer: @unchecked Sendable {
         }
     }
 
-    private func page(for path: String) -> (String, String) {
+    private func page(for path: String, userAgent: String) -> (String, String) {
         // Query strings don't change the page (tests use long tracking addresses).
         let path = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
         switch path {
@@ -94,6 +103,46 @@ final class TestServer: @unchecked Sendable {
             let footer = "<div style=\"position:fixed;left:0;right:0;bottom:0;padding:14px 20px;"
                 + "background:#2973FF;color:#fff;font-weight:600\">Fixed Footer</div>"
             return ("200 OK", html("Plain Footer", "<h1>Footer Page</h1>" + paragraphs.joined() + "<p>End of page.</p>" + footer))
+        case "/ua":
+            let desktop = !userAgent.contains("Mobile")
+            return ("200 OK", html("Plain UA", "<h1>\(desktop ? "Desktop" : "Mobile") UA</h1>"))
+        case "/blocking":
+            return ("200 OK", html("Plain Blocking", """
+                <h1 id="state">Checking</h1>
+                <script>function done(text) { document.getElementById('state').textContent = text; }</script>
+                <script src="/jquery.overlayad.js" onload="done('Ad loaded')" onerror="done('Ad blocked')"></script>
+                """))
+        case "/jquery.overlayad.js":
+            return ("200 OK", "window.plainAd = true;")
+        case "/article":
+            let paragraphs = (1...12).map {
+                "<p>Paragraph \($0) of the article. Reading on a phone should feel calm: the text sets the pace, the "
+                    + "margins give it room, and nothing moves unless you ask it to. A reader view keeps the words and "
+                    + "drops everything around them, so a long piece reads like a page in a good book.</p>"
+            }
+            let body = "<header><nav><a href=\"/a\">Home</a> · <a href=\"/b\">Archive</a></nav></header>"
+                + "<article><h1>The Quiet Page</h1><p class=\"byline\">By Plain Tester</p>"
+                + paragraphs.joined() + "<p>Next, <a href=\"/b\">read page B</a>.</p></article>"
+                + "<footer><p>Footer links and other chrome.</p></footer>"
+            return ("200 OK", html("The Quiet Page", body))
+        case "/motion":
+            return ("200 OK", html("Plain Motion", """
+                <h1 id="state">Motion</h1>
+                <p><button id="ask" style="font-size:22px;padding:12px 20px" onclick="
+                  DeviceMotionEvent.requestPermission()
+                    .then(r => { document.getElementById('state').textContent = 'Motion ' + r; })
+                    .catch(e => { document.getElementById('state').textContent = 'Motion error'; });
+                ">Use Motion</button></p>
+                """))
+        case "/location":
+            return ("200 OK", html("Plain Location", """
+                <h1 id="state">Asking</h1>
+                <script>
+                navigator.geolocation.getCurrentPosition(
+                  () => { document.getElementById('state').textContent = 'Location allowed'; },
+                  () => { document.getElementById('state').textContent = 'Location denied'; });
+                </script>
+                """))
         default:
             return ("404 Not Found", html("Not Found", "<h1>Not Found</h1>"))
         }

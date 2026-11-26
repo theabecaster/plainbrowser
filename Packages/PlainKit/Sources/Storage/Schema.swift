@@ -16,6 +16,9 @@ enum Schema {
     static let tabWindow = "tabWindow"
     static let closedTab = "closedTab"
     static let tabSearch = "tabSearch"
+    static let sitePermission = "sitePermission"
+    static let siteContentMode = "siteContentMode"
+    static let blockingAllowList = "blockingAllowList"
 
     static func register(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1.history") { db in
@@ -175,6 +178,24 @@ enum Schema {
                 t.prefixes = [2]
                 t.column("title")
                 t.column("url")
+            }
+        }
+
+        // Per-site choices remembered automatically (docs/plan.md, section 4b): permission
+        // answers, desktop or mobile site, and the sites where blocking is off.
+        migrator.registerMigration("v5.siteSettings") { db in
+            try db.create(table: sitePermission) { t in
+                t.column("site", .text).notNull()
+                t.column("permission", .text).notNull()
+                t.column("allowed", .boolean).notNull()
+                t.primaryKey(["site", "permission"])
+            }
+            try db.create(table: siteContentMode) { t in
+                t.primaryKey("site", .text)
+                t.column("mode", .text).notNull()
+            }
+            try db.create(table: blockingAllowList) { t in
+                t.primaryKey("site", .text)
             }
         }
     }

@@ -26,7 +26,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`: warm-up, tiers, popups, crash recovery), `Tab` (observed page state), `TabWebViewHandler` (navigation/UI delegate), `NavigationRules` (pure policy), `DownloadCoordinator`, `ThumbnailService`, `EngineChoices`, seams in `EngineProtocols` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
 | `Reader` | nonisolated; WebKit types MainActor | WebKit | `ReaderExtractor` (Readability in its own content world), `ReaderRenderer` (page template), `ReaderSchemeHandler` (`plain-reader:` scheme), `ReaderArticle` |
-| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI | `BrowserViewController` (page, URL pill, search sheet, page buttons), `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
+| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI, WebEngine, ContentBlocking, Reader | `BrowserViewController` (page, URL pill, search sheet, page buttons; the tab on screen in `+Tab`, the engine's questions in `+EngineHost`), `BrowserSession` (pool, `EngineTabs`, `ContentBlocker`, `ReaderExtractor`, wired once), `EngineTabs` (engine `Tab`s in step with BrowserCore's `TabStore` by id), Storage adapters for the engine seams (`SiteStores`), `ReaderPresenter`, `PageStateView`, `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
 | `TabGalleryUI` | MainActor | UIKit | `TabGalleryViewController` (cards, grid, flick to close, reorder, menus), `TabGalleryDataSource` seam (the shell implements it over `TabStore`) + `TabGalleryDemoData` fake, `TabGalleryTransition` (snapshot animator page <-> card), `ThumbnailPipeline` (off-main decode), `TabGalleryLayout`/`TabGalleryMetrics`/`CardFlick` (plain values tested on macOS) |
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `SpringDriver` (frame-by-frame spring at 80–120 Hz), `Haptic`, `Glass` (the one Liquid Glass helper and its container) |
@@ -42,12 +42,20 @@ and compile to nothing on macOS.
 
 1. `main.swift` begins the `launch` signpost interval, then calls `UIApplicationMain`.
 2. `SceneDelegate` creates the window with a `UINavigationController` (navigation bar hidden)
-   around `BrowserViewController`, one `WebViewPool` and one `LiveAddressBarData`. It opens the
-   database in a task off the main thread and hands it to the address bar when ready.
+   around `BrowserViewController`, one `BrowserSession` and one `LiveAddressBarData`. It starts
+   opening the database in a task off the main thread; the address bar, the sheets and the
+   session's stores all wait on that one task.
 3. `BrowserViewController.viewIsAppearing` makes the search field first responder before the
    first frame commits. It emits `launch.searchFieldReady`; the app ends `launch`.
-4. `viewDidAppear` schedules `WebViewPool.warmUp()` on the next main run loop turn: one offscreen
-   `WKWebView` loads `about:blank`, which starts the WebContent and Networking processes.
+4. After the first frame commits (a display link's first callback), `BrowserSession.start()`
+   warms one offscreen `WKWebView`, which starts the WebContent and Networking processes, then,
+   off the main thread: the remembered Desktop Site choices, the reader check's source, the rule
+   lists (`ContentBlocker.prepare()`, compiled only on a miss) and the last session's tab
+   (`EngineTabs.restoreLastTab()`: `loadTabSession`, then `TabStore(session:persistence:)`,
+   then the selected tab's state file; `launch.restoreTab`).
+5. Search stays first: the field keeps focus. The restored tab is attached under the search sheet
+   (it gets the warm web view and restores history, scroll and sessionStorage), so closing the
+   sheet shows the page; a submitted address loads in it, on top of its history.
 
 ### The address bar
 
@@ -59,11 +67,17 @@ and compile to nothing on macOS.
    The best row sits nearest the field. An empty field shows favorites above the keyboard.
 3. Return or a row tap → `AddressBarInput(text)` → `destination(searchingWith:)` with the saved
    engine.
-4. The first load takes the warm web view from the pool (`dequeueWebView()`), attaches
-   `NavigationSignposter`, and puts it under the chrome. Later loads reuse it.
-4. `NavigationSignposter` emits `nav.commit` (start → commit) and `nav.finish` (start → finish or
-   failure) for every main-frame navigation.
-5. A finished load is recorded through `AppDatabase.historyRecorder` (batched, off main).
+4. The first load goes to the tab on screen, or a new one (`TabStore.open` through `EngineTabs`) that the pool attaches
+   to the page container (it takes the warm web view). The shell never holds the web view: it
+   follows the `Tab` (`TabObservation`, Observation tracking, at most once per run loop turn) for
+   the pill, the buttons and the page state, and `Tab.onProgress` for the progress bar.
+5. The engine's `NavigationSignposter` emits `nav.commit` and `nav.finish` for every main-frame
+   navigation.
+6. `Tab.onVisit` reports a load that ended on a new back-forward item; the shell records it
+   through `AppDatabase.historyRecorder` (batched, off main), as `.typed` when the address bar
+   asked for it. A picked page suggestion is remembered for its input (`recordPickedSuggestion`).
+   Focus preconnects to the suggestion host; cached suggestions fill the list while the engine
+   answers.
 
 ### Page chrome
 
@@ -89,7 +103,9 @@ and compile to nothing on macOS.
 - **Pull to refresh.** The same delegate tracks a pull past the top; at 80 pt it arms with a
   selection haptic, and a release while armed reloads.
 - **Page menu.** From More and a long press on the pill: Reload, Find on Page
-  (`findInteraction`), Share, Copy Link, Desktop Site, Add to (or Remove from) Favorites, then
+  (`findInteraction`), Show Reader (only on a readerable page) or Hide Reader, Share, Copy Link,
+  Desktop Site (`Tab.setContentModeOverride`, remembered per site), Turn Off / Turn On Blocking on
+  This Site (remembered per site, applied with a reload), Add to (or Remove from) Favorites, then
   History, Edit Favorites and Settings… in their own last section. More is always enabled:
   without a page the menu holds only that last section.
 
@@ -113,17 +129,23 @@ and compile to nothing on macOS.
 
 ### Reader
 
-1. While building a tab's configuration, the shell calls `ReaderExtractor.install(in:)`. It adds
-   only `Readability-readerable.js` (about 4 KB) as a main-frame user script at document end, in
-   the reader content world. Each page reports `isProbablyReaderable` through
+1. The pool calls its `PageScripts` (the shell's `ReaderPageScripts`) for every tab's own
+   `WKUserContentController`; it adds Reader's check with `installPrepared(in:)` (the source is
+   read once off the main thread by `prepare()`; a controller made earlier gets it when ready). It
+   adds only `Readability-readerable.js` (about 4 KB) as a main-frame user script at document
+   end, in the reader content world. Each page reports `isProbablyReaderable` through
    `onAvailability`, and `isAvailable(in:)` returns the last report for the current URL.
 2. When the user opens reader mode, `article(in:)` injects the full `Readability.js` into that
    document's reader world and parses a clone of the page. The page returns one JSON string,
    decoded off the main thread. The article is kept per web view and URL for repeat opens.
-3. `ReaderSchemeHandler.install(in:)` sets up the reader web view's configuration (the
-   `plain-reader:` scheme, page JavaScript off) before the pool creates it. `show(_:in:)` renders
-   the template off the main thread and loads `plain-reader://article/<id>`. The page and
+3. The page menu offers Show Reader only when `isAvailable(in:)` is true for the page.
+   `ReaderPresenter` asks the pool for an auxiliary web view (`makeAuxiliaryWebView`, not a tab)
+   with `ReaderSchemeHandler.install(in:)` on its configuration (the `plain-reader:` scheme, page
+   JavaScript off). `show(_:in:)` renders the template off the main thread and loads
+   `plain-reader://article/<id>`; the view fades in over the page when it has loaded. The page and
    `reader.css` come from the handler, with a no-script content security policy.
+4. In the reader only reader URLs load; a tapped link closes it and opens in the tab. Back, Hide
+   Reader or the page navigating closes it, and the page under it is as it was.
 
 ## Signposts
 
@@ -165,6 +187,9 @@ exactly what the app emits.
 | `linkMenu.action` / `linkMenu.preview` | event / interval | a link menu item chosen / a preview web view made |
 | `page.zoom` / `page.save` | event | zoom changed (message: percent) / Save PDF to Files |
 | `downloads.show` / `download.preview` / `download.showInFiles` | event | Downloads sheet, Quick Look, Show in Files |
+| `page.reader` | event | Show Reader / Hide Reader |
+| `contentBlocking.prepare` / `.compile` / `.siteToggle` | interval | lists loaded / one list compiled / per-site toggle applied |
+| `launch.restoreTab` | interval | after the first frame: last session's tab read and handed to the page |
 
 ## Tabs
 
@@ -193,7 +218,14 @@ exactly what the app emits.
 
 The shell creates one `WebViewPool` and sets itself as `pool.host` (`EngineHost`: child tabs,
 JavaScript dialogs, HTTP auth and certificate errors, external apps and universal links,
-permission prompts, downloads, form resubmission). Tabs come from `pool.makeTab(id:restoring:)`; `TabStore` keeps them.
+permission prompts, downloads, form resubmission; `BrowserViewController+EngineHost.swift`,
+system alerts one at a time). Engine tabs come from `pool.makeTab(id:restoring:)` with the
+`TabStore`'s ids; `EngineTabs` maps them and reports page changes (`updatePage`). A popup the pool
+made joins the store with its own id (`TabStore.open(id:)`).
+`BrowserSession` builds the pool with Storage-backed stores (`SiteStores.swift`): permissions
+(`StorageSitePermissionStore`), Desktop Site (`StorageSiteContentModeStore`, an in-memory map
+loaded after launch), content blocking (`ContentBlocker` as `UserContentRules`, its allow-list in
+`StorageSiteAllowListStore`) and Reader's check (`ReaderPageScripts`).
 
 1. **Show a tab:** `pool.attach(tab, to: paneView)`. A discarded tab restores sessionStorage, then
    `interactionState`. `pool.detach(tab)` stores a thumbnail and applies the tier limits.

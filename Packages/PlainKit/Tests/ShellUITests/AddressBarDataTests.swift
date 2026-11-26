@@ -115,6 +115,45 @@ struct AddressBarDataTests {
         #expect(sheets.makeSettingsModel() === first)
     }
 
+    @Test func typedVisitsAndPickedSuggestionsRankFirst() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData { SuggestionClient(http: FakeEngine(body: #"["x", []]"#)) }
+        await data.attach(database)
+        let linked = URL(string: "https://example.com/linked")!
+        let typed = URL(string: "https://example.com/typed")!
+        // Same visit count; the typed one weighs more.
+        data.pageVisited(url: linked, title: "Example Page")
+        data.pageVisited(url: typed, title: "Example Page", kind: .typed)
+        await data.flush()
+        var pages: [URL] = []
+        await data.suggestions(for: "example page") { updates in
+            pages = updates.compactMap { if case .page(let url, _, _) = $0 { url } else { nil } }
+        }
+        #expect(pages.first == typed)
+
+        // Picking the other page for an input makes it first for that input.
+        data.suggestionPicked(input: "example page", url: linked)
+        await data.flush()
+        await data.suggestions(for: "example page") { updates in
+            pages = updates.compactMap { if case .page(let url, _, _) = $0 { url } else { nil } }
+        }
+        #expect(pages.first == linked)
+    }
+
+    @Test func launchFocusPreconnectsOnlyAfterTheFirstFrame() {
+        var made = 0
+        let data = LiveAddressBarData {
+            made += 1
+            return SuggestionClient(http: FakeEngine(body: #"["x", []]"#))
+        }
+        data.prepareForTyping()
+        #expect(made == 0, "no URL session on the launch path")
+        data.firstFrameDidCommit()
+        #expect(made == 1, "the held-back preconnect runs after the first frame")
+        data.prepareForTyping()
+        #expect(made == 1)
+    }
+
     @Test func onlyWebPagesAreRecorded() {
         #expect(LiveAddressBarData.isRecordable(URL(string: "https://example.com")!))
         #expect(LiveAddressBarData.isRecordable(URL(string: "http://localhost:8080/a")!))

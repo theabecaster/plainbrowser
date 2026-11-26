@@ -93,6 +93,12 @@ public final class Tab: Identifiable {
     @ObservationIgnored public internal(set) var progress: Double = 0
     /// Called on the main thread whenever `progress` changes.
     @ObservationIgnored public var onProgress: ((Double) -> Void)?
+    /// Called on the main thread when a main-frame load ends on a page not reported before (a new
+    /// back-forward item), with its address and title: what history records. A reload, a load
+    /// that failed or stopped before committing, and a restored page report nothing.
+    @ObservationIgnored public var onVisit: ((URL, String?) -> Void)?
+    /// Called when the title of the page `onVisit` reported last arrives or changes.
+    @ObservationIgnored public var onVisitTitleChange: ((URL, String) -> Void)?
 
     @ObservationIgnored weak var pool: WebViewPool?
     /// What a discarded tab restores from.

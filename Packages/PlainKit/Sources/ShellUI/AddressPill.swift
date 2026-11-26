@@ -134,12 +134,23 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         rim.gradient.colors = Palette.focusRim.map { $0.resolvedColor(with: traitCollection).cgColor }
     }
 
-    /// Shows `url`'s host while resting, or the placeholder when there is no page.
-    func display(url: URL?) {
+    /// Shows `url`'s host while resting, or the placeholder when there is no page. A page that is
+    /// not secure (http, mixed content, a certificate the user chose to pass) says so before the
+    /// host, as Safari does.
+    func display(url: URL?, notSecure: Bool = false) {
         self.url = url
         if let url, let host = url.host(), !host.isEmpty {
-            hostLabel.text = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-            hostLabel.textColor = Palette.textPrimary
+            let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+            if notSecure {
+                let text = NSMutableAttributedString(
+                    string: "Not Secure — ", attributes: [.foregroundColor: Palette.textSecondary]
+                )
+                text.append(NSAttributedString(string: name, attributes: [.foregroundColor: Palette.textPrimary]))
+                hostLabel.attributedText = text
+            } else {
+                hostLabel.text = name
+                hostLabel.textColor = Palette.textPrimary
+            }
         } else if let url {
             hostLabel.text = url.absoluteString
             hostLabel.textColor = Palette.textPrimary
@@ -192,7 +203,10 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
         guard !isEditing, !isCompact, let menu = menuProvider() else { return nil }
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
+        let configuration = UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
+        // The same top-to-bottom order wherever the menu opens, app items last.
+        configuration.preferredMenuElementOrder = .fixed
+        return configuration
     }
 }
 #endif

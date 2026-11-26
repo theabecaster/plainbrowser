@@ -11,8 +11,6 @@ Newest feature last.
 - **Edge swipe in UI tests.** `allowsBackForwardNavigationGestures` is on and the swipe tracks
   under XCUITest, but a synthesized release never commits it, so the UI test checks Back and
   Forward through the buttons only. Check the swipe by hand on the Duo.
-- **Desktop Site.** Remembered per host for the session only, through a desktop user agent. Move it
-  to `preferredContentMode` in WebEngine's navigation delegate and persist it per site in Storage.
 - **Landscape iPhones.** The pill and the button bar take two rows (102 pt) in compact height.
   Fold them into one row there.
 - **Duo inner screen.** The plan turns the vertical bar off in inner landscape (Safari's
@@ -37,9 +35,6 @@ Newest feature last.
 
 ## Reader (lane F)
 
-- Shell wiring: the reader web view's navigation delegate must allow only `ReaderRenderer.isReaderURL`
-  loads and open every other link in the tab (the reader page itself has JavaScript off and a
-  no-script CSP).
 - Opening blocks some sites put before the article (Ars' "Biz & IT —" kicker and bold deck) read
   as two extra headings. Could normalize them into `.eyebrow`/`.dek` during extraction.
 - No controlled test where an older `ReaderSchemeHandler.show` finishes after a newer one; the
@@ -113,3 +108,23 @@ Newest feature last.
   the 120 Hz hitch numbers on the device.
 - **Context menu on a partly hidden card** lifts its preview over the next card. System
   behavior; scrolling the card into view first would avoid it.
+
+## Integration 2: shell on the engine (2026-11-26)
+
+- **Reader web view ownership.** The pool makes the reader's web view (`makeAuxiliaryWebView`) but
+  `ReaderPresenter` holds it while it shows. Move holding and release into the pool (an
+  auxiliary slot per pane) if a second auxiliary view appears. (Code review, round 1.)
+- **Downloads list.** A finished download is an alert with Open; there is no list of downloads
+  in progress or past ones yet. M4 can add one in the page menu.
+- **Restored tabs beyond the last.** Only the last selected tab comes back after a relaunch; the
+  other rows stay in Storage for M2's tab gallery.
+- **Zoom in the page menu.** Not built yet; the reference menu lists it. (Design review, round 1.)
+- **Back and Forward when unavailable.** They stay visible and disabled (system style, stable
+  layout); the design review asked to hide them. Decide with the shell lane.
+- **Page menu on the Duo outer screen.** The last section (Edit Favorites, Settings) scrolls below
+  the fold of the menu with no cue. (Design review, round 2.)
+- **Geolocation and motion prompts on the simulator.** WebKit never asked the UI delegate for
+  `http://localhost` test pages (not a secure context), so the captured prompt is the camera one,
+  shown through a debug launch argument. Check location and camera prompts on the device.
+- **Duo inner screen captures.** The simulator's fold state is set only in Device Hub, so this
+  round has iPhone 17 and Duo outer screenshots only.

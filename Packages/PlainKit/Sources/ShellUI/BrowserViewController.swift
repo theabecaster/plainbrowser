@@ -12,21 +12,24 @@ import WebKit
 ///
 /// Launch order (docs/plan.md, "Engine rules"):
 /// 1. The first frame shows the search sheet with the field already first responder, keyboard up.
-/// 2. After that frame, the pool warms one offscreen web view with `about:blank`.
-/// 3. The first submitted address gets that warm web view.
+/// 2. After that frame, the pool warms one offscreen web view with `about:blank`
+///    (`BrowserSession.start()`), and the last session's tab, if any, comes back under the sheet.
+/// 3. The first submitted address goes to that tab, or to a new one that gets the warm web view.
+///
+/// The tab, its page state and the engine's questions (dialogs, sign-in, permissions, downloads)
+/// live in `BrowserViewController+Tab.swift` and `BrowserViewController+EngineHost.swift`.
 ///
 /// Embed it in a `UINavigationController` with a hidden navigation bar: where the system has a
 /// vertical bar (iPhone Duo), the page buttons are the navigation controller's toolbar items and
 /// go into that bar.
 public final class BrowserViewController: UIViewController, UITextFieldDelegate, UIScrollViewDelegate,
     UIAdaptivePresentationControllerDelegate {
-    private let pool: WebViewPool
-    private let data: any AddressBarData
+    let session: BrowserSession
+    let data: any AddressBarData
     private let sheets: FeatureSheets
     private let onSearchFieldReady: () -> Void
-    private let navigationSignposter = NavigationSignposter()
 
-    private let webContainer = UIView()
+    let webContainer = UIView()
     /// The pill and the button bar, rendered as one glass surface (docs/plan.md, section 5,
     /// Chrome). It covers the view but takes no touches of its own.
     private let chromeGlass = Glass.makeContainer(spacing: ChromeGeometry.glassMergeSpacing)
@@ -34,15 +37,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// One per control, not on `chromeGlass`: the effect reaches as high as its container, and
     /// `chromeGlass` covers the whole screen. WebKit hides it by itself where it extends a fixed
     /// footer's color to the edge instead.
-    private let pageEdgeEffects = [UIScrollEdgeElementContainerInteraction(), UIScrollEdgeElementContainerInteraction()]
-    private let pill = AddressPill()
-    private let buttonBar = ButtonBar()
+    let pageEdgeEffects = [UIScrollEdgeElementContainerInteraction(), UIScrollEdgeElementContainerInteraction()]
+    let pill = AddressPill()
+    let buttonBar = ButtonBar()
     private let sheet = SearchSheet()
     private let pullIndicator = PullIndicator()
-    private var barItems: [PageButton: UIBarButtonItem] = [:]
+    var barItems: [PageButton: UIBarButtonItem] = [:]
 
-    private var webView: WKWebView?
-    private var observations: [NSKeyValueObservation] = []
+    /// The tab on screen (BrowserCore's `TabStore` owns the list; `EngineTabs` keeps it in step).
+    var currentTab: Tab?
+    /// The tab's observation, the reader view, the page's error state and the prompt queue.
+    let engineUI = EngineUIState()
 
     // Layout.
     private var pillOnBar: NSLayoutConstraint!
@@ -51,14 +56,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// The button bar's own constraints, activated again when it comes back after a vertical bar.
     private var buttonBarConstraints: [NSLayoutConstraint] = []
     private var geometry = ChromeGeometry(viewHeight: 0, safeBottom: 0, hasButtonBar: true)
-    private var usesVerticalBar = false
+    private(set) var usesVerticalBar = false
 
     // State.
-    private var isEditingAddress = true
+    private(set) var isEditingAddress = true
     private var didFocusAtLaunch = false
     private var didWarmUp = false
-    /// Hosts this session asked for their desktop site (Desktop Site in the page menu).
-    private var desktopHosts: Set<String> = []
     private var collapse = ChromeCollapse()
     private var collapseInterval: OSSignpostIntervalState?
     /// Runs the toolbar snap frame by frame, so a drag can take the bar from where it is on screen.
@@ -75,25 +78,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var pullTracker = PullToRefreshTracker()
     private var suggestionTask: Task<Void, Never>?
     private var favoritesTask: Task<Void, Never>?
-    /// The back-forward item last recorded in history, so a load that failed or stopped before
-    /// committing (it ends on the same item) is not recorded twice.
-    private weak var recordedItem: WKBackForwardListItem?
     /// Runs when the presented feature sheet closes, by Done or by a swipe.
     private var sheetClosed: (() -> Void)?
 
     /// - Parameters:
+    ///   - session: the web view pool, tabs, content blocking and reader mode.
     ///   - data: history, favorites, settings and engine suggestions for the address bar.
     ///   - sheets: Settings, History and the favorites editor.
     ///   - onSearchFieldReady: called once, when the field first becomes first responder.
     public init(
-        pool: WebViewPool, data: any AddressBarData, sheets: FeatureSheets,
+        session: BrowserSession, data: any AddressBarData, sheets: FeatureSheets,
         onSearchFieldReady: @escaping () -> Void
     ) {
-        self.pool = pool
+        self.session = session
         self.data = data
         self.sheets = sheets
         self.onSearchFieldReady = onSearchFieldReady
         super.init(nibName: nil, bundle: nil)
+        session.pool.host = self
     }
 
     @available(*, unavailable)
@@ -218,9 +220,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             case .more:
                 button.menu = pageMenu()
                 button.showsMenuAsPrimaryAction = true
+                // The same top-to-bottom order wherever the menu opens, app items last.
+                button.preferredMenuElementOrder = .fixed
                 item = UIBarButtonItem(
                     title: kind.title, image: UIImage(systemName: kind.symbol), primaryAction: nil, menu: pageMenu()
                 )
+                item.preferredMenuElementOrder = .fixed
             case .share:
                 button.addAction(UIAction { [weak self, weak button] _ in
                     guard let button else { return }
@@ -316,7 +321,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     @objc private func firstFrameDidCommit(_ link: CADisplayLink) {
         link.invalidate()
-        pool.warmUp()
+        startSession()
     }
 
     /// Call when the address bar's data changed outside the shell (the database opened), so an
@@ -337,7 +342,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             return
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
-        pill.textField.text = webView?.url?.absoluteString ?? ""
+        pill.textField.text = currentTab?.url?.absoluteString ?? ""
         // The layout switches before the keyboard starts, so the keyboard's own animation carries
         // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.
         applyEditingLayout(true, animated: true)
@@ -372,7 +377,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             Haptic.nothingThere.play()
             return false
         }
-        load(url)
+        load(url, kind: .typed)
         signposter.endInterval(Signposts.addressSubmit, state, "loaded")
         return false
     }
@@ -382,7 +387,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         suggestionTask?.cancel()
         // The current page's address, untouched, is not a query: show favorites, as for an
         // empty field, until the user types.
-        let isCurrentAddress = !query.isEmpty && query == webView?.url?.absoluteString
+        let isCurrentAddress = !query.isEmpty && query == currentTab?.url?.absoluteString
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             sheet.show([])
@@ -416,12 +421,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private func open(_ pick: SearchPick) {
         let url: URL?
         switch pick {
-        case .page(let page): url = page
+        case .page(let page):
+            url = page
+            // What the user typed, unless the field still shows the page's own address.
+            let input = pill.textField.text ?? ""
+            if input != currentTab?.url?.absoluteString { data.suggestionPicked(input: input, url: page) }
         case .search(let query): url = data.searchEngine.resultsURL(for: query)
         }
         guard let url else { return }
         let state = Signposts.signposter.beginInterval(Signposts.addressSubmit)
-        load(url)
+        load(url, kind: .typed)
         Signposts.signposter.endInterval(Signposts.addressSubmit, state, "picked")
     }
 
@@ -437,7 +446,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// The pill's move is laid out inside the keyboard's animation, which UIKit runs for views
     /// tied to `keyboardLayoutGuide`, so it tracks the keyboard frame by frame. The sheet's
     /// fade, the field's rim and the bar use the spring.
-    private func applyEditingLayout(_ editing: Bool, animated: Bool) {
+    func applyEditingLayout(_ editing: Bool, animated: Bool) {
         let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
         isEditingAddress = editing
         guard changed || !animated else { return }
@@ -469,110 +478,32 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     // MARK: Page
 
-    private func load(_ url: URL) {
-        let webView = self.webView ?? installWebView()
-        applyUserAgent(for: url)
-        webView.load(URLRequest(url: url))
+    /// Loads `url` in the tab on screen. `.typed` when the address bar asked for it: that visit
+    /// then weighs more in ranking.
+    func load(_ url: URL, kind: VisitKind = .link) {
+        let tab = self.currentTab ?? openNewTab()
+        if kind == .typed {
+            engineUI.typedVisitTabs.insert(tab.id)
+        } else {
+            engineUI.typedVisitTabs.remove(tab.id)
+        }
+        tab.load(url)
         pill.display(url: url)
         pill.textField.text = url.absoluteString
         if isEditingAddress { endEditing() }
-    }
-
-    private func installWebView() -> WKWebView {
-        let webView = pool.dequeueWebView()
-        webView.navigationDelegate = navigationSignposter
-        webView.allowsBackForwardNavigationGestures = true
-        webView.isFindInteractionEnabled = true
-        webView.scrollView.delegate = self
-        webView.scrollView.alwaysBounceVertical = true
-        for effect in pageEdgeEffects { effect.scrollView = webView.scrollView }
-        // Hard: the page under the resting bar is obscured anyway, and an opaque edge keeps text
-        // from refracting through the glass (soft left it legible as ghost lettering;
-        // `.automatic` showed no effect at all on WebKit's scroll view).
-        webView.scrollView.bottomEdgeEffect.style = .hard
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        webContainer.addSubview(webView)
-        NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: webContainer.topAnchor),
-            webView.leadingAnchor.constraint(equalTo: webContainer.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: webContainer.trailingAnchor),
-            webView.bottomAnchor.constraint(equalTo: webContainer.bottomAnchor),
-        ])
-        self.webView = webView
-        observe(webView)
-        view.layoutIfNeeded()
-        updatePageInsets()
-        return webView
-    }
-
-    /// Page state the chrome shows. Key-value observation is fine for these: they change a few
-    /// times per load. The toolbar's scroll tracking uses the scroll delegate instead.
-    private func observe(_ webView: WKWebView) {
-        func on<Value>(_ keyPath: KeyPath<WKWebView, Value>, _ handler: @escaping @MainActor (BrowserViewController, WKWebView) -> Void) {
-            observations.append(webView.observe(keyPath, options: []) { [weak self] webView, _ in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    handler(self, webView)
-                }
-            })
-        }
-        on(\.estimatedProgress) { controller, webView in
-            guard webView.isLoading else { return }
-            controller.pill.progressBar.setProgress(webView.estimatedProgress)
-        }
-        on(\.isLoading) { controller, webView in
-            if webView.isLoading {
-                // A new load brings the bar back. Same-document URL changes (pushState) do not.
-                controller.expandForNewPage()
-                controller.pill.progressBar.begin()
-                controller.pill.progressBar.setProgress(max(0.1, webView.estimatedProgress))
-            } else {
-                controller.pill.progressBar.finish()
-                controller.recordVisit(webView)
-            }
-        }
-        on(\.url) { controller, webView in
-            controller.pill.display(url: webView.url)
-            if let url = webView.url { controller.applyUserAgent(for: url) }
-            if !controller.isEditingAddress { controller.pill.textField.text = webView.url?.absoluteString }
-            controller.updateButtons()
-        }
-        on(\.title) { controller, webView in
-            // Only for a page already recorded. A title that arrives while a load is under way
-            // belongs to the visit recorded at its end (which carries the title), and must not
-            // rename an earlier visit to the same address.
-            guard controller.recordsHistory, let url = webView.url, let title = webView.title,
-                  let item = webView.backForwardList.currentItem, item === controller.recordedItem
-            else { return }
-            controller.data.pageTitleChanged(url: url, title: title)
-        }
-        on(\.canGoBack) { controller, _ in controller.updateButtons() }
-        on(\.canGoForward) { controller, _ in controller.updateButtons() }
     }
 
     // MARK: History
 
     /// Whether this page's visits go into history. The seam for private browsing: a private tab
     /// answers false, and then neither visits nor titles are recorded.
-    private var recordsHistory: Bool { true }
+    var recordsHistory: Bool { true }
 
-    /// Records the page a load ended on, once per back-forward item: a load that failed or was
-    /// stopped before committing ends on the item already recorded. The recorder batches the
-    /// write and runs it off the main thread.
-    private func recordVisit(_ webView: WKWebView) {
-        // No current item means nothing ever committed: the first load failed.
-        guard recordsHistory, let url = webView.url, let item = webView.backForwardList.currentItem,
-              item !== recordedItem
-        else { return }
-        recordedItem = item
-        data.pageVisited(url: url, title: webView.title)
-    }
-
-    private func updateButtons() {
-        let hasPage = webView?.url != nil
+    func updateButtons() {
+        let hasPage = currentTab?.url != nil
         let enabled: [PageButton: Bool] = [
-            .back: webView?.canGoBack ?? false,
-            .forward: webView?.canGoForward ?? false,
+            .back: canGoBack,
+            .forward: !isShowingReader && (currentTab?.canGoForward ?? false),
             .share: hasPage,
             // More always opens: History and Settings apply with or without a page.
             .more: true,
@@ -588,21 +519,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// the geometry changes (rotation, fold, bar mode), never while the bar moves, so the page
     /// never relayouts during the motion. The viewport insets span collapsed to expanded, so CSS
     /// `svh`/`lvh` stay put.
-    private func updatePageInsets() {
-        guard let webView, view.bounds.height > 0 else { return }
+    func updatePageInsets() {
+        guard view.bounds.height > 0 else { return }
         let pageBottom = webContainer.frame.maxY
         let collapsed = geometry.collapsedInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)
         let obscured = pageInset.collapsed ? collapsed : expanded
-        if webView.obscuredContentInsets.bottom != obscured {
-            webView.obscuredContentInsets = UIEdgeInsets(top: 0, left: 0, bottom: obscured, right: 0)
-        }
-        if webView.minimumViewportInset.bottom != collapsed || webView.maximumViewportInset.bottom != expanded {
-            webView.setMinimumViewportInset(
-                UIEdgeInsets(top: 0, left: 0, bottom: collapsed, right: 0),
-                maximumViewportInset: UIEdgeInsets(top: 0, left: 0, bottom: expanded, right: 0)
-            )
-        }
+        applyPageInsets(obscuredBottom: obscured, collapsedBottom: collapsed, expandedBottom: expanded)
     }
 
     /// Moves the page's inset to the bar's resting state, unless the page is bouncing past an
@@ -610,7 +533,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private func applyPendingInset() {
         guard pageInset.pending != nil else { return }
         let applied: Bool
-        if let scrollView = webView?.scrollView {
+        if let scrollView = pageScrollView {
             let range = scrollRange(scrollView)
             applied = pageInset.applyIfSettled(offset: scrollView.contentOffset.y, top: range.top, bottom: range.bottom)
         } else {
@@ -645,14 +568,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if !isEditingAddress { buttonBar.alpha = ChromeGeometry.barAlpha(progress: progress) }
     }
 
-    private func expandChrome(animated: Bool) {
+    func expandChrome(animated: Bool) {
         settleCollapse(at: 0, animated: animated)
     }
 
     /// A new page brings the bar back. A finger on the page keeps the bar until it lifts, and then
     /// the snap expands it.
-    private func expandForNewPage() {
-        if webView?.scrollView.isDragging == true {
+    func expandForNewPage() {
+        if pageScrollView?.isDragging == true {
             expandOnRelease = true
         } else {
             expandChrome(animated: true)
@@ -735,7 +658,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     // MARK: UIScrollViewDelegate
 
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        guard scrollView === webView?.scrollView else { return }
+        guard scrollView === pageScrollView else { return }
         // A drag during a snap takes the bar from where it is on screen, with no jump.
         if snap.isRunning || crossfadeTarget != nil {
             cancelCrossfade()
@@ -749,7 +672,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === webView?.scrollView, !isEditingAddress else { return }
+        guard scrollView === pageScrollView, !isEditingAddress else { return }
         let (top, bottom) = scrollRange(scrollView)
         let offset = scrollView.contentOffset.y
 
@@ -778,7 +701,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func scrollViewWillEndDragging(
         _ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>
     ) {
-        guard scrollView === webView?.scrollView else { return }
+        guard scrollView === pageScrollView else { return }
         if pullTracker.released() {
             refresh()
         } else {
@@ -802,12 +725,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        guard scrollView === webView?.scrollView, !decelerate else { return }
+        guard scrollView === pageScrollView, !decelerate else { return }
         applyPendingInset()
     }
 
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        guard scrollView === webView?.scrollView else { return }
+        guard scrollView === pageScrollView else { return }
         applyPendingInset()
     }
 
@@ -835,21 +758,21 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private func refresh() {
         Signposts.signposter.emitEvent(Signposts.pullToRefresh)
         pullIndicator.hide()
-        webView?.reload()
+        reloadPage()
     }
 
     // MARK: Buttons and page menu
 
     private func goBack() {
-        guard let webView, webView.canGoBack else { return Haptic.nothingThere.play() }
+        guard canGoBack else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navBack)
-        webView.goBack()
+        performBack()
     }
 
     private func goForward() {
-        guard let webView, webView.canGoForward else { return Haptic.nothingThere.play() }
+        guard let tab = currentTab, !isShowingReader, tab.canGoForward else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navForward)
-        webView.goForward()
+        tab.goForward()
     }
 
     /// The page menu (docs/ui-reference.md): built when it opens, with only the items that apply
@@ -860,7 +783,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIDeferredMenuElement.uncached { [weak self] completion in
                 Signposts.signposter.emitEvent(Signposts.pageMenu)
                 guard let self else { return completion([]) }
-                guard let url = self.webView?.url, LiveAddressBarData.isRecordable(url) else {
+                guard let url = self.currentTab?.url, LiveAddressBarData.isRecordable(url) else {
                     return completion(self.pageMenuElements(isFavorite: nil))
                 }
                 // One indexed read off the main thread; the menu shows when it answers. If the
@@ -868,7 +791,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 Task { [weak self, data] in
                     let isFavorite = await data.isFavorite(url)
                     guard let self else { return completion([]) }
-                    completion(self.pageMenuElements(isFavorite: self.webView?.url == url ? isFavorite : nil))
+                    completion(self.pageMenuElements(isFavorite: self.currentTab?.url == url ? isFavorite : nil))
                 }
             },
         ])
@@ -894,14 +817,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             for item in [history, favorites, settings] { item.attributes = .disabled }
         }
         let app = UIMenu(options: .displayInline, children: [history, favorites, settings])
-        guard let webView, let url = webView.url else { return [app] }
-        let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { _ in
+        guard let tab = currentTab, let url = tab.url else { return [app] }
+        let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
             Signposts.signposter.emitEvent(Signposts.reload)
-            webView.reload()
+            self?.reloadPage()
         }
-        let find = UIAction(title: "Find on Page", image: UIImage(systemName: "doc.text.magnifyingglass")) { _ in
-            Signposts.signposter.emitEvent(Signposts.findOnPage)
-            webView.findInteraction?.presentFindNavigator(showingReplace: false)
+        let find = UIAction(title: "Find on Page", image: UIImage(systemName: "doc.text.magnifyingglass")) { [weak self] _ in
+            self?.findOnPage()
         }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
             guard let self else { return }
@@ -914,14 +836,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIPasteboard.general.url = url
             Haptic.success.play()
         }
-        let desktop = UIAction(
-            title: "Desktop Site", image: UIImage(systemName: "desktopcomputer"), state: isDesktopSite ? .on : .off
-        ) { [weak self] _ in
-            self?.toggleDesktopSite()
-        }
-        var siteItems: [UIMenuElement] = [desktop]
+        var siteItems = siteMenuItems(for: tab, url: url)
         if let isFavorite {
-            let title = webView.title
+            let title = tab.title
             let favorite = UIAction(
                 title: isFavorite ? "Remove from Favorites" : "Add to Favorites",
                 image: UIImage(systemName: isFavorite ? "star.slash" : "star")
@@ -932,7 +849,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             siteItems.append(favorite)
         }
         return [
-            UIMenu(options: .displayInline, children: [reload, find]),
+            UIMenu(options: .displayInline, children: [reload, find] + readerMenuItems(for: tab)),
             UIMenu(options: .displayInline, children: [share, copy]),
             UIMenu(options: .displayInline, children: siteItems),
             app,
@@ -1006,39 +923,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     private func share(from source: (any UIPopoverPresentationControllerSourceItem)?) {
-        guard let url = webView?.url else { return }
+        guard let url = currentTab?.url else { return }
         Signposts.signposter.emitEvent(Signposts.share)
         let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         sheet.popoverPresentationController?.sourceItem = source ?? pill
         present(sheet, animated: true)
     }
-
-    private var isDesktopSite: Bool {
-        guard let host = webView?.url?.host() else { return false }
-        return desktopHosts.contains(host)
-    }
-
-    /// Asks this site for its desktop layout, or back for the mobile one, and reloads.
-    ///
-    /// Stopgap until WebEngine's navigation delegate sets `preferredContentMode` per navigation
-    /// and Storage remembers the choice per site: a desktop Safari user agent, remembered per
-    /// host for this session. A link to another host uses the old agent for that one load.
-    private func toggleDesktopSite() {
-        guard let webView, let url = webView.url, let host = url.host() else { return }
-        Signposts.signposter.emitEvent(Signposts.desktopSite)
-        if desktopHosts.remove(host) == nil { desktopHosts.insert(host) }
-        applyUserAgent(for: url)
-        webView.reload()
-    }
-
-    private func applyUserAgent(for url: URL) {
-        guard let webView else { return }
-        let agent = url.host().map(desktopHosts.contains) == true ? Self.desktopUserAgent : nil
-        if webView.customUserAgent != agent { webView.customUserAgent = agent }
-    }
-
-    /// Safari on a Mac, which sites answer with their desktop layout.
-    static let desktopUserAgent =
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
 }
 #endif

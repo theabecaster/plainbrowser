@@ -33,6 +33,18 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Downloads go to Documents/Downloads; these two make it Plain's folder in the Files app. -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<!-- Asked only when a site needs them; Plain then remembers each site's answer. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Websites you allow can use the camera, for video calls and photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Websites you allow can use the microphone, for calls and voice.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Websites you allow can see your location, for maps and places nearby.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

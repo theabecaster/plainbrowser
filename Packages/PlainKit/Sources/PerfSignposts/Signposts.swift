@@ -92,6 +92,26 @@ public enum Signposts {
     /// Interval: showing an article in the reader view, from the request until the rendered page
     /// is handed to the reader web view.
     public static let readerShow: StaticString = "reader.show"
+    /// Event: the button on a page that can't show (crashed, failed, form waiting): Reload or Try
+    /// Again. The message says which.
+    public static let pageStateAction: StaticString = "page.stateAction"
+    /// Event: Show Reader or Hide Reader from the page menu (or Back closing the reader).
+    public static let readerToggle: StaticString = "page.reader"
+
+    // MARK: Content blocking
+
+    /// Interval: loading the allow-list and every bundled rule list (lookups, compiles on a miss).
+    public static let contentBlockingPrepare: StaticString = "contentBlocking.prepare"
+    /// Interval: compiling one rule list (first launch, or an update that changed it).
+    public static let contentBlockingCompile: StaticString = "contentBlocking.compile"
+    /// Interval: Turn Off / Turn On Blocking on This Site, until every web view's lists follow.
+    public static let contentBlockingSiteToggle: StaticString = "contentBlocking.siteToggle"
+
+    // MARK: Session restore
+
+    /// Interval: after the first frame, reading the last session's tab and handing it to the
+    /// page (its page then restores under `tab.restore`).
+    public static let launchRestoreTab: StaticString = "launch.restoreTab"
 
     // MARK: Tabs (TabStore). The shell emits these around its `TabStore` calls.
 

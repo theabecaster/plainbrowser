@@ -41,6 +41,7 @@ public final class WebViewPool {
     private let contentModes: any SiteContentModeStore
     private let pageZooms: any SitePageZoomStore
     let contentRules: (any UserContentRules)?
+    private let pageScripts: (any PageScripts)?
     let dataStore: WKWebsiteDataStore
     /// Where Copy Link and Copy Image write. Tests use a private one: reading the general
     /// pasteboard needs the user's permission.
@@ -72,6 +73,7 @@ public final class WebViewPool {
     ///   - permissionStore: remembered camera, microphone, location and motion answers.
     ///   - contentModes: remembered desktop/mobile choices from the page menu.
     ///   - contentRules: content blocking, applied to each web view's own controller.
+    ///   - pageScripts: user scripts added to each tab's own controller (Reader's check).
     ///   - thumbnailDirectory: where thumbnails are written. Defaults to Caches/Thumbnails.
     ///   - downloadDirectory: where downloads go. Defaults to Documents/Downloads (Files-visible).
     ///   - pageZooms: remembered page zoom per site.
@@ -81,6 +83,7 @@ public final class WebViewPool {
         permissionStore: any SitePermissionStore = InMemorySitePermissionStore(),
         contentModes: any SiteContentModeStore = InMemorySiteContentModeStore(),
         contentRules: (any UserContentRules)? = nil,
+        pageScripts: (any PageScripts)? = nil,
         thumbnailDirectory: URL? = nil,
         downloadDirectory: URL? = nil,
         pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore()
@@ -92,6 +95,7 @@ public final class WebViewPool {
         self.contentModes = contentModes
         self.pageZooms = pageZooms
         self.contentRules = contentRules
+        self.pageScripts = pageScripts
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         thumbnails = ThumbnailService(directory: thumbnailDirectory ?? caches.appending(path: "Thumbnails"))
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -159,6 +163,7 @@ public final class WebViewPool {
         controller.addUserScript(UserScripts.subframePress)
         // Its message handler is added by the tab's `Slot`, which receives the reports.
         controller.addUserScript(UserScripts.media)
+        pageScripts?.install(in: controller)
         return controller
     }
 
@@ -212,11 +217,26 @@ public final class WebViewPool {
         return (makeWebView(configuration: configuration, controller: controller), controller)
     }
 
-    /// A configured web view the caller owns. Only for M0's `BrowserViewController`, which predates
-    /// tabs; new code uses `makeTab` and `attach(_:to:)`.
-    @available(*, deprecated, message: "Use makeTab(id:restoring:) and attach(_:to:).")
-    public func dequeueWebView() -> WKWebView {
-        takeWebView().0
+    /// A web view that is not a tab, for a page the app makes itself (the reader view). It shares
+    /// the tabs' data store and identity, gets no content rules, page scripts or tab handler, and
+    /// `configure` runs on its configuration first (custom schemes, JavaScript off). The caller
+    /// shows it while its page is up and releases it after; it never becomes a tab.
+    public func makeAuxiliaryWebView(configure: (WKWebViewConfiguration) -> Void) -> WKWebView {
+        let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
+        configuration.userContentController = WKUserContentController()
+        configure(configuration)
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        #if DEBUG
+        webView.isInspectable = true
+        #endif
+        return webView
+    }
+
+    /// The tab's web view, for engine-layer helpers that run scripts in its page (Reader's
+    /// `article(in:)` and `isAvailable(in:)`). Pass it straight to the helper: never keep it, add
+    /// it to a view or change it. Nil when the tab has no web view (discarded).
+    public func webView(for tab: Tab) -> WKWebView? {
+        slots[tab.id]?.webView
     }
 
     // MARK: - Tabs
@@ -317,7 +337,9 @@ public final class WebViewPool {
     ) {
         guard let webView = slots[tab.id]?.webView else { return }
         if webView.obscuredContentInsets != obscured { webView.obscuredContentInsets = obscured }
-        webView.setMinimumViewportInset(minimumViewport, maximumViewportInset: maximumViewport)
+        if webView.minimumViewportInset != minimumViewport || webView.maximumViewportInset != maximumViewport {
+            webView.setMinimumViewportInset(minimumViewport, maximumViewportInset: maximumViewport)
+        }
     }
 
     /// Discards every tab that is not on screen (Firefox's fix for watchdog kills). Called on
@@ -404,7 +426,10 @@ public final class WebViewPool {
 
     func setContentModeOverride(_ mode: ContentMode?, for tab: Tab) {
         guard let site = NavigationRules.siteKey(for: tab.url) else { return }
-        contentModes.setContentMode(mode, forSite: site)
+        // A choice that matches what the pane would pick anyway is no override: the site goes back
+        // to the automatic choice, so it follows the pane again (Duo inner vs outer screen).
+        let automatic = NavigationRules.contentMode(forPaneSize: paneSize(of: tab))
+        contentModes.setContentMode(mode == automatic ? nil : mode, forSite: site)
         reload(tab)
     }
 
@@ -445,6 +470,10 @@ public final class WebViewPool {
                 self?.downloads.adopt(download, from: tab)
             }
         }
+    }
+
+    private func paneSize(of tab: Tab) -> CGSize {
+        slots[tab.id]?.container?.bounds.size ?? defaultPaneSize
     }
 
     func restorationState(for tab: Tab) async -> TabRestorationState {
@@ -546,12 +575,18 @@ public final class WebViewPool {
             }
             guard let slot, slot.pendingRestore != nil else { return }
             Self.apply(state, to: webView, slot: slot, resubmit: resubmit)
+            // The restored page is not a new visit: history already has it.
+            slot.markCurrentItemVisited()
             slot.pendingRestore = nil
             slot.runPendingAfterRestore()
         }
     }
 
     private static func apply(_ state: TabRestorationState, to webView: WKWebView, slot: Slot, resubmit: Bool) {
+        // The warm web view's empty warm-up page may still be loading (its WebContent process can
+        // take a second to start): if it commits after the restore, the tab shows a blank page
+        // over its restored history. Stop it first.
+        if webView.isLoading { webView.stopLoading() }
         if let interaction = state.interactionState {
             webView.interactionState = interaction
             if !resubmit {
@@ -718,8 +753,7 @@ public final class WebViewPool {
         if let site = NavigationRules.siteKey(for: url), let mode = contentModes.contentMode(forSite: site) {
             return mode
         }
-        let size = slots[tab.id]?.container?.bounds.size ?? defaultPaneSize
-        return NavigationRules.contentMode(forPaneSize: size)
+        return NavigationRules.contentMode(forPaneSize: paneSize(of: tab))
     }
 
     func applyContentRules(_ slot: Slot, mainFrameURL: URL) {
@@ -841,6 +875,8 @@ extension WebViewPool {
         /// What each frame's media script last reported, by the frame's own id.
         private var frameMedia: [String: (playing: Bool, pictureInPicture: Bool)] = [:]
         private var afterRestore: [(WKWebView) -> Void] = []
+        /// The back-forward item last reported through `Tab.onVisit`.
+        private weak var visitedItem: WKBackForwardListItem?
         private var observations: [NSKeyValueObservation] = []
 
         init(tab: Tab, webView: WKWebView, controller: WKUserContentController, pool: WebViewPool) {
@@ -908,10 +944,14 @@ extension WebViewPool {
                     MainActor.assumeIsolated {
                         guard webView.url != nil else { return }
                         self?.tab?.set(\.title, webView.title ?? "")
+                        self?.reportVisitTitle()
                     }
                 },
                 webView.observe(\.isLoading, options: .new) { [weak self] webView, _ in
-                    MainActor.assumeIsolated { self?.tab?.set(\.isLoading, webView.isLoading) }
+                    MainActor.assumeIsolated {
+                        self?.tab?.set(\.isLoading, webView.isLoading)
+                        if !webView.isLoading { self?.reportVisit() }
+                    }
                 },
                 webView.observe(\.canGoBack, options: .new) { [weak self] webView, _ in
                     MainActor.assumeIsolated { self?.tab?.set(\.canGoBack, webView.canGoBack) }
@@ -941,6 +981,29 @@ extension WebViewPool {
 
         private func publishCapture() {
             tab?.set(\.isCapturingMedia, webView.cameraCaptureState != .none || webView.microphoneCaptureState != .none)
+        }
+
+        /// A load ended: report the page once per back-forward item (`Tab.onVisit`). A load that
+        /// failed or stopped before committing ends on the item already reported; no current item
+        /// means nothing ever committed. A restore in flight is not a visit.
+        private func reportVisit() {
+            guard !isRestoring, let tab, let url = webView.url, let item = webView.backForwardList.currentItem,
+                  item !== visitedItem
+            else { return }
+            visitedItem = item
+            tab.onVisit?(url, webView.title)
+        }
+
+        func markCurrentItemVisited() {
+            visitedItem = webView.backForwardList.currentItem
+        }
+
+        /// Titles rename only the page last reported, never an earlier visit to the same address.
+        private func reportVisitTitle() {
+            guard let tab, let url = webView.url, let title = webView.title, !title.isEmpty,
+                  let item = webView.backForwardList.currentItem, item === visitedItem
+            else { return }
+            tab.onVisitTitleChange?(url, title)
         }
 
         func invalidate() {

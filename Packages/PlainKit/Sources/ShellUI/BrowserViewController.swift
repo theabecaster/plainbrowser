@@ -70,6 +70,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var expandOnRelease = false
     /// Counts Reduce Motion crossfades, so only the newest one ends the snap.
     private var crossfades = 0
+    /// Where a running Reduce Motion crossfade takes the bar.
+    private var crossfadeTarget: CGFloat?
     private var pullTracker = PullToRefreshTracker()
     private var suggestionTask: Task<Void, Never>?
     private var favoritesTask: Task<Void, Never>?
@@ -660,7 +662,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// (progress per second, from the release) is given. When the bar rests, the page's inset
     /// follows.
     private func settleCollapse(at target: CGFloat, animated: Bool, velocity: CGFloat? = nil) {
-        guard snap.isRunning || collapse.progress != target else {
+        // A crossfade already on its way there finishes on its own.
+        if let crossfadeTarget, crossfadeTarget == target, animated { return }
+        guard snap.isRunning || crossfadeTarget != nil || collapse.progress != target else {
             // Already there (the finger left the bar at an end): it rests now.
             snapEnded(at: target)
             return
@@ -670,17 +674,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if snapInterval == nil { snapInterval = signposter.beginInterval(Signposts.toolbarSnap) }
         // A rest that waited for a bounce is stale now that the bar moves again.
         pageInset.barMoved()
+        cancelCrossfade()
         if animated, Motion.prefersCrossfade {
             // Reduce Motion: the bar crossfades to its place instead of sliding.
             snap.jump(to: target)
-            crossfades += 1
             let crossfade = crossfades
+            crossfadeTarget = target
             Motion.crossfade(chromeGlass, changes: {
                 self.collapse.settle(at: target)
                 self.applyCollapse(target)
             }, completion: { [weak self] in
-                // A newer settle owns the end.
+                // A newer settle or a drag owns the end.
                 guard let self, crossfade == self.crossfades else { return }
+                self.crossfadeTarget = nil
                 self.snapEnded(at: target)
             })
             return
@@ -703,6 +709,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         })
     }
 
+    /// Forgets a running Reduce Motion crossfade, so its completion no longer ends the snap.
+    private func cancelCrossfade() {
+        crossfades += 1
+        crossfadeTarget = nil
+    }
+
     /// The bar is at rest at `target`: close the signposts and let the page's inset follow.
     private func snapEnded(at target: CGFloat) {
         let signposter = Signposts.signposter
@@ -723,7 +735,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         guard scrollView === webView?.scrollView else { return }
         // A drag during a snap takes the bar from where it is on screen, with no jump.
-        if snap.isRunning {
+        if snap.isRunning || crossfadeTarget != nil {
+            cancelCrossfade()
             collapse.settle(at: snap.stop())
             if let interval = snapInterval {
                 Signposts.signposter.endInterval(Signposts.toolbarSnap, interval, "grabbed")

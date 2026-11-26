@@ -133,6 +133,18 @@ func visit(_ url: String, _ title: String? = nil, at offset: TimeInterval = 0) -
         #expect(merged.count == FixedChoices.maxPageSuggestions)
     }
 
+    @Test func historyDedupesWithTheMergeKey() async throws {
+        let database = try AppDatabase.inMemory()
+        try await database.apply([
+            .visit(visit("https://a.example/news/?x=1")),
+            .visit(visit("http://www.A.example/news?x=1")),
+            .visit(visit("https://a.example/News?x=1")),
+        ])
+        let found = try await database.searchHistory("news", limit: 10)
+        // Paths are case-sensitive, so /News is its own page; the other two are one page.
+        #expect(found.count == 2)
+    }
+
     @Test func controlCharactersInInputAreHarmless() async throws {
         let database = try AppDatabase.inMemory()
         try await database.record(visit("https://a.example/b", "A B"))

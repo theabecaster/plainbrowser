@@ -98,7 +98,8 @@ public enum AddressBarSuggestions {
 
     /// The part of a URL that identifies a page for deduplication: host without `www.`, port,
     /// path without a trailing slash, and query. Lowercased host; scheme and fragment dropped.
-    static func addressKey(_ url: URL) -> String {
+    /// Storage's history query dedupes with this too, so both agree on what one page is.
+    public static func addressKey(_ url: URL) -> String {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let host = components.host?.lowercased()
         else { return url.absoluteString.lowercased() }

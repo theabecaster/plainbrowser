@@ -168,9 +168,16 @@ extension AppDatabase {
         }
     }
 
-    /// Up to `limit` pages with distinct addresses, best first. Variants of one page (http and
-    /// https, with and without www., fragments) share an address and count once, so they can't
-    /// crowd other pages out.
+    /// First fetch window, as a multiple of the pages wanted: twice almost always holds enough
+    /// distinct pages after variants are merged.
+    static let initialFetchFactor = 2
+    /// How much the window grows when variants of one page fill it, so the rare retry converges
+    /// in a step or two.
+    static let fetchGrowthFactor = 4
+
+    /// Up to `limit` distinct pages, best first. Variants of one page (http and https, with and
+    /// without www., trailing slash, fragments) count once, using the same key as
+    /// `AddressBarSuggestions`, so they can't crowd other pages out.
     static func historyMatches(
         _ pattern: String, addressPrefix: String?, limit: Int, in db: Database
     ) throws -> [PageCandidate] {
@@ -180,28 +187,29 @@ extension AppDatabase {
         // address prefix, so the order falls back to frecency alone.
         let like = addressPrefix.map { HistoryQuery.escapeLike($0) + "%" }
         let statement = try db.cachedStatement(sql: """
-            SELECT p.url, p.title, p.frecency, p.address
+            SELECT p.url, p.title, p.frecency
             FROM \(Schema.historySearch) s
             JOIN \(Schema.historyPlace) p ON p.id = s.rowid
             WHERE \(Schema.historySearch) MATCH ?
             ORDER BY (p.address LIKE ? ESCAPE '\\') DESC, p.frecency DESC
             LIMIT ?
             """)
-        // Twice the rows needed almost always holds enough distinct pages. When variants eat into
-        // it, fetch again with a bigger window; the cost grows only for that rare case.
-        var fetch = 2 * limit
+        // When variants eat into the window, fetch again with a bigger one; the cost grows only
+        // for that rare case.
+        var fetch = initialFetchFactor * limit
         while true {
             let rows = try Row.fetchAll(statement, arguments: [pattern, like, fetch])
             var seen = Set<String>()
             var pages: [PageCandidate] = []
             for row in rows {
-                let address: String = row["address"]
-                guard seen.insert(address.lowercased()).inserted, let url = URL(string: row["url"]) else { continue }
+                guard let url = URL(string: row["url"]),
+                      seen.insert(AddressBarSuggestions.addressKey(url)).inserted
+                else { continue }
                 pages.append(PageCandidate(url: url, title: row["title"], frecency: row["frecency"], isFavorite: false))
                 if pages.count == limit { return pages }
             }
             if rows.count < fetch { return pages }
-            fetch *= 4
+            fetch *= fetchGrowthFactor
         }
     }
 }

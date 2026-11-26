@@ -39,7 +39,7 @@ public enum Palette {
 
     /// Lagoon Blue for text and symbols on glass: in dark mode a lighter step of the same blue,
     /// so labels keep their contrast on the dark glass.
-    public static let accentOnGlass = UIColor(light: accent, dark: UIColor(rgb: 0x7AA7FF))
+    public static let accentOnGlass = UIColor(light: accent, dark: UIColor(rgb: 0x8DB6FF))
 
     /// The soft shadow under floating controls, so glass lifts off a white page.
     public static let floatingShadow = UIColor(light: UIColor(rgb: 0x0A2133), dark: .black)

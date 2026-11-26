@@ -143,13 +143,16 @@ public final class TabGalleryTransition {
                 completion: { _ in finish() }
             )
         } else {
-            UIView.animate(Motion.galleryZoom, changes: { self.apply(progress: self.progress(of: end), crossfade: false) }, completion: finish)
+            animateRing(toward: end)
+            UIView.animate(Motion.galleryZoom, changes: {
+                self.apply(progress: self.progress(of: end), crossfade: false, setsRing: false)
+            }, completion: finish)
         }
     }
 
     /// Lays everything out for `progress` (0 = page, 1 = card). Under Reduce Motion `progress`
     /// is the page's opacity instead, and nothing moves.
-    private func apply(progress: CGFloat, crossfade: Bool) {
+    private func apply(progress: CGFloat, crossfade: Bool, setsRing: Bool = true) {
         let content = gallery.transitionContent
         if crossfade {
             setFrame(pageFrame)
@@ -173,7 +176,11 @@ public final class TabGalleryTransition {
         // The tab being opened or left is the selected one: its card's ring grows in with the
         // zoom, so nothing pops when the real card takes over.
         // Only over the last stretch, so a page on its way to full screen never reads as a tile.
-        wrapper.layer.borderWidth = TabCardCell.selectionWidth * max(0, (t - 0.7) / 0.3)
+        // A spring would interpolate the width over the whole run, so `animateRing` times it then.
+        if setsRing {
+            wrapper.layer.removeAnimation(forKey: Self.ringKey)
+            wrapper.layer.borderWidth = TabCardCell.selectionWidth * max(0, (t - 0.7) / 0.3)
+        }
         wrapper.alpha = 1
         let zoom = 1 + Self.galleryZoom * (1 - progress)
         if let cards = content.first {
@@ -181,6 +188,27 @@ public final class TabGalleryTransition {
             cards.alpha = min(1, max(0, 0.3 + 0.7 * progress))
         }
         for view in content.dropFirst() { view.alpha = min(1, max(0, progress)) }
+    }
+
+    private static let ringKey = "selectionRing"
+
+    /// The selection ring grows in only as the page lands on its card, and leaves at once when a
+    /// card starts growing into its page.
+    private func animateRing(toward end: End) {
+        let layer = wrapper.layer
+        let from = layer.presentation()?.borderWidth ?? layer.borderWidth
+        let to: CGFloat = end == .gallery ? TabCardCell.selectionWidth : 0
+        let animation = CABasicAnimation(keyPath: "borderWidth")
+        animation.fromValue = from
+        animation.toValue = to
+        animation.duration = end == .gallery ? 0.14 : 0.08
+        if end == .gallery {
+            animation.beginTime = CACurrentMediaTime() + 0.24
+            animation.fillMode = .backwards
+        }
+        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        layer.borderWidth = to
+        layer.add(animation, forKey: Self.ringKey)
     }
 
     /// The snapshot keeps the page's shape, scaled to the wrapper's width and pinned to its top:

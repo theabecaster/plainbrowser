@@ -118,7 +118,12 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
 
     // MARK: Content
 
-    func configure(item: TabGalleryItem, isSelected: Bool, thumbnailHeight: CGFloat, hidesThumbnail: Bool) {
+    /// - Parameter showsPrivateBadge: false where the whole list is private (its tint says so);
+    ///   VoiceOver still hears "Private".
+    func configure(
+        item: TabGalleryItem, isSelected: Bool, thumbnailHeight: CGFloat, hidesThumbnail: Bool, showsPrivateBadge: Bool = true
+    ) {
+        let badge = item.isPrivate && showsPrivateBadge
         if tabID != item.id {
             imageView.image = nil
             faviconView.image = nil
@@ -127,14 +132,14 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         // Lay out again only when a frame depends on what changed: a reused card of the same
         // size keeps its frames during a scroll.
         let font = Self.titleFont(for: traitCollection)
-        let needsLayout = self.thumbnailHeight != thumbnailHeight || privateIcon.isHidden == item.isPrivate
+        let needsLayout = self.thumbnailHeight != thumbnailHeight || privateIcon.isHidden == badge
             || titleLabel.font.pointSize != font.pointSize
         self.thumbnailHeight = thumbnailHeight
         isSelectedTab = isSelected
         isPrivateTab = item.isPrivate
         titleLabel.text = item.displayTitle
         if titleLabel.font != font { titleLabel.font = font }
-        privateIcon.isHidden = !item.isPrivate
+        privateIcon.isHidden = !badge
         setThumbnailHidden(hidesThumbnail)
         updatePlaceholder()
         applyColors()

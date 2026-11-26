@@ -263,7 +263,8 @@ public final class TabGalleryViewController: UIViewController {
         guard let item = items[id] else { return }
         cell.configure(
             item: item, isSelected: id == selectedID,
-            thumbnailHeight: metrics.thumbnailHeight, hidesThumbnail: id == hiddenThumbnailID
+            thumbnailHeight: metrics.thumbnailHeight, hidesThumbnail: id == hiddenThumbnailID,
+            showsPrivateBadge: !dataSource.isShowingPrivateTabs
         )
         cell.onClose = { [weak self] interval in self?.closeTab(id, flick: interval) }
 

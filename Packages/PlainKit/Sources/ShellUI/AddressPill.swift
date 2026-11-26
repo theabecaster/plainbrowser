@@ -182,6 +182,10 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
 
     // MARK: Bar swipe
 
+    /// How fast the hosts fade per unit of swipe: each is fully gone or in by 80% of the way, and
+    /// both show at half opacity or more around the middle, so the pill never reads empty.
+    private static let hostFadeRate: CGFloat = 1.25
+
     /// Starts a bar swipe toward the tab showing `url`: its host waits beside the current one,
     /// inside the glass, which itself never moves.
     func beginHostSlide(to url: URL?) {
@@ -210,11 +214,11 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         let p = min(max(progress, -1), 1)
         hostLabel.transform = CGAffineTransform(translationX: p * travel, y: 0)
         // A crossfade that overlaps, so some host always reads mid-swipe.
-        hostLabel.alpha = max(0, 1 - abs(p) * 1.25)
+        hostLabel.alpha = max(0, 1 - abs(p) * Self.hostFadeRate)
         guard let incoming = incomingHost else { return }
         let side: CGFloat = p < 0 ? 1 : -1
         incoming.transform = CGAffineTransform(translationX: (p + side) * travel, y: 0)
-        incoming.alpha = min(1, abs(p) * 1.25)
+        incoming.alpha = min(1, abs(p) * Self.hostFadeRate)
     }
 
     /// Ends a bar swipe: the current host comes back (the new tab's host arrives through

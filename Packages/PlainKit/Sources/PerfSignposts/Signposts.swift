@@ -93,6 +93,30 @@ public enum Signposts {
     /// is handed to the reader web view.
     public static let readerShow: StaticString = "reader.show"
 
+    // MARK: Tabs (TabStore). The shell emits these around its `TabStore` calls.
+
+    /// Interval: a new tab, from the open request (new-tab button, link, popup) to its pane
+    /// showing it (or, in the background, to it being in the list).
+    public static let tabOpen: StaticString = "tab.open"
+    /// Interval: closing a tab (button, flick in the gallery, `window.close()`), until the next
+    /// tab is on screen.
+    public static let tabClose: StaticString = "tab.close"
+    /// Interval: choosing a tab (gallery, bar swipe, sidebar), until its page is on screen.
+    public static let tabSelect: StaticString = "tab.select"
+    /// Interval: the auto-archive check at launch or on returning to the foreground, until the
+    /// due tabs are out of the store. The message holds how many moved.
+    public static let tabArchive: StaticString = "tab.archive"
+    /// Event: an archived tab restored from the archive screen or its search.
+    public static let tabUnarchive: StaticString = "tab.unarchive"
+    /// Event: Reopen Closed Tab.
+    public static let tabReopen: StaticString = "tab.reopen"
+    /// Event: Close All Tabs.
+    public static let tabCloseAll: StaticString = "tab.closeAll"
+    /// Interval: the tab session read at launch, off the main thread (Storage emits it).
+    public static let tabSessionLoad: StaticString = "tab.sessionLoad"
+    /// Interval: one batched tab write, off the main thread (Storage emits it).
+    public static let tabSave: StaticString = "tab.save"
+
     /// Interval: putting a tab's page on screen (tab switch). Restoring a discarded tab starts here
     /// too; its page coming back is `tab.restore`.
     public static let tabAttach: StaticString = "tab.attach"

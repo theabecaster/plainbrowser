@@ -3,6 +3,10 @@ import UIKit
 
 /// The one way to make Liquid Glass (docs/ui-reference.md): only on floating controls, never glass
 /// on glass. Under Reduce Transparency the system swaps the glass for an opaque material itself.
+///
+/// Floating controls that sit together go in one `makeContainer` view, so the system renders their
+/// glass as one surface: they tint as one and merge where they meet. Glass carries its own depth,
+/// so there is no extra layer shadow.
 public enum Glass {
     public enum Shape {
         case capsule
@@ -23,19 +27,22 @@ public enum Glass {
         return view
     }
 
-    /// Lifts a floating control off the page with a soft shadow. Call `updateShadowPath` from the
-    /// view's `layoutSubviews`, so the shadow never needs an offscreen pass.
-    public static func addShadow(to view: UIView) {
-        view.layer.shadowColor = Palette.floatingShadow.resolvedColor(with: view.traitCollection).cgColor
-        view.layer.shadowOpacity = 0.14
-        view.layer.shadowRadius = 10
-        view.layer.shadowOffset = CGSize(width: 0, height: 3)
+    /// A container that renders the glass views inside its `contentView` as one combined surface
+    /// (`UIGlassContainerEffect`). Controls go anywhere inside `contentView`; the container itself
+    /// takes no touches, so it can cover the whole screen and let the page under it scroll.
+    /// - Parameter spacing: how close two glass shapes come before they start to merge.
+    public static func makeContainer(spacing: CGFloat) -> UIVisualEffectView {
+        let effect = UIGlassContainerEffect()
+        effect.spacing = spacing
+        return PassthroughEffectView(effect: effect)
     }
+}
 
-    /// The capsule shadow path for `view`'s bounds.
-    public static func updateShadowPath(of view: UIView) {
-        let bounds = view.bounds
-        view.layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: bounds.height / 2).cgPath
+/// A visual effect view that passes touches on its empty area through to the views below.
+private final class PassthroughEffectView: UIVisualEffectView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self || hit === contentView ? nil : hit
     }
 }
 #endif

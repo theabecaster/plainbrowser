@@ -14,8 +14,9 @@ public enum Motion {
     public static let urlFocus = Animation.spring(duration: 0.3, bounce: 0)
     /// Small state changes: a row highlight, an armed indicator.
     public static let quick = Animation.snappy(duration: 0.15)
-    /// Toolbar snaps collapsed or expanded when a scroll ends.
-    public static let toolbarSnap = Animation.smooth(duration: 0.25)
+    /// Toolbar snaps collapsed or expanded when a drag ends, from the release velocity. A spring
+    /// value, not an `Animation`: `SpringDriver` runs it frame by frame so a new drag can grab it.
+    public static let toolbarSnap = Spring.smooth(duration: 0.25)
     /// Tab switch by bar swipe (M2), with the gesture's velocity.
     public static let tabSwitch = Animation.spring(duration: 0.35, bounce: 0.12)
     /// Page zooms into its card in the tab gallery (M2).

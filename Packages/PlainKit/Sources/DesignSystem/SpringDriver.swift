@@ -1,0 +1,132 @@
+#if canImport(UIKit)
+import QuartzCore
+import SwiftUI
+import UIKit
+
+/// Moves one value along a spring, frame by frame, from an update link tied to the view's display
+/// and asking for 80–120 Hz (docs/plan.md, frame rate budget).
+///
+/// For motion the user can grab mid-flight: `value` is always what is on screen (the caller applies
+/// it in `onFrame`), so a gesture that starts during the motion takes over from it with no jump,
+/// and a new target keeps the current velocity. Callers apply `value` with transform and alpha only.
+public final class SpringDriver {
+    /// Big motion asks for the display's top rate; 80 is the floor before it reads as stutter.
+    public static let frameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+
+    /// The value on screen.
+    public private(set) var value: CGFloat
+    /// Where the running spring ends; equal to `value` at rest.
+    public private(set) var target: CGFloat
+    public var isRunning: Bool { link != nil }
+
+    private let spring: Spring
+    private var link: UIUpdateLink?
+    private var origin: CGFloat = 0
+    private var initialVelocity: CGFloat = 0
+    private var startTime: TimeInterval = 0
+    private var duration: TimeInterval = 0
+    private var lastTime: TimeInterval = 0
+    private var onFrame: ((CGFloat) -> Void)?
+    private var completion: (() -> Void)?
+
+    public init(spring: Spring, value: CGFloat = 0) {
+        self.spring = spring
+        self.value = value
+        self.target = value
+    }
+
+    /// The current velocity, in value units per second.
+    public var velocity: CGFloat {
+        guard isRunning else { return 0 }
+        return spring.velocity(target: target - origin, initialVelocity: initialVelocity, time: lastTime - startTime)
+    }
+
+    /// Springs from the on-screen value to `target`. Called while running, it retargets from where
+    /// the value is, keeping the current velocity unless `velocity` is given.
+    ///
+    /// - Parameters:
+    ///   - velocity: the starting velocity in value units per second (a gesture's release).
+    ///   - view: the view whose display paces the frames.
+    ///   - onFrame: applies a value; runs once per frame, and once with `target` at the end.
+    ///   - completion: runs when the spring settles, not when it is stopped or retargeted.
+    ///
+    /// Under Reduce Motion, or with the view off screen, the value jumps to `target`.
+    public func animate(
+        to target: CGFloat, velocity: CGFloat? = nil, in view: UIView,
+        onFrame: @escaping (CGFloat) -> Void, completion: (() -> Void)? = nil
+    ) {
+        let now = CACurrentMediaTime()
+        let startVelocity = velocity ?? self.velocity(at: now)
+        self.onFrame = onFrame
+        self.completion = completion
+        guard !Motion.prefersCrossfade, view.window != nil, target != value || startVelocity != 0 else {
+            finish(at: target)
+            return
+        }
+        origin = value
+        self.target = target
+        initialVelocity = startVelocity
+        startTime = now
+        lastTime = now
+        duration = spring.settlingDuration(target: target - origin, initialVelocity: startVelocity, epsilon: 0.001)
+        if link == nil {
+            let link = UIUpdateLink(view: view)
+            link.addAction { [weak self] _, info in self?.step(to: info.modelTime) }
+            link.preferredFrameRateRange = Self.frameRateRange
+            link.requiresContinuousUpdates = true
+            link.isEnabled = true
+            self.link = link
+        }
+    }
+
+    /// Stops where the value is now and returns it. The completion does not run.
+    @discardableResult
+    public func stop() -> CGFloat {
+        endLink()
+        target = value
+        onFrame = nil
+        completion = nil
+        return value
+    }
+
+    /// Sets the value without motion, stopping a running spring. Nothing is called back.
+    public func jump(to value: CGFloat) {
+        stop()
+        self.value = value
+        target = value
+    }
+
+    private func velocity(at time: TimeInterval) -> CGFloat {
+        guard isRunning else { return 0 }
+        return spring.velocity(target: target - origin, initialVelocity: initialVelocity, time: time - startTime)
+    }
+
+    private func step(to time: TimeInterval) {
+        lastTime = max(time, startTime)
+        let elapsed = lastTime - startTime
+        guard elapsed < duration else {
+            finish(at: target)
+            return
+        }
+        value = origin + spring.value(target: target - origin, initialVelocity: initialVelocity, time: elapsed)
+        onFrame?(value)
+    }
+
+    private func finish(at target: CGFloat) {
+        endLink()
+        value = target
+        self.target = target
+        let onFrame = self.onFrame
+        let completion = self.completion
+        self.onFrame = nil
+        self.completion = nil
+        onFrame?(target)
+        completion?()
+    }
+
+    private func endLink() {
+        link?.isEnabled = false
+        link = nil
+    }
+}
+#endif

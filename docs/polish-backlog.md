@@ -211,3 +211,6 @@ Newest feature last.
 - **A tab moving between panes** (Open in Other Pane on the page itself, Swap Panes) re-parents its
   web view with no snapshot cover; check on the device for a blank frame.
 - **Expanded sidebar floating** casts a light shadow; check its edge on the device and in dark mode.
+- **Pill margin in book pose.** Shifted off the crease, the pill keeps the 12 pt side margin of a
+  phone-width lane, which reads tight next to the centered 640 pt pill when flat. (Design review,
+  round 1.)

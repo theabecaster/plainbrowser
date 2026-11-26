@@ -18,9 +18,11 @@ import WebKit
 /// Embed it in a `UINavigationController` with a hidden navigation bar: where the system has a
 /// vertical bar (iPhone Duo), the page buttons are the navigation controller's toolbar items and
 /// go into that bar.
-public final class BrowserViewController: UIViewController, UITextFieldDelegate, UIScrollViewDelegate {
+public final class BrowserViewController: UIViewController, UITextFieldDelegate, UIScrollViewDelegate,
+    UIAdaptivePresentationControllerDelegate {
     private let pool: WebViewPool
     private let data: any AddressBarData
+    private let sheets: FeatureSheets
     private let onSearchFieldReady: () -> Void
     private let navigationSignposter = NavigationSignposter()
 
@@ -52,13 +54,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var pullTracker = PullToRefreshTracker()
     private var suggestionTask: Task<Void, Never>?
     private var favoritesTask: Task<Void, Never>?
+    /// The back-forward item last recorded in history, so a load that failed or stopped before
+    /// committing (it ends on the same item) is not recorded twice.
+    private weak var recordedItem: WKBackForwardListItem?
+    /// Runs when the presented feature sheet closes, by Done or by a swipe.
+    private var sheetClosed: (() -> Void)?
 
     /// - Parameters:
     ///   - data: history, favorites, settings and engine suggestions for the address bar.
+    ///   - sheets: Settings, History and the favorites editor.
     ///   - onSearchFieldReady: called once, when the field first becomes first responder.
-    public init(pool: WebViewPool, data: any AddressBarData, onSearchFieldReady: @escaping () -> Void) {
+    public init(
+        pool: WebViewPool, data: any AddressBarData, sheets: FeatureSheets,
+        onSearchFieldReady: @escaping () -> Void
+    ) {
         self.pool = pool
         self.data = data
+        self.sheets = sheets
         self.onSearchFieldReady = onSearchFieldReady
         super.init(nibName: nil, bundle: nil)
     }
@@ -82,12 +94,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
-        pill.menuProvider = { [weak self] in self?.webView?.url == nil ? nil : self?.pageMenu() }
+        pill.menuProvider = { [weak self] in self?.pageMenu() }
 
         sheet.onPick = { [weak self] pick in self?.open(pick) }
         sheet.onDismiss = { [weak self] in self?.endEditing() }
+        sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
 
         buildButtons()
+        updateButtons()
         layOut()
         updateBarMode()
         // The first frame is the search sheet, focused (viewIsAppearing makes it first responder).
@@ -459,7 +473,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 controller.pill.progressBar.setProgress(max(0.1, webView.estimatedProgress))
             } else {
                 controller.pill.progressBar.finish()
-                if let url = webView.url { controller.data.pageVisited(url: url, title: webView.title) }
+                controller.recordVisit(webView)
             }
         }
         on(\.url) { controller, webView in
@@ -469,11 +483,29 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             controller.updateButtons()
         }
         on(\.title) { controller, webView in
-            guard let url = webView.url, let title = webView.title else { return }
+            guard controller.recordsHistory, let url = webView.url, let title = webView.title else { return }
             controller.data.pageTitleChanged(url: url, title: title)
         }
         on(\.canGoBack) { controller, _ in controller.updateButtons() }
         on(\.canGoForward) { controller, _ in controller.updateButtons() }
+    }
+
+    // MARK: History
+
+    /// Whether this page's visits go into history. The seam for private browsing: a private tab
+    /// answers false, and then neither visits nor titles are recorded.
+    private var recordsHistory: Bool { true }
+
+    /// Records the page a load ended on, once per back-forward item: a load that failed or was
+    /// stopped before committing ends on the item already recorded. The recorder batches the
+    /// write and runs it off the main thread.
+    private func recordVisit(_ webView: WKWebView) {
+        // No current item means nothing ever committed: the first load failed.
+        guard recordsHistory, let url = webView.url, let item = webView.backForwardList.currentItem,
+              item !== recordedItem
+        else { return }
+        recordedItem = item
+        data.pageVisited(url: url, title: webView.title)
     }
 
     private func updateButtons() {
@@ -482,7 +514,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             .back: webView?.canGoBack ?? false,
             .forward: webView?.canGoForward ?? false,
             .share: hasPage,
-            .more: hasPage,
+            // More always opens: History and Settings apply with or without a page.
+            .more: true,
         ]
         for (kind, isEnabled) in enabled {
             buttonBar.button(kind).isEnabled = isEnabled
@@ -634,18 +667,42 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     /// The page menu (docs/ui-reference.md): built when it opens, with only the items that apply
-    /// now. Zoom, blocking, other pane and favorites arrive with their features.
+    /// now, in the reference's order, then History and Settings in their own last section. Zoom,
+    /// blocking and other pane arrive with their features.
     private func pageMenu() -> UIMenu {
         UIMenu(children: [
             UIDeferredMenuElement.uncached { [weak self] completion in
                 Signposts.signposter.emitEvent(Signposts.pageMenu)
-                completion(self?.pageMenuElements() ?? [])
+                guard let self else { return completion([]) }
+                guard let url = self.webView?.url, LiveAddressBarData.isRecordable(url) else {
+                    return completion(self.pageMenuElements(isFavorite: nil))
+                }
+                // One indexed read off the main thread; the menu shows when it answers.
+                Task { [weak self, data] in
+                    let isFavorite = await data.isFavorite(url)
+                    completion(self?.pageMenuElements(isFavorite: isFavorite) ?? [])
+                }
             },
         ])
     }
 
-    private func pageMenuElements() -> [UIMenuElement] {
-        guard let webView, let url = webView.url else { return [] }
+    /// The menu's items. `isFavorite` is nil when there is no page that can be a favorite.
+    private func pageMenuElements(isFavorite: Bool?) -> [UIMenuElement] {
+        let history = UIAction(title: "History", image: UIImage(systemName: "clock")) { [weak self] _ in
+            self?.showHistory()
+        }
+        history.accessibilityIdentifier = "menu.history"
+        let settings = UIAction(title: "Settings…", image: UIImage(systemName: "gearshape")) { [weak self] _ in
+            self?.showSettings()
+        }
+        settings.accessibilityIdentifier = "menu.settings"
+        if !sheets.isReady {
+            // The database is still opening (the first moments after launch).
+            history.attributes = .disabled
+            settings.attributes = .disabled
+        }
+        let app = UIMenu(options: .displayInline, children: [history, settings])
+        guard let webView, let url = webView.url else { return [app] }
         let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { _ in
             Signposts.signposter.emitEvent(Signposts.reload)
             webView.reload()
@@ -670,11 +727,90 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         ) { [weak self] _ in
             self?.toggleDesktopSite()
         }
+        var siteItems: [UIMenuElement] = [desktop]
+        if let isFavorite {
+            let title = webView.title
+            let favorite = UIAction(
+                title: isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                image: UIImage(systemName: isFavorite ? "star.slash" : "star")
+            ) { [weak self] _ in
+                self?.setFavorite(!isFavorite, url: url, title: title)
+            }
+            favorite.accessibilityIdentifier = "menu.favorite"
+            siteItems.append(favorite)
+        }
         return [
             UIMenu(options: .displayInline, children: [reload, find]),
             UIMenu(options: .displayInline, children: [share, copy]),
-            UIMenu(options: .displayInline, children: [desktop]),
+            UIMenu(options: .displayInline, children: siteItems),
+            app,
         ]
+    }
+
+    private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
+        Signposts.signposter.emitEvent(Signposts.favoriteToggle)
+        Task { [data] in
+            if await data.setFavorite(isFavorite, url: url, title: title) {
+                Haptic.success.play()
+            } else {
+                Haptic.nothingThere.play()
+            }
+        }
+    }
+
+    // MARK: Feature sheets
+
+    private func showSettings() {
+        present(sheets.settings { [weak self] in self?.closeSheet() }, signpost: Signposts.settingsOpen)
+    }
+
+    private func showHistory() {
+        let history = sheets.history(
+            onOpen: { [weak self] url in
+                self?.closeSheet { self?.load(url) }
+            },
+            onDone: { [weak self] in self?.closeSheet() }
+        )
+        present(history, signpost: Signposts.historyShow)
+    }
+
+    /// From the favorites strip, so the search field is open: it closes for the editor and opens
+    /// again after, showing the edited favorites.
+    private func showFavoritesEditor() {
+        guard let editor = sheets.favoritesEditor(onDone: { [weak self] in self?.closeSheet() }) else { return }
+        let wasEditing = isEditingAddress
+        if wasEditing { endEditing() }
+        present(editor, signpost: Signposts.favoritesEditorOpen) { [weak self] in
+            guard let self else { return }
+            // Focusing reloads the favorites (textFieldDidBeginEditing).
+            if !(wasEditing && self.pill.beginEditing()) { self.loadFavorites() }
+        }
+    }
+
+    private func present(_ controller: UIViewController?, signpost: StaticString, onClose: (() -> Void)? = nil) {
+        guard let controller, presentedViewController == nil else { return }
+        Signposts.signposter.emitEvent(signpost)
+        controller.presentationController?.delegate = self
+        sheetClosed = onClose
+        present(controller, animated: true)
+    }
+
+    /// Dismisses the feature sheet, then runs `completion` and the sheet's close action.
+    private func closeSheet(then completion: (() -> Void)? = nil) {
+        guard presentedViewController != nil else { return }
+        let closed = sheetClosed
+        sheetClosed = nil
+        dismiss(animated: true) {
+            completion?()
+            closed?()
+        }
+    }
+
+    /// The sheet was swiped down.
+    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        let closed = sheetClosed
+        sheetClosed = nil
+        closed?()
     }
 
     private func share(from source: (any UIPopoverPresentationControllerSourceItem)?) {

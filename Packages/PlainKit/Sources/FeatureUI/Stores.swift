@@ -59,3 +59,6 @@ public nonisolated protocol HistoryStoring: Sendable {
 
 extension AppDatabase: SettingsStoring {}
 extension AppDatabase: FavoritesStoring {}
+// In an extension, not on the declaration: the declaration form trips a compiler bug. History
+// deletes go through `AppDatabase.historyRecorder`, the one writer of history.
+extension AppDatabase: HistoryStoring {}

@@ -20,6 +20,10 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     var onPick: (SearchPick) -> Void = { _ in }
     /// A tap on the sheet outside any row: close the sheet.
     var onDismiss: () -> Void = {}
+    /// "Edit Favorites" from a long press on the favorites strip.
+    var onEditFavorites: () -> Void = {} {
+        didSet { favoritesStrip.onEdit = onEditFavorites }
+    }
 
     private let rowsClip = UIView()
     private let rowsStack = UIStackView()
@@ -252,10 +256,12 @@ final class SuggestionRow: UIControl {
     }
 }
 
-/// Favorites above the keyboard: a row of tiles that scrolls sideways when there are many.
-final class FavoritesStrip: UIView {
+/// Favorites above the keyboard: a row of tiles that scrolls sideways when there are many. A long
+/// press anywhere on it offers "Edit Favorites".
+final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate {
     static let height: CGFloat = 88
     var onPick: (URL) -> Void = { _ in }
+    var onEdit: () -> Void = {}
     private let scroll = UIScrollView()
     private let stack = UIStackView()
 
@@ -282,10 +288,23 @@ final class FavoritesStrip: UIView {
             stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor, constant: -Spacing.s),
         ])
         accessibilityIdentifier = "favorites"
+        addInteraction(UIContextMenuInteraction(delegate: self))
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            let edit = UIAction(title: "Edit Favorites", image: UIImage(systemName: "pencil")) { _ in
+                self?.onEdit()
+            }
+            edit.accessibilityIdentifier = "menu.editFavorites"
+            return UIMenu(children: [edit])
+        }
+    }
 
     func show(_ favorites: [FavoritePage]) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }

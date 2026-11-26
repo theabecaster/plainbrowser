@@ -40,6 +40,47 @@ struct AddressBarDataTests {
         #expect(updates.last?.dropFirst() == [.search("swift.org"), .search("swift ownership")])
     }
 
+    @Test func savedSettingsTakeEffectForTheNextSearch() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData()
+        await data.attach(database)
+        let store = LiveSettingsStore(database: database) { data.apply($0) }
+        var settings = try await store.settings()
+        settings.searchEngine = .duckDuckGo
+        settings.archiveAfter = .oneWeek
+        try await store.saveSettings(settings)
+        #expect(data.searchEngine == .duckDuckGo)
+        #expect(data.settings.archiveAfter == .oneWeek)
+        // Stored too, for the next launch.
+        #expect(try await database.settings().searchEngine == .duckDuckGo)
+        #expect(AddressBarInput("plain browser")?.destination(searchingWith: data.searchEngine)?.host() == "duckduckgo.com")
+    }
+
+    @Test func favoritesAreAddedAndRemovedByAddress() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData()
+        let url = URL(string: "https://a.example/page")!
+        #expect(await data.setFavorite(true, url: url, title: "A") == false, "nothing to write to before attach")
+        await data.attach(database)
+        #expect(await data.isFavorite(url) == false)
+        #expect(await data.setFavorite(true, url: url, title: "  "))
+        #expect(await data.isFavorite(url))
+        #expect(await data.favorites().first?.title == nil, "a blank title falls back to the address")
+        #expect(await data.setFavorite(false, url: url, title: nil))
+        #expect(await data.isFavorite(url) == false)
+    }
+
+    @Test func historyGoesThroughTheDatabaseRecorder() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData()
+        await data.attach(database)
+        let url = URL(string: "https://example.com/x")!
+        data.pageVisited(url: url, title: nil)
+        data.pageTitleChanged(url: url, title: "Example X")
+        await data.flush()
+        #expect(try await database.visits(matching: "example x", limit: 10).map(\.title) == ["Example X"])
+    }
+
     @Test func onlyWebPagesAreRecorded() {
         #expect(LiveAddressBarData.isRecordable(URL(string: "https://example.com")!))
         #expect(LiveAddressBarData.isRecordable(URL(string: "http://localhost:8080/a")!))

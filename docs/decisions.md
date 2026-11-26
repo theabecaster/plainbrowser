@@ -128,3 +128,19 @@ Each entry: what was chosen, and why. Newest last.
 - **Perf cost:** DesignSystem links SwiftUI for `UIView.animate(_: Animation)` (system framework,
   in the shared cache). No work added before the first frame: the database opens off main after
   the window shows, and haptic generators and the suggestion client are made on first use.
+
+## Integration 1: sheets, live settings, one history writer (2026-11-26)
+
+- **ShellUI imports FeatureUI.** The shell presents Settings, History and the favorites editor,
+  so it builds their models (`FeatureSheets`). Both are UI-layer targets and FeatureUI never
+  imports ShellUI, so the graph stays one-way. The app target stays a thin wrapper.
+- **`AppDatabase` owns the one `HistoryRecorder`.** The recorder writes through the database's
+  `DatabaseWriter`, so the database can hold it without a reference cycle. Its public history
+  deletes (`deleteHistory(for:)`, `clearHistory(since:)`) go through it, which lets
+  `AppDatabase` conform to `HistoryStoring` directly while a delete still drops visits waiting in
+  the buffer. The conformance is in an extension because the declaration form hits a compiler bug.
+- **Visits are recorded per back-forward item, at load end.** KVO on `isLoading`, deduplicated by
+  `backForwardList.currentItem`, until WebEngine's navigation delegate reports commits (Lane C).
+  Reloads and same-document (pushState) changes are not new visits for now.
+- **Settings reach the shell after each save,** through a `SettingsStoring` adapter, rather than a
+  re-read when Settings closes, so the order of saves is the order they apply.

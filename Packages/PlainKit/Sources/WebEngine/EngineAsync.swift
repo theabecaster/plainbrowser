@@ -48,6 +48,10 @@ final class BackgroundWork {
         return work
     }
 
+    isolated deinit {
+        end()
+    }
+
     func end() {
         guard identifier != .invalid else { return }
         UIApplication.shared.endBackgroundTask(identifier)

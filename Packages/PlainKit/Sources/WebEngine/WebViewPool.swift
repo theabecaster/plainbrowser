@@ -570,9 +570,10 @@ public final class WebViewPool {
             finish(nil)
         } else {
             Task { [weak slot] in
-                // Ask again right before: playback may have started since the detach.
+                let session = await fetchSessionStorage(webView)
+                // Ask again right before releasing: playback may have started since the detach.
                 await slot?.refreshMediaPlayback()
-                finish(await fetchSessionStorage(webView))
+                finish(session)
             }
         }
     }

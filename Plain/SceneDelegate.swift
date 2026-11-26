@@ -48,6 +48,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             await data.attach(database)
             sheets.attach(database)
             browser.addressBarDataDidChange()
+            // Pruning and SQLite upkeep, at most daily, at background priority after launch settles.
+            database.scheduleDailyMaintenance()
         }
     }
 }

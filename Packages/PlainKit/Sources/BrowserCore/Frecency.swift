@@ -25,3 +25,19 @@ public enum Frecency {
         exp(key - rate * now.timeIntervalSinceReferenceDate)
     }
 }
+
+/// How the user reached a page. Typed visits count more in frecency (`weight`).
+public enum VisitKind: Int, Hashable, Sendable, Codable, CaseIterable {
+    /// A link, a redirect, a restore: anything the user did not ask for by address.
+    case link = 0
+    /// An address typed in, or a page picked from the address bar's suggestions.
+    case typed = 1
+
+    /// This visit's weight in `Frecency.adding(visitAt:weight:to:)`.
+    public var weight: Double {
+        switch self {
+        case .link: 1
+        case .typed: FixedChoices.typedVisitWeight
+        }
+    }
+}

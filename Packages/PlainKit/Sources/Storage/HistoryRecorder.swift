@@ -56,6 +56,12 @@ public actor HistoryRecorder {
         enqueue(.title(title, url: url, visitedAt: visitedAt))
     }
 
+    /// Queues an address-bar pick: the user typed `input` and picked the suggestion for `url`
+    /// (adaptive history, see `InputHistory`).
+    public func recordPick(input: String, url: URL, at date: Date = Date()) {
+        enqueue(.pick(input: input, url: url, at: date))
+    }
+
     /// Writes everything buffered and returns when all writes so far are on disk.
     public func flush() async {
         startBatchWrite()
@@ -73,7 +79,11 @@ public actor HistoryRecorder {
     public func clearHistory(since start: Date? = nil) async throws {
         if let start {
             pending.removeAll {
-                if case .visit(let visit) = $0 { visit.visitedAt >= start } else { false }
+                switch $0 {
+                case .visit(let visit): visit.visitedAt >= start
+                case .pick(_, _, let date): date >= start
+                case .title: false
+                }
             }
         } else {
             pending.removeAll()
@@ -118,7 +128,15 @@ public actor HistoryRecorder {
         }
     }
 
-    private func afterPendingWrites(_ operation: @escaping @Sendable (any DatabaseWriter) async throws -> Void) async throws {
+    /// Writes the buffer, then runs `operation` after it and every write already started, in the
+    /// same chain. Maintenance prunes through this, so a buffered visit is never pruned around.
+    func afterBufferedWrites(_ operation: @escaping @Sendable (any DatabaseWriter) async throws -> Void) async throws {
+        startBatchWrite()
+        try await afterPendingWrites(operation)
+    }
+
+    /// Runs `operation` after every write already started, in the same chain (deletes, maintenance).
+    func afterPendingWrites(_ operation: @escaping @Sendable (any DatabaseWriter) async throws -> Void) async throws {
         let previous = lastWrite
         let writer = writer
         let task = Task<Void, any Error> {

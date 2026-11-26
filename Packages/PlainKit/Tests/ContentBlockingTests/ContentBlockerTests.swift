@@ -2,7 +2,8 @@
 // only (`xcodebuild test -scheme PlainKit-Package -destination ...`); `swift test` on macOS skips
 // them to stay fast.
 #if os(iOS)
-import ContentBlocking
+import BrowserCore
+@testable import ContentBlocking
 import Foundation
 import Testing
 import WebKit
@@ -146,6 +147,80 @@ import WebKit
         #expect(report.failures.count == 1)
         #expect(blocker.ruleLists.isEmpty)
         #expect(blocker.isReady)
+    }
+
+    /// An app update changed the lists: until the new ones compile, the previously compiled list
+    /// stays attached, so the page is still blocked; then it is swapped out and deleted.
+    @Test func previousListsStayAttachedWhileNewOnesCompile() async throws {
+        let (store, url) = try makeTemporaryStore()
+        defer { removeStore(at: url) }
+        let old = "blocklist-01-0000000000000000"
+        let oldRules = #"[{"trigger":{"url-filter":"doubleclick"},"action":{"type":"block"}}]"#
+        _ = try await store.compileContentRuleList(forIdentifier: old, encodedContentRuleList: oldRules)
+
+        let blocker = ContentBlocker(allowListStore: MemoryAllowListStore(), store: store)
+        let probe = PageProbe()
+        let pageURL = PageProbe.url(host: "update.example")
+        let controller = WKUserContentController()
+        blocker.apply(to: controller, forMainFrameURL: pageURL)
+        let webView = WKWebView(frame: .zero, configuration: probe.configuration(controller: controller))
+
+        let preparing = Task { await blocker.prepare() }
+        while !blocker.ruleLists.contains(where: { $0.identifier == old }) && !blocker.isReady { await Task.yield() }
+        #expect(!blocker.isReady, "the bundled lists compiled before the stand-in could be seen")
+        // Mid-update: the old list blocks the ad.
+        #expect(try await probe.load(pageURL, in: webView).adLoaded == false)
+
+        let report = await preparing.value
+        #expect(report.failures.isEmpty, "\(report.failures)")
+        #expect(report.standIns == [old])
+        #expect(report.removedStale == [old])
+        #expect(!blocker.ruleLists.contains { $0.identifier == old })
+        #expect(blocker.ruleLists.first?.identifier?.hasPrefix(FixedChoices.priorityBlocklist + "-") == true)
+        #expect(try await probe.load(pageURL, in: webView).adLoaded == false)
+    }
+
+    /// A new list that fails to compile leaves the old lists attached and stored.
+    @Test func standInsStayWhenACompileFails() async throws {
+        let (store, url) = try makeTemporaryStore()
+        defer { removeStore(at: url) }
+        let old = "blocklist-01-0000000000000000"
+        _ = try await store.compileContentRuleList(
+            forIdentifier: old, encodedContentRuleList: #"[{"trigger":{"url-filter":"ads"},"action":{"type":"block"}}]"#)
+        let resources = url.appendingPathComponent("resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+        try Data("[]".utf8).write(to: resources.appendingPathComponent("blocklist-01.json"))
+        let manifest = RuleListManifest(lists: [
+            .init(name: "blocklist-01", file: "blocklist-01.json", sha256: String(repeating: "1", count: 64), ruleCount: 1),
+        ])
+        try JSONEncoder().encode(manifest).write(to: resources.appendingPathComponent("manifest.json"))
+
+        let blocker = ContentBlocker(allowListStore: MemoryAllowListStore(), store: store, resourceDirectory: resources)
+        let report = await blocker.prepare()
+        #expect(report.failures.count == 1)
+        #expect(report.removedStale.isEmpty)
+        #expect(blocker.ruleLists.map(\.identifier) == [old])
+        #expect(await store.availableIdentifiers()?.contains(old) == true)
+    }
+
+    /// Cold compile time of each bundled list on its own, priority list first. A measurement for
+    /// docs/decisions.md; the bound only catches a list that stopped compiling sensibly.
+    @Test func compileTimePerList() async throws {
+        let directory = try #require(RuleListManifest.bundledDirectory)
+        let manifest = try await RuleListManifest.load(from: directory)
+        var lines: [String] = []
+        for list in ContentBlocker.compileOrder(manifest.lists) {
+            let (store, url) = try makeTemporaryStore()
+            defer { removeStore(at: url) }
+            let json = try String(contentsOf: directory.appendingPathComponent(list.file), encoding: .utf8)
+            let start = ContinuousClock.now
+            let compiled = try await store.compileContentRuleList(forIdentifier: list.identifier, encodedContentRuleList: json)
+            let time = ContinuousClock.now - start
+            #expect(compiled != nil)
+            #expect(time < .seconds(20), "\(list.name)")
+            lines.append("\(list.name) \(list.ruleCount) rules \(milliseconds(time))")
+        }
+        print("[ContentBlocking] compile per list: " + lines.joined(separator: "; "))
     }
 
     private func log(_ label: String, _ report: ContentBlocker.PrepareReport) {

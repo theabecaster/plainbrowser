@@ -3,32 +3,39 @@
   "formatVersion" : 1,
   "lists" : [
     {
-      "bytes" : 4130546,
+      "bytes" : 4038317,
       "file" : "blocklist-01.json",
       "name" : "blocklist-01",
-      "ruleCount" : 33864,
-      "sha256" : "18f9848fabc3c639f2f6e9928ffe6a8a906591001662ab4060a98ae496282ee5"
+      "ruleCount" : 35000,
+      "sha256" : "d8572503cec7d8bffdcc39bd59d589c8e67e2249220f89c37c77c35a67fe6d6c"
     },
     {
-      "bytes" : 4178686,
+      "bytes" : 3253233,
       "file" : "blocklist-02.json",
       "name" : "blocklist-02",
-      "ruleCount" : 33909,
-      "sha256" : "0cd99c7285615198b4bf03429a6629768f05f834f4a9d5eeb1e85dcdf1530ef3"
+      "ruleCount" : 15707,
+      "sha256" : "d1374a89c1043e00a07598166bc42fe1066eaa6b0d47f8f0870cc75bd54008b8"
     },
     {
-      "bytes" : 4161852,
+      "bytes" : 3129923,
       "file" : "blocklist-03.json",
       "name" : "blocklist-03",
-      "ruleCount" : 33898,
-      "sha256" : "9097eed9b363a7622f551e10ea1c246fee60c9883726c1d7eef58f0d773c9020"
+      "ruleCount" : 27995,
+      "sha256" : "54ed90aa402fb4b2f946a9dffeef705463303faf257dc18ef0322b83ae5fcf09"
     },
     {
-      "bytes" : 4157501,
+      "bytes" : 3146750,
       "file" : "blocklist-04.json",
       "name" : "blocklist-04",
-      "ruleCount" : 33878,
-      "sha256" : "b438a7d0bec5c7d20aa0ffa03514a6907e30089c79d96687d2669306aaad46bc"
+      "ruleCount" : 27994,
+      "sha256" : "6298b7c79bae8834928f87e7092e71754a855e6929223e34dad570af7c5c1ea2"
+    },
+    {
+      "bytes" : 3140301,
+      "file" : "blocklist-05.json",
+      "name" : "blocklist-05",
+      "ruleCount" : 27997,
+      "sha256" : "f3373028937caf85fc428142be3bd9c34093a5a071269f31dc2009f79de48d76"
     }
   ],
   "maxRulesPerList" : 35000,
@@ -36,16 +43,16 @@
     {
       "license" : "GPL-3.0-or-later OR CC-BY-SA-3.0",
       "name" : "EasyList",
-      "ruleLines" : 78692,
+      "ruleLines" : 78791,
       "url" : "https://easylist.to/easylist/easylist.txt",
-      "version" : "202611261007"
+      "version" : "202611261556"
     },
     {
       "license" : "GPL-3.0-or-later OR CC-BY-SA-3.0",
       "name" : "EasyPrivacy",
-      "ruleLines" : 56865,
+      "ruleLines" : 56866,
       "url" : "https://easylist.to/easylist/easyprivacy.txt",
-      "version" : "202611261007"
+      "version" : "202611261542"
     },
     {
       "license" : "CC-BY-3.0",

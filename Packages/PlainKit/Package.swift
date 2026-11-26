@@ -35,7 +35,8 @@ let package = Package(
         // Layer 1: persistence. GRDB, nonisolated, async API.
         .target(
             name: "Storage",
-            dependencies: ["BrowserCore", .product(name: "GRDB", package: "GRDB.swift")]
+            // PerfSignposts: maintenance and compaction intervals show up in Instruments.
+            dependencies: ["BrowserCore", "PerfSignposts", .product(name: "GRDB", package: "GRDB.swift")]
         ),
 
         // Leaves.

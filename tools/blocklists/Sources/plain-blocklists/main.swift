@@ -2,6 +2,18 @@
 // WebKit content-rule JSON with SafariConverterLib, splits the result into lists small enough to
 // compile reliably on iOS, and writes the JSON, a manifest with content hashes and a NOTICE file.
 //
+// Lists come out in three groups, in this order (the app compiles them in manifest order; see
+// FixedChoices.priorityBlocklist and cosmeticBlocklist):
+//   1. blocklist-01, the priority list: filled to the rule limit with the highest-value network
+//      rules, in this order: third-party domain blocks from EasyList and EasyPrivacy
+//      (`||host^$third-party`), EasyPrivacy's other domain blocks, then EasyPrivacy's other
+//      network rules. Trackers and ad servers are where blocking matters most, so on first launch
+//      they are blocked after the first compile, not the last.
+//   2. blocklist-02: every cosmetic rule (element hiding, `css-display-none`), in one list. Each
+//      frame then gets one hide stylesheet, and cosmetic churn recompiles one list. The tool fails
+//      if they no longer fit in one list.
+//   3. Every other network rule, including what did not fit in the priority list.
+//
 // Usage (from the repo root; tools/blocklists/generate.sh does this):
 //   swift run -c release --package-path tools/blocklists plain-blocklists [options]
 //
@@ -115,6 +127,58 @@ func ruleLines(of text: String) -> [String] {
         lines.append(line)
     }
     return lines
+}
+
+/// Element-hiding and other cosmetic rules (`##`, `#?#`, `#$#`, `#%#`), which convert to
+/// `css-display-none` (or are dropped as advanced rules).
+func isCosmetic(_ line: String) -> Bool {
+    line.contains("##") || line.contains("#?#") || line.contains("#$#") || line.contains("#%#")
+}
+
+/// A plain domain block: `||host^`, optionally `$third-party`. EasyList's ad-server and
+/// third-party sections are made of these.
+func isDomainBlock(_ line: String) -> Bool {
+    guard line.hasPrefix("||") else { return false }
+    let parts = line.dropFirst(2).split(separator: "$", maxSplits: 1, omittingEmptySubsequences: false)
+    guard let pattern = parts.first, pattern.hasSuffix("^") else { return false }
+    let host = pattern.dropLast()
+    guard !host.isEmpty, host.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" }) else { return false }
+    guard parts.count == 2 else { return true }
+    return parts[1].split(separator: ",").allSatisfy { $0 == "third-party" || $0 == "3p" }
+}
+
+/// How valuable a network line is for the priority list; lower is better, nil means "not
+/// priority". See the top of the file.
+func priorityRank(_ line: String, source: String) -> Int? {
+    let thirdPartyDomain = isDomainBlock(line) && line.contains("$")
+    switch source {
+    case "EasyList": return thirdPartyDomain ? 0 : nil
+    case "EasyPrivacy": return thirdPartyDomain ? 0 : isDomainBlock(line) ? 1 : 2
+    default: return nil
+    }
+}
+
+/// The longest start of `lines` that converts, with every exception line, to at most `maxRules`
+/// rules. Binary search over the converter, which is monotonic in the lines it gets.
+func fill(_ lines: [String], exceptions: [String], maxRules: Int) throws -> (chunk: Chunk, used: Int) {
+    func fits(_ count: Int) -> Chunk? {
+        let chunk = convert(Array(lines.prefix(count)) + exceptions)
+        return chunk.discarded == 0 && chunk.ruleCount <= maxRules ? chunk : nil
+    }
+    if let all = fits(lines.count) { return (all, lines.count) }
+    var low = 0, high = lines.count // fits(low) holds (or low is 0); fits(high) does not.
+    var best: Chunk?
+    while high - low > 1 {
+        let middle = (low + high) / 2
+        if let chunk = fits(middle) {
+            low = middle
+            best = chunk
+        } else {
+            high = middle
+        }
+    }
+    guard let best, low > 0 else { throw ToolError("--max-rules \(maxRules) is too small for the exception lines") }
+    return (best, low)
 }
 
 /// Rules that remove or weaken other rules. Every output list gets all of them, because WebKit's
@@ -263,14 +327,39 @@ func run() async throws {
 
     // Lists overlap a little; keep the first copy of each line.
     var seen = Set<String>()
-    var blocking: [String] = []
+    var ranked: [(rank: Int, line: String)] = []
+    var cosmetic: [String] = []
+    var network: [String] = []
     var exceptions: [String] = []
-    for line in fetched.flatMap(\.lines) where seen.insert(line).inserted {
-        if isException(line) { exceptions.append(line) } else { blocking.append(line) }
+    for fetchedSource in fetched {
+        for line in fetchedSource.lines where seen.insert(line).inserted {
+            if isException(line) {
+                exceptions.append(line)
+            } else if isCosmetic(line) {
+                cosmetic.append(line)
+            } else if let rank = priorityRank(line, source: fetchedSource.source.name) {
+                ranked.append((rank, line))
+            } else {
+                network.append(line)
+            }
+        }
     }
-    print("\(blocking.count) blocking lines, \(exceptions.count) exception lines")
+    // Stable: within a rank, lines keep their list order.
+    let priority = ranked.enumerated().sorted { ($0.element.rank, $0.offset) < ($1.element.rank, $1.offset) }
+        .map(\.element.line)
 
-    let chunks = try split(blocking: blocking, exceptions: exceptions, maxRules: options.maxRules)
+    let (priorityChunk, used) = try fill(priority, exceptions: exceptions, maxRules: options.maxRules)
+    network = Array(priority.dropFirst(used)) + network
+    print("""
+        priority list: \(used) of \(priority.count) priority lines; \(cosmetic.count) cosmetic lines; \
+        \(network.count) other network lines; \(exceptions.count) exception lines in every list
+        """)
+    let cosmeticChunks = try split(blocking: cosmetic, exceptions: exceptions, maxRules: options.maxRules)
+    guard cosmeticChunks.count == 1 else {
+        throw ToolError("cosmetic rules need \(cosmeticChunks.count) lists; they must fit in one (raise --max-rules or trim)")
+    }
+    let networkChunks = try split(blocking: network, exceptions: exceptions, maxRules: options.maxRules)
+    let chunks = [priorityChunk] + cosmeticChunks + networkChunks
 
     // Replace the previous output whole, so a list that is no longer produced does not linger.
     for file in try fileManager.contentsOfDirectory(atPath: output.path)

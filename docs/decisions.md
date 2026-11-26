@@ -79,11 +79,21 @@ Each entry: what was chosen, and why. Newest last.
   Apache-2.0, PunycodeSwift MIT, swift-psl MIT with Mozilla's PSL data MPL-2.0) are build-time only.
   Rerun `tools/blocklists/generate.sh`; output is byte-identical for the same downloads
   (`SWIFT_DETERMINISTIC_HASHING=1`), so an unchanged list keeps its hash and is never recompiled.
-- **Split into lists of at most 35k rules.** All three lists are converted together, as one
-  Adblock list would be. Blocking lines are dealt round-robin into parts, and every part gets all
-  exception lines (`@@`, `#@#`, `$badfilter`), because WebKit's `ignore-previous-rules` only
-  reaches rules in the same compiled list. Result: 4 lists of ~33.9k rules, 135.5k in all,
-  16 MB of JSON.
+- **Split into lists of at most 35k rules, by value (2026-11-26, design audit).** All three
+  lists are converted together, as one Adblock list would be, and every list gets all exception
+  lines (`@@`, `#@#`, `$badfilter`), because WebKit's `ignore-previous-rules` only reaches rules
+  in the same compiled list. The lists come out in three groups:
+  1. `blocklist-01` (`FixedChoices.priorityBlocklist`): filled to 35k rules with the
+     highest-value network rules: third-party domain blocks from EasyList and EasyPrivacy, then
+     EasyPrivacy's other domain blocks, then its other network rules. It compiles first, so a
+     first launch blocks trackers after about 0.8 s instead of after every list.
+  2. `blocklist-02` (`FixedChoices.cosmeticBlocklist`): every cosmetic rule (47.5k lines become
+     15.7k rules, 13.7k `css-display-none`). One hide stylesheet per frame; cosmetic churn
+     recompiles one list. The tool fails if they stop fitting in one list.
+  3. The rest of the network rules, dealt round-robin into even parts.
+  Result: 5 lists, 134.7k rules, 16 MB of JSON. Cold compile per list on the iOS 27.2 simulator
+  (iPhone 17, `ContentBlockerTests.compileTimePerList`): 01 35k rules 0.84 s, 02 15.7k cosmetic
+  1.61 s, 03–05 28k each 1.10–1.17 s; all five 5.9 s.
   - Measured on the iOS 27.2 simulator (iPhone 17), cold compile per list, alone: 25k rules
     1.0–1.7 s, 35k 1.8–2.8 s, 45k 2.2–3.8 s, 70k 3.5–3.9 s, one 126k list 5.6 s. Every size
     reloaded (lookup from a new process) in under 3 ms, so the iOS 18 failure above 45k did not
@@ -92,8 +102,12 @@ Each entry: what was chosen, and why. Newest last.
 - **Compile only when missing, never at launch.** Identifier `<name>-<first 16 hex of SHA-256>`.
   `ContentBlocker.prepare()` looks each list up (about 1 ms for all 4, warm) and compiles only a
   miss: first launch and app updates that change a list (about 6–9 s for all 4 on the
-  simulator, off the main thread; WebKit compiles on its own queue). Old `blocklist-*` entries
-  are then removed from the store.
+  simulator, off the main thread; WebKit compiles on its own queue). While new lists compile,
+  the previously compiled `blocklist-*` lists stay attached as stand-ins, so an update never
+  leaves pages unblocked; when every new list is in, they are detached in one step and removed
+  from the store (all at once, because an update can move rules between lists). After a failed
+  compile the stand-ins stay and the next launch retries. (DuckDuckGo's `LastCompiledRulesStore`
+  does the same.)
 - **Per-site off detaches the lists instead of adding an allow-list rule list.** Measured: a
   separate list with `ignore-previous-rules` for a domain does not unblock rules in other lists
   (WebKit evaluates each compiled list on its own). Appending the allow-list to every list would

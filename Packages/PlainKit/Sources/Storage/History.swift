@@ -10,11 +10,14 @@ public struct HistoryVisit: Hashable, Sendable, Codable, FetchableRecord, Mutabl
     public var url: URL
     public var title: String?
     public var visitedAt: Date
+    /// How the user reached the page; typed visits weigh more in frecency.
+    public var kind: VisitKind
 
-    public init(url: URL, title: String?, visitedAt: Date) {
+    public init(url: URL, title: String?, visitedAt: Date, kind: VisitKind = .link) {
         self.url = url
         self.title = title
         self.visitedAt = visitedAt
+        self.kind = kind
     }
 
     public mutating func didInsert(_ inserted: InsertionSuccess) {
@@ -30,11 +33,14 @@ public enum HistoryChange: Hashable, Sendable {
     /// `visitedAt`, it names that visit only, and nothing when that visit is gone (cleared), so
     /// a title can never land on an older visit. Without it, it names the newest visit.
     case title(String, url: URL, visitedAt: Date? = nil)
+    /// The user typed `input` in the address bar and picked the suggestion for `url`.
+    case pick(input: String, url: URL, at: Date)
 
     var url: URL {
         switch self {
         case .visit(let visit): visit.url
         case .title(_, let url, _): url
+        case .pick(_, let url, _): url
         }
     }
 
@@ -58,19 +64,20 @@ struct HistoryPlace: Codable, FetchableRecord, MutablePersistableRecord {
         id = inserted.rowID
     }
 
-    /// Adds one visit to the place for `url`, creating it on first visit.
-    static func recordVisit(url: URL, title: String?, at date: Date, in db: Database) throws {
+    /// Adds one visit to the place for `url`, creating it on first visit. `weight` is the
+    /// visit's `VisitKind.weight`.
+    static func recordVisit(url: URL, title: String?, at date: Date, weight: Double = 1, in db: Database) throws {
         let title = title.flatMap { $0.isEmpty ? nil : $0 }
         if var place = try HistoryPlace.filter(Column("url") == url).fetchOne(db) {
             place.visitCount += 1
             place.lastVisitedAt = max(place.lastVisitedAt, date)
-            place.frecency = Frecency.adding(visitAt: date, to: place.frecency)
+            place.frecency = Frecency.adding(visitAt: date, weight: weight, to: place.frecency)
             if let title { place.title = title }
             try place.update(db)
         } else {
             var place = HistoryPlace(
                 url: url, address: searchableAddress(url), title: title, visitCount: 1,
-                lastVisitedAt: date, frecency: Frecency.adding(visitAt: date, to: nil)
+                lastVisitedAt: date, frecency: Frecency.adding(visitAt: date, weight: weight, to: nil)
             )
             try place.insert(db)
         }
@@ -110,7 +117,10 @@ extension AppDatabase {
                 switch change {
                 case .visit(var visit):
                     try visit.insert(db)
-                    try HistoryPlace.recordVisit(url: visit.url, title: visit.title, at: visit.visitedAt, in: db)
+                    try HistoryPlace.recordVisit(
+                        url: visit.url, title: visit.title, at: visit.visitedAt, weight: visit.kind.weight, in: db)
+                case .pick(let input, let url, let date):
+                    try InputHistory.recordPick(input: input, url: url, at: date, in: db)
                 case .title(let title, let url, let visitedAt):
                     guard !title.isEmpty else { continue }
                     // Name the visit, so the History screen shows the title.
@@ -148,6 +158,7 @@ extension AppDatabase {
         try await writer.write { db in
             _ = try HistoryVisit.filter(Column("url") == url).deleteAll(db)
             _ = try HistoryPlace.filter(Column("url") == url).deleteAll(db)
+            try InputHistory.delete(url: url.absoluteString, in: db)
         }
     }
 
@@ -163,21 +174,29 @@ extension AppDatabase {
             guard let start else {
                 _ = try HistoryVisit.deleteAll(db)
                 _ = try HistoryPlace.deleteAll(db)
+                try db.execute(sql: "DELETE FROM \(Schema.inputHistory)")
                 return
             }
+            // Picks made in the cleared time go with it.
+            try db.execute(sql: "DELETE FROM \(Schema.inputHistory) WHERE lastUsedAt >= ?", arguments: [start])
             let urls = try String.fetchAll(
                 db, sql: "SELECT DISTINCT url FROM \(Schema.historyVisit) WHERE visitedAt >= ?", arguments: [start]
             )
             _ = try HistoryVisit.filter(Column("visitedAt") >= start).deleteAll(db)
             for url in urls {
-                let left = try Date.fetchAll(
-                    db, sql: "SELECT visitedAt FROM \(Schema.historyVisit) WHERE url = ? ORDER BY visitedAt", arguments: [url]
-                )
-                guard let last = left.last else {
+                let left = try Row.fetchAll(
+                    db, sql: "SELECT visitedAt, kind FROM \(Schema.historyVisit) WHERE url = ? ORDER BY visitedAt", arguments: [url]
+                ).map { row -> (date: Date, kind: VisitKind) in
+                    (row["visitedAt"], VisitKind(rawValue: row["kind"]) ?? .link)
+                }
+                guard let last = left.last?.date else {
                     try db.execute(sql: "DELETE FROM \(Schema.historyPlace) WHERE url = ?", arguments: [url])
+                    try InputHistory.delete(url: url, in: db)
                     continue
                 }
-                let frecency = left.reduce(nil as Double?) { Frecency.adding(visitAt: $1, to: $0) } ?? 0
+                let frecency = left.reduce(nil as Double?) {
+                    Frecency.adding(visitAt: $1.date, weight: $1.kind.weight, to: $0)
+                } ?? 0
                 // The title the page had at its newest kept visit, so a title seen only in the
                 // cleared time is no longer searchable.
                 let title = try String.fetchOne(
@@ -204,8 +223,12 @@ extension AppDatabase {
 
     /// Removes visits made since `start`, or all history when `start` is nil, including visits
     /// still buffered in `historyRecorder`.
+    ///
+    /// Clearing everything also compacts the database file soon after, off the main thread, so
+    /// the deleted rows do not linger on disk (see `Maintenance.swift`).
     public func clearHistory(since start: Date?) async throws {
         try await historyRecorder.clearHistory(since: start)
+        if start == nil { await maintenance.scheduleCompaction() }
     }
 
     /// Visits for the History screen, newest first. An empty `query` means every visit;
@@ -262,12 +285,53 @@ extension AppDatabase {
     ) async throws -> (history: [PageCandidate], favorites: [PageCandidate]) {
         let query = HistoryQuery(text)
         return try await writer.read { db in
-            let history = try query.pattern.map {
+            var history = try query.pattern.map {
                 try Self.historyMatches($0, addressPrefix: query.addressPrefix, limit: historyLimit, in: db)
             } ?? []
+            // The site itself, so `AddressBarSuggestions` can make it the top hit even when deep
+            // pages on it rank higher.
+            var keys = history.map { AddressBarSuggestions.addressKey($0.url) }
+            if let site = try Self.siteMatch(query, in: db) {
+                let key = AddressBarSuggestions.addressKey(site.url)
+                if !keys.contains(key) {
+                    history.append(site)
+                    keys.append(key)
+                }
+            }
+            // Pages picked before for input like this one, marked on the row already there.
+            for picked in try InputHistory.matches(for: query.inputKey, in: db) {
+                if let index = keys.firstIndex(of: AddressBarSuggestions.addressKey(picked.url)) {
+                    history[index].adaptiveUse = max(history[index].adaptiveUse ?? 0, picked.adaptiveUse ?? 0)
+                } else {
+                    history.append(picked)
+                    keys.append(AddressBarSuggestions.addressKey(picked.url))
+                }
+            }
             let favorites = try Self.favoriteMatches(query.text, in: db)
             return (history, favorites)
         }
+    }
+
+    /// The best root page (`github.com`, no path) whose address starts with the typed text, while
+    /// the text can still be a host. Nil once it has a path or a space, or when no such page is in
+    /// history. A range scan on the partial index of root pages (`historyPlace_sites`), so it costs
+    /// the same at 100k pages as at 100.
+    static func siteMatch(_ query: HistoryQuery, in db: Database) throws -> PageCandidate? {
+        guard let prefix = query.addressPrefix?.lowercased(), !prefix.contains("/"), !prefix.contains("?") else {
+            return nil
+        }
+        // The `instr` terms repeat the index's WHERE clause, so SQLite can use it.
+        let statement = try db.cachedStatement(sql: """
+            SELECT url, title, frecency FROM \(Schema.historyPlace) INDEXED BY historyPlace_sites
+            WHERE address >= ? AND address < ?
+              AND instr(address, '/') = 0 AND instr(address, '?') = 0
+            ORDER BY frecency DESC
+            LIMIT 1
+            """)
+        guard let row = try Row.fetchOne(statement, arguments: [prefix, prefix + "\u{10FFFF}"]),
+              let url = URL(string: row["url"])
+        else { return nil }
+        return PageCandidate(url: url, title: row["title"], frecency: row["frecency"], isFavorite: false)
     }
 
     /// First fetch window, as a multiple of the pages wanted: twice almost always holds enough
@@ -324,6 +388,8 @@ struct HistoryQuery {
     let pattern: String?
     /// The text as the start of an address, or nil when it can't be one (it has spaces).
     let addressPrefix: String?
+    /// The text as adaptive history stores it: lowercased, without scheme or `www.`.
+    let inputKey: String
 
     init(_ typed: String) {
         // Control characters (NUL ends an FTS5 string early) become spaces.
@@ -341,6 +407,7 @@ struct HistoryQuery {
         }
         self.text = text
         addressPrefix = text.isEmpty || text.contains(where: \.isWhitespace) ? nil : text
+        inputKey = text.lowercased()
         // Each typed word becomes a quoted prefix phrase, `"github.com/ap"*`, which FTS5 always
         // parses (no syntax errors from user text) and which matches the word's tokens in order.
         // Built by hand because GRDB's FTS5Pattern opens a scratch database per call to validate.
@@ -365,3 +432,6 @@ struct HistoryQuery {
             .replacingOccurrences(of: "_", with: "\\_")
     }
 }
+
+/// Stored as its raw value in `historyVisit.kind`.
+extension VisitKind: DatabaseValueConvertible {}

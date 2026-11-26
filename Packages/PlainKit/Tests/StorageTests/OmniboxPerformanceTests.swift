@@ -93,7 +93,10 @@ import Testing
             let host = pick(vocabulary, using: &generator) + "." + tlds.randomElement(using: &generator)!
             let path = (0..<Int.random(in: 0...3, using: &generator)).map { _ in pick(vocabulary, using: &generator) }.joined(separator: "/")
             let suffix = Int.random(in: 0..<1_000, using: &generator)
-            let address = "\(host)/\(path)\(path.isEmpty ? "" : "-")\(suffix)"
+            // One page in 20 is a site's root page (`github.com`), which the site-level top hit
+            // looks up; the rest are deep pages.
+            let isRoot = rows.count % 20 == 0
+            let address = isRoot ? host : "\(host)/\(path)\(path.isEmpty ? "" : "-")\(suffix)"
             guard seen.insert(address).inserted else { continue }
             let title = (0..<Int.random(in: 2...7, using: &generator)).map { _ in pick(vocabulary, using: &generator).capitalized }.joined(separator: " ")
             let last = t0.addingTimeInterval(-Double.random(in: 0..<(365 * 86_400), using: &generator))
@@ -110,6 +113,14 @@ import Testing
                 """)
             for row in batch {
                 try statement.execute(arguments: [row.url, row.address, row.title, row.count, row.last, row.frecency])
+            }
+            // Adaptive history: a few thousand remembered picks for short inputs, as months of use leave.
+            let pick = try db.makeStatement(sql: """
+                INSERT OR IGNORE INTO inputHistory (input, url, useCount, lastUsedAt) VALUES (?, ?, ?, ?)
+                """)
+            for (index, row) in batch.enumerated() where index % 40 == 0 {
+                let input = String(row.address.prefix(1 + index % 4))
+                try pick.execute(arguments: [input, row.url, 1 + Double(index % 7), row.last])
             }
         }
         try await database.writer.write { db in try db.execute(sql: "ANALYZE") }

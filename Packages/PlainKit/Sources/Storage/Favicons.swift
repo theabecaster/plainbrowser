@@ -39,9 +39,12 @@ extension AppDatabase {
         }
     }
 
+    /// Removes every icon, then compacts the database soon after (once, together with a history
+    /// clear made at the same time).
     public func clearFavicons() async throws {
         try await writer.write { db in
             _ = try Favicon.deleteAll(db)
         }
+        await maintenance.scheduleCompaction()
     }
 }

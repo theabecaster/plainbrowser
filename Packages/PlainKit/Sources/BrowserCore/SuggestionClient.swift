@@ -90,20 +90,37 @@ public enum SuggestionError: Error, Equatable, Sendable {
 /// Each call cancels the request still running from the previous keystroke, so only the newest
 /// query's answer is ever returned. A superseded call throws `CancellationError`; callers ignore
 /// it. Requests give up after `timeout`, so a slow server never holds suggestions back for long.
+/// There is no debounce: every keystroke asks at once, and cancellation drops the stale ones.
+///
+/// Privacy: text that `SuggestionPolicy` holds back (addresses, intranet names, IPs) and anything
+/// typed in a private tab never reaches the network; those calls return an empty list.
+///
+/// Latency: answers are kept in a small in-memory LRU cache (`FixedChoices.suggestionCacheSize`),
+/// so a query asked before returns without a request, and `cachedSuggestions(for:engine:isPrivate:)`
+/// fills the list from the longest cached prefix while a request is in flight. `preconnect` warms
+/// the connection when the address bar gains focus.
 public actor SuggestionClient {
     private let http: any HTTPLoading
     private let timeout: Duration
     private let limit: Int
+    private let cacheLifetime: Duration
     private var current: Task<[String], any Error>?
+    private var cache: SuggestionCache
+    /// When each suggestion host was last contacted, so `preconnect` skips warm connections.
+    private var lastContact: [String: ContinuousClock.Instant] = [:]
 
     public init(
         http: any HTTPLoading = SuggestionClient.makeSession(),
         timeout: Duration = FixedChoices.suggestionTimeout,
-        limit: Int = FixedChoices.maxSearchSuggestions
+        limit: Int = FixedChoices.maxSearchSuggestions,
+        cacheSize: Int = FixedChoices.suggestionCacheSize,
+        cacheLifetime: Duration = FixedChoices.suggestionCacheLifetime
     ) {
         self.http = http
         self.timeout = timeout
         self.limit = limit
+        self.cacheLifetime = cacheLifetime
+        cache = SuggestionCache(capacity: cacheSize)
     }
 
     /// A session for suggestion requests only: ephemeral (no cookies, cache or credentials are
@@ -118,19 +135,30 @@ public actor SuggestionClient {
         return URLSession(configuration: configuration)
     }
 
-    /// Suggestions for `query` from `engine`'s source. Returns an empty list for blank input
-    /// without a request.
-    public func suggestions(for query: String, engine: SearchEngine) async throws -> [String] {
+    /// Whether `query` may go to the engine at all: never from a private tab (unless
+    /// `FixedChoices.remoteSuggestionsInPrivateTabs` says so), never when it looks like an address.
+    public nonisolated static func allowsRemote(_ query: String, isPrivate: Bool) -> Bool {
+        (!isPrivate || FixedChoices.remoteSuggestionsInPrivateTabs) && SuggestionPolicy.allowsRemote(query)
+    }
+
+    /// Suggestions for `query` from `engine`'s source. Returns an empty list without a request
+    /// for blank input, for input `SuggestionPolicy` holds back, and in private tabs. A query
+    /// answered recently comes from the cache, also without a request.
+    public func suggestions(for query: String, engine: SearchEngine, isPrivate: Bool = false) async throws -> [String] {
         current?.cancel()
         current = nil
 
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let url = engine.suggestionSource.endpoint(for: trimmed) else { return [] }
-
+        guard !trimmed.isEmpty, Self.allowsRemote(trimmed, isPrivate: isPrivate) else { return [] }
         let source = engine.suggestionSource
+        let key = SuggestionCache.key(trimmed, source: source)
+        if let cached = cache.value(for: key, now: .now, lifetime: cacheLifetime) { return cached }
+        guard let url = source.endpoint(for: trimmed) else { return [] }
+
         let http = http
         let timeout = timeout
         let limit = limit
+        if let host = url.host() { lastContact[host] = .now }
         let task = Task<[String], any Error> {
             var request = URLRequest(url: url)
             request.timeoutInterval = timeout.seconds
@@ -147,10 +175,60 @@ public actor SuggestionClient {
             return Array(try source.parse(data, textEncoding: encoding).prefix(limit))
         }
         current = task
-        return try await withTaskCancellationHandler {
+        let result = try await withTaskCancellationHandler {
             try await task.value
         } onCancel: {
             task.cancel()
+        }
+        cache.insert(result, for: key, now: .now)
+        return result
+    }
+
+    /// Suggestions for `query` from the cache alone, at once: the cached answer for `query`, or
+    /// else the answer for its longest cached prefix, keeping only suggestions that still start
+    /// with `query`. Show these while `suggestions(for:engine:isPrivate:)` is in flight. Empty
+    /// when nothing fits, and always empty when the query may not go to the engine.
+    public func cachedSuggestions(for query: String, engine: SearchEngine, isPrivate: Bool = false) -> [String] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, Self.allowsRemote(trimmed, isPrivate: isPrivate) else { return [] }
+        let source = engine.suggestionSource
+        let now = ContinuousClock.now
+        if let exact = cache.value(for: SuggestionCache.key(trimmed, source: source), now: now, lifetime: cacheLifetime) {
+            return exact
+        }
+        let lowered = trimmed.lowercased()
+        var prefix = Substring(lowered)
+        while prefix.count > 1 {
+            prefix = prefix.dropLast()
+            guard let cached = cache.value(for: SuggestionCache.key(String(prefix), source: source), now: now, lifetime: cacheLifetime)
+            else { continue }
+            return Array(cached.filter { $0.lowercased().hasPrefix(lowered) }.prefix(limit))
+        }
+        return []
+    }
+
+    /// Warms the connection to `engine`'s suggestion host with one small request, so the first
+    /// keystroke's request skips DNS, TCP and TLS. Call when the address bar gains focus. Does
+    /// nothing in a private tab, or when the host was contacted within
+    /// `FixedChoices.suggestionPreconnectInterval`. Returns at once; the returned task is for
+    /// tests.
+    @discardableResult
+    public func preconnect(engine: SearchEngine, isPrivate: Bool = false) -> Task<Void, Never>? {
+        guard !isPrivate || FixedChoices.remoteSuggestionsInPrivateTabs,
+              let url = engine.suggestionSource.endpoint(for: ""), let host = url.host()
+        else { return nil }
+        let now = ContinuousClock.now
+        if let last = lastContact[host], now - last < FixedChoices.suggestionPreconnectInterval { return nil }
+        lastContact[host] = now
+        let http = http
+        let timeout = timeout
+        return Task(priority: .utility) {
+            // A HEAD for an empty query: no body to speak of, and nothing typed is sent.
+            var request = URLRequest(url: url)
+            request.httpMethod = "HEAD"
+            request.timeoutInterval = timeout.seconds
+            let finalRequest = request
+            _ = try? await Self.withTimeout(timeout) { try await http.load(finalRequest) }
         }
     }
 
@@ -194,6 +272,52 @@ public actor SuggestionClient {
         } onCancel: {
             outcome.resolve(.failure(CancellationError()))
         }
+    }
+}
+
+/// A small least-recently-used cache of engine answers, keyed by source and lowercased query.
+struct SuggestionCache {
+    private struct Entry {
+        var suggestions: [String]
+        var storedAt: ContinuousClock.Instant
+    }
+
+    let capacity: Int
+    private var entries: [String: Entry] = [:]
+    /// Keys, least recently used first. Linear updates are fine at this size.
+    private var order: [String] = []
+
+    init(capacity: Int) {
+        self.capacity = max(0, capacity)
+    }
+
+    static func key(_ query: String, source: SuggestionSource) -> String {
+        source.rawValue + "\u{0}" + query.lowercased()
+    }
+
+    mutating func value(for key: String, now: ContinuousClock.Instant, lifetime: Duration) -> [String]? {
+        guard let entry = entries[key] else { return nil }
+        guard now - entry.storedAt < lifetime else {
+            entries[key] = nil
+            order.removeAll { $0 == key }
+            return nil
+        }
+        touch(key)
+        return entry.suggestions
+    }
+
+    mutating func insert(_ suggestions: [String], for key: String, now: ContinuousClock.Instant) {
+        guard capacity > 0 else { return }
+        entries[key] = Entry(suggestions: suggestions, storedAt: now)
+        touch(key)
+        while order.count > capacity {
+            entries[order.removeFirst()] = nil
+        }
+    }
+
+    private mutating func touch(_ key: String) {
+        if let index = order.lastIndex(of: key) { order.remove(at: index) }
+        order.append(key)
     }
 }
 

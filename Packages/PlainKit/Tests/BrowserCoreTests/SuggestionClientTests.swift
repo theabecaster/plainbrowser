@@ -92,7 +92,7 @@ final class FakeHTTP: HTTPLoading {
         let http = FakeHTTP(handler: FakeHTTP.ok(SuggestionFixtures.duckDuckGo))
         let client = SuggestionClient(http: http)
         _ = try await client.suggestions(for: "swift ui", engine: .bing)
-        _ = try await client.suggestions(for: "swift ui", engine: try .custom(name: "X", template: "https://x.example/?q=%s"))
+        _ = try await client.suggestions(for: "swift uikit", engine: try .custom(name: "X", template: "https://x.example/?q=%s"))
         #expect(http.requests.withLock(\.self).map(\.host) == ["duckduckgo.com", "duckduckgo.com"])
     }
 

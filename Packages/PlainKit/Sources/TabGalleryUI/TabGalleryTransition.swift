@@ -68,6 +68,7 @@ public final class TabGalleryTransition {
 
         wrapper.clipsToBounds = true
         wrapper.layer.cornerCurve = .continuous
+        wrapper.layer.borderColor = Palette.accent.cgColor
         wrapper.backgroundColor = Palette.surface
         wrapper.accessibilityElementsHidden = true
         snapshot.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
@@ -153,6 +154,7 @@ public final class TabGalleryTransition {
         if crossfade {
             setFrame(pageFrame)
             wrapper.layer.cornerRadius = 0
+            wrapper.layer.borderWidth = 0
             wrapper.alpha = progress
             for view in content { view.transform = .identity; view.alpha = 1 }
             // The card shows under the fading page, so there is no gap.
@@ -166,7 +168,11 @@ public final class TabGalleryTransition {
             height: max(1, lerp(pageFrame.height, cardFrame.height, progress))
         )
         setFrame(frame)
-        wrapper.layer.cornerRadius = lerp(0, Radius.large, min(max(progress, 0), 1))
+        let t = min(max(progress, 0), 1)
+        wrapper.layer.cornerRadius = lerp(0, Radius.large, t)
+        // The tab being opened or left is the selected one: its card's ring grows in with the
+        // zoom, so nothing pops when the real card takes over.
+        wrapper.layer.borderWidth = TabCardCell.selectionWidth * t
         wrapper.alpha = 1
         let zoom = 1 + Self.galleryZoom * (1 - progress)
         if let cards = content.first {

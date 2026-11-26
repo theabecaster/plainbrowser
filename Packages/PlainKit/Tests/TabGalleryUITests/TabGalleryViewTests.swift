@@ -99,8 +99,13 @@ final class TabGalleryViewTests: XCTestCase {
         XCTAssertEqual(data.tabs[3].id, id)
     }
 
-    /// Main-thread cost of scrolling 100 tabs: the scroll is stepped one 120 Hz frame at a time
-    /// (cards entering, cells configured, layout), and each frame's work must fit in its 8.3 ms.
+    /// Main-thread cost of scrolling 100 tabs, cold: no preview is decoded yet, so images are
+    /// prepared and delivered while the scroll runs. The scroll moves one 120 Hz frame (33 pt, a
+    /// brisk 4000 pt/s) per step and then yields for the rest of the frame, so image deliveries and
+    /// other main-actor work land between steps. Two numbers per frame:
+    /// - work: the step itself (cards entering, cells configured, layout);
+    /// - late: how far past its 8.3 ms deadline the next step started, which counts any main-thread
+    ///   work that ran in between (image assignment, prefetch, diffable).
     func testScrollingHundredTabsFitsTheFrameBudget() async throws {
         let data = TabGalleryDemoData(count: 100)
         let gallery = show(data)
@@ -108,38 +113,49 @@ final class TabGalleryViewTests: XCTestCase {
         collection.layoutIfNeeded()
         let maxOffset = collection.contentSize.height - collection.bounds.height + collection.adjustedContentInset.bottom
         XCTAssertGreaterThan(maxOffset, 10_000)
-        // A brisk flick: 4000 pt/s, so 33 pt per 120 Hz frame.
         let step: CGFloat = 4000 / 120
+        let frame = Duration.nanoseconds(8_333_333)
         let clock = ContinuousClock()
-        var frames: [Duration] = []
+        var work: [Duration] = []
+        var late: [Duration] = []
 
-        func pass() {
-            var offset: CGFloat = 0
-            while offset < maxOffset {
-                offset = min(maxOffset, offset + step)
-                let time = clock.measure {
-                    collection.contentOffset.y = offset
-                    collection.layoutIfNeeded()
-                }
-                frames.append(time)
+        var offset: CGFloat = 0
+        var deadline = clock.now
+        while offset < maxOffset {
+            let start = clock.now
+            if work.count > 0 { late.append(max(.zero, start - deadline)) }
+            offset = min(maxOffset, offset + step)
+            collection.contentOffset.y = offset
+            collection.layoutIfNeeded()
+            work.append(clock.now - start)
+            deadline = start + frame
+            try await Task.sleep(until: deadline, tolerance: .zero, clock: clock)
+        }
+
+        func stats(_ values: [Duration]) -> (p95: Duration, p99: Duration, max: Duration) {
+            let sorted = values.sorted()
+            return (sorted[Int(Double(sorted.count) * 0.95)], sorted[Int(Double(sorted.count) * 0.99)], sorted.last!)
+        }
+        let w = stats(work)
+        let l = stats(late)
+        let ms = { (d: Duration) in String(format: "%.2f", Double(d.components.attoseconds) / 1e15 + Double(d.components.seconds) * 1000) }
+        print("[plain-measure] gallery.scroll100 frames=\(work.count) work p95=\(ms(w.p95))ms p99=\(ms(w.p99))ms max=\(ms(w.max))ms late p95=\(ms(l.p95))ms p99=\(ms(l.p99))ms max=\(ms(l.max))ms")
+        XCTAssertLessThan(w.p99, .milliseconds(4), "a frame's scroll work leaves room in 8.3 ms")
+        // Sleep wake-ups on the simulator jitter by a millisecond or two; a decode on the main
+        // thread would show up as tens of milliseconds.
+        XCTAssertLessThan(l.p95, .milliseconds(4), "nothing between frames blocks the main thread")
+
+        // XCTest metrics for the trend: a warm pass, stepped without pausing.
+        measure(metrics: [XCTClockMetric(), XCTCPUMetric()]) {
+            var y: CGFloat = 0
+            while y < maxOffset {
+                y = min(maxOffset, y + step)
+                collection.contentOffset.y = y
+                collection.layoutIfNeeded()
             }
             collection.contentOffset.y = 0
             collection.layoutIfNeeded()
         }
-
-        // First pass decodes thumbnails in the background; let them land, then measure.
-        pass()
-        try await Task.sleep(for: .seconds(2))
-        frames.removeAll()
-        measure(metrics: [XCTClockMetric(), XCTCPUMetric()]) { pass() }
-
-        let sorted = frames.sorted()
-        let p95 = sorted[Int(Double(sorted.count) * 0.95)]
-        let worst = sorted.last!
-        let mean = frames.reduce(Duration.zero, +) / frames.count
-        let p99 = sorted[Int(Double(sorted.count) * 0.99)]
-        print("[plain-measure] gallery.scroll100 frames=\(frames.count) mean=\(mean) p95=\(p95) p99=\(p99) max=\(worst)")
-        XCTAssertLessThan(p95, .microseconds(8_333), "95% of frames fit 120 Hz")
     }
 
     /// Thumbnails decode off the main thread: 100 cards' previews prepared through the pipeline.

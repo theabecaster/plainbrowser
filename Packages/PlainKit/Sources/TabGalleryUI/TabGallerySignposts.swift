@@ -21,4 +21,7 @@ extension Signposts {
     public static let galleryCloseAll: StaticString = "gallery.closeAll"
     public static let galleryReorder: StaticString = "gallery.reorder"
     public static let galleryMenu: StaticString = "gallery.menu"
+    public static let galleryCopyLink: StaticString = "gallery.copyLink"
+    public static let galleryShare: StaticString = "gallery.share"
+    public static let galleryOtherPane: StaticString = "gallery.otherPane"
 }

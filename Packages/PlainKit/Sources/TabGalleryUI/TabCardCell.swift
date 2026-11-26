@@ -11,6 +11,9 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
 
     /// The tab this cell shows; image loads check it before assigning.
     private(set) var tabID: UUID?
+    /// The image requests this cell shows; a load that finishes for an older key is dropped.
+    var thumbnailKey: ThumbnailPipeline.Key?
+    var faviconKey: ThumbnailPipeline.Key?
     /// Called when the card was flicked far or fast enough, or its close button was tapped.
     /// `thrown` is true for a flick: the card is already flying off.
     var onClose: ((_ thrown: Bool) -> Void)?
@@ -37,7 +40,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
 
     private static let faviconSize: CGFloat = 18
     private static let iconGap: CGFloat = 8
-    private static let selectionWidth: CGFloat = 3
+    static let selectionWidth: CGFloat = 3
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -118,11 +121,16 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             faviconView.image = nil
         }
         tabID = item.id
+        // Lay out again only when a frame depends on what changed: a reused card of the same
+        // size keeps its frames during a scroll.
+        let font = Self.titleFont(for: traitCollection)
+        let needsLayout = self.thumbnailHeight != thumbnailHeight || privateIcon.isHidden == item.isPrivate
+            || titleLabel.font.pointSize != font.pointSize
         self.thumbnailHeight = thumbnailHeight
         isSelectedTab = isSelected
         isPrivateTab = item.isPrivate
         titleLabel.text = item.displayTitle
-        titleLabel.font = Self.titleFont(for: traitCollection)
+        if titleLabel.font != font { titleLabel.font = font }
         privateIcon.isHidden = !item.isPrivate
         setThumbnailHidden(hidesThumbnail)
         updatePlaceholder()
@@ -140,13 +148,23 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
                 return true
             },
         ]
-        setNeedsLayout()
+        if needsLayout { setNeedsLayout() }
     }
 
     func setThumbnail(_ image: UIImage?) {
         imageView.image = image
         updatePlaceholder()
-        setNeedsLayout()
+        layoutImage()
+    }
+
+    /// The preview is the top of the page at the card's width: pages are anchored at the top.
+    private func layoutImage() {
+        let width = contentView.bounds.width
+        if let image = imageView.image, image.size.width > 0 {
+            imageView.frame = CGRect(x: 0, y: 0, width: width, height: (width * image.size.height / image.size.width).rounded())
+        } else {
+            imageView.frame = .zero
+        }
     }
 
     func setFavicon(_ image: UIImage?) {
@@ -195,12 +213,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         shadowView.frame = thumbFrame
         shadowView.layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: thumbFrame.size), cornerRadius: Radius.large).cgPath
 
-        // The preview is the top of the page at the card's width: pages are anchored at the top.
-        if let image = imageView.image, image.size.width > 0 {
-            imageView.frame = CGRect(x: 0, y: 0, width: width, height: (width * image.size.height / image.size.width).rounded())
-        } else {
-            imageView.frame = .zero
-        }
+        layoutImage()
         let iconSide = min(48, thumbnailHeight * 0.3)
         placeholderIcon.frame = CGRect(x: (width - iconSide) / 2, y: (thumbnailHeight - iconSide) / 2, width: iconSide, height: iconSide)
 
@@ -216,8 +229,8 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             titleX = privateIcon.frame.maxX + Spacing.xs
         }
         let button = Metrics.tapTarget
-        // The glyph lines up with the card's trailing edge; the 44 pt target overhangs it.
-        closeButton.frame = CGRect(x: width - button + 12, y: (midY - button / 2).rounded(), width: button, height: button)
+        // The whole 44 pt target stays inside the cell, so all of it takes touches.
+        closeButton.frame = CGRect(x: width - button + 4, y: (midY - button / 2).rounded(), width: button - 4, height: button)
         let titleHeight = ceil(titleLabel.font.lineHeight)
         titleLabel.frame = CGRect(
             x: titleX, y: (midY - titleHeight / 2).rounded(),
@@ -278,7 +291,11 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         Haptic.close.play()
         isUserInteractionEnabled = false
         let direction: CGFloat = (velocity != 0 ? velocity : translation) < 0 ? -1 : 1
-        if let host = superview, let ghost = cardView.snapshotView(afterScreenUpdates: false) {
+        if let host = superview {
+            // A rendered copy: a snapshot view would mirror the card, which is about to be hidden
+            // and deleted. One card, once per close, never during a scroll.
+            let renderer = UIGraphicsImageRenderer(bounds: cardView.bounds)
+            let ghost = UIImageView(image: renderer.image { cardView.layer.render(in: $0.cgContext) })
             let presented = cardView.layer.presentation()
             ghost.frame = contentView.convert(presented?.frame ?? cardView.frame, to: host)
             ghost.alpha = CGFloat(presented?.opacity ?? Float(cardView.alpha))

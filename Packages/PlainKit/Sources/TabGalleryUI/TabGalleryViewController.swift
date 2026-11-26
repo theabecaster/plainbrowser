@@ -107,20 +107,23 @@ public final class TabGalleryViewController: UIViewController {
         if collectionView.frame != bounds { collectionView.frame = bounds }
         let safe = view.safeAreaInsets
 
+        // Floating controls center on the safe area: on the Duo's outer screen the system's
+        // vertical bar takes one side.
+        let midX = (safe.left + (bounds.width - safe.right)) / 2
         let barSize = bottomBar.sizeThatFits(bounds.size)
         let barBottom = bounds.height - max(safe.bottom, Spacing.l)
         bottomBar.frame = CGRect(
-            x: ((bounds.width - barSize.width) / 2).rounded(), y: barBottom - barSize.height,
+            x: (midX - barSize.width / 2).rounded(), y: barBottom - barSize.height,
             width: barSize.width, height: barSize.height
         )
         let toastSize = toast.sizeThatFits(bounds.size)
         toast.frame = CGRect(
-            x: ((bounds.width - toastSize.width) / 2).rounded(), y: bottomBar.frame.minY - Spacing.m - toastSize.height,
+            x: (midX - toastSize.width / 2).rounded(), y: bottomBar.frame.minY - Spacing.m - toastSize.height,
             width: toastSize.width, height: toastSize.height
         )
         let emptySize = emptyView.sizeThatFits(CGSize(width: min(bounds.width - Spacing.xl * 2, 360), height: bounds.height))
         emptyView.frame = CGRect(
-            x: ((bounds.width - emptySize.width) / 2).rounded(), y: ((bounds.height - emptySize.height) / 2).rounded(),
+            x: (midX - emptySize.width / 2).rounded(), y: ((bounds.height - emptySize.height) / 2).rounded(),
             width: emptySize.width, height: emptySize.height
         )
         // The cards scroll under the floating bar and end above it.
@@ -145,7 +148,13 @@ public final class TabGalleryViewController: UIViewController {
             isCompactWidth: traits.horizontalSizeClass != .regular,
             titleLineHeight: TabCardCell.titleFont(for: traits).lineHeight
         )
-        metrics = next
+        if next != metrics {
+            let resized = metrics.cardSize != next.cardSize && metrics.width > 0
+            metrics = next
+            // Cards already on screen keep their old preview height until configured again.
+            // Not inside this layout pass: on the next turn of the main loop.
+            if resized { Task { @MainActor [weak self] in self?.reconfigureAll() } }
+        }
         let size = next.cardSize
         let item = NSCollectionLayoutItem(layoutSize: .init(widthDimension: .absolute(size.width), heightDimension: .absolute(size.height)))
         let rowWidth = size.width * CGFloat(next.columns) + TabGalleryMetrics.spacing * CGFloat(next.columns - 1)
@@ -169,7 +178,11 @@ public final class TabGalleryViewController: UIViewController {
     /// Reads the tabs again and applies the difference. Call it when tabs change outside the
     /// gallery (a title, a thumbnail, a tab opened elsewhere).
     public func reloadTabs(animated: Bool) {
-        guard isViewLoaded else { return }
+        reloadTabs(animated: animated, completion: nil)
+    }
+
+    private func reloadTabs(animated: Bool, completion: (() -> Void)?) {
+        guard isViewLoaded else { completion?(); return }
         let state = Signposts.signposter.beginInterval(Signposts.galleryReload)
         let tabs = dataSource.tabs
         let previous = items
@@ -192,6 +205,7 @@ public final class TabGalleryViewController: UIViewController {
 
         let apply = { [diffable] in diffable!.apply(snapshot, animatingDifferences: animated) {
             Signposts.signposter.endInterval(Signposts.galleryReload, state)
+            completion?()
         } }
         if animated, !Motion.prefersCrossfade {
             UIView.animate(Motion.reflow, changes: apply)
@@ -226,25 +240,31 @@ public final class TabGalleryViewController: UIViewController {
         cell.onClose = { [weak self] thrown in self?.closeTab(id, thrown: thrown) }
 
         let thumbKey = thumbnailKey(for: item)
-        if let image = pipeline.cached(thumbKey) {
-            cell.setThumbnail(image)
-        } else {
-            Task { [weak self, weak cell] in
-                guard let self else { return }
-                let image = await pipeline.image(for: thumbKey) { [dataSource] in await dataSource.thumbnail(for: id) }
-                guard let cell, cell.tabID == id else { return }
+        if cell.thumbnailKey != thumbKey {
+            cell.thumbnailKey = thumbKey
+            if let image = pipeline.cached(thumbKey) {
                 cell.setThumbnail(image)
+            } else {
+                Task { [weak self, weak cell] in
+                    guard let self else { return }
+                    let image = await pipeline.image(for: thumbKey) { [dataSource] in await dataSource.thumbnail(for: id) }
+                    guard let cell, cell.thumbnailKey == thumbKey else { return }
+                    cell.setThumbnail(image)
+                }
             }
         }
         let iconKey = faviconKey(for: item)
-        if let image = pipeline.cached(iconKey) {
-            cell.setFavicon(image)
-        } else {
-            Task { [weak self, weak cell] in
-                guard let self else { return }
-                let image = await pipeline.image(for: iconKey) { [dataSource] in await dataSource.favicon(for: id) }
-                guard let cell, cell.tabID == id else { return }
+        if cell.faviconKey != iconKey {
+            cell.faviconKey = iconKey
+            if let image = pipeline.cached(iconKey) {
                 cell.setFavicon(image)
+            } else {
+                Task { [weak self, weak cell] in
+                    guard let self else { return }
+                    let image = await pipeline.image(for: iconKey) { [dataSource] in await dataSource.favicon(for: id) }
+                    guard let cell, cell.faviconKey == iconKey else { return }
+                    cell.setFavicon(image)
+                }
             }
         }
     }
@@ -260,7 +280,8 @@ public final class TabGalleryViewController: UIViewController {
 
     private func faviconKey(for item: TabGalleryItem) -> ThumbnailPipeline.Key {
         let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 3
-        return .init(id: item.id, revision: 0, pixelWidth: Int(18 * scale), maxAspectPermille: 0, kind: .favicon)
+        // A tab that moves to another site gets that site's icon.
+        return .init(id: item.id, revision: item.host?.hashValue ?? 0, pixelWidth: Int(18 * scale), maxAspectPermille: 0, kind: .favicon)
     }
 
     // MARK: Actions
@@ -268,6 +289,8 @@ public final class TabGalleryViewController: UIViewController {
     private func open(_ id: UUID) {
         toast.hide(animated: true)
         dataSource.selectTab(id)
+        // Move the selection ring now; the shell has already hidden the card it zooms.
+        reloadTabs(animated: false)
     }
 
     private func done() {
@@ -291,8 +314,9 @@ public final class TabGalleryViewController: UIViewController {
             onLastTabClosed?()
             return
         }
-        reloadTabs(animated: true)
-        Signposts.signposter.endInterval(Signposts.galleryCardClose, state)
+        reloadTabs(animated: true) {
+            Signposts.signposter.endInterval(Signposts.galleryCardClose, state)
+        }
         toast.show(animated: true)
     }
 
@@ -437,17 +461,20 @@ extension TabGalleryViewController: UICollectionViewDelegate, UICollectionViewDa
         var top: [UIMenuElement] = []
         if dataSource.canOpenInOtherPane {
             top.append(UIAction(title: "Open in Other Pane", image: UIImage(systemName: "rectangle.split.2x1")) { [weak self] _ in
+                Signposts.signposter.emitEvent(Signposts.galleryOtherPane)
                 self?.dataSource.openInOtherPane(id)
             })
         }
         if let url = item.url {
             top.append(UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { _ in
+                Signposts.signposter.emitEvent(Signposts.galleryCopyLink)
                 UIPasteboard.general.url = url
                 Haptic.success.play()
             })
             top.append(UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
                 guard let self else { return }
                 let source = diffable.indexPath(for: id).flatMap { self.collectionView.cellForItem(at: $0) } ?? view
+                Signposts.signposter.emitEvent(Signposts.galleryShare)
                 share(item, from: source ?? view)
             })
         }

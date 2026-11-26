@@ -479,7 +479,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// then weighs more in ranking.
     func load(_ url: URL, kind: VisitKind = .link) {
         let tab = self.currentTab ?? openNewTab()
-        engineUI.typedVisitTab = kind == .typed ? tab.id : nil
+        if kind == .typed {
+            engineUI.typedVisitTabs.insert(tab.id)
+        } else {
+            engineUI.typedVisitTabs.remove(tab.id)
+        }
         tab.load(url)
         pill.display(url: url)
         pill.textField.text = url.absoluteString

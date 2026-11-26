@@ -193,25 +193,22 @@ extension BrowserViewController: EngineHost {
     }
 
     /// Shows the alert `make` builds once the questions before it are answered, and returns the
-    /// answer its actions pass to `finish`. When it can't be shown (the screen is busy leaving),
-    /// the fallback `make` returned is the answer, so the engine never waits forever.
+    /// answer its actions pass to `finish`. When it can't be shown (the screen is busy leaving) or
+    /// goes away unanswered (the scene closed), the fallback `make` returned is the answer, so the
+    /// engine never waits forever and the next question is not stuck behind it.
     private func presentPrompt<Answer: Sendable>(
         _ make: (_ finish: @escaping (Answer) -> Void) -> (UIAlertController, fallback: Answer)
     ) async -> Answer {
         await engineUI.prompts.acquire()
         defer { engineUI.prompts.release() }
         return await withCheckedContinuation { continuation in
-            let once = Once()
-            let (alert, fallback) = make { answer in
-                guard once.claim() else { return }
-                continuation.resume(returning: answer)
-            }
+            let answer = PromptAnswer(continuation)
+            // The actions keep `answer` alive; when the alert is released unanswered, so is it.
+            let (alert, fallback) = make { answer.resume($0) }
+            answer.fallback = fallback
             alert.view.tintColor = Palette.accent
-            let presenter = topPresenter
-            presenter.present(alert, animated: true)
-            if alert.presentingViewController == nil, once.claim() {
-                continuation.resume(returning: fallback)
-            }
+            topPresenter.present(alert, animated: true)
+            if alert.presentingViewController == nil { answer.resume(fallback) }
         }
     }
 
@@ -243,14 +240,23 @@ extension BrowserViewController: EngineHost {
     }
 }
 
-/// True for the first `claim()` only, so a continuation resumes once.
-private final class Once {
-    private var claimed = false
+/// Resumes a prompt's continuation once: with the user's answer, or with the fallback when the
+/// alert is released without one.
+private final class PromptAnswer<Answer: Sendable> {
+    private var continuation: CheckedContinuation<Answer, Never>?
+    var fallback: Answer?
 
-    func claim() -> Bool {
-        guard !claimed else { return false }
-        claimed = true
-        return true
+    init(_ continuation: CheckedContinuation<Answer, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ answer: Answer) {
+        continuation?.resume(returning: answer)
+        continuation = nil
+    }
+
+    isolated deinit {
+        if let continuation, let fallback { continuation.resume(returning: fallback) }
     }
 }
 #endif

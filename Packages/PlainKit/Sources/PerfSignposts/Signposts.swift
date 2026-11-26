@@ -92,6 +92,9 @@ public enum Signposts {
     /// Interval: showing an article in the reader view, from the request until the rendered page
     /// is handed to the reader web view.
     public static let readerShow: StaticString = "reader.show"
+    /// Event: the button on a page that can't show (crashed, failed, form waiting): Reload or Try
+    /// Again. The message says which.
+    public static let pageStateAction: StaticString = "page.stateAction"
     /// Event: Show Reader or Hide Reader from the page menu (or Back closing the reader).
     public static let readerToggle: StaticString = "page.reader"
 

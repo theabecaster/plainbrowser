@@ -17,8 +17,8 @@ final class EngineUIState {
     let reader = ReaderPresenter()
     var readerTask: Task<Void, Never>?
     let pageState = PageStateView()
-    /// The tab whose next visit the address bar asked for (`VisitKind.typed`).
-    var typedVisitTab: UUID?
+    /// Tabs whose next visit the address bar asked for (`VisitKind.typed`).
+    var typedVisitTabs: Set<UUID> = []
     /// Tabs whose page kept crashing after the engine's automatic reloads.
     var crashedTabs: Set<UUID> = []
     let prompts = PromptQueue()
@@ -106,8 +106,7 @@ extension BrowserViewController {
         }
         tab.onVisit = { [weak self, weak tab] url, title in
             guard let self, let tab else { return }
-            let kind: VisitKind = self.engineUI.typedVisitTab == tab.id ? .typed : .link
-            self.engineUI.typedVisitTab = nil
+            let kind: VisitKind = self.engineUI.typedVisitTabs.remove(tab.id) != nil ? .typed : .link
             guard self.recordsHistory else { return }
             self.data.pageVisited(url: url, title: title, kind: kind)
         }
@@ -167,7 +166,7 @@ extension BrowserViewController {
             } else if old != nil {
                 pill.progressBar.finish()
                 // A typed load that ended without a new page (it failed): later visits are links.
-                if engineUI.typedVisitTab == currentTab?.id { engineUI.typedVisitTab = nil }
+                if let tab = currentTab { engineUI.typedVisitTabs.remove(tab.id) }
             }
         }
         updateButtons()
@@ -186,14 +185,19 @@ extension BrowserViewController {
         }
         guard let tab = currentTab else { return state.show(nil) }
         if engineUI.crashedTabs.contains(tab.id) {
-            state.show(.init(message: "This page stopped working.", button: "Reload") { [weak tab] in tab?.reload() })
+            state.show(.init(message: "This page stopped working.", button: "Reload") { [weak tab] in
+                Signposts.signposter.emitEvent(Signposts.pageStateAction, "reload after crash")
+                tab?.reload()
+            })
         } else if tab.isAwaitingResubmit {
             state.show(.init(message: "Reload to send the form again.", button: "Reload") { [weak tab] in
+                Signposts.signposter.emitEvent(Signposts.pageStateAction, "resend form")
                 tab?.reload()
             })
         } else if let error = tab.loadError, !tab.isLoading {
             let retry = error.url ?? tab.url
             state.show(.init(message: PageStateView.message(for: error), button: "Try Again") { [weak tab] in
+                Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again")
                 if let retry { tab?.load(retry) } else { tab?.reload() }
             })
         } else {

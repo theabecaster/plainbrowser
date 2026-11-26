@@ -280,28 +280,34 @@ public final class WebViewPool {
     // MARK: - Commands from Tab
 
     func load(_ url: URL, in tab: Tab) {
-        let slot = ensureSlot(for: tab)
-        slot.whenRestored { webView in webView.load(URLRequest(url: url)) }
-        if slot.container == nil { enforceTiers() }
+        perform(in: tab) { $0.load(URLRequest(url: url)) }
     }
 
+    /// Reloads; a discarded tab's restore is its reload.
     func reload(_ tab: Tab) {
-        if let slot = slots[tab.id] {
-            if slot.webView.url == nil, let url = tab.url {
-                slot.webView.load(URLRequest(url: url))
-            } else {
-                slot.webView.reload()
-            }
-        } else {
-            _ = ensureSlot(for: tab)
+        guard tab.pool === self else { return }
+        guard slots[tab.id] != nil else {
+            ensureSlot(for: tab)
             enforceTiers()
+            return
+        }
+        perform(in: tab) { webView in
+            if webView.url == nil, let url = tab.url {
+                webView.load(URLRequest(url: url))
+            } else {
+                webView.reload()
+            }
         }
     }
 
-    /// The tab's web view, created (and restored) if it was discarded.
-    func webView(for tab: Tab) -> WKWebView? {
-        guard tab.pool === self else { return nil }
-        return ensureSlot(for: tab).webView
+    /// Runs `work` on the tab's web view, creating and restoring it if the tab was discarded, and
+    /// after any pending restore, so a command lands on top of the restored history.
+    func perform(in tab: Tab, _ work: @escaping (WKWebView) -> Void) {
+        guard tab.pool === self else { return }
+        let isNew = slots[tab.id] == nil
+        let slot = ensureSlot(for: tab)
+        slot.whenRestored(work)
+        if isNew { enforceTiers() }
     }
 
     func existingWebView(for tab: Tab) -> WKWebView? {
@@ -323,6 +329,7 @@ public final class WebViewPool {
             return tab.restoration
                 ?? TabRestorationState(url: tab.url, title: tab.title, interactionState: nil, sessionStorage: nil)
         }
+        if let pending = slot.pendingRestore { return pending }
         let webView = slot.webView
         let session = try? await webView.fetchData(of: .sessionStorage)
         // After the round trip, so the latest scroll position is in the history item.
@@ -357,10 +364,10 @@ public final class WebViewPool {
     private func restore(_ state: TabRestorationState, into slot: Slot) {
         let signposter = Signposts.signposter
         slot.restoreInterval = signposter.beginInterval(Signposts.tabRestore, id: signposter.makeSignpostID())
-        slot.isRestoring = true
+        slot.pendingRestore = state
         let webView = slot.webView
         let finish: () -> Void = { [weak slot] in
-            guard let slot, slot.isRestoring else { return }
+            guard let slot, slot.pendingRestore != nil else { return }
             if let interaction = state.interactionState {
                 webView.interactionState = interaction
             } else if let url = state.url {
@@ -368,7 +375,7 @@ public final class WebViewPool {
             } else {
                 slot.endRestoreInterval()
             }
-            slot.isRestoring = false
+            slot.pendingRestore = nil
             slot.runPendingAfterRestore()
         }
         if let session = state.sessionStorage {
@@ -581,7 +588,9 @@ extension WebViewPool {
         weak var container: UIView?
         var lastUse: UInt64 = 0
         var isDiscarding = false
-        var isRestoring = false
+        /// The state being restored until its `interactionState` is applied.
+        var pendingRestore: TabRestorationState?
+        var isRestoring: Bool { pendingRestore != nil }
         var needsReload = false
         var restoreInterval: OSSignpostIntervalState?
         private var afterRestore: [(WKWebView) -> Void] = []

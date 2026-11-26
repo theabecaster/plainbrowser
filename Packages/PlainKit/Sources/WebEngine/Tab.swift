@@ -85,11 +85,11 @@ public final class Tab: Identifiable {
     }
 
     public func goBack() {
-        pool?.webView(for: self)?.goBack()
+        pool?.perform(in: self) { $0.goBack() }
     }
 
     public func goForward() {
-        pool?.webView(for: self)?.goForward()
+        pool?.perform(in: self) { $0.goForward() }
     }
 
     /// Reloads, restoring a discarded tab first.

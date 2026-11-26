@@ -117,6 +117,12 @@ struct TierTests {
         harness.pool.attach(reopened, to: harness.container)
         try await harness.waitForLoad(of: harness.server.url("/b"), in: reopened)
         #expect(reopened.canGoBack)
+
+        // Back on a tab that is still discarded restores it first, then goes back.
+        let another = harness.pool.makeTab(restoring: state)
+        another.goBack()
+        try await waitUntil("restored, then back") { another.title == "A" && !another.isLoading }
+        #expect(another.canGoForward)
     }
 
     @Test func attachingALiveTabIsFast() async throws {

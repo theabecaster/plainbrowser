@@ -31,7 +31,13 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
             decisionHandler(.download, preferences)
             return
         }
-        let isMainFrame = action.targetFrame?.isMainFrame ?? true
+        // No target frame: a new window. `createWebViewWith` makes the child tab, whose own
+        // handler decides its navigation; this tab's mode and rules must not change.
+        guard let targetFrame = action.targetFrame else {
+            decisionHandler(NavigationRules.schemeKind(of: url) == .external ? .cancel : .allow, preferences)
+            return
+        }
+        let isMainFrame = targetFrame.isMainFrame
         switch NavigationRules.schemeKind(of: url) {
         case .external:
             decisionHandler(.cancel, preferences)

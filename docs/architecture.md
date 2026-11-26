@@ -23,7 +23,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 |---|---|---|---|
 | `BrowserCore` | nonisolated | Foundation | `AddressBarInput` (URL vs search rules), `SearchEngine` |
 | `Storage` | nonisolated | GRDB | `AppDatabase` (migrations, async reads/writes), `HistoryVisit` |
-| `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`, warm-up), `NavigationSignposter` |
+| `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`: warm-up, tiers, popups, crash recovery), `Tab` (observed page state), `TabWebViewHandler` (navigation/UI delegate), `NavigationRules` (pure policy), `DownloadCoordinator`, `ThumbnailService`, `EngineChoices`, seams in `EngineProtocols` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
 | `Reader` | nonisolated; WebKit types MainActor | WebKit | `ReaderExtractor` (Readability in its own content world), `ReaderRenderer` (page template), `ReaderSchemeHandler` (`plain-reader:` scheme), `ReaderArticle` |
 | `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI | `BrowserViewController` (page, URL pill, search sheet, page buttons), `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
@@ -139,4 +139,25 @@ exactly what the app emits.
 | `settings.open` / `history.show` / `favorites.editorOpen` | event | sheet presented |
 | `reader.extract` | interval | reader request → article returned (or not readerable) |
 | `reader.show` | interval | show article → rendered page handed to the reader web view |
+| `tab.attach` | interval | `WebViewPool.attach` (tab switch) |
+| `tab.restore` | interval | discarded tab's restore start → its page commits |
+| `tab.discard` | interval | discard start (state read) → web view released |
+| `tab.snapshot` | interval | thumbnail `takeSnapshot` → image returned |
+| `tab.crash` | event | a tab's WebContent process terminated |
+
+## Web engine
+
+The shell creates one `WebViewPool` and sets itself as `pool.host` (`EngineHost`: child tabs,
+JavaScript dialogs, HTTP auth and certificate errors, external apps and universal links,
+permission prompts, downloads). Tabs come from `pool.makeTab(id:restoring:)`; `TabStore` keeps them.
+
+1. **Show a tab:** `pool.attach(tab, to: paneView)`. A discarded tab restores sessionStorage, then
+   `interactionState`. `pool.detach(tab)` stores a thumbnail and applies the tier limits.
+2. **Navigate:** `tab.load(url)`, `goBack()`, `reload()`. `TabWebViewHandler.decidePolicyFor`
+   handles downloads, external schemes, desktop/mobile (pane size or the site's override), content
+   rules (`UserContentRules.apply` on the tab's own controller) and universal links.
+3. **State out:** `Tab` properties (`@Observable`), progress through `tab.onProgress`, thumbnails
+   through `pool.thumbnail(for:)` when `tab.thumbnailRevision` changes.
+4. **Session restore:** `await tab.restorationState()` → `encoded()` → Storage's `TabStateStore`;
+   at launch, decode and pass it to `makeTab(id:restoring:)`.
 

@@ -185,3 +185,53 @@ Each entry: what was chosen, and why. Newest last.
   reader mode extracts in 7–68 ms including the Readability injection (most pages 7–18 ms); a
   non-article page returns nil in about 4 ms; a repeat open of the same page is under 1 ms;
   rendering and loading the reader page about 50 ms warm.
+
+## Web engine: tab tiers, handlers and seams (2026-11-26)
+
+- **The pool owns every web view; tabs never hold one.** `WebViewPool` keeps a slot per tab with
+  a web view (web view, its own `WKUserContentController`, delegate, KVO). The shell's `TabStore`
+  owns `Tab` objects; the pool holds them weakly. The shell shows a page with
+  `attach(_:to:)` (adds the web view to a container it owns) and never sees the `WKWebView`.
+- **One configuration copy and one `WKUserContentController` per web view**, sharing one website
+  data store. Content blocking's per-site off detaches lists from a single controller (see
+  "Content blocking lists"). Popups take the configuration WebKit passes in (or `window.opener`
+  breaks) and get a fresh controller on it; `window.opener` still works (tested).
+- **Tiers:** live = visible + `FixedChoices.extraLiveTabs`, capped at 4 (`EngineChoices.maxLiveTabs`),
+  so the Duo split keeps 2 hidden live tabs; hidden live tabs are `.throttle`d. The next 4 are
+  `.suspend`ed. The rest are discarded: `fetchData(of: .sessionStorage)` plus `interactionState`
+  stay in the `Tab` (~1 KB each in tests) and go to Storage's `TabStateStore` as a binary plist.
+  A memory warning discards every hidden tab. Attaching during an in-flight discard cancels it.
+- **Scroll restore lag (measured):** WebKit copies the scroll position into the history item a few
+  hundred ms after scrolling stops (not at 200 ms, always by 350 ms on the simulator). A tab
+  discarded within that window comes back at its previous scroll position. Real discards hit tabs
+  hidden far longer, so no workaround.
+- **Warm-up:** `loadHTMLString("")` on the warm web view leaves no back/forward item (measured),
+  so the first tab's Back never goes to a blank page.
+- **KVO only where WebKit has no delegate signal:** `url`, `title`, `canGoBack/Forward` (same-
+  document navigations), `isLoading`, `estimatedProgress`, `hasOnlySecureContent`. Security and
+  errors come from navigation delegates. Progress is outside observation (`Tab.onProgress`).
+- **Desktop or mobile is decided at navigation start** from the pane (container bounds, else
+  `defaultPaneSize`): shorter side ≥ 600 pt is desktop (Duo inner screen yes; outer screen, split
+  half, phone landscape no). Never switched on resize. Desktop mode also sets `customUserAgent`
+  to Mac Safari's, because WebKit appends `applicationNameForUserAgent` (`Mobile/15E148`) even in
+  desktop mode (measured).
+- **Navigation handlers split by concern**, after DuckDuckGo's `apple-browsers` navigation
+  middleware (Apache-2.0): an idea only, no code copied. Pure policy lives in `NavigationRules`.
+- **Abuse limits** (popups 2 per 2 s, dialogs 5 per 20 s, external apps 2 per 10 s per tab) follow
+  firefox-ios `PopupThrottler` (MPL-2.0): idea and numbers only, no code copied.
+  `javaScriptCanOpenWindowsAutomatically = false` makes WebKit ask only for gesture popups.
+- **Universal links:** for a tapped cross-site link the handler awaits the shell's
+  `openUniversalLink` before allowing the navigation. Cost: one main-actor hop plus the shell's
+  `UIApplication.open(universalLinksOnly:)` round trip, on cross-site taps only.
+- **Certificate errors:** the shell shows the interstitial; "visit anyway" trusts that exact leaf
+  certificate for the host until quit, then reloads. Nothing is persisted.
+- **Seams:** Storage's concrete `TabStateStore` (no protocol needed). New protocols where Storage has
+  nothing yet: `SitePermissionStore` (async), `SiteContentModeStore` (sync, in-memory map, because
+  it is read on every navigation start), `UserContentRules` (`ContentBlocker` already matches it).
+  In-memory defaults exist for both stores, also usable for private tabs.
+- **Permissions in tests:** in a hostless test process WebKit never calls the camera or location
+  delegate (no app authorization), so the pool's remember-per-site logic is tested directly.
+- **Perf (iPhone 17 simulator, iOS 27.2, loaded machine):** attach a live tab median 1.4–1.5 ms;
+  discard 6.5–8 ms; restore a discarded tab: attach call 4–9 ms, page back 400–490 ms (new
+  WebContent process, local server), scroll back with it; thumbnail snapshot 1.7 ms main-thread
+  wait, JPEG encode + write 6.6–7.4 ms off main; thumbnail read + decode from disk ~40 ms off main.

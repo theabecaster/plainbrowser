@@ -334,3 +334,19 @@ Each entry: what was chosen, and why. Newest last.
 - **Perf (macOS `swift test`, file database, 100 open + 1,000 archived, median of 30):**
   `loadTabSession` 1.5–1.6 ms off main; `TabStore(session:)` 0.14 ms on main (p95 0.17 ms, budget
   5 ms); archive search over 1,000 rows 1.3–1.4 ms.
+
+## Xcode Cloud as the TestFlight fallback, free tier only (2026-11-26)
+
+- **Chosen:** `scripts/testflight.sh --cloud` / `--auto` archive on Xcode Cloud when this Mac is
+  busy with builds, tests and perf runs. Local archiving stays the default. Only the 25 compute
+  hours a month included in the developer membership are used, never a paid plan.
+- **Why Xcode Cloud:** it is the only hosted macOS builder that costs nothing on top of the
+  membership. It signs with the team's cloud-managed certificates, so it needs no secrets in the
+  repo.
+- **Cloud archives, this Mac uploads.** Xcode Cloud stamps every build it distributes with its own
+  counter (1, 2, 3...), which would sort below our `yyMMddHHmm` builds. So the workflow does not
+  distribute. The script downloads the archive, sets the same build number a local build gets,
+  and uploads it the usual way. Export and upload are light work for a busy Mac.
+- **Manual start only, guarded.** The workflow has no triggers, so it never spends hours on its
+  own. `setup` disables every other workflow, and `start` refuses past 20 hours in the last 31
+  days. Without a subscription Apple can't bill: at 25 hours, builds stop until the next month.

@@ -165,3 +165,9 @@ Newest feature last.
 - **Unused motion values.** `Motion.throwClose` and `Motion.throwCloseTiming` no longer have a
   user; drop them once no lane needs them.
 - **XCUITest after a long press** still waits for idle up to a minute (M2b item above).
+- **A new tab's card after an appearance change.** Its paper resolves from the window scene's
+  appearance when shown; switching the system appearance while the always-dark gallery is open
+  leaves it stale until the card is configured again. (Code review, round 3.)
+- **Dark band at the bottom of page previews.** The shell's thumbnails include the area under the
+  resting bar, which shows as a solid dark footer on the cards. Crop it in `ThumbnailService`.
+  (Design review, round 3.)

@@ -123,6 +123,27 @@ final class FakeHost: EngineHost {
     func downloadDidEnd(_ download: Download) {
         endedDownloads.append(download)
     }
+
+    var hasOtherPane = false
+    var openedLinks: [(url: URL, placement: LinkOpenPlacement)] = []
+    var sharedLinks: [URL] = []
+    var completedLinkActions: [(action: LinkMenuItem, succeeded: Bool)] = []
+
+    func canOpenInOtherPane(from tab: Tab) -> Bool {
+        hasOtherPane
+    }
+
+    func tab(_ tab: Tab, open url: URL, placement: LinkOpenPlacement) {
+        openedLinks.append((url, placement))
+    }
+
+    func tab(_ tab: Tab, share url: URL, from sourceView: UIView, sourceRect: CGRect) {
+        sharedLinks.append(url)
+    }
+
+    func tab(_ tab: Tab, didComplete action: LinkMenuItem, succeeded: Bool) {
+        completedLinkActions.append((action, succeeded))
+    }
 }
 
 /// Records every `apply` per controller, like `ContentBlocker` would act on them.
@@ -156,6 +177,7 @@ final class Harness {
         permissionStore: any SitePermissionStore = InMemorySitePermissionStore(),
         contentRules: (any UserContentRules)? = nil,
         tabStates: Bool = false,
+        pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
         route: @escaping @Sendable (TestServer.Request) -> TestServer.Response = Pages.route
     ) async throws {
         server = try await TestServer(route: route)
@@ -166,7 +188,8 @@ final class Harness {
             permissionStore: permissionStore,
             contentRules: contentRules,
             thumbnailDirectory: directory.appending(path: "Thumbnails"),
-            downloadDirectory: directory.appending(path: "Downloads")
+            downloadDirectory: directory.appending(path: "Downloads"),
+            pageZooms: pageZooms
         )
         pool.host = host
         host.pool = pool

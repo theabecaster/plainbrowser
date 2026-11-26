@@ -53,6 +53,12 @@ nonisolated enum NavigationRules {
         return isMainFrame ? .download : .cancel
     }
 
+    /// WebKit shows these inline as a PDF page.
+    static func isPDF(mimeType: String?) -> Bool {
+        guard let mimeType = mimeType?.lowercased() else { return false }
+        return mimeType == "application/pdf" || mimeType == "text/pdf" || mimeType == "application/x-pdf"
+    }
+
     /// The site key for remembered choices: the host without a leading `www.`.
     static func siteKey(for url: URL?) -> String? {
         guard let host = url?.host()?.lowercased(), !host.isEmpty else { return nil }

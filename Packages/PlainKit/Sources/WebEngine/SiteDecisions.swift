@@ -61,4 +61,20 @@ public final class InMemorySiteContentModeStore: SiteContentModeStore {
         modes[site] = mode
     }
 }
+
+/// Page zooms kept in memory. The default until Storage provides a persistent store, and the
+/// store for private tabs.
+public final class InMemorySitePageZoomStore: SitePageZoomStore {
+    private var zooms: [String: Double] = [:]
+
+    public init() {}
+
+    public func pageZoom(forSite site: String) -> Double? {
+        zooms[site]
+    }
+
+    public func setPageZoom(_ zoom: Double?, forSite site: String) {
+        zooms[site] = zoom
+    }
+}
 #endif

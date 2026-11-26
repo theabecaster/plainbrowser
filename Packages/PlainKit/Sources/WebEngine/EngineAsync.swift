@@ -8,7 +8,8 @@ import UIKit
 /// nothing in the engine waits on one forever. `start` runs synchronously, so a snapshot is taken
 /// before the caller removes the view from the window.
 func callWithWebKitTimeout<Value>(
-    fallback: Value, _ start: (@escaping (Value) -> Void) -> Void, completion: @escaping (Value) -> Void
+    fallback: Value, timeout: Duration = EngineChoices.webKitReplyTimeout, _ start: (@escaping (Value) -> Void) -> Void,
+    completion: @escaping (Value) -> Void
 ) {
     var delivered = false
     let deliver: (Value) -> Void = { value in
@@ -18,17 +19,17 @@ func callWithWebKitTimeout<Value>(
     }
     start(deliver)
     Task {
-        try? await Task.sleep(for: EngineChoices.webKitReplyTimeout)
+        try? await Task.sleep(for: timeout)
         deliver(fallback)
     }
 }
 
 /// `callWithWebKitTimeout` for async callers.
 func withWebKitTimeout<Value: Sendable>(
-    fallback: Value, _ start: (@escaping (Value) -> Void) -> Void
+    fallback: Value, timeout: Duration = EngineChoices.webKitReplyTimeout, _ start: (@escaping (Value) -> Void) -> Void
 ) async -> Value {
     await withCheckedContinuation { continuation in
-        callWithWebKitTimeout(fallback: fallback, start) { continuation.resume(returning: $0) }
+        callWithWebKitTimeout(fallback: fallback, timeout: timeout, start) { continuation.resume(returning: $0) }
     }
 }
 

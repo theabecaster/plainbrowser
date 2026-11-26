@@ -48,6 +48,7 @@ Newest feature last.
   no window server). Recheck in the app once reader mode is wired, including accessibility text
   sizes and the Duo outer screen.
 
+<<<<<<< HEAD
 ## Shell audit (lane H, 2026-11-26)
 
 - **Fixed values.** The snap's clear-velocity (0.2 pt/ms) and speed cap (8 progress/s) and the glass
@@ -74,3 +75,22 @@ Newest feature last.
   `archiveIdleTabs`; Storage's `TabSessionWriter` deletes state files once no row names the tab.
 - **Thumbnail files.** Storage keeps only the file name and revision; the engine should prune
   thumbnail files outside `AppDatabase.referencedTabIDs()` at launch.
+||||||| fed9f77
+=======
+## M4 completeness (lane M4, 2026-11-26)
+
+- **Downloads sheet styling.** The list card's large radius, the gap under the toolbar and the bold
+  empty-state sentence come from the system `List` and `ContentUnavailableView`, shared with
+  History. Revisit both sheets together. (Design review, round 1.)
+- **Share in Downloads** uses `ShareLink`, which has no signpost hook. (Code review, round 1.)
+- **Iframe images in the link menu.** The pressed-image lookup reads the main frame only, so an
+  image inside an iframe gets the link items but not Save Image / Copy Image. A press in an iframe
+  does hide an older main-frame image. (Code review, round 1-2.)
+- **Synthetic presses.** The press listeners accept untrusted `pointerdown` events (tests depend
+  on them), so a page can hide its own image items. Iframe press messages are throttled to one per
+  100 ms. (Code review, round 3.)
+- **Check on the Duo:** long-press menus and the live preview on real links and images (WebKit's
+  element info for an unlinked image), the find bar above the keyboard with the bottom pill, PiP
+  and fullscreen flags with a real video, `<input type=file>` and `capture` pickers.
+>>>>>>> worktree-agent-aa68dfa0a55ee1ed8
+- Downloads sheet: the title sits beside Show in Files instead of centered (FeatureUI DownloadsView toolbar).

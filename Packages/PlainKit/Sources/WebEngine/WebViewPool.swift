@@ -39,7 +39,12 @@ public final class WebViewPool {
     private let tabStates: TabStateStore?
     private let permissionStore: any SitePermissionStore
     private let contentModes: any SiteContentModeStore
-    private let contentRules: (any UserContentRules)?
+    private let pageZooms: any SitePageZoomStore
+    let contentRules: (any UserContentRules)?
+    let dataStore: WKWebsiteDataStore
+    /// Where Copy Link and Copy Image write. Tests use a private one: reading the general
+    /// pasteboard needs the user's permission.
+    var pasteboard = UIPasteboard.general
     let trustExceptions = ServerTrustExceptions()
 
     private var slots: [UUID: Slot] = [:]
@@ -69,6 +74,7 @@ public final class WebViewPool {
     ///   - contentRules: content blocking, applied to each web view's own controller.
     ///   - thumbnailDirectory: where thumbnails are written. Defaults to Caches/Thumbnails.
     ///   - downloadDirectory: where downloads go. Defaults to Documents/Downloads (Files-visible).
+    ///   - pageZooms: remembered page zoom per site.
     public init(
         dataStore: WKWebsiteDataStore = .default(),
         tabStates: TabStateStore? = nil,
@@ -76,12 +82,15 @@ public final class WebViewPool {
         contentModes: any SiteContentModeStore = InMemorySiteContentModeStore(),
         contentRules: (any UserContentRules)? = nil,
         thumbnailDirectory: URL? = nil,
-        downloadDirectory: URL? = nil
+        downloadDirectory: URL? = nil,
+        pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore()
     ) {
         baseConfiguration = Self.makeBaseConfiguration(dataStore: dataStore)
+        self.dataStore = dataStore
         self.tabStates = tabStates
         self.permissionStore = permissionStore
         self.contentModes = contentModes
+        self.pageZooms = pageZooms
         self.contentRules = contentRules
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         thumbnails = ThumbnailService(directory: thumbnailDirectory ?? caches.appending(path: "Thumbnails"))
@@ -115,6 +124,7 @@ public final class WebViewPool {
         configuration.applicationNameForUserAgent = EngineChoices.applicationNameForUserAgent
         configuration.allowsInlineMediaPlayback = true
         configuration.allowsPictureInPictureMediaPlayback = true
+        configuration.allowsAirPlayForMediaPlayback = true
         // Like Safari: muted video autoplays, sound waits for a tap.
         configuration.mediaTypesRequiringUserActionForPlayback = .audio
         // Pinch zoom works on every page, as in Safari.
@@ -145,6 +155,10 @@ public final class WebViewPool {
     private func makeController() -> WKUserContentController {
         let controller = WKUserContentController()
         controller.addUserScript(UserScripts.preconnect)
+        controller.addUserScript(UserScripts.pressedElement)
+        controller.addUserScript(UserScripts.subframePress)
+        // Its message handler is added by the tab's `Slot`, which receives the reports.
+        controller.addUserScript(UserScripts.media)
         return controller
     }
 
@@ -154,8 +168,20 @@ public final class WebViewPool {
         webView.isInspectable = true
         #endif
         webView.allowsBackForwardNavigationGestures = true
+        // The system find bar for "Find on Page" (`Tab.beginFind()`).
+        webView.isFindInteractionEnabled = true
         contentRules?.apply(to: controller, forMainFrameURL: nil)
         return webView
+    }
+
+    /// A web view for a link preview: no engine scripts, no delegates. The caller applies and
+    /// releases the content rules on the returned controller.
+    func makePreviewWebView() -> (WKWebView, WKUserContentController) {
+        let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
+        let controller = WKUserContentController()
+        configuration.userContentController = controller
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        return (webView, controller)
     }
 
     // MARK: - Warm-up (docs/plan.md, "Engine rules" 1)
@@ -382,6 +408,45 @@ public final class WebViewPool {
         reload(tab)
     }
 
+    /// Applies a zoom now and remembers it for the tab's site (100% forgets it). A discarded tab
+    /// gets it when its page commits again.
+    func setPageZoom(_ zoom: Double, for tab: Tab) {
+        guard tab.pool === self else { return }
+        if let site = NavigationRules.siteKey(for: tab.url) {
+            pageZooms.setPageZoom(zoom == PageZoom.actualSize ? nil : zoom, forSite: site)
+        }
+        tab.set(\.pageZoom, zoom)
+        if let webView = slots[tab.id]?.webView, webView.pageZoom != zoom { webView.pageZoom = zoom }
+        Signposts.signposter.emitEvent(Signposts.pageZoom, "\(PageZoom.percent(zoom))")
+    }
+
+    /// The site's remembered zoom, applied when a main-frame page commits, so the first paint of
+    /// a new page already has it. WebKit's `pageZoom` outlives navigations; this resets it on a
+    /// site without a remembered zoom.
+    func applyRememberedZoom(to webView: WKWebView, in tab: Tab) {
+        let site = NavigationRules.siteKey(for: webView.url)
+        let zoom = site.flatMap(pageZooms.pageZoom(forSite:)).map(PageZoom.nearestStep(to:)) ?? PageZoom.actualSize
+        if webView.pageZoom != zoom { webView.pageZoom = zoom }
+        tab.set(\.pageZoom, zoom)
+    }
+
+    /// Shows the system find bar on the tab's page. Only for a tab on screen.
+    func beginFind(in tab: Tab) {
+        guard let slot = slots[tab.id], slot.container != nil else { return }
+        Signposts.signposter.emitEvent(Signposts.findOnPage)
+        slot.webView.findInteraction?.presentFindNavigator(showingReplace: false)
+    }
+
+    /// Downloads `url` with the tab's cookies through `DownloadCoordinator`, as if the page had
+    /// served it as an attachment. "Download Linked File" and "Save PDF to Files".
+    func startDownload(_ url: URL, from tab: Tab) {
+        perform(in: tab) { [weak self, weak tab] webView in
+            webView.startDownload(using: URLRequest(url: url)) { download in
+                self?.downloads.adopt(download, from: tab)
+            }
+        }
+    }
+
     func restorationState(for tab: Tab) async -> TabRestorationState {
         guard let slot = slots[tab.id] else {
             return tab.restoration
@@ -592,6 +657,7 @@ public final class WebViewPool {
     }
 
     private func tearDown(_ slot: Slot) {
+        let tab = slot.tab
         slot.pendingSave?.cancel()
         slot.invalidate()
         let webView = slot.webView
@@ -601,6 +667,9 @@ public final class WebViewPool {
         webView.removeFromSuperview()
         contentRules?.release(slot.controller)
         slot.controller.removeAllUserScripts()
+        slot.controller.removeAllScriptMessageHandlers()
+        // No web view, no media: a restored page starts silent.
+        tab?.resetMediaState()
     }
 
     // MARK: - Events from the tab handler
@@ -664,6 +733,7 @@ public final class WebViewPool {
     func webContentProcessDidTerminate(_ tab: Tab) {
         Signposts.signposter.emitEvent(Signposts.tabCrash)
         guard let slot = slots[tab.id] else { return }
+        slot.clearMediaReports()
         if slot.container == nil {
             // If it is kept anyway (still busy), it reloads when shown. A dead process plays nothing.
             slot.needsReload = true
@@ -766,6 +836,10 @@ extension WebViewPool {
         var media = MediaState.idle
         /// Set when the current main-frame navigation is a form submission (POST).
         var pendingNavigationIsFormSubmission = false
+        /// Set from the main-frame response: the page being loaded is a PDF.
+        var pendingNavigationIsPDF = false
+        /// What each frame's media script last reported, by the frame's own id.
+        private var frameMedia: [String: (playing: Bool, pictureInPicture: Bool)] = [:]
         private var afterRestore: [(WKWebView) -> Void] = []
         private var observations: [NSKeyValueObservation] = []
 
@@ -776,7 +850,47 @@ extension WebViewPool {
             handler = TabWebViewHandler(tab: tab, pool: pool)
             webView.navigationDelegate = handler
             webView.uiDelegate = handler
+            let messages = EngineMessageHandler(slot: self)
+            controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.mediaHandlerName)
+            controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.subframePressHandlerName)
             observe()
+        }
+
+        /// When a finger last went down inside an iframe, in milliseconds since 1970 (the page's
+        /// `Date.now()`). A main-frame press older than this is not the one a menu is for.
+        var lastSubframePress: Double = 0
+
+        /// Bumped whenever media state is reset (new document, crash, teardown), so a WebKit
+        /// playback answer requested before it is dropped instead of overwriting the reset.
+        private var mediaGeneration = 0
+
+        /// A frame's media script reported (`UserScripts.mediaSource`).
+        func receiveMediaReport(frame id: String, playing: Bool, pictureInPicture: Bool) {
+            if playing || pictureInPicture {
+                frameMedia[id] = (playing, pictureInPicture)
+            } else {
+                frameMedia[id] = nil
+            }
+            publishMedia()
+            // The scripts can't see every player (`new Audio()` never added to the page, media in
+            // a shadow root), so each report also asks WebKit, which knows them all. One IPC per
+            // play or pause.
+            Task { [weak self] in await self?.refreshMediaPlayback() }
+        }
+
+        /// A new main-frame document committed (the old frames are gone) or the process died.
+        func clearMediaReports() {
+            mediaGeneration += 1
+            frameMedia = [:]
+            media = .idle
+            publishMedia()
+        }
+
+        private func publishMedia() {
+            guard let tab else { return }
+            let playing = media == .playing || frameMedia.values.contains { $0.playing }
+            tab.set(\.isPlayingMedia, playing)
+            tab.set(\.isInPictureInPicture, frameMedia.values.contains { $0.pictureInPicture })
         }
 
         /// KVO only where WebKit has no delegate callback: title changes, same-document
@@ -811,19 +925,37 @@ extension WebViewPool {
                 webView.observe(\.hasOnlySecureContent, options: .new) { [weak self] webView, _ in
                     MainActor.assumeIsolated { self?.handler.updateSecurity(of: webView) }
                 },
+                webView.observe(\.fullscreenState, options: .new) { [weak self] webView, _ in
+                    MainActor.assumeIsolated {
+                        self?.tab?.set(\.isFullscreen, webView.fullscreenState != .notInFullscreen)
+                    }
+                },
+                webView.observe(\.cameraCaptureState, options: .new) { [weak self] _, _ in
+                    MainActor.assumeIsolated { self?.publishCapture() }
+                },
+                webView.observe(\.microphoneCaptureState, options: .new) { [weak self] _, _ in
+                    MainActor.assumeIsolated { self?.publishCapture() }
+                },
             ]
+        }
+
+        private func publishCapture() {
+            tab?.set(\.isCapturingMedia, webView.cameraCaptureState != .none || webView.microphoneCaptureState != .none)
         }
 
         func invalidate() {
             observations.forEach { $0.invalidate() }
             observations = []
             endRestoreInterval()
+            // The tab may get a new slot; nothing this one asked for may reach it.
+            mediaGeneration += 1
+            tab = nil
         }
 
         /// Media playing (picture in picture included), camera or microphone on, fullscreen, or a
         /// download from this tab running: never discard it.
         func isBusy(in pool: WebViewPool) -> Bool {
-            media != .idle
+            media != .idle || !frameMedia.isEmpty
                 || webView.cameraCaptureState != .none || webView.microphoneCaptureState != .none
                 || webView.fullscreenState != .notInFullscreen
                 || (tab.map { pool.downloads.hasActiveDownload(fromTab: $0.id) } ?? false)
@@ -832,10 +964,13 @@ extension WebViewPool {
         /// A frozen process that never answers counts as not playing.
         func refreshMediaPlayback() async {
             let webView = self.webView
+            let generation = mediaGeneration
             let state = await withWebKitTimeout(fallback: WKMediaPlaybackState.none) { done in
                 webView.requestMediaPlaybackState(completionHandler: done)
             }
+            guard generation == mediaGeneration else { return }
             media = state == .playing ? .playing : .idle
+            publishMedia()
         }
 
         /// Runs `work` once a pending restore has applied its history, so a load issued meanwhile
@@ -858,6 +993,27 @@ extension WebViewPool {
             guard let interval = restoreInterval else { return }
             restoreInterval = nil
             Signposts.signposter.endInterval(Signposts.tabRestore, interval)
+        }
+    }
+
+    /// Receives the media and iframe-press reports. The controller keeps it strongly, so it holds the slot
+    /// weakly; the pool removes it when the web view goes away.
+    final class EngineMessageHandler: NSObject, WKScriptMessageHandler {
+        private weak var slot: Slot?
+
+        init(slot: Slot) {
+            self.slot = slot
+        }
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == UserScripts.subframePressHandlerName {
+                if let time = message.body as? Double { slot?.lastSubframePress = time }
+                return
+            }
+            guard let body = message.body as? [String: Any], let id = body["id"] as? String else { return }
+            slot?.receiveMediaReport(
+                frame: id, playing: body["playing"] as? Bool ?? false, pictureInPicture: body["pip"] as? Bool ?? false
+            )
         }
     }
 }

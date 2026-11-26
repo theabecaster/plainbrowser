@@ -152,6 +152,49 @@ final class CaptureTests: XCTestCase {
         shot("f3-page-end")
     }
 
+    /// The engine wiring: a page, its menu, the reader view and a permission prompt. Grant the
+    /// app location first (`xcrun simctl privacy <udid> grant location <bundle id>`), so the
+    /// site's prompt is Plain's, not the system's.
+    func testCaptureEngine() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication()
+        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        app.launch()
+
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/article") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["The Quiet Page"].waitForExistence(timeout: 10))
+        pause(2)
+        shot("e1-page")
+
+        app.buttons["more"].tap()
+        pause(1)
+        shot("e2-page-menu")
+        let reader = app.buttons["Show Reader"]
+        if reader.waitForExistence(timeout: 2) {
+            reader.tap()
+            XCTAssertTrue(app.webViews["readerView"].waitForExistence(timeout: 5))
+            pause(1.5)
+            shot("e3-reader")
+            app.buttons["back"].tap()
+            pause(1)
+        }
+
+        app.buttons["addressPill"].tap()
+        field.typeText(server.address("/location") + "\n")
+        let allow = app.alerts.buttons["Allow"]
+        if allow.waitForExistence(timeout: 8) {
+            pause(1)
+            shot("e4-permission")
+            allow.tap()
+        }
+        pause(1)
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

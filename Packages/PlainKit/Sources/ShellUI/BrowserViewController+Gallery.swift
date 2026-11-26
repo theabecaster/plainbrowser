@@ -422,12 +422,13 @@ extension BrowserViewController: GalleryHost {
 
     /// The tabs changed outside the gallery (a title, a thumbnail, the archive): it shows them.
     func tabsDidChange() {
+        // The rules first: the sidebar's New Tab reads them.
+        updateButtons()
         tabsUI.gallery?.reloadTabs(animated: false)
         duo.sidebar?.reloadTabs()
         duo.strip?.reloadTabs()
         // A tab closed or archived elsewhere may have left the other pane.
         syncPanes()
-        updateButtons()
         updateStartScreen()
     }
 

@@ -98,6 +98,7 @@ extension BrowserViewController {
             if item.isEnabled != applied.isEnabled { item.isEnabled = applied.isEnabled }
         }
         applyTabsFace(rules.tabsSlot)
+        duo.sidebar?.setNewTabShown(rules.menuNewTab)
         if !tabsUI.start.isHidden { applyStartShortcuts() }
         applyToolbarItems()
     }

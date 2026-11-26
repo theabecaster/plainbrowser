@@ -202,6 +202,13 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     // MARK: Tabs
 
     /// Reads the tabs again (a title, a selection, a close elsewhere) and shows what changed.
+    /// The header's New Tab: hidden on an empty tab, which New Tab would only repeat
+    /// (docs/state-rules.md, principle 8). The shell decides from its state rules.
+    public func setNewTabShown(_ shown: Bool) {
+        loadViewIfNeeded()
+        newTabButton.isHidden = !shown
+    }
+
     public func reloadTabs() {
         guard isViewLoaded else { return }
         let regular = dataSource.regularTabs

@@ -32,6 +32,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private let onSearchFieldReady: () -> Void
 
     let webContainer = UIView()
+    /// The page's area (beside a vertical bar, under the status bar): it clips the page and the bar
+    /// swipe's neighbour, so neither shows under the system's bar while they slide.
+    let pageClip = UIView()
     /// The pill and the button bar, rendered as one glass surface (docs/plan.md, section 5,
     /// Chrome). It covers the view but takes no touches of its own.
     let chromeGlass = Glass.makeContainer(spacing: ChromeGeometry.glassMergeSpacing)
@@ -114,7 +117,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         view.backgroundColor = Palette.background
         view.tintColor = Palette.accent
 
-        for subview in [webContainer, pullIndicator, sheet, chromeGlass, tabsUI.toast] as [UIView] {
+        for subview in [pageClip, pullIndicator, sheet, chromeGlass, tabsUI.toast] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
@@ -123,6 +126,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             chromeGlass.contentView.addSubview(subview)
         }
         webContainer.clipsToBounds = true
+        pageClip.clipsToBounds = true
+        webContainer.translatesAutoresizingMaskIntoConstraints = false
+        pageClip.addSubview(webContainer)
         for (effect, control) in zip(pageEdgeEffects, [pill, buttonBar] as [UIView]) {
             effect.edge = .bottom
             control.addInteraction(effect)
@@ -202,10 +208,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
             // The page fills the view below the status bar and beside a vertical bar. Its bottom
             // runs under the chrome; obscuredContentInsets tells WebKit what the chrome covers.
-            webContainer.topAnchor.constraint(equalTo: safe.topAnchor),
-            webContainer.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
-            webContainer.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
-            webContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            pageClip.topAnchor.constraint(equalTo: safe.topAnchor),
+            pageClip.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
+            pageClip.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            pageClip.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            webContainer.topAnchor.constraint(equalTo: pageClip.topAnchor),
+            webContainer.leadingAnchor.constraint(equalTo: pageClip.leadingAnchor),
+            webContainer.trailingAnchor.constraint(equalTo: pageClip.trailingAnchor),
+            webContainer.bottomAnchor.constraint(equalTo: pageClip.bottomAnchor),
 
             pullIndicator.topAnchor.constraint(equalTo: webContainer.topAnchor, constant: Spacing.s),
             pullIndicator.centerXAnchor.constraint(equalTo: webContainer.centerXAnchor),
@@ -580,7 +590,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// `svh`/`lvh` stay put.
     func updatePageInsets() {
         guard view.bounds.height > 0 else { return }
-        let pageBottom = webContainer.frame.maxY
+        let pageBottom = pageClip.frame.maxY
         let collapsed = geometry.collapsedInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)
         let obscured = pageInset.collapsed ? collapsed : expanded

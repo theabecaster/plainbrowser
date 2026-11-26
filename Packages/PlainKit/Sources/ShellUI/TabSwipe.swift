@@ -149,7 +149,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         swipe.preview.backgroundColor = Palette.background
         swipe.preview.bounds = browser.webContainer.bounds
         swipe.preview.center = browser.webContainer.center
-        browser.view.insertSubview(swipe.preview, aboveSubview: browser.webContainer)
+        browser.pageClip.insertSubview(swipe.preview, aboveSubview: browser.webContainer)
         self.swipe = swipe
         Haptic.selection.prepare()
     }

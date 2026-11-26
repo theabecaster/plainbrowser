@@ -52,7 +52,7 @@ extension BrowserViewController: GalleryHost {
         gallery.view.accessibilityViewIsModal = true
         // Over the page, under the chrome (which fades as the gallery's own bar arrives) and the
         // search sheet (a new tab from the gallery opens it).
-        view.insertSubview(gallery.view, aboveSubview: webContainer)
+        view.insertSubview(gallery.view, aboveSubview: pageClip)
         gallery.didMove(toParent: self)
         tabsUI.gallery = gallery
         updateButtons()
@@ -70,7 +70,7 @@ extension BrowserViewController: GalleryHost {
         let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: tab.id, gallery: gallery, container: view, snapshot: snapshot,
-            pageFrame: webContainer.frame, from: .page
+            pageFrame: pageClip.frame, from: .page
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }
@@ -176,7 +176,7 @@ extension BrowserViewController: GalleryHost {
         let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: id, gallery: gallery, container: view, snapshot: cardPicture(for: id),
-            pageFrame: webContainer.frame, from: .gallery
+            pageFrame: pageClip.frame, from: .gallery
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }

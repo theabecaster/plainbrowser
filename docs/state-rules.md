@@ -75,7 +75,7 @@ press means the same thing whatever it shows.
 | `others ≥ 1` | Tabs (`square.on.square`) | Gallery | There is somewhere to switch to. |
 | `others = 0`, `page` | New Tab (`plus`) | New tab, search field up | A one-card switcher is a dead end (owner). The one useful tab action is a second tab. Same slot, so no new button. |
 | `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) stay in More (section 4) and show as shortcuts on the start screen, so none of them is ever out of reach. |
-| Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. |
+| Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. The sidebar's New Tab follows principle 8 (hidden on an empty tab). |
 
 - **The tabs items are never only behind a long press** (owner, 2026-11-26). New Private Tab,
   Reopen Closed Tab and Archived Tabs are in More's top section in every state where they apply,

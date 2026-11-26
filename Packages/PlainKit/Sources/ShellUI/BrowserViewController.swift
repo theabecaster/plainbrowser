@@ -435,6 +435,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         on(\.isLoading) { controller, webView in
             if webView.isLoading {
+                // A new load brings the bar back. Same-document URL changes (pushState) do not.
+                controller.expandChrome(animated: true)
                 controller.pill.progressBar.setProgress(max(0.1, webView.estimatedProgress))
             } else {
                 controller.pill.progressBar.finish()
@@ -444,7 +446,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         on(\.url) { controller, webView in
             controller.pill.display(url: webView.url)
             if !controller.isEditingAddress { controller.pill.textField.text = webView.url?.absoluteString }
-            controller.expandChrome(animated: true)
             controller.updateButtons()
         }
         on(\.title) { controller, webView in
@@ -520,7 +521,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             finish()
             return
         }
-        Motion.animate(Motion.toolbarSnap, crossfading: view, changes: { self.applyCollapse(target) }, completion: finish)
+        // Small moves of two floating controls: no crossfade of the whole screen.
+        Motion.animate(Motion.toolbarSnap, changes: { self.applyCollapse(target) }, completion: finish)
     }
 
     // MARK: UIScrollViewDelegate

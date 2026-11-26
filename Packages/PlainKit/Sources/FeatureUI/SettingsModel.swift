@@ -41,10 +41,14 @@ public final class SettingsModel {
     /// the first read finishes, so a change can never save defaults over the stored values.
     public func load() async {
         let editsAtStart = edits
+        let store = store
         do {
-            async let settings = store.settings()
-            async let custom = store.savedCustomSearchEngine()
-            let (loaded, savedCustom) = try await (settings, custom)
+            // Queued behind any save still running, so it reads what the user last chose.
+            let (loaded, savedCustom) = try await writes.perform {
+                async let settings = store.settings()
+                async let custom = store.savedCustomSearchEngine()
+                return try await (settings, custom)
+            }
             // A change made while reading is newer than what was read.
             guard edits == editsAtStart else { return }
             self.settings = loaded
@@ -141,14 +145,23 @@ public final class SettingsModel {
             guard let self else { return }
             errorMessage = Wording.saveFailed
             // Show what is really stored, so the failed choice can be made again.
-            writes.enqueue({ [weak self] in await self?.reloadAfterFailure() }, onError: { _ in })
+            reconcile()
         }
     }
 
-    private func reloadAfterFailure() async {
-        let editsAtStart = edits
-        guard let stored = try? await store.settings(), edits == editsAtStart else { return }
-        settings = stored
+    /// Re-reads the store after every queued write and shows it, unless the user changed
+    /// something since; then it tries again after that change's write.
+    private func reconcile() {
+        let mark = edits
+        let store = store
+        writes.enqueue({ [weak self] in
+            let stored = try await store.settings()
+            await self?.apply(stored, ifUnchangedSince: mark)
+        }, onError: { _ in })
+    }
+
+    private func apply(_ stored: BrowserSettings, ifUnchangedSince mark: Int) {
+        if edits == mark { settings = stored } else { reconcile() }
     }
 
     /// Returns when every change so far is saved.

@@ -56,7 +56,19 @@ actor GatedHistory: HistoryStoring {
         return snapshot
     }
 
-    func deleteHistory(for url: URL) async throws { visits.removeAll { $0.url == url } }
+    private var deleteArmed = false
+    private var deleteWaiting: CheckedContinuation<Void, Never>?
+    func armDelete() { deleteArmed = true }
+    var isDeleteWaiting: Bool { deleteWaiting != nil }
+    func releaseDelete() { deleteWaiting?.resume(); deleteWaiting = nil }
+
+    func deleteHistory(for url: URL) async throws {
+        if deleteArmed {
+            deleteArmed = false
+            await withCheckedContinuation { deleteWaiting = $0 }
+        }
+        visits.removeAll { $0.url == url }
+    }
     func clearHistory(since start: Date?) async throws { visits.removeAll() }
 }
 
@@ -140,9 +152,15 @@ actor GatedHistory: HistoryStoring {
         await store.arm()
         let slowLoad = Task { await model.load() }
         while await !store.isWaiting { await Task.yield() }
-        await model.delete(row)
+        // The stale read lands while the delete is still in the store.
+        await store.armDelete()
+        let deleting = Task { await model.delete(row) }
+        while await !store.isDeleteWaiting { await Task.yield() }
         await store.release()
         await slowLoad.value
+        #expect(!model.days.flatMap(\.rows).contains { $0.url == row.url })
+        await store.releaseDelete()
+        await deleting.value
         #expect(!model.days.flatMap(\.rows).contains { $0.url == row.url })
     }
 
@@ -153,9 +171,11 @@ actor GatedHistory: HistoryStoring {
         let slowLoad = Task { await model.load() }
         while await !store.isWaiting { await Task.yield() }
         model.query = "Gamma"
-        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        // The old read lands during the search pause, before the new search starts.
         await store.release()
         await slowLoad.value
+        #expect(model.days.isEmpty, "the old results are not shown for the new query")
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
         #expect(model.days.flatMap(\.rows).map(\.id) == [3])
     }
 

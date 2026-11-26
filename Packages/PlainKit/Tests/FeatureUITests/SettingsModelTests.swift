@@ -107,6 +107,17 @@ import Testing
         #expect(model.settings.tabLayout == .regular, "back to the stored value, so choosing again saves again")
     }
 
+    @Test func aLoadWaitsForSavesStillRunning() async throws {
+        let model = SettingsModel(
+            store: FlakySettings(database: database, failSaves: false, saveDelay: .milliseconds(50)),
+            clearer: clearer, about: testAbout
+        )
+        await model.load()
+        model.setTabLayout(.sideTabs)
+        await model.load()
+        #expect(model.settings.tabLayout == .sideTabs)
+    }
+
     @Test func clearHistoryAndDataCallsTheClearer() async {
         let model = makeModel()
         await model.clearHistoryAndData()
@@ -138,13 +149,16 @@ let testAbout = AboutInfo(name: "Plain", version: "1.0", build: "1", documents: 
 final class FlakySettings: SettingsStoring {
     let database: AppDatabase
     let failSaves: Bool
-    init(database: AppDatabase, failSaves: Bool) {
+    let saveDelay: Duration
+    init(database: AppDatabase, failSaves: Bool, saveDelay: Duration = .zero) {
         self.database = database
         self.failSaves = failSaves
+        self.saveDelay = saveDelay
     }
     func settings() async throws -> BrowserSettings { try await database.settings() }
     func savedCustomSearchEngine() async throws -> SearchEngine? { try await database.savedCustomSearchEngine() }
     func saveSettings(_ settings: BrowserSettings) async throws {
+        try await Task.sleep(for: saveDelay)
         if failSaves { throw URLError(.unknown) }
         try await database.saveSettings(settings)
     }

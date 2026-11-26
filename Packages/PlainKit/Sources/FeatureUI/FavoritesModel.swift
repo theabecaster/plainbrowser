@@ -22,8 +22,10 @@ public final class FavoritesModel {
 
     public func load() async {
         let editsAtStart = edits
+        let store = store
         do {
-            let stored = try await store.favorites()
+            // Queued behind any write still running, so it reads the user's latest edits.
+            let stored = try await writes.perform { try await store.favorites() }
             // An edit made while reading is newer than what was read.
             if edits == editsAtStart { favorites = stored }
         } catch {
@@ -94,16 +96,23 @@ public final class FavoritesModel {
         writes.enqueue(operation) { [weak self] _ in
             guard let self else { return }
             errorMessage = Wording.favoritesFailed
-            // Re-read through the write queue, after every write queued so far, so the list
-            // shows what is stored. An edit made after the failure wins over the re-read.
-            writes.enqueue({ [weak self] in await self?.reloadAfterFailure() }, onError: { _ in })
+            reconcile()
         }
     }
 
-    private func reloadAfterFailure() async {
-        let editsAtStart = edits
-        guard let stored = try? await store.favorites(), edits == editsAtStart else { return }
-        favorites = stored
+    /// Re-reads the store after every queued write and shows it, so the list matches what is
+    /// stored. If the user edited since, it tries again after that edit's write.
+    private func reconcile() {
+        let mark = edits
+        let store = store
+        writes.enqueue({ [weak self] in
+            let stored = try await store.favorites()
+            await self?.apply(stored, ifUnchangedSince: mark)
+        }, onError: { _ in })
+    }
+
+    private func apply(_ stored: [Favorite], ifUnchangedSince mark: Int) {
+        if edits == mark { favorites = stored } else { reconcile() }
     }
 
     /// Returns when every change so far is saved.

@@ -20,6 +20,18 @@ final class WriteQueue {
         }
     }
 
+    /// Runs `operation` after every earlier one finishes and returns its result. Reads go through
+    /// here too, so a read never sees the store from before a change the user already made.
+    func perform<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        let previous = last
+        let task = Task<T, any Error> {
+            await previous?.value
+            return try await operation()
+        }
+        last = Task { _ = try? await task.value }
+        return try await task.value
+    }
+
     /// Returns when every write started so far has finished.
     func drain() async {
         await last?.value

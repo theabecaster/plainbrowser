@@ -324,8 +324,9 @@ public final class WebViewPool {
                 ?? TabRestorationState(url: tab.url, title: tab.title, interactionState: nil, sessionStorage: nil)
         }
         let webView = slot.webView
-        let interaction = webView.interactionState as? Data
         let session = try? await webView.fetchData(of: .sessionStorage)
+        // After the round trip, so the latest scroll position is in the history item.
+        let interaction = webView.interactionState as? Data
         return TabRestorationState(url: tab.url, title: tab.title, interactionState: interaction, sessionStorage: session)
     }
 
@@ -413,10 +414,12 @@ public final class WebViewPool {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.tabDiscard, id: signposter.makeSignpostID())
         let webView = slot.webView
-        let interaction = webView.interactionState as? Data
         let finish: (Data?) -> Void = { [weak self, weak slot, weak tab] session in
             defer { signposter.endInterval(Signposts.tabDiscard, interval) }
             guard let self, let slot, let tab, slot.isDiscarding, self.slots[tab.id] === slot else { return }
+            // Read after the sessionStorage round trip to the WebContent process: by then its
+            // latest scroll position has reached the history item.
+            let interaction = webView.interactionState as? Data
             let state = TabRestorationState(
                 url: tab.url, title: tab.title, interactionState: interaction, sessionStorage: session
             )

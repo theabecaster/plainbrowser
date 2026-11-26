@@ -104,7 +104,7 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
 
     // MARK: Blob fallback
 
-    private func readBlob(_ url: URL, from webView: WKWebView, frame: WKFrameInfo, into item: Download) {
+    func readBlob(_ url: URL, from webView: WKWebView, frame: WKFrameInfo, into item: Download) {
         Task {
             do {
                 let value = try await webView.callAsyncJavaScript(

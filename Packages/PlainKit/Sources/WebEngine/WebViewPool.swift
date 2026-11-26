@@ -156,6 +156,7 @@ public final class WebViewPool {
         let controller = WKUserContentController()
         controller.addUserScript(UserScripts.preconnect)
         controller.addUserScript(UserScripts.pressedElement)
+        controller.addUserScript(UserScripts.subframePress)
         // Its message handler is added by the tab's `Slot`, which receives the reports.
         controller.addUserScript(UserScripts.media)
         return controller
@@ -656,6 +657,7 @@ public final class WebViewPool {
     }
 
     private func tearDown(_ slot: Slot) {
+        let tab = slot.tab
         slot.pendingSave?.cancel()
         slot.invalidate()
         let webView = slot.webView
@@ -667,7 +669,7 @@ public final class WebViewPool {
         slot.controller.removeAllUserScripts()
         slot.controller.removeAllScriptMessageHandlers()
         // No web view, no media: a restored page starts silent.
-        slot.tab?.resetMediaState()
+        tab?.resetMediaState()
     }
 
     // MARK: - Events from the tab handler
@@ -848,11 +850,19 @@ extension WebViewPool {
             handler = TabWebViewHandler(tab: tab, pool: pool)
             webView.navigationDelegate = handler
             webView.uiDelegate = handler
-            controller.add(
-                MediaMessageHandler(slot: self), contentWorld: UserScripts.world, name: UserScripts.mediaHandlerName
-            )
+            let messages = EngineMessageHandler(slot: self)
+            controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.mediaHandlerName)
+            controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.subframePressHandlerName)
             observe()
         }
+
+        /// When a finger last went down inside an iframe, in milliseconds since 1970 (the page's
+        /// `Date.now()`). A main-frame press older than this is not the one a menu is for.
+        var lastSubframePress: Double = 0
+
+        /// Bumped whenever media state is reset (new document, crash, teardown), so a WebKit
+        /// playback answer requested before it is dropped instead of overwriting the reset.
+        private var mediaGeneration = 0
 
         /// A frame's media script reported (`UserScripts.mediaSource`).
         func receiveMediaReport(frame id: String, playing: Bool, pictureInPicture: Bool) {
@@ -870,6 +880,7 @@ extension WebViewPool {
 
         /// A new main-frame document committed (the old frames are gone) or the process died.
         func clearMediaReports() {
+            mediaGeneration += 1
             frameMedia = [:]
             media = .idle
             publishMedia()
@@ -936,6 +947,9 @@ extension WebViewPool {
             observations.forEach { $0.invalidate() }
             observations = []
             endRestoreInterval()
+            // The tab may get a new slot; nothing this one asked for may reach it.
+            mediaGeneration += 1
+            tab = nil
         }
 
         /// Media playing (picture in picture included), camera or microphone on, fullscreen, or a
@@ -950,9 +964,11 @@ extension WebViewPool {
         /// A frozen process that never answers counts as not playing.
         func refreshMediaPlayback() async {
             let webView = self.webView
+            let generation = mediaGeneration
             let state = await withWebKitTimeout(fallback: WKMediaPlaybackState.none) { done in
                 webView.requestMediaPlaybackState(completionHandler: done)
             }
+            guard generation == mediaGeneration else { return }
             media = state == .playing ? .playing : .idle
             publishMedia()
         }
@@ -980,9 +996,9 @@ extension WebViewPool {
         }
     }
 
-    /// Receives the media script's reports. The controller keeps it strongly, so it holds the slot
+    /// Receives the media and iframe-press reports. The controller keeps it strongly, so it holds the slot
     /// weakly; the pool removes it when the web view goes away.
-    final class MediaMessageHandler: NSObject, WKScriptMessageHandler {
+    final class EngineMessageHandler: NSObject, WKScriptMessageHandler {
         private weak var slot: Slot?
 
         init(slot: Slot) {
@@ -990,6 +1006,10 @@ extension WebViewPool {
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == UserScripts.subframePressHandlerName {
+                if let time = message.body as? Double { slot?.lastSubframePress = time }
+                return
+            }
             guard let body = message.body as? [String: Any], let id = body["id"] as? String else { return }
             slot?.receiveMediaReport(
                 frame: id, playing: body["playing"] as? Bool ?? false, pictureInPicture: body["pip"] as? Bool ?? false

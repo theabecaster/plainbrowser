@@ -49,6 +49,25 @@ enum UserScripts {
         source: pressedElementSource, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world
     )
 
+    /// The name of the message handler `subframePressSource` posts to.
+    static let subframePressHandlerName = "plainPress"
+
+    /// A press inside an iframe never reaches the main document, so the main document's last press
+    /// could be an older one. Each iframe reports the time of its presses (one small message per
+    /// finger down in an iframe), and the menu ignores a main-frame press older than that.
+    static let subframePressSource = """
+        (() => {
+          if (window === window.top) return;
+          addEventListener('pointerdown', () => {
+            try { webkit.messageHandlers.\(subframePressHandlerName).postMessage(Date.now()); } catch (e) {}
+          }, { passive: true, capture: true });
+        })();
+        """
+
+    static let subframePress = WKUserScript(
+        source: subframePressSource, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: world
+    )
+
     /// Asked when a link menu opens: the pressed image's address and its enclosing link, if any.
     static let pressedImageQuery = """
         // A press in an iframe never reaches this document, so an old press here is not this
@@ -58,7 +77,8 @@ enum UserScripts {
         const image = target && target.closest ? target.closest('img') : null;
         if (!image || !image.isConnected) return null;
         const link = image.closest('a[href]');
-        return { src: image.currentSrc || image.src, href: link ? link.href : null };
+        return { src: image.currentSrc || image.src, href: link ? link.href : null,
+                 at: globalThis.__plainPressedAt };
         """
 
     /// The name of the message handler `mediaSource` posts to.

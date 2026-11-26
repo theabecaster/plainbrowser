@@ -70,6 +70,24 @@ struct CompletenessTests {
         #expect(framed.element.imageURL == nil)
     }
 
+    @Test func pressInAnIframeHidesTheMainFramesOlderImage() async throws {
+        let harness = try await Harness(route: M4Pages.route)
+        defer { harness.cleanUp() }
+        let tab = try await harness.loadedTab("/framed")
+        _ = try await harness.evaluate(M4Pages.press("#lone"), in: tab)
+        // Before any iframe press, the unlinked image counts.
+        #expect(try #require(await harness.pool.linkMenu(for: nil, in: tab)).element.imageURL != nil)
+
+        try await Task.sleep(for: .milliseconds(5))
+        _ = try await harness.evaluate("""
+            document.querySelector('iframe').contentDocument.body
+              .dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); 0
+            """, in: tab)
+        let slot = try #require(harness.pool.slot(for: tab))
+        try await waitUntil("iframe press reported") { slot.lastSubframePress > 0 }
+        #expect(await harness.pool.linkMenu(for: nil, in: tab) == nil)
+    }
+
     @Test func playersOutsideTheDocumentCountAfterARefresh() async throws {
         let harness = try await Harness(route: M4Pages.route)
         defer { harness.cleanUp() }
@@ -310,6 +328,11 @@ enum M4Pages {
                 <a id=link href='/b'><img id=pic src='/image.png' width=40 height=40></a>
                 <a id=other href='/a'>A</a>
                 <img id=lone src='/image.png' width=40 height=40>
+                """))
+        case "/framed":
+            return .html(Pages.page(title: "Framed", body: """
+                <img id=lone src='/image.png' width=40 height=40>
+                <iframe src='/b' width=200 height=100></iframe>
                 """))
         case "/image.png":
             return .data(png, type: "image/png")

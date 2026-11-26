@@ -29,6 +29,12 @@ struct LinkMenu {
     }
 }
 
+private struct PressedImageReply: Sendable {
+    let src: String?
+    let href: String?
+    let time: Double
+}
+
 /// A live preview of a link: a web view from the pool loading it. Released with the controller.
 final class LinkPreviewController: UIViewController {
     private let webView: WKWebView
@@ -66,8 +72,10 @@ extension WebViewPool {
         var element = LinkElement(linkURL: linkURL, imageURL: nil)
         if let pressed = await pressedImage(in: webView) {
             // The last finger down may have been somewhere else; keep the image only when it is
-            // the link's own image, or, with no link reported, an image outside any link.
-            if pressed.link == linkURL {
+            // the link's own image, or, with no link reported, an image outside any link, and
+            // only when no iframe was pressed since (that press would be the menu's).
+            let pressedInFrameSince = (slot(for: tab)?.lastSubframePress ?? 0) >= pressed.time
+            if pressed.link == linkURL, !pressedInFrameSince {
                 element.imageURL = pressed.image
             }
         }
@@ -95,19 +103,22 @@ extension WebViewPool {
         }
     }
 
-    private func pressedImage(in webView: WKWebView) async -> (image: URL, link: URL?)? {
-        let reply: [String?]? = await withWebKitTimeout(
+    /// The pressed image, its enclosing link and the press time (ms since 1970, the page's clock).
+    private func pressedImage(in webView: WKWebView) async -> (image: URL, link: URL?, time: Double)? {
+        let reply: PressedImageReply? = await withWebKitTimeout(
             fallback: nil, timeout: EngineChoices.pressedElementTimeout
         ) { done in
             webView.callAsyncJavaScript(
                 UserScripts.pressedImageQuery, arguments: [:], in: nil, in: UserScripts.world
             ) { result in
                 let info = (try? result.get()) as? [String: Any]
-                done(info.map { [$0["src"] as? String, $0["href"] as? String] })
+                done(info.map {
+                    PressedImageReply(src: $0["src"] as? String, href: $0["href"] as? String, time: $0["at"] as? Double ?? 0)
+                })
             }
         }
-        guard let reply, let image = LinkMenuRules.fetchableImageURL(reply[0]) else { return nil }
-        return (image, reply[1].flatMap(URL.init(string:)))
+        guard let reply, let image = LinkMenuRules.fetchableImageURL(reply.src) else { return nil }
+        return (image, reply.href.flatMap(URL.init(string:)), reply.time)
     }
 
     /// Photos crashes an app that saves without this key, so Save Image hides until it is there.

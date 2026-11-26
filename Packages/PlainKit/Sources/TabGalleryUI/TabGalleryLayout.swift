@@ -33,8 +33,9 @@ struct TabGalleryMetrics: Equatable {
     static let spacing: CGFloat = 16
     /// The single-column card shows this much of its page: height over width.
     static let listAspect: CGFloat = 0.72
-    /// Grid cards take the page's shape, kept inside these bounds (height over width).
-    static let gridAspect: ClosedRange<CGFloat> = 0.62...1.4
+    /// Grid cards take the page's shape, kept inside these bounds (height over width). Taller
+    /// than 1.1 and a portrait grid shows barely more than one row.
+    static let gridAspect: ClosedRange<CGFloat> = 0.62...1.1
     /// The title row is a 44 pt tap target at least (docs/ui-reference.md), and grows with the font.
     static let minTitleRow: CGFloat = 44
     static let titleRowPadding: CGFloat = 12

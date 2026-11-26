@@ -1,6 +1,7 @@
 #if DEBUG
 import BrowserCore
 import Foundation
+import Observation
 import Storage
 
 /// Sample stores for SwiftUI previews and screenshot harnesses. Debug builds only.
@@ -17,6 +18,59 @@ public enum PreviewData {
 
     public static func favoritesModel() -> FavoritesModel {
         FavoritesModel(store: SampleFavorites())
+    }
+
+    /// Downloads in every state: running with a known size, starting, finished, cancelled, failed.
+    public static func downloads() -> SampleDownloads {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "PreviewDownloads")
+        return SampleDownloads(directory: folder, downloads: [
+            SampleDownload("Quarterly Report.pdf", file: folder.appending(path: "Quarterly Report.pdf"), bytes: 2_400_000),
+            SampleDownload("photo-2026-11-20.jpg", file: folder.appending(path: "photo-2026-11-20.jpg"), bytes: 845_000),
+            SampleDownload("old-installer.dmg", cancelled: true),
+            SampleDownload("archive.zip", failed: true),
+            SampleDownload("podcast-episode-214.mp3", running: 31_200_000, of: 58_900_000),
+            SampleDownload("dataset.csv", running: 0, of: -1),
+        ])
+    }
+
+    public static func noDownloads() -> SampleDownloads {
+        SampleDownloads(directory: FileManager.default.temporaryDirectory, downloads: [])
+    }
+
+    @Observable
+    public final class SampleDownloads: DownloadListSource {
+        public let directory: URL
+        public var downloads: [SampleDownload]
+
+        init(directory: URL, downloads: [SampleDownload]) {
+            self.directory = directory
+            self.downloads = downloads
+        }
+    }
+
+    @Observable
+    public final class SampleDownload: DownloadListItem {
+        public let id = UUID()
+        public let filename: String
+        public let progress: Progress
+        public private(set) var fileURL: URL?
+        public private(set) var isInProgress = false
+        public private(set) var isCancelled = false
+
+        init(_ name: String, file: URL? = nil, bytes: Int64 = 0, cancelled: Bool = false, failed: Bool = false,
+             running completed: Int64? = nil, of total: Int64 = 0) {
+            filename = name
+            fileURL = file
+            isCancelled = cancelled
+            isInProgress = completed != nil
+            progress = Progress(totalUnitCount: completed == nil ? bytes : total)
+            progress.completedUnitCount = completed ?? bytes
+        }
+
+        public func cancel() {
+            isInProgress = false
+            isCancelled = true
+        }
     }
 
     struct NoOpClearer: BrowsingDataClearing {

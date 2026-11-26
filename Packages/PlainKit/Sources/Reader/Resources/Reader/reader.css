@@ -1,0 +1,175 @@
+/* Plain reader view. No settings: text size follows Dynamic Type (-apple-system-body), colors
+   follow light and dark mode, and the accent is Lagoon Blue (#2973FF). Served from the
+   plain-reader: scheme, never the network. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #FFFCF7;
+  --text: #1F1B16;
+  --secondary: #6A6259;
+  --rule: rgba(31, 27, 22, 0.12);
+  --tint: rgba(31, 27, 22, 0.05);
+  --accent: #2973FF;
+  --selection: rgba(41, 115, 255, 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0E1A24;
+    --text: #E3E7EB;
+    --secondary: #95A2AD;
+    --rule: rgba(227, 231, 235, 0.14);
+    --tint: rgba(227, 231, 235, 0.07);
+    --selection: rgba(41, 115, 255, 0.38);
+  }
+}
+
+/* Dynamic Type: the root size is the system body size, so every rem and em below scales. */
+html {
+  font: -apple-system-body;
+  -webkit-text-size-adjust: 100%;
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-serif, "New York", Georgia, serif;
+  font-size: 1.125rem;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--selection); }
+
+article {
+  max-width: 66ch;
+  margin: 0 auto;
+  padding: 1.75rem 1.25rem 4rem;
+}
+
+/* Header: site and byline, title, a short accent rule. */
+article > header { margin-bottom: 2rem; }
+article > header::after {
+  content: "";
+  display: block;
+  width: 2.5rem;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  margin-top: 1.25rem;
+}
+.meta {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--secondary);
+  margin: 0 0 0.6rem;
+}
+.meta .site { font-weight: 600; }
+article > header h1 {
+  font-size: 1.65em;
+  line-height: 1.18;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+/* Body text. */
+.content p { margin: 0 0 1.05em; text-wrap: pretty; hyphens: auto; -webkit-hyphens: auto; }
+.content h2, .content h3, .content h4, .content h5, .content h6 {
+  line-height: 1.25;
+  font-weight: 700;
+  margin: 1.8em 0 0.55em;
+  text-wrap: balance;
+}
+.content h2 { font-size: 1.3em; }
+.content h3 { font-size: 1.12em; }
+.content h4, .content h5, .content h6 { font-size: 1em; }
+
+.content a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+.content a:active { color: var(--accent); }
+
+.content ul, .content ol { padding-inline-start: 1.4em; margin: 0 0 1.05em; }
+.content li { margin: 0.3em 0; }
+.content li > p { margin: 0; }
+
+.content blockquote {
+  margin: 1.5em 0;
+  padding: 0 0 0 1em;
+  border-inline-start: 3px solid var(--accent);
+  color: var(--secondary);
+  font-style: italic;
+}
+
+.content hr { border: 0; border-top: 1px solid var(--rule); margin: 2em 0; }
+
+/* Media: never wider than the text column. */
+.content img, .content video, .content svg, .content canvas, .content iframe, .content picture {
+  max-width: 100%;
+  height: auto;
+}
+.content img { border-radius: 8px; }
+.content figure { margin: 1.6em 0; }
+.content figure img, .content p > img:only-child { display: block; margin: 0 auto; }
+.content figcaption, .content .caption {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--secondary);
+  margin-top: 0.6em;
+}
+
+/* Code. */
+.content code, .content kbd, .content samp, .content pre {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.content code {
+  font-size: 0.85em;
+  background: var(--tint);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.content pre {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  background: var(--tint);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin: 1.4em 0;
+  overflow-x: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 4;
+}
+.content pre p { margin: 0; }
+.content pre code { font-size: inherit; background: none; padding: 0; border-radius: 0; }
+
+/* Tables scroll sideways instead of widening the page. */
+.content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 1.4em 0;
+}
+.content th, .content td {
+  border-bottom: 1px solid var(--rule);
+  padding: 0.4em 0.6em;
+  text-align: start;
+  vertical-align: top;
+}
+
+.content sup, .content sub { line-height: 0; }

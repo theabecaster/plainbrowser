@@ -236,7 +236,12 @@ public final class WebViewPool {
         thumbnails.capture(slot.webView, for: tab)
         slot.webView.removeFromSuperview()
         slot.container = nil
-        slot.refreshMediaPlayback()
+        // Protected until WebKit says whether media is playing; then the limits apply again.
+        slot.media = .unknown
+        Task { [weak self, weak slot] in
+            await slot?.refreshMediaPlayback()
+            self?.enforceTiers()
+        }
         scheduleSave(slot)
         enforceTiers()
     }
@@ -304,7 +309,7 @@ public final class WebViewPool {
     /// `willResignActive` inside a background task.
     public func saveAllTabs() async {
         let background = BackgroundWork.begin("Plain.saveTabs")
-        defer { BackgroundWork.end(background) }
+        defer { background?.end() }
         for slot in slots.values {
             slot.pendingSave?.cancel()
             await save(slot, fetchingSessionStorage: true)
@@ -423,6 +428,8 @@ public final class WebViewPool {
     private func save(_ slot: Slot, fetchingSessionStorage: Bool) async {
         guard let tabStates, let tab = slot.tab, slots[tab.id] === slot else { return }
         let session = fetchingSessionStorage ? await fetchSessionStorage(slot.webView) : nil
+        // Closed or discarded meanwhile: a write now would bring its file back.
+        guard slots[tab.id] === slot else { return }
         if let session { slot.lastSessionStorage = session }
         let state = currentState(of: slot, tab: tab, sessionStorage: session)
         let id = tab.id
@@ -467,7 +474,8 @@ public final class WebViewPool {
                 await withWebKitTimeout(fallback: ()) { done in webView.restoreData(session) { _ in done(()) } }
             }
             // A page that was the result of a form would be sent again: ask first.
-            var resubmit = true
+            // Only the shell's explicit yes sends a form again.
+            var resubmit = !state.isFormResult
             if state.isFormResult, let self, let slot, let tab = slot.tab, let host = self.host {
                 resubmit = await Signposts.prompt("resubmit") { await host.pool(self, shouldResubmitFormIn: tab) }
             }
@@ -561,7 +569,11 @@ public final class WebViewPool {
         if !fetchingSessionStorage || slot.pendingRestore != nil || webView.url == nil {
             finish(nil)
         } else {
-            Task { finish(await fetchSessionStorage(webView)) }
+            Task { [weak slot] in
+                // Ask again right before: playback may have started since the detach.
+                await slot?.refreshMediaPlayback()
+                finish(await fetchSessionStorage(webView))
+            }
         }
     }
 
@@ -652,8 +664,9 @@ public final class WebViewPool {
         Signposts.signposter.emitEvent(Signposts.tabCrash)
         guard let slot = slots[tab.id] else { return }
         if slot.container == nil {
-            // If it is kept anyway (still busy), it reloads when shown.
+            // If it is kept anyway (still busy), it reloads when shown. A dead process plays nothing.
             slot.needsReload = true
+            slot.media = .idle
             slot.isDiscarding = false
             discard(slot, fetchingSessionStorage: false)
         } else if isAppActive {
@@ -746,8 +759,10 @@ extension WebViewPool {
         /// The last sessionStorage read or restored, reused by saves that don't fetch it.
         var lastSessionStorage: Data?
         var pendingSave: Task<Void, Never>?
-        /// The page's media was playing when last asked (on detach and before a discard).
-        var isPlayingMedia = false
+        enum MediaState { case idle, unknown, playing }
+        /// Whether the page's media was playing when last asked (on detach and before a discard).
+        /// Unknown until WebKit answers, and protected meanwhile.
+        var media = MediaState.idle
         /// Set when the current main-frame navigation is a form submission (POST).
         var pendingNavigationIsFormSubmission = false
         private var afterRestore: [(WKWebView) -> Void] = []
@@ -807,16 +822,19 @@ extension WebViewPool {
         /// Media playing (picture in picture included), camera or microphone on, fullscreen, or a
         /// download from this tab running: never discard it.
         func isBusy(in pool: WebViewPool) -> Bool {
-            isPlayingMedia
+            media != .idle
                 || webView.cameraCaptureState != .none || webView.microphoneCaptureState != .none
                 || webView.fullscreenState != .notInFullscreen
                 || (tab.map { pool.downloads.hasActiveDownload(fromTab: $0.id) } ?? false)
         }
 
-        func refreshMediaPlayback() {
-            webView.requestMediaPlaybackState { [weak self] state in
-                self?.isPlayingMedia = state == .playing
+        /// A frozen process that never answers counts as not playing.
+        func refreshMediaPlayback() async {
+            let webView = self.webView
+            let state = await withWebKitTimeout(fallback: WKMediaPlaybackState.none) { done in
+                webView.requestMediaPlaybackState(completionHandler: done)
             }
+            media = state == .playing ? .playing : .idle
         }
 
         /// Runs `work` once a pending restore has applied its history, so a load issued meanwhile

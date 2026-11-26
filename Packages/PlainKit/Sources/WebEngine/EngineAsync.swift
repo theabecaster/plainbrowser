@@ -33,18 +33,25 @@ func withWebKitTimeout<Value: Sendable>(
 }
 
 /// `beginBackgroundTask` around work that must finish after the app leaves the screen (saving
-/// tabs, running downloads). Only inside the app: test bundles have no `UIApplication`.
-enum BackgroundWork {
+/// tabs, running downloads). Ends exactly once: on `end()` or when the system's time runs out.
+/// Only inside the app: test bundles have no `UIApplication`.
+final class BackgroundWork {
     static let isInApp = Bundle.main.bundleURL.pathExtension == "app"
+    private var identifier = UIBackgroundTaskIdentifier.invalid
 
-    static func begin(_ name: String) -> UIBackgroundTaskIdentifier? {
+    static func begin(_ name: String) -> BackgroundWork? {
         guard isInApp else { return nil }
-        return UIApplication.shared.beginBackgroundTask(withName: name)
+        let work = BackgroundWork()
+        work.identifier = UIApplication.shared.beginBackgroundTask(withName: name) { [weak work] in
+            work?.end()
+        }
+        return work
     }
 
-    static func end(_ identifier: UIBackgroundTaskIdentifier?) {
-        guard let identifier, identifier != .invalid else { return }
+    func end() {
+        guard identifier != .invalid else { return }
         UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
     }
 }
 #endif

@@ -55,12 +55,13 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     private var active: [ObjectIdentifier: Download] = [:]
     private var frames: [ObjectIdentifier: WKFrameInfo] = [:]
     /// Blob fallbacks in progress (they no longer have a `WKDownload`).
-    private var blobReads: Set<UUID> = []
+    /// Download id to tab id.
+    private var blobReads: [UUID: UUID?] = [:]
     /// Destinations handed to WebKit but not written yet, so two downloads of the same name in
     /// flight get different files.
     private var reserved: Set<URL> = []
     /// Keeps the app running while downloads are in progress after it leaves the screen.
-    private var backgroundTask: UIBackgroundTaskIdentifier?
+    private var backgroundTask: BackgroundWork?
 
     init(directory: URL) {
         self.directory = directory
@@ -88,6 +89,11 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
         let name = NavigationRules.sanitizedFilename(suggestedFilename)
         item.filename = name
         guard let destination = await reserveDestination(for: name) else { return nil }
+        // Cancelled while the name was being picked.
+        guard active[ObjectIdentifier(download)] === item else {
+            reserved.remove(destination)
+            return nil
+        }
         item.destination = destination
         return destination
     }
@@ -115,15 +121,18 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     func cancel(_ download: WKDownload) {
         download.cancel { [weak self] _ in
             guard let self, let item = self.take(download) else { return }
-            if let destination = item.destination { try? FileManager.default.removeItem(at: destination) }
-            self.end(item, .cancelled)
+            Task {
+                // The partial file goes off the main thread; the name stays reserved until then.
+                if let destination = item.destination { await Self.delete(destination) }
+                self.end(item, .cancelled)
+            }
         }
     }
 
     // MARK: Blob fallback
 
     func readBlob(_ url: URL, from webView: WKWebView, frame: WKFrameInfo, into item: Download) {
-        blobReads.insert(item.id)
+        blobReads[item.id] = item.tabID
         Task {
             do {
                 let value = try await webView.callAsyncJavaScript(
@@ -155,14 +164,14 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     }
 
     func hasActiveDownload(fromTab id: UUID) -> Bool {
-        active.values.contains { $0.tabID == id }
+        active.values.contains { $0.tabID == id } || blobReads.values.contains(id)
     }
 
     private func end(_ item: Download, _ state: Download.State) {
         if let destination = item.destination { reserved.remove(destination) }
-        blobReads.remove(item.id)
+        blobReads[item.id] = nil
         if active.isEmpty, blobReads.isEmpty {
-            BackgroundWork.end(backgroundTask)
+            backgroundTask?.end()
             backgroundTask = nil
         }
         item.state = state
@@ -211,6 +220,11 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
             number += 1
         }
         return candidate
+    }
+
+    @concurrent
+    nonisolated static func delete(_ url: URL) async {
+        try? FileManager.default.removeItem(at: url)
     }
 
     @concurrent

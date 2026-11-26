@@ -1,45 +1,49 @@
 {
   "groups": [
     {
-      "name": "Flap",
+      "name": "Curl",
       "layers": [
         {
-          "name": "Flap",
+          "name": "Curl",
           "glass": true,
           "image-name-specializations": [
             {
-              "value": "flap.svg"
+              "value": "curl.svg"
             },
             {
               "appearance": "tinted",
-              "value": "flap-tinted.svg"
+              "value": "curl-tinted.svg"
             }
           ]
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.6
+        "opacity": 0.45
       },
       "translucency": {
         "enabled": false,
         "value": 0
       },
-      "specular": true
+      "specular": false
     },
     {
-      "name": "P",
+      "name": "Ring",
       "layers": [
         {
-          "name": "Body",
+          "name": "Ring",
           "glass": true,
           "image-name-specializations": [
             {
-              "value": "body.svg"
+              "value": "ring.svg"
             },
             {
               "appearance": "dark",
-              "value": "body-dark.svg"
+              "value": "ring-dark.svg"
+            },
+            {
+              "appearance": "tinted",
+              "value": "ring-tinted.svg"
             }
           ]
         }
@@ -50,27 +54,27 @@
       },
       "translucency": {
         "enabled": true,
-        "value": 0.16
+        "value": 0.12
       },
       "specular": true
     },
     {
-      "name": "Window",
+      "name": "View",
       "layers": [
         {
-          "name": "Window",
+          "name": "View",
           "glass": false,
           "image-name-specializations": [
             {
-              "value": "window.svg"
+              "value": "view.svg"
             },
             {
               "appearance": "dark",
-              "value": "window-dark.svg"
+              "value": "view-dark.svg"
             },
             {
               "appearance": "tinted",
-              "value": "window-tinted.svg"
+              "value": "view-tinted.svg"
             }
           ]
         }
@@ -99,6 +103,12 @@
               "appearance": "dark",
               "value": "bloom-dark.svg"
             }
+          ],
+          "hidden-specializations": [
+            {
+              "appearance": "tinted",
+              "value": true
+            }
           ]
         }
       ],
@@ -108,7 +118,7 @@
       },
       "translucency": {
         "enabled": false,
-        "value": 0.5
+        "value": 0
       },
       "specular": false
     }

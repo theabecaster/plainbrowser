@@ -91,7 +91,9 @@ final class StateRulesTests: XCTestCase {
         let tabs = app.buttons["tabs"]
         XCTAssertTrue(tabs.waitForExistence(timeout: 2))
         XCTAssertEqual(tabs.label, "New Tab")
-        XCTAssertFalse(app.buttons["forward"].exists, "Forward hides until there is somewhere forward")
+        // Forward hides in place until there is somewhere forward; the Duo's vertical bar dims it.
+        let forward = app.buttons["forward"]
+        XCTAssertFalse(forward.exists && forward.isEnabled, "Forward does nothing yet")
         XCTAssertTrue(app.buttons["back"].exists, "Back stays, dimmed")
 
         // A swipe up with one tab bumps: no one-card gallery.

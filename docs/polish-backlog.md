@@ -220,3 +220,21 @@ Newest feature last.
 - **Above and Right on the device.** Both were built after the Mac locked: unit-tested
   (`DuoLayoutTests`) and UI-tested only as far as the simulator allowed; check the strip's look
   and the Right sidebar's drag on the inner screen.
+## State rules (state lane, 2026-11-26)
+
+- **Find on Page and the bar.** Bar gestures stop while the find bar is open, but the page's bar
+  is not replaced by it (§7, §8 "Find open"); the keyboard covers it today. Hide the bar while
+  Find is open. (Code review, round 1.)
+- **Split and side-tab cells.** The matrix rows for Duo split, side tabs and book pose wait for
+  the M3 lane; `ChromeState.canSplit` is wired to `canOpenInOtherPane(from:)`, which is still
+  `false` on `dev`. Tab Layout in Settings (gap 16) is in the M3 branch.
+- **Sheet failure states.** History, Archive and Favorites show OK on a failed read, not Try
+  Again, and History's Clear is enabled with an empty history while a search is typed (§6,
+  Sheets; pre-existing, not in the gaps list). (Code review, round 1.)
+- **The pill on a failed page** shows the last committed address, not the one that was tried;
+  Share and Copy already use the tried address. (Code review, round 1.)
+- **Fixed choices.** The tabs tip's trigger (2 gallery opens) and display count, the bump's
+  travel and the edge swipe's commit distance live in their files; move them to `FixedChoices`
+  when that file is free of other lanes' edits. (Code review, round 1.)
+- **Signposts.** New Tab reusing an empty tab emits no `tab.open`; the tip's display and
+  retirement emit none. (Code review, round 1.)

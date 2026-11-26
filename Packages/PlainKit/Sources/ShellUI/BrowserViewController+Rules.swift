@@ -104,7 +104,7 @@ extension BrowserViewController {
     /// rules: hidden while editing, the gallery has its own). It empties rather than hides, so its
     /// column keeps its width and nothing under it lays out again.
     func applyToolbarItems() {
-        guard usesVerticalBar else { return }
+        // Kept in step in either bar mode, so a switch to the vertical bar finds them right.
         let items = rules.barShown && !isShowingGallery ? PageButton.allCases.compactMap { barItems[$0] } : []
         guard (toolbarItems ?? []) != items else { return }
         setToolbarItems(items, animated: true)

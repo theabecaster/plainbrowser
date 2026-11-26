@@ -342,6 +342,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         if changed { updatePillRestConstraint() }
         view.setNeedsLayout()
+        // The rules depend on the bar (the vertical bar dims instead of hiding).
+        if changed { updateButtons() }
     }
 
     private func updatePillRestConstraint() {

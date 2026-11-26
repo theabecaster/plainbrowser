@@ -235,7 +235,8 @@ final class CaptureTests: XCTestCase {
         pause(1.5)
         shot("t2-gallery")
         let cards = app.collectionViews["tabGallery"].cells.matching(identifier: "tabCard")
-        cards.element(boundBy: 1).tap()
+        app.collectionViews["tabGallery"].swipeDown(velocity: .fast)
+        cards.matching(NSPredicate(format: "label BEGINSWITH %@", "Hacker News")).firstMatch.tap()
         pause(1.5)
 
         // A slow bar swipe toward the next tab, held mid-way, then let go.
@@ -285,9 +286,10 @@ final class CaptureTests: XCTestCase {
         // The page menu with the zoom row, after one step in.
         app.buttons["more"].tap()
         pause(1)
+        shot("t8-page-menu")
         app.buttons["menu.zoomIn"].tap()
         pause(1)
-        shot("t8-page-menu-zoom")
+        shot("t8b-page-menu-zoomed")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
         pause(1)
 

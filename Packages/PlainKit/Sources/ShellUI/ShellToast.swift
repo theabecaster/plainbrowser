@@ -48,6 +48,11 @@ final class ShellToast: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Its width under Auto Layout: the message and the button, capped by the pill's width.
+    override var intrinsicContentSize: CGSize {
+        sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: Metrics.tapTarget))
+    }
+
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let labelSize = label.sizeThatFits(size)
         let buttonWidth = button.isHidden ? 0 : button.sizeThatFits(size).width
@@ -71,7 +76,9 @@ final class ShellToast: UIView {
         button.configuration?.title = title
         button.isHidden = title == nil
         self.action = action
-        superview?.setNeedsLayout()
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+        superview?.layoutIfNeeded()
         hideTask?.cancel()
         hideTask = Task { [weak self] in
             try? await Task.sleep(for: FixedChoices.toastDuration)

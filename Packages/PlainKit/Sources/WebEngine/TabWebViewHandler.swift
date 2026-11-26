@@ -65,6 +65,8 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
 
         // Desktop or mobile, decided now and kept for this page (never switched on resize).
+        pool.slot(for: tab)?.pendingNavigationIsFormSubmission =
+            action.request.httpMethod == "POST" || action.navigationType == .formResubmitted
         let mode = pool.contentMode(for: url, in: tab)
         preferences.preferredContentMode = mode == .desktop ? .desktop : .mobile
         let agent = mode == .desktop ? EngineChoices.desktopUserAgent : nil
@@ -74,16 +76,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
             pool.applyContentRules(slot, mainFrameURL: url)
         }
 
-        // A tapped link to another site may belong to an installed app (universal link).
-        if action.navigationType == .linkActivated, NavigationRules.isCrossSite(from: webView.url, to: url),
-           let host = pool.host
-        {
-            Task {
-                let opened = await Signposts.prompt("universalLink") { await host.tab(tab, openUniversalLink: url) }
-                decisionHandler(opened ? .cancel : .allow, preferences)
-            }
-            return
-        }
+        // `.allow` also lets WebKit hand a tapped cross-site link to an app that claims it.
         decisionHandler(.allow, preferences)
     }
 
@@ -119,6 +112,10 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         signposter.webView(webView, didCommit: navigation)
+        if let tab, let slot = pool?.slot(for: tab) {
+            tab.isFormResult = slot.pendingNavigationIsFormSubmission
+            tab.set(\.isAwaitingResubmit, false)
+        }
         updateSecurity(of: webView)
         endRestore()
     }
@@ -127,6 +124,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         signposter.webView(webView, didFinish: navigation)
         updateSecurity(of: webView)
         endRestore()
+        if let tab, let pool, let slot = pool.slot(for: tab) { pool.scheduleSave(slot) }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {

@@ -2,6 +2,7 @@
 import Foundation
 import Observation
 import PerfSignposts
+import UIKit
 import WebKit
 
 /// One download, for the shell's downloads list.
@@ -53,9 +54,13 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     weak var pool: WebViewPool?
     private var active: [ObjectIdentifier: Download] = [:]
     private var frames: [ObjectIdentifier: WKFrameInfo] = [:]
+    /// Blob fallbacks in progress (they no longer have a `WKDownload`).
+    private var blobReads: Set<UUID> = []
     /// Destinations handed to WebKit but not written yet, so two downloads of the same name in
     /// flight get different files.
     private var reserved: Set<URL> = []
+    /// Keeps the app running while downloads are in progress after it leaves the screen.
+    private var backgroundTask: UIBackgroundTaskIdentifier?
 
     init(directory: URL) {
         self.directory = directory
@@ -69,6 +74,7 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
         active[ObjectIdentifier(download)] = item
         frames[ObjectIdentifier(download)] = download.originatingFrame
         downloads.append(item)
+        if backgroundTask == nil { backgroundTask = BackgroundWork.begin("Plain.downloads") }
         Signposts.signposter.emitEvent(Signposts.download, "started")
         pool?.host?.downloadDidStart(item)
     }
@@ -117,6 +123,7 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     // MARK: Blob fallback
 
     func readBlob(_ url: URL, from webView: WKWebView, frame: WKFrameInfo, into item: Download) {
+        blobReads.insert(item.id)
         Task {
             do {
                 let value = try await webView.callAsyncJavaScript(
@@ -147,8 +154,17 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
         return active.removeValue(forKey: ObjectIdentifier(download))
     }
 
+    func hasActiveDownload(fromTab id: UUID) -> Bool {
+        active.values.contains { $0.tabID == id }
+    }
+
     private func end(_ item: Download, _ state: Download.State) {
         if let destination = item.destination { reserved.remove(destination) }
+        blobReads.remove(item.id)
+        if active.isEmpty, blobReads.isEmpty {
+            BackgroundWork.end(backgroundTask)
+            backgroundTask = nil
+        }
         item.state = state
         Signposts.signposter.emitEvent(Signposts.download, "\(Self.label(state), privacy: .public)")
         pool?.host?.downloadDidEnd(item)

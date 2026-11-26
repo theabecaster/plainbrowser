@@ -34,6 +34,44 @@ struct EdgeCaseTests {
         #expect(harness.pool.existingWebView(for: child) == nil)
     }
 
+    @Test func popupGetsItsOwnControllerSoRulesNeverTouchTheOpener() async throws {
+        let rules = RecordingRules()
+        let harness = try await Harness(contentRules: rules)
+        defer { harness.cleanUp() }
+        harness.host.childContainer = harness.makePane(size: CGSize(width: 390, height: 780))
+        let opener = harness.pool.makeTab()
+        harness.pool.attach(opener, to: harness.container)
+        try await harness.load("/opener", in: opener)
+        let openerController = try #require(harness.pool.existingWebView(for: opener)).configuration.userContentController
+        let appliedToOpener = rules.applied.filter { $0.controller == ObjectIdentifier(openerController) }.count
+
+        _ = try await harness.evaluate("window.open('/child'); 0", in: opener)
+        try await waitUntil("child tab") { harness.host.opened.count == 1 }
+        let child = harness.host.opened[0].child
+        try await harness.waitForLoad(of: harness.server.url("/child"), in: child)
+        let childController = try #require(harness.pool.existingWebView(for: child)).configuration.userContentController
+        #expect(childController !== openerController)
+        // The child's navigation applied rules to the child's controller only.
+        let childPath = harness.server.url("/child")
+        #expect(rules.applied.contains { $0.controller == ObjectIdentifier(childController) && $0.url == childPath })
+        #expect(!rules.applied.contains { $0.controller == ObjectIdentifier(openerController) && $0.url == childPath })
+        #expect(rules.applied.filter { $0.controller == ObjectIdentifier(openerController) }.count == appliedToOpener)
+
+        harness.pool.close(child)
+        #expect(rules.released == [ObjectIdentifier(childController)])
+    }
+
+    @Test func pageTheUserOpenedCannotCloseItsTab() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/a", in: tab)
+        _ = try await harness.evaluate("window.close(); 0", in: tab)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(harness.host.closeRequests.isEmpty)
+    }
+
     @Test func popupBurstIsThrottled() async throws {
         let harness = try await Harness()
         defer { harness.cleanUp() }

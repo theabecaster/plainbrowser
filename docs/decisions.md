@@ -196,11 +196,28 @@ Each entry: what was chosen, and why. Newest last.
   data store. Content blocking's per-site off detaches lists from a single controller (see
   "Content blocking lists"). Popups take the configuration WebKit passes in (or `window.opener`
   breaks) and get a fresh controller on it; `window.opener` still works (tested).
-- **Tiers:** live = visible + `FixedChoices.extraLiveTabs`, capped at 4 (`EngineChoices.maxLiveTabs`),
-  so the Duo split keeps 2 hidden live tabs; hidden live tabs are `.throttle`d. The next 4 are
-  `.suspend`ed. The rest are discarded: `fetchData(of: .sessionStorage)` plus `interactionState`
-  stay in the `Tab` (~1 KB each in tests) and go to Storage's `TabStateStore` as a binary plist.
-  A memory warning discards every hidden tab. Attaching during an in-flight discard cancels it.
+- **Tiers:** live = attached; suspended = detached with a web view, up to 8 web views in all
+  (`EngineChoices.maxWebViews`), most recent first; the rest are discarded to `interactionState`
+  plus sessionStorage (~1 KB each in tests), kept in the `Tab` and written to Storage's
+  `TabStateStore` as a binary plist. No per-tab `inactiveSchedulingPolicy`: copied configurations
+  share one `WKPreferences`, so a per-tab value is really global and each write sends a
+  preferences update to every WebContent process (design audit). WebKit's default `.suspend`
+  applies to every detached page. Attaching during an in-flight discard cancels it.
+- **Never discarded:** tabs playing media (picture in picture included), capturing camera or
+  microphone, in fullscreen, or with a download running; they are kept beyond the limit.
+- **Saved for relaunch continuously**, not only on discard: `interactionState` 1 s after each
+  main-frame finish or detach (UI-process data, wakes nothing), and every tab with sessionStorage
+  on `willResignActive` inside a background task. Writes are serialized per pool.
+- **Every WebKit reply has a 400 ms timeout** (`fetchData`, `restoreData`, `takeSnapshot`): a
+  frozen or killed process may never answer. A memory-warning discard skips the sessionStorage
+  fetch so it wakes no suspended process.
+- **Restore checks itself:** if `interactionState` does not decode (WebKit drops it silently), the
+  saved URL loads instead. A page that was a form result (POST) asks the shell before sending the
+  form again; on "no" history comes back and `tab.isAwaitingResubmit` waits for a reload.
+- **A killed process is not always a crash.** A hidden tab's process kill (iOS reclaims suspended
+  processes) discards the tab, so it restores in place. A visible tab reloads at once, or when the
+  app is active again; only those reloads count toward the crash-loop limit.
+- **`window.close()`** closes only tabs a page opened.
 - **Scroll restore lag (measured):** WebKit copies the scroll position into the history item a few
   hundred ms after scrolling stops (not at 200 ms, always by 350 ms on the simulator). A tab
   discarded within that window comes back at its previous scroll position. Real discards hit tabs
@@ -220,9 +237,9 @@ Each entry: what was chosen, and why. Newest last.
 - **Abuse limits** (popups 2 per 2 s, dialogs 5 per 20 s, external apps 2 per 10 s per tab) follow
   firefox-ios `PopupThrottler` (MPL-2.0): idea and numbers only, no code copied.
   `javaScriptCanOpenWindowsAutomatically = false` makes WebKit ask only for gesture popups.
-- **Universal links:** for a tapped cross-site link the handler awaits the shell's
-  `openUniversalLink` before allowing the navigation. Cost: one main-actor hop plus the shell's
-  `UIApplication.open(universalLinksOnly:)` round trip, on cross-site taps only.
+- **Universal links: left to WebKit.** `.allow` on a tapped navigation already makes WebKit try
+  the app link (design audit), so the engine adds no check and no wait on link taps. No private
+  "allow without app link" policy is used.
 - **Certificate errors:** the shell shows the interstitial; "visit anyway" trusts that exact leaf
   certificate for the host until quit, then reloads. Nothing is persisted.
 - **Seams:** Storage's concrete `TabStateStore` (no protocol needed). New protocols where Storage has
@@ -231,7 +248,11 @@ Each entry: what was chosen, and why. Newest last.
   In-memory defaults exist for both stores, also usable for private tabs.
 - **Permissions in tests:** in a hostless test process WebKit never calls the camera or location
   delegate (no app authorization), so the pool's remember-per-site logic is tested directly.
+- **Thumbnails at 2 px per point** of the card width (400 px wide), not the screen's 3x: 2.25x
+  fewer pixels in memory and on disk. The snapshot starts before the view leaves the window.
+- **Downloads keep running in the background** inside `beginBackgroundTask` while any is active.
 - **Perf (iPhone 17 simulator, iOS 27.2, loaded machine):** attach a live tab median 1.4–1.5 ms;
-  discard 6.5–8 ms; restore a discarded tab: attach call 4–9 ms, page back 400–490 ms (new
-  WebContent process, local server), scroll back with it; thumbnail snapshot 1.7 ms main-thread
-  wait, JPEG encode + write 6.6–7.4 ms off main; thumbnail read + decode from disk ~40 ms off main.
+  discard 0.3 ms without the sessionStorage fetch, 6.5–15 ms with it; restore a discarded tab:
+  attach call 4–20 ms, page back 400–490 ms (new WebContent process, local server), scroll back
+  with it; thumbnail snapshot 0.75 ms main-thread wait, JPEG encode + write 2–3 ms off main;
+  thumbnail read + decode from disk 23–53 ms off main.

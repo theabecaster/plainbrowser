@@ -7,16 +7,26 @@ import Foundation
 nonisolated public enum EngineChoices {
     // MARK: Tab tiers (docs/plan.md, "Engine rules" 2)
 
-    /// Tabs that keep a running web view, visible ones included: the visible tab plus
-    /// `FixedChoices.extraLiveTabs` recent ones, capped here so the Duo split (two visible) keeps
-    /// two recent tabs instead of three.
-    public static let maxLiveTabs = 4
-    /// Tabs after the live ones that keep their web view but have it suspended
-    /// (`inactiveSchedulingPolicy = .suspend`). Older tabs are discarded to `interactionState`.
-    public static let maxSuspendedTabs = 4
+    /// Tabs that keep a web view, visible ones included. Hidden ones are suspended by WebKit and
+    /// cost the app about 3-5 MB each; switching back to one is instant. Older tabs are discarded
+    /// to `interactionState`. Busy tabs (media, capture, downloads) are kept beyond this.
+    public static let maxWebViews = 8
+
+    // MARK: Saving tabs
+
+    /// A tab is saved this long after its last main-frame load or detach, so a burst of loads
+    /// writes one file.
+    public static let saveDebounce: Duration = .seconds(1)
+    /// The longest the engine waits for a WebContent process to answer (`fetchData`,
+    /// `restoreData`, `takeSnapshot`). A frozen process may never answer; past this the engine
+    /// goes on without sessionStorage or the thumbnail.
+    public static let webKitReplyTimeout: Duration = .milliseconds(400)
 
     // MARK: Thumbnails (docs/plan.md, "Engine rules" 3)
 
+    /// Thumbnails are stored at this many pixels per point of `FixedChoices.thumbnailWidth`: sharp
+    /// on a card, and 2.25x fewer pixels than a 3x screen-scale snapshot.
+    public static let thumbnailPixelsPerPoint: CGFloat = 2
     /// JPEG quality on disk: invisible loss at card size, a third of PNG's size and write time.
     public static let thumbnailJPEGQuality: CGFloat = 0.7
     /// Decoded thumbnails kept in memory. About 8 cards; the rest reload from disk on demand.

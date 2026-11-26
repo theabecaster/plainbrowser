@@ -18,12 +18,31 @@ nonisolated public struct TabRestorationState: Sendable, Codable, Equatable {
     public var interactionState: Data?
     /// `WKWebView.fetchData(of: .sessionStorage)`, opaque to us.
     public var sessionStorage: Data?
+    /// The current page is the result of a form submission (POST). Restoring it would send the
+    /// form again, so the shell is asked first.
+    public var isFormResult: Bool
 
-    public init(url: URL?, title: String, interactionState: Data?, sessionStorage: Data?) {
+    public init(
+        url: URL?, title: String, interactionState: Data?, sessionStorage: Data?, isFormResult: Bool = false
+    ) {
         self.url = url
         self.title = title
         self.interactionState = interactionState
         self.sessionStorage = sessionStorage
+        self.isFormResult = isFormResult
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case url, title, interactionState, sessionStorage, isFormResult
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        url = try container.decodeIfPresent(URL.self, forKey: .url)
+        title = try container.decode(String.self, forKey: .title)
+        interactionState = try container.decodeIfPresent(Data.self, forKey: .interactionState)
+        sessionStorage = try container.decodeIfPresent(Data.self, forKey: .sessionStorage)
+        isFormResult = try container.decodeIfPresent(Bool.self, forKey: .isFormResult) ?? false
     }
 
     /// A binary property list. Encode and decode off the main thread.
@@ -87,6 +106,9 @@ public protocol TabPresenter: AnyObject {
     /// The visible tab's page crashed again right after automatic reloads. The shell shows a
     /// "This page crashed" state with a reload button (`tab.reload()`).
     func pool(_ pool: WebViewPool, tabKeepsCrashing tab: Tab)
+    /// A restored tab's page was the result of a form. True sends the form again; false restores
+    /// history without loading, and `tab.isAwaitingResubmit` stays true until `tab.reload()`.
+    func pool(_ pool: WebViewPool, shouldResubmitFormIn tab: Tab) async -> Bool
 }
 
 /// `alert`, `confirm` and `prompt`. Only the visible tab's dialogs reach the shell; background tabs
@@ -128,16 +150,12 @@ public protocol AuthenticationPresenter: AnyObject {
     func tab(_ tab: Tab, shouldProceedPast error: CertificateError) async -> Bool
 }
 
-/// Links that leave the browser.
+/// Links that leave the browser. Universal links need nothing here: allowing a tapped navigation
+/// lets WebKit hand it to the app that claims it.
 public protocol ExternalAppPresenter: AnyObject {
     /// A page wants to open a custom-scheme URL (`mailto:`, `tel:`, another app's scheme). The
     /// shell confirms with the user and opens it; return whether it was opened.
     func tab(_ tab: Tab, openExternally url: URL) async -> Bool
-    /// The user tapped a link to another site. If an installed app claims it as a universal link,
-    /// open it there (`UIApplication.open(_:options: [.universalLinksOnly: true])`) and return
-    /// true; the navigation is then cancelled. Called only for user taps across sites, never for
-    /// redirects or scripts.
-    func tab(_ tab: Tab, openUniversalLink url: URL) async -> Bool
 }
 
 /// Camera, microphone, location and motion prompts. Answers are remembered per site through

@@ -11,12 +11,18 @@ import WebKit
 /// configures a web view itself.
 ///
 /// Tabs move between three tiers (docs/plan.md, "Engine rules" 2):
-/// - **Live:** attached tabs plus the most recent others, up to `EngineChoices.maxLiveTabs`
-///   (`FixedChoices.extraLiveTabs` beyond the visible ones). Hidden live tabs are throttled.
-/// - **Suspended:** the next `EngineChoices.maxSuspendedTabs`. WebKit suspends their pages.
+/// - **Live:** attached (on screen).
+/// - **Suspended:** detached but keeping its web view, up to `EngineChoices.maxWebViews` web views
+///   in all, most recently used first. WebKit suspends a page as soon as it leaves the window
+///   (`inactiveSchedulingPolicy` stays at its `.suspend` default: it lives on a `WKPreferences`
+///   that every copied configuration shares, so it can't be set per tab).
 /// - **Discarded:** the rest. Only `interactionState` and sessionStorage stay, in memory and in
 ///   Storage's `TabStateStore`; the web view is released. A memory warning discards every tab
-///   that is not on screen.
+///   that is not on screen. Tabs playing media, in fullscreen or picture in picture, capturing
+///   camera or microphone, or downloading are never discarded.
+///
+/// State is saved for relaunch after every main-frame load (debounced) and for every tab when
+/// the app resigns active, not only on discard.
 public final class WebViewPool {
     /// The shell. Without one, popups are refused, dialogs dismissed and permissions denied.
     public weak var host: (any EngineHost)?
@@ -45,12 +51,14 @@ public final class WebViewPool {
         limit: EngineChoices.externalAppLimit, window: EngineChoices.externalAppWindow
     )
     private var crashLimiter = RateLimiter(limit: EngineChoices.crashReloadLimit, window: EngineChoices.crashWindow)
-    private var memoryWarningObserver: (any NSObjectProtocol)?
     /// State-file writes and deletes run one after another, in the order they were issued, so an
     /// older write never lands after a newer one or after the tab was closed.
     private var stateWrites: Task<Void, Never>?
     /// Permission prompts in flight, so two requests for the same site and permissions ask once.
     private var pendingPermissionAsks: [String: Task<Bool, Never>] = [:]
+    private var lifecycleObservers: [any NSObjectProtocol] = []
+    /// False while the app is in the background or inactive. Tests never leave the active state.
+    private(set) var isAppActive = true
 
     /// - Parameters:
     ///   - dataStore: one store for every tab, so cookies and logins are shared. A private-tabs
@@ -82,15 +90,21 @@ public final class WebViewPool {
             directory: downloadDirectory ?? documents.appending(path: EngineChoices.downloadsFolderName)
         )
         downloads.pool = self
-        memoryWarningObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.handleMemoryWarning() }
+        let center = NotificationCenter.default
+        let observe: (Notification.Name, @escaping @Sendable @MainActor (WebViewPool) -> Void) -> any NSObjectProtocol = { name, act in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { if let self { act(self) } }
+            }
         }
+        lifecycleObservers = [
+            observe(UIApplication.didReceiveMemoryWarningNotification) { $0.handleMemoryWarning() },
+            observe(UIApplication.willResignActiveNotification) { $0.applicationWillResignActive() },
+            observe(UIApplication.didBecomeActiveNotification) { $0.applicationDidBecomeActive() },
+        ]
     }
 
     isolated deinit {
-        if let memoryWarningObserver { NotificationCenter.default.removeObserver(memoryWarningObserver) }
+        lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     // MARK: - Configuration
@@ -108,7 +122,6 @@ public final class WebViewPool {
 
         let preferences = configuration.preferences
         preferences.isElementFullscreenEnabled = true
-        preferences.inactiveSchedulingPolicy = .suspend
         // WebKit then asks `createWebViewWith` only for popups a user gesture opened.
         preferences.javaScriptCanOpenWindowsAutomatically = false
         preferences.isFraudulentWebsiteWarningEnabled = true
@@ -205,7 +218,7 @@ public final class WebViewPool {
             webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             container.addSubview(webView)
         }
-        if slot.needsReload {
+        if slot.needsReload, isAppActive {
             slot.needsReload = false
             reloadAfterCrash(slot, tab: tab)
         } else if webView.url == nil, !webView.isLoading, !slot.isRestoring, let url = tab.url {
@@ -223,6 +236,8 @@ public final class WebViewPool {
         thumbnails.capture(slot.webView, for: tab)
         slot.webView.removeFromSuperview()
         slot.container = nil
+        slot.refreshMediaPlayback()
+        scheduleSave(slot)
         enforceTiers()
     }
 
@@ -279,12 +294,39 @@ public final class WebViewPool {
     public func handleMemoryWarning() {
         warm = nil
         thumbnails.dropMemoryCache()
-        for slot in slots.values where slot.container == nil {
-            discard(slot)
+        // No sessionStorage fetch: it would wake every suspended process at the worst moment.
+        for slot in slots.values where slot.container == nil && !slot.isBusy(in: self) {
+            discard(slot, fetchingSessionStorage: false)
         }
     }
 
-    /// The tier each tab is in, for tests and debugging.
+    /// Saves every tab with a web view, so a kill in the background loses nothing. Runs on
+    /// `willResignActive` inside a background task.
+    public func saveAllTabs() async {
+        let background = BackgroundWork.begin("Plain.saveTabs")
+        defer { BackgroundWork.end(background) }
+        for slot in slots.values {
+            slot.pendingSave?.cancel()
+            await save(slot, fetchingSessionStorage: true)
+        }
+        await stateWrites?.value
+    }
+
+    private func applicationWillResignActive() {
+        isAppActive = false
+        Task { await saveAllTabs() }
+    }
+
+    private func applicationDidBecomeActive() {
+        isAppActive = true
+        // Visible pages whose process died while the app was in the background.
+        for slot in slots.values where slot.needsReload && slot.container != nil {
+            slot.needsReload = false
+            if let tab = slot.tab { reloadAfterCrash(slot, tab: tab) }
+        }
+    }
+
+    /// How many tabs hold a web view, for tests and debugging.
     var liveWebViewCount: Int { slots.count }
 
     // MARK: - Commands from Tab
@@ -301,6 +343,7 @@ public final class WebViewPool {
             enforceTiers()
             return
         }
+        tab.set(\.isAwaitingResubmit, false)
         perform(in: tab) { webView in
             if webView.url == nil, let url = tab.url {
                 webView.load(URLRequest(url: url))
@@ -340,11 +383,53 @@ public final class WebViewPool {
                 ?? TabRestorationState(url: tab.url, title: tab.title, interactionState: nil, sessionStorage: nil)
         }
         if let pending = slot.pendingRestore { return pending }
-        let webView = slot.webView
-        let session = try? await webView.fetchData(of: .sessionStorage)
-        // After the round trip, so the latest scroll position is in the history item.
-        let interaction = webView.interactionState as? Data
-        return TabRestorationState(url: tab.url, title: tab.title, interactionState: interaction, sessionStorage: session)
+        let session = await fetchSessionStorage(slot.webView)
+        return currentState(of: slot, tab: tab, sessionStorage: session)
+    }
+
+    /// The tab's state now. Read after any sessionStorage round trip to the WebContent process:
+    /// by then its latest scroll position has reached the history item.
+    private func currentState(of slot: Slot, tab: Tab, sessionStorage: Data?) -> TabRestorationState {
+        if let pending = slot.pendingRestore { return pending }
+        return TabRestorationState(
+            url: tab.url, title: tab.title, interactionState: slot.webView.interactionState as? Data,
+            sessionStorage: sessionStorage ?? slot.lastSessionStorage, isFormResult: tab.isFormResult
+        )
+    }
+
+    /// sessionStorage, or nil after `EngineChoices.webKitReplyTimeout`: a frozen or killed
+    /// WebContent process may never answer.
+    private func fetchSessionStorage(_ webView: WKWebView) async -> Data? {
+        guard webView.url != nil else { return nil }
+        return await withWebKitTimeout(fallback: nil) { done in
+            webView.fetchData(of: .sessionStorage) { data, _ in done(data) }
+        }
+    }
+
+    // MARK: - Saving for relaunch
+
+    /// Saves the tab a second after its last main-frame load or detach, so a burst of loads
+    /// writes once. `interactionState` is UI-process data: reading it wakes nothing.
+    func scheduleSave(_ slot: Slot) {
+        guard tabStates != nil else { return }
+        slot.pendingSave?.cancel()
+        slot.pendingSave = Task { [weak self, weak slot] in
+            try? await Task.sleep(for: EngineChoices.saveDebounce)
+            guard !Task.isCancelled, let self, let slot else { return }
+            await self.save(slot, fetchingSessionStorage: false)
+        }
+    }
+
+    private func save(_ slot: Slot, fetchingSessionStorage: Bool) async {
+        guard let tabStates, let tab = slot.tab, slots[tab.id] === slot else { return }
+        let session = fetchingSessionStorage ? await fetchSessionStorage(slot.webView) : nil
+        if let session { slot.lastSessionStorage = session }
+        let state = currentState(of: slot, tab: tab, sessionStorage: session)
+        let id = tab.id
+        enqueueStateWork {
+            guard let data = try? await Self.encode(state) else { return }
+            try? await tabStates.write(data, for: id)
+        }
     }
 
     // MARK: - Slots and tiers
@@ -375,73 +460,90 @@ public final class WebViewPool {
         let signposter = Signposts.signposter
         slot.restoreInterval = signposter.beginInterval(Signposts.tabRestore, id: signposter.makeSignpostID())
         slot.pendingRestore = state
+        slot.lastSessionStorage = state.sessionStorage
         let webView = slot.webView
-        let finish: () -> Void = { [weak slot] in
+        Task { [weak self, weak slot] in
+            if let session = state.sessionStorage {
+                await withWebKitTimeout(fallback: ()) { done in webView.restoreData(session) { _ in done(()) } }
+            }
+            // A page that was the result of a form would be sent again: ask first.
+            var resubmit = true
+            if state.isFormResult, let self, let slot, let tab = slot.tab, let host = self.host {
+                resubmit = await Signposts.prompt("resubmit") { await host.pool(self, shouldResubmitFormIn: tab) }
+            }
             guard let slot, slot.pendingRestore != nil else { return }
-            if let interaction = state.interactionState {
-                webView.interactionState = interaction
-            } else if let url = state.url {
+            Self.apply(state, to: webView, slot: slot, resubmit: resubmit)
+            slot.pendingRestore = nil
+            slot.runPendingAfterRestore()
+        }
+    }
+
+    private static func apply(_ state: TabRestorationState, to webView: WKWebView, slot: Slot, resubmit: Bool) {
+        if let interaction = state.interactionState {
+            webView.interactionState = interaction
+            if !resubmit {
+                // History and URL come back; the form is not sent until the user reloads.
+                webView.stopLoading()
+                slot.tab?.set(\.isAwaitingResubmit, true)
+                slot.endRestoreInterval()
+                return
+            }
+        }
+        // `interactionState` that fails to decode is dropped without an error: load the URL.
+        if webView.url == nil {
+            if let url = state.url {
                 webView.load(URLRequest(url: url))
             } else {
                 slot.endRestoreInterval()
             }
-            slot.pendingRestore = nil
-            slot.runPendingAfterRestore()
-        }
-        if let session = state.sessionStorage {
-            webView.restoreData(session) { _ in finish() }
-        } else {
-            finish()
         }
     }
 
-    /// Applies the tier limits: attached tabs are live; of the rest, the most recently used stay
-    /// live (throttled), the next ones are suspended, and the others are discarded.
+    /// Applies the tier limits: attached tabs are live; of the rest, the most recently used keep
+    /// their web view (suspended by WebKit) up to `EngineChoices.maxWebViews` in all, and the
+    /// others are discarded. Busy tabs (media, capture, fullscreen, downloads) are always kept.
     func enforceTiers() {
-        var attached = 0
+        var kept = 0
         var hidden: [Slot] = []
         for slot in slots.values {
             if slot.container != nil {
-                attached += 1
+                kept += 1
                 slot.tab?.set(\.tier, .live)
             } else {
                 hidden.append(slot)
             }
         }
         hidden.sort { $0.lastUse > $1.lastUse }
-        let liveRoom = max(0, min(FixedChoices.extraLiveTabs, EngineChoices.maxLiveTabs - attached))
-        for (index, slot) in hidden.enumerated() {
-            if index < liveRoom {
-                slot.setInactivePolicy(.throttle)
-                slot.tab?.set(\.tier, .live)
-            } else if index < liveRoom + EngineChoices.maxSuspendedTabs {
-                slot.setInactivePolicy(.suspend)
+        for slot in hidden {
+            if kept < EngineChoices.maxWebViews || slot.isBusy(in: self) {
+                kept += 1
                 slot.tab?.set(\.tier, .suspended)
             } else {
-                discard(slot)
+                discard(slot, fetchingSessionStorage: true)
             }
         }
     }
 
     /// Saves the tab's history, scroll and sessionStorage, then releases its web view. The state
     /// read is asynchronous; attaching the tab meanwhile cancels the discard.
-    private func discard(_ slot: Slot) {
+    private func discard(_ slot: Slot, fetchingSessionStorage: Bool) {
         guard !slot.isDiscarding, slot.container == nil, let tab = slot.tab else { return }
         slot.isDiscarding = true
+        slot.pendingSave?.cancel()
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.tabDiscard, id: signposter.makeSignpostID())
         let webView = slot.webView
         let finish: (Data?) -> Void = { [weak self, weak slot, weak tab] session in
             defer { signposter.endInterval(Signposts.tabDiscard, interval) }
             guard let self, let slot, let tab, slot.isDiscarding, self.slots[tab.id] === slot else { return }
-            // A restore still in flight has not applied its state yet: keep that state, not the
-            // empty web view's.
-            let state = slot.pendingRestore ?? TabRestorationState(
-                url: tab.url, title: tab.title,
-                // Read after the sessionStorage round trip to the WebContent process: by then its
-                // latest scroll position has reached the history item.
-                interactionState: webView.interactionState as? Data, sessionStorage: session
-            )
+            // It may have started playing or downloading meanwhile.
+            guard !slot.isBusy(in: self) else {
+                slot.isDiscarding = false
+                return
+            }
+            // A restore still in flight has not applied its state yet: `currentState` keeps that
+            // state, not the empty web view's.
+            let state = self.currentState(of: slot, tab: tab, sessionStorage: session)
             self.slots[tab.id] = nil
             self.tearDown(slot)
             tab.restoration = state
@@ -456,10 +558,10 @@ public final class WebViewPool {
                 }
             }
         }
-        if slot.pendingRestore != nil || webView.url == nil {
+        if !fetchingSessionStorage || slot.pendingRestore != nil || webView.url == nil {
             finish(nil)
         } else {
-            webView.fetchData(of: .sessionStorage) { data, _ in finish(data) }
+            Task { finish(await fetchSessionStorage(webView)) }
         }
     }
 
@@ -477,6 +579,7 @@ public final class WebViewPool {
     }
 
     private func tearDown(_ slot: Slot) {
+        slot.pendingSave?.cancel()
         slot.invalidate()
         let webView = slot.webView
         webView.stopLoading()
@@ -510,7 +613,10 @@ public final class WebViewPool {
         return webView
     }
 
+    /// `window.close()`: only a tab a page opened may close itself (a page the user opened from
+    /// the address bar may not, even with one history entry).
     func childRequestsClose(_ tab: Tab) {
+        guard tab.openerID != nil else { return }
         host?.pool(self, tabRequestsClose: tab)
     }
 
@@ -538,10 +644,19 @@ public final class WebViewPool {
         contentRules?.apply(to: slot.controller, forMainFrameURL: mainFrameURL)
     }
 
+    /// A WebContent process ended. iOS kills suspended ones under memory pressure all the time;
+    /// those are not crashes. A hidden tab becomes discarded (its history and scroll are still in
+    /// the UI process) and restores in place on attach. A visible tab reloads now, or when the app
+    /// is active again; only those reloads count toward the crash-loop limit.
     func webContentProcessDidTerminate(_ tab: Tab) {
         Signposts.signposter.emitEvent(Signposts.tabCrash)
         guard let slot = slots[tab.id] else { return }
-        if slot.container != nil {
+        if slot.container == nil {
+            // If it is kept anyway (still busy), it reloads when shown.
+            slot.needsReload = true
+            slot.isDiscarding = false
+            discard(slot, fetchingSessionStorage: false)
+        } else if isAppActive {
             reloadAfterCrash(slot, tab: tab)
         } else {
             slot.needsReload = true
@@ -628,9 +743,15 @@ extension WebViewPool {
         var isRestoring: Bool { pendingRestore != nil }
         var needsReload = false
         var restoreInterval: OSSignpostIntervalState?
+        /// The last sessionStorage read or restored, reused by saves that don't fetch it.
+        var lastSessionStorage: Data?
+        var pendingSave: Task<Void, Never>?
+        /// The page's media was playing when last asked (on detach and before a discard).
+        var isPlayingMedia = false
+        /// Set when the current main-frame navigation is a form submission (POST).
+        var pendingNavigationIsFormSubmission = false
         private var afterRestore: [(WKWebView) -> Void] = []
         private var observations: [NSKeyValueObservation] = []
-        private var inactivePolicy: WKPreferences.InactiveSchedulingPolicy?
 
         init(tab: Tab, webView: WKWebView, controller: WKUserContentController, pool: WebViewPool) {
             self.tab = tab
@@ -683,10 +804,19 @@ extension WebViewPool {
             endRestoreInterval()
         }
 
-        func setInactivePolicy(_ policy: WKPreferences.InactiveSchedulingPolicy) {
-            guard inactivePolicy != policy else { return }
-            inactivePolicy = policy
-            webView.configuration.preferences.inactiveSchedulingPolicy = policy
+        /// Media playing (picture in picture included), camera or microphone on, fullscreen, or a
+        /// download from this tab running: never discard it.
+        func isBusy(in pool: WebViewPool) -> Bool {
+            isPlayingMedia
+                || webView.cameraCaptureState != .none || webView.microphoneCaptureState != .none
+                || webView.fullscreenState != .notInFullscreen
+                || (tab.map { pool.downloads.hasActiveDownload(fromTab: $0.id) } ?? false)
+        }
+
+        func refreshMediaPlayback() {
+            webView.requestMediaPlaybackState { [weak self] state in
+                self?.isPlayingMedia = state == .playing
+            }
         }
 
         /// Runs `work` once a pending restore has applied its history, so a load issued meanwhile

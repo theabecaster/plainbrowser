@@ -34,7 +34,11 @@ public final class ThumbnailService {
     func capture(_ webView: WKWebView, for tab: Tab) {
         guard webView.url != nil, webView.bounds.width > 0 else { return }
         let configuration = WKSnapshotConfiguration()
-        configuration.snapshotWidth = NSNumber(value: FixedChoices.thumbnailWidth)
+        // WebKit multiplies `snapshotWidth` by the screen scale; aim for a fixed pixel density.
+        let scale = max(1, webView.traitCollection.displayScale)
+        configuration.snapshotWidth = NSNumber(
+            value: FixedChoices.thumbnailWidth * EngineChoices.thumbnailPixelsPerPoint / scale
+        )
         configuration.afterScreenUpdates = false
         let id = tab.id
         let generation = generations[id, default: 0] + 1
@@ -42,7 +46,11 @@ public final class ThumbnailService {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.tabSnapshot, id: signposter.makeSignpostID())
         let started = ContinuousClock.now
-        webView.takeSnapshot(with: configuration) { [weak self, weak tab] image, _ in
+        // Started now, while the view is still in the window: a snapshot of a removed view falls
+        // back to a slow, large software render. A frozen page may never answer.
+        callWithWebKitTimeout(fallback: nil) { done in
+            webView.takeSnapshot(with: configuration) { image, _ in done(image) }
+        } completion: { [weak self, weak tab] (image: UIImage?) in
             signposter.endInterval(Signposts.tabSnapshot, interval)
             let snapshotTime = ContinuousClock.now - started
             guard let self, let image, self.generations[id] == generation else { return }

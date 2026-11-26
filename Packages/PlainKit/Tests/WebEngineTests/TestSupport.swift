@@ -2,6 +2,7 @@
 import Foundation
 import Testing
 import UIKit
+import Storage
 import WebKit
 @testable import WebEngine
 
@@ -56,7 +57,8 @@ final class FakeHost: EngineHost {
     var certificateErrors: [CertificateError] = []
     var proceedPastCertificateError = false
     var externalURLs: [URL] = []
-    var universalLinks: [URL] = []
+    var resubmitAnswer = false
+    var resubmitAsks = 0
     var permissionAnswer = true
     var permissionAsks: [(permissions: [SitePermission], site: String)] = []
     var startedDownloads: [Download] = []
@@ -104,9 +106,9 @@ final class FakeHost: EngineHost {
         return true
     }
 
-    func tab(_ tab: Tab, openUniversalLink url: URL) async -> Bool {
-        universalLinks.append(url)
-        return false
+    func pool(_ pool: WebViewPool, shouldResubmitFormIn tab: Tab) async -> Bool {
+        resubmitAsks += 1
+        return resubmitAnswer
     }
 
     func tab(_ tab: Tab, allow permissions: [SitePermission], forSite site: String) async -> Bool {
@@ -120,6 +122,21 @@ final class FakeHost: EngineHost {
 
     func downloadDidEnd(_ download: Download) {
         endedDownloads.append(download)
+    }
+}
+
+/// Records every `apply` per controller, like `ContentBlocker` would act on them.
+@MainActor
+final class RecordingRules: UserContentRules {
+    var applied: [(controller: ObjectIdentifier, url: URL?)] = []
+    var released: [ObjectIdentifier] = []
+
+    func apply(to controller: WKUserContentController, forMainFrameURL mainFrameURL: URL?) {
+        applied.append((ObjectIdentifier(controller), mainFrameURL))
+    }
+
+    func release(_ controller: WKUserContentController) {
+        released.append(ObjectIdentifier(controller))
     }
 }
 
@@ -137,13 +154,17 @@ final class Harness {
     init(
         paneSize: CGSize = CGSize(width: 390, height: 780),
         permissionStore: any SitePermissionStore = InMemorySitePermissionStore(),
+        contentRules: (any UserContentRules)? = nil,
+        tabStates: Bool = false,
         route: @escaping @Sendable (TestServer.Request) -> TestServer.Response = Pages.route
     ) async throws {
         server = try await TestServer(route: route)
         directory = FileManager.default.temporaryDirectory.appending(path: "plain-c-\(UUID().uuidString)")
         pool = WebViewPool(
             dataStore: .nonPersistent(),
+            tabStates: tabStates ? TabStateStore(directory: directory.appending(path: "TabStates")) : nil,
             permissionStore: permissionStore,
+            contentRules: contentRules,
             thumbnailDirectory: directory.appending(path: "Thumbnails"),
             downloadDirectory: directory.appending(path: "Downloads")
         )
@@ -235,6 +256,8 @@ enum Pages {
             response.reason = "Unauthorized"
             response.headers["WWW-Authenticate"] = "Basic realm=\"Plain Test\""
             return response
+        case "/form":
+            return .html(page(title: "Form", body: "<form id=f method=post action='/b'><input name=q value=1></form>"))
         case "/ua":
             return .html(page(title: "UA", body: "<p>ua</p>"))
         default:

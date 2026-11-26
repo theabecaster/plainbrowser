@@ -149,15 +149,17 @@ exactly what the app emits.
 
 The shell creates one `WebViewPool` and sets itself as `pool.host` (`EngineHost`: child tabs,
 JavaScript dialogs, HTTP auth and certificate errors, external apps and universal links,
-permission prompts, downloads). Tabs come from `pool.makeTab(id:restoring:)`; `TabStore` keeps them.
+permission prompts, downloads, form resubmission). Tabs come from `pool.makeTab(id:restoring:)`; `TabStore` keeps them.
 
 1. **Show a tab:** `pool.attach(tab, to: paneView)`. A discarded tab restores sessionStorage, then
    `interactionState`. `pool.detach(tab)` stores a thumbnail and applies the tier limits.
 2. **Navigate:** `tab.load(url)`, `goBack()`, `reload()`. `TabWebViewHandler.decidePolicyFor`
    handles downloads, external schemes, desktop/mobile (pane size or the site's override), content
-   rules (`UserContentRules.apply` on the tab's own controller) and universal links.
+   rules (`UserContentRules.apply` on the tab's own controller). Universal links are WebKit's.
 3. **State out:** `Tab` properties (`@Observable`), progress through `tab.onProgress`, thumbnails
    through `pool.thumbnail(for:)` when `tab.thumbnailRevision` changes.
-4. **Session restore:** `await tab.restorationState()` → `encoded()` → Storage's `TabStateStore`;
-   at launch, decode and pass it to `makeTab(id:restoring:)`.
+4. **Session restore:** pass Storage's `TabStateStore` to the pool. It writes each tab after
+   loads and detaches (debounced), on discard and on `willResignActive` (`saveAllTabs()`). At
+   launch, decode each file with `TabRestorationState(encoded:)` and pass it to
+   `makeTab(id:restoring:)`.
 

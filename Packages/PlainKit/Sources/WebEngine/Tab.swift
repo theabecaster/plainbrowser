@@ -57,6 +57,9 @@ public final class Tab: Identifiable {
     public internal(set) var loadError: LoadError?
     /// Bumped when a new thumbnail is stored; read it with `WebViewPool.thumbnail(for:)`.
     public internal(set) var thumbnailRevision = 0
+    /// A restored form result is waiting: history is back but the page is not loaded. The shell
+    /// shows "Reload to send the form again"; `reload()` sends it.
+    public internal(set) var isAwaitingResubmit = false
 
     /// Load progress from 0 to 1. Not observed: read it from `onProgress`.
     @ObservationIgnored public internal(set) var progress: Double = 0
@@ -66,6 +69,8 @@ public final class Tab: Identifiable {
     @ObservationIgnored weak var pool: WebViewPool?
     /// What a discarded tab restores from.
     @ObservationIgnored var restoration: TabRestorationState?
+    /// The current page came from a form submission (POST).
+    @ObservationIgnored var isFormResult = false
 
     init(id: UUID, openerID: UUID?, pool: WebViewPool, restoring state: TabRestorationState?) {
         self.id = id
@@ -75,6 +80,7 @@ public final class Tab: Identifiable {
         if let state {
             url = state.url
             title = state.title
+            isFormResult = state.isFormResult
         }
     }
 

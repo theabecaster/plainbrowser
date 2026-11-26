@@ -22,25 +22,24 @@ struct TierTests {
             harness.pool.detach(tab)
             tabs.append(tab)
         }
-        let discardCount = 10 - FixedChoices.extraLiveTabs - EngineChoices.maxSuspendedTabs
+        let discardCount = 10 - EngineChoices.maxWebViews
         try await waitUntil("discards") { tabs.filter { $0.tier == .discarded }.count == discardCount }
-        // Newest first: live, then suspended, then discarded.
+        // Newest first: suspended (kept), then discarded.
         let tiers = tabs.reversed().map(\.tier)
-        #expect(tiers == Array(repeating: .live, count: FixedChoices.extraLiveTabs)
-            + Array(repeating: .suspended, count: EngineChoices.maxSuspendedTabs)
+        #expect(tiers == Array(repeating: .suspended, count: EngineChoices.maxWebViews)
             + Array(repeating: .discarded, count: discardCount))
-        #expect(harness.pool.liveWebViewCount == 10 - discardCount)
+        #expect(harness.pool.liveWebViewCount == EngineChoices.maxWebViews)
         for tab in tabs where tab.tier == .discarded {
             #expect(harness.pool.existingWebView(for: tab) == nil)
             #expect(tab.title == "A")
         }
 
-        // On the Duo split two tabs are visible, so only two others stay live.
-        let left = tabs[9], right = tabs[8]
+        // The Duo split: two visible tabs count toward the web view limit.
+        let left = tabs[0], right = tabs[1]
         harness.pool.attach(left, to: harness.container)
         harness.pool.attach(right, to: harness.makePane(size: CGSize(width: 390, height: 780)))
-        let liveHidden = tabs.filter { $0.tier == .live && $0 !== left && $0 !== right }
-        #expect(liveHidden.count == EngineChoices.maxLiveTabs - 2)
+        #expect(left.tier == .live && right.tier == .live)
+        try await waitUntil("limit kept") { harness.pool.liveWebViewCount == EngineChoices.maxWebViews }
     }
 
     @Test func discardThenRestoreKeepsHistoryScrollAndSessionStorage() async throws {
@@ -67,6 +66,9 @@ struct TierTests {
         try await Task.sleep(for: .milliseconds(500))
 
         pool.detach(tab)
+        // A memory-warning discard skips the sessionStorage fetch; the last save (here the
+        // resign-active flush) supplies it.
+        await pool.saveAllTabs()
         let discardStart = ContinuousClock.now
         pool.handleMemoryWarning()
         try await waitUntil("discarded") { tab.tier == .discarded }
@@ -163,7 +165,7 @@ struct TierTests {
             harness.pool.detach(tab)
         }
         report("attach live tab: \(describe(samples))")
-        #expect(a.tier == .live && b.tier == .live)
+        #expect(a.tier == .suspended && b.tier == .suspended)
     }
 
     @Test func thumbnailIsTakenWhenATabLeavesTheScreen() async throws {
@@ -184,7 +186,8 @@ struct TierTests {
         #expect(tab.thumbnailRevision == 10)
         let image = try #require(await harness.pool.thumbnail(for: tab))
         report("thumbnail size \(image.size) @\(image.scale)x")
-        #expect(abs(image.size.width - FixedChoices.thumbnailWidth) < 1)
+        let pixels = image.size.width * image.scale
+        #expect(abs(pixels - FixedChoices.thumbnailWidth * EngineChoices.thumbnailPixelsPerPoint) < 2)
 
         // From disk after the memory cache is dropped.
         harness.pool.thumbnails.dropMemoryCache()
@@ -218,21 +221,107 @@ struct TierTests {
         #expect(harness.host.keepsCrashing.isEmpty)
     }
 
-    @Test func hiddenTabReloadsWhenShownAfterACrash() async throws {
+    @Test func hiddenTabWhoseProcessIsKilledIsDiscardedThenRestored() async throws {
         let harness = try await Harness()
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab()
         harness.pool.attach(tab, to: harness.container)
         try await harness.load("/a", in: tab)
+        try await harness.load("/b", in: tab)
         harness.pool.detach(tab)
         let webView = try #require(harness.pool.existingWebView(for: tab))
         try kill(webView)
-        try await Task.sleep(for: .milliseconds(500))
-        #expect(harness.server.requests.filter { $0.path == "/a" }.count == 1)
+        // A kill of a suspended process is memory pressure, not a crash: the tab is discarded.
+        try await waitUntil("discarded") { tab.tier == .discarded }
+        #expect(harness.server.requests.filter { $0.path == "/b" }.count == 1)
+        #expect(harness.host.keepsCrashing.isEmpty)
         harness.pool.attach(tab, to: harness.container)
-        try await waitUntil("reloaded on attach") {
-            harness.server.requests.filter { $0.path == "/a" }.count == 2 && !tab.isLoading
+        try await waitUntil("restored on attach") {
+            harness.server.requests.filter { $0.path == "/b" }.count == 2 && !tab.isLoading && tab.title == "B"
         }
+        #expect(tab.canGoBack)
+    }
+
+    @Test func tabsAreSavedAfterLoadingAndWhenTheAppLeaves() async throws {
+        let harness = try await Harness(tabStates: true)
+        defer { harness.cleanUp() }
+        let store = TabStateStore(directory: harness.directory.appending(path: "TabStates"))
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/a", in: tab)
+        try await waitUntil("debounced save", timeout: .seconds(5)) {
+            FileManager.default.fileExists(atPath: store.fileURL(for: tab.id).path)
+        }
+        let saved = try TabRestorationState(encoded: try #require(try await store.read(for: tab.id)))
+        #expect(saved.url == harness.server.url("/a"))
+        #expect(saved.interactionState != nil)
+
+        let other = harness.pool.makeTab()
+        try await harness.load("/b", in: other)
+        _ = try await harness.evaluate("sessionStorage.setItem('k', 'v'); 0", in: tab)
+        await harness.pool.saveAllTabs()
+        let flushed = try TabRestorationState(encoded: try #require(try await store.read(for: other.id)))
+        #expect(flushed.url == harness.server.url("/b"))
+        let withSession = try TabRestorationState(encoded: try #require(try await store.read(for: tab.id)))
+        #expect(withSession.sessionStorage != nil)
+    }
+
+    @Test func restoredFormResultAsksBeforeSendingTheFormAgain() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/form", in: tab)
+        _ = try await harness.evaluate("document.getElementById('f').submit(); 0", in: tab)
+        try await waitUntil("form result") { tab.title == "B" && !tab.isLoading }
+        let state = await tab.restorationState()
+        #expect(state.isFormResult)
+        harness.pool.close(tab)
+        let posts = { harness.server.requests.filter { $0.method == "POST" }.count }
+        #expect(posts() == 1)
+
+        let restored = harness.pool.makeTab(restoring: state)
+        harness.pool.attach(restored, to: harness.container)
+        try await waitUntil("asked") { harness.host.resubmitAsks == 1 }
+        try await waitUntil("awaiting resubmit") { restored.isAwaitingResubmit }
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(posts() == 1)
+        #expect(restored.canGoBack)
+
+        harness.host.resubmitAnswer = true
+        let again = harness.pool.makeTab(restoring: state)
+        harness.pool.attach(again, to: harness.container)
+        try await waitUntil("sent again") { posts() == 2 && again.title == "B" }
+    }
+
+    @Test func unreadableHistoryFallsBackToTheSavedURL() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let state = TabRestorationState(
+            url: harness.server.url("/b"), title: "B", interactionState: Data("junk".utf8), sessionStorage: nil
+        )
+        let tab = harness.pool.makeTab(restoring: state)
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.waitForLoad(of: harness.server.url("/b"), in: tab)
+    }
+
+    @Test func busyTabIsNeverDiscarded() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/a", in: tab)
+        _ = try await harness.evaluate("location.href = '/big.bin'; 0", in: tab)
+        try await waitUntil("download start") { !harness.host.startedDownloads.isEmpty }
+        harness.pool.detach(tab)
+        harness.pool.handleMemoryWarning()
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(tab.tier == .suspended)
+        #expect(harness.pool.existingWebView(for: tab) != nil)
+        harness.host.startedDownloads[0].cancel()
+        try await waitUntil("download end") { !harness.host.endedDownloads.isEmpty }
+        harness.pool.handleMemoryWarning()
+        try await waitUntil("discarded once idle") { tab.tier == .discarded }
     }
 
     @Test func crashLoopStopsAutomaticReloads() async throws {

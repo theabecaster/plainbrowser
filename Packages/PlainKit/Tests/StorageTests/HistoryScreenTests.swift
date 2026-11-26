@@ -59,6 +59,28 @@ import Testing
         #expect(try await database.searchHistory("monday").map(\.title) == ["Monday Headlines"])
     }
 
+    @Test func aTitleForAClearedVisitNamesNothing() async throws {
+        let database = try AppDatabase.inMemory()
+        let url = URL(string: "https://news.example/today")!
+        // Yesterday's visit, then today's, whose page is still open.
+        try await database.apply([
+            .visit(visit(url.absoluteString, "Monday Headlines", at: 0)),
+            .visit(visit(url.absoluteString, "Today", at: 100)),
+        ])
+        try await database.clearHistory(since: t0 + 50)
+        // The open page changes its title afterwards.
+        try await database.apply([.title("Secret Plans", url: url, visitedAt: t0 + 100)])
+        #expect(try await database.searchHistory("secret").isEmpty)
+        #expect(try await database.recentVisits(limit: 10).map(\.title) == ["Monday Headlines"])
+
+        // A title for a visit that is still there names that visit and the page.
+        let later = t0.addingTimeInterval(200.0004)
+        try await database.apply([.visit(HistoryVisit(url: url, title: nil, visitedAt: later))])
+        try await database.apply([.title("Evening Edition", url: url, visitedAt: later)])
+        #expect(try await database.recentVisits(limit: 10).map(\.title) == ["Evening Edition", "Monday Headlines"])
+        #expect(try await database.searchHistory("evening").count == 1)
+    }
+
     @Test func clearSinceNilRemovesEverything() async throws {
         let database = try AppDatabase.inMemory()
         try await database.apply([.visit(visit("https://a.example/", "A"))])

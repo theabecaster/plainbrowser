@@ -57,6 +57,8 @@ public final class LiveAddressBarData: AddressBarData {
     private let makeClient: () -> SuggestionClient
     /// The newest queued history change, so `flush` includes it.
     private var lastRecord: Task<Void, Never>?
+    /// The visit title changes belong to.
+    private var lastVisit: (url: URL, at: Date)?
 
     /// - Parameter makeClient: builds the engine suggestion client on first use (tests pass one
     ///   with a fake loader).
@@ -133,6 +135,7 @@ public final class LiveAddressBarData: AddressBarData {
     public func pageVisited(url: URL, title: String?) {
         guard let recorder, Self.isRecordable(url) else { return }
         let visit = HistoryVisit(url: url, title: title, visitedAt: Date())
+        lastVisit = (url, visit.visitedAt)
         let previous = lastRecord
         lastRecord = Task {
             await previous?.value
@@ -140,12 +143,16 @@ public final class LiveAddressBarData: AddressBarData {
         }
     }
 
+    /// Names the last recorded visit only, and only when it is to `url`: a title never lands on
+    /// another visit, and does nothing once that visit has been cleared.
     public func pageTitleChanged(url: URL, title: String) {
-        guard let recorder, Self.isRecordable(url), !title.isEmpty else { return }
+        guard let recorder, Self.isRecordable(url), !title.isEmpty,
+              let lastVisit, lastVisit.url == url
+        else { return }
         let previous = lastRecord
         lastRecord = Task {
             await previous?.value
-            await recorder.recordTitle(title, for: url)
+            await recorder.recordTitle(title, for: url, visitedAt: lastVisit.at)
         }
     }
 

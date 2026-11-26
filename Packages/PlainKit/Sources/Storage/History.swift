@@ -26,15 +26,20 @@ public struct HistoryVisit: Hashable, Sendable, Codable, FetchableRecord, Mutabl
 public enum HistoryChange: Hashable, Sendable {
     /// The user saw `url`.
     case visit(HistoryVisit)
-    /// The page at `url` reported its title, usually after the visit was recorded.
-    case title(String, url: URL)
+    /// The page at `url` reported its title, usually after the visit was recorded. With
+    /// `visitedAt`, it names that visit only, and nothing when that visit is gone (cleared), so
+    /// a title can never land on an older visit. Without it, it names the newest visit.
+    case title(String, url: URL, visitedAt: Date? = nil)
 
     var url: URL {
         switch self {
         case .visit(let visit): visit.url
-        case .title(_, let url): url
+        case .title(_, let url, _): url
         }
     }
+
+    /// Stored dates keep milliseconds; a visit's own date matches within this.
+    static let visitDateTolerance: TimeInterval = 0.002
 }
 
 /// One row per address: the aggregate the address bar ranks and searches.
@@ -106,17 +111,33 @@ extension AppDatabase {
                 case .visit(var visit):
                     try visit.insert(db)
                     try HistoryPlace.recordVisit(url: visit.url, title: visit.title, at: visit.visitedAt, in: db)
-                case .title(let title, let url):
+                case .title(let title, let url, let visitedAt):
                     guard !title.isEmpty else { continue }
+                    // Name the visit, so the History screen shows the title.
+                    if let visitedAt {
+                        let tolerance = HistoryChange.visitDateTolerance
+                        try db.execute(
+                            sql: """
+                            UPDATE \(Schema.historyVisit) SET title = ?
+                            WHERE url = ? AND visitedAt BETWEEN ? AND ?
+                            """,
+                            arguments: [
+                                title, url,
+                                visitedAt.addingTimeInterval(-tolerance), visitedAt.addingTimeInterval(tolerance),
+                            ]
+                        )
+                        // That visit was cleared: the title must not reach the page's other visits.
+                        guard db.changesCount > 0 else { continue }
+                    } else {
+                        try db.execute(
+                            sql: """
+                            UPDATE \(Schema.historyVisit) SET title = ?
+                            WHERE id = (SELECT id FROM \(Schema.historyVisit) WHERE url = ? ORDER BY visitedAt DESC LIMIT 1)
+                            """,
+                            arguments: [title, url]
+                        )
+                    }
                     try HistoryPlace.filter(Column("url") == url).updateAll(db, Column("title").set(to: title))
-                    // Name the newest visit too, so the History screen shows the title.
-                    try db.execute(
-                        sql: """
-                        UPDATE \(Schema.historyVisit) SET title = ?
-                        WHERE id = (SELECT id FROM \(Schema.historyVisit) WHERE url = ? ORDER BY visitedAt DESC LIMIT 1)
-                        """,
-                        arguments: [title, url]
-                    )
                 }
             }
         }

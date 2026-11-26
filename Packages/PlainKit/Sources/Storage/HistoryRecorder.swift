@@ -50,9 +50,10 @@ public actor HistoryRecorder {
         enqueue(.visit(visit))
     }
 
-    /// Queues a title change for a page already visited (or queued).
-    public func recordTitle(_ title: String, for url: URL) {
-        enqueue(.title(title, url: url))
+    /// Queues a title change for a page already visited (or queued). Pass the visit's
+    /// `visitedAt` to name that visit only (see `HistoryChange.title`).
+    public func recordTitle(_ title: String, for url: URL, visitedAt: Date? = nil) {
+        enqueue(.title(title, url: url, visitedAt: visitedAt))
     }
 
     /// Writes everything buffered and returns when all writes so far are on disk.

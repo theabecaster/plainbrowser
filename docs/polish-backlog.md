@@ -11,8 +11,6 @@ Newest feature last.
 - **Edge swipe in UI tests.** `allowsBackForwardNavigationGestures` is on and the swipe tracks
   under XCUITest, but a synthesized release never commits it, so the UI test checks Back and
   Forward through the buttons only. Check the swipe by hand on the Duo.
-- **Desktop Site.** Remembered per host for the session only, through a desktop user agent. Move it
-  to `preferredContentMode` in WebEngine's navigation delegate and persist it per site in Storage.
 - **Landscape iPhones.** The pill and the button bar take two rows (102 pt) in compact height.
   Fold them into one row there.
 - **Duo inner screen.** The plan turns the vertical bar off in inner landscape (Safari's
@@ -37,9 +35,6 @@ Newest feature last.
 
 ## Reader (lane F)
 
-- Shell wiring: the reader web view's navigation delegate must allow only `ReaderRenderer.isReaderURL`
-  loads and open every other link in the tab (the reader page itself has JavaScript off and a
-  no-script CSP).
 - Opening blocks some sites put before the article (Ars' "Biz & IT —" kicker and bold deck) read
   as two extra headings. Could normalize them into `.eyebrow`/`.dek` during extraction.
 - No controlled test where an older `ReaderSchemeHandler.show` finishes after a newer one; the

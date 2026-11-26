@@ -14,6 +14,17 @@ Xcode 27.2+, XcodeGen (`brew install xcodegen`) and `jq`. Every script runs from
 
 Package tests alone: `cd Packages/PlainKit && swift test`.
 
+WebKit tests (`WebEngineTests`, `ContentBlockingTests`) need an iOS simulator; on macOS only their
+pure parts run. Run them on one of your own `plain-*` simulators:
+
+```sh
+cd Packages/PlainKit
+xcodebuild test -scheme PlainKit-Package -destination id=<udid> -only-testing:WebEngineTests
+```
+
+They serve pages from a local HTTP server on 127.0.0.1 and print timings as `[plain-measure]`
+lines.
+
 ## Device setup
 
 The device scripts read the phone's UDID from `PLAIN_DEVICE`, or from `scripts/local.env`

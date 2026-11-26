@@ -91,9 +91,13 @@ public enum SuggestionPolicy {
         }
 
         if labels.count == 1 {
-            // "intranet/", "localhost?x", "nas:8080": a word with a port, or followed by only a
-            // slash, query or fragment, is a host. "and/or" and "AC/DC" are words.
-            return hasPort || (hasPath && (rest == "/" || rest.first == "?" || rest.first == "#"))
+            // "intranet/", "wiki/team", "localhost?x", "nas:8080": a word with a port, path, query
+            // or fragment is a host. The one exception is two short words around a slash
+            // ("and/or", "AC/DC", "24/7", "tcp/ip"): common in searches, rare as intranet paths.
+            guard hasPort || hasPath else { return false }
+            let isShortSlashPair = rest.first == "/" && host.count <= 3 && rest.count - 1 <= 3 && rest.count > 1
+                && !rest.dropFirst().contains { "/?#".contains($0) }
+            return !isShortSlashPair
         }
         if labels.allSatisfy({ $0.allSatisfy(\.isNumber) }) {
             // "3.14" is a number; "192.168." and "10.0.0" are addresses being typed.

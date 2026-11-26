@@ -129,6 +129,7 @@ struct HistoryRowView: View {
             }
             .contentShape(.rect)
         }
+        .tint(.primary)
     }
 }
 

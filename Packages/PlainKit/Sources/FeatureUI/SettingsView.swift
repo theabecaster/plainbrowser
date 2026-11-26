@@ -119,6 +119,7 @@ struct SearchEngineView: View {
                         }
                         .contentShape(.rect)
                     }
+                    .tint(.primary)
                     .accessibilityAddTraits(engine == model.settings.searchEngine ? .isSelected : [])
                 }
             }

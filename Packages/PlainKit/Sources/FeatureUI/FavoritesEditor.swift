@@ -36,6 +36,7 @@ public struct FavoritesEditor: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                     }
+                    .tint(.primary)
                     .accessibilityHint("Renames this favorite")
                 }
                 .onMove { model.move(fromOffsets: $0, toOffset: $1) }

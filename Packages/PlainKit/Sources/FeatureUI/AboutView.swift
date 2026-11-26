@@ -27,6 +27,7 @@ public struct AboutView: View {
                         Image(systemName: "arrow.up.right").foregroundStyle(.secondary)
                     }
                 }
+                .tint(.primary)
                 ForEach(info.documents) { document in
                     NavigationLink(document.title) {
                         DocumentView(document: document)

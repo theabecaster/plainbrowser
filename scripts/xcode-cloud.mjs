@@ -3,28 +3,26 @@
 // See docs/development.md, Xcode Cloud.
 //
 // Usage: node scripts/xcode-cloud.mjs <command>
-//   setup                  create or update Plain's manual-only archive workflow; disables the
-//                          product's other workflows; prints XCODE_CLOUD_WORKFLOW_ID
+//   setup [--dry-run]      check the workflow against WORKFLOW below and repair what differs;
+//                          disable the product's other workflows. Changes nothing when all is right.
 //   usage                  compute hours used this calendar month and in the last 31 days
 //   start [branch] [--dry-run]
 //                          start the workflow on the branch's pushed head (default dev); prints
 //                          the run id on the last line. Exit 3: budget guard said no. Exit 4: not set up.
-//   wait <run-id>          poll until the run finishes; exit 0 only if it succeeded; the last
-//                          line is `commit <sha>` (or `commit unknown`)
-//   fetch <run-id> <dir>   download the run's archive into dir; prints the .xcarchive path
+//   wait <run-id>          poll until the run finishes; exit 0 only if it succeeded; the last two
+//                          lines are `commit <sha|unknown>` and `build <App Store Connect build number>`
 //
 // Settings come from the environment or scripts/local.env (the environment wins): ASC_KEY_ID,
-// ASC_ISS, optional ASC_KEY, TESTFLIGHT_APP_ID, XCODE_CLOUD_WORKFLOW_ID.
-import { execFileSync } from 'node:child_process';
+// ASC_ISS, optional ASC_KEY, TESTFLIGHT_APP_ID, XCODE_CLOUD_PRODUCT_ID, XCODE_CLOUD_WORKFLOW_ID.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { call, token } from './lib/asc.mjs';
+import { call } from './lib/asc.mjs';
 
 export const FREE_TIER_CAP_HOURS = 20;   // 5 h under the included 25, for runs counted late
 export const RUN_ESTIMATE_HOURS = 0.25;  // one Release archive of Plain
 const WINDOW_DAYS = 31;                  // covers any monthly cycle, whatever day it resets
-const WORKFLOW_NAME = 'TestFlight archive (manual)';
+const WORKFLOW_NAME = 'TestFlight';
 const POLL_SECONDS = 30, WAIT_MINUTES = 90;
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -136,65 +134,73 @@ function need(...vars) {
 }
 
 async function product() {
+  if (process.env.XCODE_CLOUD_PRODUCT_ID) return { id: process.env.XCODE_CLOUD_PRODUCT_ID };
   const res = await api('GET', `/v1/ciProducts?filter${q('[app]')}=${process.env.TESTFLIGHT_APP_ID}&fields${q('[ciProducts]')}=name&limit=1`);
   return res.data[0] || null;
 }
 
 // The workflow's settings. Manual starts only: no branch, tag, pull request or schedule
-// condition, so it never spends compute hours by itself.
-function workflowAttributes() {
-  return {
-    name: WORKFLOW_NAME,
-    description: 'Manual only, started by scripts/xcode-cloud.mjs. Archives Release; scripts/testflight.sh numbers and uploads it.',
-    manualBranchStartCondition: { source: { isAllMatch: true } },
-    actions: [{
-      name: 'Archive - iOS', actionType: 'ARCHIVE', destination: 'ANY_IOS_DEVICE',
-      scheme: 'Plain', platform: 'IOS', isRequiredToPass: true,
-    }],
-    isEnabled: true, isLockedForEditing: false, clean: false, containerFilePath: 'Plain.xcodeproj',
-  };
+// condition, so it never spends compute hours by itself. One archive, uploaded by Xcode Cloud for
+// internal testing (it can't go to external groups); no tests.
+export const WORKFLOW = {
+  name: WORKFLOW_NAME,
+  description: 'Manual start only: archive Plain and upload to TestFlight (internal).',
+  branchStartCondition: null, tagStartCondition: null, pullRequestStartCondition: null, scheduledStartCondition: null,
+  manualBranchStartCondition: { source: { isAllMatch: true, patterns: [] } },
+  manualTagStartCondition: null, manualPullRequestStartCondition: null,
+  actions: [{
+    name: 'Archive - iOS', actionType: 'ARCHIVE', destination: 'ANY_IOS_DEVICE', buildDistributionAudience: 'INTERNAL_ONLY',
+    testConfiguration: null, scheme: 'Plain', platform: 'IOS', isRequiredToPass: true,
+  }],
+  isEnabled: true, isLockedForEditing: false, clean: true, containerFilePath: 'Plain.xcodeproj',
+};
+// The attributes that differ from WORKFLOW, ignoring the API's read-only extras.
+export function workflowDiff(actual) {
+  const norm = v => JSON.stringify(v ?? null);
+  return Object.keys(WORKFLOW).filter(k => norm(actual[k]) !== norm(WORKFLOW[k]));
 }
 
-async function setup() {
+async function setup(dry) {
   need('TESTFLIGHT_APP_ID');
   const prod = await product();
   if (!prod) die('no Xcode Cloud product for this app yet. The owner creates it once in Xcode (docs/development.md, Xcode Cloud), then rerun setup.', 4);
-  const repos = (await api('GET', `/v1/ciProducts/${prod.id}/primaryRepositories?limit=10&fields${q('[scmRepositories]')}=ownerName,repositoryName`)).data;
-  const repo = repos.find(r => r.attributes.repositoryName === 'plainbrowser') || repos[0];
-  if (!repo) die('the Xcode Cloud product has no repository; grant Xcode Cloud access to the GitHub repo', 4);
+  const flows = (await all(`/v1/ciProducts/${prod.id}/workflows?limit=200&fields${q('[ciWorkflows]')}=name,isEnabled`)).data;
+  let flow = flows.find(f => f.id === process.env.XCODE_CLOUD_WORKFLOW_ID) || flows.find(f => f.attributes.name === WORKFLOW_NAME);
+  const act = async (what, fn) => { say((dry ? 'would ' : '') + what); if (!dry) await fn(); };
 
   // First, before anything can fail: any other workflow (Xcode's default one starts on every
   // push) would spend hours on its own.
-  const flows = (await all(`/v1/ciProducts/${prod.id}/workflows?limit=200&fields${q('[ciWorkflows]')}=name,isEnabled`)).data;
   for (const f of flows) {
-    if (f.attributes.name === WORKFLOW_NAME || !f.attributes.isEnabled) continue;
-    await api('PATCH', `/v1/ciWorkflows/${f.id}`, { data: { type: 'ciWorkflows', id: f.id, attributes: { isEnabled: false } } });
-    say(`disabled workflow "${f.attributes.name}"`);
+    if (f.id === flow?.id || !f.attributes.isEnabled) continue;
+    await act(`disable workflow "${f.attributes.name}"`, () =>
+      api('PATCH', `/v1/ciWorkflows/${f.id}`, { data: { type: 'ciWorkflows', id: f.id, attributes: { isEnabled: false } } }));
   }
 
-  // "Latest Release" follows each new Xcode release, so the workflow never needs an edit for it.
-  const xcode = (await api('GET', `/v1/ciXcodeVersions?limit=50&fields${q('[ciXcodeVersions]')}=name,version`)).data.find(x => x.attributes.name === 'Latest Release');
-  const macos = (await api('GET', `/v1/ciMacOsVersions?limit=50&fields${q('[ciMacOsVersions]')}=name,version`)).data.find(x => x.attributes.name === 'Latest Release');
-  if (!xcode || !macos) die('Xcode Cloud lists no "Latest Release" Xcode or macOS');
-  const rel = {
-    xcodeVersion: { data: { type: 'ciXcodeVersions', id: xcode.id } },
-    macOsVersion: { data: { type: 'ciMacOsVersions', id: macos.id } },
-  };
-
-  let flow = flows.find(f => f.attributes.name === WORKFLOW_NAME);
   if (flow) {
-    const cleared = { branchStartCondition: null, tagStartCondition: null, pullRequestStartCondition: null, scheduledStartCondition: null };
-    await api('PATCH', `/v1/ciWorkflows/${flow.id}`, { data: { type: 'ciWorkflows', id: flow.id, attributes: { ...workflowAttributes(), ...cleared }, relationships: rel } });
-    say(`updated workflow "${WORKFLOW_NAME}"`);
+    const actual = (await api('GET', `/v1/ciWorkflows/${flow.id}`)).data.attributes;
+    const diff = workflowDiff(actual);
+    if (!diff.length) say(`workflow "${WORKFLOW_NAME}" is as it should be`);
+    else await act(`repair workflow "${actual.name}": ${diff.join(', ')}`, () =>
+      api('PATCH', `/v1/ciWorkflows/${flow.id}`, { data: { type: 'ciWorkflows', id: flow.id, attributes: WORKFLOW } }));
   } else {
-    flow = (await api('POST', '/v1/ciWorkflows', { data: {
-      type: 'ciWorkflows', attributes: workflowAttributes(),
-      relationships: { ...rel, product: { data: { type: 'ciProducts', id: prod.id } }, repository: { data: { type: 'scmRepositories', id: repo.id } } },
-    } })).data;
-    say(`created workflow "${WORKFLOW_NAME}"`);
+    // Only when the owner's workflow is gone. "Latest Release" follows each new Xcode release.
+    const repos = (await api('GET', `/v1/ciProducts/${prod.id}/primaryRepositories?limit=10&fields${q('[scmRepositories]')}=repositoryName`)).data;
+    const repo = repos.find(r => r.attributes.repositoryName === 'plainbrowser') || repos[0];
+    if (!repo) die('the Xcode Cloud product has no repository; grant Xcode Cloud access to the GitHub repo', 4);
+    const xcode = (await api('GET', `/v1/ciXcodeVersions?limit=50&fields${q('[ciXcodeVersions]')}=name`)).data.find(x => x.attributes.name === 'Latest Release');
+    const macos = (await api('GET', `/v1/ciMacOsVersions?limit=50&fields${q('[ciMacOsVersions]')}=name`)).data.find(x => x.attributes.name === 'Latest Release');
+    if (!xcode || !macos) die('Xcode Cloud lists no "Latest Release" Xcode or macOS');
+    const attributes = Object.fromEntries(Object.entries(WORKFLOW).filter(([, v]) => v !== null));
+    await act(`create workflow "${WORKFLOW_NAME}"`, async () => {
+      flow = (await api('POST', '/v1/ciWorkflows', { data: { type: 'ciWorkflows', attributes, relationships: {
+        product: { data: { type: 'ciProducts', id: prod.id } },
+        repository: { data: { type: 'scmRepositories', id: repo.id } },
+        xcodeVersion: { data: { type: 'ciXcodeVersions', id: xcode.id } },
+        macOsVersion: { data: { type: 'ciMacOsVersions', id: macos.id } },
+      } } })).data;
+    });
   }
-  say(`Xcode ${xcode.attributes.version}, macOS ${macos.attributes.version}, repo ${repo.attributes.ownerName}/${repo.attributes.repositoryName}`);
-  say(`add to scripts/local.env:\nXCODE_CLOUD_WORKFLOW_ID=${flow.id}`);
+  if (flow && flow.id !== process.env.XCODE_CLOUD_WORKFLOW_ID) say(`set in scripts/local.env:\nXCODE_CLOUD_WORKFLOW_ID=${flow.id}`);
 }
 
 async function usage() {
@@ -225,7 +231,7 @@ async function start(branch = 'dev', dry = false) {
   if (dry) { say(`dry run: would start "${flow.attributes.name}" on ${branch}`); return; }
 
   const run = (await api('POST', '/v1/ciBuildRuns', { data: {
-    type: 'ciBuildRuns', attributes: { clean: false },
+    type: 'ciBuildRuns',
     relationships: {
       workflow: { data: { type: 'ciWorkflows', id: wf } },
       sourceBranchOrTag: { data: { type: 'scmGitReferences', id: ref.id } },
@@ -238,63 +244,50 @@ async function start(branch = 'dev', dry = false) {
 async function wait(id) {
   if (!id) die('usage: wait <run-id>', 2);
   const deadline = Date.now() + WAIT_MINUTES * 60_000;
-  let last = '';
+  let last = '', commit = '';
   for (;;) {
     const a = (await api('GET', `/v1/ciBuildRuns/${id}?fields${q('[ciBuildRuns]')}=number,executionProgress,completionStatus,sourceCommit`)).data.attributes;
+    commit = a.sourceCommit?.commitSha || '';
     const state = a.executionProgress === 'COMPLETE' ? a.completionStatus : a.executionProgress;
     if (state !== last) { say(`${new Date().toTimeString().slice(0, 8)} run #${a.number}: ${state}`); last = state; }
     if (a.executionProgress === 'COMPLETE') {
       if (a.completionStatus !== 'SUCCEEDED') die(`run #${a.number} ended ${a.completionStatus}; see Xcode > Report navigator > Cloud`);
-      // Last line: the commit the run built, when Apple reports it, so callers can check it.
-      say(`commit ${a.sourceCommit?.commitSha || 'unknown'}`);
-      return;
+      break;
     }
     if (Date.now() > deadline) die(`run #${a.number} still ${state} after ${WAIT_MINUTES} minutes; rerun wait ${id}`);
     await new Promise(r => setTimeout(r, POLL_SECONDS * 1000));
   }
-}
-
-async function fetchArchive(id, dir) {
-  if (!id || !dir) die('usage: fetch <run-id> <dir>', 2);
-  const actions = (await api('GET', `/v1/ciBuildRuns/${id}/actions?limit=50&fields${q('[ciBuildActions]')}=actionType,completionStatus`)).data;
-  const archive = actions.find(a => a.attributes.actionType === 'ARCHIVE' && a.attributes.completionStatus === 'SUCCEEDED');
-  if (!archive) die(`run ${id} has no successful archive action`);
-  const arts = (await api('GET', `/v1/ciBuildActions/${archive.id}/artifacts?limit=50&fields${q('[ciArtifacts]')}=fileType,fileName,fileSize,downloadUrl`)).data;
-  const art = arts.find(x => x.attributes.fileType === 'ARCHIVE');
-  if (!art?.attributes.downloadUrl) die(`run ${id} has no archive artifact`);
-  fs.mkdirSync(dir, { recursive: true });
-  // The download link is presigned; if it ever asks for the API token, send it.
-  let res = await fetch(art.attributes.downloadUrl);
-  if (res.status === 401 || res.status === 403) res = await fetch(art.attributes.downloadUrl, { headers: { Authorization: `Bearer ${token()}` } });
-  if (!res.ok) die(`archive download answered ${res.status}`);
-  const zip = path.join(dir, 'archive.zip');
-  fs.writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
-  execFileSync('/usr/bin/ditto', ['-x', '-k', zip, dir]);
-  fs.rmSync(zip);
-  const found = execFileSync('/usr/bin/find', [dir, '-maxdepth', '3', '-name', '*.xcarchive', '-type', 'd']).toString().trim().split('\n').filter(Boolean);
-  if (found.length !== 1) die(`expected one .xcarchive in the artifact, found ${found.length}`);
-  say(found[0]);
+  // The App Store Connect build the run uploaded. It can show up a little after the run ends.
+  let version = '';
+  for (let i = 0; i < 20 && !version; i++) {
+    const builds = (await api('GET', `/v1/ciBuildRuns/${id}/builds?limit=1&fields${q('[builds]')}=version`)).data;
+    version = builds[0]?.attributes.version || '';
+    if (!version) await new Promise(r => setTimeout(r, POLL_SECONDS * 1000));
+  }
+  if (!version) die(`run ${id} succeeded but no App Store Connect build appeared in 10 minutes`);
+  // Last two lines, for callers: the commit the run built (when Apple reports it) and the build.
+  say(`commit ${commit || 'unknown'}`);
+  say(`build ${version}`);
 }
 
 async function main(argv) {
   const [cmd, ...rest] = argv;
-  if (!['setup', 'usage', 'start', 'wait', 'fetch'].includes(cmd)) {
-    die('usage: node scripts/xcode-cloud.mjs setup | usage | start [branch] [--dry-run] | wait <run-id> | fetch <run-id> <dir>', 2);
+  if (!['setup', 'usage', 'start', 'wait'].includes(cmd)) {
+    die('usage: node scripts/xcode-cloud.mjs setup [--dry-run] | usage | start [branch] [--dry-run] | wait <run-id>', 2);
   }
   loadEnv();
   if (!process.env.ASC_KEY_ID || !process.env.ASC_ISS) die('ASC_KEY_ID and ASC_ISS are not set (environment or scripts/local.env)');
   const dry = rest.includes('--dry-run');
   const args = rest.filter(a => a !== '--dry-run');
   switch (cmd) {
-    case 'setup': return setup();
+    case 'setup': return setup(dry);
     case 'usage': return void await usage();
     case 'start': return start(args[0], dry);
     case 'wait': return wait(args[0]);
-    case 'fetch': return fetchArchive(args[0], args[1]);
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main(process.argv.slice(2)).catch(e => {
     console.error(`xcode-cloud.mjs: ${e.message}`);
     process.exit(e instanceof Exit ? e.code : 1);

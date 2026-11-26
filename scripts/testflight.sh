@@ -12,13 +12,15 @@
 #   --dry-run      check the setup with read-only calls; builds, uploads and changes nothing
 #
 # Settings come from the environment or scripts/local.env: ASC_KEY_ID, ASC_ISS, optional ASC_KEY,
-# TESTFLIGHT_APP_ID, TESTFLIGHT_GROUP_ID, XCODE_CLOUD_WORKFLOW_ID (for --cloud and --auto).
-# See docs/development.md, TestFlight and Xcode Cloud.
+# TESTFLIGHT_APP_ID, TESTFLIGHT_GROUP_ID, and for --cloud and --auto XCODE_CLOUD_WORKFLOW_ID and
+# TESTFLIGHT_INTERNAL_GROUP_ID. See docs/development.md, TestFlight and Xcode Cloud.
 set -euo pipefail
 source "${0:A:h}/lib/common.zsh"
 # scripts/local.env fills in what the environment leaves unset; the environment wins.
 typeset -A _env
-for v in ASC_KEY_ID ASC_ISS ASC_KEY TESTFLIGHT_APP_ID TESTFLIGHT_GROUP_ID XCODE_CLOUD_WORKFLOW_ID; do [[ -n ${(P)v:-} ]] && _env[$v]=${(P)v}; done
+for v in ASC_KEY_ID ASC_ISS ASC_KEY TESTFLIGHT_APP_ID TESTFLIGHT_GROUP_ID TESTFLIGHT_INTERNAL_GROUP_ID XCODE_CLOUD_PRODUCT_ID XCODE_CLOUD_WORKFLOW_ID; do
+  [[ -n ${(P)v:-} ]] && _env[$v]=${(P)v}
+done
 [[ -f scripts/local.env ]] && source scripts/local.env
 for v in ${(k)_env}; do typeset -g $v=${_env[$v]}; done
 
@@ -41,6 +43,7 @@ done
 [[ -n $NOTES_FILE ]] || usage
 (( SKIP_UPLOAD )) && [[ -z $BUILD ]] && die "--skip-upload needs --build"
 (( SKIP_UPLOAD )) && [[ $WHERE != local ]] && die "--skip-upload builds nothing, so it takes no --cloud or --auto"
+[[ -n $BUILD && $WHERE != local ]] && die "--build is for local builds; Xcode Cloud numbers its own"
 BUILD=${BUILD:-$(date +%y%m%d%H%M)}
 [[ $BUILD =~ '^[0-9]+$' ]] || die "build number '$BUILD' must be digits"
 [[ -f $NOTES_FILE ]] || die "no notes file at $NOTES_FILE"
@@ -83,12 +86,16 @@ review_state() {
 
 APP=$(asc GET "/v1/apps/$APP_ID?fields%5Bapps%5D=name,bundleId" | json 'd.data.attributes.name+" ("+d.data.attributes.bundleId+")"') \
   || die "App Store Connect has no app $APP_ID for this key"
-GROUP=$(asc GET "/v1/betaGroups/$GROUP_ID?fields%5BbetaGroups%5D=name,isInternalGroup" \
-  | json 'd.data.attributes.name+(d.data.attributes.isInternalGroup?" internal":" external")') \
-  || die "App Store Connect has no beta group $GROUP_ID"
-INTERNAL=0; [[ $GROUP == *" internal" ]] && INTERNAL=1
+# Sets GROUP_ID, GROUP ("<name> internal|external") and INTERNAL for the group id given.
+use_group() {
+  GROUP_ID=$1
+  GROUP=$(asc GET "/v1/betaGroups/$GROUP_ID?fields%5BbetaGroups%5D=name,isInternalGroup" \
+    | json 'd.data.attributes.name+(d.data.attributes.isInternalGroup?" internal":" external")') \
+    || die "App Store Connect has no beta group $GROUP_ID"
+  INTERNAL=0; [[ $GROUP == *" internal" ]] && INTERNAL=1
+  return 0
+}
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
-say "build $BUILD of $BRANCH $(git rev-parse --short HEAD) for $APP, group ${GROUP% *}"
 
 # Why this Mac is too busy to archive, or nothing. Two xcodebuilds already compete for the CPU.
 # A 1-minute load above 1.5x the core count means every core already has more work queued than it
@@ -104,6 +111,7 @@ busy_reason() {
 # Why Xcode Cloud can't build what this checkout would ship, or nothing. It builds the pushed head.
 cloud_blocker() {
   [[ -n ${XCODE_CLOUD_WORKFLOW_ID:-} ]] || { print "Xcode Cloud is not set up (no XCODE_CLOUD_WORKFLOW_ID)"; return; }
+  [[ -n ${TESTFLIGHT_INTERNAL_GROUP_ID:-} ]] || { print "no TESTFLIGHT_INTERNAL_GROUP_ID for Xcode Cloud's internal-only builds"; return; }
   [[ $BRANCH != HEAD ]] || { print "HEAD is detached"; return; }
   [[ -z $(git status --porcelain) ]] || { print "uncommitted changes would not ship"; return; }
   [[ $(git ls-remote origin "refs/heads/$BRANCH" | cut -f1) == $(git rev-parse HEAD) ]] \
@@ -124,11 +132,15 @@ if (( ! SKIP_UPLOAD )); then
     B=$(cloud_blocker); [[ -z $B ]] || die "--cloud: $B"
   fi
 fi
-export TESTFLIGHT_APP_ID XCODE_CLOUD_WORKFLOW_ID
+export TESTFLIGHT_APP_ID XCODE_CLOUD_PRODUCT_ID XCODE_CLOUD_WORKFLOW_ID
+# Xcode Cloud uploads internal-only builds, which only internal groups can test.
+if [[ $WHERE == cloud ]]; then use_group $TESTFLIGHT_INTERNAL_GROUP_ID; else use_group $TESTFLIGHT_GROUP_ID; fi
+if [[ $WHERE == cloud ]]; then say "Xcode Cloud build of $BRANCH $(git rev-parse --short HEAD) for $APP, group ${GROUP% *}"
+else say "build $BUILD of $BRANCH $(git rev-parse --short HEAD) for $APP, group ${GROUP% *}"; fi
 
 if (( DRY )); then
   [[ -z $(git status --porcelain) ]] || say "note: uncommitted changes would ship"
-  (( SKIP_UPLOAD )) || [[ -z $(build_state) ]] || die "build $BUILD already exists; pick a higher number"
+  [[ $WHERE == cloud ]] || (( SKIP_UPLOAD )) || [[ -z $(build_state) ]] || die "build $BUILD already exists; pick a higher number"
   if [[ $WHERE == cloud ]] && ! node scripts/xcode-cloud.mjs start "$BRANCH" --dry-run; then
     (( CLOUD_FALLBACK )) || die "Xcode Cloud can't start"
     say "Xcode Cloud can't start; would archive here"
@@ -137,12 +149,40 @@ if (( DRY )); then
   exit 0
 fi
 
-if (( ! SKIP_UPLOAD )); then
+OUT=build/testflight
+if [[ $WHERE == cloud ]]; then
+  rm -rf $OUT; mkdir -p $OUT
+  if node scripts/xcode-cloud.mjs start "$BRANCH" > $OUT/cloud.log 2>&1; then
+    cat $OUT/cloud.log; RUN=$(tail -1 $OUT/cloud.log)
+  else
+    cat $OUT/cloud.log >&2
+    (( CLOUD_FALLBACK )) || die "Xcode Cloud did not start"
+    WHERE=local; use_group $TESTFLIGHT_GROUP_ID
+    say "Xcode Cloud did not start: build $BUILD here, group ${GROUP% *}"
+  fi
+fi
+if [[ $WHERE == cloud ]]; then
+  # Xcode Cloud archives and uploads; the steps below take it from there.
+  node scripts/xcode-cloud.mjs wait "$RUN" | tee $OUT/cloud-wait.log || die "no cloud build; see run $RUN"
+  BUILD=$(tail -1 $OUT/cloud-wait.log); BUILD=${BUILD#build }
+  BUILT=$(tail -2 $OUT/cloud-wait.log | head -1); BUILT=${BUILT#commit }
+  [[ $BUILD =~ '^[0-9]+$' ]] || die "run $RUN gave no build number"
+  # Ship only what the notes and the tf/ tag describe: the run must have built this HEAD.
+  if [[ $BUILT == unknown ]]; then
+    [[ $(git ls-remote origin "refs/heads/$BRANCH" | cut -f1) == $(git rev-parse HEAD) ]] \
+      || die "origin/$BRANCH moved during run $RUN, so build $BUILD may not be HEAD; check it before testers get it"
+  else
+    [[ $BUILT == $(git rev-parse HEAD) ]] || die "run $RUN built $BUILT, not HEAD; check build $BUILD before testers get it"
+  fi
+  say "Xcode Cloud uploaded build $BUILD"
+  git tag "tf/$BUILD" HEAD && git push -q origin "tf/$BUILD" || say "note: could not tag tf/$BUILD"
+  rm -rf $OUT
+elif (( ! SKIP_UPLOAD )); then
   [[ -z $(build_state) ]] || die "build $BUILD already exists; pick a higher number"
   TEAM=$(sed -n 's/^DEVELOPMENT_TEAM *= *//p' Config/Signing.local.xcconfig 2>/dev/null | head -1)
   [[ -n $TEAM ]] || die "no DEVELOPMENT_TEAM in Config/Signing.local.xcconfig"
   AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISS")
-  OUT=build/testflight; rm -rf $OUT; mkdir -p $OUT
+  rm -rf $OUT; mkdir -p $OUT
   cat > $OUT/ExportOptions.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -154,47 +194,17 @@ if (( ! SKIP_UPLOAD )); then
   <key>manageAppVersionAndBuildNumber</key><false/>
 </dict></plist>
 EOF
-  ARCHIVE=$OUT/Plain.xcarchive
-  if [[ $WHERE == cloud ]]; then
-    if node scripts/xcode-cloud.mjs start "$BRANCH" > $OUT/cloud.log 2>&1; then
-      cat $OUT/cloud.log; RUN=$(tail -1 $OUT/cloud.log)
-    else
-      cat $OUT/cloud.log >&2
-      (( CLOUD_FALLBACK )) || die "Xcode Cloud did not start"
-      WHERE=local; say "Xcode Cloud did not start: archiving here"
-    fi
-  fi
-  if [[ $WHERE == cloud ]]; then
-    node scripts/xcode-cloud.mjs wait "$RUN" | tee $OUT/cloud-wait.log || die "no cloud archive; see run $RUN"
-    # Ship only what the notes and the tf/ tag describe: the run must have built this HEAD.
-    BUILT=$(tail -1 $OUT/cloud-wait.log); BUILT=${BUILT#commit }
-    if [[ $BUILT == unknown ]]; then
-      [[ $(git ls-remote origin "refs/heads/$BRANCH" | cut -f1) == $(git rev-parse HEAD) ]] \
-        || die "origin/$BRANCH moved during run $RUN, so it may not have built HEAD; rerun"
-    else
-      [[ $BUILT == $(git rev-parse HEAD) ]] || die "run $RUN built $BUILT, not HEAD; rerun"
-    fi
-    ARCHIVE=$(node scripts/xcode-cloud.mjs fetch "$RUN" $OUT/cloud | tail -1) || die "could not download the archive of run $RUN"
-    # Xcode Cloud builds with its own number; the upload gets this script's, so the order holds.
-    # The export below re-signs the app, so changing its Info.plist here is safe.
-    /usr/libexec/PlistBuddy -c "Set :ApplicationProperties:CFBundleVersion $BUILD" "$ARCHIVE/Info.plist"
-    for P in "$ARCHIVE"/Products/Applications/*.app/Info.plist(N) "$ARCHIVE"/Products/Applications/*.app/PlugIns/*.appex/Info.plist(N); do
-      /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$P"
-    done
-    say "cloud archive of run $RUN is build $BUILD"
-  else
-    xcodegen generate --quiet
-    say "archiving (log: $OUT/archive.log)"
-    xcodebuild -project Plain.xcodeproj -scheme Plain -configuration Release -destination 'generic/platform=iOS' \
-        -archivePath $ARCHIVE -derivedDataPath build/device "${AUTH[@]}" \
-        CURRENT_PROJECT_VERSION=$BUILD archive > $OUT/archive.log 2>&1 \
-      || { grep -E 'error:' $OUT/archive.log | sort -u | head -20; die "archive failed"; }
-  fi
+  xcodegen generate --quiet
+  say "archiving (log: $OUT/archive.log)"
+  xcodebuild -project Plain.xcodeproj -scheme Plain -configuration Release -destination 'generic/platform=iOS' \
+      -archivePath $OUT/Plain.xcarchive -derivedDataPath build/device "${AUTH[@]}" \
+      CURRENT_PROJECT_VERSION=$BUILD archive > $OUT/archive.log 2>&1 \
+    || { grep -E 'error:' $OUT/archive.log | sort -u | head -20; die "archive failed"; }
   say "uploading (log: $OUT/upload.log)"
-  xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist $OUT/ExportOptions.plist \
+  xcodebuild -exportArchive -archivePath $OUT/Plain.xcarchive -exportOptionsPlist $OUT/ExportOptions.plist \
       -exportPath $OUT/export "${AUTH[@]}" > $OUT/upload.log 2>&1 \
     || { grep -iE 'error' $OUT/upload.log | sort -u | head -20; die "upload failed"; }
-  rm -rf $OUT/Plain.xcarchive $OUT/cloud $OUT/export
+  rm -rf $OUT/Plain.xcarchive $OUT/export
   # The tag marks what each build contains, so the next build's notes start from it.
   git tag "tf/$BUILD" HEAD && git push -q origin "tf/$BUILD" || say "note: could not tag tf/$BUILD"
 fi

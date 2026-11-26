@@ -8,9 +8,8 @@ cd "${CI_PRIMARY_REPOSITORY_PATH:-${0:A:h:h}}"
 [[ -n ${CI_TEAM_ID:-} ]] || { print -u2 "ci_post_clone.sh: CI_TEAM_ID is not set"; exit 1; }
 print -r -- "DEVELOPMENT_TEAM = $CI_TEAM_ID" > Config/Signing.local.xcconfig
 
-# Same scheme and time zone as scripts/testflight.sh, so cloud and local numbers stay in order.
-# Xcode Cloud replaces it with its own counter only when it distributes a build itself, which
-# Plain's workflow never does: scripts/testflight.sh numbers and uploads the cloud archive.
+# Same scheme and time zone as scripts/testflight.sh. The archive keeps it, but Xcode Cloud stamps
+# the build it uploads to TestFlight with its own counter (docs/development.md, Xcode Cloud).
 BUILD=$(TZ=America/New_York date +%y%m%d%H%M)
 sed -i '' "s/^\( *CURRENT_PROJECT_VERSION:\).*/\1 \"$BUILD\"/" project.yml
 grep -q "CURRENT_PROJECT_VERSION: \"$BUILD\"" project.yml || { print -u2 "ci_post_clone.sh: could not set the build number"; exit 1; }

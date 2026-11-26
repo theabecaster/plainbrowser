@@ -343,10 +343,13 @@ Each entry: what was chosen, and why. Newest last.
 - **Why Xcode Cloud:** it is the only hosted macOS builder that costs nothing on top of the
   membership. It signs with the team's cloud-managed certificates, so it needs no secrets in the
   repo.
-- **Cloud archives, this Mac uploads.** Xcode Cloud stamps every build it distributes with its own
-  counter (1, 2, 3...), which would sort below our `yyMMddHHmm` builds. So the workflow does not
-  distribute. The script downloads the archive, sets the same build number a local build gets,
-  and uploads it the usual way. Export and upload are light work for a busy Mac.
+- **Xcode Cloud uploads, internal only.** The cloud build goes straight to TestFlight, so a busy
+  Mac does no signing, export or upload. Internal-only builds skip Beta App Review but can't reach
+  external groups; those still get local builds.
+- **Cost: build numbers.** Xcode Cloud stamps every build it uploads with its own counter
+  (1, 2, 3...), which sorts below our `yyMMddHHmm` local builds. App Store Connect accepts it for
+  iOS. Setting the next cloud build number above the local ones (App Store Connect only, no API)
+  keeps TestFlight in order.
 - **Manual start only, guarded.** The workflow has no triggers, so it never spends hours on its
   own. `setup` disables every other workflow, and `start` refuses past 20 hours in the last 31
   days. Without a subscription Apple can't bill: at 25 hours, builds stop until the next month.

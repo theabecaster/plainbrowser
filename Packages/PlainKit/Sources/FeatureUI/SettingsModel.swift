@@ -214,7 +214,7 @@ enum Wording {
     static let favoritesFooter = "Tap a favorite to rename it."
     static let favoritesFailed = "Plain couldn't change your favorites. Try again."
 
-    static let tabLayoutFooter = "Side Tabs moves your tabs to a sidebar when the window is wide."
+    static let tabLayoutFooter = "Regular keeps tabs in the bottom bar; Side Tabs adds a sidebar when the window is wide."
     static let searchEngineFooter = "Searches from the address bar use this engine."
     static let customEngineFooter = "Paste a search results address with %s where the search words go."
     static let clearFooter = "Removes your history, cookies and website data from this device."

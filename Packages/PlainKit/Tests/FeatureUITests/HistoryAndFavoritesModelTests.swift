@@ -278,6 +278,14 @@ actor GatedHistory: HistoryStoring {
         #expect(titles(model).last == "example.com/start")
     }
 
+    @Test func aLoadWaitsForWritesStillRunning() async throws {
+        let model = FavoritesModel(store: SlowFavorites(database: database))
+        await model.load()
+        model.rename(model.favorites[0], to: "Alpha")
+        await model.load()
+        #expect(titles(model).first == "Alpha")
+    }
+
     @Test func failedWriteReloadsFromTheStore() async throws {
         let model = FavoritesModel(store: FailingFavorites(database: database))
         await model.load()
@@ -287,6 +295,18 @@ actor GatedHistory: HistoryStoring {
         #expect(model.errorMessage != nil)
         #expect(titles(model) == ["A", "B", "C", "D", "E"])
     }
+}
+
+/// Favorites in a real database whose writes take a while.
+struct SlowFavorites: FavoritesStoring {
+    let database: AppDatabase
+    func favorites() async throws -> [Favorite] { try await database.favorites() }
+    func renameFavorite(id: Int64, title: String) async throws {
+        try await Task.sleep(for: .milliseconds(50))
+        try await database.renameFavorite(id: id, title: title)
+    }
+    func removeFavorite(id: Int64) async throws { try await database.removeFavorite(id: id) }
+    func moveFavorite(id: Int64, to index: Int) async throws { try await database.moveFavorite(id: id, to: index) }
 }
 
 struct FailingFavorites: FavoritesStoring {

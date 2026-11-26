@@ -76,6 +76,40 @@ struct EdgeCaseTests {
         #expect(second.lastPathComponent == "report 2.bin")
     }
 
+    @Test func concurrentDownloadsOfOneNameGetDifferentFiles() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let tabs = [harness.pool.makeTab(), harness.pool.makeTab()]
+        // Two panes, as on the Duo split.
+        harness.pool.attach(tabs[0], to: harness.container)
+        harness.pool.attach(tabs[1], to: harness.makePane(size: CGSize(width: 390, height: 780)))
+        for tab in tabs { try await harness.load("/a", in: tab) }
+        for tab in tabs { _ = try await harness.evaluate("location.href = '/file.bin'; 0", in: tab) }
+        try await waitUntil("both downloads") { harness.host.endedDownloads.count == 2 }
+        let names = harness.host.endedDownloads.compactMap { download -> String? in
+            if case .finished(let file) = download.state { return file.lastPathComponent }
+            return nil
+        }
+        #expect(Set(names) == ["report.bin", "report 2.bin"])
+    }
+
+    @Test func cancelledDownloadEnds() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/a", in: tab)
+        _ = try await harness.evaluate("location.href = '/big.bin'; 0", in: tab)
+        try await waitUntil("download start") { !harness.host.startedDownloads.isEmpty }
+        harness.host.startedDownloads[0].cancel()
+        try await waitUntil("download end") { !harness.host.endedDownloads.isEmpty }
+        #expect(harness.host.endedDownloads[0].state == .cancelled)
+        let leftovers = (try? FileManager.default.contentsOfDirectory(
+            atPath: harness.directory.appending(path: "Downloads").path
+        )) ?? []
+        #expect(leftovers.isEmpty)
+    }
+
     @Test func typeWebKitCannotShowBecomesADownload() async throws {
         let harness = try await Harness()
         defer { harness.cleanUp() }

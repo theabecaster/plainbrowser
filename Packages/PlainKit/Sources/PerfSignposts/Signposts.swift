@@ -97,6 +97,11 @@ public enum Signposts {
     public static let tabDiscard: StaticString = "tab.discard"
     /// Interval of a tab thumbnail snapshot, until WebKit returns the image.
     public static let tabSnapshot: StaticString = "tab.snapshot"
+    /// Interval from the engine asking the shell (dialog, sign-in, certificate warning, permission,
+    /// external app, universal link) to the answer. The kind is the interval's message.
+    public static let enginePrompt: StaticString = "engine.prompt"
+    /// Event: a download started or ended; the message says which and how.
+    public static let download: StaticString = "download"
     /// Event: a tab's web content process terminated.
     public static let tabCrash: StaticString = "tab.crash"
 

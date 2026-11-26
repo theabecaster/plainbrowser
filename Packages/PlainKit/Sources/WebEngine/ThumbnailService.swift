@@ -12,8 +12,11 @@ import WebKit
 public final class ThumbnailService {
     public let directory: URL
     private let cache = NSCache<NSUUID, UIImage>()
-    /// Bumped on every capture and removal, so a slow write can't resurrect a removed thumbnail.
+    /// Bumped on every capture and removal, so a stale capture is never cached or written.
     private var generations: [UUID: Int] = [:]
+    /// File writes and deletes run one after another in the order issued, so an older write can
+    /// never land after a newer one or after the removal.
+    private var fileWork: Task<Void, Never>?
 
     /// Test hook: called on the main thread after a capture's file is written, with the time the
     /// main thread waited for the snapshot and the off-main encode-and-write time.
@@ -47,12 +50,10 @@ public final class ThumbnailService {
             tab?.thumbnailRevision += 1
             let url = self.fileURL(for: id)
             let directory = self.directory
-            Task {
+            self.enqueue {
+                // Skip a capture a newer one or a removal already superseded.
+                guard self.generations[id] == generation else { return }
                 let encodeAndWrite = await Self.write(image, to: url, directory: directory)
-                guard self.generations[id] == generation else {
-                    await Self.delete(url)
-                    return
-                }
                 self.onStored?(id, snapshotTime, encodeAndWrite)
             }
         }
@@ -71,7 +72,15 @@ public final class ThumbnailService {
         generations[id, default: 0] += 1
         cache.removeObject(forKey: id as NSUUID)
         let url = fileURL(for: id)
-        Task { await Self.delete(url) }
+        enqueue { await Self.delete(url) }
+    }
+
+    private func enqueue(_ work: @escaping () async -> Void) {
+        let previous = fileWork
+        fileWork = Task {
+            await previous?.value
+            await work()
+        }
     }
 
     func dropMemoryCache() {

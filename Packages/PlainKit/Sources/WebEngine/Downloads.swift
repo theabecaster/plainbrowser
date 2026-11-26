@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import Foundation
 import Observation
+import PerfSignposts
 import WebKit
 
 /// One download, for the shell's downloads list.
@@ -26,7 +27,7 @@ public final class Download: Identifiable {
 
     @ObservationIgnored weak var webKitDownload: WKDownload?
     @ObservationIgnored var destination: URL?
-    @ObservationIgnored var isCancelling = false
+    @ObservationIgnored weak var coordinator: DownloadCoordinator?
 
     init(sourceURL: URL?, tabID: UUID?, progress: Progress) {
         self.sourceURL = sourceURL
@@ -37,8 +38,7 @@ public final class Download: Identifiable {
 
     public func cancel() {
         guard state == .inProgress, let download = webKitDownload else { return }
-        isCancelling = true
-        download.cancel(nil)
+        coordinator?.cancel(download)
     }
 }
 
@@ -53,6 +53,9 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     weak var pool: WebViewPool?
     private var active: [ObjectIdentifier: Download] = [:]
     private var frames: [ObjectIdentifier: WKFrameInfo] = [:]
+    /// Destinations handed to WebKit but not written yet, so two downloads of the same name in
+    /// flight get different files.
+    private var reserved: Set<URL> = []
 
     init(directory: URL) {
         self.directory = directory
@@ -62,9 +65,11 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
         download.delegate = self
         let item = Download(sourceURL: download.originalRequest?.url, tabID: tab?.id, progress: download.progress)
         item.webKitDownload = download
+        item.coordinator = self
         active[ObjectIdentifier(download)] = item
         frames[ObjectIdentifier(download)] = download.originatingFrame
         downloads.append(item)
+        Signposts.signposter.emitEvent(Signposts.download, "started")
         pool?.host?.downloadDidStart(item)
     }
 
@@ -76,7 +81,7 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
         guard let item = active[ObjectIdentifier(download)] else { return nil }
         let name = NavigationRules.sanitizedFilename(suggestedFilename)
         item.filename = name
-        guard let destination = try? await Self.uniqueDestination(in: directory, filename: name) else { return nil }
+        guard let destination = await reserveDestination(for: name) else { return nil }
         item.destination = destination
         return destination
     }
@@ -93,12 +98,19 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     public func download(_ download: WKDownload, didFailWithError error: any Error, resumeData: Data?) {
         let frame = frames[ObjectIdentifier(download)]
         guard let item = take(download) else { return }
-        if item.isCancelling {
-            end(item, .cancelled)
-        } else if let url = item.sourceURL, url.scheme == "blob", let frame, let webView = frame.webView {
+        if let url = item.sourceURL, url.scheme == "blob", let frame, let webView = frame.webView {
             readBlob(url, from: webView, frame: frame, into: item)
         } else {
             end(item, .failed(error.localizedDescription))
+        }
+    }
+
+    /// WebKit sends no failure callback after a cancel, so the cancel's completion ends it.
+    func cancel(_ download: WKDownload) {
+        download.cancel { [weak self] _ in
+            guard let self, let item = self.take(download) else { return }
+            if let destination = item.destination { try? FileManager.default.removeItem(at: destination) }
+            self.end(item, .cancelled)
         }
     }
 
@@ -114,8 +126,11 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
                 guard let result = value as? [String: Any], let base64 = result["data"] as? String else {
                     throw URLError(.cannotDecodeContentData)
                 }
-                let destination = try await Self.write(base64: base64, in: directory, filename: item.filename)
+                guard let destination = await reserveDestination(for: item.filename) else {
+                    throw URLError(.cannotCreateFile)
+                }
                 item.destination = destination
+                try await Self.write(base64: base64, to: destination)
                 item.progress.totalUnitCount = 1
                 item.progress.completedUnitCount = 1
                 end(item, .finished(destination))
@@ -133,20 +148,48 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     }
 
     private func end(_ item: Download, _ state: Download.State) {
+        if let destination = item.destination { reserved.remove(destination) }
         item.state = state
+        Signposts.signposter.emitEvent(Signposts.download, "\(Self.label(state), privacy: .public)")
         pool?.host?.downloadDidEnd(item)
+    }
+
+    /// A free file name, reserved until the download ends. The disk check runs off the main
+    /// thread; the reservation is checked again after it, so concurrent picks never collide.
+    private func reserveDestination(for name: String) async -> URL? {
+        while true {
+            let taken = reserved
+            guard let candidate = try? await Self.uniqueDestination(in: directory, filename: name, excluding: taken) else {
+                return nil
+            }
+            if !reserved.contains(candidate) {
+                reserved.insert(candidate)
+                return candidate
+            }
+        }
+    }
+
+    private static func label(_ state: Download.State) -> String {
+        switch state {
+        case .inProgress: "inProgress"
+        case .finished: "finished"
+        case .failed: "failed"
+        case .cancelled: "cancelled"
+        }
     }
 
     /// `name.ext`, or `name 2.ext`, `name 3.ext`... when taken. Disk work, so off the main thread.
     @concurrent
-    nonisolated static func uniqueDestination(in directory: URL, filename: String) async throws -> URL {
+    nonisolated static func uniqueDestination(
+        in directory: URL, filename: String, excluding taken: Set<URL> = []
+    ) async throws -> URL {
         let files = FileManager.default
         try files.createDirectory(at: directory, withIntermediateDirectories: true)
         let base = (filename as NSString).deletingPathExtension
         let ext = (filename as NSString).pathExtension
         var candidate = directory.appending(path: filename)
         var number = 2
-        while files.fileExists(atPath: candidate.path) {
+        while files.fileExists(atPath: candidate.path) || taken.contains(candidate) {
             let name = ext.isEmpty ? "\(base) \(number)" : "\(base) \(number).\(ext)"
             candidate = directory.appending(path: name)
             number += 1
@@ -155,11 +198,9 @@ public final class DownloadCoordinator: NSObject, WKDownloadDelegate {
     }
 
     @concurrent
-    nonisolated static func write(base64: String, in directory: URL, filename: String) async throws -> URL {
+    nonisolated static func write(base64: String, to destination: URL) async throws {
         guard let data = Data(base64Encoded: base64) else { throw URLError(.cannotDecodeContentData) }
-        let destination = try await uniqueDestination(in: directory, filename: filename)
         try data.write(to: destination, options: .withoutOverwriting)
-        return destination
     }
 }
 #endif

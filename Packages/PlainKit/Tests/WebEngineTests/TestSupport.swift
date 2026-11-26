@@ -205,6 +205,9 @@ enum Pages {
         case "/file.bin":
             return .data(Data(repeating: 7, count: 4096), type: "application/octet-stream",
                          headers: ["Content-Disposition": "attachment; filename=\"report.bin\""])
+        case "/big.bin":
+            return .data(bigFile, type: "application/octet-stream",
+                         headers: ["Content-Disposition": "attachment; filename=\"big.bin\""])
         case "/raw":
             return .data(Data(repeating: 1, count: 1024), type: "application/x-plain-unknown")
         case "/doc.pdf":
@@ -246,6 +249,9 @@ enum Pages {
         <title>\(title)</title></head><body>\(body)</body></html>
         """
     }
+
+    /// Large enough that a cancel lands before it finishes.
+    static let bigFile = Data(repeating: 3, count: 256 * 1024 * 1024)
 
     /// A one-page PDF.
     static let minimalPDF: Data = {

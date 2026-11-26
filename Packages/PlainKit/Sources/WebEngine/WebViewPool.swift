@@ -46,6 +46,11 @@ public final class WebViewPool {
     )
     private var crashLimiter = RateLimiter(limit: EngineChoices.crashReloadLimit, window: EngineChoices.crashWindow)
     private var memoryWarningObserver: (any NSObjectProtocol)?
+    /// State-file writes and deletes run one after another, in the order they were issued, so an
+    /// older write never lands after a newer one or after the tab was closed.
+    private var stateWrites: Task<Void, Never>?
+    /// Permission prompts in flight, so two requests for the same site and permissions ask once.
+    private var pendingPermissionAsks: [String: Task<Bool, Never>] = [:]
 
     /// - Parameters:
     ///   - dataStore: one store for every tab, so cookies and logins are shared. A private-tabs
@@ -82,6 +87,10 @@ public final class WebViewPool {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.handleMemoryWarning() }
         }
+    }
+
+    isolated deinit {
+        if let memoryWarningObserver { NotificationCenter.default.removeObserver(memoryWarningObserver) }
     }
 
     // MARK: - Configuration
@@ -231,7 +240,8 @@ public final class WebViewPool {
         externalLimiter.reset(tab.id)
         crashLimiter.reset(tab.id)
         if let tabStates {
-            Task { await tabStates.delete([tab.id]) }
+            let id = tab.id
+            enqueueStateWork { await tabStates.delete([id]) }
         }
         enforceTiers()
     }
@@ -424,11 +434,13 @@ public final class WebViewPool {
         let finish: (Data?) -> Void = { [weak self, weak slot, weak tab] session in
             defer { signposter.endInterval(Signposts.tabDiscard, interval) }
             guard let self, let slot, let tab, slot.isDiscarding, self.slots[tab.id] === slot else { return }
-            // Read after the sessionStorage round trip to the WebContent process: by then its
-            // latest scroll position has reached the history item.
-            let interaction = webView.interactionState as? Data
-            let state = TabRestorationState(
-                url: tab.url, title: tab.title, interactionState: interaction, sessionStorage: session
+            // A restore still in flight has not applied its state yet: keep that state, not the
+            // empty web view's.
+            let state = slot.pendingRestore ?? TabRestorationState(
+                url: tab.url, title: tab.title,
+                // Read after the sessionStorage round trip to the WebContent process: by then its
+                // latest scroll position has reached the history item.
+                interactionState: webView.interactionState as? Data, sessionStorage: session
             )
             self.slots[tab.id] = nil
             self.tearDown(slot)
@@ -437,16 +449,25 @@ public final class WebViewPool {
             tab.set(\.isLoading, false)
             tab.setProgress(0)
             if let tabStates = self.tabStates {
-                Task {
+                let id = tab.id
+                self.enqueueStateWork {
                     guard let data = try? await Self.encode(state) else { return }
-                    try? await tabStates.write(data, for: tab.id)
+                    try? await tabStates.write(data, for: id)
                 }
             }
         }
-        if webView.url == nil {
+        if slot.pendingRestore != nil || webView.url == nil {
             finish(nil)
         } else {
             webView.fetchData(of: .sessionStorage) { data, _ in finish(data) }
+        }
+    }
+
+    private func enqueueStateWork(_ work: @escaping @Sendable () async -> Void) {
+        let previous = stateWrites
+        stateWrites = Task {
+            await previous?.value
+            await work()
         }
     }
 
@@ -500,7 +521,7 @@ public final class WebViewPool {
 
     func openExternally(_ url: URL, from tab: Tab) {
         guard isAttached(tab), let host, externalLimiter.allow(tab.id) else { return }
-        Task { _ = await host.tab(tab, openExternally: url) }
+        Task { _ = await Signposts.prompt("external") { await host.tab(tab, openExternally: url) } }
     }
 
     /// The content mode for a navigation starting now: the site's remembered choice, otherwise
@@ -552,10 +573,21 @@ public final class WebViewPool {
         }
         guard !unknown.isEmpty else { return true }
         guard isAttached(tab), let host else { return false }
-        let allowed = await host.tab(tab, allow: unknown, forSite: site)
-        for permission in unknown {
-            await permissionStore.setAllowed(allowed, permission, forSite: site)
+        let key = unknown.map(\.rawValue).joined(separator: ",") + " " + site
+        if let pending = pendingPermissionAsks[key] { return await pending.value }
+        let store = permissionStore
+        let ask = Task {
+            let allowed = await Signposts.prompt("permission") {
+                await host.tab(tab, allow: unknown, forSite: site)
+            }
+            for permission in unknown {
+                await store.setAllowed(allowed, permission, forSite: site)
+            }
+            return allowed
         }
+        pendingPermissionAsks[key] = ask
+        let allowed = await ask.value
+        pendingPermissionAsks[key] = nil
         return allowed
     }
 
@@ -567,7 +599,10 @@ public final class WebViewPool {
         )
         guard let host else { return }
         Task {
-            guard await host.tab(tab, shouldProceedPast: certificateError), let trust, tab.pool === self else {
+            let proceed = await Signposts.prompt("certificate") {
+                await host.tab(tab, shouldProceedPast: certificateError)
+            }
+            guard proceed, let trust, tab.pool === self else {
                 return
             }
             self.trustExceptions.allow(trust, forHost: hostName)

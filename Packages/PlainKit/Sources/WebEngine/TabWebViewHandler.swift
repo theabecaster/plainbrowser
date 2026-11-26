@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import Foundation
+import PerfSignposts
 import WebKit
 
 /// The navigation and UI delegate of one tab's web view. It routes each WebKit callback to the
@@ -34,7 +35,13 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         // No target frame: a new window. `createWebViewWith` makes the child tab, whose own
         // handler decides its navigation; this tab's mode and rules must not change.
         guard let targetFrame = action.targetFrame else {
-            decisionHandler(NavigationRules.schemeKind(of: url) == .external ? .cancel : .allow, preferences)
+            if NavigationRules.schemeKind(of: url) == .external {
+                // `target=_blank` to another app: WebKit only gets here from a user gesture.
+                decisionHandler(.cancel, preferences)
+                pool.openExternally(url, from: tab)
+            } else {
+                decisionHandler(.allow, preferences)
+            }
             return
         }
         let isMainFrame = targetFrame.isMainFrame
@@ -72,7 +79,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
            let host = pool.host
         {
             Task {
-                let opened = await host.tab(tab, openUniversalLink: url)
+                let opened = await Signposts.prompt("universalLink") { await host.tab(tab, openUniversalLink: url) }
                 decisionHandler(opened ? .cancel : .allow, preferences)
             }
             return
@@ -203,7 +210,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
                 proposedUser: challenge.proposedCredential?.user
             )
             Task {
-                if let credential = await host.tab(tab, credentialFor: request) {
+                if let credential = await Signposts.prompt("auth", { await host.tab(tab, credentialFor: request) }) {
                     completionHandler(.useCredential, credential)
                 } else {
                     // Continue without credentials, so the server's 401 page shows.
@@ -237,7 +244,8 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo
     ) async {
         guard let tab, let pool, pool.mayShowDialog(for: tab), let host = pool.host else { return }
-        await host.tab(tab, alert: message, from: Self.site(of: frame.securityOrigin))
+        let site = Self.site(of: frame.securityOrigin)
+        await Signposts.prompt("alert") { await host.tab(tab, alert: message, from: site) }
     }
 
     func webView(
@@ -245,7 +253,8 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo
     ) async -> Bool {
         guard let tab, let pool, pool.mayShowDialog(for: tab), let host = pool.host else { return false }
-        return await host.tab(tab, confirm: message, from: Self.site(of: frame.securityOrigin))
+        let site = Self.site(of: frame.securityOrigin)
+        return await Signposts.prompt("confirm") { await host.tab(tab, confirm: message, from: site) }
     }
 
     func webView(
@@ -253,7 +262,10 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo
     ) async -> String? {
         guard let tab, let pool, pool.mayShowDialog(for: tab), let host = pool.host else { return nil }
-        return await host.tab(tab, prompt: prompt, defaultText: defaultText, from: Self.site(of: frame.securityOrigin))
+        let site = Self.site(of: frame.securityOrigin)
+        return await Signposts.prompt("prompt") {
+            await host.tab(tab, prompt: prompt, defaultText: defaultText, from: site)
+        }
     }
 
     // MARK: - Permissions

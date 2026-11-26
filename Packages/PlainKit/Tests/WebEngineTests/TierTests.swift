@@ -125,6 +125,25 @@ struct TierTests {
         #expect(another.canGoForward)
     }
 
+    @Test func discardDuringARestoreKeepsTheSavedState() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let source = harness.pool.makeTab()
+        harness.pool.attach(source, to: harness.container)
+        try await harness.load("/a", in: source)
+        try await harness.load("/b", in: source)
+        _ = try await harness.evaluate("sessionStorage.setItem('k', 'v'); 0", in: source)
+        let state = await source.restorationState()
+        #expect(state.sessionStorage != nil)
+        harness.pool.close(source)
+
+        let tab = harness.pool.makeTab(restoring: state)
+        tab.reload()  // starts the restore in a hidden web view; sessionStorage restores first
+        harness.pool.handleMemoryWarning()
+        try await waitUntil("discarded again") { tab.tier == .discarded }
+        #expect(tab.restoration == state)
+    }
+
     @Test func attachingALiveTabIsFast() async throws {
         let harness = try await Harness()
         defer { harness.cleanUp() }

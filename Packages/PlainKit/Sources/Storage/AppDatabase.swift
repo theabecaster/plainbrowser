@@ -14,6 +14,8 @@ public final class AppDatabase: Sendable {
     /// The one writer of history: page loads record through it, and history deletes go through
     /// it so they are ordered with visits still buffered.
     public let historyRecorder: HistoryRecorder
+    /// The one writer of tabs: `TabStore` sends its changes here (`TabPersistence`).
+    public let tabSession: TabSessionWriter
     /// Compaction and daily maintenance (`Maintenance.swift`), one task at a time.
     let maintenance: DatabaseMaintenance
 
@@ -51,6 +53,7 @@ public final class AppDatabase: Sendable {
         self.writer = writer
         self.tabStates = tabStates
         historyRecorder = HistoryRecorder(writer: writer)
+        tabSession = TabSessionWriter(writer: writer, tabStates: tabStates)
         maintenance = DatabaseMaintenance(writer: writer, compactionDelay: FixedChoices.compactionDelay)
         try Self.migrator.migrate(writer)
     }

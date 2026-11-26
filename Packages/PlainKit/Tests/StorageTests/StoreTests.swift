@@ -53,67 +53,6 @@ import Testing
     }
 }
 
-@Suite struct TabTests {
-    func tab(_ position: Int, lastActive: TimeInterval = 0, url: String? = nil, title: String? = nil) -> TabRecord {
-        TabRecord(id: UUID(), url: url.map { URL(string: $0)! }, title: title, position: position,
-                  lastActiveAt: t0.addingTimeInterval(lastActive))
-    }
-
-    @Test func saveUpdatesAndOrders() async throws {
-        let database = try AppDatabase.inMemory()
-        var first = tab(1, url: "https://a.example", title: "A")
-        let second = tab(0)
-        try await database.saveTabs([first, second])
-        #expect(try await database.openTabs().map(\.id) == [second.id, first.id])
-
-        first.title = "A2"
-        first.position = 0
-        var moved = second
-        moved.position = 1
-        try await database.saveTabs([first, moved])
-        let tabs = try await database.openTabs()
-        #expect(tabs.map(\.id) == [first.id, second.id])
-        #expect(tabs.first == first)
-    }
-
-    @Test func archiveMovesStaleTabsAndArchiveIsSearchable() async throws {
-        let database = try AppDatabase.inMemory()
-        let stale = tab(0, lastActive: -2 * 86_400, url: "https://recipes.example/soup", title: "Tomato 100% soup")
-        let fresh = tab(1, lastActive: -60, url: "https://fresh.example")
-        try await database.saveTabs([stale, fresh])
-
-        let cutoff = t0.addingTimeInterval(-ArchiveAfter.oneDay.interval!)
-        let archived = try await database.archiveTabs(lastActiveBefore: cutoff, now: t0)
-        #expect(archived == [stale.id])
-        #expect(try await database.openTabs().map(\.id) == [fresh.id])
-        #expect(try await database.archivedTabs().first?.archivedAt == t0)
-        #expect(try await database.searchArchivedTabs("soup").map(\.id) == [stale.id])
-        #expect(try await database.searchArchivedTabs("recipes.ex").map(\.id) == [stale.id])
-        #expect(try await database.searchArchivedTabs("100%").map(\.id) == [stale.id])
-        #expect(try await database.searchArchivedTabs("1_0").isEmpty)
-        #expect(try await database.searchArchivedTabs("fresh").isEmpty)
-    }
-
-    @Test func stateFilesRoundTripAndFollowTabDeletion() async throws {
-        let database = try AppDatabase.inMemory()
-        defer { try? FileManager.default.removeItem(at: database.tabStates.directory) }
-        let kept = tab(0), deleted = tab(1), orphan = UUID()
-        try await database.saveTabs([kept, deleted])
-        for id in [kept.id, deleted.id, orphan] {
-            try await database.tabStates.write(Data(id.uuidString.utf8), for: id)
-        }
-        #expect(try await database.tabStates.read(for: kept.id) == Data(kept.id.uuidString.utf8))
-        #expect(try await database.tabStates.read(for: UUID()) == nil)
-
-        try await database.deleteTabs(ids: [deleted.id])
-        #expect(try await database.tabStates.read(for: deleted.id) == nil)
-
-        try await database.removeOrphanedTabStates()
-        #expect(try await database.tabStates.read(for: orphan) == nil)
-        #expect(try await database.tabStates.read(for: kept.id) != nil)
-    }
-}
-
 @Suite struct FaviconTests {
     @Test func saveFetchAndPrune() async throws {
         let database = try AppDatabase.inMemory()

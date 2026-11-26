@@ -82,8 +82,12 @@ public struct DownloadsView<Source: DownloadListSource>: View {
             .navigationTitle("Downloads")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // An icon, so the title stays centered between it and Done.
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Show in Files") { showInFiles(source.directory) }
+                    Button { showInFiles(source.directory) } label: {
+                        Label("Show in Files", systemImage: "folder")
+                    }
+                    .labelStyle(.iconOnly)
                 }
                 DoneButton(onDone: onDone)
             }

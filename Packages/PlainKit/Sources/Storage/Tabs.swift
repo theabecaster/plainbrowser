@@ -72,6 +72,11 @@ public struct ArchivedTab: Hashable, Sendable, Identifiable {
     public var entry: TabEntry
     public var archivedAt: Date
     public var id: TabID { entry.id }
+
+    public init(entry: TabEntry, archivedAt: Date) {
+        self.entry = entry
+        self.archivedAt = archivedAt
+    }
 }
 
 /// One window's pane selection.

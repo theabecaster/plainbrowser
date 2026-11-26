@@ -51,6 +51,10 @@ public protocol AddressBarData: AnyObject {
     /// Settings > Archive Tabs, once the saved settings are read; nil before, so nothing is
     /// archived on a default the user may have changed.
     var archiveAfter: ArchiveAfter? { get }
+    /// Settings > Tab Layout, once the saved settings are read; nil before.
+    var tabLayout: TabLayout? { get }
+    /// Called on the main thread when the settings in effect change (read at launch, or saved).
+    var onSettingsChange: (() -> Void)? { get set }
 }
 
 extension AddressBarData {
@@ -80,6 +84,8 @@ public final class LiveAddressBarData: AddressBarData {
     /// True once the saved settings are read (or a save replaced them).
     private var hasSettings = false
     public var archiveAfter: ArchiveAfter? { hasSettings ? settings.archiveAfter : nil }
+    public var tabLayout: TabLayout? { hasSettings ? settings.tabLayout : nil }
+    public var onSettingsChange: (() -> Void)?
     private var hasFirstFrame = false
     private var preconnectAfterFirstFrame = false
     public var searchEngine: SearchEngine { settings.searchEngine }
@@ -111,6 +117,7 @@ public final class LiveAddressBarData: AddressBarData {
             settings = stored
         }
         hasSettings = true
+        onSettingsChange?()
     }
 
     /// Puts `settings` in effect; Settings calls it after each save.
@@ -118,6 +125,7 @@ public final class LiveAddressBarData: AddressBarData {
         settingsEdits += 1
         self.settings = settings
         hasSettings = true
+        onSettingsChange?()
     }
 
     /// Writes buffered history. Call when the app moves to the background.

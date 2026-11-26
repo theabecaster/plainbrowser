@@ -79,7 +79,7 @@ import Testing
 
     @Test func settingsRoundTrip() async throws {
         let database = try AppDatabase.inMemory()
-        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .sideTabs, archiveAfter: .never)
+        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never)
         try await database.saveSettings(settings)
         #expect(try await database.settings() == settings)
     }
@@ -87,7 +87,7 @@ import Testing
     @Test func customEngineIsKeptAfterSwitchingAway() async throws {
         let database = try AppDatabase.inMemory()
         let custom = try SearchEngine.custom(name: "Wiki", template: "https://en.wikipedia.org/w/index.php?search=%s")
-        try await database.saveSettings(BrowserSettings(searchEngine: custom, tabLayout: .regular, archiveAfter: .oneDay))
+        try await database.saveSettings(BrowserSettings(searchEngine: custom, tabLayout: .left, archiveAfter: .oneDay))
         #expect(try await database.settings().searchEngine == custom)
 
         try await database.saveSettings(.defaults)
@@ -112,5 +112,22 @@ import Testing
                 """)
         }
         #expect(try await database.settings().searchEngine == .google)
+    }
+
+    /// Before Above/Left/Right, Tab Layout stored "regular" or "sideTabs".
+    @Test func olderTabLayoutValuesMapToTheNewOnes() async throws {
+        let database = try AppDatabase.inMemory()
+        try await database.writer.write { db in
+            try db.execute(sql: "INSERT INTO setting (key, value) VALUES ('tabLayout', 'sideTabs')")
+        }
+        #expect(try await database.settings().tabLayout == .left)
+        try await database.writer.write { db in
+            try db.execute(sql: "UPDATE setting SET value = 'regular' WHERE key = 'tabLayout'")
+        }
+        #expect(try await database.settings().tabLayout == FixedChoices.defaultTabLayout)
+        try await database.writer.write { db in
+            try db.execute(sql: "UPDATE setting SET value = 'right' WHERE key = 'tabLayout'")
+        }
+        #expect(try await database.settings().tabLayout == .right)
     }
 }

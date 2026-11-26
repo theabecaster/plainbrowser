@@ -60,7 +60,7 @@ extension BrowserViewController: GalleryHost {
         gallery.view.accessibilityViewIsModal = true
         // Over the page, under the chrome (which fades as the gallery's own bar arrives) and the
         // search sheet (a new tab from the gallery opens it).
-        view.insertSubview(gallery.view, aboveSubview: pageClip)
+        view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
         gallery.didMove(toParent: self)
         tabsUI.gallery = gallery
         // The gallery has its own bar: the system's vertical bar (Duo) empties rather than hides,
@@ -81,7 +81,7 @@ extension BrowserViewController: GalleryHost {
         let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: tab.id, gallery: gallery, container: view, snapshot: snapshot,
-            pageFrame: pageClip.frame, from: .page
+            pageFrame: pageClip.convert(pageClip.bounds, to: view), from: .page
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }
@@ -188,7 +188,7 @@ extension BrowserViewController: GalleryHost {
         let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: id, gallery: gallery, container: view, snapshot: cardPicture(for: id),
-            pageFrame: pageClip.frame, from: .gallery
+            pageFrame: pageClip.convert(pageClip.bounds, to: view), from: .gallery
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }
@@ -296,7 +296,19 @@ extension BrowserViewController: GalleryHost {
     /// The tabs changed outside the gallery (a title, a thumbnail, the archive): it shows them.
     func tabsDidChange() {
         tabsUI.gallery?.reloadTabs(animated: false)
+        duo.sidebar?.reloadTabs()
+        duo.strip?.reloadTabs()
+        // A tab closed or archived elsewhere may have left the other pane.
+        syncPanes()
         updateButtons()
+    }
+
+    var galleryCanOpenInOtherPane: Bool { canSplit }
+
+    /// The gallery's Open in Other Pane: the gallery fades and the tab shows beside the page.
+    func galleryOpenInOtherPane(_ id: TabID) {
+        dismissGalleryFading()
+        openInOtherPane(session.tabs.tab(id))
     }
 }
 #endif

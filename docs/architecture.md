@@ -26,8 +26,8 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`: warm-up, tiers, popups, crash recovery), `Tab` (observed page state), `TabWebViewHandler` (navigation/UI delegate), `NavigationRules` (pure policy), `DownloadCoordinator`, `ThumbnailService`, `EngineChoices`, seams in `EngineProtocols` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
 | `Reader` | nonisolated; WebKit types MainActor | WebKit | `ReaderExtractor` (Readability in its own content world), `ReaderRenderer` (page template), `ReaderSchemeHandler` (`plain-reader:` scheme), `ReaderArticle` |
-| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI, TabGalleryUI, WebEngine, ContentBlocking, Reader | `BrowserViewController` (page, URL pill, search sheet, page buttons; the tab on screen in `+Tab`, the engine's questions in `+EngineHost`, the gallery in `+Gallery`, the tabs button, archive and link menu in `+Tabs`, zoom, PDF and downloads in `+PageFeatures`), `TabSwipe` (bar swipe between tabs, swipe up to the gallery), `GalleryTabs` (the gallery's data source over `EngineTabs`), `ShellToast`, `BrowserSession` (pool, `EngineTabs`, `ContentBlocker`, `ReaderExtractor`, wired once), `EngineTabs` (engine `Tab`s in step with BrowserCore's `TabStore` by id), Storage adapters for the engine seams (`SiteStores`), `ReaderPresenter`, `PageStateView`, `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor, Downloads, archive), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
-| `TabGalleryUI` | MainActor | UIKit | `TabGalleryViewController` (app-switcher cascade on compact width, sideways grid pages on regular width, one `UIScrollView` whose cards are placed every frame by position and transform only; swipe up to close, menus), `TabCardView`, `CardMotion` (springs for gaps, new cards and scroll shifts on one update link), `TabGalleryReorder` (drag to reorder, edge auto-scroll), `EmptyTabView` + `MarkView` (the start screen with the spinnable Stem mark; the shell shows it for an empty tab), `TabGalleryDataSource` seam (the shell implements it over `TabStore`) + `TabGalleryDemoData` fake, `TabGalleryTransition` (snapshot animator page <-> card; zooms the cards about the card; `track`/`release` for the swipe up from the bar), `ThumbnailPipeline` (off-main decode), `TabGalleryLayout`: `CascadeCurve`/`TabGalleryMetrics`/`CardSwipe` (plain values tested on macOS; numbers in `docs/research/arc-tab-switcher.md`) |
+| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI, TabGalleryUI, WebEngine, ContentBlocking, Reader | `BrowserViewController` (page, URL pill, search sheet, page buttons; the tab on screen in `+Tab`, the engine's questions in `+EngineHost`, the gallery in `+Gallery`, the tabs button, archive and link menu in `+Tabs`, zoom, PDF and downloads in `+PageFeatures`), `TabSwipe` (bar swipe between tabs, swipe up to the gallery), `GalleryTabs` (the gallery's data source over `EngineTabs`), `ShellToast`, `BrowserSession` (pool, `EngineTabs`, `ContentBlocker`, `ReaderExtractor`, wired once), `EngineTabs` (engine `Tab`s in step with BrowserCore's `TabStore` by id), Storage adapters for the engine seams (`SiteStores`), `ReaderPresenter`, `PageStateView`, `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor, Downloads, archive), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS), the Duo layout: `DuoLayout` (panes, sidebar, chrome lane, folds: plain values tested on macOS), `PanesController` (`UIArrangementViewController` with two `PaneSlot`s), `+Panes` (split, focus, fold resize), `+SideTabs` and `SideTabs` (the sidebar's data source) |
+| `TabGalleryUI` | MainActor | UIKit | `TabGalleryViewController` (app-switcher cascade on compact width, sideways grid pages on regular width, one `UIScrollView` whose cards are placed every frame by position and transform only; swipe up to close, menus), `TabCardView`, `CardMotion` (springs for gaps, new cards and scroll shifts on one update link), `TabGalleryReorder` (drag to reorder, edge auto-scroll), `EmptyTabView` + `MarkView` (the start screen with the spinnable Stem mark; the shell shows it for an empty tab), `TabGalleryDataSource` seam (the shell implements it over `TabStore`) + `TabGalleryDemoData` fake, `TabGalleryTransition` (snapshot animator page <-> card; zooms the cards about the card; `track`/`release` for the swipe up from the bar), `ThumbnailPipeline` (off-main decode), `TabGalleryLayout`: `CascadeCurve`/`TabGalleryMetrics`/`CardSwipe` (plain values tested on macOS; numbers in `docs/research/arc-tab-switcher.md`), side tabs: `SideTabsViewController` + `SideTabCell`, `SideTabsDataSource` seam, `SidebarState`/`SidebarDrag` (plain values), the Above strip: `TabStripViewController` + `TabStripCell` |
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `SpringDriver` (frame-by-frame spring at 80–120 Hz), `Haptic`, `Glass` (the one Liquid Glass helper and its container) |
 | `PerfSignposts` | nonisolated | os | signpost subsystem, category and names |
@@ -205,6 +205,10 @@ exactly what the app emits.
 | `gallery.show` / `gallery.openTab` | interval | page zooms into its card / card grows into its page, until settled |
 | `gallery.cardClose` / `gallery.scroll` / `gallery.reload` | interval | a card closed until reflowed / one scroll / a list applied |
 | `archive.show` / `tab.privateMode` / `toast.show` | event | Archive screen / private toggle in the gallery / a toast |
+| `split.open` / `split.close` | interval | Open in Other Pane (page, link, gallery, sidebar) / Close Pane, until the panes show |
+| `split.swap` / `pane.focus` | event | Swap Panes / the focused pane changed (message: pane) |
+| `fold.transition` | interval | `viewWillTransition(to:with:)` (fold, unfold, rotation) → its completion, insets applied (message: target size) |
+| `sidebar.state` | interval | sidebar springs to Hidden, Rail or Expanded → at rest (message: state) |
 
 ## Tabs
 
@@ -278,6 +282,31 @@ loaded after launch), content blocking (`ContentBlocker` as `UserContentRules`, 
      before an automatic archive or close.
    - *Downloads UI:* FeatureUI's `DownloadsView` and `FilePreviewController` (Quick Look) read
      `DownloadListSource`/`DownloadListItem`, which `DownloadCoordinator`/`Download` match exactly.
+
+## Duo layouts (M3)
+
+- **Layout.** Before every layout pass `updateDuoLayout()` builds a `DuoLayoutInput` from the root
+  view (page area inside the safe area, size classes, `reservedRegions` for the fold and the
+  camera) and applies the `DuoLayout` it returns: the sidebar's docked width, which pane slots
+  the arrangement shows and how wide, and the lane the pill, search field and toast ride in.
+  `docs/decisions.md` ("M3 Duo layouts") has the rules and why.
+- **Panes.** `TabStore` owns which tab each pane shows and the focused pane (per window).
+  `webContainer`/`pageClip` are the focused slot's, so the existing chrome, bar swipe, gallery
+  zoom and reader act on the focused pane. `show(_:)` lets the store pick the pane first and keeps
+  a tab attached while the other pane shows it; `syncPanes()` attaches or detaches the other
+  pane's tab when it comes on screen or leaves (fold, split, close). Open in Other Pane comes from
+  the page menu (with Swap Panes and Close Pane), the link menu, the gallery and the sidebar.
+- **Folds.** `viewWillTransition(to:with:)` lays out once for the final size inside the
+  transition's animation and applies page insets in its completion (`fold.transition`).
+- **Tab Layout.** `DuoLayout.tabLayout` is the layout in effect: Left or Right shows
+  `SideTabsViewController` on that side (where the page keeps 640 pt beside the rail), Above shows
+  `TabStripViewController` across the top of the page area (also the fallback for Left and Right
+  in inner portrait). Both are siblings of the panes, never inside the arrangement, read `SideTabs`
+  (over `EngineTabs`), and reload with the gallery on every tab change. The shell owns the
+  sidebar's width: drags track it, releases spring it.
+- **Per window.** The scene passes its saved window id to `BrowserSession`, and `EngineTabs`
+  reads and changes only that window; the id and the sidebar state live in
+  `UISceneSession.userInfo`.
 
 ## Tab gallery, bar swipe and private tabs (M2)
 

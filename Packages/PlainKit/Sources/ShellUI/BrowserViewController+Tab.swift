@@ -83,23 +83,32 @@ extension BrowserViewController {
         return tab
     }
 
-    /// Puts `tab` on screen in place of the current one, which stays in the store.
+    /// Puts `tab` on screen in the focused pane, in place of the current one, which stays in the
+    /// store. In a split, a tab already in the other pane gets the focus instead, and the tab it
+    /// leaves stays on screen in its own pane.
     func show(_ tab: Tab) {
         guard self.currentTab !== tab else { return }
         tabsUI.swipe.cancel()
+        let focusBefore = session.tabs.focusedPane
+        // The store decides the pane first: the outgoing tab stays attached if it is still shown.
+        session.tabs.select(tab)
         if let current = self.currentTab {
             closeReader(animated: false)
             engineUI.observation?.cancel()
             current.onProgress = nil
-            keepPreview(of: current, beside: tab)
-            session.pool.detach(current)
+            if !isShownInOtherPane(current.id) {
+                keepPreview(of: current, beside: tab)
+                session.pool.detach(current)
+                forgetAttachment(of: current.id)
+            }
         }
         self.currentTab = tab
         setPrivateChrome(tab.isPrivate)
         // A typed load that ended while the tab was off screen left its marker behind.
         if !tab.isLoading { engineUI.typedVisitTabs.remove(tab.id) }
-        session.tabs.select(tab)
+        if session.tabs.focusedPane != focusBefore { focusDidChange() }
         session.pool.attach(tab, to: webContainer)
+        record(tab.id, inSlot: session.tabs.focusedPane)
         webContainer.bringSubviewToFront(engineUI.pageState)
         if let scrollView = session.pool.scrollView(for: tab) {
             scrollView.delegate = self
@@ -136,10 +145,11 @@ extension BrowserViewController {
         #endif
         refreshNeighbourPreviews()
         updateButtons()
+        syncPanes()
     }
 
     /// Takes the page off screen with no tab in its place (the tab on screen is closing, or the
-    /// pane shows the start page).
+    /// pane shows the start page). A tab still shown in a split's other pane stays attached there.
     func clearPage() {
         tabsUI.swipe.cancel()
         if let current = currentTab {
@@ -147,9 +157,12 @@ extension BrowserViewController {
             engineUI.observation?.cancel()
             engineUI.observation = nil
             current.onProgress = nil
-            session.pool.detach(current)
-            engineUI.crashedTabs.remove(current.id)
-            engineUI.typedVisitTabs.remove(current.id)
+            if !isShownInOtherPane(current.id) {
+                session.pool.detach(current)
+                forgetAttachment(of: current.id)
+                engineUI.crashedTabs.remove(current.id)
+                engineUI.typedVisitTabs.remove(current.id)
+            }
         }
         currentTab = nil
         pill.display(url: nil)

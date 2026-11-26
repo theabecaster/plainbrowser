@@ -98,7 +98,7 @@ let package = Package(
         .testTarget(name: "ContentBlockingTests", dependencies: ["ContentBlocking"]),
         // The shell's chrome rules (collapse, pull to refresh, geometry) and the address bar's
         // data seam; plain values, so they run on macOS.
-        .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "FeatureUI", "BrowserCore", "Storage"]),
+        .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "FeatureUI", "BrowserCore", "Storage", "TabGalleryUI"]),
         // The gallery's geometry and flick rules run on macOS; its UIKit behavior and the 100-tab
         // scroll perf test run on an iOS simulator (xcodebuild), like the WebKit tests.
         .testTarget(name: "TabGalleryUITests", dependencies: ["TabGalleryUI", "DesignSystem", "PerfSignposts"]),

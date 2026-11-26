@@ -195,3 +195,28 @@ Newest feature last.
   (geometry from `Brand/tools/gen_icon.py`) to DesignSystem and have both use it.
 - **Device numbers.** Splash frame rate and hitches are measured on the simulator only (60 Hz);
   check 120 Hz and the `intro.splash` animation interval on the Duo.
+## M3 Duo layouts (2026-11-26)
+
+- **Top pills on the inner screen.** The plan's table gives each pane its own top pill in inner
+  landscape; M3 kept the one bottom pill and moved it over the focused pane (the brief: keep the
+  existing chrome). Decide on the device whether the inner screen wants top pills. (Design
+  review, round 1.)
+- **Open in New Window** needs one app-wide `TabStore` shared by scenes, and a fresh window for a
+  scene whose saved window is gone (today it takes the first window; one scene only). (Code
+  review, round 1.)
+- **Drop a tab on the other pane to split** (plan, side tabs) and drag a tab between panes are not
+  built; Open in Other Pane covers it from the menus.
+- **Site icons in the rail.** Rows show a letter tile until Storage's favicons reach the shell.
+- **Inner portrait split.** Off by design (two 334 pt panes); a stacked second pane is not built.
+- **A tab moving between panes** (Open in Other Pane on the page itself, Swap Panes) re-parents its
+  web view with no snapshot cover; check on the device for a blank frame.
+- **Expanded sidebar floating** casts a light shadow; check its edge on the device and in dark mode.
+- **Pill margin in book pose.** Shifted off the crease, the pill keeps the 12 pt side margin of a
+  phone-width lane, which reads tight next to the centered 640 pt pill when flat. (Design review,
+  round 1.)
+- **Tab strip reloads twice per action.** A tap, close or reorder reloads the strip at once (for
+  instant feedback) and again on the store's change notification; fold them into the one
+  notification if profiling shows it. (Code review, round 3.)
+- **Above and Right on the device.** Both were built after the Mac locked: unit-tested
+  (`DuoLayoutTests`) and UI-tested only as far as the simulator allowed; check the strip's look
+  and the Right sidebar's drag on the inner screen.

@@ -233,6 +233,24 @@ public enum Signposts {
     /// Event: Set as Default Browser was tapped (intro step or the empty-tab card).
     public static let defaultBrowserPrompt: StaticString = "defaultBrowser.open"
 
+    // MARK: Duo layouts (M3)
+
+    /// Interval: a split opening (page menu, link menu, gallery, sidebar), until both panes show.
+    public static let splitOpen: StaticString = "split.open"
+    /// Interval: a pane closing, until the remaining page fills the window.
+    public static let splitClose: StaticString = "split.close"
+    /// Event: the panes traded places.
+    public static let splitSwap: StaticString = "split.swap"
+    /// Event: the focused pane changed (a touch on the other pane, or a tab chosen in it).
+    public static let paneFocus: StaticString = "pane.focus"
+    /// Interval: a size change of the window (fold, unfold, rotation), from
+    /// `viewWillTransition(to:with:)` to its completion, when the page insets apply. The message is
+    /// the target size.
+    public static let foldTransition: StaticString = "fold.transition"
+    /// Interval: the sidebar moving between Hidden, Rail and Expanded, until it rests. The message
+    /// is the state it rests in.
+    public static let sidebarState: StaticString = "sidebar.state"
+
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {
         name.description

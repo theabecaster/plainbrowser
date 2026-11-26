@@ -34,6 +34,13 @@ public enum Motion {
     /// A card that was swiped up but not far or fast enough springs back, with the release
     /// velocity. Slight bounce: momentum drives it (WWDC18, "Designing Fluid Interfaces").
     public static let cardReturn = Animation.spring(duration: 0.32, bounce: 0.12)
+    /// The sidebar springing to Hidden, Rail or Expanded (M3): the tab switch's spring, with bounce
+    /// only when a flick released it.
+    public static func sidebarSettle(flicked: Bool) -> Animation {
+        .spring(duration: 0.35, bounce: flicked ? 0.12 : 0)
+    }
+    /// The sidebar's edge under the finger: tracks 1:1 and hands its velocity to the settle.
+    public static let sidebarTrack = Animation.interactiveSpring
     /// The Reduce Motion replacement for any movement.
     public static let crossfadeDuration: TimeInterval = 0.2
 

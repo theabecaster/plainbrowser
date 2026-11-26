@@ -1,0 +1,201 @@
+import XCTest
+
+/// The Duo's inner-screen layouts: split tabs (open from the page menu, focus by touch, close a
+/// pane) and Tab Layout (Left by default, Right, Above; the setting survives a
+/// relaunch).
+///
+/// They need the iPhone Duo simulator unfolded: the fold is set only in Device Hub
+/// (`scripts/duo-fold.sh <sim> Open`). Elsewhere, an iPhone or the Duo's outer screen, they skip.
+@MainActor
+final class DuoTests: XCTestCase {
+    private var server: TestServer!
+
+    private func launch(_ arguments: [String] = ["-PlainInMemoryStore"]) throws -> XCUIApplication {
+        continueAfterFailure = false
+        if server == nil {
+            server = try TestServer()
+            try server.start()
+            addTeardownBlock { [server] in server?.stop() }
+        }
+        let app = XCUIApplication()
+        app.launchArguments = arguments
+        app.launch()
+        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        return app
+    }
+
+    /// Skips unless the window is the Duo's inner screen in landscape (wide enough for a split).
+    private func requireInnerLandscape(_ app: XCUIApplication) throws {
+        let width = app.windows.firstMatch.frame.width
+        try XCTSkipUnless(width >= 900, "needs the Duo's inner screen in landscape (window is \(Int(width)) pt wide)")
+    }
+
+    private func go(_ app: XCUIApplication, to path: String, heading: String) {
+        let field = app.textFields["searchField"]
+        if !(field.exists && field.hasKeyboardFocus) {
+            app.buttons["addressPill"].tap()
+            XCTAssertTrue(field.waitForExistence(timeout: 2))
+        }
+        field.typeText(server.address(path) + "\n")
+        XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 10), "page \"\(heading)\" did not show")
+    }
+
+    /// The page menu from a long press on the pill (it acts on the focused pane), then `item`.
+    private func pageMenu(_ app: XCUIApplication, pick item: String, file: StaticString = #filePath, line: UInt = #line) {
+        let pill = app.buttons["addressPill"]
+        XCTAssertTrue(pill.waitForExistence(timeout: 2), file: file, line: line)
+        pill.press(forDuration: 1.0)
+        let action = app.buttons[item]
+        XCTAssertTrue(action.waitForExistence(timeout: 3), "\"\(item)\" is not in the page menu", file: file, line: line)
+        action.tap()
+    }
+
+    private func tabsMenu(_ app: XCUIApplication, pick item: String) {
+        let tabs = app.buttons["tabs"]
+        XCTAssertTrue(tabs.waitForExistence(timeout: 2))
+        tabs.press(forDuration: 1.0)
+        let action = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", item)).firstMatch
+        XCTAssertTrue(action.waitForExistence(timeout: 3), "\"\(item)\" is not in the tabs menu")
+        action.tap()
+    }
+
+    private func waitForPill(_ app: XCUIApplication, showing path: String, file: StaticString = #filePath, line: UInt = #line) {
+        let pill = app.buttons["addressPill"]
+        let shows = NSPredicate { _, _ in (pill.value as? String)?.hasSuffix(path) == true }
+        let expectation = XCTNSPredicateExpectation(predicate: shows, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 5), .completed,
+                       "the pill shows \(String(describing: pill.value)), not \(path)", file: file, line: line)
+    }
+
+    /// Pages A and B both on screen, side by side, A first.
+    private func waitForSplit(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        let a = app.webViews.staticTexts["Page A"]
+        let b = app.webViews.staticTexts["Page B"]
+        let split = NSPredicate { _, _ in a.exists && b.exists && a.frame.maxX <= b.frame.minX }
+        let expectation = XCTNSPredicateExpectation(predicate: split, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 10), .completed,
+                       "pages A and B are not side by side", file: file, line: line)
+    }
+
+    func testSplitOpensFromThePageMenuFocusesByTouchAndCloses() throws {
+        let app = try launch()
+        try requireInnerLandscape(app)
+        go(app, to: "/a", heading: "Page A")
+        tabsMenu(app, pick: "New Tab")
+        go(app, to: "/b", heading: "Page B")
+
+        // B moves to the other pane, A (its neighbour) fills the first; the new pane is focused.
+        pageMenu(app, pick: "menu.otherPane")
+        waitForSplit(app)
+        waitForPill(app, showing: "/b")
+        let pill = app.buttons["addressPill"]
+        let headingA = app.webViews.staticTexts["Page A"]
+        let headingB = app.webViews.staticTexts["Page B"]
+        XCTAssertGreaterThan(pill.frame.midX, headingB.frame.minX, "the pill sits over the focused pane")
+
+        // A touch on the first pane focuses it: the pill moves over it and shows its page.
+        headingA.tap()
+        waitForPill(app, showing: "/a")
+        let moved = NSPredicate { _, _ in pill.frame.midX < headingB.frame.minX }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: moved, object: nil)], timeout: 3), .completed,
+                       "the pill moved over the focused pane")
+
+        // Close Pane closes the focused one; its tab stays open, the other page fills the window.
+        pageMenu(app, pick: "menu.closePane")
+        XCTAssertTrue(headingA.waitForNonExistence(timeout: 5), "the closed pane's page left the screen")
+        waitForPill(app, showing: "/b")
+        let filled = NSPredicate { _, _ in headingB.frame.minX < 100 }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: filled, object: nil)], timeout: 3), .completed,
+                       "the remaining page fills the window")
+        // The tab is still open: the tabs menu goes back to it.
+        tabsMenu(app, pick: "Previous Tab")
+        XCTAssertTrue(headingA.waitForExistence(timeout: 5))
+    }
+
+    func testOpenInOtherPaneFromTheLinkMenu() throws {
+        let app = try launch()
+        try requireInnerLandscape(app)
+        go(app, to: "/a", heading: "Page A")
+        app.webViews.links["Go to B"].press(forDuration: 1.2)
+        let open = app.buttons["Open in Other Pane"]
+        XCTAssertTrue(open.waitForExistence(timeout: 3), "the link menu offers the other pane")
+        open.tap()
+        waitForSplit(app)
+        waitForPill(app, showing: "/b")
+    }
+
+    /// Settings > Tab Layout > `choice`, then Done.
+    private func chooseTabLayout(_ app: XCUIApplication, _ choice: String, file: StaticString = #filePath, line: UInt = #line) {
+        app.buttons["more"].tap()
+        let settings = app.buttons["Settings…"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3), file: file, line: line)
+        settings.tap()
+        let layout = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Tab Layout'")).firstMatch
+        XCTAssertTrue(layout.waitForExistence(timeout: 3), "Tab Layout is in Settings", file: file, line: line)
+        XCTAssertTrue(layout.isEnabled, "Tab Layout applies on the inner screen", file: file, line: line)
+        layout.tap()
+        let option = app.buttons[choice]
+        XCTAssertTrue(option.waitForExistence(timeout: 2), "\"\(choice)\" is not a Tab Layout choice", file: file, line: line)
+        option.tap()
+        app.buttons["Done"].tap()
+    }
+
+    func testTabLayoutLeftByDefaultThenRightThenAboveAndItSurvivesRelaunch() throws {
+        var app = try launch(["-PlainTestStore", "-PlainResetStore"])
+        try requireInnerLandscape(app)
+        go(app, to: "/a", heading: "Page A")
+        let sidebar = app.otherElements["sideTabs"]
+        let window = app.windows.firstMatch.frame
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 3), "Left is the default: the sidebar shows")
+        XCTAssertLessThan(sidebar.frame.minX, window.midX)
+        XCTAssertTrue(app.buttons["sideTabs.newTab"].exists)
+
+        // The Tabs button hides the sidebar and brings it back.
+        app.buttons["tabs"].tap()
+        let hidden = NSPredicate { _, _ in !sidebar.exists }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: hidden, object: nil)], timeout: 3), .completed)
+        app.buttons["tabs"].tap()
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 3))
+
+        chooseTabLayout(app, "Right")
+        let onRight = NSPredicate { _, _ in sidebar.exists && sidebar.frame.minX > window.midX }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: onRight, object: nil)], timeout: 3), .completed,
+                       "the sidebar moved to the right")
+
+        chooseTabLayout(app, "Above")
+        let strip = app.otherElements["tabStrip"]
+        XCTAssertTrue(strip.waitForExistence(timeout: 3), "the tab strip shows")
+        XCTAssertFalse(sidebar.exists)
+        XCTAssertLessThan(strip.frame.maxY, app.webViews.staticTexts["Page A"].frame.minY, "the strip sits above the page")
+
+        // Settings are written at once.
+        Thread.sleep(forTimeInterval: 1)
+        app.terminate()
+        app = try launch(["-PlainTestStore"])
+        XCTAssertTrue(app.otherElements["tabStrip"].waitForExistence(timeout: 5), "Above comes back after a relaunch")
+    }
+
+    func testSidebarAndStripListTheTabsAndSwitchThem() throws {
+        let app = try launch()
+        try requireInnerLandscape(app)
+        go(app, to: "/a", heading: "Page A")
+        tabsMenu(app, pick: "New Tab")
+        go(app, to: "/b", heading: "Page B")
+
+        let rows = app.otherElements["sideTabs"].descendants(matching: .any).matching(identifier: "sideTab")
+        let two = NSPredicate { _, _ in rows.count == 2 }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: two, object: nil)], timeout: 5), .completed)
+        rows.matching(NSPredicate(format: "label == 'Plain Test A'")).firstMatch.tap()
+        waitForPill(app, showing: "/a")
+
+        chooseTabLayout(app, "Above")
+        let stripTabs = app.otherElements["tabStrip"].descendants(matching: .any).matching(identifier: "stripTab")
+        let twoInStrip = NSPredicate { _, _ in stripTabs.count == 2 }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: twoInStrip, object: nil)], timeout: 5), .completed)
+        stripTabs.matching(NSPredicate(format: "label == 'Plain Test B'")).firstMatch.tap()
+        waitForPill(app, showing: "/b")
+        // New Tab from the strip goes straight to the search field.
+        app.buttons["tabStrip.newTab"].tap()
+        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 3))
+    }
+}

@@ -22,7 +22,12 @@ import WebEngine
 /// `tab.unarchive`, `tab.closeAll` events are emitted here, around the `TabStore` calls.
 final class EngineTabs {
     let pool: WebViewPool
-    private(set) var store = TabStore()
+    private(set) var store: TabStore
+    /// The window this scene shows (per-window state, docs/plan.md, section 6): every read and
+    /// change here acts on it. The scene keeps it across launches.
+    private(set) var windowID: WindowID
+    /// Tabs the bar swipe and Next/Previous Tab skip: the other pane's tab while a split shows.
+    var excludedFromNeighbours: Set<TabID> = []
     private var engineTabs: [TabID: Tab] = [:]
     private var watches: [TabID: TabWatch] = [:]
     private let database: DatabaseProvider
@@ -34,14 +39,23 @@ final class EngineTabs {
     /// The saved session is in the store (after `restoreSession()`).
     private(set) var isSessionLoaded = false
 
-    init(pool: WebViewPool, database: @escaping DatabaseProvider, tabStates: TabStateStore?) {
+    /// - Parameter windowID: the window the scene showed last time, when it has one; the saved
+    ///   session's first window otherwise.
+    init(pool: WebViewPool, database: @escaping DatabaseProvider, tabStates: TabStateStore?, windowID: WindowID? = nil) {
         self.pool = pool
         self.database = database
         self.tabStates = tabStates
+        let id = windowID ?? WindowID()
+        self.windowID = id
+        store = TabStore(session: TabSession(windows: [WindowSession(id: id, tabIDs: [], panes: [nil], focusedPane: 0)]))
         wireStore()
     }
 
-    private var window: WindowID { store.windows[0].id }
+    private var window: WindowID { windowID }
+
+    /// What the window's panes show (one, or two in a split) and which one is focused.
+    var panes: [TabID?] { store.window(windowID)?.panes ?? [nil] }
+    var focusedPane: Int { store.window(windowID)?.focusedPane ?? 0 }
 
     // MARK: Reading
 
@@ -73,7 +87,7 @@ final class EngineTabs {
     /// neighbours.
     func neighbours(of id: TabID) -> (previous: TabID?, next: TabID?) {
         guard let entry = store.tabs[id] else { return (nil, nil) }
-        let list = entries(private: entry.isPrivate).map(\.id)
+        let list = entries(private: entry.isPrivate).map(\.id).filter { $0 == id || !excludedFromNeighbours.contains($0) }
         guard let index = list.firstIndex(of: id) else { return (nil, nil) }
         return (index > 0 ? list[index - 1] : nil, index + 1 < list.count ? list[index + 1] : nil)
     }
@@ -127,6 +141,32 @@ final class EngineTabs {
         let interval = signposter.beginInterval(Signposts.tabSelect, id: signposter.makeSignpostID())
         defer { signposter.endInterval(Signposts.tabSelect, interval) }
         store.select(tab.id)
+    }
+
+    // MARK: Panes
+
+    /// Shows `id` in `pane` (a tab already in the other pane trades places), focusing that pane.
+    func show(_ id: TabID, inPane pane: Int) {
+        store.select(id, pane: pane)
+    }
+
+    /// Splits the window, `id` in the new pane, focused; the first pane keeps a tab of its own
+    /// (TabStore's rule). No-op when already split.
+    func split(showing id: TabID?) {
+        store.split(window, showing: id)
+    }
+
+    /// Closes `pane`; its tab stays open. The other pane is focused.
+    func closePane(_ pane: Int) {
+        store.closePane(pane, in: window)
+    }
+
+    func focusPane(_ pane: Int) {
+        store.focusPane(pane, in: window)
+    }
+
+    func swapPanes() {
+        store.swapPanes(in: window)
     }
 
     /// Closes a tab. Its state file and thumbnail stay for Reopen Closed Tab (a private tab keeps
@@ -208,27 +248,31 @@ final class EngineTabs {
         guard let database = await database() else { return nil }
         let saved = (try? await database.loadTabSession()) ?? .empty
         let mine = store
+        let myWindow = windowID
         let openedMeanwhile = !mine.tabs.isEmpty
         var session = saved
+        // This scene's saved window, else the first one saved.
+        let savedIndex = session.windows.firstIndex { $0.id == myWindow } ?? (session.windows.isEmpty ? nil : 0)
         if openedMeanwhile {
             // The user's tabs join the saved window and stay on screen.
             let current = mine.session
             session.tabs += current.tabs
-            if session.windows.isEmpty {
+            if let savedIndex, let window = current.windows.first {
+                session.windows[savedIndex].tabIDs += window.tabIDs
+                session.windows[savedIndex].panes = window.panes
+                session.windows[savedIndex].focusedPane = window.focusedPane
+            } else {
                 session.windows = current.windows
-            } else if let window = current.windows.first {
-                session.windows[0].tabIDs += window.tabIDs
-                session.windows[0].panes = window.panes
-                session.windows[0].focusedPane = window.focusedPane
             }
         }
         store = TabStore(session: session, persistence: database.tabSession)
+        windowID = savedIndex.map { session.windows[$0].id } ?? store.windows[0].id
         wireStore()
         // Private tabs opened before the session loaded stay (the store never saves them).
-        for entry in mine.tabs(in: mine.windows[0].id, private: true) {
+        for entry in mine.tabs(in: myWindow, private: true) {
             store.open(entry.url, title: entry.title, in: window, isPrivate: true, id: entry.id)
         }
-        if let id = mine.selectedTabID(in: mine.windows[0].id), mine.tabs[id]?.isPrivate == true {
+        if let id = mine.selectedTabID(in: myWindow), mine.tabs[id]?.isPrivate == true {
             store.select(id)
         }
         isSessionLoaded = true

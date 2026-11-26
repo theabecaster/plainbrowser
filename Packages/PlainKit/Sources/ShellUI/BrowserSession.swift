@@ -27,7 +27,9 @@ public final class BrowserSession {
     ///   - database: the app's database once it has opened off the main thread.
     ///   - tabStates: where each tab's history, scroll and sessionStorage are saved for relaunch;
     ///     nil keeps them in memory only.
-    public init(database: @escaping DatabaseProvider, tabStates: TabStateStore?) {
+    ///   - windowID: the window this scene showed last time (`UISceneSession.userInfo`), so each
+    ///     scene comes back to its own tabs and panes; nil for a new scene.
+    public init(database: @escaping DatabaseProvider, tabStates: TabStateStore?, windowID: UUID? = nil) {
         self.database = database
         contentModes = StorageSiteContentModeStore(database: database)
         pageZooms = StorageSitePageZoomStore(database: database)
@@ -41,8 +43,12 @@ public final class BrowserSession {
             pageScripts: readerScripts,
             pageZooms: pageZooms
         )
-        tabs = EngineTabs(pool: pool, database: database, tabStates: tabStates)
+        tabs = EngineTabs(pool: pool, database: database, tabStates: tabStates, windowID: windowID)
     }
+
+    /// The window this scene shows. Keep it with the scene (`UISceneSession.userInfo`) so the next
+    /// launch gives the scene the same tabs; it is final once the saved tabs are in.
+    public var windowID: UUID { tabs.windowID }
 
     /// After the first frame: warms the first web view at once, then loads the per-site choices,
     /// the reader check, the rule lists and the saved tabs off the main thread. Returns the last

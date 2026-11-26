@@ -75,7 +75,15 @@ get your own set. Delete yours when you finish
 (`xcrun simctl delete <udid>`).
 
 Duo simulator: device type `iPhone Duo`, runtime `com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4`.
-Set the fold state from the Device Hub (Closed / Partially Open / Open); there is no CLI for it.
+Set the fold state from the Device Hub (Closed / Partially Open / Open); `simctl` has no command
+for it. `scripts/duo-fold.sh <simulator name> Open` presses Device Hub's buttons for you
+(`Closed`, `"Partially Open"`, `Open`, `"Rotate Right"`; it needs Accessibility access for the
+terminal). Screenshots per screen: `xcrun simctl io <udid> enumerate`, then
+`screenshot --display=<id>` (the inner screen is the 2007x2853 one). The Duo layout UI tests
+(`DuoTests`) skip unless the simulator is unfolded, so run them after `duo-fold.sh ... Open`.
+Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit`, `-PlainTabLayout above|left|right` and
+`-PlainSidebar rail|expanded|hidden` (none saved) to reach a split or a tab layout for screenshots
+without driving the UI. Device Hub can't be driven while the Mac is locked.
 
 ## TestFlight
 

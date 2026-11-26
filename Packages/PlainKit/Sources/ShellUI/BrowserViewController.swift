@@ -31,10 +31,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let sheets: FeatureSheets
     private let onSearchFieldReady: () -> Void
 
-    let webContainer = UIView()
-    /// The page's area (beside a vertical bar, under the status bar): it clips the page and the bar
-    /// swipe's neighbour, so neither shows under the system's bar while they slide.
-    let pageClip = UIView()
+    /// The page panes: one, or two in a split on the Duo's inner screen (`+Panes`).
+    let panes = PanesController()
+    /// The Duo layout: panes, sidebar, the chrome's lane, folds (`+Panes`, `+SideTabs`).
+    let duo = DuoUIState()
+    /// Where the focused pane's tab is attached. The chrome, the bar swipe, the gallery's zoom and
+    /// the reader all act on the focused pane.
+    var webContainer: UIView { panes.slots[session.tabs.focusedPane].container }
+    /// The focused pane's area (beside a vertical bar, under the status bar): it clips the page and
+    /// the bar swipe's neighbour, so neither shows under the system's bar while they slide.
+    var pageClip: UIView { panes.slots[session.tabs.focusedPane].clip }
     /// The pill and the button bar, rendered as one glass surface (docs/plan.md, section 5,
     /// Chrome). It covers the view but takes no touches of its own.
     let chromeGlass = Glass.makeContainer(spacing: ChromeGeometry.glassMergeSpacing)
@@ -118,7 +124,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         view.tintColor = Palette.accent
         defer { updateStartScreen() }
 
-        for subview in [pageClip, pullIndicator, sheet, chromeGlass, tabsUI.toast] as [UIView] {
+        panes.install(in: self)
+        for subview in [panes.view, pullIndicator, sheet, chromeGlass, tabsUI.toast] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
@@ -126,10 +133,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             subview.translatesAutoresizingMaskIntoConstraints = false
             chromeGlass.contentView.addSubview(subview)
         }
-        webContainer.clipsToBounds = true
-        pageClip.clipsToBounds = true
-        webContainer.translatesAutoresizingMaskIntoConstraints = false
-        pageClip.addSubview(webContainer)
+        installPanes()
         for (effect, control) in zip(pageEdgeEffects, [pill, buttonBar] as [UIView]) {
             effect.edge = .bottom
             control.addInteraction(effect)
@@ -155,7 +159,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         traits += UITraitCollection.systemTraitsAffectingVerticalBarEdge
         registerForTraitChanges(traits) { (controller: BrowserViewController, _) in
             controller.updateBarMode()
+            controller.view.setNeedsLayout()
         }
+        data.onSettingsChange = { [weak self] in self?.settingsDidChange() }
 
         tabsUI.swipe.browser = self
         tabsUI.swipe.install(on: [pill, buttonBar])
@@ -176,6 +182,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     private func layOut() {
         let safe = view.safeAreaLayoutGuide
+        // Their constants make room for the sidebar (either side) and the tab strip (`+Panes`).
+        duo.panesLeading = panes.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor)
+        duo.panesTrailing = panes.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
+        duo.panesTop = panes.view.topAnchor.constraint(equalTo: safe.topAnchor)
         let margin = Spacing.m
         // The resting chrome's bottom: above the home indicator, or 8 pt above a plain edge.
         let rest = UILayoutGuide()
@@ -189,12 +199,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pillOnEdge = pill.bottomAnchor.constraint(equalTo: rest.topAnchor)
         pillOnKeyboard = pill.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -Spacing.s)
 
+        // The chrome's lane: the focused pane, off an active fold and the camera (`DuoLayout`).
+        let lane = duo.chromeLane
+        view.addLayoutGuide(lane)
+        duo.laneLeading = lane.leadingAnchor.constraint(equalTo: view.leadingAnchor)
+        // Set before every layout pass (`updateDuoLayout`, from `viewWillLayoutSubviews`).
+        duo.laneWidth = lane.widthAnchor.constraint(equalToConstant: 0)
+
         func capWidth(_ item: UIView) -> [NSLayoutConstraint] {
-            let fill = item.widthAnchor.constraint(equalTo: safe.widthAnchor, constant: -2 * margin)
+            let fill = item.widthAnchor.constraint(equalTo: lane.widthAnchor, constant: -2 * margin)
             // Just under required: only the 640 pt cap may override it, never content size.
             fill.priority = .required - 1
             return [
-                item.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
+                item.centerXAnchor.constraint(equalTo: lane.centerXAnchor),
                 fill,
                 item.widthAnchor.constraint(lessThanOrEqualToConstant: 640),
             ]
@@ -207,19 +224,20 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             restOverIndicator,
             restOverEdge,
 
-            // The page fills the view below the status bar and beside a vertical bar. Its bottom
-            // runs under the chrome; obscuredContentInsets tells WebKit what the chrome covers.
-            pageClip.topAnchor.constraint(equalTo: safe.topAnchor),
-            pageClip.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
-            pageClip.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
-            pageClip.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            webContainer.topAnchor.constraint(equalTo: pageClip.topAnchor),
-            webContainer.leadingAnchor.constraint(equalTo: pageClip.leadingAnchor),
-            webContainer.trailingAnchor.constraint(equalTo: pageClip.trailingAnchor),
-            webContainer.bottomAnchor.constraint(equalTo: pageClip.bottomAnchor),
+            duo.laneLeading, duo.laneWidth,
+            lane.topAnchor.constraint(equalTo: view.topAnchor),
+            lane.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            pullIndicator.topAnchor.constraint(equalTo: webContainer.topAnchor, constant: Spacing.s),
-            pullIndicator.centerXAnchor.constraint(equalTo: webContainer.centerXAnchor),
+            // The panes fill the view below the status bar and beside a vertical bar and the
+            // sidebar. Their bottom runs under the chrome; obscuredContentInsets tells WebKit what
+            // the chrome covers.
+            duo.panesTop,
+            duo.panesLeading,
+            duo.panesTrailing,
+            panes.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            pullIndicator.topAnchor.constraint(equalTo: panes.view.topAnchor, constant: Spacing.s),
+            pullIndicator.centerXAnchor.constraint(equalTo: lane.centerXAnchor),
             pullIndicator.widthAnchor.constraint(equalToConstant: PullIndicator.size),
             pullIndicator.heightAnchor.constraint(equalToConstant: PullIndicator.size),
 
@@ -292,6 +310,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 item = UIBarButtonItem(primaryAction: action)
             }
             item.axisBehavior = .verticalPreferred
+            // Back, Forward and Tabs overflow last (docs/research/design-audit.md, Duo).
+            item.visibilityPriority = kind == .share ? .low : (kind == .more ? .standard : .high)
             item.accessibilityIdentifier = kind.identifier
             item.isEnabled = false
             barItems[kind] = item
@@ -333,6 +353,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
     }
 
+    override public func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        // Every Duo state comes from the bounds, size classes and the fold's regions here.
+        updateDuoLayout()
+    }
+
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let next = ChromeGeometry(
@@ -341,7 +367,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         guard next != geometry else { return }
         geometry = next
         applyCollapse(collapse.progress)
-        updatePageInsets()
+        // During a fold or rotation the insets wait for the transition's completion.
+        if !duo.isResizing { updatePageInsets() }
+    }
+
+    override public func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        windowWillResize(to: size, with: coordinator)
+    }
+
+    /// UIKit re-runs this when the fold's reserved regions change (book pose on and off).
+    override public func updateViewConstraints() {
+        super.updateViewConstraints()
+        view.setNeedsLayout()
     }
 
     // MARK: Launch
@@ -590,8 +628,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// never relayouts during the motion. The viewport insets span collapsed to expanded, so CSS
     /// `svh`/`lvh` stay put.
     func updatePageInsets() {
-        guard view.bounds.height > 0 else { return }
-        let pageBottom = pageClip.frame.maxY
+        // During a fold or rotation the insets wait for the transition's completion.
+        guard view.bounds.height > 0, !duo.isResizing else { return }
+        let pageBottom = panes.view.frame.maxY
         let collapsed = geometry.collapsedInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)
         let obscured = pageInset.collapsed ? collapsed : expanded
@@ -890,7 +929,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             for item in [history, favorites, settings] { item.attributes = .disabled }
         }
         let app = UIMenu(options: .displayInline, children: downloadsMenuItems() + [history, favorites, settings])
-        guard let tab = currentTab, let url = tab.url else { return [app] }
+        guard let tab = currentTab, let url = tab.url else {
+            // An empty pane of a split can still be swapped or closed.
+            let paneItems = paneMenuItems(for: nil)
+            return (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
+        }
         let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
             Signposts.signposter.emitEvent(Signposts.reload)
             self?.reloadPage()
@@ -909,7 +952,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIPasteboard.general.url = url
             Haptic.success.play()
         }
-        var siteItems = siteMenuItems(for: tab, url: url)
+        var siteItems = siteMenuItems(for: tab, url: url) + paneMenuItems(for: tab)
         if let isFavorite {
             let title = tab.title
             let favorite = UIAction(
@@ -944,7 +987,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     // MARK: Feature sheets
 
     private func showSettings() {
-        present(sheets.settings { [weak self] in self?.closeSheet() }, signpost: Signposts.settingsOpen)
+        // Tab Layout applies only where a tab list fits; elsewhere its row says why (docs/plan.md, section 4b).
+        let isTabLayoutAvailable = duo.layout?.tabLayoutAvailable ?? false
+        present(
+            sheets.settings(isTabLayoutAvailable: isTabLayoutAvailable) { [weak self] in self?.closeSheet() },
+            signpost: Signposts.settingsOpen
+        )
     }
 
     private func showHistory() {

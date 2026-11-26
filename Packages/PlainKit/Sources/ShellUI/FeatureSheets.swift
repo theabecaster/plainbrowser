@@ -56,8 +56,11 @@ public final class FeatureSheets {
 
     #if os(iOS)
     /// Settings, with a single Done button.
-    func settings(onDone: @escaping () -> Void) -> UIViewController? {
+    /// - Parameter isTabLayoutAvailable: a tab list fits here; otherwise the Tab Layout row is
+    ///   disabled and its footer says why.
+    func settings(isTabLayoutAvailable: Bool = true, onDone: @escaping () -> Void) -> UIViewController? {
         guard let model = makeSettingsModel() else { return nil }
+        model.isTabLayoutAvailable = isTabLayoutAvailable
         return Self.sheet(SettingsView(model: model, onDone: onDone), identifier: "settingsSheet")
     }
 

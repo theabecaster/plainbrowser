@@ -38,9 +38,10 @@ public struct SettingsView: View {
                         ForEach(TabLayout.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.menu)
-                    .disabled(!model.isLoaded)
+                    .disabled(!model.isLoaded || !model.isTabLayoutAvailable)
+                    .accessibilityIdentifier("settings.tabLayout")
                 } footer: {
-                    Text(Wording.tabLayoutFooter)
+                    Text(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
                 }
 
                 Section {

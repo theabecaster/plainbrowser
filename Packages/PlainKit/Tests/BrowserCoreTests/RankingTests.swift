@@ -125,7 +125,7 @@ import Testing
 
 @Suite struct SettingsTests {
     @Test func defaultsComeFromFixedChoices() {
-        #expect(BrowserSettings.defaults == BrowserSettings(searchEngine: .google, tabLayout: .regular, archiveAfter: .oneDay))
+        #expect(BrowserSettings.defaults == BrowserSettings(searchEngine: .google, tabLayout: .left, archiveAfter: .oneDay))
     }
 
     @Test func archiveDueness() {

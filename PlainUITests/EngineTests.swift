@@ -70,7 +70,8 @@ final class EngineTests: XCTestCase {
         app.webViews.links["Go to B"].tap()
         waitForPage(app, "Page B")
         XCTAssertTrue(app.buttons["back"].isEnabled)
-        // The engine saves a tab a second after its page finishes loading.
+        // Leaving the app saves every tab (the engine also saves a second after each load).
+        XCUIDevice.shared.press(.home)
         Thread.sleep(forTimeInterval: 2)
         app.terminate()
 

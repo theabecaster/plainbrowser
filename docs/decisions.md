@@ -318,6 +318,9 @@ Each entry: what was chosen, and why. Newest last.
   and a buffer, no actor hop, so changes never reorder); a newer session replaces an older one
   still waiting. Writes run off main, 500 ms after the first change, in one transaction, and touch
   only rows that changed (a title change writes one row instead of 100).
+  A failed write is retried in place (3 tries, 100 ms apart) so later writes never land first.
+  Restoring from the archive is its own change (`unarchive`), so a restored tab leaves the
+  archive even when the sessions around it are coalesced away.
 - **Archive rows stay in the `tab` table** with `isArchived`, searched through an FTS5 index synced
   to it (diacritics removed, word prefixes). The archive is not loaded at launch.
 - **Recently closed is a stack of batches** (one close, Close All Tabs or a closed window), so

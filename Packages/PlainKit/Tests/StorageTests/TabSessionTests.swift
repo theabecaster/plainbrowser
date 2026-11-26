@@ -194,6 +194,42 @@ import Testing
         await store.flush()
         #expect(try await database.archivedTabCount() == 0)
         #expect(try await database.loadTabSession().recentlyClosed.first?.tabs.first?.entry.id == entry.id)
+
+        // Even when nothing about it is left in the session.
+        let other = TabEntry(url: url("other"), createdAt: t0)
+        database.tabSession.enqueue(.archive([other], at: t0))
+        await database.tabSession.flush()
+        store.restoreArchived(other)
+        store.close(other.id)
+        store.clearRecentlyClosed()
+        await store.flush()
+        #expect(try await database.archivedTabCount() == 0)
+    }
+
+    @Test func aRetriedBatchLandsBeforeTheBatchesBehindIt() async throws {
+        let database = try AppDatabase.inMemory()
+        let calls = Mutex(0)
+        try await database.writer.write { db in
+            db.add(function: DatabaseFunction("plainFailOnce", argumentCount: 0) { _ in
+                let first = calls.withLock { count in
+                    count += 1
+                    return count == 1
+                }
+                if first { throw DatabaseError(message: "injected failure") }
+                return nil
+            })
+            try db.execute(sql: "CREATE TEMP TRIGGER failOnce BEFORE INSERT ON tabWindow BEGIN SELECT plainFailOnce(); END")
+        }
+        let writer = TabSessionWriter(writer: database.writer, tabStates: database.tabStates, delay: .seconds(60))
+        let window = WindowID()
+        let a = TabEntry(title: "first", createdAt: t0)
+        writer.enqueue(.session(TabSession(windows: [WindowSession(id: window, tabIDs: [a.id], panes: [a.id], focusedPane: 0)], tabs: [a])))
+        writer.startWrite() // the first batch is in the chain before the second is enqueued
+        var b = a
+        b.title = "second"
+        writer.enqueue(.session(TabSession(windows: [WindowSession(id: window, tabIDs: [b.id], panes: [b.id], focusedPane: 0)], tabs: [b])))
+        await writer.flush()
+        #expect(try await database.loadTabSession().tabs.map(\.title) == ["second"])
     }
 
     @Test func aFailedWriteIsRetriedInOrder() async throws {

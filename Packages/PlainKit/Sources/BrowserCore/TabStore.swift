@@ -352,6 +352,10 @@ public final class TabStore {
         for closed in toShow.sorted(by: { !$0.wasFocused && $1.wasFocused }) {
             let id = closed.entry.id
             guard let windowID = windowOfTab[id], let index = windowIndex(windowID) else { continue }
+            // A closed window comes back with one pane; a split in it gets its second pane back.
+            if let pane = closed.pane, pane < FixedChoices.maxPanesPerWindow {
+                while windows[index].panes.count <= pane { windows[index].panes.append(nil) }
+            }
             show(id, inPane: closed.pane, windowIndex: index)
         }
         saveSession()
@@ -419,6 +423,7 @@ public final class TabStore {
         windowOfTab[entry.id] = windowID
         windows[index].tabIDs.append(entry.id)
         if !inBackground { show(entry.id, inPane: nil, windowIndex: index) }
+        persistence?.enqueue(.unarchive([entry.id]))
         saveSession()
         return entry.id
     }

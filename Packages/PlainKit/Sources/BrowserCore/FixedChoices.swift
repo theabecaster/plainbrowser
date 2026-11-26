@@ -147,6 +147,11 @@ public enum FixedChoices {
     /// cost one write. A crash loses at most this much; the app also writes on going to the
     /// background.
     public static let tabSaveDelay = Duration.milliseconds(500)
+    /// A tab write that fails (disk full, a locked file) is tried this many times, a short pause
+    /// apart, before it is dropped; later writes wait behind it so they never land first. Three
+    /// rides out a passing lock without holding later saves for long.
+    public static let tabWriteAttempts = 3
+    public static let tabWriteRetryDelay = Duration.milliseconds(100)
     /// Archived tabs kept; the oldest are deleted beyond it, with their state files (a few KB
     /// each). Months of tabs at the 1-day default, and the size the archive search is tested on.
     public static let archivedTabLimit = 1_000

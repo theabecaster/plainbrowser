@@ -161,6 +161,8 @@ public enum TabChange: Sendable, Equatable {
     case session(TabSession)
     /// These tabs moved to the archive at `at`.
     case archive([TabEntry], at: Date)
+    /// These archived tabs were restored: they leave the archive, whatever happens to them next.
+    case unarchive([TabID])
     /// Delete these archived tabs; nil deletes the whole archive.
     case deleteArchived([TabID]?)
 }

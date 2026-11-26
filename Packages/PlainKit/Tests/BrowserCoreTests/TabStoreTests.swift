@@ -407,6 +407,25 @@ final class RecordingPersistence: TabPersistence {
         #expect(store.windowID(of: a) == first)
     }
 
+    @Test func aClosedSplitWindowReopensSplit() {
+        let store = makeStore()
+        let window = store.windows[0].id
+        let a = store.open(url("a")), b = store.open(url("b"))
+        store.split(window, showing: b)
+        store.closeWindow(window)
+        #expect(store.windows[0].panes == [nil])
+        store.reopenLastClosed()
+        #expect(store.windows[0].panes == [a, b])
+        #expect(store.windows[0].focusedPane == 1)
+    }
+
+    @Test func restoringFromTheArchiveTellsPersistence() {
+        let store = makeStore()
+        let entry = TabEntry(createdAt: clock.now)
+        store.restoreArchived(entry, inBackground: true)
+        #expect(persistence.recorded.contains(.unarchive([entry.id])))
+    }
+
     @Test func theLastWindowIsEmptiedNotRemoved() {
         let store = makeStore()
         let window = store.windows[0].id

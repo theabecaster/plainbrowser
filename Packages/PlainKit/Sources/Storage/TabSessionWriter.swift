@@ -32,13 +32,7 @@ public final class TabSessionWriter: TabPersistence {
         /// compares with the rows instead.
         var written: TabSession?
         var lastError: (any Error)?
-        /// Failed attempts of the batch at the front of `pending`.
-        var failures = 0
     }
-
-    /// A batch that fails this many times in a row is dropped, so one bad change can't block
-    /// every later one; `lastError` keeps the reason.
-    static let maxAttempts = 3
 
     private let state = Mutex(State())
 
@@ -77,15 +71,11 @@ public final class TabSessionWriter: TabPersistence {
         }
     }
 
-    /// Writes everything enqueued so far and returns when it is on disk, retrying a failed batch
-    /// at once (up to `maxAttempts`), since the app may be suspended right after.
+    /// Writes everything enqueued so far and returns when it is on disk.
     public func flush() async {
-        for _ in 0 ..< Self.maxAttempts {
-            startWrite()
-            let last = state.withLock { $0.lastWrite }
-            await last?.value
-            if state.withLock({ $0.pending.isEmpty }) { return }
-        }
+        startWrite()
+        let last = state.withLock { $0.lastWrite }
+        await last?.value
     }
 
     /// Reads the session in the write chain, after every write already started, and keeps it as
@@ -111,7 +101,7 @@ public final class TabSessionWriter: TabPersistence {
     }
 
     /// Takes the buffer and chains its write after the previous one, without waiting for it.
-    private func startWrite() {
+    func startWrite() {
         state.withLock { state in
             state.scheduled?.cancel()
             state.scheduled = nil
@@ -132,33 +122,23 @@ public final class TabSessionWriter: TabPersistence {
         defer { signposter.endInterval(Signposts.tabSave, interval) }
         let written = state.withLock { $0.written }
         let archiveLimit = archiveLimit
-        do {
-            let result = try await writer.write { db in
-                try Self.apply(batch, written: written, archiveLimit: archiveLimit, in: db)
-            }
-            state.withLock {
-                $0.written = result.written
-                $0.failures = 0
-            }
-            if !result.unreferenced.isEmpty {
-                await tabStates.delete(Array(result.unreferenced))
-            }
-        } catch {
-            // The transaction rolled back, so the rows are as before; put the batch back in front
-            // of newer changes and try again later. A newer session supersedes the batch's own.
-            state.withLock { state in
-                state.lastError = error
-                state.failures += 1
-                guard state.failures < Self.maxAttempts else {
-                    state.failures = 0
-                    return
+        // A failed transaction rolls back, so the rows are as before. Try again in place: later
+        // batches wait behind this one in the chain, so nothing newer can land first.
+        for attempt in 1 ... FixedChoices.tabWriteAttempts {
+            do {
+                let result = try await writer.write { db in
+                    try Self.apply(batch, written: written, archiveLimit: archiveLimit, in: db)
                 }
-                var retry = batch
-                if state.pending.contains(where: { if case .session = $0 { true } else { false } }) {
-                    retry.removeAll { if case .session = $0 { true } else { false } }
+                state.withLock { $0.written = result.written }
+                if !result.unreferenced.isEmpty {
+                    await tabStates.delete(Array(result.unreferenced))
                 }
-                state.pending = retry + state.pending
-                schedule(&state)
+                return
+            } catch {
+                state.withLock { $0.lastError = error }
+                if attempt < FixedChoices.tabWriteAttempts {
+                    try? await Task.sleep(for: FixedChoices.tabWriteRetryDelay)
+                }
             }
         }
     }
@@ -197,6 +177,10 @@ public final class TabSessionWriter: TabPersistence {
                 // The written session no longer holds them as open.
                 let archived = Set(entries.map(\.id))
                 written?.tabs.removeAll { archived.contains($0.id) }
+            case .unarchive(let ids):
+                // The tab is open again (a later session writes its open row) or already closed
+                // again; either way it is no longer in the archive.
+                try deleteRows(ids.map(\.uuidString), archived: true, in: db)
             case .deleteArchived(let ids):
                 let doomed = try ids.map { $0.map(\.uuidString) }
                     ?? String.fetchAll(db, sql: "SELECT id FROM \(Schema.tab) WHERE isArchived")
@@ -254,9 +238,6 @@ public final class TabSessionWriter: TabPersistence {
             let oldClosed = Set((old?.recentlyClosed ?? []).flatMap { $0.tabs.map(\.entry.id) })
             let newClosed = Set(session.recentlyClosed.flatMap { $0.tabs.map(\.entry.id) })
             gone.formUnion(oldClosed.subtracting(newClosed))
-            // Only an open tab can close, so a closed tab is no longer archived, even when the
-            // session that restored it was superseded before it was written.
-            try deleteRows(newClosed.subtracting(oldClosed).map(\.uuidString), archived: true, in: db)
         }
         return gone
     }

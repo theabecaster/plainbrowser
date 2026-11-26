@@ -486,8 +486,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         webView.scrollView.delegate = self
         webView.scrollView.alwaysBounceVertical = true
         for effect in pageEdgeEffects { effect.scrollView = webView.scrollView }
-        // Soft, named outright: on WebKit's scroll view `.automatic` showed no effect at all.
-        webView.scrollView.bottomEdgeEffect.style = .soft
+        // Hard: the page under the resting bar is obscured anyway, and an opaque edge keeps text
+        // from refracting through the glass (soft left it legible as ghost lettering;
+        // `.automatic` showed no effect at all on WebKit's scroll view).
+        webView.scrollView.bottomEdgeEffect.style = .hard
         webView.translatesAutoresizingMaskIntoConstraints = false
         webContainer.addSubview(webView)
         NSLayoutConstraint.activate([

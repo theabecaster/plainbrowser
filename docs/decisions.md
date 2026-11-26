@@ -296,7 +296,10 @@ Each entry: what was chosen, and why. Newest last.
 - **Scroll edge effect per control.** An interaction on the full-screen container stretched the
   edge effect over the whole page (seen with the hard style), so the pill and the bar each carry
   one. WebKit hides the bottom effect itself where it shows a fixed footer's color extension. The
-  style is `.soft`, named outright: on WebKit's scroll view `.automatic` showed no effect at all.
+  style is `.hard`: the page area under the resting bar is obscured anyway (the inset follows the
+  bar), and an opaque edge stops body text refracting through the glass. The soft style left that
+  text legible as ghost lettering in the pill (design review, rounds 1 and 2), and `.automatic`
+  showed no effect at all on WebKit's scroll view. The hard edge follows the collapsed pill too.
 - **Glass tint 0.88 (light) / 0.84 (dark), up from 0.78 / 0.72:** the design review saw body
   text refracted through the pill as ghost lettering; the denser paper tint keeps the host legible.
 - **Collapsed pill: taps only.** `AddressPill.isCompact` turns away every recognizer except its

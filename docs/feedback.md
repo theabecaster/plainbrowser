@@ -8,9 +8,10 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Tab Layout values:** "Above", "Left" and "Right" instead of "Regular Tabs" and "Side Tabs". The name "Tab Layout" stays. (M3 lane.)
 - **State-aware controls:** a control appears only when it does something useful in the current state, for example no tab switcher or new-tab button with a single empty tab. Rules in `docs/state-rules.md`. (State audit, then a fix lane.)
-- **First-run intro:** Arc Search's intro look and feel in Plain's identity, including the blocking toggle demo and the default-browser card on the empty tab (gated until Apple grants the entitlement). (Intro lane.)
 
 ## Done
+
+- **First-run intro:** Arc Search's intro look and feel in Plain's identity: Stem splash, icon picker (Dawn, Night, Coral, Paper), live blocking demo. The default-browser step and empty-tab card are built and wait for Apple's entitlement. (dev, next build.)
 
 - **Floating address bar:** no glass band behind the pill; the page runs under it. (dev, after build 2611261658.)
 - **Tab switcher:** behaves like the iOS app switcher, Arc Search style. (Build 2611261658.)

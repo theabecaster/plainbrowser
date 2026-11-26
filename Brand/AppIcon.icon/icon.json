@@ -5,17 +5,25 @@
       "layers": [
         {
           "name": "Flap",
-          "image-name": "flap.svg",
-          "glass": true
+          "glass": true,
+          "image-name-specializations": [
+            {
+              "value": "flap.svg"
+            },
+            {
+              "appearance": "tinted",
+              "value": "flap-tinted.svg"
+            }
+          ]
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.6
       },
       "translucency": {
-        "enabled": true,
-        "value": 0.1
+        "enabled": false,
+        "value": 0
       },
       "specular": true
     },
@@ -24,19 +32,58 @@
       "layers": [
         {
           "name": "Body",
-          "image-name": "body.svg",
-          "glass": true
+          "glass": true,
+          "image-name-specializations": [
+            {
+              "value": "body.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "body-dark.svg"
+            }
+          ]
         }
       ],
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.4
+        "opacity": 0.5
       },
       "translucency": {
         "enabled": true,
-        "value": 0.15
+        "value": 0.16
       },
       "specular": true
+    },
+    {
+      "name": "Window",
+      "layers": [
+        {
+          "name": "Window",
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "window.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "window-dark.svg"
+            },
+            {
+              "appearance": "tinted",
+              "value": "window-tinted.svg"
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "specular": false
     },
     {
       "name": "Bloom",

@@ -7,12 +7,16 @@ public struct PageCandidate: Hashable, Sendable {
     /// The page's `Frecency` key, or nil for a favorite never visited.
     public var frecency: Double?
     public var isFavorite: Bool
+    /// How often the user picked this page after typing text that starts like the current
+    /// input (adaptive history), or nil when never. Higher is stronger.
+    public var adaptiveUse: Double?
 
-    public init(url: URL, title: String?, frecency: Double?, isFavorite: Bool) {
+    public init(url: URL, title: String?, frecency: Double?, isFavorite: Bool, adaptiveUse: Double? = nil) {
         self.url = url
         self.title = title
         self.frecency = frecency
         self.isFavorite = isFavorite
+        self.adaptiveUse = adaptiveUse
     }
 }
 
@@ -25,8 +29,13 @@ public enum AddressBarSuggestion: Hashable, Sendable {
 /// Merges history, favorites and engine suggestions into the address bar's list.
 ///
 /// Order:
-/// 1. **Top hit**: the best page whose address starts with what was typed ("git" finds
-///    github.com), so the obvious destination is one tap away.
+/// 1. **Top hit**, the first of:
+///    - the page the user picked most after typing this text before (adaptive history);
+///    - while the text can still be a host ("git", "github.co"), the site itself: the root page
+///      of the best matching host (`github.com`, not `github.com/apple/swift`), made from that
+///      host when only deeper pages were visited;
+///    - once the text reaches a path ("github.com/ap"), the best page whose address starts with it.
+///    So the obvious destination is one tap away.
 /// 2. **Pages**: favorites first, then history by frecency, up to `maxPages` in total with the top hit.
 /// 3. **Searches** from the engine, filling the rest of the list.
 ///
@@ -47,13 +56,15 @@ public enum AddressBarSuggestions {
 
         let pages = rankedPages(favorites + history)
 
-        var orderedPages: [PageCandidate] = []
-        let typedAddress = normalizedPrefix(typed)
-        if let typedAddress, let topIndex = pages.firstIndex(where: { addressKey($0.url).hasPrefix(typedAddress) }) {
-            orderedPages.append(pages[topIndex])
-            orderedPages += pages.enumerated().filter { $0.offset != topIndex }.map(\.element)
-        } else {
-            orderedPages = pages
+        var orderedPages = pages
+        if let top = topHit(in: pages, typedAddress: normalizedPrefix(typed)) {
+            switch top {
+            case .existing(let index):
+                orderedPages.remove(at: index)
+                orderedPages.insert(pages[index], at: 0)
+            case .origin(let origin):
+                orderedPages.insert(origin, at: 0)
+            }
         }
 
         var result = orderedPages.prefix(min(maxPages, maxTotal)).map {
@@ -69,6 +80,47 @@ public enum AddressBarSuggestions {
         return result
     }
 
+    enum TopHit: Equatable {
+        case existing(Int)
+        case origin(PageCandidate)
+    }
+
+    /// The top hit among ranked `pages` (see the type's documentation), or nil when nothing fits.
+    static func topHit(in pages: [PageCandidate], typedAddress: String?) -> TopHit? {
+        // Adaptive history: the page picked most for text like this.
+        var picked: (index: Int, use: Double)?
+        for (index, page) in pages.enumerated() {
+            guard let use = page.adaptiveUse, use > (picked?.use ?? 0) else { continue }
+            picked = (index, use)
+        }
+        if let picked { return .existing(picked.index) }
+
+        guard let typedAddress,
+              let first = pages.firstIndex(where: { addressKey($0.url).hasPrefix(typedAddress) })
+        else { return nil }
+        // Past the host: the best page whose address starts with the text.
+        guard !typedAddress.contains("/") && !typedAddress.contains("?") else { return .existing(first) }
+        let host = siteKey(addressKey(pages[first].url))
+        guard host.hasPrefix(typedAddress) else { return .existing(first) }
+        // Still a host: the site itself.
+        if let root = pages.firstIndex(where: { addressKey($0.url) == host }) { return .existing(root) }
+        guard var components = URLComponents(url: pages[first].url, resolvingAgainstBaseURL: false),
+              components.host != nil
+        else { return .existing(first) }
+        components.user = nil
+        components.password = nil
+        components.percentEncodedPath = "/"
+        components.query = nil
+        components.fragment = nil
+        guard let origin = components.url else { return .existing(first) }
+        return .origin(PageCandidate(url: origin, title: nil, frecency: nil, isFavorite: false))
+    }
+
+    /// The host part of an `addressKey` (host and port, without path or query).
+    static func siteKey(_ key: String) -> String {
+        String(key.prefix { $0 != "/" && $0 != "?" })
+    }
+
     /// Candidates merged by address and sorted: favorites first, then by frecency.
     static func rankedPages(_ candidates: [PageCandidate]) -> [PageCandidate] {
         var byKey: [String: PageCandidate] = [:]
@@ -82,6 +134,7 @@ public enum AddressBarSuggestions {
             }
             existing.isFavorite = existing.isFavorite || candidate.isFavorite
             existing.frecency = [existing.frecency, candidate.frecency].compactMap(\.self).max()
+            existing.adaptiveUse = [existing.adaptiveUse, candidate.adaptiveUse].compactMap(\.self).max()
             if existing.title?.isEmpty ?? true { existing.title = candidate.title }
             byKey[key] = existing
         }

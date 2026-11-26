@@ -27,13 +27,14 @@ struct AddressBarDataTests {
 
     @Test func visitedPagesComeFirstThenEngineSuggestions() async throws {
         let database = try AppDatabase.inMemory()
-        let data = LiveAddressBarData { SuggestionClient(http: FakeEngine(body: #"["swift.o", ["swift.org", "swift ownership"]]"#)) }
+        let data = LiveAddressBarData { SuggestionClient(http: FakeEngine(body: #"["swift docs", ["swift.org", "swift ownership"]]"#)) }
         await data.attach(database)
         data.pageVisited(url: URL(string: "https://swift.org/documentation")!, title: "Swift Docs")
         await data.flush()
 
         var updates: [[AddressBarSuggestion]] = []
-        await data.suggestions(for: "swift.o") { updates.append($0) }
+        // Words, not an address: "swift.o" would be held back from the engine (SuggestionPolicy).
+        await data.suggestions(for: "swift docs") { updates.append($0) }
 
         #expect(updates.count == 2)
         #expect(updates.first == [.page(url: URL(string: "https://swift.org/documentation")!, title: "Swift Docs", isFavorite: false)])

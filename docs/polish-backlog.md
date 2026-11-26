@@ -34,3 +34,16 @@ Newest feature last.
 - **Visits on commit, pushState and reloads.** History records at load end per back-forward item.
   Same-document navigations and reloads are not new visits until WebEngine's navigation delegate
   reports commits (Lane C).
+
+## Reader (lane F)
+
+- Shell wiring: the reader web view's navigation delegate must allow only `ReaderRenderer.isReaderURL`
+  loads and open every other link in the tab (the reader page itself has JavaScript off and a
+  no-script CSP).
+- Opening blocks some sites put before the article (Ars' "Biz & IT —" kicker and bold deck) read
+  as two extra headings. Could normalize them into `.eyebrow`/`.dek` during extraction.
+- No controlled test where an older `ReaderSchemeHandler.show` finishes after a newer one; the
+  latest-show guard is covered by a cancellation test only.
+- Screenshots so far come from simulator Safari loading the rendered page (an SPM test bundle has
+  no window server). Recheck in the app once reader mode is wired, including accessibility text
+  sizes and the Duo outer screen.

@@ -55,7 +55,12 @@ let package = Package(
             // A folder named Resources at the bundle root breaks iOS signing, hence the subfolder.
             resources: [.copy("Resources/BlockLists")]
         ),
-        .target(name: "Reader", dependencies: ["Storage", "BrowserCore"]),
+        .target(
+            name: "Reader",
+            dependencies: ["Storage", "BrowserCore", "PerfSignposts"],
+            // Mozilla Readability 0.6.0 (Apache-2.0), the reader page template and its stylesheet.
+            resources: [.copy("Resources/Reader")]
+        ),
 
         // Layer 3: UI.
         .target(
@@ -86,5 +91,7 @@ let package = Package(
         // The shell's chrome rules (collapse, pull to refresh, geometry) and the address bar's
         // data seam; plain values, so they run on macOS.
         .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "FeatureUI", "BrowserCore", "Storage"]),
+        // Reader extraction and rendering on saved article pages; iOS simulator only, like above.
+        .testTarget(name: "ReaderTests", dependencies: ["Reader"], resources: [.copy("Fixtures")]),
     ]
 )

@@ -79,6 +79,15 @@ public enum Signposts {
     /// Event: the favorites editor opened from the favorites strip.
     public static let favoritesEditorOpen: StaticString = "favorites.editorOpen"
 
+    // MARK: Reader
+
+    /// Interval: a reader request, from asking for the page's article until it is returned (or
+    /// found not readerable). Near zero for a repeat open of the same page.
+    public static let readerExtract: StaticString = "reader.extract"
+    /// Interval: showing an article in the reader view, from the request until the rendered page
+    /// is handed to the reader web view.
+    public static let readerShow: StaticString = "reader.show"
+
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {
         name.description

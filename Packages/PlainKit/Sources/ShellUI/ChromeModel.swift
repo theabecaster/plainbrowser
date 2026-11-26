@@ -6,10 +6,10 @@ import Foundation
 
 /// Where the bottom chrome sits, expanded and collapsed, in the root view's coordinates.
 ///
-/// The page never relayouts for the toolbar (docs/plan.md, engine rule 4): the web view's
-/// `obscuredContentInsets` is the collapsed chrome, set once, and the expanded chrome overlaps the
-/// page while it shows. `setMinimumViewportInset` gets the collapsed and expanded sizes, so CSS
-/// `svh`/`lvh` stay stable while the bar moves.
+/// The page never relayouts while the toolbar moves (docs/plan.md, engine rule 4): the bar moves by
+/// transform and alpha, and the web view's bottom `obscuredContentInsets` follows the bar's resting
+/// state, changed once when a snap ends (`PageInsetState`). `setMinimumViewportInset` gets the
+/// collapsed and expanded sizes, so CSS `svh`/`lvh` stay stable while the bar moves.
 struct ChromeGeometry: Equatable {
     /// The root view's height.
     var viewHeight: CGFloat
@@ -22,6 +22,9 @@ struct ChromeGeometry: Equatable {
     static let barHeight: CGFloat = 48
     /// Between the pill and the button bar.
     static let gap: CGFloat = 6
+    /// How close the pill and bar glass come before they merge: under `gap`, so at rest they stay
+    /// two shapes and only flow together while they pass each other in a collapse.
+    static let glassMergeSpacing: CGFloat = 4
     /// Above the bottom edge when there is no home indicator (iPhone SE).
     static let edgeMargin: CGFloat = 8
     /// The collapsed pill's size relative to the expanded one.
@@ -72,15 +75,22 @@ struct ChromeGeometry: Equatable {
         max(0, 1 - progress / 0.6)
     }
 
-    /// The page's obscured bottom inset, measured up from `pageBottom` (the web view's bottom in
-    /// the same coordinates): the collapsed chrome.
-    func obscuredBottom(pageBottom: CGFloat) -> CGFloat {
+    /// The collapsed chrome's height over the page, measured up from `pageBottom` (the web view's
+    /// bottom in the same coordinates). The smallest bottom inset the page sees.
+    func collapsedInset(pageBottom: CGFloat) -> CGFloat {
         max(0, pageBottom - collapsedTop)
     }
 
-    /// The largest bottom inset the page sees: the expanded chrome.
-    func expandedBottom(pageBottom: CGFloat) -> CGFloat {
-        max(0, pageBottom - expandedTop)
+    /// The expanded chrome's height over the page: the largest bottom inset the page sees, never
+    /// equal to the collapsed one (WebKit wants the maximum viewport inset strictly larger).
+    func expandedInset(pageBottom: CGFloat) -> CGFloat {
+        max(pageBottom - expandedTop, collapsedInset(pageBottom: pageBottom) + 1)
+    }
+
+    /// The page's obscured bottom inset for the bar resting collapsed or expanded, so the resting
+    /// bar never covers fixed page footers or the page's last lines.
+    func obscuredInset(pageBottom: CGFloat, collapsed: Bool) -> CGFloat {
+        collapsed ? collapsedInset(pageBottom: pageBottom) : expandedInset(pageBottom: pageBottom)
     }
 }
 
@@ -117,22 +127,69 @@ struct ChromeCollapse: Equatable {
         lastOffset = nil
     }
 
-    /// Sets the progress outright (a snap, or expanding for a new page).
+    /// Sets the progress outright (a snap's frame, a drag taking over mid-snap, or expanding for a
+    /// new page). The next scroll starts fresh from it.
     mutating func settle(at value: CGFloat) {
         progress = min(max(value, 0), 1)
         lastOffset = nil
     }
 
-    /// Where the bar should settle when the scroll stops: the nearer end, unless the release had
+    /// Where the bar should settle when the finger lifts: the nearer end, unless the release had
     /// clear velocity (points per millisecond, positive scrolling down the page).
     func settleTarget(velocity: CGFloat = 0) -> CGFloat {
-        if velocity > 0.2 { return 1 }
-        if velocity < -0.2 { return 0 }
+        if velocity > Self.clearVelocity { return 1 }
+        if velocity < -Self.clearVelocity { return 0 }
         return progress >= 0.5 ? 1 : 0
+    }
+
+    /// A release faster than this (points per millisecond) picks the snap's direction.
+    static let clearVelocity: CGFloat = 0.2
+    /// The fastest the snap starts (progress per second): a hard flick still eases into place
+    /// instead of slamming into the end.
+    static let maxSnapVelocity: CGFloat = 8
+
+    /// The snap's starting velocity in progress per second, from the scroll's release velocity
+    /// (points per millisecond, positive scrolling down the page): the bar keeps the speed it had
+    /// under the finger, where it followed the scroll 1:1 over `distance`. Only velocity toward
+    /// `target` carries over.
+    func snapVelocity(scrollVelocity: CGFloat, toward target: CGFloat) -> CGFloat {
+        let perSecond = scrollVelocity * 1000 / distance
+        let towardTarget = (target - progress) * perSecond >= 0 ? perSecond : 0
+        return min(max(towardTarget, -Self.maxSnapVelocity), Self.maxSnapVelocity)
     }
 
     /// True while the bar is between its two resting states.
     var isMidway: Bool { progress > 0 && progress < 1 }
+}
+
+/// When the page's bottom inset may follow the bar's resting state (docs/plan.md, engine rule 4).
+///
+/// The bar comes to rest at the end of each snap. The inset then changes once, to the expanded or
+/// collapsed chrome, never per frame. While the page is pulled past its top or bottom the change
+/// waits, because WebKit clamps the overscroll on any inset change and the bounce would jump.
+struct PageInsetState: Equatable {
+    /// The resting state the page's inset shows: true for the collapsed bar. The bar starts out.
+    private(set) var collapsed = false
+    /// A resting state waiting for the bounce to end.
+    private(set) var pending: Bool?
+
+    /// The bar came to rest, collapsed or expanded.
+    mutating func barRested(collapsed: Bool) {
+        pending = collapsed == self.collapsed ? nil : collapsed
+    }
+
+    /// Applies a waiting change when the page is within its scroll range: `offset` is the content
+    /// offset, `top` and `bottom` the smallest and largest offsets at rest. Returns true when the
+    /// inset should change now.
+    mutating func applyIfSettled(offset: CGFloat, top: CGFloat, bottom: CGFloat) -> Bool {
+        guard let pending else { return false }
+        // A page shorter than the screen rests at its top.
+        let isOverscrolled = offset < top - 0.5 || offset > max(bottom, top) + 0.5
+        guard !isOverscrolled else { return false }
+        collapsed = pending
+        self.pending = nil
+        return true
+    }
 }
 
 /// Pull to refresh's threshold logic (docs/plan.md, motion table: arms at 80 pt, selection haptic

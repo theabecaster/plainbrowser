@@ -27,6 +27,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private let navigationSignposter = NavigationSignposter()
 
     private let webContainer = UIView()
+    /// The pill and the button bar, rendered as one glass surface (docs/plan.md, section 5,
+    /// Chrome). It covers the view but takes no touches of its own.
+    private let chromeGlass = Glass.makeContainer(spacing: ChromeGeometry.glassMergeSpacing)
+    /// The system scroll edge effect under the chrome, so page text under the bar stays readable.
+    private let pageEdgeEffect = UIScrollEdgeElementContainerInteraction()
     private let pill = AddressPill()
     private let buttonBar = ButtonBar()
     private let sheet = SearchSheet()
@@ -51,6 +56,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var desktopHosts: Set<String> = []
     private var collapse = ChromeCollapse()
     private var collapseInterval: OSSignpostIntervalState?
+    /// Runs the toolbar snap frame by frame, so a drag can take the bar from where it is on screen.
+    private let snap = SpringDriver(spring: Motion.toolbarSnap)
+    private var snapInterval: OSSignpostIntervalState?
+    /// Which resting state the page's bottom inset follows, and a change waiting for a bounce.
+    private var pageInset = PageInsetState()
     private var pullTracker = PullToRefreshTracker()
     private var suggestionTask: Task<Void, Never>?
     private var favoritesTask: Task<Void, Never>?
@@ -85,11 +95,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         view.backgroundColor = Palette.background
         view.tintColor = Palette.accent
 
-        for subview in [webContainer, pullIndicator, sheet, buttonBar, pill] as [UIView] {
+        for subview in [webContainer, pullIndicator, sheet, chromeGlass] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
+        for subview in [buttonBar, pill] as [UIView] {
+            subview.translatesAutoresizingMaskIntoConstraints = false
+            chromeGlass.contentView.addSubview(subview)
+        }
         webContainer.clipsToBounds = true
+        pageEdgeEffect.edge = .bottom
+        chromeGlass.addInteraction(pageEdgeEffect)
 
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
@@ -158,6 +174,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             pullIndicator.centerXAnchor.constraint(equalTo: webContainer.centerXAnchor),
             pullIndicator.widthAnchor.constraint(equalToConstant: PullIndicator.size),
             pullIndicator.heightAnchor.constraint(equalToConstant: PullIndicator.size),
+
+            chromeGlass.topAnchor.constraint(equalTo: view.topAnchor),
+            chromeGlass.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            chromeGlass.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            chromeGlass.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
             sheet.topAnchor.constraint(equalTo: view.topAnchor),
             sheet.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -284,8 +305,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     // MARK: Address bar
 
     private func pillTapped() {
-        // A collapsed bar first comes back, as Safari's does; the next tap edits.
-        if collapse.progress > 0 {
+        // A collapsed bar first comes back, as Safari's does; the next tap edits. A bar already
+        // springing back out takes the tap as an edit.
+        let restingProgress = snap.isRunning ? snap.target : collapse.progress
+        if restingProgress > 0 {
             expandChrome(animated: true)
             return
         }
@@ -299,6 +322,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     public func textFieldDidBeginEditing(_ textField: UITextField) {
+        // First, so a preconnect to the suggestion host overlaps the sheet opening.
+        data.prepareForTyping()
         applyEditingLayout(true, animated: didFocusAtLaunch)
         if !(textField.text ?? "").isEmpty {
             textField.selectAll(nil)
@@ -436,6 +461,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         webView.isFindInteractionEnabled = true
         webView.scrollView.delegate = self
         webView.scrollView.alwaysBounceVertical = true
+        pageEdgeEffect.scrollView = webView.scrollView
         webView.translatesAutoresizingMaskIntoConstraints = false
         webContainer.addSubview(webView)
         NSLayoutConstraint.activate([
@@ -529,16 +555,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
     }
 
-    /// Tells WebKit what the chrome covers, without relayouting the page as the bar moves
-    /// (docs/plan.md, engine rule 4): the obscured inset is the collapsed chrome and changes only
-    /// when the geometry does (rotation, fold, bar mode), never while scrolling.
+    /// Tells WebKit what the chrome covers (docs/plan.md, engine rule 4). The bottom inset is the
+    /// chrome at rest: expanded or collapsed, as `pageInset` says. It changes when a snap ends or
+    /// the geometry changes (rotation, fold, bar mode), never while the bar moves, so the page
+    /// never relayouts during the motion. The viewport insets span collapsed to expanded, so CSS
+    /// `svh`/`lvh` stay put.
     private func updatePageInsets() {
         guard let webView, view.bounds.height > 0 else { return }
         let pageBottom = webContainer.frame.maxY
-        let collapsed = geometry.obscuredBottom(pageBottom: pageBottom)
-        let expanded = max(geometry.expandedBottom(pageBottom: pageBottom), collapsed + 1)
-        if webView.obscuredContentInsets.bottom != collapsed {
-            webView.obscuredContentInsets = UIEdgeInsets(top: 0, left: 0, bottom: collapsed, right: 0)
+        let collapsed = geometry.collapsedInset(pageBottom: pageBottom)
+        let expanded = geometry.expandedInset(pageBottom: pageBottom)
+        let obscured = pageInset.collapsed ? collapsed : expanded
+        if webView.obscuredContentInsets.bottom != obscured {
+            webView.obscuredContentInsets = UIEdgeInsets(top: 0, left: 0, bottom: obscured, right: 0)
         }
         if webView.minimumViewportInset.bottom != collapsed || webView.maximumViewportInset.bottom != expanded {
             webView.setMinimumViewportInset(
@@ -548,6 +577,33 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
     }
 
+    /// Moves the page's inset to the bar's resting state, unless the page is bouncing past an
+    /// edge; then the next scroll callback inside the range applies it.
+    private func applyPendingInset() {
+        guard pageInset.pending != nil else { return }
+        let applied: Bool
+        if let scrollView = webView?.scrollView {
+            let range = scrollRange(scrollView)
+            applied = pageInset.applyIfSettled(offset: scrollView.contentOffset.y, top: range.top, bottom: range.bottom)
+        } else {
+            applied = pageInset.applyIfSettled(offset: 0, top: 0, bottom: 0)
+        }
+        guard applied else { return }
+        if pageInset.collapsed {
+            Signposts.signposter.emitEvent(Signposts.pageInset, "collapsed")
+        } else {
+            Signposts.signposter.emitEvent(Signposts.pageInset, "expanded")
+        }
+        updatePageInsets()
+    }
+
+    /// The smallest and largest content offsets of the page at rest.
+    private func scrollRange(_ scrollView: UIScrollView) -> (top: CGFloat, bottom: CGFloat) {
+        let top = -scrollView.adjustedContentInset.top
+        let bottom = scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+        return (top, bottom)
+    }
+
     // MARK: Toolbar collapse
 
     /// Places the pill and button bar for collapse `progress` with transform and alpha only.
@@ -555,6 +611,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let pillMove = geometry.pillTransform(progress: progress)
         pill.transform = CGAffineTransform(translationX: 0, y: pillMove.translationY)
             .scaledBy(x: pillMove.scale, y: pillMove.scale)
+        pill.isCompact = progress > 0
         guard !usesVerticalBar else { return }
         buttonBar.transform = CGAffineTransform(translationX: 0, y: geometry.barTranslation(progress: progress))
         if !isEditingAddress { buttonBar.alpha = ChromeGeometry.barAlpha(progress: progress) }
@@ -564,44 +621,86 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         settleCollapse(at: 0, animated: animated)
     }
 
-    /// Snaps the bar to `target` (0 or 1) with `.smooth(0.25)`.
-    private func settleCollapse(at target: CGFloat, animated: Bool) {
-        let moving = collapse.progress != target
-        collapse.settle(at: target)
-        guard moving || collapseInterval != nil else { return }
-        if collapseInterval == nil { collapseInterval = Signposts.signposter.beginInterval(Signposts.toolbarCollapse) }
-        let finish = { [weak self] in
-            guard let self, let interval = self.collapseInterval else { return }
-            Signposts.signposter.endInterval(Signposts.toolbarCollapse, interval)
-            self.collapseInterval = nil
-        }
-        guard animated else {
-            applyCollapse(target)
-            finish()
+    /// Snaps the bar to `target` (0 expanded, 1 collapsed) with `.smooth(0.25)`, from where it is
+    /// on screen. A snap already running retargets and keeps its velocity unless `velocity`
+    /// (progress per second, from the release) is given. When the bar rests, the page's inset
+    /// follows.
+    private func settleCollapse(at target: CGFloat, animated: Bool, velocity: CGFloat? = nil) {
+        guard snap.isRunning || collapse.progress != target else {
+            // Already there (the finger left the bar at an end): it rests now.
+            snapEnded(at: target)
             return
         }
-        // Small moves of two floating controls: no crossfade of the whole screen.
-        Motion.animate(Motion.toolbarSnap, changes: { self.applyCollapse(target) }, completion: finish)
+        let signposter = Signposts.signposter
+        if collapseInterval == nil { collapseInterval = signposter.beginInterval(Signposts.toolbarCollapse) }
+        if snapInterval == nil { snapInterval = signposter.beginInterval(Signposts.toolbarSnap) }
+        guard animated else {
+            snap.jump(to: target)
+            collapse.settle(at: target)
+            applyCollapse(target)
+            snapEnded(at: target)
+            return
+        }
+        // At rest the driver's value is stale: the drag moved the bar since. Start from the screen.
+        if !snap.isRunning { snap.jump(to: collapse.progress) }
+        snap.animate(to: target, velocity: velocity, in: view, onFrame: { [weak self] progress in
+            guard let self else { return }
+            self.collapse.settle(at: progress)
+            self.applyCollapse(self.collapse.progress)
+        }, completion: { [weak self] in
+            self?.snapEnded(at: target)
+        })
+    }
+
+    /// The bar is at rest at `target`: close the signposts and let the page's inset follow.
+    private func snapEnded(at target: CGFloat) {
+        let signposter = Signposts.signposter
+        if let interval = snapInterval {
+            signposter.endInterval(Signposts.toolbarSnap, interval, "settled")
+            snapInterval = nil
+        }
+        if let interval = collapseInterval {
+            signposter.endInterval(Signposts.toolbarCollapse, interval)
+            collapseInterval = nil
+        }
+        pageInset.barRested(collapsed: target >= 1)
+        applyPendingInset()
     }
 
     // MARK: UIScrollViewDelegate
 
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        guard scrollView === webView?.scrollView else { return }
+        // A drag during a snap takes the bar from where it is on screen, with no jump.
+        if snap.isRunning {
+            collapse.settle(at: snap.stop())
+            if let interval = snapInterval {
+                Signposts.signposter.endInterval(Signposts.toolbarSnap, interval, "grabbed")
+                snapInterval = nil
+            }
+        }
         collapse.resetTracking()
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView === webView?.scrollView, !isEditingAddress else { return }
-        let top = -scrollView.adjustedContentInset.top
+        let (top, bottom) = scrollRange(scrollView)
         let offset = scrollView.contentOffset.y
 
-        if scrollView.isTracking {
-            trackPull(top - offset)
+        // A resting state that waited for a bounce applies once the page is back in range.
+        if pageInset.pending != nil { applyPendingInset() }
+
+        guard scrollView.isTracking else {
+            // Coasting into the top brings the bar back, as reaching the top by hand does.
+            let restingProgress = snap.isRunning ? snap.target : collapse.progress
+            if scrollView.isDecelerating, offset <= top, restingProgress > 0 {
+                expandChrome(animated: true)
+            }
+            return
         }
-        guard scrollView.isTracking || scrollView.isDecelerating else { return }
-        let bottom = scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+        trackPull(top - offset)
         // A page that barely scrolls keeps its bar.
-        guard bottom - top > collapse.distance * 2 else { return }
+        guard !snap.isRunning, bottom - top > collapse.distance * 2 else { return }
         if collapse.scrolled(to: offset, top: top, bottom: bottom) {
             if collapseInterval == nil {
                 collapseInterval = Signposts.signposter.beginInterval(Signposts.toolbarCollapse)
@@ -619,16 +718,30 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         } else {
             pullIndicator.hide()
         }
+        guard !isEditingAddress else { return }
+        // The snap starts as the finger lifts, toward the release velocity when it is clear, and
+        // runs alongside the page's deceleration instead of waiting for it to end.
+        let (top, bottom) = scrollRange(scrollView)
+        let collapsible = bottom - top > collapse.distance * 2
+        let target: CGFloat
+        if !collapsible || scrollView.contentOffset.y <= top {
+            target = 0
+        } else {
+            target = collapse.settleTarget(velocity: velocity.y)
+        }
+        settleCollapse(
+            at: target, animated: true, velocity: collapse.snapVelocity(scrollVelocity: velocity.y, toward: target)
+        )
     }
 
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        guard scrollView === webView?.scrollView, !decelerate, !isEditingAddress else { return }
-        settleCollapse(at: collapse.settleTarget(), animated: true)
+        guard scrollView === webView?.scrollView, !decelerate else { return }
+        applyPendingInset()
     }
 
     public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        guard scrollView === webView?.scrollView, !isEditingAddress else { return }
-        settleCollapse(at: collapse.settleTarget(), animated: true)
+        guard scrollView === webView?.scrollView else { return }
+        applyPendingInset()
     }
 
     public func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {

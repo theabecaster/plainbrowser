@@ -142,14 +142,14 @@ extension BrowserViewController: EngineHost {
     public func downloadDidEnd(_ download: Download) {
         switch download.state {
         case .finished(let file):
-            Task {
-                await presentPrompt { finish in
+            Task { [weak self] in
+                await self?.presentPrompt { finish in
                     let alert = UIAlertController(
                         title: "Downloaded", message: "\(download.filename) is in Files, in Plain's Downloads folder.",
                         preferredStyle: .alert
                     )
                     alert.addAction(UIAlertAction(title: "OK", style: .cancel) { _ in finish(()) })
-                    alert.addAction(UIAlertAction(title: "Open", style: .default) { [weak self] _ in
+                    alert.addAction(UIAlertAction(title: "Open", style: .default) { _ in
                         finish(())
                         self?.preview(file)
                     })

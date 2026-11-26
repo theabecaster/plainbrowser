@@ -29,8 +29,9 @@ public protocol AddressBarData: AnyObject {
     func isFavorite(_ url: URL) async -> Bool
     /// Adds `url` to the end of the favorites, or removes it. Returns false when it couldn't.
     func setFavorite(_ isFavorite: Bool, url: URL, title: String?) async -> Bool
-    /// A page finished loading.
-    func pageVisited(url: URL, title: String?)
+    /// A page finished loading. `kind` is `.typed` when the address bar asked for it (an address,
+    /// a search or a picked suggestion), which weighs more in ranking.
+    func pageVisited(url: URL, title: String?, kind: VisitKind)
     /// A visited page's title arrived or changed.
     func pageTitleChanged(url: URL, title: String)
     /// The address field took focus: typing is likely next. A chance to preconnect to the
@@ -38,10 +39,18 @@ public protocol AddressBarData: AnyObject {
     /// including at launch before the first frame, so it must return at once and start any work
     /// off the main thread.
     func prepareForTyping()
+    /// A page suggestion was picked for the typed `input`, so it ranks first for that input next
+    /// time. Not for searches or favorites tiles.
+    func suggestionPicked(input: String, url: URL)
 }
 
 extension AddressBarData {
     public func prepareForTyping() {}
+
+    /// A visit the address bar did not ask for (a link, a redirect).
+    public func pageVisited(url: URL, title: String?) {
+        pageVisited(url: url, title: title, kind: .link)
+    }
 }
 
 /// The app's address-bar data: GRDB history and favorites (Storage), the user's engine
@@ -55,6 +64,8 @@ extension AddressBarData {
 public final class LiveAddressBarData: AddressBarData {
     /// The settings in effect. Tab layout and archive interval wait here for the tab features.
     public private(set) var settings = BrowserSettings.defaults
+    /// Private browsing: no remote suggestions, no preconnect. False until M2 adds private tabs.
+    public var isPrivate = false
     public var searchEngine: SearchEngine { settings.searchEngine }
     private var database: AppDatabase?
     /// The database's one history writer.
@@ -105,11 +116,36 @@ public final class LiveAddressBarData: AddressBarData {
         }
         guard !Task.isCancelled else { return }
         update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: []))
+        // While the engine answers, the longest cached prefix's suggestions fill the list.
+        let cached = await client.cachedSuggestions(for: query, engine: searchEngine, isPrivate: isPrivate)
+        guard !Task.isCancelled else { return }
+        if !cached.isEmpty {
+            update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: cached))
+        }
 
-        guard let searches = try? await client.suggestions(for: query, engine: searchEngine),
-              !searches.isEmpty, !Task.isCancelled
+        guard let searches = try? await client.suggestions(for: query, engine: searchEngine, isPrivate: isPrivate),
+              !searches.isEmpty, searches != cached, !Task.isCancelled
         else { return }
         update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: searches))
+    }
+
+    /// Warms the connection to the engine's suggestion host as the field takes focus. Returns at
+    /// once: the client is an actor and the request runs at utility priority.
+    public func prepareForTyping() {
+        let engine = searchEngine
+        let isPrivate = isPrivate
+        Task { [client] in await client.preconnect(engine: engine, isPrivate: isPrivate) }
+    }
+
+    public func suggestionPicked(input: String, url: URL) {
+        guard let database, Self.isRecordable(url),
+              !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        let previous = lastRecord
+        lastRecord = Task {
+            await previous?.value
+            await database.recordPickedSuggestion(input: input, url: url)
+        }
     }
 
     public func cancelSuggestions() {
@@ -141,9 +177,9 @@ public final class LiveAddressBarData: AddressBarData {
         }
     }
 
-    public func pageVisited(url: URL, title: String?) {
+    public func pageVisited(url: URL, title: String?, kind: VisitKind) {
         guard let recorder, Self.isRecordable(url) else { return }
-        let visit = HistoryVisit(url: url, title: title, visitedAt: Date())
+        let visit = HistoryVisit(url: url, title: title, visitedAt: Date(), kind: kind)
         lastVisit = (url, visit.visitedAt)
         let previous = lastRecord
         lastRecord = Task {

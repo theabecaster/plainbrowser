@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import Observation
 import os
@@ -16,6 +17,8 @@ final class EngineUIState {
     let reader = ReaderPresenter()
     var readerTask: Task<Void, Never>?
     let pageState = PageStateView()
+    /// The tab whose next visit the address bar asked for (`VisitKind.typed`).
+    var typedVisitTab: UUID?
     /// Tabs whose page kept crashing after the engine's automatic reloads.
     var crashedTabs: Set<UUID> = []
     let prompts = PromptQueue()
@@ -101,9 +104,12 @@ extension BrowserViewController {
             guard let self, let tab, tab.isLoading, tab === self.currentTab else { return }
             self.pill.progressBar.setProgress(progress)
         }
-        tab.onVisit = { [weak self] url, title in
-            guard let self, self.recordsHistory else { return }
-            self.data.pageVisited(url: url, title: title)
+        tab.onVisit = { [weak self, weak tab] url, title in
+            guard let self, let tab else { return }
+            let kind: VisitKind = self.engineUI.typedVisitTab == tab.id ? .typed : .link
+            self.engineUI.typedVisitTab = nil
+            guard self.recordsHistory else { return }
+            self.data.pageVisited(url: url, title: title, kind: kind)
         }
         tab.onVisitTitleChange = { [weak self] url, title in
             guard let self, self.recordsHistory else { return }
@@ -160,6 +166,8 @@ extension BrowserViewController {
                 if let tab = currentTab { engineUI.crashedTabs.remove(tab.id) }
             } else if old != nil {
                 pill.progressBar.finish()
+                // A typed load that ended without a new page (it failed): later visits are links.
+                if engineUI.typedVisitTab == currentTab?.id { engineUI.typedVisitTab = nil }
             }
         }
         updateButtons()

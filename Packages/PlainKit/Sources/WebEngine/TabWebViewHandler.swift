@@ -310,7 +310,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(
         _ webView: WKWebView, requestGeolocationPermissionFor origin: WKSecurityOrigin,
-        initiatedBy frame: WKFrameInfo, decisionHandler: @escaping @MainActor (WKPermissionDecision) -> Void
+        initiatedByFrame frame: WKFrameInfo, decisionHandler: @escaping @MainActor (WKPermissionDecision) -> Void
     ) {
         Task { decisionHandler(await decide([.location], origin: origin)) }
     }

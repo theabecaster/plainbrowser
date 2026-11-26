@@ -374,7 +374,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             Haptic.nothingThere.play()
             return false
         }
-        load(url)
+        load(url, kind: .typed)
         signposter.endInterval(Signposts.addressSubmit, state, "loaded")
         return false
     }
@@ -418,12 +418,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private func open(_ pick: SearchPick) {
         let url: URL?
         switch pick {
-        case .page(let page): url = page
+        case .page(let page):
+            url = page
+            // What the user typed, unless the field still shows the page's own address.
+            let input = pill.textField.text ?? ""
+            if input != currentTab?.url?.absoluteString { data.suggestionPicked(input: input, url: page) }
         case .search(let query): url = data.searchEngine.resultsURL(for: query)
         }
         guard let url else { return }
         let state = Signposts.signposter.beginInterval(Signposts.addressSubmit)
-        load(url)
+        load(url, kind: .typed)
         Signposts.signposter.endInterval(Signposts.addressSubmit, state, "picked")
     }
 
@@ -471,8 +475,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     // MARK: Page
 
-    func load(_ url: URL) {
+    /// Loads `url` in the tab on screen. `.typed` when the address bar asked for it: that visit
+    /// then weighs more in ranking.
+    func load(_ url: URL, kind: VisitKind = .link) {
         let tab = self.currentTab ?? openNewTab()
+        engineUI.typedVisitTab = kind == .typed ? tab.id : nil
         tab.load(url)
         pill.display(url: url)
         pill.textField.text = url.absoluteString

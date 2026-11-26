@@ -85,6 +85,9 @@ let package = Package(
         .target(
             name: "FeatureUI",
             dependencies: ["Storage", "BrowserCore", "DesignSystem", "PerfSignposts"],
+            // The app icon colorways' previews for the icon picker (Brand/tools/icon_previews.sh).
+            // Read only when the intro or Settings > App Icon shows them.
+            resources: [.copy("Resources/AppIcons")],
             swiftSettings: mainActorByDefault
         ),
 

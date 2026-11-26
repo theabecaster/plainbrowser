@@ -473,6 +473,7 @@ Each entry: what was chosen, and why. Newest last.
   view; a tab switch adds one WebKit snapshot of the page leaving (2x, kept only for the two
   neighbours, about 5 MB each decoded). The gallery is built when opened and released when it
   closes. Engine-tab watches are one Observation per tab with an engine tab.
+
 ## Tab gallery: the app-switcher cascade on a plain scroll view (2026-11-26)
 
 - **Chosen:** the gallery works like Arc Search's switcher, which copies the iPhone app switcher:
@@ -512,3 +513,46 @@ Each entry: what was chosen, and why. Newest last.
   spins under a finger; one sentence; Search while the keyboard is down), and the search sheet is
   clear over it. A new tab's card is the mark on paper. The views live in TabGalleryUI, next to the
   card that shares the mark; the shell installs the start screen in three lines.
+
+
+## First-run intro (2026-11-26)
+
+- **Chosen:** a short intro on first launch only, replacing "no onboarding" (the owner's choice;
+  docs/ui-reference.md, "First run"). Steps: the Stem mark assembling, the promise, what's inside,
+  pick your icon, the blocking demo, the default-browser step (gated), then a dissolve into the
+  search field. Skip on every step. Motion and look follow Arc Search's intro in Plain's identity;
+  the reasoning is in docs/research/intro.md.
+- **Its own window above the browser's.** On first launch the scene shows only the intro; the
+  browser is built when the intro finishes, so its search field takes focus and the keyboard rises
+  while the intro fades off the top. After the intro was seen, launch runs one user-defaults read
+  (`IntroGate.shouldShow`, key `PlainIntroSeen`) and nothing else of the intro: no views, layers
+  or images are made. `-PlainIntroSeen YES` (the argument domain, Release too) marks it seen for
+  the perf and smoke tests; Debug UI tests with `-PlainInMemoryStore`/`-PlainTestStore` skip it
+  unless `-PlainShowIntro` is given.
+- **Splash in Core Animation, steps in SwiftUI.** The mark is the icon's own geometry (ported from
+  `Brand/tools/gen_icon.py`) as shape and gradient layers; the fold is a half turn of a
+  `CATransformLayer` about the crease, with a double-sided coral back. Every splash and field
+  animation runs on the render server at up to 120 Hz (`preferredFrameRateRange` 80–120). The
+  steps are low-frequency static screens, so SwiftUI: its blur, opacity and offset transitions are
+  Core Animation filters too.
+- **The blocking demo reflows instead of wiping** between two pictures: the clutter leaves piece
+  by piece and the article closes up, which shows what blocking does to a page.
+- **Icon colorways:** Dawn (the app icon), Night, Coral and Paper, each an Icon Composer document
+  from the same generator (`gen_icon.py --all`), compiled as alternate icons
+  (`ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES`; actool takes `.icon` documents and writes
+  `CFBundleAlternateIcons`, checked in the built Info.plist). The picker's previews are ictool
+  renders in FeatureUI's resources (`Brand/tools/icon_previews.sh`), decoded off the main thread.
+  Settings gets one row, App Icon.
+- **Default-browser prompts gated off** (`FixedChoices.defaultBrowserPromptsEnabled = false`):
+  without Apple's default-browser entitlement Plain cannot be picked as the default, so the prompts
+  would point at a choice that is not there. Both prompts are built and tested
+  (`-PlainForceDefaultBrowserPrompts` in Debug). The button opens the Default Apps settings
+  (`openDefaultApplicationsSettingsURLString`). The empty-tab card is `DefaultBrowserCard` in
+  FeatureUI for the start screen to host: ShellUI installs the start screen (`EmptyTabView`) and
+  already imports FeatureUI, so it can place `makeDefaultBrowserCard` there when
+  `DefaultBrowserPrompts.showsEmptyTabCard()` says so. No module dependency changes.
+- **Brand art colors** (`DesignSystem.BrandArt`): the mark's and the field's colors live in
+  DesignSystem, used only by the mark and the intro. The demo page's fake ads keep their own loud
+  colors on purpose.
+- **Perf cost:** after the intro was seen, one defaults read on the launch path. FeatureUI's
+  resource bundle adds four 180 px PNGs (150 KB), read only by the picker.

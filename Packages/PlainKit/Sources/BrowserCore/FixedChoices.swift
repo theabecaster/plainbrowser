@@ -41,6 +41,18 @@ public enum FixedChoices {
     /// Page zoom and desktop/mobile site are remembered per site, automatically.
     public static let perSiteChoicesRemembered = true
 
+    // MARK: First run
+
+    /// A short intro on first launch only (the owner's choice, docs/ui-reference.md, "First run"),
+    /// never again after it is finished or skipped. No permission prompts in it: those wait until
+    /// a site needs them.
+    public static let introShownOnce = true
+    /// The intro's default-browser step and the empty-tab "Set as Default Browser" card. Off until
+    /// Apple grants Plain the default-browser entitlement (`com.apple.developer.web-browser`):
+    /// without it Plain cannot be chosen as the default, so the prompts would point at a choice
+    /// that is not there. Both are built and tested; turn this on when the entitlement lands.
+    public static let defaultBrowserPromptsEnabled = false
+
     // MARK: Page
 
     /// Page zoom steps, Safari's set: fine steps near 100% where people adjust, bigger ones past

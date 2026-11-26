@@ -17,7 +17,7 @@ final class PerfTests: XCTestCase {
     /// Cold launch until the main thread is responsive after the first frame.
     func testLaunch() {
         measure(metrics: [XCTApplicationLaunchMetric(waitUntilResponsive: true)], options: options) {
-            XCUIApplication().launch()
+            XCUIApplication.introSeen().launch()
         }
     }
 
@@ -27,13 +27,13 @@ final class PerfTests: XCTestCase {
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launch)
         )
         measure(metrics: [metric], options: options) {
-            XCUIApplication().launch()
+            XCUIApplication.introSeen().launch()
         }
     }
 
     /// Two local pages in two tabs, with the search sheet closed: the start of the tab tests.
     private func launchWithTwoTabs(_ server: TestServer) -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = XCUIApplication.introSeen()
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -85,7 +85,7 @@ final class PerfTests: XCTestCase {
 
     /// Scrolling a long real page. Needs the network: it loads a Wikipedia article.
     func testPageScrollHitches() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.introSeen()
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))

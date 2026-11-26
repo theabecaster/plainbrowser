@@ -4,7 +4,7 @@ import XCTest
 @MainActor
 final class SmokeTests: XCTestCase {
     func testLaunchFocusesSearchField() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.introSeen()
         app.launch()
 
         let field = app.textFields["searchField"]
@@ -14,7 +14,7 @@ final class SmokeTests: XCTestCase {
     }
 
     func testSubmittingAnAddressOpensAWebView() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.introSeen()
         app.launch()
 
         let field = app.textFields["searchField"]
@@ -27,6 +27,17 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(pill.waitForExistence(timeout: 5))
         XCTAssertTrue((pill.value as? String)?.hasPrefix("https://example.com") ?? false)
         XCTAssertFalse(field.exists && field.hasKeyboardFocus, "field should give up focus after submit")
+    }
+}
+
+@MainActor
+extension XCUIApplication {
+    /// The app as a returning user launches it: the first-run intro already seen. The argument
+    /// sets the same user default the intro writes (argument domain), in Release builds too.
+    static func introSeen() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-PlainIntroSeen", "YES"]
+        return app
     }
 }
 

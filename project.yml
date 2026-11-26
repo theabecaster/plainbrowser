@@ -30,9 +30,17 @@ targets:
       # The app icon, an Icon Composer document. actool compiles it into the layered icon and
       # the flat ones older systems use.
       - path: Brand/AppIcon.icon
+      # Alternate icons the user can pick (first-run intro, Settings > App Icon), named in
+      # ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES below.
+      - path: Brand/AppIcon-Night.icon
+      - path: Brand/AppIcon-Coral.icon
+      - path: Brand/AppIcon-Paper.icon
     dependencies:
       - package: PlainKit
         product: ShellUI
+      # The first-run intro (shown once, before the browser).
+      - package: PlainKit
+        product: FeatureUI
       - package: PlainKit
         product: Storage
       - package: PlainKit
@@ -44,6 +52,9 @@ targets:
         # The name under the icon.
         APP_DISPLAY_NAME: Plain
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # actool compiles these into the app and lists them under CFBundleAlternateIcons, so
+        # UIApplication.setAlternateIconName can switch to them. Names match FeatureUI's AppIconChoice.
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Night AppIcon-Coral AppIcon-Paper
         INFOPLIST_FILE: Plain/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         # UI code: MainActor by default, like the package's UI targets. (Not on the UI tests:

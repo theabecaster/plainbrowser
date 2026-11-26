@@ -171,3 +171,27 @@ Newest feature last.
 - **Dark band at the bottom of page previews.** The shell's thumbnails include the area under the
   resting bar, which shows as a solid dark footer on the cards. Crop it in `ThumbnailService`.
   (Design review, round 3.)
+
+## First-run intro (2026-11-26)
+
+- **Splash-skip UI test proves little.** `testTapSkipsTheSplash` can pass even without the tap
+  handler when launch synchronization outlasts the 1.12 s splash. A Debug launch argument that
+  holds the splash until tapped would make it a real test. (Code review, rounds 1–2.)
+- **Icon step on tall screens.** The 2 x 2 grid leaves a large empty middle above Next on an
+  iPhone 17; lower or enlarge the grid on tall layouts, keep the Duo's tighter arrangement.
+  (Design review, round 3.)
+- **Default-browser prompts back to back.** With the prompts on, "Not Now" on the intro's default
+  step is followed by the empty-tab card on the start screen. When the start screen hosts the card,
+  skip it for the first session after the intro. (Design review, round 3.)
+- **Duo cluttered demo.** The cookie wall still covers most of the photo on the Duo's outer
+  screen. Fine as a picture of clutter; a shorter wall or a smaller masthead would show more.
+  (Design review, round 3.)
+- **Hosting the empty-tab card.** `DefaultBrowserCard` lives in FeatureUI. ShellUI installs the
+  start screen (TabGalleryUI's `EmptyTabView`) and already imports FeatureUI, so it can add the
+  card there behind `DefaultBrowserPrompts.showsEmptyTabCard()`. The card shows its own mark, so
+  hosted on the start screen it should replace that screen's mark and sentence, not stack on them.
+- **Two Stem mark views.** The intro's `StemMarkView` (FeatureUI, animated assembly) and the start
+  screen's `MarkView` (TabGalleryUI, spinnable) were built in parallel lanes. Move one shared mark
+  (geometry from `Brand/tools/gen_icon.py`) to DesignSystem and have both use it.
+- **Device numbers.** Splash frame rate and hitches are measured on the simulator only (60 Hz);
+  check 120 Hz and the `intro.splash` animation interval on the Duo.

@@ -117,3 +117,23 @@ Newest feature last.
   shown through a debug launch argument. Check location and camera prompts on the device.
 - **Duo inner screen captures.** The simulator's fold state is set only in Device Hub, so this
   round has iPhone 17 and Duo outer screenshots only.
+
+## M2 shell wiring: tabs, gallery, bar swipe, private (2026-11-26)
+
+- **Blurry card previews.** Still the M2b item above: thumbnails are 200 pt at 2x (400 px) and a
+  phone card is about 370 pt at 3x. A sharper capture needs a bigger file per tab or a top-only
+  crop at card width; decide with the memory budget on the Duo. (Design review, round 1.)
+- **Page menu length.** The Zoom row adds a row to a menu that already scrolls on the Duo outer
+  screen and on iPhone 17 (the last section is cut with no cue). Move History / Edit Favorites /
+  Settings to their own submenu or the tabs button, or drop a section. (Design review, round 1.)
+- **Zoom from the Duo's vertical bar.** UIKit gives no way to update an open `UIBarButtonItem`
+  menu, so there each zoom step closes the menu (the pill's and the glass bar's menus stay open
+  and update).
+- **Blocking per site in private tabs.** Hidden: the allow-list is persistent. A memory-only
+  private allow-list in `ContentBlocker` would bring the toggle back. (Code review, round 1.)
+- **Gallery selection ring weight.** The blue ring reads strong in the calm gallery; try a thinner
+  ring or the on-glass blue. (Design review, round 1.)
+- **Inner screen and device checks.** No Duo inner screen captures (fold not settable from the
+  CLI). Check on the device: the bar swipe at 120 Hz with a live neighbour, a swipe started on a
+  page still loading, the swipe-up gallery with the system's vertical bar, private tint in dark
+  mode.

@@ -144,6 +144,10 @@ exactly what the app emits.
 | `tab.discard` | interval | discard start (state read) → web view released |
 | `tab.snapshot` | interval | thumbnail `takeSnapshot` → image returned |
 | `tab.crash` | event | a tab's WebContent process terminated |
+| `linkMenu.build` | interval | WebKit asks for a link menu → menu built (includes the pressed-image lookup) |
+| `linkMenu.action` / `linkMenu.preview` | event / interval | a link menu item chosen / a preview web view made |
+| `page.zoom` / `page.save` | event | zoom changed (message: percent) / Save PDF to Files |
+| `downloads.show` / `download.preview` / `download.showInFiles` | event | Downloads sheet, Quick Look, Show in Files |
 
 ## Web engine
 
@@ -163,3 +167,22 @@ permission prompts, downloads, form resubmission). Tabs come from `pool.makeTab(
    launch, decode each file with `TabRestorationState(encoded:)` and pass it to
    `makeTab(id:restoring:)`.
 
+5. **Page features (M4):**
+   - *Link menu:* `TabWebViewHandler` answers `contextMenuConfigurationFor` with
+     `WebViewPool.contextMenuConfiguration`. Items come from `LinkMenuRules`; the pressed image
+     from a passive `pointerdown` listener in the engine's content world (WebKit's public element
+     info has the link only). Open in New Tab / Background / Other Pane and Share go to the host
+     (`LinkMenuPresenter`, defaults for every requirement); Copy Link, Download Linked File, Save
+     Image and Copy Image run in the engine. The preview is a delegate-less web view from the pool;
+     tapping it loads the link in the tab.
+   - *Page zoom:* `tab.zoomIn()/zoomOut()/resetZoom()`, `tab.zoomPercent`; steps in
+     `FixedChoices.pageZoomSteps`; remembered per site in `SitePageZoomStore` and applied at each
+     main-frame commit.
+   - *Find:* `tab.beginFind()` shows the system find bar (`isFindInteractionEnabled` on every web view).
+   - *PDF:* `tab.isPDF` from the main-frame response; `tab.saveToDownloads()` runs a `WKDownload`.
+   - *Media:* a script in every frame reports play and picture in picture; each report also asks
+     WebKit (`requestMediaPlaybackState`), which sees players the page never attached. KVO gives
+     fullscreen and capture. `tab.isBusy` combines them with downloads; `tab.refreshMediaState()`
+     before an automatic archive or close.
+   - *Downloads UI:* FeatureUI's `DownloadsView` and `FilePreviewController` (Quick Look) read
+     `DownloadListSource`/`DownloadListItem`, which `DownloadCoordinator`/`Download` match exactly.

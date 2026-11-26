@@ -58,8 +58,13 @@ enum UserScripts {
     static let subframePressSource = """
         (() => {
           if (window === window.top) return;
+          let last = 0;
           addEventListener('pointerdown', () => {
-            try { webkit.messageHandlers.\(subframePressHandlerName).postMessage(Date.now()); } catch (e) {}
+            // At most one message per 100 ms, so a page firing synthetic events can't flood the app.
+            const now = Date.now();
+            if (now - last < 100) return;
+            last = now;
+            try { webkit.messageHandlers.\(subframePressHandlerName).postMessage(now); } catch (e) {}
           }, { passive: true, capture: true });
         })();
         """

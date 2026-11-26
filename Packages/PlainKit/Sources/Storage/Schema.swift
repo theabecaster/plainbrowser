@@ -19,6 +19,7 @@ enum Schema {
     static let sitePermission = "sitePermission"
     static let siteContentMode = "siteContentMode"
     static let blockingAllowList = "blockingAllowList"
+    static let sitePageZoom = "sitePageZoom"
 
     static func register(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1.history") { db in
@@ -196,6 +197,14 @@ enum Schema {
             }
             try db.create(table: blockingAllowList) { t in
                 t.primaryKey("site", .text)
+            }
+        }
+
+        // Page zoom remembered per site (docs/plan.md, section 4b), set from the page menu.
+        migrator.registerMigration("v6.sitePageZoom") { db in
+            try db.create(table: sitePageZoom) { t in
+                t.primaryKey("site", .text)
+                t.column("zoom", .double).notNull()
             }
         }
     }

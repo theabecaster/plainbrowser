@@ -1,0 +1,58 @@
+{
+  "converter" : "SafariConverterLib 4.3.1",
+  "formatVersion" : 1,
+  "lists" : [
+    {
+      "bytes" : 4130546,
+      "file" : "blocklist-01.json",
+      "name" : "blocklist-01",
+      "ruleCount" : 33864,
+      "sha256" : "18f9848fabc3c639f2f6e9928ffe6a8a906591001662ab4060a98ae496282ee5"
+    },
+    {
+      "bytes" : 4178686,
+      "file" : "blocklist-02.json",
+      "name" : "blocklist-02",
+      "ruleCount" : 33909,
+      "sha256" : "0cd99c7285615198b4bf03429a6629768f05f834f4a9d5eeb1e85dcdf1530ef3"
+    },
+    {
+      "bytes" : 4161852,
+      "file" : "blocklist-03.json",
+      "name" : "blocklist-03",
+      "ruleCount" : 33898,
+      "sha256" : "9097eed9b363a7622f551e10ea1c246fee60c9883726c1d7eef58f0d773c9020"
+    },
+    {
+      "bytes" : 4157501,
+      "file" : "blocklist-04.json",
+      "name" : "blocklist-04",
+      "ruleCount" : 33878,
+      "sha256" : "b438a7d0bec5c7d20aa0ffa03514a6907e30089c79d96687d2669306aaad46bc"
+    }
+  ],
+  "maxRulesPerList" : 35000,
+  "sources" : [
+    {
+      "license" : "GPL-3.0-or-later OR CC-BY-SA-3.0",
+      "name" : "EasyList",
+      "ruleLines" : 78692,
+      "url" : "https://easylist.to/easylist/easylist.txt",
+      "version" : "202611261007"
+    },
+    {
+      "license" : "GPL-3.0-or-later OR CC-BY-SA-3.0",
+      "name" : "EasyPrivacy",
+      "ruleLines" : 56865,
+      "url" : "https://easylist.to/easylist/easyprivacy.txt",
+      "version" : "202611261007"
+    },
+    {
+      "license" : "CC-BY-3.0",
+      "name" : "EasyList Cookie List",
+      "ruleLines" : 25380,
+      "url" : "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt",
+      "version" : "2026-11-26 01:00 UTC"
+    }
+  ]
+}

@@ -57,3 +57,50 @@ Each entry: what was chosen, and why. Newest last.
   `docs/perf-log.md`. The absolute budgets in `perf/budgets.json` apply only with `--device`.
 - **Why:** simulator numbers are not comparable to device budgets, but tracking them per change
   builds the habit and catches large regressions until the device runs the gate.
+
+## Content blocking lists (2026-11-26)
+
+- **Chosen sources, all bundled as generated WebKit JSON:**
+
+  | List | License | Why it is allowed |
+  |---|---|---|
+  | EasyList | GPL-3.0-or-later or CC BY-SA 3.0+ (dual) | We use the GPL option; GPLv3 combines with AGPL-3.0 (GPLv3 §13). |
+  | EasyPrivacy | same as EasyList | same. |
+  | EasyList Cookie List (`fanboy-cookiemonster.txt`) | CC BY 3.0 (its own header) | Permissive with attribution; kept in `NOTICE.txt`. |
+
+  Sources, versions and attribution ship in `ContentBlocking/Resources/BlockLists/NOTICE.txt`.
+- **Not bundled:** DuckDuckGo's tracker blocklist (TDS) data is CC BY-NC-SA 4.0. The
+  non-commercial term is not compatible with the AGPL, so the tracker rules come from EasyPrivacy
+  instead. (TrackerRadarKit's code is Apache-2.0, but it is only useful with that data, so it is
+  not a dependency.) uBlock-only and ABP-only lines (`!#if` blocks, `!#include`) are skipped.
+- **Converter:** AdGuard SafariConverterLib 4.3.1 (GPL-3.0), pinned exactly, run at build time by
+  `tools/blocklists` (its own Swift package). It is never linked into the app, which keeps the
+  plan's "no AdGuard converter in the app". Its own dependencies (swift-argument-parser
+  Apache-2.0, PunycodeSwift MIT, swift-psl MIT with Mozilla's PSL data MPL-2.0) are build-time only.
+  Rerun `tools/blocklists/generate.sh`; output is byte-identical for the same downloads
+  (`SWIFT_DETERMINISTIC_HASHING=1`), so an unchanged list keeps its hash and is never recompiled.
+- **Split into lists of at most 35k rules.** All three lists are converted together, as one
+  Adblock list would be. Blocking lines are dealt round-robin into parts, and every part gets all
+  exception lines (`@@`, `#@#`, `$badfilter`), because WebKit's `ignore-previous-rules` only
+  reaches rules in the same compiled list. Result: 4 lists of ~33.9k rules, 135.5k in all,
+  16 MB of JSON.
+  - Measured on the iOS 27.2 simulator (iPhone 17), cold compile per list, alone: 25k rules
+    1.0–1.7 s, 35k 1.8–2.8 s, 45k 2.2–3.8 s, 70k 3.5–3.9 s, one 126k list 5.6 s. Every size
+    reloaded (lookup from a new process) in under 3 ms, so the iOS 18 failure above 45k did not
+    reproduce on the simulator. 35k keeps a 10k margin under that reported limit with only 4
+    lists. Check on the device.
+- **Compile only when missing, never at launch.** Identifier `<name>-<first 16 hex of SHA-256>`.
+  `ContentBlocker.prepare()` looks each list up (about 1 ms for all 4, warm) and compiles only a
+  miss: first launch and app updates that change a list (about 6–9 s for all 4 on the
+  simulator, off the main thread; WebKit compiles on its own queue). Old `blocklist-*` entries
+  are then removed from the store.
+- **Per-site off detaches the lists instead of adding an allow-list rule list.** Measured: a
+  separate list with `ignore-previous-rules` for a domain does not unblock rules in other lists
+  (WebKit evaluates each compiled list on its own). Appending the allow-list to every list would
+  mean recompiling all 135k rules on each toggle. So `ContentBlocker.apply(to:forMainFrameURL:)`
+  removes the lists from that web view's `WKUserContentController` on an allowed site and adds
+  them back on any other. This needs one `WKUserContentController` per web view (a WebEngine
+  follow-up); on a shared controller it would turn blocking off in every tab. The allowed sites
+  persist through the small `SiteAllowListStore` protocol, which a Storage adapter implements.
+- **Perf cost:** 16 MB of JSON in the app bundle (about 8x smaller compressed in the IPA). The JSON is
+  read only to compile, never on a warm launch.

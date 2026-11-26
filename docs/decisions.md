@@ -575,9 +575,11 @@ Each entry: what was chosen, and why. Newest last.
   simulator). A split needs two 375 pt panes (`FixedChoices.splitMinimumPaneWidth`), so inner
   portrait (669 pt) shows one pane.
 - **Slot `i` shows pane `i`.** The two `PaneSlot` view controllers never trade panes; where only
-  one pane can show (outer screen, inner portrait) the focused pane's slot is the arrangement's
-  primary alone. The web view stays in its slot's container through a fold; only the slot moves
-  between arrangement places. The other pane's tab is detached (suspended, a live tier when it
+  one pane can show (outer screen, inner portrait, no split) the focused pane's slot sits alone in
+  a plain full-size container beside the arrangement: partly folded, the arrangement shrinks a
+  lone view to one side of the fold (or hides it when its width is fixed), and a single page must
+  keep spanning the screen. The web view stays in its slot's container through a fold; only the
+  slot moves between the two hosts. The other pane's tab is detached (suspended, a live tier when it
   comes back) and re-attached on unfold. Swap and Close Pane re-parent web views without a reload.
 - **The other pane keeps the expanded bar's bottom inset**, so a focus switch never relayouts
   either page; only the focused page's inset follows the collapsing bar.

@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Intro styling:** keep the intro's steps, words and simplicity, but restyle it in Plain's own colors and look (paper, dawn, coral fold) so it no longer reads as Arc's. (Intro restyle lane.)
+
 - **Suggestions over the start-screen mark:** typing in a new tab can draw suggestion rows over the white mark, making them unreadable. Keep the design; the mark should yield smoothly while suggestions show. (State fix lane.)
 
 - **Discoverable tab features:** with one tab the tabs button becomes "+"; New Private Tab, Reopen Closed Tab and Archived Tabs must stay obviously reachable (More menu, start-screen shortcuts), not only behind a long press. (State fix lane.)

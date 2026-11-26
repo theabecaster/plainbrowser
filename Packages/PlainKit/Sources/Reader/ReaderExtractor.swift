@@ -29,7 +29,8 @@ import WebKit
     private struct Kept {
         weak var webView: WKWebView?
         let url: URL?
-        let document: Int
+        /// The document the article came from (`ReaderExtractor.documentToken`).
+        let document: String
         let article: ReaderArticle?
     }
 
@@ -38,8 +39,6 @@ import WebKit
     private let world = WKContentWorld.world(name: ReaderWorld.contentWorldName)
     private var availability: [ObjectIdentifier: Availability] = [:]
     private var kept: [ObjectIdentifier: Kept] = [:]
-    /// Counts documents per web view: each readerable report is a new document (a reload too).
-    private var documents: [ObjectIdentifier: Int] = [:]
 
     public override init() {}
 
@@ -79,9 +78,8 @@ import WebKit
         let key = ObjectIdentifier(webView)
         prune()
         availability[key] = Availability(webView: webView, url: webView.url, available: available)
-        // Every document reports once, including a reload of the same URL, so a new report means
-        // the kept article is out of date, and any extraction still running belongs to the old one.
-        documents[key, default: 0] += 1
+        // Every document reports once, including a reload of the same URL: a new report means the
+        // kept article is out of date. (Hits are also checked against the live document's token.)
         kept[key] = nil
         onAvailability?(webView, available)
     }
@@ -90,7 +88,10 @@ import WebKit
 
     /// The page's article, or `nil` when the page isn't readerable. Repeated calls for the same
     /// document return the article already found (with `install(in:)`, a reload starts over).
-    /// Throws `CancellationError` when the web view navigates away while extracting.
+    /// Throws `CancellationError` when the web view navigates away or reloads while extracting.
+    ///
+    /// Each document gets a random token in the reader world, which a new document (a reload too)
+    /// never has. A result counts only if the web view still shows the document it came from.
     public func article(in webView: WKWebView) async throws -> ReaderArticle? {
         let signposter = Signposts.signposter
         let state = signposter.beginInterval(Signposts.readerExtract)
@@ -98,28 +99,36 @@ import WebKit
 
         let key = ObjectIdentifier(webView)
         let url = webView.url
-        let document = documents[key, default: 0]
-        if let entry = kept[key], entry.webView === webView, entry.url == url, entry.document == document {
+        if let entry = kept[key], entry.webView === webView, entry.url == url,
+           try await documentToken(in: webView) == entry.document {
             return entry.article
         }
-        let article = try await extract(in: webView)
+        let (document, article) = try await extract(in: webView)
         // The page navigated or reloaded while extracting: the result belongs to a page no longer shown.
-        guard webView.url == url, documents[key, default: 0] == document else { throw CancellationError() }
+        guard webView.url == url, try await documentToken(in: webView) == document else {
+            throw CancellationError()
+        }
         prune()
         kept[key] = Kept(webView: webView, url: url, document: document, article: article)
         return article
+    }
+
+    /// The token of the document `webView` shows now, or `nil` if extraction never ran in it.
+    private func documentToken(in webView: WKWebView) async throws -> String? {
+        try await webView.callAsyncJavaScript(
+            "return globalThis.\(Self.tokenName) ?? null", in: nil, contentWorld: world) as? String
     }
 
     /// Forgets what was kept for `webView`, for example when its tab closes.
     public func forget(_ webView: WKWebView) {
         availability[ObjectIdentifier(webView)] = nil
         kept[ObjectIdentifier(webView)] = nil
-        documents[ObjectIdentifier(webView)] = nil
     }
 
     /// Runs the check and the parse in the reader world, installing Readability first when this
     /// document's reader world doesn't have it yet.
-    private func extract(in webView: WKWebView) async throws -> ReaderArticle? {
+    /// Returns the token of the document it ran in, with the article.
+    private func extract(in webView: WKWebView) async throws -> (String, ReaderArticle?) {
         var result = try await callExtract(in: webView)
         if result == Self.missing {
             let script = try await ReaderResources.readabilityScript()
@@ -127,17 +136,24 @@ import WebKit
             _ = try await webView.evaluateJavaScript(script, in: nil, contentWorld: world)
             result = try await callExtract(in: webView)
         }
-        guard result != Self.missing, result != Self.notReaderable else { return nil }
-        return try await Self.decode(result)
+        // "<token>\n<payload>": the payload is a status or the article JSON.
+        guard let newline = result.firstIndex(of: "\n") else { throw CancellationError() }
+        let token = String(result[..<newline])
+        let payload = result[result.index(after: newline)...]
+        guard payload != Self.notReaderable else { return (token, nil) }
+        return (token, try await Self.decode(String(payload)))
     }
 
     private func callExtract(in webView: WKWebView) async throws -> String {
         try Task.checkCancellation()
         let value = try await webView.callAsyncJavaScript(Self.extractBody, in: nil, contentWorld: world)
-        return value as? String ?? Self.notReaderable
+        guard let result = value as? String else { throw CancellationError() }
+        return result
     }
 
     private static let missing = "missing"
+    /// The reader-world global that names the current document.
+    private static let tokenName = "__plainReaderDocument"
     private static let notReaderable = "none"
 
     /// The body of an async function run in the reader world. It returns one string: a status,
@@ -150,10 +166,11 @@ import WebKit
     /// configuration are the second layer.
     private static let extractBody = """
         if (typeof Readability !== "function" || typeof isProbablyReaderable !== "function") return "missing";
+        const token = globalThis.\(tokenName) ??= Math.random().toString(36).slice(2) + Date.now().toString(36);
         try {
-          if (!document.body || !isProbablyReaderable(document)) return "none";
+          if (!document.body || !isProbablyReaderable(document)) return token + "\\nnone";
           const a = new Readability(document.cloneNode(true)).parse();
-          if (!a || !a.content || !(a.textContent || "").trim()) return "none";
+          if (!a || !a.content || !(a.textContent || "").trim()) return token + "\\nnone";
           const t = document.createElement("template");
           t.innerHTML = a.content;
           t.content.querySelectorAll(
@@ -177,12 +194,13 @@ import WebKit
           // Heading permalinks ("#", "¶", "§") are page chrome, not text.
           t.content.querySelectorAll("h1 a, h2 a, h3 a, h4 a, h5 a, h6 a").forEach(link => {
             const text = link.textContent.trim();
-            if ((text === "" || text === "#" || text === "¶" || text === "§")
-                && (link.getAttribute("href") || "").startsWith("#")) link.remove();
+            const href = link.getAttribute("href") || "";
+            const here = href.startsWith("#") || (href.includes("#") && href.split("#")[0] === document.URL.split("#")[0]);
+            if ((text === "" || text === "#" || text === "¶" || text === "§") && here) link.remove();
           });
           const box = document.createElement("div");
           box.appendChild(t.content);
-          return JSON.stringify({
+          return token + "\\n" + JSON.stringify({
             title: a.title || document.title || "",
             byline: a.byline || null,
             siteName: a.siteName || null,
@@ -194,7 +212,7 @@ import WebKit
             url: document.URL
           });
         } catch (e) {
-          return "none";
+          return token + "\\nnone";
         }
         """
 
@@ -206,7 +224,6 @@ import WebKit
     private func prune() {
         availability = availability.filter { $0.value.webView != nil }
         kept = kept.filter { $0.value.webView != nil }
-        documents = documents.filter { availability[$0.key] != nil }
     }
 }
 

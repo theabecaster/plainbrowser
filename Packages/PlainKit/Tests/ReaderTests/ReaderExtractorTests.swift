@@ -106,6 +106,19 @@ import WebKit
         #expect(!html.contains(">#</a>"))
     }
 
+    /// Without any readerable report (the window between a reload's commit and its document end),
+    /// the kept article still isn't served for the new document.
+    @Test func keptArticleNeedsTheSameDocument() async throws {
+        let extractor = ReaderExtractor()
+        let webView = try await load("v8-blog")
+        let first = try #require(try await extractor.article(in: webView))
+        server.replacements["v8-blog"] = "ars-1"
+        try await waiter.run(in: webView) { webView.reload() }
+        let reloaded = try await extractor.article(in: webView)
+        #expect(reloaded?.title == (try FixtureServer.expected("ars-1").title))
+        #expect(reloaded?.title != first.title)
+    }
+
     /// A reload of the same URL is a new document, so the kept article is dropped.
     @Test func reloadDropsTheKeptArticle() async throws {
         let extractor = ReaderExtractor()

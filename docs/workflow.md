@@ -18,7 +18,7 @@ Run both from the feature's worktree, with output to files under `build/reviews/
 - **Code and performance:**
 
   ```
-  codex review --base dev "<brief + AGENTS.md rules + perf numbers; tag each finding blocking or polish>" > build/reviews/code-<round>.md
+  codex exec -s read-only -o build/reviews/code-<round>.md "Review the changes in \`git diff dev...HEAD\` (run it). <brief + AGENTS.md rules + perf numbers; tag each finding blocking or polish with file:line>"
   ```
 
 - **Design:**

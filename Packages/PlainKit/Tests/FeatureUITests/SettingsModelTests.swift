@@ -134,7 +134,7 @@ import Testing
     }
 
     @Test func wordingIsTitleCaseAndFootersAreSentences() {
-        #expect(TabLayout.allCases.map(\.title) == ["Regular", "Side Tabs"])
+        #expect(TabLayout.allCases.map(\.title) == ["Regular Tabs", "Side Tabs"])
         #expect(ArchiveAfter.allCases.map(\.title) == ["After 12 Hours", "After 1 Day", "After 1 Week", "Never"])
         for archive in ArchiveAfter.allCases {
             #expect(archive.footer.hasSuffix("."))

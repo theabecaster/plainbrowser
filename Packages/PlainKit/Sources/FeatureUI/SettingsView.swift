@@ -31,16 +31,19 @@ public struct SettingsView: View {
                     Text(Wording.searchEngineFooter)
                 }
 
-                Section {
-                    Picker("Tab Layout", selection: Binding(
-                        get: { model.settings.tabLayout }, set: { model.setTabLayout($0) }
-                    )) {
-                        ForEach(TabLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                if model.showsTabLayout {
+                    Section {
+                        Picker("Tab Layout", selection: Binding(
+                            get: { model.settings.tabLayout }, set: { model.setTabLayout($0) }
+                        )) {
+                            ForEach(TabLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(!model.isLoaded)
+                        .accessibilityIdentifier("settings.tabLayout")
+                    } footer: {
+                        Text(Wording.tabLayoutFooter)
                     }
-                    .pickerStyle(.menu)
-                    .disabled(!model.isLoaded)
-                } footer: {
-                    Text(Wording.tabLayoutFooter)
                 }
 
                 Section {

@@ -52,6 +52,18 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         didSet { view.layer.shadowOpacity = floats ? 0.18 : 0 }
     }
 
+    /// Tab Layout: Right. The sidebar sits on the trailing side: its edge with the page (and the
+    /// hairline) is its leading one, and it widens toward the page. Rows keep the tile first.
+    public var isOnRight = false {
+        didSet {
+            guard isViewLoaded, isOnRight != oldValue else { return }
+            separatorOnTrailing.isActive = !isOnRight
+            separatorOnLeading.isActive = isOnRight
+        }
+    }
+    private var separatorOnTrailing: NSLayoutConstraint!
+    private var separatorOnLeading: NSLayoutConstraint!
+
     public init(dataSource: any SideTabsDataSource) {
         self.dataSource = dataSource
         super.init(nibName: nil, bundle: nil)
@@ -137,9 +149,12 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
             collectionView.widthAnchor.constraint(equalToConstant: width),
             separator.topAnchor.constraint(equalTo: view.topAnchor),
             separator.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            separator.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             separator.widthAnchor.constraint(equalToConstant: 1 / max(1, traitCollection.displayScale)),
         ])
+        separatorOnTrailing = separator.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        separatorOnLeading = separator.leadingAnchor.constraint(equalTo: view.leadingAnchor)
+        separatorOnTrailing.isActive = !isOnRight
+        separatorOnLeading.isActive = isOnRight
 
         diffable = UICollectionViewDiffableDataSource<Int, UUID>(collectionView: collectionView) { [weak self] collectionView, indexPath, id in
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: SideTabCell.reuseID, for: indexPath)

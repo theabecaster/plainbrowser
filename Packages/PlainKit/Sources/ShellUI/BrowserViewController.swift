@@ -182,7 +182,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     private func layOut() {
         let safe = view.safeAreaLayoutGuide
+        // Their constants make room for the sidebar (either side) and the tab strip (`+Panes`).
         duo.panesLeading = panes.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor)
+        duo.panesTrailing = panes.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
+        duo.panesTop = panes.view.topAnchor.constraint(equalTo: safe.topAnchor)
         let margin = Spacing.m
         // The resting chrome's bottom: above the home indicator, or 8 pt above a plain edge.
         let rest = UILayoutGuide()
@@ -228,9 +231,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // The panes fill the view below the status bar and beside a vertical bar and the
             // sidebar. Their bottom runs under the chrome; obscuredContentInsets tells WebKit what
             // the chrome covers.
-            panes.view.topAnchor.constraint(equalTo: safe.topAnchor),
+            duo.panesTop,
             duo.panesLeading,
-            panes.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            duo.panesTrailing,
             panes.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             pullIndicator.topAnchor.constraint(equalTo: panes.view.topAnchor, constant: Spacing.s),
@@ -984,10 +987,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     // MARK: Feature sheets
 
     private func showSettings() {
-        // Tab Layout shows only where side tabs can show (docs/plan.md, section 4b).
-        let showsTabLayout = duo.layout?.sideTabsAvailable ?? false
+        // Tab Layout applies only where a tab list fits; elsewhere its row says why (docs/plan.md, section 4b).
+        let isTabLayoutAvailable = duo.layout?.tabLayoutAvailable ?? false
         present(
-            sheets.settings(showsTabLayout: showsTabLayout) { [weak self] in self?.closeSheet() },
+            sheets.settings(isTabLayoutAvailable: isTabLayoutAvailable) { [weak self] in self?.closeSheet() },
             signpost: Signposts.settingsOpen
         )
     }

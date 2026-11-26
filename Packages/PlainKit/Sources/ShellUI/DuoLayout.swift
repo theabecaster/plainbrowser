@@ -32,7 +32,7 @@ struct DuoLayoutInput: Equatable {
     var chromeBand: ClosedRange<CGFloat> = 0...0
 
     init(
-        pageArea: CGRect, isRegularWidth: Bool, isRegularHeight: Bool, tabLayout: TabLayout = .regular,
+        pageArea: CGRect, isRegularWidth: Bool, isRegularHeight: Bool, tabLayout: TabLayout = FixedChoices.defaultTabLayout,
         requestedSidebar: SidebarState = .rail, paneCount: Int = 1, focusedPane: Int = 0,
         division: CGRect? = nil, isDivisionActive: Bool = false, occlusions: [CGRect] = [],
         chromeBand: ClosedRange<CGFloat> = 0...0
@@ -53,11 +53,19 @@ struct DuoLayoutInput: Equatable {
 
 /// Where everything goes for one `DuoLayoutInput`.
 struct DuoLayout: Equatable {
-    /// Side tabs can show here: regular in both size classes, and the page keeps at least
-    /// `FixedChoices.sideTabsMinimumPageWidth` beside the rail. The setting decides whether they do.
-    var sideTabsAvailable: Bool
-    /// The sidebar is on screen (side tabs available and chosen).
+    /// Tab Layout applies here: regular in both size classes and a page at least
+    /// `FixedChoices.sideTabsMinimumPageWidth` wide. Elsewhere the app switcher is the only tab
+    /// list (the Settings row says so).
+    var tabLayoutAvailable: Bool
+    /// The layout in effect: the setting, or Above where a sidebar would leave the page too narrow
+    /// (inner portrait); nil where Tab Layout does not apply.
+    var tabLayout: TabLayout?
+    /// The sidebar is on screen (Left or Right in effect).
     var showsSidebar: Bool
+    /// The sidebar is on the trailing side (Right).
+    var sidebarOnRight: Bool
+    /// The tab strip is on screen above the pages (Above in effect).
+    var showsStrip: Bool
     /// The state the sidebar rests in now (the request, limited by split and fold).
     var sidebar: SidebarState
     /// The widest state the sidebar may take now: Rail while a split shows or the screen is
@@ -68,6 +76,8 @@ struct DuoLayout: Equatable {
     var sidebarDockWidth: CGFloat
     /// Expanded floats over the page: docked, it would leave the page under the minimum width.
     var sidebarFloats: Bool
+    /// How far the strip pushes the pages down.
+    var stripHeight: CGFloat
     /// A split can show here (regular both ways, each pane at least the minimum width).
     var splitAvailable: Bool
     /// Both panes are on screen. A window with two panes where the split can't show (the outer
@@ -76,7 +86,7 @@ struct DuoLayout: Equatable {
     /// The panes' frames: one, or two side by side (primary, then secondary).
     var paneFrames: [CGRect]
     /// The horizontal lane for the pill, the search field and toasts: the focused pane, moved off
-    /// an active fold and the camera.
+    /// a floating sidebar, an active fold and the camera.
     var chromeLane: ClosedRange<CGFloat>
 
     /// The focused pane's frame.
@@ -87,8 +97,19 @@ struct DuoLayout: Equatable {
         let regular = input.isRegularWidth && input.isRegularHeight
         let rail = SidebarState.rail.width
         let minimumPage = CGFloat(FixedChoices.sideTabsMinimumPageWidth)
-        sideTabsAvailable = regular && area.width - rail >= minimumPage
-        showsSidebar = sideTabsAvailable && input.tabLayout == .sideTabs
+        tabLayoutAvailable = regular && area.width >= minimumPage
+        let sidebarFits = regular && area.width - rail >= minimumPage
+        if !tabLayoutAvailable {
+            tabLayout = nil
+        } else if input.tabLayout.isSidebar && !sidebarFits {
+            tabLayout = .above
+        } else {
+            tabLayout = input.tabLayout
+        }
+        showsSidebar = tabLayout?.isSidebar ?? false
+        sidebarOnRight = tabLayout == .right
+        showsStrip = tabLayout == .above
+        stripHeight = showsStrip ? CGFloat(FixedChoices.tabStripHeight) : 0
 
         let vertical = input.division.flatMap { Self.verticalFold($0) }
         let minimumPane = CGFloat(FixedChoices.splitMinimumPaneWidth)
@@ -111,8 +132,8 @@ struct DuoLayout: Equatable {
         }
 
         let panes = CGRect(
-            x: area.minX + sidebarDockWidth, y: area.minY,
-            width: max(0, area.width - sidebarDockWidth), height: area.height
+            x: area.minX + (sidebarOnRight ? 0 : sidebarDockWidth), y: area.minY + stripHeight,
+            width: max(0, area.width - sidebarDockWidth), height: max(0, area.height - stripHeight)
         )
         if splitShown {
             // Flat: on the crease when it leaves both panes their minimum, else halves. Partly
@@ -135,7 +156,9 @@ struct DuoLayout: Equatable {
         var lane = focusedPaneFrame.minX...focusedPaneFrame.maxX
         // Expanded floating over the page: the pill stays clear of it.
         if sidebarFloats {
-            lane = Self.lane(lane, avoiding: area.minX...(area.minX + SidebarState.expanded.width))
+            let width = SidebarState.expanded.width
+            let covered = sidebarOnRight ? (area.maxX - width)...area.maxX : area.minX...(area.minX + width)
+            lane = Self.lane(lane, avoiding: covered)
         }
         // Book pose: the pill and toasts keep off the fold. A flat fold has no width and is
         // only used for its position (the split above).

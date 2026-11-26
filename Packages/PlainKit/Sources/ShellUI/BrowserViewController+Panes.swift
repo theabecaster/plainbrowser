@@ -15,8 +15,10 @@ final class DuoUIState {
     let chromeLane = UILayoutGuide()
     var laneLeading: NSLayoutConstraint!
     var laneWidth: NSLayoutConstraint!
-    /// The panes' leading edge: after the sidebar's docked width.
+    /// The panes' edges: beside the sidebar's docked width (left or right), under the tab strip.
     var panesLeading: NSLayoutConstraint!
+    var panesTrailing: NSLayoutConstraint!
+    var panesTop: NSLayoutConstraint!
     /// Which tab each pane slot has attached, so a pane change attaches or detaches only what moved.
     var slotTabs: [Int: TabID] = [:]
     /// A fold, unfold or rotation is running: page insets wait for its completion.
@@ -27,6 +29,11 @@ final class DuoUIState {
     var sidebar: SideTabsViewController?
     var sideTabs: SideTabs?
     var sidebarWidth: NSLayoutConstraint?
+    /// The sidebar's side: its leading or its trailing edge is pinned.
+    var sidebarLeading: NSLayoutConstraint?
+    var sidebarTrailing: NSLayoutConstraint?
+    /// Tab Layout: Above (`+SideTabs`).
+    var strip: TabStripViewController?
     /// The state the user left the sidebar in; the layout limits it (Rail during a split or fold).
     var sidebarRequest: SidebarState = .rail
     /// The state the Tabs button brings the sidebar back to after hiding it.
@@ -120,7 +127,10 @@ extension BrowserViewController {
             active \(input.isDivisionActive) split \(layout.splitShown) sidebar \(layout.sidebar.rawValue) \
             panes \(String(describing: layout.paneFrames)) lane \(String(describing: layout.chromeLane))
             """)
-        duo.panesLeading.constant = layout.sidebarDockWidth
+        duo.panesLeading.constant = layout.sidebarOnRight ? 0 : layout.sidebarDockWidth
+        duo.panesTrailing.constant = layout.sidebarOnRight ? -layout.sidebarDockWidth : 0
+        duo.panesTop.constant = layout.stripHeight
+        applyStripLayout(layout)
         duo.laneLeading.constant = layout.chromeLane.lowerBound
         duo.laneWidth.constant = layout.chromeLane.upperBound - layout.chromeLane.lowerBound
         applySidebarLayout(layout)
@@ -247,6 +257,7 @@ extension BrowserViewController {
         Signposts.signposter.emitEvent(Signposts.paneFocus, "\(focused)")
         updatePaneLooks()
         duo.sidebar?.reloadTabs()
+        duo.strip?.reloadTabs()
         view.setNeedsLayout()
         Motion.animate(Motion.urlFocus) { self.view.layoutIfNeeded() }
         expandChrome(animated: true)

@@ -583,18 +583,33 @@ Each entry: what was chosen, and why. Newest last.
   comes back) and re-attached on unfold. Swap and Close Pane re-parent web views without a reload.
 - **The other pane keeps the expanded bar's bottom inset**, so a focus switch never relayouts
   either page; only the focused page's inset follows the collapsing bar.
-- **Side tabs gate on the page, not the window.** Available where both size classes are regular
-  and the page keeps 640 pt beside the 64 pt rail. On the Duo that is inner landscape only (867 pt
-  beside the vertical bar); inner portrait leaves 605 pt, so it shows regular tabs and keeps the
-  setting. Expanded (260 pt) would leave 607 pt in inner landscape, so there it floats over the
+- **Tab Layout is Above, Left or Right** (owner feedback, replacing Regular / Side Tabs): a tab
+  strip across the top of the page area, or a sidebar on the left or the right. Left is the
+  default (`FixedChoices.defaultTabLayout`: the inner screen has spare width beside a page and
+  little height, and the system's vertical bar is on the right). Older stored values map on read:
+  "sideTabs" to Left, "regular" to the default. The app switcher (swipe up from the bar, Show All
+  Tabs) stays in every layout; the Tabs button opens it with Above and hides or shows the sidebar
+  with Left and Right.
+- **Tab Layout gates on the page, not the window.** It applies where both size classes are
+  regular and the page is at least 640 pt wide; elsewhere (outer screen, iPhones) the app switcher
+  is the only tab list and the Settings row is disabled with a footer saying why. A sidebar also
+  needs 640 pt left beside its 64 pt rail: on the Duo that is inner landscape (867 pt beside the
+  vertical bar); inner portrait leaves 605 pt, so Left and Right show the strip there and the
+  setting is kept. The strip (48 pt, `FixedChoices.tabStripHeight`) pushes the panes down; a split
+  stays on the crease under it. Expanded (260 pt) would leave 607 pt in inner landscape, so there it floats over the
   page (with a shadow) while the page keeps the rail's width; it docks where it leaves 640 pt.
   Rail is the widest state during a split or a book pose.
 - **The sidebar resizes without relayout.** Rows are laid out at the expanded width and clipped
   by the sidebar; a drag moves only the sidebar's width (pages keep theirs), and the release
   springs to the nearest state (`SidebarDrag`, `Motion.sidebarSettle`, bounce only after a flick)
   and then docks once, inside the spring, so each web view gets one new frame.
-- **The Tabs button hides and shows the sidebar** while side tabs show; the gallery stays one
-  menu item away (Show All Tabs) and on the swipe up from the bar. Hidden comes back as it was.
+- **Right mirrors Left.** The sidebar pins to the trailing edge of the safe area (inside the
+  system's vertical bar), widens toward the page, floats Expanded from the right, and its rows
+  keep the tile first. A drag's direction is flipped, the states and springs are the same.
+- **The strip reads the same data source as the sidebar** (`SideTabsDataSource`): tap to show,
+  long press for Open in Other Pane and Close Tab, drag to reorder within a list, a close button on
+  the focused tab, + at the end (long press: New Private Tab), private tabs after the regular ones,
+  tinted. Fixed 170 pt tabs that scroll sideways, the focused one scrolled into view.
 - **Tiles until site icons are stored.** Rail rows show the site's first letter ("W" for
   en.wikipedia.org) on a tile; a favicon replaces it when Storage's icons reach the shell.
 - **Fold safety.** `viewWillTransition(to:with:)` fires on fold and unfold (verified on the

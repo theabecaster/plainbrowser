@@ -6,11 +6,11 @@ import TabGalleryUI
 import UIKit
 import WebEngine
 
-// MARK: - Side tabs
+// MARK: - Tab Layout: the sidebar (Left, Right) and the strip (Above)
 
 extension BrowserViewController {
-    /// The sidebar follows the layout: on screen where side tabs are available and chosen, at the
-    /// layout's width unless a finger is resizing it.
+    /// The sidebar follows the layout: on screen where Left or Right is in effect, on that side,
+    /// at the layout's width unless a finger is resizing it.
     func applySidebarLayout(_ layout: DuoLayout) {
         guard layout.showsSidebar else {
             removeSidebar()
@@ -18,16 +18,54 @@ extension BrowserViewController {
         }
         let sidebar = installSidebarIfNeeded()
         sidebar.floats = layout.sidebarFloats
+        sidebar.isOnRight = layout.sidebarOnRight
+        duo.sidebarLeading?.isActive = !layout.sidebarOnRight
+        duo.sidebarTrailing?.isActive = layout.sidebarOnRight
         guard !duo.isDraggingSidebar else { return }
         duo.sidebarWidth?.constant = layout.sidebar.width
         sidebar.showsTitles = layout.sidebar == .expanded
         sidebar.view.isHidden = layout.sidebar == .hidden
     }
 
+    /// The strip follows the layout: across the top of the page area where Above is in effect.
+    func applyStripLayout(_ layout: DuoLayout) {
+        guard layout.showsStrip else {
+            if let strip = duo.strip {
+                strip.willMove(toParent: nil)
+                strip.view.removeFromSuperview()
+                strip.removeFromParent()
+                duo.strip = nil
+            }
+            return
+        }
+        guard duo.strip == nil else { return }
+        let source = duo.sideTabs ?? SideTabs(tabs: session.tabs)
+        source.host = self
+        duo.sideTabs = source
+        let strip = TabStripViewController(dataSource: source)
+        addChild(strip)
+        strip.view.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(strip.view, aboveSubview: panes.view)
+        let safe = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            strip.view.topAnchor.constraint(equalTo: safe.topAnchor),
+            strip.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
+            strip.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            strip.view.heightAnchor.constraint(equalToConstant: CGFloat(FixedChoices.tabStripHeight)),
+        ])
+        strip.didMove(toParent: self)
+        duo.strip = strip
+    }
+
+    /// The topmost of the page area's views (panes, strip, sidebar): the gallery goes above it.
+    var pageAreaTopView: UIView {
+        [panes.view, duo.strip?.view, duo.sidebar?.view].compactMap { $0 }.last ?? panes.view
+    }
+
     @discardableResult
     private func installSidebarIfNeeded() -> SideTabsViewController {
         if let sidebar = duo.sidebar { return sidebar }
-        let source = SideTabs(tabs: session.tabs)
+        let source = duo.sideTabs ?? SideTabs(tabs: session.tabs)
         source.host = self
         let sidebar = SideTabsViewController(dataSource: source)
         sidebar.onResize = { [weak self] phase, travel, velocity in
@@ -36,11 +74,14 @@ extension BrowserViewController {
         addChild(sidebar)
         sidebar.view.translatesAutoresizingMaskIntoConstraints = false
         // Over the page (Expanded may float over it), under the chrome and the search sheet.
-        view.insertSubview(sidebar.view, aboveSubview: panes.view)
+        view.insertSubview(sidebar.view, aboveSubview: duo.strip?.view ?? panes.view)
+        let safe = view.safeAreaLayoutGuide
         let width = sidebar.view.widthAnchor.constraint(equalToConstant: 0)
+        // Right sits inside the system's vertical bar, which is on the trailing edge too.
+        duo.sidebarLeading = sidebar.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor)
+        duo.sidebarTrailing = sidebar.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
         NSLayoutConstraint.activate([
-            sidebar.view.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
-            sidebar.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            sidebar.view.topAnchor.constraint(equalTo: safe.topAnchor),
             sidebar.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             width,
         ])
@@ -57,8 +98,9 @@ extension BrowserViewController {
         sidebar.view.removeFromSuperview()
         sidebar.removeFromParent()
         duo.sidebar = nil
-        duo.sideTabs = nil
         duo.sidebarWidth = nil
+        duo.sidebarLeading = nil
+        duo.sidebarTrailing = nil
         duo.isDraggingSidebar = false
     }
 
@@ -135,14 +177,15 @@ extension BrowserViewController {
             duo.isDraggingSidebar = true
             duo.sidebarDragStart = widthConstraint.constant
         case .changed:
-            let width = drag.trackedWidth(duo.sidebarDragStart + travel)
+            // A Right sidebar widens toward the page, to the left.
+            let width = drag.trackedWidth(duo.sidebarDragStart + (layout.sidebarOnRight ? -travel : travel))
             widthConstraint.constant = width
             duo.sidebar?.showsTitles = width > SidebarState.rail.width + Spacing.xl
             UIView.animate(Motion.sidebarTrack) { self.view.layoutIfNeeded() }
         case .ended:
             duo.isDraggingSidebar = false
             let width = widthConstraint.constant
-            let target = drag.restingState(width: width, velocity: velocity)
+            let target = drag.restingState(width: width, velocity: layout.sidebarOnRight ? -velocity : velocity)
             let flicked = abs(velocity) > 600
             setSidebar(target, flicked: flicked)
         }
@@ -178,11 +221,11 @@ extension BrowserViewController {
     private static let sidebarStateKey = "plain.sidebarState"
 
     #if DEBUG
-    /// Debug builds only (the app's `-PlainOpen`, `-PlainSplit`, `-PlainSidebar` launch
-    /// arguments): opens pages once the session is up, optionally in a split, and shows side tabs
-    /// in a state, for screenshots of Duo states.
-    public func debugSetUp(open pages: [URL], split: Bool, sidebar: String?) {
-        guard !pages.isEmpty || sidebar != nil else { return }
+    /// Debug builds only (the app's `-PlainOpen`, `-PlainSplit`, `-PlainTabLayout`,
+    /// `-PlainSidebar` launch arguments): opens pages once the session is up, optionally in a
+    /// split, and sets Tab Layout and the sidebar's state (not saved), for screenshots of Duo states.
+    public func debugSetUp(open pages: [URL], split: Bool, tabLayout: String?, sidebar: String?) {
+        guard !pages.isEmpty || sidebar != nil || tabLayout != nil else { return }
         Task { [weak self] in
             // After launch's restore, so the pages are not merged into it.
             try? await Task.sleep(for: .seconds(1.5))
@@ -191,8 +234,11 @@ extension BrowserViewController {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             guard let self else { return }
+            if let tabLayout, let layout = TabLayout(rawValue: tabLayout) {
+                duo.tabLayout = layout
+                view.setNeedsLayout()
+            }
             if let sidebar, let state = SidebarState(rawValue: sidebar) {
-                duo.tabLayout = .sideTabs
                 duo.sidebarRequest = state
                 if state != .hidden { duo.lastShownSidebar = state }
                 view.setNeedsLayout()

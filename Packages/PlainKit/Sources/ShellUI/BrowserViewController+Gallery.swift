@@ -60,7 +60,7 @@ extension BrowserViewController: GalleryHost {
         gallery.view.accessibilityViewIsModal = true
         // Over the page, under the chrome (which fades as the gallery's own bar arrives) and the
         // search sheet (a new tab from the gallery opens it).
-        view.insertSubview(gallery.view, aboveSubview: duo.sidebar?.view ?? panes.view)
+        view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
         gallery.didMove(toParent: self)
         tabsUI.gallery = gallery
         // The gallery has its own bar: the system's vertical bar (Duo) empties rather than hides,
@@ -297,6 +297,7 @@ extension BrowserViewController: GalleryHost {
     func tabsDidChange() {
         tabsUI.gallery?.reloadTabs(animated: false)
         duo.sidebar?.reloadTabs()
+        duo.strip?.reloadTabs()
         // A tab closed or archived elsewhere may have left the other pane.
         syncPanes()
         updateButtons()

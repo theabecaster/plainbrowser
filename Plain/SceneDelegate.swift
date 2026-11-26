@@ -98,14 +98,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         attachDatabase(to: browser)
         #if DEBUG
         // `-PlainOpen <url>,<url>` opens pages after launch, `-PlainSplit` puts the last one in a
-        // split's other pane and `-PlainSidebar rail|expanded|hidden` turns side tabs on in that
-        // state: screenshots of Duo states the simulator reaches only through Device Hub.
+        // split's other pane, `-PlainTabLayout above|left|right` sets Tab Layout and `-PlainSidebar
+        // rail|expanded|hidden` the sidebar's state (neither saved): screenshots of Duo states the
+        // simulator reaches only through Device Hub.
         let arguments = ProcessInfo.processInfo.arguments
         func value(after flag: String) -> String? {
             arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
         }
         let pages = value(after: "-PlainOpen")?.split(separator: ",").compactMap { URL(string: String($0)) } ?? []
-        browser.debugSetUp(open: pages, split: arguments.contains("-PlainSplit"), sidebar: value(after: "-PlainSidebar"))
+        browser.debugSetUp(
+            open: pages, split: arguments.contains("-PlainSplit"), tabLayout: value(after: "-PlainTabLayout"),
+            sidebar: value(after: "-PlainSidebar")
+        )
         #endif
     }
 

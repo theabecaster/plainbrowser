@@ -81,8 +81,9 @@ for it. `scripts/duo-fold.sh <simulator name> Open` presses Device Hub's buttons
 terminal). Screenshots per screen: `xcrun simctl io <udid> enumerate`, then
 `screenshot --display=<id>` (the inner screen is the 2007x2853 one). The Duo layout UI tests
 (`DuoTests`) skip unless the simulator is unfolded, so run them after `duo-fold.sh ... Open`.
-Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit` and `-PlainSidebar rail|expanded|hidden`
-to reach a split or side tabs for screenshots without driving the UI.
+Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit`, `-PlainTabLayout above|left|right` and
+`-PlainSidebar rail|expanded|hidden` (none saved) to reach a split or a tab layout for screenshots
+without driving the UI. Device Hub can't be driven while the Mac is locked.
 
 ## TestFlight
 

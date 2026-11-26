@@ -1,7 +1,7 @@
 import XCTest
 
 /// The Duo's inner-screen layouts: split tabs (open from the page menu, focus by touch, close a
-/// pane) and side tabs (only where the window is wide enough, and the setting survives a
+/// pane) and Tab Layout (Left by default, Right, Above; the setting survives a
 /// relaunch).
 ///
 /// They need the iPhone Duo simulator unfolded: the fold is set only in Device Hub
@@ -124,59 +124,78 @@ final class DuoTests: XCTestCase {
         waitForPill(app, showing: "/b")
     }
 
-    func testSideTabsShowOnlyWhenWideAndTheSettingSurvivesRelaunch() throws {
+    /// Settings > Tab Layout > `choice`, then Done.
+    private func chooseTabLayout(_ app: XCUIApplication, _ choice: String, file: StaticString = #filePath, line: UInt = #line) {
+        app.buttons["more"].tap()
+        let settings = app.buttons["Settings…"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3), file: file, line: line)
+        settings.tap()
+        let layout = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Tab Layout'")).firstMatch
+        XCTAssertTrue(layout.waitForExistence(timeout: 3), "Tab Layout is in Settings", file: file, line: line)
+        XCTAssertTrue(layout.isEnabled, "Tab Layout applies on the inner screen", file: file, line: line)
+        layout.tap()
+        let option = app.buttons[choice]
+        XCTAssertTrue(option.waitForExistence(timeout: 2), "\"\(choice)\" is not a Tab Layout choice", file: file, line: line)
+        option.tap()
+        app.buttons["Done"].tap()
+    }
+
+    func testTabLayoutLeftByDefaultThenRightThenAboveAndItSurvivesRelaunch() throws {
         var app = try launch(["-PlainTestStore", "-PlainResetStore"])
         try requireInnerLandscape(app)
         go(app, to: "/a", heading: "Page A")
-        XCTAssertFalse(app.otherElements["sideTabs"].exists, "regular tabs by default")
-
-        app.buttons["more"].tap()
-        let settings = app.buttons["Settings…"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 3))
-        settings.tap()
-        let layout = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Tab Layout'")).firstMatch
-        XCTAssertTrue(layout.waitForExistence(timeout: 3), "Tab Layout shows on the inner screen")
-        layout.tap()
-        let side = app.buttons["Side Tabs"]
-        XCTAssertTrue(side.waitForExistence(timeout: 2))
-        side.tap()
-        app.buttons["Done"].tap()
-        XCTAssertTrue(app.otherElements["sideTabs"].waitForExistence(timeout: 3), "the sidebar shows")
+        let sidebar = app.otherElements["sideTabs"]
+        let window = app.windows.firstMatch.frame
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 3), "Left is the default: the sidebar shows")
+        XCTAssertLessThan(sidebar.frame.minX, window.midX)
         XCTAssertTrue(app.buttons["sideTabs.newTab"].exists)
 
         // The Tabs button hides the sidebar and brings it back.
         app.buttons["tabs"].tap()
-        let hidden = NSPredicate { _, _ in !app.otherElements["sideTabs"].exists }
+        let hidden = NSPredicate { _, _ in !sidebar.exists }
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: hidden, object: nil)], timeout: 3), .completed)
         app.buttons["tabs"].tap()
-        XCTAssertTrue(app.otherElements["sideTabs"].waitForExistence(timeout: 3))
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 3))
 
-        // Settings are written at once; the tab list within half a second.
+        chooseTabLayout(app, "Right")
+        let onRight = NSPredicate { _, _ in sidebar.exists && sidebar.frame.minX > window.midX }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: onRight, object: nil)], timeout: 3), .completed,
+                       "the sidebar moved to the right")
+
+        chooseTabLayout(app, "Above")
+        let strip = app.otherElements["tabStrip"]
+        XCTAssertTrue(strip.waitForExistence(timeout: 3), "the tab strip shows")
+        XCTAssertFalse(sidebar.exists)
+        XCTAssertLessThan(strip.frame.maxY, app.webViews.staticTexts["Page A"].frame.minY, "the strip sits above the page")
+
+        // Settings are written at once.
         Thread.sleep(forTimeInterval: 1)
         app.terminate()
         app = try launch(["-PlainTestStore"])
-        XCTAssertTrue(app.otherElements["sideTabs"].waitForExistence(timeout: 5), "side tabs come back after a relaunch")
+        XCTAssertTrue(app.otherElements["tabStrip"].waitForExistence(timeout: 5), "Above comes back after a relaunch")
     }
 
-    func testSideTabsListTheTabsAndSwitchThem() throws {
+    func testSidebarAndStripListTheTabsAndSwitchThem() throws {
         let app = try launch()
         try requireInnerLandscape(app)
         go(app, to: "/a", heading: "Page A")
         tabsMenu(app, pick: "New Tab")
         go(app, to: "/b", heading: "Page B")
-        app.buttons["more"].tap()
-        app.buttons["Settings…"].tap()
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Tab Layout'")).firstMatch.tap()
-        app.buttons["Side Tabs"].tap()
-        app.buttons["Done"].tap()
 
         let rows = app.otherElements["sideTabs"].descendants(matching: .any).matching(identifier: "sideTab")
         let two = NSPredicate { _, _ in rows.count == 2 }
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: two, object: nil)], timeout: 5), .completed)
         rows.matching(NSPredicate(format: "label == 'Plain Test A'")).firstMatch.tap()
         waitForPill(app, showing: "/a")
-        // New Tab from the sidebar goes straight to the search field.
-        app.buttons["sideTabs.newTab"].tap()
+
+        chooseTabLayout(app, "Above")
+        let stripTabs = app.otherElements["tabStrip"].descendants(matching: .any).matching(identifier: "stripTab")
+        let twoInStrip = NSPredicate { _, _ in stripTabs.count == 2 }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: twoInStrip, object: nil)], timeout: 5), .completed)
+        stripTabs.matching(NSPredicate(format: "label == 'Plain Test B'")).firstMatch.tap()
+        waitForPill(app, showing: "/b")
+        // New Tab from the strip goes straight to the search field.
+        app.buttons["tabStrip.newTab"].tap()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 3))
     }
 }

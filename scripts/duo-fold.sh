@@ -20,6 +20,15 @@ on run argv
   set simName to item 1 of argv
   set foldState to item 2 of argv
   tell application "System Events" to tell process "DeviceHub"
+    -- A closed or hidden window comes back from the Window menu.
+    if (count of windows) is 0 then
+      repeat with m in menu items of menu "Window" of menu bar 1
+        try
+          if (name of m) starts with simName then click m
+        end try
+      end repeat
+      delay 1.5
+    end if
     set w to window 1
     set sidebar to outline 1 of scroll area 1 of group 1 of splitter group 1 of group 1 of splitter group 1 of group 1 of w
     repeat with r in rows of sidebar

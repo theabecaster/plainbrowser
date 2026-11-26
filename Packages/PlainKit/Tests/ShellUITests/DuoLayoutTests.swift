@@ -18,7 +18,7 @@ struct DuoLayoutTests {
     static let bookFold = flatFold
 
     func inner(
-        layout: TabLayout = .regular, sidebar: SidebarState = .rail, panes: Int = 1, focused: Int = 0,
+        layout: TabLayout = .above, sidebar: SidebarState = .rail, panes: Int = 1, focused: Int = 0,
         fold: CGRect? = flatFold, active: Bool = false
     ) -> DuoLayout {
         DuoLayout(DuoLayoutInput(
@@ -30,9 +30,11 @@ struct DuoLayoutTests {
     @Test func outerScreenShowsOnePaneAndNoSideTabs() {
         let outer = DuoLayout(DuoLayoutInput(
             pageArea: CGRect(x: 0, y: 24, width: 466 - Self.bar, height: 654), isRegularWidth: false, isRegularHeight: true,
-            tabLayout: .sideTabs, paneCount: 2, focusedPane: 1
+            tabLayout: .left, paneCount: 2, focusedPane: 1
         ))
-        #expect(!outer.sideTabsAvailable)
+        #expect(!outer.tabLayoutAvailable)
+        #expect(outer.tabLayout == nil, "the app switcher is the only tab list")
+        #expect(!outer.showsStrip)
         #expect(!outer.showsSidebar)
         #expect(!outer.splitAvailable)
         #expect(!outer.splitShown)
@@ -40,14 +42,22 @@ struct DuoLayoutTests {
         #expect(outer.chromeLane == 0...(466 - Self.bar))
     }
 
-    @Test func innerPortraitHasNoSplitAndNoSideTabs() {
+    @Test func innerPortraitHasNoSplitAndShowsTheStripForASidebar() {
         // 669 pt wide: the rail would leave 605 pt, under the 640 pt minimum, and two panes would
-        // be 334 pt each.
+        // be 334 pt each. The strip fits, so Left and Right show it there.
+        for setting in [TabLayout.left, .right, .above] {
+            let portrait = DuoLayout(DuoLayoutInput(
+                pageArea: CGRect(x: 0, y: 24, width: 669, height: 927), isRegularWidth: true, isRegularHeight: true,
+                tabLayout: setting, paneCount: 2
+            ))
+            #expect(portrait.tabLayoutAvailable)
+            #expect(portrait.tabLayout == .above)
+            #expect(portrait.showsStrip && !portrait.showsSidebar)
+        }
         let portrait = DuoLayout(DuoLayoutInput(
             pageArea: CGRect(x: 0, y: 24, width: 669, height: 927), isRegularWidth: true, isRegularHeight: true,
-            tabLayout: .sideTabs, paneCount: 2
+            tabLayout: .left, paneCount: 2
         ))
-        #expect(!portrait.sideTabsAvailable)
         #expect(!portrait.splitAvailable)
         #expect(portrait.paneFrames.count == 1)
     }
@@ -56,9 +66,9 @@ struct DuoLayoutTests {
         // A Pro Max in landscape: regular width, compact height.
         let phone = DuoLayout(DuoLayoutInput(
             pageArea: CGRect(x: 59, y: 0, width: 838, height: 440), isRegularWidth: true, isRegularHeight: false,
-            tabLayout: .sideTabs, paneCount: 2
+            tabLayout: .left, paneCount: 2
         ))
-        #expect(!phone.sideTabsAvailable)
+        #expect(!phone.tabLayoutAvailable)
         #expect(!phone.splitShown)
     }
 
@@ -86,9 +96,10 @@ struct DuoLayoutTests {
         #expect(split.paneFrames[0].width == split.paneFrames[1].width)
     }
 
-    @Test func sideTabsRailDocksAndExpandedFloatsWhenThePageWouldBeTooNarrow() {
-        let rail = inner(layout: .sideTabs, sidebar: .rail)
-        #expect(rail.sideTabsAvailable)
+    @Test func leftRailDocksAndExpandedFloatsWhenThePageWouldBeTooNarrow() {
+        let rail = inner(layout: .left, sidebar: .rail)
+        #expect(rail.tabLayoutAvailable)
+        #expect(!rail.sidebarOnRight)
         #expect(rail.showsSidebar)
         #expect(rail.sidebar == .rail)
         #expect(rail.sidebarDockWidth == 64)
@@ -96,7 +107,7 @@ struct DuoLayoutTests {
         #expect(rail.paneFrames[0].width >= 640)
 
         // 867 - 260 = 607 pt of page: Expanded floats over it, the page keeps the rail's width.
-        let expanded = inner(layout: .sideTabs, sidebar: .expanded)
+        let expanded = inner(layout: .left, sidebar: .expanded)
         #expect(expanded.sidebar == .expanded)
         #expect(expanded.sidebarFloats)
         #expect(expanded.sidebarDockWidth == 64)
@@ -105,32 +116,46 @@ struct DuoLayoutTests {
         // A window with room beside it docks Expanded.
         let wide = DuoLayout(DuoLayoutInput(
             pageArea: CGRect(x: 0, y: 24, width: 1180, height: 796), isRegularWidth: true, isRegularHeight: true,
-            tabLayout: .sideTabs, requestedSidebar: .expanded
+            tabLayout: .left, requestedSidebar: .expanded
         ))
         #expect(!wide.sidebarFloats)
         #expect(wide.sidebarDockWidth == 260)
     }
 
     @Test func splitAndFoldForceTheRail() {
-        let split = inner(layout: .sideTabs, sidebar: .expanded, panes: 2)
+        let split = inner(layout: .left, sidebar: .expanded, panes: 2)
         #expect(split.sidebar == .rail)
         #expect(split.widestSidebar == .rail)
         #expect(split.splitShown)
         #expect(split.paneFrames.allSatisfy { $0.width >= CGFloat(FixedChoices.splitMinimumPaneWidth) })
 
-        let book = inner(layout: .sideTabs, sidebar: .expanded, fold: Self.bookFold, active: true)
+        let book = inner(layout: .left, sidebar: .expanded, fold: Self.bookFold, active: true)
         #expect(book.sidebar == .rail)
 
-        let hidden = inner(layout: .sideTabs, sidebar: .hidden, panes: 2)
+        let hidden = inner(layout: .left, sidebar: .hidden, panes: 2)
         #expect(hidden.sidebar == .hidden)
         #expect(hidden.sidebarDockWidth == 0)
     }
 
-    @Test func regularTabsNeverShowTheSidebar() {
-        let regular = inner(layout: .regular, sidebar: .expanded)
-        #expect(regular.sideTabsAvailable)
-        #expect(!regular.showsSidebar)
-        #expect(regular.sidebarDockWidth == 0)
+    @Test func aboveShowsTheStripOverThePages() {
+        let above = inner(layout: .above, sidebar: .expanded, panes: 2)
+        #expect(above.showsStrip)
+        #expect(!above.showsSidebar)
+        #expect(above.sidebarDockWidth == 0)
+        #expect(above.stripHeight == CGFloat(FixedChoices.tabStripHeight))
+        #expect(above.paneFrames.allSatisfy { $0.minY == Self.innerLandscape.minY + above.stripHeight })
+        #expect(above.paneFrames[0].maxX == 475.5, "the split stays on the crease")
+    }
+
+    @Test func rightDocksTheSidebarOnTheTrailingSide() {
+        let rail = inner(layout: .right, sidebar: .rail)
+        #expect(rail.sidebarOnRight)
+        #expect(rail.paneFrames[0].minX == Self.innerLandscape.minX)
+        #expect(rail.paneFrames[0].maxX == Self.innerLandscape.maxX - 64)
+        // Expanded floats over the page from the right: the pill keeps clear of it.
+        let expanded = inner(layout: .right, sidebar: .expanded)
+        #expect(expanded.sidebarFloats)
+        #expect(expanded.chromeLane == Self.innerLandscape.minX...(Self.innerLandscape.maxX - 260))
     }
 
     @Test func bookPoseMovesThePillOffTheFold() {
@@ -153,7 +178,7 @@ struct DuoLayoutTests {
     @Test func pillAvoidsTheCameraOnlyWhereItSits() {
         let camera = CGRect(x: 400, y: 600, width: 60, height: 40)
         var input = DuoLayoutInput(
-            pageArea: Self.innerLandscape, isRegularWidth: true, isRegularHeight: true, occlusions: [camera],
+            pageArea: Self.innerLandscape, isRegularWidth: true, isRegularHeight: true, tabLayout: .above, occlusions: [camera],
             chromeBand: 580...669
         )
         #expect(DuoLayout(input).chromeLane == 460...Self.innerLandscape.maxX)

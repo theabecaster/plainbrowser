@@ -57,8 +57,9 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     public var isOnRight = false {
         didSet {
             guard isViewLoaded, isOnRight != oldValue else { return }
-            separatorOnTrailing.isActive = !isOnRight
-            separatorOnLeading.isActive = isOnRight
+            // The outgoing edge lets go first.
+            (isOnRight ? separatorOnTrailing : separatorOnLeading)?.isActive = false
+            (isOnRight ? separatorOnLeading : separatorOnTrailing)?.isActive = true
         }
     }
     private var separatorOnTrailing: NSLayoutConstraint!

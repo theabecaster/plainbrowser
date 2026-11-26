@@ -19,8 +19,11 @@ extension BrowserViewController {
         let sidebar = installSidebarIfNeeded()
         sidebar.floats = layout.sidebarFloats
         sidebar.isOnRight = layout.sidebarOnRight
-        duo.sidebarLeading?.isActive = !layout.sidebarOnRight
-        duo.sidebarTrailing?.isActive = layout.sidebarOnRight
+        // The outgoing edge lets go first, so the two never pin the sidebar together.
+        let (pin, unpin) = layout.sidebarOnRight
+            ? (duo.sidebarTrailing, duo.sidebarLeading) : (duo.sidebarLeading, duo.sidebarTrailing)
+        unpin?.isActive = false
+        pin?.isActive = true
         guard !duo.isDraggingSidebar else { return }
         duo.sidebarWidth?.constant = layout.sidebar.width
         sidebar.showsTitles = layout.sidebar == .expanded

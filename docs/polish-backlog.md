@@ -214,3 +214,9 @@ Newest feature last.
 - **Pill margin in book pose.** Shifted off the crease, the pill keeps the 12 pt side margin of a
   phone-width lane, which reads tight next to the centered 640 pt pill when flat. (Design review,
   round 1.)
+- **Tab strip reloads twice per action.** A tap, close or reorder reloads the strip at once (for
+  instant feedback) and again on the store's change notification; fold them into the one
+  notification if profiling shows it. (Code review, round 3.)
+- **Above and Right on the device.** Both were built after the Mac locked: unit-tested
+  (`DuoLayoutTests`) and UI-tested only as far as the simulator allowed; check the strip's look
+  and the Right sidebar's drag on the inner screen.

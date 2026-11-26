@@ -14,7 +14,7 @@ import Testing
     @Test func omniboxQueryOn100kPagesMeetsBudget() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: "plain-perf-\(UUID())")
         defer { try? FileManager.default.removeItem(at: folder) }
-        let database = try AppDatabase.open(at: folder.appending(path: "Plain.sqlite"))
+        let database = try await AppDatabase.open(at: folder.appending(path: "Plain.sqlite"))
 
         var generator = SeededGenerator(seed: 42)
         let vocabulary = Self.vocabulary(using: &generator)

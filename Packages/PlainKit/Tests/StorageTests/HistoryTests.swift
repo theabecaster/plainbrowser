@@ -43,9 +43,9 @@ func visit(_ url: String, _ title: String? = nil, at offset: TimeInterval = 0) -
     @Test func everyMigrationRunsOnAFileDatabase() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: "plain-migrate-\(UUID())")
         defer { try? FileManager.default.removeItem(at: folder) }
-        _ = try AppDatabase.open(at: folder.appending(path: "Plain.sqlite"))
+        _ = try await AppDatabase.open(at: folder.appending(path: "Plain.sqlite"))
         // Reopening an up-to-date database is a no-op.
-        let database = try AppDatabase.open(at: folder.appending(path: "Plain.sqlite"))
+        let database = try await AppDatabase.open(at: folder.appending(path: "Plain.sqlite"))
         let applied = try await database.writer.read { db in try AppDatabase.migrator.appliedMigrations(db) }
         #expect(applied == AppDatabase.migrator.migrations)
     }

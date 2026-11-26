@@ -1,0 +1,5 @@
+// Signing for every target. The team is personal, so it lives in the gitignored
+// Config/Signing.local.xcconfig (copy Config/Signing.local.xcconfig.example). Without it,
+// simulator builds still work; device builds need it.
+CODE_SIGN_STYLE = Automatic
+#include? "Signing.local.xcconfig"

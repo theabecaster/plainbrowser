@@ -14,9 +14,10 @@ public final class AppDatabase: Sendable {
     /// Opens (or creates) the database at `url` and migrates it to the current schema. Tab state
     /// files live in a `TabState` folder next to it unless `tabStateDirectory` says otherwise.
     ///
-    /// Opening is synchronous file I/O. Call it off the main thread, for example from a detached
-    /// task during launch.
-    public static func open(at url: URL, tabStateDirectory: URL? = nil) throws -> AppDatabase {
+    /// Opening and migrating touch the disk, so they run on the global executor, never on the
+    /// caller's actor.
+    @concurrent
+    public static func open(at url: URL, tabStateDirectory: URL? = nil) async throws -> AppDatabase {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true
         )

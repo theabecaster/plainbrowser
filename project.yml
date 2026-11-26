@@ -6,11 +6,13 @@ options:
   deploymentTarget:
     iOS: "27.1"
   createIntermediateGroups: true
+# Signing team comes from the gitignored Config/Signing.local.xcconfig.
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    DEVELOPMENT_TEAM: R2PVQ496X7
-    CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES

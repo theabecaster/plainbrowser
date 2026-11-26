@@ -25,7 +25,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate 
     private var didWarmUp = false
 
     /// - Parameter onSearchFieldReady: called once, when the field first becomes first responder.
-    public init(pool: WebViewPool, searchEngine: SearchEngine = .google, onSearchFieldReady: @escaping () -> Void) {
+    public init(pool: WebViewPool, searchEngine: SearchEngine = FixedChoices.defaultSearchEngine, onSearchFieldReady: @escaping () -> Void) {
         self.pool = pool
         self.searchEngine = searchEngine
         self.onSearchFieldReady = onSearchFieldReady
@@ -82,18 +82,31 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate 
         super.viewDidAppear(animated)
         guard !didWarmUp else { return }
         didWarmUp = true
-        // The first frame is on its way to the screen; warm the web processes on the next turn
-        // of the main run loop so the warm-up never delays it.
-        DispatchQueue.main.async { [pool] in pool.warmUp() }
+        // A dispatch to the main queue can run before Core Animation commits the first frame.
+        // A display link's first callback comes at the vsync after that commit, so the warm-up
+        // starts only once the first frame has gone to the render server.
+        let link = CADisplayLink(target: self, selector: #selector(firstFrameDidCommit(_:)))
+        link.add(to: .main, forMode: .common)
+    }
+
+    @objc private func firstFrameDidCommit(_ link: CADisplayLink) {
+        link.invalidate()
+        pool.warmUp()
     }
 
     public func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        let signposter = Signposts.signposter
+        let state = signposter.beginInterval(Signposts.addressSubmit)
         guard let input = AddressBarInput(textField.text ?? ""),
               let url = input.destination(searchingWith: searchEngine)
-        else { return false }
+        else {
+            signposter.endInterval(Signposts.addressSubmit, state, "ignored")
+            return false
+        }
         load(url)
         textField.text = url.absoluteString
         textField.resignFirstResponder()
+        signposter.endInterval(Signposts.addressSubmit, state, "loaded")
         return false
     }
 

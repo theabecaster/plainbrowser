@@ -60,4 +60,13 @@ public enum FixedChoices {
     public static let extraLiveTabs = 3
     /// Tab thumbnails are this wide in points; full-size snapshots cost 70+ MiB (research notes).
     public static let thumbnailWidth: Double = 200
+
+    // MARK: Tab gallery
+
+    /// Tab gallery width, in points, from which it shows the wide grid. Below it the gallery is
+    /// a phone-sized card list; above it there is room for twice the columns.
+    public static let tabGalleryWideWidth: Double = 640
+    /// Tab gallery columns below and above `tabGalleryWideWidth`. Always even, so on the Duo's
+    /// inner screen no card straddles the fold (docs/plan.md, section 6).
+    public static let tabGalleryColumns = (narrow: 2, wide: 4)
 }

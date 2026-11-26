@@ -14,6 +14,11 @@ public enum Signposts {
     public static let launch: StaticString = "launch"
     /// Event: the search field became first responder at launch.
     public static let searchFieldReady: StaticString = "launch.searchFieldReady"
+    /// Interval: the pool creating the warm web view after the first frame.
+    public static let webViewWarmUp: StaticString = "webView.warmUp"
+    /// Interval: the user submitting the address bar, until the load is handed to the web view
+    /// (parsing the input, getting a web view, starting the load).
+    public static let addressSubmit: StaticString = "address.submit"
     /// Interval from a navigation starting to its first content committing.
     public static let navCommit: StaticString = "nav.commit"
     /// Interval from a navigation starting to it finishing (or failing).

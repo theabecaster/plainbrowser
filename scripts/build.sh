@@ -10,7 +10,7 @@ mkdir -p build
 if ! xcodebuild -project Plain.xcodeproj -scheme Plain -configuration Debug \
     -destination 'generic/platform=iOS Simulator' -derivedDataPath build/sim \
     build-for-testing > build/build.log 2>&1; then
-  grep -E 'error:' build/build.log | sort -u | head -20
+  grep -E 'error:' build/build.log | sort -u | head -20 || true
   print -u2 "build failed; full log: build/build.log"
   exit 1
 fi

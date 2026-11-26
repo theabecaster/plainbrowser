@@ -2,16 +2,20 @@
 # Run every test that doesn't need the device:
 #   1. `swift test` for Packages/PlainKit (BrowserCore, Storage) on macOS.
 #   2. The Smoke test plan (UI tests minus perf) on two simulators this script owns:
-#      plain-duo (iPhone Duo) and plain-17 (iPhone 17).
+#      <prefix>-duo (iPhone Duo) and <prefix>-17 (iPhone 17); the prefix is PLAIN_SIM_PREFIX,
+#      default `plain`. Agents running in parallel each set their own (e.g. plain-r).
 # The simulators are created when missing and deleted afterwards, unless KEEP_SIMS=1.
 # Only simulators named plain-* are ever touched.
-# Usage: scripts/test.sh            KEEP_SIMS=1 scripts/test.sh
+# Each test is capped by XCTest's execution time allowance, so a stuck test cannot hang the run.
+# Usage: scripts/test.sh            KEEP_SIMS=1 scripts/test.sh     PLAIN_SIM_PREFIX=plain-r scripts/test.sh
 set -euo pipefail
 source "${0:A:h}/lib/common.zsh"
 
+PREFIX=${PLAIN_SIM_PREFIX:-plain}
+[[ $PREFIX == plain || $PREFIX == plain-* ]] || { print -u2 "PLAIN_SIM_PREFIX must start with plain"; exit 1; }
 typeset -A SIMS=(
-  plain-duo "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4"
-  plain-17  "com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-27-2"
+  $PREFIX-duo "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4"
+  $PREFIX-17  "com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-27-2"
 )
 
 sim_udid() {
@@ -36,7 +40,7 @@ trap cleanup EXIT
 
 mkdir -p build/test
 failed=0
-for name in plain-duo plain-17; do
+for name in $PREFIX-duo $PREFIX-17; do
   udid=$(sim_udid $name)
   if [[ -z "$udid" ]]; then
     udid=$(xcrun simctl create $name ${=SIMS[$name]})
@@ -46,12 +50,14 @@ for name in plain-duo plain-17; do
   rm -rf build/test/$name.xcresult
   if xcodebuild -project Plain.xcodeproj -scheme Plain -testPlan Smoke -destination "id=$udid" \
       -derivedDataPath build/sim -resultBundlePath build/test/$name.xcresult \
+      -test-timeouts-enabled YES -default-test-execution-time-allowance 120 \
+      -maximum-test-execution-time-allowance 300 \
       test-without-building > build/test/$name.log 2>&1; then
     xcrun xcresulttool get test-results summary --path build/test/$name.xcresult \
       | jq -r '"\(.result): \(.passedTests) passed, \(.failedTests) failed, \(.skippedTests) skipped"'
   else
     failed=1
-    grep -E 'error:|failed' build/test/$name.log | head -20
+    grep -E 'error:|failed' build/test/$name.log | head -20 || true
     print -u2 "UI smoke failed on $name; log: build/test/$name.log"
   fi
 done

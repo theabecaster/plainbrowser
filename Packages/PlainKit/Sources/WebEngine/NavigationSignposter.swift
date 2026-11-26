@@ -44,6 +44,17 @@ public final class NavigationSignposter: NSObject, WKNavigationDelegate {
         end(navigation, outcome: "failed")
     }
 
+    /// A crashed page never finishes its navigations; close their intervals.
+    public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        for state in open.values {
+            if let commit = state.commit {
+                Signposts.signposter.endInterval(Signposts.navCommit, commit, "crashed")
+            }
+            Signposts.signposter.endInterval(Signposts.navFinish, state.finish, "crashed")
+        }
+        open = [:]
+    }
+
     private func end(_ navigation: WKNavigation?, outcome: StaticString) {
         guard let navigation, let state = open.removeValue(forKey: ObjectIdentifier(navigation)) else { return }
         let signposter = Signposts.signposter

@@ -88,6 +88,18 @@ public enum Signposts {
     /// is handed to the reader web view.
     public static let readerShow: StaticString = "reader.show"
 
+    /// Interval: putting a tab's page on screen (tab switch). Restoring a discarded tab starts here
+    /// too; its page coming back is `tab.restore`.
+    public static let tabAttach: StaticString = "tab.attach"
+    /// Interval from a discarded tab's restore starting to its page committing.
+    public static let tabRestore: StaticString = "tab.restore"
+    /// Interval from a tab's discard starting (reading its state) to its web view being released.
+    public static let tabDiscard: StaticString = "tab.discard"
+    /// Interval of a tab thumbnail snapshot, until WebKit returns the image.
+    public static let tabSnapshot: StaticString = "tab.snapshot"
+    /// Event: a tab's web content process terminated.
+    public static let tabCrash: StaticString = "tab.crash"
+
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {
         name.description

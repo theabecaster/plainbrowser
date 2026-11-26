@@ -93,5 +93,8 @@ let package = Package(
         .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "FeatureUI", "BrowserCore", "Storage"]),
         // Reader extraction and rendering on saved article pages; iOS simulator only, like above.
         .testTarget(name: "ReaderTests", dependencies: ["Reader"], resources: [.copy("Fixtures")]),
+        // WebKit tests against a local HTTP server; they run on an iOS simulator (xcodebuild).
+        // On macOS only the pure navigation rules run.
+        .testTarget(name: "WebEngineTests", dependencies: ["WebEngine", "Storage", "BrowserCore"]),
     ]
 )

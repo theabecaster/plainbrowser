@@ -177,9 +177,10 @@ SCENE = {
                   rim="#9CFFE8", sun=("#FFF8E8", "#FF9A78", "#FF5A4C"), glow=1.0),
     "dark": dict(sky=("#1E1A80", "#2F6FE8", "#FFBA8E"), planet=("#141F70", "#0B0D3A"),
                  rim="#7CFFE0", sun=("#FFF6E4", "#FF9474", "#FF5A4C"), glow=1.0),
-    # tinted: dark sky, black planet, a bright rim and sun, so the horizon reads
-    "tinted": dict(sky=("#1C1C1C", "#383838", "#9C9C9C"), planet=("#000000", "#000000"),
-                   rim="#FFFFFF", sun=("#FFFFFF", "#F4F4F4", "#D8D8D8"), glow=0.55),
+    # tinted: the system tints the ring at full strength, so the view stays
+    # dark to keep the ring crisp; a thin bright band, rim and sun mark the horizon
+    "tinted": dict(sky=("#0E0E0E", "#161616", "#7A7A7A"), planet=("#000000", "#000000"),
+                   rim="#FFFFFF", sun=("#FFFFFF", "#F4F4F4", "#D8D8D8"), glow=0.3),
 }
 
 def view_svg(mode):

@@ -54,12 +54,12 @@ mock() {   # $1 name, $2 wallpaper gradient, $3 glow, $4 rendition
 mock light '#B9C7E6-#7B86B8' '#FFE7D6C0' Default
 mock dark '#2B2F45-#0C0E18' '#4A3A5A90' Dark
 
-# Comparison sheet: renditions, then sizes (actual pixels), then silhouette.
+# Comparison sheet: renditions, then sizes (actual pixels; T = TintedDark), then silhouette.
 big=(); for r in $RENDS; do big+=(-label $r "$OUT/$r-1024.png"); done
 magick montage -font $FONT -pointsize 22 -fill '#E8E8EE' -background '#1C1D24' \
   $big -tile 6x1 -geometry '300x300>+12+10' "$tmp/r1.png"
 small=(); for s in $SIZES; do small+=(-label "$s" "$OUT/Default-$s.png"); done
-for s in 60 40 29 20; do small+=(-label "tinted $s" "$OUT/TintedDark-$s.png"); done
+for s in 60 40 29 20; do small+=(-label "T$s" "$OUT/TintedDark-$s.png"); done
 [[ -f "$OUT/silhouette-60.png" ]] && small+=(-label silhouette "$OUT/silhouette-60.png")
 magick montage -font $FONT -pointsize 20 -fill '#E8E8EE' -background '#1C1D24' $small \
   -tile $(( ${#small} / 3 ))x1 -geometry '+18+14' "$tmp/r2.png"

@@ -10,13 +10,13 @@ The generated files are distributed under GPL-3.0-or-later, the GPL option of th
 dual license, which is compatible with Plain's AGPL-3.0-only license. The attributions
 below are kept as the source licenses require.
 
-EasyList (version 202611261007)
+EasyList (version 202611261556)
   Source:      https://easylist.to/easylist/easylist.txt
   Homepage:    https://easylist.to/
   License:     GPL-3.0-or-later OR CC-BY-SA-3.0 (https://easylist.to/pages/licence.html)
   Attribution: The EasyList authors (https://easylist.to/)
 
-EasyPrivacy (version 202611261007)
+EasyPrivacy (version 202611261542)
   Source:      https://easylist.to/easylist/easyprivacy.txt
   Homepage:    https://easylist.to/
   License:     GPL-3.0-or-later OR CC-BY-SA-3.0 (https://easylist.to/pages/licence.html)

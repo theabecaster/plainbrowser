@@ -140,6 +140,20 @@ struct AddressBarDataTests {
         #expect(pages.first == linked)
     }
 
+    @Test func launchFocusPreconnectsOnlyAfterTheFirstFrame() {
+        var made = 0
+        let data = LiveAddressBarData {
+            made += 1
+            return SuggestionClient(http: FakeEngine(body: #"["x", []]"#))
+        }
+        data.prepareForTyping()
+        #expect(made == 0, "no URL session on the launch path")
+        data.firstFrameDidCommit()
+        #expect(made == 1, "the held-back preconnect runs after the first frame")
+        data.prepareForTyping()
+        #expect(made == 1)
+    }
+
     @Test func onlyWebPagesAreRecorded() {
         #expect(LiveAddressBarData.isRecordable(URL(string: "https://example.com")!))
         #expect(LiveAddressBarData.isRecordable(URL(string: "http://localhost:8080/a")!))

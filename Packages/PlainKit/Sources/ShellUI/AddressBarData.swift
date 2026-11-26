@@ -42,10 +42,14 @@ public protocol AddressBarData: AnyObject {
     /// A page suggestion was picked for the typed `input`, so it ranks first for that input next
     /// time. Not for searches or favorites tiles.
     func suggestionPicked(input: String, url: URL)
+    /// The first frame is on screen: work held back from launch (`prepareForTyping`'s
+    /// preconnect, which builds a URL session) may start.
+    func firstFrameDidCommit()
 }
 
 extension AddressBarData {
     public func prepareForTyping() {}
+    public func firstFrameDidCommit() {}
 
     /// A visit the address bar did not ask for (a link, a redirect).
     public func pageVisited(url: URL, title: String?) {
@@ -66,6 +70,8 @@ public final class LiveAddressBarData: AddressBarData {
     public private(set) var settings = BrowserSettings.defaults
     /// Private browsing: no remote suggestions, no preconnect. False until M2 adds private tabs.
     public var isPrivate = false
+    private var hasFirstFrame = false
+    private var preconnectAfterFirstFrame = false
     public var searchEngine: SearchEngine { settings.searchEngine }
     private var database: AppDatabase?
     /// The database's one history writer.
@@ -130,11 +136,26 @@ public final class LiveAddressBarData: AddressBarData {
     }
 
     /// Warms the connection to the engine's suggestion host as the field takes focus. Returns at
-    /// once: the client is an actor and the request runs at utility priority.
+    /// once: the client is an actor and the request runs at utility priority. The launch focus
+    /// comes before the first frame, so that one waits for `firstFrameDidCommit()`: the client
+    /// (and its URL session) is never made on the launch path.
     public func prepareForTyping() {
+        guard hasFirstFrame else {
+            preconnectAfterFirstFrame = true
+            return
+        }
         let engine = searchEngine
         let isPrivate = isPrivate
         Task { [client] in await client.preconnect(engine: engine, isPrivate: isPrivate) }
+    }
+
+    public func firstFrameDidCommit() {
+        guard !hasFirstFrame else { return }
+        hasFirstFrame = true
+        if preconnectAfterFirstFrame {
+            preconnectAfterFirstFrame = false
+            prepareForTyping()
+        }
     }
 
     public func suggestionPicked(input: String, url: URL) {

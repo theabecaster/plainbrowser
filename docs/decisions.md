@@ -379,6 +379,10 @@ Each entry: what was chosen, and why. Newest last.
   offers Quick Look.
 - **Popups become tabs in the store and take the screen** (one tab on screen until M2); Back on a
   popup's first page closes it and returns to its opener.
+- **Suggestion preconnect after the first frame.** The launch focus calls `prepareForTyping()`
+  before the first frame; the preconnect (and the suggestion client's URL session) waits for
+  `firstFrameDidCommit()`. Typed visits (`VisitKind.typed`) are the address bar's loads: an
+  address, a search or a picked suggestion; a picked page suggestion is remembered for its input.
 - **Fixed with it:** the geolocation delegate method had the wrong selector
   (`initiatedBy` instead of `initiatedByFrame`), so WebKit never asked; it now does.
 - **Perf cost:** after the first frame only. Lookups for compiled rule lists take about 1 ms; the

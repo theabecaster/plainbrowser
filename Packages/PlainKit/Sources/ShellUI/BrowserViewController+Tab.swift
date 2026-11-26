@@ -62,6 +62,7 @@ extension BrowserViewController {
     /// After the first frame: warms the engine, then shows the last session's tab under the
     /// search sheet when the user has not opened a page meanwhile.
     func startSession() {
+        data.firstFrameDidCommit()
         Task { [weak self, session] in
             let restored = await session.start()
             guard let self, let restored, self.currentTab == nil else { return }

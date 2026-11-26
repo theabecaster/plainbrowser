@@ -151,9 +151,9 @@ Motion principles: springs with no bounce by default; bounce only when a flick w
 | URL bar focus | bar grows into search sheet | `.snappy(duration: 0.3)`, bounce 0, follows `keyboardLayoutGuide` | none |
 | Switch tab by bar swipe | 1:1 tracking, then spring with gesture velocity. Preview: the neighbour's live web view, else a 2x full-screen snapshot kept for the two neighbours only. A snapshot of the glass bar slides, never live glass. | `.spring(duration: 0.35, bounce: 0.12)`, commit at 50% projected travel | selection on commit |
 | Swipe past last tab | rubber-band, new-tab card at 80 pt | as above | selection at threshold, light impact on commit |
-| Open tab gallery | page zooms into its card; custom snapshot animator, also driven by swipe up from the bar | `.spring(duration: 0.42, bounce: 0)`, 80–120 Hz | none |
+| Open tab gallery | page zooms into its card and the cascade zooms in around it; custom snapshot animator. Swipe up from the bar: the card follows the finger (bottom edge under it, sideways 1:1), card-sized at 40% of the height, then rubber-bands (docs/research/arc-tab-switcher.md) | `.spring(duration: 0.42, bounce: 0)`, 80–120 Hz; commit on a flick > 600 pt/s up or a projection (0.99) past 30% | none |
 | Open tab | same custom animator in reverse, interruptible; not the system `.zoom` (tabs are re-parented web views, not pushed controllers); target cell hidden by tab ID; live web view swapped in at the end | `.spring(duration: 0.42, bounce: 0)` | none |
-| Close tab | projected throw, cards reflow | close at −40% height or > 800 pt/s; throw `.spring(0.3, bounce 0.15)`; reflow `.snappy(0.3)` | soft impact |
+| Close tab | swipe a card up; projected throw, cards reflow | close at −40% height (projection 0.99) or > 800 pt/s up; throw `.spring(0.3, bounce 0)` continuing the tracking spring; spring back `.spring(0.32, bounce 0.12)`; reflow `Spring(0.35, bounce 0.1)` frame by frame | soft impact |
 | Pull to refresh | rubber-band, arms at 80 pt | — | selection at arm |
 | Toolbar collapse | tied to scroll; snaps on release, toward the release velocity when it is clear; a drag during the snap retargets from the on-screen position | `.smooth(0.25)` | none |
 | Link preview | `UIContextMenuInteraction` | system | system |

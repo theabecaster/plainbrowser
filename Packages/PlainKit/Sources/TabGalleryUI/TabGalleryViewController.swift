@@ -52,6 +52,9 @@ public final class TabGalleryViewController: UIViewController {
     var autoScroll: AutoScroller?
     /// The card a drag lifted: hidden until its preview lands.
     private var liftedID: UUID?
+    /// The blurred, dimmed page behind the cards.
+    private let backdrop = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
+    private var isShowingPrivate = false
     /// A swipe up on the empty space: back to the page.
     private var backgroundSwipe: UIPanGestureRecognizer?
     /// Cards rising away after a close, with where they sit on screen.
@@ -75,7 +78,15 @@ public final class TabGalleryViewController: UIViewController {
 
     override public func loadView() {
         let root = UIView()
-        root.backgroundColor = Palette.background
+        // Like the app switcher (and Arc): the cards float over the page they came from, blurred
+        // and dimmed, so the gallery reads as a layer over the browser. Always dark: the titles
+        // and the bar read the same in either appearance.
+        root.backgroundColor = .clear
+        root.overrideUserInterfaceStyle = .dark
+        backdrop.frame = root.bounds
+        backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        backdrop.contentView.backgroundColor = Palette.galleryDim
+        root.addSubview(backdrop)
         view = root
 
         let scroll = GalleryScrollView()
@@ -449,9 +460,11 @@ public final class TabGalleryViewController: UIViewController {
 
     private func updateChrome() {
         let isPrivate = dataSource.isShowingPrivateTabs
-        let background = isPrivate ? Palette.privateBackground : Palette.background
-        if view.backgroundColor != background {
-            view.backgroundColor = background
+        // Private tabs: the same blur, tinted with the private dusk.
+        let dim = isPrivate ? Palette.privateBackground.withAlphaComponent(0.7) : Palette.galleryDim
+        if backdrop.contentView.backgroundColor != dim || isShowingPrivate != isPrivate {
+            isShowingPrivate = isPrivate
+            backdrop.contentView.backgroundColor = dim
             bottomBar.setPrivate(isPrivate)
             emptyView.setPrivate(isPrivate)
         }
@@ -775,6 +788,7 @@ extension TabGalleryViewController: UIGestureRecognizerDelegate {
 
     @objc func backgroundTapped() {
         guard selectedID != nil, reorder == nil else { return }
+        Signposts.signposter.emitEvent(Signposts.galleryBack)
         done()
     }
 

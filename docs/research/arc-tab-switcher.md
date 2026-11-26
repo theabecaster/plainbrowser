@@ -103,11 +103,50 @@ They agree with the Arc measurements. Apple has not published its own numbers. *
   exactly as the app switcher does. The reverse plays when the gallery opens; either way can be
   reversed mid-flight. Reduce Motion: 0.2 s crossfade.
 
+**Enter: swipe up from the address bar (the home-indicator swipe)**
+- The page becomes a card that follows the finger: its bottom edge stays under the finger and it
+  moves sideways with it. It shrinks with the distance travelled and is card-sized after 40% of
+  the page's height; past that it rubber-bands (c = 0.55) to at most 15% smaller. The other cards
+  zoom in around it, so the neighbors slide in from the sides as it shrinks.
+- Release: a flick up faster than 600 pt/s lands in the gallery; a release moving down faster
+  than 300 pt/s goes back to the page; otherwise the projection (d = 0.99) must pass 30% of the
+  way. (The app switcher sends a fast flick home; a browser has no home, so a flick commits.)
+  The spring continues the finger's tracking animation, so the card keeps its velocity.
+- The tabs button runs the same animation, driven.
+
+**Leave without choosing**
+- A tap or a swipe up (40 pt, or a flick) on the space around the cards opens the tab on screen,
+  as a tap or a swipe up in the app switcher goes home.
+
+**Look**
+- The cards float over the page they came from, blurred (thin dark material) and dimmed with Deep
+  Lagoon at 42%, as the app switcher floats over a blurred Home Screen and Arc's switcher over its
+  backdrop. The gallery is always dark, so titles and the glass bar read the same in either
+  appearance. Private tabs tint the dim with the private dusk.
+- Titles and icons fade out while the cards are zoomed in (an open or the swipe up), so they never
+  cross the status bar.
+
+**Empty states (Arc: never an empty switcher)**
+- Arc closes the last tab straight into search with the keyboard up, over a pastel screen with its
+  logo, which a finger can spin like a fidget spinner. With zero tabs the switcher cannot be
+  reached. [C] Arc blog "hidden features" (archived), Android release notes v1.9.0.
+- Plain: no tabs → the tabs button and the swipe up open the search field, never an empty gallery.
+  An empty tab (no page, or no tab at all) shows the start screen: the Stem mark (paper ring, the
+  dawn, the stem, the coral fold), large, in the space above the search field and the favorites
+  strip, over paper warming toward Lagoon at the bottom. A finger spins it and it keeps turning
+  with the flick (friction: 12% of the speed left after a second). Under it one sentence ("Start
+  with a search or an address.") and, while the keyboard is down, one button (Search). The search
+  sheet is clear over it, so the mark shows with the keyboard up too. A slot under the sentence
+  takes one card above the search field (the coming "Set as Default Browser" offer).
+- A new tab's card in the gallery is the start screen in small (the mark on paper), never a blank
+  white card. The private gallery's empty state keeps its sentence and button, with the mark above.
+
 **Other**
 - Long-press a card: its menu (Open in Other Pane, Copy Link, Share, Close Tab "Or swipe the card
   up"). Move the finger and the card lifts to be dragged to a new place; the cards make room with
   the same springs, and the gallery scrolls at the edges (up to 900 pt/s).
-- Floating glass bar: More (Reopen Closed Tab, Close All Tabs), New Tab, Done.
+- Floating glass bar: More (Reopen Closed Tab, Archived Tabs, Close All Tabs), Private, New Tab,
+  Done.
 - Haptics: soft impact when a close commits, selection tick when a dragged card takes a new place.
 
 ## Sources

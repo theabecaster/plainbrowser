@@ -190,9 +190,14 @@ final class ReopenToast: UIView {
 final class GalleryEmptyView: UIView {
     let label = UILabel()
     let button = UIButton(type: .system)
+    /// The mark, as on the start screen: a finger can spin it, so the screen is never dead.
+    let mark = MarkView()
+    private static let markSide: CGFloat = 88
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        mark.isSpinnable = true
+        addSubview(mark)
         label.text = "Your open tabs show up here."
         label.font = UIFont.preferredFont(forTextStyle: .body)
         label.adjustsFontForContentSizeCategory = true
@@ -226,13 +231,17 @@ final class GalleryEmptyView: UIView {
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let text = label.sizeThatFits(CGSize(width: size.width, height: .greatestFiniteMagnitude))
         let buttonSize = button.sizeThatFits(size)
-        return CGSize(width: size.width, height: ceil(text.height) + Spacing.l + max(Metrics.tapTarget, buttonSize.height))
+        return CGSize(
+            width: size.width,
+            height: Self.markSide + Spacing.xl + ceil(text.height) + Spacing.l + max(Metrics.tapTarget, buttonSize.height)
+        )
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let text = label.sizeThatFits(CGSize(width: bounds.width, height: .greatestFiniteMagnitude))
-        label.frame = CGRect(x: 0, y: 0, width: bounds.width, height: ceil(text.height))
+        mark.frame = CGRect(x: ((bounds.width - Self.markSide) / 2).rounded(), y: 0, width: Self.markSide, height: Self.markSide)
+        label.frame = CGRect(x: 0, y: mark.frame.maxY + Spacing.xl, width: bounds.width, height: ceil(text.height))
         let size = button.sizeThatFits(bounds.size)
         let height = max(Metrics.tapTarget, size.height)
         button.frame = CGRect(x: ((bounds.width - size.width) / 2).rounded(), y: label.frame.maxY + Spacing.l, width: size.width, height: height)

@@ -42,6 +42,9 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
     private(set) var size: CGSize = .zero
     private var headerHeight: CGFloat = 0
     private var isSelectedTab = false
+    /// The tab has no page yet (a new tab).
+    private var isBlankTab = false
+    private let blankMark = MarkView()
     private var titleAlpha: CGFloat = 1
     private var visibleWidth: CGFloat = 0
     /// The card's offset when the finger went down (non-zero when it grabs a card mid-spring).
@@ -79,6 +82,8 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         placeholderIcon.contentMode = .scaleAspectFit
         placeholderIcon.tintColor = Palette.textSecondary
         thumbnailContainer.addSubview(placeholderIcon)
+        blankMark.isHidden = true
+        thumbnailContainer.addSubview(blankMark)
 
         faviconView.contentMode = .scaleAspectFit
         faviconView.layer.cornerRadius = Radius.small
@@ -134,6 +139,7 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         }
         tabID = item.id
         isSelectedTab = isSelected
+        isBlankTab = item.url == nil
         titleLabel.text = item.displayTitle
         let font = Self.titleFont(for: traitCollection)
         let fontChanged = titleLabel.font != font
@@ -210,7 +216,15 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
     }
 
     private func updatePlaceholder() {
-        placeholderIcon.isHidden = imageView.image != nil
+        // A new tab has no page: its card is the start screen (the mark on paper), never a blank
+        // white card.
+        blankMark.isHidden = !isBlankTab
+        imageView.isHidden = isBlankTab
+        // A new tab's card shows its start screen as the tab shows it: in the window's own
+        // appearance, not the gallery's always-dark one.
+        let pageTraits = window?.windowScene?.traitCollection ?? traitCollection
+        thumbnailContainer.backgroundColor = isBlankTab ? Palette.background.resolvedColor(with: pageTraits) : Palette.surface
+        placeholderIcon.isHidden = isBlankTab || imageView.image != nil
         if imageView.image == nil {
             placeholderIcon.image = faviconView.image ?? UIImage(systemName: "globe")
         }
@@ -253,6 +267,9 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         layoutImage()
         let iconSide = min(48, thumbHeight * 0.3)
         placeholderIcon.frame = CGRect(x: (size.width - iconSide) / 2, y: (thumbHeight - iconSide) / 2, width: iconSide, height: iconSide)
+        // A new tab's card shows the start screen in small: the mark a little above the middle.
+        let markSide = (size.width * 0.42).rounded()
+        blankMark.frame = CGRect(x: ((size.width - markSide) / 2).rounded(), y: (thumbHeight * 0.4 - markSide / 2).rounded(), width: markSide, height: markSide)
         layoutHeader()
         visibleWidth = -1
         setHeader(titleAlpha: titleAlpha, visibleWidth: size.width)
@@ -286,6 +303,11 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
     }
 
     /// Ready for another tab: no motion, no handlers.
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil, isBlankTab { updatePlaceholder() }
+    }
+
     func prepareForReuse() {
         body.layer.removeAllAnimations()
         body.transform = .identity
@@ -330,6 +352,7 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
             if gesture.state == .ended, CardSwipe.shouldClose(translation: y, velocity: velocity, cardHeight: height) {
                 onSwipeAway?()
             } else {
+                Signposts.signposter.emitEvent(Signposts.galleryCardKept)
                 Motion.animate(Motion.cardReturn) {
                     self.body.transform = .identity
                 }

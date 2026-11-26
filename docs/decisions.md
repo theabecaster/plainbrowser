@@ -499,3 +499,16 @@ Each entry: what was chosen, and why. Newest last.
 - **Close by swiping up, not sideways.** Sideways now scrolls. Close also stays in the card menu
   ("Close Tab — or swipe the card up") and as a VoiceOver action; the card has no X button, as in
   Arc and the app switcher.
+- **The swipe up from the bar is the home-indicator swipe.** `TabGalleryTransition` gained
+  `track(translation:)` and `release(velocity:)` (additive; `update(progress:)`/`finish(at:)`
+  stay): the page follows the finger in 2D as a card and the transition decides where a release
+  lands, by projection, with the shell's `gallerySwipeCommit`/`galleryFlickSpeed`. The shell's bar
+  swipe hands it the raw translation and velocity, two calls in `TabSwipe`.
+- **A dark, blurred backdrop.** The gallery is a layer over the page (the shell keeps the page
+  under it), so a thin dark blur of the page, dimmed, stands behind the cards, as the app
+  switcher and Arc do. One `UIVisualEffectView` that never moves; the cards scroll above it.
+- **Never an empty switcher.** With no tabs, the tabs button and the swipe up open the search
+  field. An empty tab shows the start screen (`EmptyTabView`: the Stem mark drawn in layers, which
+  spins under a finger; one sentence; Search while the keyboard is down), and the search sheet is
+  clear over it. A new tab's card is the mark on paper. The views live in TabGalleryUI, next to the
+  card that shares the mark; the shell installs the start screen in three lines.

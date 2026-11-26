@@ -19,13 +19,13 @@ mkdir -p build
 if ! xcodebuild -project Plain.xcodeproj -scheme Plain -configuration Release -destination "id=$PLAIN_DEVICE" \
     -derivedDataPath build/device -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
     CURRENT_PROJECT_VERSION=$BUILD build > build/install-duo.log 2>&1; then
-  grep -E 'error:' build/install-duo.log | sort -u | head -20
+  grep -E 'error:' build/install-duo.log | sort -u | head -20 || true
   print -u2 "build failed; full log: build/install-duo.log"
   exit 1
 fi
 if ! xcrun devicectl device install app --device "$PLAIN_DEVICE" --timeout 120 \
     build/device/Build/Products/Release-iphoneos/Plain.app > build/install-duo-device.log 2>&1; then
-  grep -iE 'error|locked|unavailable|timed out' build/install-duo-device.log | head -5
+  grep -iE 'error|locked|unavailable|timed out' build/install-duo-device.log | head -5 || true
   echo "note: build $BUILD built but not installed (device locked or unreachable); log: build/install-duo-device.log"
   exit 0
 fi

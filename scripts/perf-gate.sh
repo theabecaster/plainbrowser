@@ -3,8 +3,8 @@
 # docs/perf-log.md, and fail on a breach.
 #
 # Usage: scripts/perf-gate.sh [--sim | --device]
-#   --sim (default)  On the plain-perf-duo simulator (iPhone Duo), created when missing and shut
-#                    down afterwards. Fails on a test failure, or when a metric is more than
+#   --sim (default)  On the <prefix>-perf-duo simulator (iPhone Duo; prefix PLAIN_SIM_PREFIX, default
+#                    `plain`). Shut down afterwards, and deleted when this run created it. Fails on a test failure, or when a metric is more than
 #                    simRegressionTolerance (perf/budgets.json) worse than the previous `sim` row.
 #                    The hitch ratio is device-only: XCTHitchMetric reports nothing on a simulator.
 #   --device         On the device from PLAIN_DEVICE or scripts/local.env (also:
@@ -28,7 +28,7 @@ esac
 BUDGETS=perf/budgets.json
 LOG=docs/perf-log.md
 METRICS=(launchMs searchFieldMs hitchMsPerS)
-SIM_NAME=plain-perf-duo
+SIM_NAME=${PLAIN_SIM_PREFIX:-plain}-perf-duo
 SIM_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-Duo
 SIM_RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4
 
@@ -39,10 +39,15 @@ if [[ $MODE == device ]]; then
   destination="id=$PLAIN_DEVICE"
   extra=(-allowProvisioningUpdates -allowProvisioningDeviceRegistration)
 else
+  [[ $SIM_NAME == plain-* ]] || { print -u2 "PLAIN_SIM_PREFIX must start with plain"; exit 1; }
   udid=$(xcrun simctl list devices -j | jq -r --arg n $SIM_NAME '[.devices[][] | select(.name == $n)][0].udid // empty')
-  [[ -n "$udid" ]] || udid=$(xcrun simctl create $SIM_NAME $SIM_TYPE $SIM_RUNTIME)
+  created_sim=0
+  if [[ -z "$udid" ]]; then
+    udid=$(xcrun simctl create $SIM_NAME $SIM_TYPE $SIM_RUNTIME)
+    created_sim=1
+  fi
   destination="id=$udid"
-  trap 'xcrun simctl shutdown "$udid" 2>/dev/null || true' EXIT
+  trap 'xcrun simctl shutdown "$udid" 2>/dev/null || true; (( created_sim )) && xcrun simctl delete "$udid" 2>/dev/null || true' EXIT
 fi
 
 sha=$(git rev-parse --short HEAD)
@@ -56,9 +61,10 @@ xcodegen generate --quiet
 tests_ok=1
 xcodebuild -project Plain.xcodeproj -scheme Plain -testPlan Perf -configuration Release \
   -destination "$destination" -derivedDataPath build/perf/dd -resultBundlePath $result $extra \
+  -test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 600 \
   -enableCodeCoverage NO test > build/perf/$stamp.log 2>&1 || tests_ok=0
 if [[ ! -d $result ]]; then
-  grep -E 'error:' build/perf/$stamp.log | sort -u | head -20
+  grep -E 'error:' build/perf/$stamp.log | sort -u | head -20 || true
   print -u2 "no test results; log: build/perf/$stamp.log"
   exit 1
 fi

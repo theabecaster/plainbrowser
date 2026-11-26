@@ -320,6 +320,8 @@ extension BrowserViewController {
             }
             reader.onShown = { [weak self] in self?.updateButtons() }
             reader.prepare(pool: session.pool, in: self.webContainer, scrollDelegate: self)
+            // A tap on the status bar scrolls the reader, not the page under it.
+            session.pool.scrollView(for: tab)?.scrollsToTop = false
             self.attachEdgeEffects()
             self.updatePageInsets()
             try? await reader.show(article)
@@ -333,6 +335,7 @@ extension BrowserViewController {
         engineUI.readerTask = nil
         guard isShowingReader else { return }
         engineUI.reader.close(animated: animated)
+        if let tab = currentTab { session.pool.scrollView(for: tab)?.scrollsToTop = true }
         attachEdgeEffects()
         updateButtons()
         updatePageInsets()

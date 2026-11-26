@@ -1,0 +1,8 @@
+Plain's reader mode bundles Mozilla Readability.
+
+Readability.js and Readability-readerable.js
+  Version: 0.6.0 (https://github.com/mozilla/readability/releases/tag/0.6.0)
+  Source:  https://github.com/mozilla/readability
+  Copyright (c) 2010 Arc90 Inc
+  License: Apache License, Version 2.0 (full text in Readability-LICENSE.md)
+  The files are unmodified.

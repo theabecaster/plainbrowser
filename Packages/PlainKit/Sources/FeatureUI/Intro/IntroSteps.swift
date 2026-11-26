@@ -27,7 +27,8 @@ private struct StepView: View {
     var body: some View {
         VStack(spacing: 0) {
             topRow
-                .entrance(0)
+                // On the promise step it waits for the window to open under it (white on paper otherwise).
+                .entrance(step == .promise ? 4 : 0)
             Color.clear
                 .frame(height: max(0, IntroLayout.reserve(step, safeHeight: model.safeHeight)))
             content

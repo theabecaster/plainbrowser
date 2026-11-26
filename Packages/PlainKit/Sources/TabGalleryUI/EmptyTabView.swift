@@ -22,6 +22,15 @@ public final class EmptyTabView: UIView {
     /// The main button was tapped.
     public var onAction: (() -> Void)?
 
+    /// The search field is open (Editing mode): the main button and the shortcuts step aside, as
+    /// they do for the keyboard, even when a hardware keyboard keeps the software one down.
+    public var isSearchFieldActive = false {
+        didSet {
+            guard isSearchFieldActive != oldValue else { return }
+            applyButton()
+        }
+    }
+
     /// A small shortcut under the main button: a private tab, Reopen Closed Tab, Archived Tabs.
     public struct Shortcut {
         public let id: String
@@ -223,14 +232,15 @@ public final class EmptyTabView: UIView {
 
     private func applyButton() {
         button.configuration?.title = buttonTitle
-        let hidden = buttonTitle == nil || keyboardUp
-        // The shortcuts follow the keyboard too: with it up, the search sheet takes the touches.
-        shortcutRow.isUserInteractionEnabled = !keyboardUp
-        shortcutRow.accessibilityElementsHidden = keyboardUp
-        guard button.alpha != (hidden ? 0 : 1) || shortcutRow.alpha != (keyboardUp ? 0 : 1) else { return }
+        let aside = keyboardUp || isSearchFieldActive
+        let hidden = buttonTitle == nil || aside
+        // The shortcuts follow the field too: while it is open, the search sheet takes the touches.
+        shortcutRow.isUserInteractionEnabled = !aside
+        shortcutRow.accessibilityElementsHidden = aside
+        guard button.alpha != (hidden ? 0 : 1) || shortcutRow.alpha != (aside ? 0 : 1) else { return }
         Motion.animate(Motion.quick) {
             self.button.alpha = hidden ? 0 : 1
-            self.shortcutRow.alpha = self.keyboardUp ? 0 : 1
+            self.shortcutRow.alpha = aside ? 0 : 1
         }
         button.isUserInteractionEnabled = !hidden
     }

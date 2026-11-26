@@ -295,7 +295,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 button.addAction(action, for: .primaryActionTriggered)
                 button.menu = tabsMenu()
                 button.showsMenuAsPrimaryAction = false
+                // The same top-to-bottom order wherever the menu opens: Close Tab last, on its own.
+                button.preferredMenuElementOrder = .fixed
                 item = UIBarButtonItem(primaryAction: action, menu: tabsMenu())
+                item.preferredMenuElementOrder = .fixed
             case .share:
                 button.addAction(UIAction { [weak self, weak button] _ in
                     guard let button else { return }
@@ -567,8 +570,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
         isEditingAddress = editing
         guard changed || !animated else { return }
-        // Editing is a mode: the bar's controls and gestures follow the rules for it.
+        // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
+        // screen's button and shortcuts step aside for the field.
         updateButtons()
+        tabsUI.start.isSearchFieldActive = editing
         if editing {
             sheet.isHidden = false
             settleCollapse(at: 0, animated: false)

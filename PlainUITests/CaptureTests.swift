@@ -317,7 +317,8 @@ final class CaptureTests: XCTestCase {
         try server.start()
         defer { server.stop() }
         let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore"]
+        // An archive from the start, so the start screen and More show Archived Tabs.
+        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedArchive"]
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -376,6 +377,29 @@ final class CaptureTests: XCTestCase {
         field.typeText(server.address("/b") + "\n")
         pause(2)
         shot("s6-private")
+
+        // Something closed: the start screen offers it back, with the archive.
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        pause(0.8)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        pause(0.8)
+        app.buttons["addressPill"].swipeRight(velocity: .fast)
+        pause(1.5)
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Close Tab'")).firstMatch.tap()
+        pause(1)
+        app.buttons["more"].tap()
+        pause(1)
+        shot("s8a-more-with-closed")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        pause(0.8)
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        pause(0.8)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        pause(1.2)
+        shot("s8b-start-with-closed")
     }
 
     private func pause(_ seconds: TimeInterval) {

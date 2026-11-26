@@ -6,7 +6,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - About five top-level rows, at most two levels deep, opened as a sheet with a single "Done" button.
 - Each row shows its current value, for example "Google", "Side tabs" or "After 1 day".
-- Every row is a choice the user understands and would want to make. Plain's rows are: Search Engine, Tab Layout, Archive Tabs, Clear History and Data, and About.
+- Every row is a choice the user understands and would want to make. Plain's rows are: Search Engine, Tab Layout, Archive Tabs, App Icon, Clear History and Data, and About.
 - Footers are one plain sentence that teaches, for example "Tabs you haven't opened in a day move to the archive."
 - Labels are Title Case nouns ("Search Engine", "Clear History and Data").
 
@@ -44,7 +44,8 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - Each empty state is one sentence and one main button.
 - After the last tab closes, Plain goes straight to the search field. There is no empty screen in between.
-- First run is the search field with the keyboard up. There is no onboarding, and permissions (camera, location, notifications) are asked only when a site needs them.
+- **First run:** the owner chose a short intro, shown once on first launch and never again after it is finished or skipped. It is the Stem mark assembling, one promise, what's inside, an icon picker and a live blocking demo, then it dissolves into the search field with the keyboard up. Every step has Skip. It asks no permissions: camera, location and notifications are still asked only when a site needs them. Its look follows Arc Search's intro in Plain's identity (docs/research/intro.md): a full-bleed dawn gradient, big display type with one italic word, cream-paper cards and capsule buttons. These are the intro's own; the rest of the app keeps the rules below.
+- **Default browser:** the intro's "Make Plain your default" step and the empty start screen's card (the mark, one sentence, "Set as Default Browser", dismissible) wait behind `FixedChoices.defaultBrowserPromptsEnabled` until Plain has the default-browser entitlement.
 
 ## Visual and motion
 

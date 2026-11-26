@@ -332,7 +332,6 @@ public final class TabStore {
             let index = windowIndex(windowID)!
             var entry = closed.entry
             entry.lastActiveAt = date
-            if let opener = entry.openerID, tabs[opener] == nil { entry.openerID = nil }
             var list = windows[index].tabIDs
             var position = closed.previousTabID.flatMap { list.firstIndex(of: $0).map { $0 + 1 } }
                 ?? min(closed.index, list.count)
@@ -344,6 +343,10 @@ public final class TabStore {
             windowOfTab[entry.id] = windowID
             reopened.append(entry.id)
             if closed.pane != nil { toShow.append(closed) }
+        }
+        // Openers are checked once the whole batch is back: a child may come before its opener.
+        for id in reopened {
+            if let opener = tabs[id]?.openerID, tabs[opener] == nil { tabs[id]?.openerID = nil }
         }
         if toShow.isEmpty, let first = batch.tabs.first(where: { reopened.contains($0.entry.id) }) {
             toShow = [first]

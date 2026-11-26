@@ -164,6 +164,17 @@ final class RecordingPersistence: TabPersistence {
         #expect(store.windows[0].focusedPane == 0)
     }
 
+    @Test func aReopenedBatchKeepsOpenersInsideIt() {
+        let store = makeStore()
+        let a = store.open(url("a"))
+        let child = store.open(url("c"), opener: a, inBackground: true)
+        store.move(child, to: 0)
+        store.close([child, a])
+        store.reopenLastClosed()
+        #expect(store.windows[0].tabIDs == [child, a])
+        #expect(store.tabs[child]?.openerID == a)
+    }
+
     @Test func recentlyClosedIsCapped() {
         let store = makeStore()
         for index in 0 ..< FixedChoices.recentlyClosedLimit + 5 {

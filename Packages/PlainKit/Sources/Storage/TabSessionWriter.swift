@@ -181,6 +181,7 @@ public final class TabSessionWriter: TabPersistence {
                 // The tab is open again (a later session writes its open row) or already closed
                 // again; either way it is no longer in the archive.
                 try deleteRows(ids.map(\.uuidString), archived: true, in: db)
+                candidates.formUnion(ids)
             case .deleteArchived(let ids):
                 let doomed = try ids.map { $0.map(\.uuidString) }
                     ?? String.fetchAll(db, sql: "SELECT id FROM \(Schema.tab) WHERE isArchived")

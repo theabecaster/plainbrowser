@@ -48,6 +48,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var pillOnBar: NSLayoutConstraint!
     private var pillOnEdge: NSLayoutConstraint!
     private var pillOnKeyboard: NSLayoutConstraint!
+    /// The button bar's own constraints, activated again when it comes back after a vertical bar.
+    private var buttonBarConstraints: [NSLayoutConstraint] = []
     private var geometry = ChromeGeometry(viewHeight: 0, safeBottom: 0, hasButtonBar: true)
     private var usesVerticalBar = false
 
@@ -192,10 +194,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             sheet.content.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: Spacing.s),
             sheet.content.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s),
 
+            pill.heightAnchor.constraint(equalToConstant: ChromeGeometry.pillHeight),
+        ] + capWidth(pill) + capWidth(sheet.content))
+
+        buttonBarConstraints = [
             buttonBar.heightAnchor.constraint(equalToConstant: ChromeGeometry.barHeight),
             buttonBar.bottomAnchor.constraint(equalTo: rest.topAnchor),
-            pill.heightAnchor.constraint(equalToConstant: ChromeGeometry.pillHeight),
-        ] + capWidth(pill) + capWidth(buttonBar) + capWidth(sheet.content))
+        ] + capWidth(buttonBar)
+        NSLayoutConstraint.activate(buttonBarConstraints)
     }
 
     private func buildButtons() {
@@ -243,7 +249,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         navigationController?.setToolbarHidden(!vertical, animated: false)
         // Nothing is ever pushed; the left edge belongs to the page's swipe back.
         navigationController?.interactivePopGestureRecognizer?.isEnabled = false
-        buttonBar.isHidden = vertical
+        // The bar leaves the glass container rather than hiding in it: a hidden view inside a
+        // glass container still shows up in the accessibility tree, as a second Back and More.
+        if vertical {
+            buttonBar.removeFromSuperview()
+        } else if buttonBar.superview == nil {
+            chromeGlass.contentView.insertSubview(buttonBar, belowSubview: pill)
+            NSLayoutConstraint.activate(buttonBarConstraints)
+        }
         if changed { updatePillRestConstraint() }
         view.setNeedsLayout()
     }

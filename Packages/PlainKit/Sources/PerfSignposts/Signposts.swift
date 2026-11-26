@@ -214,6 +214,25 @@ public enum Signposts {
     /// Event: a tab's web content process terminated.
     public static let tabCrash: StaticString = "tab.crash"
 
+    // MARK: First-run intro (FeatureUI emits these)
+
+    /// Animation interval: the Stem mark assembling on the splash (ring draws, dawn rises, fold
+    /// folds), until it lands or a tap skips it. Instruments shows its frame rate and hitches.
+    public static let introSplash: StaticString = "intro.splash"
+    /// Animation interval: one step of the intro handing over to the next (blur dissolve, staggered
+    /// entrance). The message names the step it goes to.
+    public static let introStep: StaticString = "intro.step"
+    /// Animation interval: the blocking demo's page going clean or cluttered (the toggle).
+    public static let introBlockingDemo: StaticString = "intro.blockingDemo"
+    /// Animation interval: the intro dissolving into the search field, until it is gone.
+    public static let introFinish: StaticString = "intro.finish"
+    /// Event: the intro was skipped; the message names the step it was skipped from.
+    public static let introSkip: StaticString = "intro.skip"
+    /// Interval: an app icon change, from the pick until the system confirms it.
+    public static let appIconChange: StaticString = "appIcon.change"
+    /// Event: Set as Default Browser was tapped (intro step or the empty-tab card).
+    public static let defaultBrowserPrompt: StaticString = "defaultBrowser.open"
+
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {
         name.description

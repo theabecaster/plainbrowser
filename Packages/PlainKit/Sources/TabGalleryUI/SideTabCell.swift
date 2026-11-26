@@ -95,6 +95,7 @@ final class SideTabCell: UICollectionViewCell {
         // Hidden behind the clip in the rail anyway; out of the accessibility tree there too.
         titleLabel.isHidden = !showsTitle
         closeButton.isHidden = !showsTitle
+        setNeedsLayout()
         accessibilityLabel = item.displayTitle
         accessibilityValue = isFocused ? "Selected" : (isInOtherPane ? "In other pane" : nil)
         accessibilityTraits = isFocused ? [.button, .selected] : .button
@@ -125,7 +126,9 @@ final class SideTabCell: UICollectionViewCell {
         let bounds = contentView.bounds
         let rail = SidebarState.rail.width
         let inset = Spacing.xs
-        highlight.frame = CGRect(x: inset + Spacing.xxs, y: inset / 2, width: bounds.width - 2 * (inset + Spacing.xxs), height: bounds.height - inset)
+        // In the rail the mark wraps the tile alone, so the clip never cuts its edge.
+        let markWidth = (titleLabel.isHidden ? rail : bounds.width) - 2 * (inset + Spacing.xxs)
+        highlight.frame = CGRect(x: inset + Spacing.xxs, y: inset / 2, width: markWidth, height: bounds.height - inset)
         let size = Self.tileSize
         tile.frame = CGRect(x: (rail - size) / 2, y: (bounds.height - size) / 2, width: size, height: size)
         letter.frame = tile.bounds

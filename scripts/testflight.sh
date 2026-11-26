@@ -147,9 +147,17 @@ fi
 say "notes set"
 
 if (( ! INTERNAL )); then
+  OUT_ERR=$(mktemp); trap "rm -f $OUT_ERR" EXIT
   if [[ -z $(review_state $ID) ]]; then
-    asc POST /v1/betaAppReviewSubmissions "{\"data\":{\"type\":\"betaAppReviewSubmissions\",\"relationships\":{\"build\":{\"data\":{\"type\":\"builds\",\"id\":\"$ID\"}}}}}" >/dev/null \
-      || die "could not submit for Beta App Review"
+    # Only one build per version can be in review; wait for the one ahead (up to 4 hours).
+    for i in {1..120}; do
+      asc POST /v1/betaAppReviewSubmissions "{\"data\":{\"type\":\"betaAppReviewSubmissions\",\"relationships\":{\"build\":{\"data\":{\"type\":\"builds\",\"id\":\"$ID\"}}}}}" >/dev/null 2>$OUT_ERR \
+        && break
+      grep -q "already in beta review" $OUT_ERR || { cat $OUT_ERR >&2; die "could not submit for Beta App Review"; }
+      (( i == 1 )) && say "another build is in review; waiting to submit"
+      sleep 120
+    done
+    grep -q "already in beta review" $OUT_ERR 2>/dev/null && [[ -z $(review_state $ID) ]] && die "the build ahead stayed in review for 4 hours; rerun with --skip-upload --build $BUILD"
     say "submitted for Beta App Review"
   fi
   RS=""

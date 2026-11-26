@@ -37,6 +37,24 @@ final class ShellTests: XCTestCase {
         XCTAssertTrue(text.waitForExistence(timeout: timeout), "page \"\(heading)\" did not show", file: file, line: line)
     }
 
+    /// A long tracking address never pushes the pill past the screen, resting or editing.
+    func testLongAddressStaysInsideTheScreen() throws {
+        let app = try launch()
+        let screen = app.windows.firstMatch.frame
+        go(app, to: "/a?cjdata=MXxOfDB8WXww&cjevent=9dfc9ae0e9b011f1811706670a82b836&utm_source=CJ&utm_medium=101597760&utm_campaign=4500501&utm_term=17187241")
+        waitForPage(app, "Page A")
+        let pill = app.buttons["addressPill"]
+        XCTAssertTrue(pill.waitForExistence(timeout: 2))
+        XCTAssertGreaterThanOrEqual(pill.frame.minX, screen.minX)
+        XCTAssertLessThanOrEqual(pill.frame.maxX, screen.maxX)
+
+        pill.tap()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        XCTAssertGreaterThanOrEqual(field.frame.minX, screen.minX)
+        XCTAssertLessThanOrEqual(field.frame.maxX, screen.maxX)
+    }
+
     func testTypeAndGo() throws {
         let app = try launch()
         go(app, to: "/a")
@@ -121,3 +139,4 @@ final class ShellTests: XCTestCase {
         XCTAssertFalse(app.textFields["searchField"].exists)
     }
 }
+

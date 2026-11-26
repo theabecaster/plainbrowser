@@ -131,7 +131,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
         func capWidth(_ item: UIView) -> [NSLayoutConstraint] {
             let fill = item.widthAnchor.constraint(equalTo: safe.widthAnchor, constant: -2 * margin)
-            fill.priority = .defaultHigh
+            // Just under required: only the 640 pt cap may override it, never content size.
+            fill.priority = .required - 1
             return [
                 item.centerXAnchor.constraint(equalTo: safe.centerXAnchor),
                 fill,

@@ -54,6 +54,10 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         textField.clearButtonMode = .whileEditing
         textField.enablesReturnKeyAutomatically = false
         textField.translatesAutoresizingMaskIntoConstraints = false
+        // A long address must scroll inside the field, never widen the pill: the pill's width
+        // (750 in the shell) has to beat the text's natural width.
+        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
         glass.contentView.addSubview(textField)
 
         progressBar.translatesAutoresizingMaskIntoConstraints = false

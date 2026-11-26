@@ -69,6 +69,8 @@ final class TestServer: @unchecked Sendable {
     }
 
     private func page(for path: String) -> (String, String) {
+        // Query strings don't change the page (tests use long tracking addresses).
+        let path = path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? path
         switch path {
         case "/a":
             return ("200 OK", html("Plain Test A", "<h1>Page A</h1><p><a href=\"/b\">Go to B</a></p>"))

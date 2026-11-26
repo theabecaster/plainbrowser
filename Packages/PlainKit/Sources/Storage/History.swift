@@ -85,8 +85,9 @@ struct HistoryPlace: Codable, FetchableRecord, MutablePersistableRecord {
 }
 
 extension AppDatabase {
-    // Writes are internal: `HistoryRecorder` is the one owner of history writes, so a delete can
-    // never race a batch still waiting in its buffer.
+    // Direct writes are internal: `historyRecorder` is the one owner of history writes, so a
+    // delete can never race a batch still waiting in its buffer. The public deletes below go
+    // through it.
 
     func record(_ visit: HistoryVisit) async throws {
         try await apply([.visit(visit)])
@@ -94,6 +95,10 @@ extension AppDatabase {
 
     /// Applies history changes in order, in one transaction.
     func apply(_ changes: [HistoryChange]) async throws {
+        try await Self.apply(changes, to: writer)
+    }
+
+    static func apply(_ changes: [HistoryChange], to writer: any DatabaseWriter) async throws {
         guard !changes.isEmpty else { return }
         try await writer.write { db in
             for change in changes {
@@ -117,19 +122,84 @@ extension AppDatabase {
         }
     }
 
-    /// Removes every visit to `url`.
-    func deleteHistory(for url: URL) async throws {
+    /// Removes every visit to `url`, written at once (see `HistoryRecorder.deleteHistory`).
+    static func deleteHistory(for url: URL, in writer: any DatabaseWriter) async throws {
         try await writer.write { db in
             _ = try HistoryVisit.filter(Column("url") == url).deleteAll(db)
             _ = try HistoryPlace.filter(Column("url") == url).deleteAll(db)
         }
     }
 
-    /// Removes all history. The full-text index follows through its triggers.
-    func clearHistory() async throws {
+    /// Removes visits made at or after `start`, or all history when `start` is nil, written at
+    /// once (see `HistoryRecorder.clearHistory`). The full-text index follows through its
+    /// triggers.
+    ///
+    /// A page with older visits left keeps its row, with its count, last visit and frecency
+    /// rebuilt from those visits, so the address bar ranks it as if the cleared visits never
+    /// happened.
+    static func clearHistory(since start: Date?, in writer: any DatabaseWriter) async throws {
         try await writer.write { db in
-            _ = try HistoryVisit.deleteAll(db)
-            _ = try HistoryPlace.deleteAll(db)
+            guard let start else {
+                _ = try HistoryVisit.deleteAll(db)
+                _ = try HistoryPlace.deleteAll(db)
+                return
+            }
+            let urls = try String.fetchAll(
+                db, sql: "SELECT DISTINCT url FROM \(Schema.historyVisit) WHERE visitedAt >= ?", arguments: [start]
+            )
+            _ = try HistoryVisit.filter(Column("visitedAt") >= start).deleteAll(db)
+            for url in urls {
+                let left = try Date.fetchAll(
+                    db, sql: "SELECT visitedAt FROM \(Schema.historyVisit) WHERE url = ? ORDER BY visitedAt", arguments: [url]
+                )
+                guard let last = left.last else {
+                    try db.execute(sql: "DELETE FROM \(Schema.historyPlace) WHERE url = ?", arguments: [url])
+                    continue
+                }
+                let frecency = left.reduce(nil as Double?) { Frecency.adding(visitAt: $1, to: $0) } ?? 0
+                try db.execute(
+                    sql: "UPDATE \(Schema.historyPlace) SET visitCount = ?, lastVisitedAt = ?, frecency = ? WHERE url = ?",
+                    arguments: [left.count, last, frecency, url]
+                )
+            }
+        }
+    }
+
+    /// Removes every visit to `url`, including visits still buffered in `historyRecorder`.
+    public func deleteHistory(for url: URL) async throws {
+        try await historyRecorder.deleteHistory(for: url)
+    }
+
+    /// Removes visits made since `start`, or all history when `start` is nil, including visits
+    /// still buffered in `historyRecorder`.
+    public func clearHistory(since start: Date?) async throws {
+        try await historyRecorder.clearHistory(since: start)
+    }
+
+    /// Visits for the History screen, newest first. An empty `query` means every visit;
+    /// otherwise only visits to pages whose title or address match it, through the same
+    /// full-text index and word rules as the address bar.
+    public func visits(matching query: String, limit: Int) async throws -> [HistoryVisit] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return try await recentVisits(limit: limit) }
+        guard let pattern = HistoryQuery(trimmed).pattern, limit > 0 else { return [] }
+        return try await writer.read { db in
+            // The index finds the pages; their visits come from `historyVisit_on_url`, and the
+            // newest `limit` are kept with a top-N sort.
+            try HistoryVisit.fetchAll(
+                db,
+                sql: """
+                SELECT v.* FROM \(Schema.historyVisit) v
+                WHERE v.url IN (
+                    SELECT p.url FROM \(Schema.historySearch) s
+                    JOIN \(Schema.historyPlace) p ON p.id = s.rowid
+                    WHERE \(Schema.historySearch) MATCH ?
+                )
+                ORDER BY v.visitedAt DESC
+                LIMIT ?
+                """,
+                arguments: [pattern, limit]
+            )
         }
     }
 

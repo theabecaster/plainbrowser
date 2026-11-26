@@ -10,6 +10,9 @@ public final class AppDatabase: Sendable {
     let writer: any DatabaseWriter
     /// Tab `interactionState` blobs, stored as files next to the database.
     public let tabStates: TabStateStore
+    /// The one writer of history: page loads record through it, and history deletes go through
+    /// it so they are ordered with visits still buffered.
+    public let historyRecorder: HistoryRecorder
 
     /// Opens (or creates) the database at `url` and migrates it to the current schema. Tab state
     /// files live in a `TabState` folder next to it unless `tabStateDirectory` says otherwise.
@@ -44,6 +47,7 @@ public final class AppDatabase: Sendable {
     private init(_ writer: any DatabaseWriter, tabStates: TabStateStore) throws {
         self.writer = writer
         self.tabStates = tabStates
+        historyRecorder = HistoryRecorder(writer: writer)
         try Self.migrator.migrate(writer)
     }
 

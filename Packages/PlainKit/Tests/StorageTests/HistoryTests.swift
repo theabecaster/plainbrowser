@@ -184,7 +184,7 @@ func visit(_ url: String, _ title: String? = nil, at offset: TimeInterval = 0) -
         try await database.apply([.visit(visit("https://a.example/x", "Alpha")), .visit(visit("https://b.example/x", "Alpine"))])
         try await database.deleteHistory(for: URL(string: "https://a.example/x")!)
         #expect(try await database.searchHistory("alp").map(\.title) == ["Alpine"])
-        try await database.clearHistory()
+        try await database.clearHistory(since: nil)
         #expect(try await database.searchHistory("alp").isEmpty)
         #expect(try await database.recentVisits(limit: 10).isEmpty)
     }

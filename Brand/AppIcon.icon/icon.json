@@ -1,0 +1,114 @@
+{
+  "groups": [
+    {
+      "name": "Flap",
+      "layers": [
+        {
+          "name": "Flap",
+          "image-name": "flap.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.1
+      },
+      "specular": true
+    },
+    {
+      "name": "P",
+      "layers": [
+        {
+          "name": "Body",
+          "image-name": "body.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.4
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.15
+      },
+      "specular": true
+    },
+    {
+      "name": "Bloom",
+      "layers": [
+        {
+          "name": "Bloom",
+          "glass": false,
+          "image-name-specializations": [
+            {
+              "value": "bloom.svg"
+            },
+            {
+              "appearance": "dark",
+              "value": "bloom-dark.svg"
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      },
+      "specular": false
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared",
+    "circles": [
+      "watchOS"
+    ]
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.20,0.86,0.78,1.0",
+          "srgb:0.16,0.45,1.0,1.0"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.2,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.8,
+            "y": 1
+          }
+        }
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:0.04,0.13,0.20,1.0",
+          "srgb:0.06,0.06,0.20,1.0"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.2,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.8,
+            "y": 1
+          }
+        }
+      }
+    }
+  ]
+}

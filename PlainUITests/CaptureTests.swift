@@ -261,7 +261,8 @@ final class CaptureTests: XCTestCase {
         app.buttons["galleryPrivate"].tap()
         pause(1.2)
         shot("t4-private-empty")
-        app.buttons["galleryNewTab"].tap()
+        // An empty list has one New Tab: the empty state's button (state rules, principle 8).
+        app.buttons["emptyNewTab"].tap()
         pause(1)
         field.typeText("en.wikipedia.org/wiki/Private_browsing\n")
         pause(4)

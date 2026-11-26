@@ -4,6 +4,12 @@ Every control in Plain earns its place in the current state. This file says, for
 app can be in, which controls show, which hide, which dim, and which behave differently, and why.
 The implementation follows these rules; the "Gaps" section lists where the code does not yet.
 
+**Where the rules live in code.** `BrowserCore/ControlRules.swift` is the one place that turns a
+state into shown / dimmed / hidden: `ChromeState` and `ControlRules` for the bar, the gestures,
+the page menu, the tabs menu and the start screen; `GalleryState` and `GalleryRules` for the
+gallery. The view code describes the state and applies the answer. `ControlRulesTests` checks
+the matrix in section 8 row by row on macOS.
+
 Owner's brief (2026-11-26): "If there are no tabs open and you have one single tab open, why
 should we even show the tab switcher? Why should we even show the new tab button all over the
 app? … there are many edge cases like this that need to make sense at all times to the user and
@@ -68,12 +74,25 @@ press means the same thing whatever it shows.
 |---|---|---|---|
 | `others ≥ 1` | Tabs (`square.on.square`) | Gallery | There is somewhere to switch to. |
 | `others = 0`, `page` | New Tab (`plus`) | New tab, search field up | A one-card switcher is a dead end (owner). The one useful tab action is a second tab. Same slot, so no new button. |
-| `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) move into the page menu while this lasts (section 4), so none of them is ever out of reach. |
+| `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) stay in More (section 4) and show as shortcuts on the start screen, so none of them is ever out of reach. |
 | Side tabs showing | — | — | The sidebar is the tab list. Its header has a More (…) button that is always there and opens the same tabs menu (section 5), so Reopen, Archive and private tabs are always one tap away. Its "+" follows principle 8 (hidden on an empty tab). |
 
-- **With one page tab, the tabs menu is long press only.** New Private Tab, Reopen Closed Tab and
-  Archived Tabs then sit behind a long press on "+", as Safari keeps Recently Closed behind a long
-  press on its New Tab button. The Reopen toast after every close is the visible way back.
+- **The tabs items are never only behind a long press** (owner, 2026-11-26). New Private Tab,
+  Reopen Closed Tab and Archived Tabs are in More's top section in every state where they apply,
+  one visible tap away, and the start screen shows them as small shortcuts under the mark. The
+  long press on the tabs slot is a shortcut to the same items, as Safari keeps Recently Closed
+  behind a long press on its New Tab button. The Reopen toast after every close is the visible
+  way back.
+- **Teaching the long press: a one-time TipKit tip, no glyph on the button.** Options weighed: a
+  menu indicator on the button (`UIButton.Configuration.indicator`) is the pop-up button's
+  chevron, which tells the user a tap opens a menu, and here a tap does something else; it also
+  breaks the bar's five equal glyphs. Safari's and Mail's toolbar buttons with long-press menus
+  carry no indicator either. A one-time tip is Apple's own way to teach a hidden gesture
+  (TipKit), it shows once and never again, and it costs nothing on screen afterwards. So: after
+  the user has opened the gallery twice with a tap on Tabs, a popover tip over the button says
+  "Touch and Hold for More"; opening the tabs menu retires it. Because every item is also in
+  More, a user who never sees the tip loses nothing. Tips are off under UI tests and perf runs
+  (`-Plain…` launch arguments).
 - **No count badge.** docs/ui-reference.md says no badges. VoiceOver reads "3 tabs" as the value.
 - **The swipe up from the bar follows the same rule.** With `others ≥ 1` it opens the gallery.
   Otherwise the page lifts a few points, rubber-bands back and plays "nothing there". It never
@@ -93,6 +112,7 @@ press means the same thing whatever it shows.
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
 | Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. |
+| Start screen shortcuts (under the Search button) | Private Tab always (New Tab on an empty private tab); Reopen Closed Tab with `closed`; Archived Tabs with `archived`. Only while the keyboard is down. | — | | Small, quiet, one tap: the tabs items in plain sight when no switcher shows (owner). |
 | Pull to refresh | off | on a loaded or loading page; off on failed and crashed pages (their Try Again / Reload owns it) and in the reader | Off | Nothing to reload on Start; a second reload control next to Try Again is noise. |
 | Bar swipe sideways | to neighbours in `list` | to neighbours in `list` | Rubber-band with no neighbour | The same gesture as on a page. Leaving an empty tab drops it. |
 | New Tab card past the last tab | never | when the tab has an address and is last in `list` | Not offered | Swiping past an empty tab would make a second empty tab. |
@@ -114,7 +134,7 @@ Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen.
 | Turn Off / On Blocking on This Site | — | http(s), regular tabs | http(s), regular tabs | http(s), regular tabs (blocking can cause the failure) | — | — | Private tabs: hidden (the allow-list is saved to disk). |
 | Add to / Remove from Favorites | — | — | recordable page | — | — | shown (the page's address) | A page that never loaded is not a favorite. |
 | Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). |
-| New Private Tab, Reopen Closed Tab, Archived Tabs | Only while the tabs slot is hidden (Start, `others = 0`): New Private Tab always (on a private empty tab it reads "New Tab"; it turns this empty tab, nothing is added), Reopen Closed Tab with `closed`, Archived Tabs with `archived` | — | — | — | — | — | The tabs menu's items, in the one menu left on screen. Without them, closed and archived tabs could not be reached with no tab open. |
+| New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "New Tab": it turns this empty tab, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
 | Downloads | while any this session | ← same | ← | ← | ← | ← | Subtitle "1 in progress" while one runs. |
 | History, Edit Favorites, Settings… | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. |
 
@@ -214,8 +234,8 @@ combines its base state with the rows that modify it (for example, private + loa
 | State | Back | Fwd | Tabs slot | Share | More | Swipe up | Bar swipe | New Tab card | Pull to refresh | Progress | Start screen |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | First run (no tabs, keyboard up) | — | — | — | — | — | off | off | — | off | — | ✓ (behind the field) |
-| First run, field closed | — | — | — | — | ✓ | ≠ bump | ≠ rubber-band | — | off | — | ✓, Search button |
-| No tabs, some closed or archived | — | — | — | — | ✓ (+ Reopen Closed Tab, Archived Tabs) | ≠ bump | ≠ rubber-band | — | off | — | ✓ |
+| First run, field closed | — | — | — | — | ✓ (New Private Tab on top) | ≠ bump | ≠ rubber-band | — | off | — | ✓, Search button, Private Tab shortcut |
+| No tabs, some closed or archived | — | — | — | — | ✓ (Reopen Closed Tab, Archived Tabs on top) | ≠ bump | ≠ rubber-band | — | off | — | ✓ + shortcuts |
 | One empty tab, others ≥ 1 | — | — | Tabs | — | ✓ | gallery | neighbours | — | off | — | ✓ |
 | One page, no others | ✓ / dim | — / ✓ | ≠ "+" | ✓ | ✓ | ≠ bump | ≠ rubber-band | ✓ | ✓ | while loading | — |
 | Several tabs | ✓ / dim | — / ✓ | Tabs | ✓ | ✓ | gallery | neighbours | when last | ✓ | while loading | — |
@@ -242,6 +262,8 @@ combines its base state with the rows that modify it (for example, private + loa
 | Phone landscape (compact height) | as Page; no side tabs | | | | | | | | | | |
 
 Notes:
+- More always carries New Private Tab on top, and Reopen Closed Tab and Archived Tabs when they
+  apply (§4); the matrix names them only where they are the only way to those items.
 - "✓ / dim" for Back: shown, dim when there is nothing to go back to. "— / ✓" for Forward:
   hidden in place, shown once there is somewhere forward.
 - "bump": the page lifts slightly, rubber-bands back and plays the "nothing there" haptic.
@@ -268,80 +290,82 @@ tab leaves, or Safari's empty tab overview text. The rules above do not depend o
 
 ## 10. Gaps in the code (audit of `dev` at 18e28cd)
 
-Ranked by how visible and annoying each is. Format: `file:line — today → rule`.
+Ranked by how visible and annoying each is. Format: `file:line — today → rule`. **Fixed** marks
+the ones the state lane closed (2026-11-26); line numbers are from the audit, before the fix.
 
-1. `ShellUI/BrowserViewController.swift:576` — the tabs button is always shown and enabled, with
+1. **Fixed.** `ShellUI/BrowserViewController.swift:576` — the tabs button is always shown and enabled, with
    0, 1 or many tabs → the tabs slot has three faces (§3): Tabs with `others ≥ 1`, "+" with one
    page tab, hidden on Start with nothing else.
-2. `ShellUI/BrowserViewController+Gallery.swift:48` and `ShellUI/TabSwipe.swift:80` — a tap or a
+2. **Fixed.** `ShellUI/BrowserViewController+Gallery.swift:48` and `ShellUI/TabSwipe.swift:80` — a tap or a
    swipe up with one tab opens a one-card gallery; with no tabs both open the search field → both
    follow `others ≥ 1`; otherwise the "+" tap (button) or the bump (swipe).
-3. `TabGalleryUI/TabGalleryViewController.swift:610` with `ShellUI/GalleryTabs.swift:81` — closing
+3. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:610` with `ShellUI/GalleryTabs.swift:81` — closing
    a private card shows the Reopen toast, and its Reopen brings back the last closed *regular*
    batch (or does nothing) → the toast shows only when the close made a batch, and reopens that
    batch.
-4. `ShellUI/BrowserViewController+Gallery.swift:45-50` — on Start with only private tabs open, the
+4. **Fixed.** `ShellUI/BrowserViewController+Gallery.swift:45-50` — on Start with only private tabs open, the
    tabs button opens search, because the gallery looks only at the regular list. The private tabs
    cannot be reached → open the gallery on the list that has tabs (§6).
-5. `ShellUI/BrowserViewController+Tab.swift:173-178` with `BrowserCore/TabStore.swift:568` —
+5. **Fixed.** `ShellUI/BrowserViewController+Tab.swift:173-178` with `BrowserCore/TabStore.swift:568` —
    closing the last private tab from the tabs menu, with regular tabs open, lands on an empty
    search field (the store looks for a replacement only in the private list) → show the regular
    tab that was selected before (the gallery already does this, `+Gallery.swift:255`).
-6. `ShellUI/BrowserViewController+Tabs.swift:85-90`, `ShellUI/BrowserViewController+Gallery.swift:230-237`,
+6. **Fixed.** `ShellUI/BrowserViewController+Tabs.swift:85-90`, `ShellUI/BrowserViewController+Gallery.swift:230-237`,
    `ShellUI/EngineTabs.swift:105` — New Tab always makes a tab, even on an empty tab, and an
    empty tab you leave stays in the list, so blank start-screen cards pile up in the gallery →
    New Tab reuses the empty tab on screen; leaving an empty tab drops it (principle 7).
-7. `ShellUI/BrowserViewController.swift:573-579` — on Start, Back, Forward and Share show dimmed
+7. **Fixed.** `ShellUI/BrowserViewController.swift:573-579` — on Start, Back, Forward and Share show dimmed
    with nothing to act on → hidden on Start (slots kept).
-8. `TabGalleryUI/TabGalleryViewController.swift:599-604`, `ShellUI/BrowserViewController+Gallery.swift:254-266`,
+8. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:599-604`, `ShellUI/BrowserViewController+Gallery.swift:254-266`,
    `TabGalleryUI/TabGalleryViewController.swift:633-640` — closing the last card, or Close All
    Tabs, goes to the search field with no Reopen offer; the undo is left in a menu → the Reopen
    toast moves with the close and shows above the search field.
-9. `ShellUI/TabSwipe.swift:219-222` — the New Tab card shows past the last tab even when that tab
+9. **Fixed.** `ShellUI/TabSwipe.swift:219-222` — the New Tab card shows past the last tab even when that tab
    is empty → only when the tab on screen has an address.
-10. `ShellUI/BrowserViewController.swift:575` — Forward shows dimmed on every page → hidden in
+10. **Fixed.** `ShellUI/BrowserViewController.swift:575` — Forward shows dimmed on every page → hidden in
     place until it applies (dim only on the Duo's system bar). Settles the open item "Back and
     Forward when unavailable" in docs/polish-backlog.md.
-11. `ShellUI/BrowserViewController+Tabs.swift:42-82` — the tabs menu has no Reopen Closed Tab or
+11. **Fixed.** `ShellUI/BrowserViewController+Tabs.swift:42-82` — the tabs menu has no Reopen Closed Tab or
     Archived Tabs, shows dimmed Previous/Next and Show All Tabs with one tab, and New Tab on an
     empty tab → §5.
-12. `TabGalleryUI/TabGalleryViewController.swift:653` with `ShellUI/GalleryTabs.swift:50` —
+12. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:653` with `ShellUI/GalleryTabs.swift:50` —
     Archived Tabs shows whenever the database is ready, even with an empty archive (opens "No
     archived tabs."), and with no tab open the archive cannot be reached at all → only when
     `archived`, in the gallery menu, the tabs menu and (on Start with nothing open) the page
     menu; needs a count from Storage.
-13. `ShellUI/BrowserViewController.swift:894` — no Stop: while a page loads, the menu offers
+13. **Fixed.** `ShellUI/BrowserViewController.swift:894` — no Stop: while a page loads, the menu offers
     Reload, and `Tab.stopLoading()` (`WebEngine/Tab.swift:148`) has no caller → Stop in Reload's
     place while loading.
-14. `ShellUI/BrowserViewController.swift:893-930` — on a failed or crashed page the menu offers
+14. **Fixed.** `ShellUI/BrowserViewController.swift:893-930` — on a failed or crashed page the menu offers
     Find, Zoom, Reader and Add to Favorites for a page that is not there → §4 (Desktop Site and
     the blocking toggle stay on a failed page: they can be the cause).
-15. `ShellUI/BrowserViewController.swift:925-928`, `ShellUI/BrowserViewController+Tab.swift:277-283`
+15. **Fixed.** `ShellUI/BrowserViewController.swift:925-928`, `ShellUI/BrowserViewController+Tab.swift:277-283`
     — with the reader open, the Zoom row, Desktop Site and the blocking toggle act on the hidden
     page, and Reload (and pull to refresh) reloads the reader view → hidden in the reader; pull to
     refresh off.
-16. `FeatureUI/SettingsView.swift:33` — Tab Layout shows on every screen, and Side Tabs changes
+16. **Open, in the M3 lane** (its branch shows Tab Layout only where side tabs can show, with
+    side tabs; left alone here to avoid a conflict). `FeatureUI/SettingsView.swift:33` — Tab Layout shows on every screen, and Side Tabs changes
     nothing yet → shown only where side tabs can show, once they are built (plan, section 4b).
-17. `WebEngine/WebViewPool.swift:185` with `ShellUI/BrowserViewController+Tab.swift:43-57` — the
+17. **Fixed.** `WebEngine/WebViewPool.swift:185` with `ShellUI/BrowserViewController+Tab.swift:43-57` — the
     Back button closes a link-opened tab on its first page and returns to the opener, but the
     edge swipe does nothing there → the edge swipe does the same as the button.
-18. `ShellUI/BrowserViewController+Tabs.swift:15-17` — the bar gestures do not check whether Find
+18. **Fixed.** `ShellUI/BrowserViewController+Tabs.swift:15-17` — the bar gestures do not check whether Find
     on Page is open, so a swipe could switch tabs under the find bar (not yet seen on a device) →
     off while Find is open (§7).
-19. `TabGalleryUI/TabGalleryViewController.swift:477-479` — an empty list shows the empty state's
+19. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:477-479` — an empty list shows the empty state's
     New Tab button and the bar's "+" together → the bar's "+" hides in an empty list.
-20. `ShellUI/BrowserViewController+PageFeatures.swift:100-110` — a download toast can show while
+20. **Fixed.** `ShellUI/BrowserViewController+PageFeatures.swift:100-110` — a download toast can show while
     the gallery or a sheet is up (the gallery hides the toast only as it opens), where Show cannot
     open Downloads → the newest toast waits until they close.
-21. `TabGalleryUI/TabGalleryViewController.swift:645-668` — the gallery's More button shows even
+21. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:645-668` — the gallery's More button shows even
     when its menu is empty (no closed tabs, empty archive, one card) → hidden when empty; Close
     All needs 2 or more tabs.
-22. `TabGalleryUI/TabGalleryViewController.swift:480` — Done shows dimmed when the shown list
+22. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:480` — Done shows dimmed when the shown list
     does not hold the tab on screen → hidden.
-23. `FeatureUI/Downloads.swift:120-121` — running, failed and cancelled rows are buttons that do
+23. **Fixed.** `FeatureUI/Downloads.swift:120-121` — running, failed and cancelled rows are buttons that do
     nothing (no file yet) → only a finished row is a button.
-24. `TabGalleryUI/TabGalleryViewController.swift:630-632` — Close All Tabs counts pinned tabs it
+24. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:630-632` — Close All Tabs counts pinned tabs it
     will not close. No pin control exists yet, so no one sees it today → count only the tabs it
     closes.
-25. `ShellUI/BrowserViewController+PageFeatures.swift:95-97` — a download start plays a haptic
+25. **Fixed.** `ShellUI/BrowserViewController+PageFeatures.swift:95-97` — a download start plays a haptic
     and nothing else until it ends → Downloads item says "1 in progress" while one runs.

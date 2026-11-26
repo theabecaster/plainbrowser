@@ -225,9 +225,8 @@ Newest feature last.
 - **Find on Page and the bar.** Bar gestures stop while the find bar is open, but the page's bar
   is not replaced by it (§7, §8 "Find open"); the keyboard covers it today. Hide the bar while
   Find is open. (Code review, round 1.)
-- **Split and side-tab cells.** The matrix rows for Duo split, side tabs and book pose wait for
-  the M3 lane; `ChromeState.canSplit` is wired to `canOpenInOtherPane(from:)`, which is still
-  `false` on `dev`. Tab Layout in Settings (gap 16) is in the M3 branch.
+- **Book pose.** Pills and toasts avoiding the fold (§8 "Book pose") are the M3 layout's, not
+  `ControlRules`'; check them on the device with the state rules in mind.
 - **Sheet failure states.** History, Archive and Favorites show OK on a failed read, not Try
   Again, and History's Clear is enabled with an empty history while a search is typed (§6,
   Sheets; pre-existing, not in the gaps list). (Code review, round 1.)

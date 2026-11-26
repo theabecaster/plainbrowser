@@ -935,7 +935,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let top = UIMenu(options: .displayInline, children: tabItemsForMore(rules))
         guard rules.shareAndCopy, let tab = currentTab, let url = pageAddress else {
             // An empty pane of a split can still be swapped or closed.
-            let paneItems = paneMenuItems(for: nil)
+            let paneItems = paneMenuItems(for: nil, rules: rules)
             return [top] + (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
         }
         var pageItems: [UIMenuElement] = []
@@ -978,7 +978,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             Haptic.success.play()
         }
         var siteItems = siteMenuItems(for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle)
-            + paneMenuItems(for: tab)
+            + paneMenuItems(for: tab, rules: rules)
         if rules.favorite, let isFavorite {
             let title = tab.title
             let favorite = UIAction(

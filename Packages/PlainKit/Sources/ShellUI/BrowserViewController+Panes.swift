@@ -356,9 +356,8 @@ extension BrowserViewController {
 
     /// The page menu's pane items: Open in Other Pane where a split can show, Swap Panes and
     /// Close Pane while one shows.
-    func paneMenuItems(for tab: Tab?) -> [UIMenuElement] {
-        guard canSplit else { return [] }
-        if isSplit {
+    func paneMenuItems(for tab: Tab?, rules: ControlRules) -> [UIMenuElement] {
+        if rules.paneItems {
             let swap = UIAction(title: "Swap Panes", image: UIImage(systemName: "arrow.left.arrow.right")) { [weak self] _ in
                 self?.swapPanes()
             }
@@ -369,7 +368,7 @@ extension BrowserViewController {
             close.accessibilityIdentifier = "menu.closePane"
             return [swap, close]
         }
-        guard let tab else { return [] }
+        guard rules.openInOtherPane, let tab else { return [] }
         let open = UIAction(title: "Open in Other Pane", image: UIImage(systemName: "rectangle.split.2x1")) { [weak self, weak tab] _ in
             guard let self, let tab else { return }
             openInOtherPane(tab)

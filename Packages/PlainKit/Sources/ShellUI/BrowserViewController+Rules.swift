@@ -15,6 +15,9 @@ extension BrowserViewController {
         state.usesVerticalBar = usesVerticalBar
         state.isEditing = isEditingAddress
         state.hasDownloads = !session.pool.downloads.downloads.isEmpty
+        state.sideTabs = duo.layout?.showsSidebar ?? false
+        state.canSplit = canSplit
+        state.isSplit = isSplit
         state.hasClosed = tabs.canReopenClosedTab
         state.hasArchived = tabs.hasArchivedTabs
         guard let tab = currentTab else {
@@ -52,7 +55,6 @@ extension BrowserViewController {
         if let page = session.pool.webView(for: tab) {
             state.isReaderAvailable = session.reader.isAvailable(in: page) == true
         }
-        state.canSplit = canOpenInOtherPane(from: tab)
         return state
     }
 

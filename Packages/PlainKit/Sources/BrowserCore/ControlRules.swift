@@ -89,6 +89,10 @@ public struct ChromeState: Sendable, Equatable {
     public var isRecordable = false
     /// A Duo split can show (width and height both regular).
     public var canSplit = false
+    /// Two panes show; the rules describe the focused one.
+    public var isSplit = false
+    /// The sidebar (Tab Layout Left or Right) is in effect: it is the tab list.
+    public var sideTabs = false
 
     public init() {}
 }
@@ -142,13 +146,15 @@ public struct ControlRules: Sendable, Equatable {
     public var more: ControlVisibility { .shown }
 
     /// One predicate, `others ≥ 1`, for the tap, the swipe up and Show All Tabs.
+    /// With side tabs the slot shows and hides the sidebar, which is always there to toggle (M3).
     public var tabsSlot: TabsSlotFace {
-        if state.others >= 1 { return .tabs }
+        if state.sideTabs || state.others >= 1 { return .tabs }
         return state.hasPage ? .newTab : .hidden
     }
 
-    /// The swipe up from the bar opens the gallery; otherwise it bumps ("nothing there").
-    public var swipeUpOpensGallery: Bool { state.others >= 1 }
+    /// The swipe up from the bar opens the gallery; otherwise it bumps ("nothing there"). Off with
+    /// side tabs: the sidebar is the switcher.
+    public var swipeUpOpensGallery: Bool { !state.sideTabs && state.others >= 1 }
 
     /// The bar's gestures run; Find on Page owns the bottom while it is open (§7).
     public var acceptsBarGestures: Bool { !state.isFindOpen && barShown }
@@ -181,7 +187,8 @@ public struct ControlRules: Sendable, Equatable {
         return state.hasNext ? .shown : .dimmed
     }
 
-    public var menuShowAllTabs: Bool { swipeUpOpensGallery }
+    /// The gallery from the menu: with side tabs too, as the button there toggles the sidebar.
+    public var menuShowAllTabs: Bool { state.others >= 1 }
     public var menuReopenClosedTab: Bool { state.hasClosed }
     public var menuArchivedTabs: Bool { state.hasArchived }
     /// Closing an empty tab does nothing useful; it goes away by itself.
@@ -231,7 +238,11 @@ public struct ControlRules: Sendable, Equatable {
     /// Downloads: while any ran this session.
     public var downloads: Bool { state.hasDownloads }
 
-    public var openInOtherPane: Bool { state.canSplit && isPageShowing && !state.isReaderOpen }
+    /// Open in Other Pane: a page that shows, where a split can show and none does yet.
+    public var openInOtherPane: Bool { state.canSplit && !state.isSplit && isPageShowing && !state.isReaderOpen }
+
+    /// Swap Panes and Close Pane while a split shows, whatever the focused pane holds.
+    public var paneItems: Bool { state.canSplit && state.isSplit }
 
     // The tabs menu's other items sit in More's top section in every state where they apply, one
     // visible tap away; the long press on the tabs slot is a shortcut, never the only way (owner,

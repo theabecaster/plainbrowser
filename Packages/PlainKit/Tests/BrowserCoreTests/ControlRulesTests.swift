@@ -291,8 +291,35 @@ import Testing
         #expect(!ControlRules(state).openInOtherPane)
         state.canSplit = true
         #expect(ControlRules(state).openInOtherPane)
+        #expect(!ControlRules(state).paneItems)
         state.condition = .failed
         #expect(!ControlRules(state).openInOtherPane)
+    }
+
+    @Test func duoSplitActsOnTheFocusedPane() {
+        var state = Self.page(others: 1)
+        state.canSplit = true
+        state.isSplit = true
+        let rules = ControlRules(state)
+        #expect(!rules.openInOtherPane, "the other pane already shows")
+        #expect(rules.paneItems)
+        #expect(rules.tabsSlot == .tabs, "the other pane's tab counts")
+        var empty = Self.emptyTab(others: 1)
+        empty.canSplit = true
+        empty.isSplit = true
+        #expect(ControlRules(empty).paneItems, "an empty pane can still be swapped or closed")
+    }
+
+    @Test func sideTabsMakeTheSidebarTheSwitcher() {
+        var state = Self.page()
+        state.sideTabs = true
+        let rules = ControlRules(state)
+        #expect(rules.tabsSlot == .tabs, "the slot shows and hides the sidebar")
+        #expect(!rules.swipeUpOpensGallery, "the sidebar is the switcher")
+        #expect(!rules.menuShowAllTabs, "nothing else to show")
+        state.others = 2
+        #expect(ControlRules(state).menuShowAllTabs)
+        #expect(!ControlRules(state).swipeUpOpensGallery)
     }
 
     @Test func reopenAndArchiveFollowTheirStores() {

@@ -75,7 +75,7 @@ press means the same thing whatever it shows.
 | `others ≥ 1` | Tabs (`square.on.square`) | Gallery | There is somewhere to switch to. |
 | `others = 0`, `page` | New Tab (`plus`) | New tab, search field up | A one-card switcher is a dead end (owner). The one useful tab action is a second tab. Same slot, so no new button. |
 | `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) stay in More (section 4) and show as shortcuts on the start screen, so none of them is ever out of reach. |
-| Side tabs showing | — | — | The sidebar is the tab list. Its header has a More (…) button that is always there and opens the same tabs menu (section 5), so Reopen, Archive and private tabs are always one tap away. Its "+" follows principle 8 (hidden on an empty tab). |
+| Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. |
 
 - **The tabs items are never only behind a long press** (owner, 2026-11-26). New Private Tab,
   Reopen Closed Tab and Archived Tabs are in More's top section in every state where they apply,
@@ -258,7 +258,7 @@ combines its base state with the rows that modify it (for example, private + loa
 | Duo outer (system vertical bar) | dim when none | dim when none | per table, dim instead of hide inside Page | ✓ | ✓ | same | same | same | same | same | same |
 | Duo inner, single pane | as Duo outer | | | | | | | | | | |
 | Duo split | per focused pane | | | | | | | | | | Open in Other Pane shown; Close Tab acts on the focused pane |
-| Side tabs, Rail or Expanded | as Page | | — (sidebar has the list and "+"; long press "+" for the tabs menu) | | | off (sidebar is the switcher) | neighbours | when last | | | |
+| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | |
 | Book pose | as the pane's state; pills and toasts avoid the fold | | | | | | | | | | |
 | Phone landscape (compact height) | as Page; no side tabs | | | | | | | | | | |
 
@@ -344,8 +344,7 @@ the ones the state lane closed (2026-11-26); line numbers are from the audit, be
     — with the reader open, the Zoom row, Desktop Site and the blocking toggle act on the hidden
     page, and Reload (and pull to refresh) reloads the reader view → hidden in the reader; pull to
     refresh off.
-16. **Open, in the M3 lane** (its branch shows Tab Layout only where side tabs can show, with
-    side tabs; left alone here to avoid a conflict). `FeatureUI/SettingsView.swift:33` — Tab Layout shows on every screen, and Side Tabs changes
+16. **Fixed (M3 lane):** Tab Layout shows only where side tabs can show. `FeatureUI/SettingsView.swift:33` — Tab Layout shows on every screen, and Side Tabs changes
     nothing yet → shown only where side tabs can show, once they are built (plan, section 4b).
 17. **Fixed.** `WebEngine/WebViewPool.swift:185` with `ShellUI/BrowserViewController+Tab.swift:43-57` — the
     Back button closes a link-opened tab on its first page and returns to the opener, but the

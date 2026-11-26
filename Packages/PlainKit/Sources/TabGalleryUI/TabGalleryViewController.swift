@@ -132,7 +132,7 @@ public final class TabGalleryViewController: UIViewController {
         bottomBar.menuButton.showsMenuAsPrimaryAction = true
         root.addSubview(bottomBar)
 
-        toast.button.addAction(UIAction { [weak self] _ in self?.reopenClosedTab() }, for: .primaryActionTriggered)
+        toast.button.addAction(UIAction { [weak self] _ in self?.reopenClosedTab(offered: true) }, for: .primaryActionTriggered)
         root.addSubview(toast)
     }
 
@@ -644,10 +644,11 @@ public final class TabGalleryViewController: UIViewController {
         onLastTabClosed?()
     }
 
-    private func reopenClosedTab() {
+    /// Reopen from the menu (the last close) or the toast (`offered`: the close it was shown for).
+    private func reopenClosedTab(offered: Bool = false) {
         Signposts.signposter.emitEvent(Signposts.galleryReopen)
         toast.hide(animated: true)
-        guard let id = dataSource.reopenClosedTab() else { return }
+        guard let id = offered ? dataSource.reopenOfferedTab() : dataSource.reopenClosedTab() else { return }
         reloadTabs(animated: true)
         scrollToTab(id, animated: true)
     }

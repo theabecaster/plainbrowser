@@ -59,6 +59,13 @@ extension BrowserViewController: GalleryHost {
                   privateCount: session.tabs.pageEntries(private: true).count
               )
         else { return nil }
+        // Leaving an empty tab for the gallery drops it (principle 7): the start screen waits under
+        // the cards, with nothing selected.
+        if let tab = currentTab, session.tabs.isEmpty(tab.id) {
+            clearPage()
+            engineUI.typedVisitTabs.remove(tab.id)
+            session.tabs.discard(tab.id, refillingPane: false)
+        }
         let tabs = galleryTabs()
         tabs.setShowingPrivateTabs(showsPrivate)
         Signposts.signposter.emitEvent(Signposts.galleryOpen, "\(source)")
@@ -77,7 +84,7 @@ extension BrowserViewController: GalleryHost {
         tabsUI.gallery = gallery
         // The gallery has its own bar: the system's vertical bar (Duo) empties rather than hides,
         // so its column keeps its width and nothing under the gallery lays out again.
-        setToolbarItems([], animated: true)
+        applyToolbarItems()
         updateButtons()
 
         // The page zooms into its card; an empty tab has no card, so the gallery fades in.
@@ -161,7 +168,7 @@ extension BrowserViewController: GalleryHost {
         gallery.view.removeFromSuperview()
         gallery.removeFromParent()
         tabsUI.gallery = nil
-        setToolbarItems(PageButton.allCases.compactMap { barItems[$0] }, animated: true)
+        applyToolbarItems()
         setChromeHiddenForGallery(false, animated: false)
         updateButtons()
         updatePageState()
@@ -257,11 +264,20 @@ extension BrowserViewController: GalleryHost {
         return tab.id
     }
 
-    func galleryReopenClosedTab() -> TabID? {
-        let ids = session.tabs.reopenLastClosed()
+    /// Reopen Closed Tab from the gallery's menu (`batch` nil: the last close) or its toast (the
+    /// close it was offered for). Reopened tabs are regular: the gallery shows that list.
+    func galleryReopen(batch: UUID?) -> TabID? {
+        let ids = batch.map { session.tabs.reopenClosed($0) } ?? session.tabs.reopenLastClosed()
+        guard !ids.isEmpty else {
+            Haptic.nothingThere.play()
+            return nil
+        }
+        tabsUI.galleryTabs?.setShowingPrivateTabs(false)
         if let selected = session.tabs.selected { show(selected) }
         return ids.first
     }
+
+    var galleryLastClosedBatch: UUID? { session.tabs.lastClosedBatchID }
 
     var galleryCanShowArchive: Bool { sheets.isReady && session.tabs.hasArchivedTabs }
 
@@ -297,7 +313,10 @@ extension BrowserViewController: GalleryHost {
         case .switchList:
             tabs.setShowingPrivateTabs(!wasPrivate)
             gallery.reloadTabs(animated: false)
-            if batch != nil { gallery.showReopenToast() }
+            if let batch {
+                tabs.offerReopen(batch)
+                gallery.showReopenToast()
+            }
         case .search:
             dismissGalleryFading()
             beginAddressEditing()

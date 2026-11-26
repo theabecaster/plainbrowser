@@ -249,6 +249,22 @@ import Testing
         #expect(!ControlRules(state).savePDF)
     }
 
+    @Test func editingHidesTheBarAndItsGestures() {
+        var state = Self.page(others: 2)
+        state.isEditing = true
+        let rules = ControlRules(state)
+        #expect(!rules.barShown)
+        #expect(!rules.acceptsBarGestures)
+        #expect(ControlRules(Self.firstRun).barShown)
+    }
+
+    @Test func downloadsOnlyAfterOneRan() {
+        var state = Self.page()
+        #expect(!ControlRules(state).downloads)
+        state.hasDownloads = true
+        #expect(ControlRules(state).downloads)
+    }
+
     @Test func findOpenStopsTheBarGestures() {
         var state = Self.page(others: 2)
         #expect(ControlRules(state).acceptsBarGestures)

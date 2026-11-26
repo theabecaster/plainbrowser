@@ -79,7 +79,7 @@ extension BrowserViewController {
     /// runs, so a download that started says so before it ends.
     func downloadsMenuItems() -> [UIMenuElement] {
         let downloads = session.pool.downloads.downloads
-        guard !downloads.isEmpty else { return [] }
+        guard currentRules().downloads else { return [] }
         let running = downloads.count { $0.state == .inProgress }
         let subtitle = running == 0 ? nil : String(localized: "\(running) in progress")
         let item = UIAction(title: "Downloads", subtitle: subtitle, image: UIImage(systemName: "arrow.down.circle")) { [weak self] _ in

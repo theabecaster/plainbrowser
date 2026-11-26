@@ -217,9 +217,9 @@ final class EngineTabs {
     }
 
     /// Removes an empty tab the user left, with no Reopen (docs/state-rules.md, principle 7).
-    func discard(_ id: TabID) {
+    func discard(_ id: TabID, refillingPane: Bool = true) {
         let wasPrivate = store.tabs[id]?.isPrivate == true
-        store.discard(id)
+        store.discard(id, refillingPane: refillingPane)
         drop(id)
         if wasPrivate { endPrivateSessionIfEmpty() }
     }

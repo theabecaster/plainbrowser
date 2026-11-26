@@ -96,6 +96,8 @@ public protocol TabGalleryDataSource: AnyObject {
     /// The empty space was tapped while the tab on screen is not a card in the list (an empty tab,
     /// or a tab of the other list): the shell goes back to it as it is.
     func returnToPage()
+    /// The Reopen toast after a close: brings back exactly that close, if it still can.
+    @discardableResult func reopenOfferedTab() -> UUID?
 }
 
 extension TabGalleryDataSource {
@@ -107,5 +109,6 @@ extension TabGalleryDataSource {
     public var canShowArchive: Bool { false }
     public func showArchive() {}
     public func returnToPage() {}
+    @discardableResult public func reopenOfferedTab() -> UUID? { reopenClosedTab() }
 }
 #endif

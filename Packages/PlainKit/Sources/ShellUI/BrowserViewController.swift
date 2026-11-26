@@ -563,6 +563,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
         isEditingAddress = editing
         guard changed || !animated else { return }
+        // Editing is a mode: the bar's controls and gestures follow the rules for it.
+        updateButtons()
         if editing {
             sheet.isHidden = false
             settleCollapse(at: 0, animated: false)

@@ -62,6 +62,10 @@ public struct ChromeState: Sendable, Equatable {
     public var canGoForward = false
     public var isReaderOpen = false
     public var isFindOpen = false
+    /// The search field is open (Editing mode).
+    public var isEditing = false
+    /// Downloads ran or run this session.
+    public var hasDownloads = false
     /// Open tabs besides the one on screen, regular and private together. Empty tabs never count.
     public var others = 0
     /// Tabs in the on-screen tab's own list (regular or private), itself included.
@@ -105,6 +109,11 @@ public struct ControlRules: Sendable, Equatable {
 
     // MARK: The bar (§3)
 
+    /// Editing hides the button bar (the keyboard and the field take the bottom), in the glass bar
+    /// and in the Duo's vertical bar alike (§6).
+    public var barShown: Bool { !state.isEditing }
+
+
     /// Leftmost; dim inside Page so its place stays muscle memory. Hidden on Start.
     public var back: ControlVisibility {
         guard !isStart else { return .hidden }
@@ -140,7 +149,7 @@ public struct ControlRules: Sendable, Equatable {
     public var swipeUpOpensGallery: Bool { state.others >= 1 }
 
     /// The bar's gestures run; Find on Page owns the bottom while it is open (§7).
-    public var acceptsBarGestures: Bool { !state.isFindOpen }
+    public var acceptsBarGestures: Bool { !state.isFindOpen && barShown }
 
     /// A sideways bar swipe moves between tabs. With no tab at all it only bumps.
     public var barSwipeSwitchesTabs: Bool { state.hasTab }
@@ -216,6 +225,9 @@ public struct ControlRules: Sendable, Equatable {
         guard state.hasPage, state.isRecordable else { return false }
         return state.isReaderOpen || state.condition == .loaded
     }
+
+    /// Downloads: while any ran this session.
+    public var downloads: Bool { state.hasDownloads }
 
     public var openInOtherPane: Bool { state.canSplit && isPageShowing && !state.isReaderOpen }
 

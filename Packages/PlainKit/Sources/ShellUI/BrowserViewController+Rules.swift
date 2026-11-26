@@ -13,6 +13,8 @@ extension BrowserViewController {
         let tabs = session.tabs
         var state = ChromeState()
         state.usesVerticalBar = usesVerticalBar
+        state.isEditing = isEditingAddress
+        state.hasDownloads = !session.pool.downloads.downloads.isEmpty
         state.hasClosed = tabs.canReopenClosedTab
         state.hasArchived = tabs.hasArchivedTabs
         guard let tab = currentTab else {
@@ -61,7 +63,9 @@ extension BrowserViewController {
 
     /// The address the tab on screen is about: its page, or the one a failed load tried.
     var pageAddress: URL? {
-        currentTab?.url ?? currentTab?.loadError?.url
+        guard let tab = currentTab else { return nil }
+        if let error = tab.loadError, !tab.isLoading, let tried = error.url { return tried }
+        return tab.url
     }
 
     /// The system find bar shows over the page or the reader.
@@ -93,6 +97,17 @@ extension BrowserViewController {
         }
         applyTabsFace(rules.tabsSlot)
         if !tabsUI.start.isHidden { applyStartShortcuts() }
+        applyToolbarItems()
+    }
+
+    /// The system's vertical bar (Duo) holds the page buttons only where the bar shows (state
+    /// rules: hidden while editing, the gallery has its own). It empties rather than hides, so its
+    /// column keeps its width and nothing under it lays out again.
+    func applyToolbarItems() {
+        guard usesVerticalBar else { return }
+        let items = rules.barShown && !isShowingGallery ? PageButton.allCases.compactMap { barItems[$0] } : []
+        guard (toolbarItems ?? []) != items else { return }
+        setToolbarItems(items, animated: true)
     }
 
     /// The tabs slot's face: Tabs, or New Tab with one page tab. The long press is the tabs menu

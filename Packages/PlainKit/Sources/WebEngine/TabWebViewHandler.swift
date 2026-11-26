@@ -154,6 +154,12 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
             pool.handleCertificateError(error, in: tab)
             return
         }
+        if NavigationRules.isSilentError(error) {
+            // Stopped (or turned into a download) before it committed: the tab is back on what it
+            // showed, which for a fresh tab is nothing (docs/state-rules.md §7, Stop). The URL
+            // observer ignores nil, so the address is set here.
+            tab?.set(\.url, webView.url)
+        }
         report(error)
     }
 

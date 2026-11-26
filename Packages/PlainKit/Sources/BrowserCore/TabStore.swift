@@ -212,10 +212,13 @@ public final class TabStore {
 
     /// Removes a tab without a trace: no recently closed batch, nothing to reopen. For an empty tab
     /// the user left (docs/state-rules.md, principle 7: empty tabs are never left behind). A pane
-    /// that showed it is filled as for `close`.
-    public func discard(_ id: TabID) {
+    /// that showed it is filled as for `close`, or left on the start page with `refillingPane: false`
+    /// (the gallery opened over the empty tab: nothing else is on screen yet).
+    public func discard(_ id: TabID, refillingPane: Bool = true) {
         guard let windowID = windowOfTab[id], let index = windowIndex(windowID), let entry = tabs[id] else { return }
+        let shownIn = windows[index].panes.indices.filter { windows[index].panes[$0] == id }
         remove(id, windowIndex: index)
+        if !refillingPane { for pane in shownIn { windows[index].panes[pane] = nil } }
         clearOpeners(of: [id])
         if !entry.isPrivate { saveSession() }
     }

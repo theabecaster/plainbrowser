@@ -201,6 +201,9 @@ extension BrowserViewController {
         // Only a close that made a batch can be undone (a private tab never does).
         if offerReopen, let batch = session.tabs.lastClosedBatchID, batch != batchBefore {
             self.offerReopen(batch)
+        } else if offerReopen {
+            // An earlier offer must not read as this close's undo.
+            tabsUI.toast.hide(animated: true)
         }
         guard wasShown else { return updateButtons() }
         if let next = session.tabs.selected {

@@ -21,7 +21,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 
 | Target | Isolation | Imports | Holds today (M0) |
 |---|---|---|---|
-| `BrowserCore` | nonisolated (`TabStore` MainActor) | Foundation | `AddressBarInput` (URL vs search rules), `SearchEngine`, `TabStore` (tabs, windows, panes, recently closed, auto-archive) and its value types (`TabModel.swift`), `TabPersistence` seam |
+| `BrowserCore` | nonisolated (`TabStore` MainActor) | Foundation | `AddressBarInput` (URL vs search rules), `SearchEngine`, `TabStore` (tabs, windows, panes, recently closed, auto-archive) and its value types (`TabModel.swift`), `TabPersistence` seam, `ControlRules`/`GalleryRules` (docs/state-rules.md as plain values: which control shows, dims or hides in each state) |
 | `Storage` | nonisolated | GRDB | `AppDatabase` (migrations, async reads/writes), `HistoryVisit`, `TabSessionWriter` (the one tab writer), `loadTabSession`, archive reads and search, `TabStateStore` |
 | `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`: warm-up, tiers, popups, crash recovery), `Tab` (observed page state), `TabWebViewHandler` (navigation/UI delegate), `NavigationRules` (pure policy), `DownloadCoordinator`, `ThumbnailService`, `EngineChoices`, seams in `EngineProtocols` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
@@ -113,9 +113,18 @@ and compile to nothing on macOS.
   (remembered per site, applied with a reload), Add to (or Remove from) Favorites, then Downloads
   (while there are any), History, Edit Favorites and Settings… in their own last section. More is
   always enabled: without a page the menu holds only that last section.
-- **Tabs button.** A tap opens the gallery; a long press, the tabs menu: New Tab, New Private Tab,
-  Previous / Next Tab ("Or swipe the address bar"), Show All Tabs ("Or swipe up from the address
-  bar"), Close Tab (with a Reopen toast).
+- **State rules.** `+Rules` describes the screen as a `ChromeState` and applies what
+  `ControlRules` answers: each bar button shown, dimmed or hidden in place (`ButtonBar.setVisibility`),
+  the tabs slot's face, the page and tabs menus' items, the gestures and the start screen's
+  shortcuts. The gallery does the same with `GalleryRules`. No view decides visibility itself.
+- **Tabs button.** Three faces (docs/state-rules.md §3): Tabs opens the gallery, "+" with one page
+  tab opens a new one, hidden on the start screen with nothing else open. A long press is the tabs
+  menu: New Tab, New Private Tab, Previous / Next Tab ("Or swipe the address bar"), Show All Tabs
+  ("Or swipe up from the address bar"), Reopen Closed Tab, Archived Tabs, Close Tab (with a Reopen
+  toast). A one-time TipKit tip teaches the long press (`TabsMenuTip`); More carries the same
+  items on top.
+- **Empty tabs.** An empty tab exists only while on screen: `show(_:)` drops one it leaves
+  (`EngineTabs.discard`, no Reopen), New Tab reuses one, the gallery never lists one.
 - **Toast.** `ShellToast` floats above the pill for a few seconds: Reopen after Close Tab, a
   finished or failed download (Show opens Downloads), a link opened in the background (Show).
 

@@ -146,6 +146,11 @@ final class RecordingPersistence: TabPersistence {
         #expect(store.recentlyClosed.isEmpty)
         #expect(store.selectedTabID(in: window) == a)
         #expect(persistence.lastSession?.tabs.map(\.id) == [a])
+        // Left on the start page: nothing takes the pane.
+        let other = store.open()
+        store.discard(other, refillingPane: false)
+        #expect(store.selectedTabID(in: window) == nil)
+        #expect(store.windows[0].tabIDs == [a])
     }
 
     @Test func reopenClosedBringsBackExactlyThatBatch() {

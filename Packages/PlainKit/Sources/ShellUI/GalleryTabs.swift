@@ -13,7 +13,8 @@ protocol GalleryHost: AnyObject {
     func galleryCloseTab(_ id: TabID)
     func galleryCloseAll(private isPrivate: Bool)
     func galleryNewTab(private isPrivate: Bool) -> TabID
-    func galleryReopenClosedTab() -> TabID?
+    func galleryReopen(batch: UUID?) -> TabID?
+    var galleryLastClosedBatch: UUID? { get }
     func galleryShowArchive()
     var galleryCanShowArchive: Bool { get }
     var galleryCanOpenInOtherPane: Bool { get }
@@ -60,12 +61,29 @@ final class GalleryTabs: TabGalleryDataSource {
         host?.galleryOpenTab(id)
     }
 
+    /// The batch the gallery's Reopen toast brings back: the one its last close made.
+    private var offeredBatch: UUID?
+
     func closeTab(_ id: UUID) {
         host?.galleryCloseTab(id)
+        offeredBatch = isShowingPrivateTabs ? nil : host?.galleryLastClosedBatch
     }
 
     func closeAllTabs() {
         host?.galleryCloseAll(private: isShowingPrivateTabs)
+        offeredBatch = isShowingPrivateTabs ? nil : host?.galleryLastClosedBatch
+    }
+
+    /// The Reopen toast: exactly the close it was offered for.
+    func reopenOfferedTab() -> UUID? {
+        guard let batch = offeredBatch else { return nil }
+        offeredBatch = nil
+        return host?.galleryReopen(batch: batch)
+    }
+
+    /// The shell moved the offer here after switching lists (the last card of the other list).
+    func offerReopen(_ batch: UUID) {
+        offeredBatch = batch
     }
 
     func moveTab(_ id: UUID, to index: Int) {
@@ -79,7 +97,7 @@ final class GalleryTabs: TabGalleryDataSource {
 
     @discardableResult
     func reopenClosedTab() -> UUID? {
-        host?.galleryReopenClosedTab()
+        host?.galleryReopen(batch: nil)
     }
 
     func setShowingPrivateTabs(_ isPrivate: Bool) {

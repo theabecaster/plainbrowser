@@ -33,6 +33,8 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   cell and the open gaps, is `docs/state-rules.md`.
 - A button, its gesture and its menu item follow one condition. The tabs button, the swipe up and
   Show All Tabs show only when there is another tab to switch to; with one tab the slot is New Tab.
+- A long press is never the only way to an item: New Private Tab, Reopen Closed Tab and Archived
+  Tabs are also in More, and on the start screen.
 - A gesture with nothing to do rubber-bands with the "nothing there" haptic. It never does
   something else instead.
 - The bar changes shape only between modes (start screen, page, search, gallery). Inside a mode a

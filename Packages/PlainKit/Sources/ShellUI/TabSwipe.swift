@@ -31,6 +31,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     /// A gesture with nothing to do: the page follows the finger a little on this axis, rubber-
     /// banded, and springs back with the "nothing there" haptic (state rules, principle 4).
     private var bumpVertical = false
+    /// The rules when the finger came down: one read of the tab list per gesture, not per frame.
+    private var gestureRules: ControlRules?
 
     /// One swipe from a tab toward a neighbour, kept while the page settles so a finger can grab it.
     private final class Swipe {
@@ -92,6 +94,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             // One condition per gesture, from the state rules: the swipe up opens the gallery only
             // with another tab to switch to, a sideways swipe moves only with a tab on screen.
             let rules = browser.currentRules()
+            gestureRules = rules
             if abs(velocity.x) > abs(velocity.y) || swipe != nil {
                 if rules.barSwipeSwitchesTabs || swipe != nil {
                     beginTabSwipe()
@@ -119,6 +122,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             case .none: break
             }
             mode = .none
+            gestureRules = nil
         default:
             break
         }
@@ -257,7 +261,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
                 swipe.preview.addSubview(picture(for: id, size: swipe.preview.bounds.size))
             }
             browser.pill.beginHostSlide(to: tab.url)
-        } else if side > 0, browser.currentRules().offersNewTabCard {
+        } else if side > 0, (gestureRules ?? browser.currentRules()).offersNewTabCard {
             // Past the last tab, from a page only: past an empty tab it would make a second one.
             swipe.isNewTabCard = true
             swipe.preview.addSubview(NewTabCard(frame: swipe.preview.bounds))

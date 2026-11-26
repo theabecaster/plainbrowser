@@ -15,6 +15,7 @@ import Network
 ///   that matches any site) was blocked.
 /// - `/article`: a readerable article (Reader), with a link to `/b`.
 /// - `/location`: asks for the location (a permission prompt).
+/// - `/motion`: a button that asks for motion sensors (a permission prompt after a tap).
 final class TestServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "TestServer")
@@ -124,6 +125,15 @@ final class TestServer: @unchecked Sendable {
                 + paragraphs.joined() + "<p>Next, <a href=\"/b\">read page B</a>.</p></article>"
                 + "<footer><p>Footer links and other chrome.</p></footer>"
             return ("200 OK", html("The Quiet Page", body))
+        case "/motion":
+            return ("200 OK", html("Plain Motion", """
+                <h1 id="state">Motion</h1>
+                <p><button id="ask" style="font-size:22px;padding:12px 20px" onclick="
+                  DeviceMotionEvent.requestPermission()
+                    .then(r => { document.getElementById('state').textContent = 'Motion ' + r; })
+                    .catch(e => { document.getElementById('state').textContent = 'Motion error'; });
+                ">Use Motion</button></p>
+                """))
         case "/location":
             return ("200 OK", html("Plain Location", """
                 <h1 id="state">Asking</h1>

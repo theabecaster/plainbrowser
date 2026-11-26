@@ -22,6 +22,9 @@ final class EngineUIState {
     /// Tabs whose page kept crashing after the engine's automatic reloads.
     var crashedTabs: Set<UUID> = []
     let prompts = PromptQueue()
+    #if DEBUG
+    var didPreviewPermissionPrompt = false
+    #endif
     /// The file Quick Look shows after "Open" on a finished download.
     let preview = DownloadPreview()
 }
@@ -117,6 +120,9 @@ extension BrowserViewController {
         engineUI.observation = TabObservation(tab) { [weak self] old, new in
             self?.tabChanged(from: old, to: new)
         }
+        #if DEBUG
+        previewPermissionPromptIfAsked(for: tab)
+        #endif
     }
 
     /// Closes `tab` and shows the next one (its opener for a popup). With no tab left, the search

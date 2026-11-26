@@ -184,13 +184,20 @@ final class CaptureTests: XCTestCase {
             pause(1)
         }
 
-        app.buttons["addressPill"].tap()
-        field.typeText(server.address("/location") + "\n")
+        // The permission prompt: WebKit asks only on secure pages and the simulator has no camera,
+        // so a debug launch argument shows the camera prompt over a page.
+        app.terminate()
+        app.launchArguments = ["-PlainInMemoryStore", "-PlainPreviewPermissionPrompt"]
+        app.launch()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/b") + "\n")
         let allow = app.alerts.buttons["Allow"]
         if allow.waitForExistence(timeout: 8) {
             pause(1)
             shot("e4-permission")
             allow.tap()
+        } else {
+            shot("e4-no-prompt")
         }
         pause(1)
     }

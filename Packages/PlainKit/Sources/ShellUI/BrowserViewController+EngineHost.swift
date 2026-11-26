@@ -178,6 +178,22 @@ extension BrowserViewController: EngineHost {
         topPresenter.present(controller, animated: true)
     }
 
+    #if DEBUG
+    /// `-PlainPreviewPermissionPrompt`: shows the camera and microphone prompt once, for
+    /// screenshots. The simulator has no camera, and WebKit asks for location or motion only on a
+    /// secure page, which the local test server is not. Debug builds only.
+    func previewPermissionPromptIfAsked(for tab: Tab) {
+        guard ProcessInfo.processInfo.arguments.contains("-PlainPreviewPermissionPrompt"),
+              !engineUI.didPreviewPermissionPrompt
+        else { return }
+        engineUI.didPreviewPermissionPrompt = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            _ = await self?.tab(tab, allow: [.camera, .microphone], forSite: "https://meet.example.com")
+        }
+    }
+    #endif
+
     // MARK: Presenting
 
     /// A yes-or-no question: `confirm` answers true, `cancel` false.

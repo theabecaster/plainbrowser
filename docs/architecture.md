@@ -26,7 +26,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`: warm-up, tiers, popups, crash recovery), `Tab` (observed page state), `TabWebViewHandler` (navigation/UI delegate), `NavigationRules` (pure policy), `DownloadCoordinator`, `ThumbnailService`, `EngineChoices`, seams in `EngineProtocols` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
 | `Reader` | nonisolated; WebKit types MainActor | WebKit | `ReaderExtractor` (Readability in its own content world), `ReaderRenderer` (page template), `ReaderSchemeHandler` (`plain-reader:` scheme), `ReaderArticle` |
-| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI, WebEngine, ContentBlocking, Reader | `BrowserViewController` (page, URL pill, search sheet, page buttons; the tab on screen in `+Tab`, the engine's questions in `+EngineHost`), `BrowserSession` (pool, `EngineTabs`, `ContentBlocker`, `ReaderExtractor`, wired once), `EngineTabs` (engine `Tab`s in step with BrowserCore's `TabStore` by id), Storage adapters for the engine seams (`SiteStores`), `ReaderPresenter`, `PageStateView`, `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
+| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI, TabGalleryUI, WebEngine, ContentBlocking, Reader | `BrowserViewController` (page, URL pill, search sheet, page buttons; the tab on screen in `+Tab`, the engine's questions in `+EngineHost`, the gallery in `+Gallery`, the tabs button, archive and link menu in `+Tabs`, zoom, PDF and downloads in `+PageFeatures`), `TabSwipe` (bar swipe between tabs, swipe up to the gallery), `GalleryTabs` (the gallery's data source over `EngineTabs`), `ShellToast`, `BrowserSession` (pool, `EngineTabs`, `ContentBlocker`, `ReaderExtractor`, wired once), `EngineTabs` (engine `Tab`s in step with BrowserCore's `TabStore` by id), Storage adapters for the engine seams (`SiteStores`), `ReaderPresenter`, `PageStateView`, `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor, Downloads, archive), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
 | `TabGalleryUI` | MainActor | UIKit | `TabGalleryViewController` (cards, grid, flick to close, reorder, menus), `TabGalleryDataSource` seam (the shell implements it over `TabStore`) + `TabGalleryDemoData` fake, `TabGalleryTransition` (snapshot animator page <-> card), `ThumbnailPipeline` (off-main decode), `TabGalleryLayout`/`TabGalleryMetrics`/`CardFlick` (plain values tested on macOS) |
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `SpringDriver` (frame-by-frame spring at 80–120 Hz), `Haptic`, `Glass` (the one Liquid Glass helper and its container) |
@@ -52,7 +52,10 @@ and compile to nothing on macOS.
    off the main thread: the remembered Desktop Site choices, the reader check's source, the rule
    lists (`ContentBlocker.prepare()`, compiled only on a miss) and the last session's tab
    (`EngineTabs.restoreLastTab()`: `loadTabSession`, then `TabStore(session:persistence:)`,
-   then the selected tab's state file; `launch.restoreTab`).
+   (`EngineTabs.restoreSession()`: `loadTabSession`, then `TabStore(session:persistence:)`; every
+   saved tab is in the list, none has a web view; `launch.restoreTab`). The selected tab is made
+   with `pool.makeSavedTab`, which reads its state file off main when it first attaches. Then, at
+   background priority, state files and thumbnails no row names are deleted (`pruneFiles`).
 5. Search stays first: the field keeps focus. The restored tab is attached under the search sheet
    (it gets the warm web view and restores history, scroll and sessionStorage), so closing the
    sheet shows the page; a submitted address loads in it, on top of its history.
@@ -81,7 +84,7 @@ and compile to nothing on macOS.
 
 ### Page chrome
 
-- **Buttons.** Back, Forward, Share and More are the navigation controller's toolbar items with
+- **Buttons.** Back, Forward, Tabs, Share and More are the navigation controller's toolbar items with
   `.verticalPreferred`. Where `verticalBarEdge` reports a vertical bar (iPhone Duo), the toolbar
   shows and the system puts them in its side column. Elsewhere the toolbar stays hidden and the
   same actions sit in the glass `ButtonBar` under the pill.
@@ -103,11 +106,18 @@ and compile to nothing on macOS.
 - **Pull to refresh.** The same delegate tracks a pull past the top; at 80 pt it arms with a
   selection haptic, and a release while armed reloads.
 - **Page menu.** From More and a long press on the pill: Reload, Find on Page
-  (`findInteraction`), Show Reader (only on a readerable page) or Hide Reader, Share, Copy Link,
-  Desktop Site (`Tab.setContentModeOverride`, remembered per site), Turn Off / Turn On Blocking on
-  This Site (remembered per site, applied with a reload), Add to (or Remove from) Favorites, then
-  History, Edit Favorites and Settings… in their own last section. More is always enabled:
-  without a page the menu holds only that last section.
+  (`Tab.beginFind`), Show Reader (only on a readerable page) or Hide Reader, Save PDF to Files
+  (only on a PDF), Share, Copy Link, the Zoom row (− / percentage / +, remembered per site; it
+  keeps the menu open and updates it in place from the pill and the glass bar), Desktop Site
+  (`Tab.setContentModeOverride`, remembered per site), Turn Off / Turn On Blocking on This Site
+  (remembered per site, applied with a reload), Add to (or Remove from) Favorites, then Downloads
+  (while there are any), History, Edit Favorites and Settings… in their own last section. More is
+  always enabled: without a page the menu holds only that last section.
+- **Tabs button.** A tap opens the gallery; a long press, the tabs menu: New Tab, New Private Tab,
+  Previous / Next Tab ("Or swipe the address bar"), Show All Tabs ("Or swipe up from the address
+  bar"), Close Tab (with a Reopen toast).
+- **Toast.** `ShellToast` floats above the pill for a few seconds: Reopen after Close Tab, a
+  finished or failed download (Show opens Downloads), a link opened in the background (Show).
 
 ### Sheets and settings
 
@@ -125,7 +135,7 @@ and compile to nothing on macOS.
 - **History writes.** `AppDatabase.historyRecorder` is the one writer. Visits are recorded when a
   load ends on a new back-forward item (a failed or stopped load is not recorded twice); title
   changes only once that item is recorded, so a title never renames an earlier visit. History
-  reads and deletes first write what the shell has queued (`ShellHistoryStore`). `BrowserViewController.recordsHistory` is the seam for private tabs.
+  reads and deletes first write what the shell has queued (`ShellHistoryStore`). A private tab records nothing (`recordsHistory(for:)`).
 
 ### Reader
 
@@ -189,7 +199,12 @@ exactly what the app emits.
 | `downloads.show` / `download.preview` / `download.showInFiles` | event | Downloads sheet, Quick Look, Show in Files |
 | `page.reader` | event | Show Reader / Hide Reader |
 | `contentBlocking.prepare` / `.compile` / `.siteToggle` | interval | lists loaded / one list compiled / per-site toggle applied |
-| `launch.restoreTab` | interval | after the first frame: last session's tab read and handed to the page |
+| `launch.restoreTab` | interval | after the first frame: the saved tab list read and the selected tab handed to the page |
+| `tab.swipe` | interval | bar swipe: finger starts moving → page settled ("switched", "stayed", "newTab", "cancelled") |
+| `gallery.open` | event | gallery opened ("button", "swipe", "menu"); the zoom is `gallery.show` |
+| `gallery.show` / `gallery.openTab` | interval | page zooms into its card / card grows into its page, until settled |
+| `gallery.cardClose` / `gallery.scroll` / `gallery.reload` | interval | a card closed until reflowed / one scroll / a list applied |
+| `archive.show` / `tab.privateMode` / `toast.show` | event | Archive screen / private toggle in the gallery / a toast |
 
 ## Tabs
 
@@ -204,8 +219,13 @@ exactly what the app emits.
    panes, each showing a tab or the start page, with one focused pane. `open`, `select`, `close`,
    `closeAllTabs`, `move`, `setPinned`, `split`/`closePane`/`focusPane`/`swapPanes`,
    `reopenLastClosed`, `restoreArchived`. Rules and their reasons are in `FixedChoices` ("Tabs").
-3. **Engine in step:** the shell calls `updatePage` and `setThumbnail` when the engine's `Tab`
-   changes, and answers `isTabInUse` (media, PiP, fullscreen, capture, download) for the archive.
+3. **Engine in step:** `EngineTabs` makes engine `Tab`s on first use (a saved tab through
+   `makeSavedTab`, which reads its state file when it first attaches) and follows each one's
+   address, title and thumbnail (`TabWatch`, once per run loop turn) into `updatePage` and
+   `setThumbnail`. Closing or archiving a tab drops its engine tab with
+   `pool.close(_:keepingSavedState: true)`: its state file and thumbnail stay for Reopen Closed
+   Tab and the archive, and Storage deletes them once no row names the tab. `isTabInUse` is the
+   engine tab's `isBusy` (media, PiP, fullscreen, capture, download).
 4. **Persistence:** every change hands `TabPersistence.enqueue` an ordered `TabChange`. Storage's
    `TabSessionWriter` writes 500 ms after the first change, off main, touching only changed rows;
    `flush()` on background. Private tabs never reach it.
@@ -258,3 +278,34 @@ loaded after launch), content blocking (`ContentBlocker` as `UserContentRules`, 
      before an automatic archive or close.
    - *Downloads UI:* FeatureUI's `DownloadsView` and `FilePreviewController` (Quick Look) read
      `DownloadListSource`/`DownloadListItem`, which `DownloadCoordinator`/`Download` match exactly.
+
+## Tab gallery, bar swipe and private tabs (M2)
+
+- **Gallery:** the tabs button (or a swipe up from the expanded bar) adds `TabGalleryViewController`
+  as a child over the page, under the chrome and the search sheet. `TabGalleryTransition` zooms a
+  snapshot of the page into the selected card; the chrome slides down a little and fades as the
+  gallery's own bar arrives. A swipe drives the same transition with `update(progress:)` and
+  `finish(at:)`. Opening a card attaches its web view under the gallery at once and grows the
+  card's thumbnail into the page, then the gallery leaves and the live page shows. New Tab goes
+  straight to the search field; the last tab closed does too (or back to the regular list when
+  only private tabs closed). `GalleryTabs` is the data source: lists, thumbnails from the pool's
+  `ThumbnailService`, actions handed to the browser (`GalleryHost`).
+- **Bar swipe (`TabSwipe`):** a pan on the expanded pill and the glass bar (never the collapsed
+  pill). Sideways, the page container moves 1:1; the neighbour is its own web view re-parented
+  into a preview container when it has one, else a 2x full-screen snapshot taken when it left
+  the screen (kept for the two neighbours only, `TabsUIState.previews`), else its thumbnail. The
+  glass stays still; the pill's host label slides inside it. Release springs frame by frame
+  (`SpringDriver`, `Motion.tabSwitchSpring`) with the finger's velocity; it commits when the
+  projected travel passes half the width. A finger grabs a settling page. Past the last tab a New
+  Tab card rubber-bands in (80 pt to open). The tabs menu has Next Tab / Previous Tab, naming the
+  gesture.
+- **Private tabs:** `TabStore` keeps them in the window's private list and never persists them.
+  The pool gives them one shared `WKWebsiteDataStore.nonPersistent()` (dropped when the last one
+  closes, `endPrivateSession()`), never the warm web view, in-memory per-site choices, no state
+  files and memory-only thumbnails. The chrome takes `Palette.privateGlassTint`; history and the
+  address bar's remote suggestions stay off.
+- **Archive:** `archiveIdleTabs(after:)` runs once the saved tabs and the settings are in, and on
+  each return to the foreground; hidden tabs are asked about media first (`refreshMediaState`).
+  The Archive screen (FeatureUI) reads `searchArchivedTabs`; restore and delete go through
+  `TabStore`.
+

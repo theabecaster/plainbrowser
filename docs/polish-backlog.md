@@ -63,12 +63,8 @@ Newest feature last.
 
 ## Tab model (lane M2a, 2026-11-26)
 
-- **Engine seam: keep state files for closed and archived tabs.** `WebViewPool.close` deletes the
-  tab's state file, but Reopen Closed Tab and archive restore want it (back/forward list, scroll).
-  The shell should drop the engine tab without deleting the file after `close` and
-  `archiveIdleTabs`; Storage's `TabSessionWriter` deletes state files once no row names the tab.
-- **Thumbnail files.** Storage keeps only the file name and revision; the engine should prune
-  thumbnail files outside `AppDatabase.referencedTabIDs()` at launch.
+- Both items (state files kept on close and archive, thumbnail pruning) are done in the M2 shell
+  wiring.
 
 ## M4 completeness (lane M4, 2026-11-26)
 
@@ -85,14 +81,12 @@ Newest feature last.
 - **Check on the Duo:** long-press menus and the live preview on real links and images (WebKit's
   element info for an unlinked image), the find bar above the keyboard with the bottom pill, PiP
   and fullscreen flags with a real video, `<input type=file>` and `capture` pickers.
-- **Downloads title.** The "Downloads" title sits beside Show in Files instead of centered. (Lead review.)
 
 ## M2b tab gallery (2026-11-26)
 
 - **Decided values outside FixedChoices.** `TabGalleryChoices` (Reopen toast 4 s, 64 MB preview
   cache, 180 pt minimum grid card) and `TabGalleryMetrics.gridAspect` (0.62–1.1) belong in
-  `FixedChoices`; the gallery signposts (`TabGallerySignposts.swift`) belong in `PerfSignposts`.
-  Kept in TabGalleryUI because this lane could not edit BrowserCore or PerfSignposts.
+  `FixedChoices`. (The gallery signposts moved to `PerfSignposts` with the M2 shell wiring.)
 - **Blurry previews on big cards.** `ThumbnailService` captures 200 pt wide; a compact card is
   about 370 pt wide, so its preview is upscaled. Capture visible and neighbour tabs at card width.
 - **Bar over a dense grid.** In the inner-landscape grid, titles and close buttons still show
@@ -114,11 +108,6 @@ Newest feature last.
 - **Reader web view ownership.** The pool makes the reader's web view (`makeAuxiliaryWebView`) but
   `ReaderPresenter` holds it while it shows. Move holding and release into the pool (an
   auxiliary slot per pane) if a second auxiliary view appears. (Code review, round 1.)
-- **Downloads list.** A finished download is an alert with Open; there is no list of downloads
-  in progress or past ones yet. M4 can add one in the page menu.
-- **Restored tabs beyond the last.** Only the last selected tab comes back after a relaunch; the
-  other rows stay in Storage for M2's tab gallery.
-- **Zoom in the page menu.** Not built yet; the reference menu lists it. (Design review, round 1.)
 - **Back and Forward when unavailable.** They stay visible and disabled (system style, stable
   layout); the design review asked to hide them. Decide with the shell lane.
 - **Page menu on the Duo outer screen.** The last section (Edit Favorites, Settings) scrolls below

@@ -394,3 +394,53 @@ Each entry: what was chosen, and why. Newest last.
 - **Perf cost:** after the first frame only. Lookups for compiled rule lists take about 1 ms; the
   content-mode map and the tab restore are single reads off main. No work added before the
   search field is focused.
+
+## M2 shell wiring: tabs, gallery, bar swipe, private tabs (2026-11-26)
+
+- **Every saved tab comes back, none loads.** The whole list is restored at launch; engine tabs
+  are made on first use. A saved tab (`pool.makeSavedTab`) holds only its address until it first
+  attaches, then reads and decodes its state file off the main thread before restoring. Why: 100
+  saved tabs cost 100 small objects at most, and nothing touches disk or WebKit before a tab is
+  opened. While the file is being read, nothing may overwrite it with less (saves, discards and
+  closes skip that tab).
+- **Closing or archiving keeps the state file and thumbnail** (`close(_:keepingSavedState:)`,
+  polish backlog M2a): Reopen Closed Tab and archive restore bring back history and scroll. The
+  current state is written first. Storage's `TabSessionWriter` deletes files no row names; at
+  launch, thumbnails outside `referencedTabIDs()` are pruned at background priority.
+- **The bar swipe moves the page, not the glass.** The motion table says a snapshot of the glass
+  slides; here the glass stays where it is and only the pill's host label slides inside it (the
+  current one out, the neighbour's in). Same rule underneath (never move live glass), cheaper (no
+  glass snapshot, which would need a render pass per swipe start), and the bar never seems to
+  leave. The neighbour preview is its live web view re-parented into a preview container (no
+  reload, cancelled swipes detach it again) or a 2x snapshot taken as it left the screen.
+- **The swipe spring runs frame by frame** (`SpringDriver`, `Motion.tabSwitchSpring`), like the
+  toolbar snap: the release velocity carries in, and a finger can grab the page mid-flight
+  without a jump. Commit at half the projected travel (UIScrollView's normal deceleration).
+- **One pan recognizer per bar view** decides by its first velocity: sideways switches tabs, up
+  opens the gallery (the same `TabGalleryTransition`, finger-driven). It never begins on the
+  collapsed pill or during a snap (`acceptsBarGestures`).
+- **The gallery is a child view controller over the page**, under the chrome and the search sheet,
+  not a presented one: the page's web view stays where it is, so opening a card re-parents nothing
+  and Back/Forward state never moves. The chrome fades and slides 24 pt down with the zoom.
+- **Opening a card grows the card's thumbnail**, not a live snapshot of the page: the web view was
+  just attached under the gallery and may not have drawn; the thumbnail is already decoded in
+  memory. The live page shows when the gallery leaves.
+- **Private tabs share one non-persistent data store** made with the first private tab and dropped
+  (with its data) when the last one closes. Their per-site choices (zoom, Desktop Site,
+  permissions) live in memory for that session; reading falls back to the regular choices. No
+  state files, thumbnails on disk, history, typed-input learning or remote suggestions.
+  `TabStore` already keeps them out of persistence.
+- **The private tint is a quiet dusk violet** (`Palette.privateGlassTint`,
+  `privateBackground`): on the glass, behind the status bar and in the private gallery. No badge
+  or banner (docs/ui-reference.md).
+- **The archive runs when both the tab list and the settings are in**, then on each foreground.
+  Before an archive pass, hidden tabs with a web view ask WebKit about media, so a tab playing
+  sound stays (`isTabInUse` = `Tab.isBusy`).
+- **Downloads toast instead of an alert.** A finished download no longer interrupts: a toast says
+  so with Show (the Downloads sheet), and the page menu lists Downloads while there are any.
+- **Page zoom per site in Storage** (`v6.sitePageZoom`), answered from an in-memory map loaded
+  after the first frame, like Desktop Site.
+- **Perf cost:** a bar swipe start attaches at most one web view (about 1.5 ms) or adds one image
+  view; a tab switch adds one WebKit snapshot of the page leaving (2x, kept only for the two
+  neighbours, about 5 MB each decoded). The gallery is built when opened and released when it
+  closes. Engine-tab watches are one Observation per tab with an engine tab.

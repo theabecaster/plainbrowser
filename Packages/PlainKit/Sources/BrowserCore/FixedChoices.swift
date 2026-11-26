@@ -15,7 +15,9 @@ public enum FixedChoices {
 
     // MARK: Decided for the user, no setting
 
-    /// Ads, trackers and cookie banners are blocked everywhere; the page menu can turn it off per site.
+    /// Ads, trackers and cookie banners are blocked everywhere, with no global switch: almost
+    /// nobody wants them, and a page that breaks gets "Turn Off Blocking on This Site" in its page
+    /// menu, which is remembered for that site.
     public static let contentBlockingAlwaysOn = true
     /// The content-blocking list compiled first on first launch (and after an update changes it):
     /// the highest-value network rules, third-party ad and tracker domains plus EasyPrivacy,

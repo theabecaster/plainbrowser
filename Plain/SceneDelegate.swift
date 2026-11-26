@@ -31,6 +31,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     /// The first-run intro's window, above the browser's, only while the intro is up.
     private var introWindow: UIWindow?
+    /// The browser was built (on launch, or when the intro finished).
+    private var browserShown = false
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -73,6 +75,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func showBrowser(in windowScene: UIWindowScene) {
+        browserShown = true
         let window = UIWindow(windowScene: windowScene)
         let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) {
             Signposts.signposter.endInterval(Signposts.launch, launchInterval)
@@ -89,6 +92,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        // Nothing to save while the intro is up: the browser (and its engine) is not built yet.
+        guard browserShown else { return }
         let data = addressBarData
         Task { await data.flush() }
         // The pool saves every tab's page state on its own (willResignActive); this writes the

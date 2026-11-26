@@ -57,7 +57,7 @@ final class IntroTests: XCTestCase {
         let app = launch()
         // A tap during the splash lands the mark at once; the promise step follows.
         app.tap()
-        XCTAssertTrue(app.buttons["introNext"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["introNext"].waitForExistence(timeout: 0.9), "the tap did not cut the splash short")
     }
 
     func testFullPath() {

@@ -45,6 +45,7 @@ private struct StepView: View {
             buttons
                 .frame(maxWidth: IntroStyle.contentWidth)
                 .padding(.horizontal, 24)
+                .padding(.top, 14)
                 .padding(.bottom, 12)
         }
         .foregroundStyle(ink)
@@ -113,9 +114,9 @@ private struct PromiseStep: View {
 
 private struct InsideStep: View {
     private let rows: [(symbol: String, title: String, detail: String, tint: Color)] = [
-        ("shield.lefthalf.filled", "Blocking, Everywhere", "Ads, trackers and cookie walls stay off every site.", IntroStyle.coral),
+        ("shield.lefthalf.filled", "Blocking Everywhere", "Ads, trackers and cookie walls stay off every site.", IntroStyle.coral),
         ("archivebox.fill", "Tabs Tidy Themselves", "Tabs you leave for a day move to a searchable archive.", IntroStyle.mint),
-        ("eye.slash.fill", "Private Tabs", "No history, and nothing kept once you close them.", IntroStyle.violet),
+        ("eye.slash.fill", "Private Tabs", "No history, and their site data goes when you close them.", IntroStyle.violet),
         ("rectangle.split.2x1.fill", "Made for iPhone Duo", "Unfold for two pages side by side.", IntroStyle.lagoon),
     ]
 
@@ -168,7 +169,9 @@ private struct FeatureRow: View {
 
 private struct IconStep: View {
     @Bindable var model: IntroModel
-    private let columns = [GridItem(.flexible(), spacing: 20), GridItem(.flexible(), spacing: 20)]
+    @ScaledMetric(relativeTo: .body) private var tile: CGFloat = 84
+    /// Two columns while two tiles fit; one at the largest text sizes.
+    private var columns: [GridItem] { [GridItem(.adaptive(minimum: tile + 40), spacing: 20)] }
 
     var body: some View {
         ScrollView {
@@ -184,13 +187,13 @@ private struct IconStep: View {
                     .entrance(2)
                 LazyVGrid(columns: columns, spacing: 22) {
                     ForEach(Array(AppIconChoice.allCases.enumerated()), id: \.element) { index, choice in
-                        IconTile(choice: choice, image: model.iconPreviews[choice], selected: model.icon == choice) {
+                        IconTile(choice: choice, image: model.iconPreviews[choice], selected: model.icon == choice, size: tile) {
                             withAnimation(Motion.urlFocus) { model.pick(choice) }
                         }
                         .entrance(3 + index)
                     }
                 }
-                .frame(maxWidth: 300)
+                .frame(maxWidth: max(300, 2 * tile + 60))
                 .padding(.top, 28)
             }
             .frame(maxWidth: .infinity)
@@ -205,8 +208,8 @@ private struct IconTile: View {
     let choice: AppIconChoice
     let image: UIImage?
     let selected: Bool
+    let size: CGFloat
     let action: () -> Void
-    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 84
 
     var body: some View {
         Button(action: action) {
@@ -286,7 +289,8 @@ private struct DefaultBrowserStep: View {
 
 // MARK: Shared pieces
 
-/// The intro's display line: big, heavy and rounded, with one word in italics.
+/// The intro's display line: big and heavy, with the emphasis in italics. SF Pro, not SF Rounded:
+/// the rounded design has no italic, so the emphasis would not show.
 struct DisplayText: View {
     let lead: String
     let emphasis: String
@@ -295,7 +299,7 @@ struct DisplayText: View {
 
     var body: some View {
         Text("\(lead) \(Text(emphasis).italic())\(trail)")
-            .font(.system(size: size, weight: .heavy, design: .rounded))
+            .font(.system(size: size, weight: .heavy))
             .tracking(-0.4)
             .multilineTextAlignment(.center)
             .lineSpacing(-2)

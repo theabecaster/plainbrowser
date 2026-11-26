@@ -66,14 +66,14 @@ public enum AppIcons {
         }
     }
 
-    /// The preview image, decoded off the main thread.
+    /// The preview image. The bundle lookup, the read and the decode all run off the main thread.
     public static func preview(_ choice: AppIconChoice) async -> UIImage? {
-        guard let url = choice.previewURL else { return nil }
-        return await decode(url)
+        await load(choice)
     }
 
-    @concurrent private static func decode(_ url: URL) async -> UIImage? {
-        guard let data = try? Data(contentsOf: url), let image = UIImage(data: data) else { return nil }
+    @concurrent private static func load(_ choice: AppIconChoice) async -> UIImage? {
+        guard let url = choice.previewURL, let data = try? Data(contentsOf: url),
+              let image = UIImage(data: data) else { return nil }
         return await image.byPreparingForDisplay()
     }
 }

@@ -1,4 +1,5 @@
 #if os(iOS)
+import DesignSystem
 import Observation
 import os
 import PerfSignposts
@@ -64,7 +65,7 @@ final class IntroModel {
     }
 
     private func go(to next: Step?) {
-        withAnimation(IntroMotion.exit) { step = next }
+        withAnimation(Motion.prefersCrossfade ? IntroMotion.crossfade : IntroMotion.exit) { step = next }
         onStepChange?(next)
         guard let next else { return }
         let interval = Signposts.signposter.beginAnimationInterval(Signposts.introStep, "\(next.rawValue, privacy: .public)")
@@ -74,10 +75,21 @@ final class IntroModel {
         }
     }
 
+    /// An icon change is in flight; picks wait for it (the system takes one at a time).
+    private(set) var isChangingIcon = false
+
+    /// Shows the pick at once, then asks the system; a refusal puts the old choice back, so the
+    /// same tile can be tried again.
     func pick(_ choice: AppIconChoice) {
-        guard choice != icon else { return }
+        guard choice != icon, !isChangingIcon else { return }
+        let previous = icon
         icon = choice
-        Task { await AppIcons.set(choice) }
+        isChangingIcon = true
+        Task {
+            let changed = await AppIcons.set(choice)
+            isChangingIcon = false
+            if !changed { icon = previous }
+        }
     }
 
     func loadPreviews() async {
@@ -92,13 +104,13 @@ enum IntroMotion {
     /// A step leaving: blur, fade and a slight shrink.
     static let exit = Animation.smooth(duration: 0.38)
     /// A step's parts arriving, one after another.
-    static let enter = Animation.spring(duration: 0.62, bounce: 0)
+    static let enter = Animation.spring(duration: 0.52, bounce: 0)
     /// The first part starts after the old step is half gone, so the field is never empty for long.
     static let enterDelay: Double = 0.16
     /// Between one part and the next.
     static let stagger: Double = 0.065
     /// When a step change has settled (for its signpost): the last part's arrival.
-    static let stepSettle: Double = 0.9
+    static let stepSettle: Double = 0.85
     /// The Reduce Motion crossfade.
     static let crossfade = Animation.easeInOut(duration: 0.2)
     /// How far a part rises as it arrives, and how blurred it starts.

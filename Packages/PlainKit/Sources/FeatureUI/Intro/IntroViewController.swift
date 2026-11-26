@@ -106,7 +106,7 @@ public final class IntroViewController: UIViewController {
         splashInterval = Signposts.signposter.beginAnimationInterval(Signposts.introSplash)
         // The field fades in over the launch color while the mark starts drawing.
         mark.isHidden = false
-        UIView.animate(withDuration: Motion.prefersCrossfade ? Motion.crossfadeDuration : 0.4) { self.backdrop.alpha = 1 }
+        UIView.animate(withDuration: Motion.prefersCrossfade ? Motion.crossfadeDuration : 0.22) { self.backdrop.alpha = 1 }
         mark.assemble(onLanded: { Haptic.tap.play() }, completion: { [weak self] in self?.splashEnded() })
     }
 
@@ -152,10 +152,14 @@ public final class IntroViewController: UIViewController {
         guard place != markPlace else { return }
         markPlace = place
         if place == .gone {
-            // It leaves with the step around it: the same fade and slight shrink.
-            UIView.animate(withDuration: 0.32, delay: 0, options: [.curveEaseIn, .allowUserInteraction]) {
+            // It leaves with the step around it: the same fade and slight shrink (a fade alone
+            // under Reduce Motion).
+            let reduce = Motion.prefersCrossfade
+            let shrunk = mark.transform.scaledBy(x: 0.92, y: 0.92)
+            UIView.animate(withDuration: reduce ? Motion.crossfadeDuration : 0.32, delay: 0,
+                           options: [.curveEaseIn, .allowUserInteraction]) {
                 self.mark.alpha = 0
-                self.mark.transform = CGAffineTransform(scaleX: 0.92, y: 0.92)
+                if !reduce { self.mark.transform = shrunk }
             } completion: { _ in
                 self.mark.isHidden = true
             }

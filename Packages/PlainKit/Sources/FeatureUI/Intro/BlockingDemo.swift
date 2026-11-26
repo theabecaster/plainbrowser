@@ -26,6 +26,9 @@ struct BlockingDemo: View {
     var body: some View {
         VStack(spacing: 0) {
             page
+                // Under Reduce Motion nothing moves: the whole page crossfades between states.
+                .id(reduceMotion ? AnyHashable(model.blockingOn) : AnyHashable("page"))
+                .transition(.opacity)
                 .frame(maxWidth: 360, maxHeight: .infinity)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(model.blockingOn
@@ -68,16 +71,9 @@ struct BlockingDemo: View {
             .environment(\.colorScheme, .light)
     }
 
-    /// The sticky video ad and the cookie wall, floating over the article.
+    /// The cookie wall, floating over the bottom of the article.
     private var overlays: some View {
         ZStack(alignment: .bottom) {
-            if videoAd {
-                video
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.trailing, 12)
-                    .padding(.bottom, cookieWall ? 150 : 44)
-                    .transition(.scale(scale: 0.2, anchor: .bottomTrailing).combined(with: .opacity))
-            }
             if cookieWall {
                 cookie.transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -144,6 +140,7 @@ struct BlockingDemo: View {
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.black)
                 .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14)
             Text("NOV 26 · 6 MIN READ")
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
@@ -151,6 +148,14 @@ struct BlockingDemo: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 6)
             hero
+                // The sticky video ad sits over the photo, so the headline stays readable.
+                .overlay(alignment: .bottomTrailing) {
+                    if videoAd {
+                        video
+                            .padding(6)
+                            .transition(.scale(scale: 0.2, anchor: .bottomTrailing).combined(with: .opacity))
+                    }
+                }
                 .padding(.horizontal, 14)
                 .padding(.top, 10)
             lines(3).padding(.top, 12)
@@ -206,14 +211,14 @@ struct BlockingDemo: View {
             Text("AD · 0:15").font(.system(size: 8, weight: .heavy)).foregroundStyle(.white)
                 .padding(4).background(Color(red: 0.95, green: 0.75, blue: 0.1).opacity(0.9), in: .rect(cornerRadius: 3)).padding(5)
         }
-        .frame(width: 120, height: 68)
+        .frame(width: 100, height: 56)
         .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
     }
 
     private var cookie: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("We value your privacy").font(.system(size: 14, weight: .bold)).foregroundStyle(.black)
-            Text("We and our 214 partners use cookies to personalise ads and measure you across sites.")
+            Text("We and 214 partners use cookies to follow you across sites.")
                 .font(.system(size: 10.5)).foregroundStyle(.black.opacity(0.6)).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Text("Accept All").frame(maxWidth: .infinity, minHeight: 30)
@@ -223,8 +228,8 @@ struct BlockingDemo: View {
             }
             .font(.system(size: 11, weight: .bold))
         }
-        .padding(14)
-        .padding(.bottom, 26)
+        .padding(12)
+        .padding(.bottom, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .overlay(alignment: .top) { Rectangle().fill(.black.opacity(0.08)).frame(height: 1) }
@@ -274,17 +279,17 @@ struct BlockingDemo: View {
     private func apply(_ on: Bool, animated: Bool) {
         let steps: [(Double, () -> Void)] = [
             (0.0, { cookieWall = !on }),
-            (0.07, { videoAd = !on }),
-            (0.12, { trackersBlocked = on }),
-            (0.16, { bannerAd = !on }),
-            (0.24, { inlineAd = !on }),
+            (0.05, { videoAd = !on }),
+            (0.08, { trackersBlocked = on }),
+            (0.1, { bannerAd = !on }),
+            (0.15, { inlineAd = !on }),
         ]
-        for (delay, change) in on ? steps : steps.reversed().enumerated().map({ (Double($0.offset) * 0.07, $0.element.1) }) {
-            if !animated {
-                change()
-            } else if reduceMotion {
-                withAnimation(IntroMotion.crossfade, change)
-            } else {
+        if !animated {
+            steps.forEach { $0.1() }
+        } else if reduceMotion {
+            withAnimation(IntroMotion.crossfade) { steps.forEach { $0.1() } }
+        } else {
+            for (delay, change) in on ? steps : steps.reversed().enumerated().map({ (Double($0.offset) * 0.05, $0.element.1) }) {
                 withAnimation(IntroMotion.reflow.delay(delay), change)
             }
         }

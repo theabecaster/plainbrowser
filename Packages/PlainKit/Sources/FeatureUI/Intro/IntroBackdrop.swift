@@ -152,7 +152,7 @@ extension IntroBackdrop.Mood {
     ])
     /// The promise: the sun comes up on the trailing side.
     static let promise = Self(base: [A.dawnViolet, A.lagoon], blooms: [
-        B(color: A.mint, alpha: 0.55, center: CGPoint(x: 0.0, y: 0.05)),
+        B(color: A.mint, alpha: 0.75, center: CGPoint(x: 0.0, y: 0.05)),
         B(color: A.coral, alpha: 0.9, center: CGPoint(x: 1.05, y: 0.72)),
         B(color: A.peach, alpha: 0.6, center: CGPoint(x: 0.55, y: 1.1)),
     ])
@@ -166,7 +166,7 @@ extension IntroBackdrop.Mood {
     static let icons = Self(base: [A.dawnViolet, A.lagoon], blooms: [
         B(color: A.bloomViolet, alpha: 0.8, center: CGPoint(x: 0.35, y: 0.0)),
         B(color: A.coral, alpha: 0.85, center: CGPoint(x: 1.05, y: 0.4)),
-        B(color: A.mint, alpha: 0.55, center: CGPoint(x: 0.0, y: 0.95)),
+        B(color: A.mint, alpha: 0.75, center: CGPoint(x: 0.0, y: 0.95)),
     ])
     /// The blocking demo: darker, so the white page stands out.
     static let blocking = Self(base: [A.nightLagoon, A.dawnViolet], blooms: [

@@ -49,7 +49,7 @@ public struct DefaultBrowserCard: View {
         .padding(.top, 24)
         .padding(.bottom, 20)
         .frame(maxWidth: 360)
-        .background(Color(uiColor: Palette.surface), in: .rect(cornerRadius: Radius.large, style: .continuous))
+        // No card surface: it sits on the start screen's own paper, like an empty state.
         .overlay(alignment: .topTrailing) {
             Button {
                 DefaultBrowserPrompts.dismissEmptyTabCard()

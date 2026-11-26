@@ -556,3 +556,55 @@ Each entry: what was chosen, and why. Newest last.
   colors on purpose.
 - **Perf cost:** after the intro was seen, one defaults read on the launch path. FeatureUI's
   resource bundle adds four 180 px PNGs (150 KB), read only by the picker.
+## M3 Duo layouts: panes, side tabs, folds (2026-11-26)
+
+- **One layout model, from geometry only.** `DuoLayout` (ShellUI, plain values tested on macOS)
+  decides from the root view's page area (safe area: status bar, the system's vertical bar), its
+  size classes and `reservedRegions` (`.division` with `.includeInactive`, `.occlusion`): whether
+  side tabs and a split can show, the sidebar's state and docked width, the pane frames and the
+  chrome's lane. No device, `UIScreen` or orientation checks. It runs before every layout pass.
+- **One pill, over the focused pane.** The plan's "each pane has its own top pill" became the
+  existing bottom pill riding a lane over the focused pane (the brief: keep the existing chrome).
+  The pill, search field, toast and button bar all act on the focused pane; a touch in the other
+  pane focuses it and the pill slides over (`Motion.urlFocus`). The focused pane gets a 2 pt
+  `Palette.accentOnGlass` ring and both panes a 6 pt gutter, only while a split shows.
+- **Split on the crease, panes beside the fold.** Flat, the primary pane's width is set to the
+  crease (when both panes keep 375 pt), so a later book pose barely moves them. Partly folded,
+  `UIArrangementViewController` gets no fixed width and places one pane on each side of the fold
+  itself: with a fixed width that crosses an active fold it hides both panes (seen on the
+  simulator). A split needs two 375 pt panes (`FixedChoices.splitMinimumPaneWidth`), so inner
+  portrait (669 pt) shows one pane.
+- **Slot `i` shows pane `i`.** The two `PaneSlot` view controllers never trade panes; where only
+  one pane can show (outer screen, inner portrait) the focused pane's slot is the arrangement's
+  primary alone. The web view stays in its slot's container through a fold; only the slot moves
+  between arrangement places. The other pane's tab is detached (suspended, a live tier when it
+  comes back) and re-attached on unfold. Swap and Close Pane re-parent web views without a reload.
+- **The other pane keeps the expanded bar's bottom inset**, so a focus switch never relayouts
+  either page; only the focused page's inset follows the collapsing bar.
+- **Side tabs gate on the page, not the window.** Available where both size classes are regular
+  and the page keeps 640 pt beside the 64 pt rail. On the Duo that is inner landscape only (867 pt
+  beside the vertical bar); inner portrait leaves 605 pt, so it shows regular tabs and keeps the
+  setting. Expanded (260 pt) would leave 607 pt in inner landscape, so there it floats over the
+  page (with a shadow) while the page keeps the rail's width; it docks where it leaves 640 pt.
+  Rail is the widest state during a split or a book pose.
+- **The sidebar resizes without relayout.** Rows are laid out at the expanded width and clipped
+  by the sidebar; a drag moves only the sidebar's width (pages keep theirs), and the release
+  springs to the nearest state (`SidebarDrag`, `Motion.sidebarSettle`, bounce only after a flick)
+  and then docks once, inside the spring, so each web view gets one new frame.
+- **The Tabs button hides and shows the sidebar** while side tabs show; the gallery stays one
+  menu item away (Show All Tabs) and on the swipe up from the bar. Hidden comes back as it was.
+- **Tiles until site icons are stored.** Rail rows show the site's first letter ("W" for
+  en.wikipedia.org) on a tile; a favicon replaces it when Storage's icons reach the shell.
+- **Fold safety.** `viewWillTransition(to:with:)` fires on fold and unfold (verified on the
+  simulator: 951x669 to 466x678 and back). Inside its animation the layout is decided for the
+  final bounds and laid out once (web views follow their pane by autoresizing, one frame each);
+  page insets wait for the completion. Partly folding has no size change: it reaches the layout
+  through the reserved regions (`updateViewConstraints`). Desktop or mobile stays the choice made
+  at navigation start; a tab opened into a pane is attached before it loads, so the choice uses
+  that pane's width.
+- **Per-window state.** Each scene keeps its `TabStore` window id and its sidebar state in
+  `UISceneSession.userInfo`; `EngineTabs` acts on that window only. No multi-window UI yet.
+- **Perf cost:** one more view controller (the arrangement) and two pane slots, made once. A
+  split keeps two attached web views (both live; the pool already never discards attached tabs).
+  Layout runs one `DuoLayout` value computation per layout pass and touches constraints only when
+  it changes. The sidebar is built only when side tabs show.

@@ -14,7 +14,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 ## Options live on the object
 
-- **Page menu:** one menu from the URL pill. It holds Reload, Find on Page, Share, Copy Link, Desktop Site, Zoom, Turn Off Blocking on This Site, Open in Other Pane (Duo), and Add to Favorites. Items appear only when they apply. Destructive items go in their own last section.
+- **Page menu:** one menu from the URL pill. It holds Reload, Find on Page, Share, Copy Link, Desktop Site, Zoom, Turn Off Blocking on This Site, Open in Other Pane (Duo; Swap Panes and Close Pane while a split shows), and Add to Favorites. Items appear only when they apply. Destructive items go in their own last section.
 - **Context menus on links, tabs and favorites:** Open in New Tab, Open in Other Pane, Copy Link, Share, Close, Pin, Rename favorite.
 - **Swipe actions:** quick actions with no confirmation, for example close a tab or delete a history row.
 - **Confirmations:** only for destructive actions that affect a lot, for example Clear History and Data or Close All Tabs.

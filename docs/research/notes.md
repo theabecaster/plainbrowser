@@ -94,7 +94,13 @@ These are the key facts from seven research reports, kept for builders. The plan
 - **Fold and unfold:** a trait and bounds change in the same scene. The keyboard, scroll position and video survive.
 - **Safari's sizes on the Duo:** outer viewport is 382×580 CSS px, with a ~84 pt system column on the right. Folding fires 2–3 resize events, including a transient 466×498, so ignore transient sizes.
 - **Web content can't see the fold:** the Viewport Segments and Device Posture web APIs can't be enabled in `WKWebView`.
-- **Simulator:** device type `iPhone Duo` with runtime `iOS-27-2-iPhone19-4`. Set the fold state from the Device Hub buttons (Closed / Partially Open / Open). There is no CLI for it. Never use `screenConfig power`: it crashed SpringBoard in a prior project.
+- **Simulator:** device type `iPhone Duo` with runtime `iOS-27-2-iPhone19-4`. Set the fold state from the Device Hub buttons (Closed / Partially Open / Open). `simctl` has no command for it; `scripts/duo-fold.sh` presses the buttons through System Events. Never use `screenConfig power`: it crashed SpringBoard in a prior project.
+- **Measured on the simulator (M3, 2026-11-26):**
+  - Unfolded, the inner screen is 951x669 with the system's vertical bar on the trailing edge (84 pt, status bar inside it): pages get 867 pt. Inner portrait (Device Hub "Rotate Right") is 669x951 with horizontal bars.
+  - Fold and unfold call `viewWillTransition(to:with:)` (951x669 to 466x678 and back). Partly opening does not: the size stays, only the reserved regions change.
+  - `reservedRegions(kind: .division, options: .includeInactive)` reports the crease as a 40 pt wide region (x 455.5 to 495.5 in the root view) both flat (`isActive` false) and partly open (true), not zero wide.
+  - `UIArrangementViewController` is fold-aware: partly open, a split with default sizes puts one view on each side of the division (0-455.5 and 495.5-867). A split with a fixed primary width that crosses the active division hides both views (`state(for:).isHidden`). Alone, the primary view keeps half the width unless its preferred width is `.fractional(1)`.
+  - `XCUIApplication.webViews.count` counts several elements per web view; count pages by their content instead.
 - **Simulator screenshots:** `xcrun simctl io booted enumerate`, then `screenshot --display=<id>`.
 - **Device screenshots:** `xcrun devicectl device info displays --device <udid>`, then `xcrun devicectl device capture screenshot --device <udid> --destination out.png [--display-unique-id <id>]`.
 

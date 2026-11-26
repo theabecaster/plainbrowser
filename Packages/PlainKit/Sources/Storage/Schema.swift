@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 import GRDB
 
@@ -11,6 +12,7 @@ enum Schema {
     static let tab = "tab"
     static let favicon = "favicon"
     static let setting = "setting"
+    static let inputHistory = "inputHistory"
 
     static func register(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1.history") { db in
@@ -89,6 +91,36 @@ enum Schema {
                 t.primaryKey("key", .text)
                 t.column("value", .text).notNull()
             }
+        }
+
+        // How each visit was reached (`VisitKind`): typed visits weigh more in frecency. Visits
+        // recorded before this were not told apart and stay links, so stored frecency is unchanged.
+        migrator.registerMigration("v3.visitKind") { db in
+            try db.alter(table: historyVisit) { t in
+                t.add(column: "kind", .integer).notNull().defaults(to: VisitKind.link.rawValue)
+            }
+        }
+
+        // Adaptive history, like Firefox's `moz_inputhistory`: the page picked from the address
+        // bar for a typed input, with a use count that grows with each pick and decays daily.
+        migrator.registerMigration("v3.inputHistory") { db in
+            try db.create(table: inputHistory) { t in
+                // Normalized as `HistoryQuery` shapes typed text: lowercased, no scheme or `www.`.
+                t.column("input", .text).notNull()
+                t.column("url", .text).notNull().indexed()
+                t.column("useCount", .double).notNull()
+                t.column("lastUsedAt", .datetime).notNull()
+                t.primaryKey(["input", "url"])
+            }
+        }
+
+        // Root pages (`github.com`, no path or query) by address, for the address bar's
+        // site-level top hit. Partial, so it holds only the few root pages, not every page.
+        migrator.registerMigration("v3.siteIndex") { db in
+            try db.execute(sql: """
+                CREATE INDEX historyPlace_sites ON \(historyPlace)(address)
+                WHERE instr(address, '/') = 0 AND instr(address, '?') = 0
+                """)
         }
     }
 }

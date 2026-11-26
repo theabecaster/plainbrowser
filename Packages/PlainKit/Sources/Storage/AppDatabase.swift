@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 import GRDB
 
@@ -13,6 +14,8 @@ public final class AppDatabase: Sendable {
     /// The one writer of history: page loads record through it, and history deletes go through
     /// it so they are ordered with visits still buffered.
     public let historyRecorder: HistoryRecorder
+    /// Compaction and daily maintenance (`Maintenance.swift`), one task at a time.
+    let maintenance: DatabaseMaintenance
 
     /// Opens (or creates) the database at `url` and migrates it to the current schema. Tab state
     /// files live in a `TabState` folder next to it unless `tabStateDirectory` says otherwise.
@@ -48,6 +51,7 @@ public final class AppDatabase: Sendable {
         self.writer = writer
         self.tabStates = tabStates
         historyRecorder = HistoryRecorder(writer: writer)
+        maintenance = DatabaseMaintenance(writer: writer, compactionDelay: FixedChoices.compactionDelay)
         try Self.migrator.migrate(writer)
     }
 

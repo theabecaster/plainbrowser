@@ -47,8 +47,19 @@ import WebKit
     /// Adds the readerable check to `controller`, in the reader world. Call it while building a
     /// web view's configuration, before its first navigation. Reads the script off the main thread.
     public func install(in controller: WKUserContentController) async throws {
+        try await prepare()
+        installPrepared(in: controller)
+    }
+
+    /// The check's source, once `prepare()` has read it.
+    private var checkSource: String?
+
+    /// Reads the readerable check off the main thread, once, so `installPrepared(in:)` can add it
+    /// synchronously while a web view is being made.
+    public func prepare() async throws {
+        guard checkSource == nil else { return }
         let check = try await ReaderResources.readerableScript()
-        let source = check + """
+        checkSource = check + """
 
             ;(() => {
               let available = false;
@@ -56,9 +67,20 @@ import WebKit
               window.webkit.messageHandlers.\(Self.messageName).postMessage(available);
             })();
             """
+    }
+
+    /// True once `prepare()` has read the check.
+    public var isPrepared: Bool { checkSource != nil }
+
+    /// `install(in:)` without the wait: adds the check if `prepare()` has finished and returns
+    /// whether it did. A script added to a web view that already exists runs from its next page on.
+    @discardableResult
+    public func installPrepared(in controller: WKUserContentController) -> Bool {
+        guard let checkSource else { return false }
         controller.addUserScript(WKUserScript(
-            source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: world))
+            source: checkSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: world))
         controller.add(WeakMessageHandler(self), contentWorld: world, name: Self.messageName)
+        return true
     }
 
     /// The last readerable report for the page `webView` shows now, or `nil` before it reports.

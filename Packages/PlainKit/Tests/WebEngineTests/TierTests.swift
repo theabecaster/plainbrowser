@@ -40,6 +40,11 @@ struct TierTests {
         harness.pool.attach(right, to: harness.makePane(size: CGSize(width: 390, height: 780)))
         #expect(left.tier == .live && right.tier == .live)
         try await waitUntil("limit kept") { harness.pool.liveWebViewCount == EngineChoices.maxWebViews }
+        // A memory warning discards every hidden tab, never either pane of the split.
+        harness.pool.handleMemoryWarning()
+        try await waitUntil("hidden tabs discarded") { harness.pool.liveWebViewCount == 2 }
+        #expect(left.tier == .live && right.tier == .live)
+        #expect(harness.pool.existingWebView(for: left) != nil && harness.pool.existingWebView(for: right) != nil)
     }
 
     @Test func discardThenRestoreKeepsHistoryScrollAndSessionStorage() async throws {

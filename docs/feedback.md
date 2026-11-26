@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Appearance:** Settings choice of System (default), Light or Dark, saved; sites follow it, and pages without a dark mode get darkened like Safari's new auto dark mode, with a per-site off switch. (Appearance lane.)
+
 - **Paper texture:** a subtle, elegant paper texture on the app's own surfaces, never costing frames or quality, never called out in the UI. (Paper lane.)
 
 - **Intro styling:** keep the intro's steps, words and simplicity, but restyle it in Plain's own colors and look (paper, dawn, coral fold) so it no longer reads as Arc's. (Intro restyle lane.)

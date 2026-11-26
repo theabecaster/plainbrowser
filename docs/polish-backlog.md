@@ -48,7 +48,6 @@ Newest feature last.
   no window server). Recheck in the app once reader mode is wired, including accessibility text
   sizes and the Duo outer screen.
 
-<<<<<<< HEAD
 ## Shell audit (lane H, 2026-11-26)
 
 - **Fixed values.** The snap's clear-velocity (0.2 pt/ms) and speed cap (8 progress/s) and the glass
@@ -75,8 +74,7 @@ Newest feature last.
   `archiveIdleTabs`; Storage's `TabSessionWriter` deletes state files once no row names the tab.
 - **Thumbnail files.** Storage keeps only the file name and revision; the engine should prune
   thumbnail files outside `AppDatabase.referencedTabIDs()` at launch.
-||||||| fed9f77
-=======
+
 ## M4 completeness (lane M4, 2026-11-26)
 
 - **Downloads sheet styling.** The list card's large radius, the gap under the toolbar and the bold
@@ -92,5 +90,4 @@ Newest feature last.
 - **Check on the Duo:** long-press menus and the live preview on real links and images (WebKit's
   element info for an unlinked image), the find bar above the keyboard with the bottom pill, PiP
   and fullscreen flags with a real video, `<input type=file>` and `capture` pickers.
->>>>>>> worktree-agent-aa68dfa0a55ee1ed8
-- Downloads sheet: the title sits beside Show in Files instead of centered (FeatureUI DownloadsView toolbar).
+- **Downloads title.** The "Downloads" title sits beside Show in Files instead of centered. (Lead review.)

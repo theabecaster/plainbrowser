@@ -156,11 +156,15 @@ exactly what the app emits.
 | `tab.discard` | interval | discard start (state read) → web view released |
 | `tab.snapshot` | interval | thumbnail `takeSnapshot` → image returned |
 | `tab.crash` | event | a tab's WebContent process terminated |
-<<<<<<< HEAD
 | `tab.open` / `tab.close` / `tab.select` | interval | shell, around the `TabStore` call → page on screen |
 | `tab.archive` | interval | shell, around `archiveIdleTabs` (launch, foreground) |
 | `tab.unarchive` / `tab.reopen` / `tab.closeAll` | event | archive restore / Reopen Closed Tab / Close All Tabs |
 | `tab.sessionLoad` / `tab.save` | interval | Storage: launch read / one batched write, off main |
+
+| `linkMenu.build` | interval | WebKit asks for a link menu → menu built (includes the pressed-image lookup) |
+| `linkMenu.action` / `linkMenu.preview` | event / interval | a link menu item chosen / a preview web view made |
+| `page.zoom` / `page.save` | event | zoom changed (message: percent) / Save PDF to Files |
+| `downloads.show` / `download.preview` / `download.showInFiles` | event | Downloads sheet, Quick Look, Show in Files |
 
 ## Tabs
 
@@ -184,13 +188,6 @@ exactly what the app emits.
    moves tabs not on screen for the interval to the archive, never pinned, visible, private or in-use
    tabs. Archived rows keep their state file; `searchArchivedTabs` (FTS5, title + address) and
    `archivedTabs` read it on demand. The archive keeps the newest 1,000.
-||||||| fed9f77
-=======
-| `linkMenu.build` | interval | WebKit asks for a link menu → menu built (includes the pressed-image lookup) |
-| `linkMenu.action` / `linkMenu.preview` | event / interval | a link menu item chosen / a preview web view made |
-| `page.zoom` / `page.save` | event | zoom changed (message: percent) / Save PDF to Files |
-| `downloads.show` / `download.preview` / `download.showInFiles` | event | Downloads sheet, Quick Look, Show in Files |
->>>>>>> worktree-agent-aa68dfa0a55ee1ed8
 
 ## Web engine
 

@@ -483,7 +483,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             controller.updateButtons()
         }
         on(\.title) { controller, webView in
-            guard controller.recordsHistory, let url = webView.url, let title = webView.title else { return }
+            // Only for a page already recorded. A title that arrives while a load is under way
+            // belongs to the visit recorded at its end (which carries the title), and must not
+            // rename an earlier visit to the same address.
+            guard controller.recordsHistory, let url = webView.url, let title = webView.title,
+                  let item = webView.backForwardList.currentItem, item === controller.recordedItem
+            else { return }
             controller.data.pageTitleChanged(url: url, title: title)
         }
         on(\.canGoBack) { controller, _ in controller.updateButtons() }
@@ -698,12 +703,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self?.showSettings()
         }
         settings.accessibilityIdentifier = "menu.settings"
+        // The menu way to what a long press on the favorites strip offers.
+        let favorites = UIAction(title: "Edit Favorites", image: UIImage(systemName: "star.square.on.square")) { [weak self] _ in
+            self?.showFavoritesEditor()
+        }
+        favorites.accessibilityIdentifier = "menu.editFavorites"
         if !sheets.isReady {
             // The database is still opening (the first moments after launch).
-            history.attributes = .disabled
-            settings.attributes = .disabled
+            for item in [history, favorites, settings] { item.attributes = .disabled }
         }
-        let app = UIMenu(options: .displayInline, children: [history, settings])
+        let app = UIMenu(options: .displayInline, children: [history, favorites, settings])
         guard let webView, let url = webView.url else { return [app] }
         let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { _ in
             Signposts.signposter.emitEvent(Signposts.reload)
@@ -776,8 +785,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         present(history, signpost: Signposts.historyShow)
     }
 
-    /// From the favorites strip, so the search field is open: it closes for the editor and opens
-    /// again after, showing the edited favorites.
+    /// From the favorites strip (the search field is open: it closes for the editor and opens
+    /// again after, showing the edited favorites) or from the page menu.
     private func showFavoritesEditor() {
         guard let editor = sheets.favoritesEditor(onDone: { [weak self] in self?.closeSheet() }) else { return }
         let wasEditing = isEditingAddress

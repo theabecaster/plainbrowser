@@ -80,15 +80,15 @@ and compile to nothing on macOS.
   selection haptic, and a release while armed reloads.
 - **Page menu.** From More and a long press on the pill: Reload, Find on Page
   (`findInteraction`), Share, Copy Link, Desktop Site, Add to (or Remove from) Favorites, then
-  History and Settings… in their own last section. More is always enabled: without a page the
-  menu holds only History and Settings….
+  History, Edit Favorites and Settings… in their own last section. More is always enabled:
+  without a page the menu holds only that last section.
 
 ### Sheets and settings
 
 - **Presenting.** `FeatureSheets` (ShellUI) builds the FeatureUI models over the database and
   wraps each view in a page-sheet `UIHostingController`; `BrowserViewController` presents it.
   Settings and History come from the page menu; the favorites editor from a long press on the
-  favorites strip ("Edit Favorites"), after which the search field opens again. A History row
+  favorites strip ("Edit Favorites", after which the search field opens again) or the page menu. A History row
   closes the sheet and loads its page.
 - **Live settings.** `LiveSettingsStore` saves through `AppDatabase`, then hands the saved
   `BrowserSettings` to `LiveAddressBarData.apply`, so the next search and suggestion request use
@@ -97,8 +97,9 @@ and compile to nothing on macOS.
   then `WKWebsiteDataStore.default().removeData` for every type (the pool's configuration uses
   the default store).
 - **History writes.** `AppDatabase.historyRecorder` is the one writer. Visits are recorded when a
-  load ends on a new back-forward item (a failed or stopped load is not recorded twice); titles
-  as they arrive. `BrowserViewController.recordsHistory` is the seam for private tabs.
+  load ends on a new back-forward item (a failed or stopped load is not recorded twice); title
+  changes only once that item is recorded, so a title never renames an earlier visit. History
+  reads and deletes first write what the shell has queued (`ShellHistoryStore`). `BrowserViewController.recordsHistory` is the seam for private tabs.
 
 ## Signposts
 

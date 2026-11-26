@@ -21,3 +21,16 @@ Newest feature last.
   in `ShellUI/ChromeModel.swift`. Move any that count as product decisions to `FixedChoices`.
 - **Sheet close.** While the sheet fades out, the favorites briefly overlap the page coming back.
   Fade the favorites out first. (Design review, round 3.)
+
+## Integration 1: sheets and history wiring (2026-11-26)
+
+- **Favorites strip edge on the Duo.** The last tile is cut where the strip meets the vertical bar
+  (same item as Lane A's strip-edge note). (Design review, round 1.)
+- **Tab Layout footer.** Two choices joined by a semicolon; one teaching sentence would read
+  better ("Side Tabs shows tabs in a sidebar when the window is wide."). FeatureUI wording.
+- **Grouped-list radii and the focus rim.** System grouped lists in the sheets use larger radii
+  than the 6–10 pt rule, and the field's mint-to-blue rim reads as a second accent. Either adjust
+  or record them as exceptions in docs/ui-reference.md.
+- **Visits on commit, pushState and reloads.** History records at load end per back-forward item.
+  Same-document navigations and reloads are not new visits until WebEngine's navigation delegate
+  reports commits (Lane C).

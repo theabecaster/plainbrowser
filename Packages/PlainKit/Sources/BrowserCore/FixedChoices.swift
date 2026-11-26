@@ -91,6 +91,12 @@ public enum FixedChoices {
     /// Firefox's values for `moz_inputhistory`.
     public static let inputHistoryDailyDecay = 0.975
     public static let inputHistoryMinimumUse = 0.01
+    /// Each new pick keeps this share of a page's earlier picks, then adds one (Firefox's
+    /// update), so repeated picks approach 10 and a new habit overtakes an old one in a few picks.
+    public static let inputHistoryPickRetention = 0.9
+    /// Remembered picks offered per keystroke: the strongest becomes the top hit, and a second
+    /// keeps a close runner-up in the list.
+    public static let inputHistoryMatches = 2
 
     // MARK: Storage maintenance
 

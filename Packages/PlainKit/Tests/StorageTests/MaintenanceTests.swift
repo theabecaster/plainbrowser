@@ -91,6 +91,27 @@ import Testing
         #expect(try await database.settings() == BrowserSettings.defaults)
     }
 
+    @Test func concurrentCallersRunItOnce() async throws {
+        let database = try AppDatabase.inMemory()
+        async let first = database.runDailyMaintenanceIfDue(now: t0)
+        async let second = database.runDailyMaintenanceIfDue(now: t0)
+        let reports = try await [first, second]
+        #expect(reports.compactMap(\.self).count == 1)
+    }
+
+    @Test func bufferedVisitsAreWrittenBeforePruning() async throws {
+        let database = try AppDatabase.inMemory()
+        let maxAge = FixedChoices.historyMaxAge
+        try await database.record(visit("https://old.example/", "Old", at: -maxAge - Self.day))
+        // A revisit still in the recorder's buffer (the interval is two seconds).
+        await database.historyRecorder.record(visit("https://old.example/", "Old", at: 0))
+        let report = try await database.runMaintenance(now: t0, lastRun: nil)
+        #expect(report.expiredVisits == 1)
+        #expect(report.removedPlaces == 0)
+        let place = try #require(try await database.writer.read { db in try HistoryPlace.fetchOne(db) })
+        #expect(place.visitCount == 2)
+    }
+
     @Test func clearingEverythingCompactsTheFile() async throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: "plain-compact-\(UUID())")
         defer { try? FileManager.default.removeItem(at: folder) }

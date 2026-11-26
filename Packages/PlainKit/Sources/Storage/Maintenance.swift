@@ -114,13 +114,18 @@ extension AppDatabase {
 
     /// Runs `runMaintenance` if the last run was `FixedChoices.maintenanceInterval` or more ago (or
     /// never, or in the future because the clock moved). Returns nil when it was not due.
+    ///
+    /// The check runs inside the serialized maintenance task, so two callers never both run it.
     @discardableResult
     public func runDailyMaintenanceIfDue(now: Date = Date()) async throws -> MaintenanceReport? {
-        let lastRun = try await lastMaintenance()
-        if let lastRun, lastRun <= now, now.timeIntervalSince(lastRun) < FixedChoices.maintenanceInterval {
-            return nil
+        try await maintenance.run {
+            let lastRun = try await self.lastMaintenance()
+            if let lastRun, lastRun <= now, now.timeIntervalSince(lastRun) < FixedChoices.maintenanceInterval {
+                return nil
+            }
+            return try await self.performMaintenance(
+                now: now, lastRun: lastRun, maxPlaces: FixedChoices.historyMaxPlaces, maxAge: FixedChoices.historyMaxAge)
         }
-        return try await runMaintenance(now: now, lastRun: lastRun)
     }
 
     func lastMaintenance() async throws -> Date? {
@@ -140,34 +145,39 @@ extension AppDatabase {
         maxPlaces: Int = FixedChoices.historyMaxPlaces,
         maxAge: TimeInterval = FixedChoices.historyMaxAge
     ) async throws -> MaintenanceReport {
-        let writer = writer
-        let recorder = historyRecorder
-        return try await maintenance.run {
-            let signpost = Signposts.signposter.beginInterval("storage.maintenance")
-            defer { Signposts.signposter.endInterval("storage.maintenance", signpost) }
-            let report = ReportBox()
-            // History pruning goes through the one history writer, ordered with buffered visits.
-            try await recorder.afterPendingWrites { writer in
-                let pruned = try await writer.write { db in
-                    try Self.prune(now: now, lastRun: lastRun, maxPlaces: maxPlaces, maxAge: maxAge, in: db)
-                }
-                report.set(pruned)
-            }
-            try await writer.write { db in
-                // Merges the full-text index's segments, so searches read fewer b-trees.
-                try db.execute(sql: "INSERT INTO \(Schema.historySearch)(\(Schema.historySearch)) VALUES('optimize')")
-                try db.execute(
-                    sql: """
-                    INSERT INTO \(Schema.setting) (key, value) VALUES (?, ?)
-                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
-                    """,
-                    arguments: [Self.lastMaintenanceKey, String(now.timeIntervalSince1970)]
-                )
-            }
-            // Refreshes the query planner's statistics where they went stale; cheap when nothing did.
-            try await writer.writeWithoutTransaction { db in try db.execute(sql: "PRAGMA optimize") }
-            return report.value
+        try await maintenance.run {
+            try await self.performMaintenance(now: now, lastRun: lastRun, maxPlaces: maxPlaces, maxAge: maxAge)
         }
+    }
+
+    /// The pass itself. Run it only inside `maintenance.run`.
+    private func performMaintenance(
+        now: Date, lastRun: Date?, maxPlaces: Int, maxAge: TimeInterval
+    ) async throws -> MaintenanceReport {
+        let signpost = Signposts.signposter.beginInterval("storage.maintenance")
+        defer { Signposts.signposter.endInterval("storage.maintenance", signpost) }
+        let report = ReportBox()
+        // History pruning goes through the one history writer, after the visits it has buffered.
+        try await historyRecorder.afterBufferedWrites { writer in
+            let pruned = try await writer.write { db in
+                try Self.prune(now: now, lastRun: lastRun, maxPlaces: maxPlaces, maxAge: maxAge, in: db)
+            }
+            report.set(pruned)
+        }
+        try await writer.write { db in
+            // Merges the full-text index's segments, so searches read fewer b-trees.
+            try db.execute(sql: "INSERT INTO \(Schema.historySearch)(\(Schema.historySearch)) VALUES('optimize')")
+            try db.execute(
+                sql: """
+                INSERT INTO \(Schema.setting) (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                arguments: [Self.lastMaintenanceKey, String(now.timeIntervalSince1970)]
+            )
+        }
+        // Refreshes the query planner's statistics where they went stale; cheap when nothing did.
+        try await writer.writeWithoutTransaction { db in try db.execute(sql: "PRAGMA optimize") }
+        return report.value
     }
 
     /// Expires old visits and pages, caps history, ages adaptive history and drops stale icons, in

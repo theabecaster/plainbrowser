@@ -128,6 +128,13 @@ public actor HistoryRecorder {
         }
     }
 
+    /// Writes the buffer, then runs `operation` after it and every write already started, in the
+    /// same chain. Maintenance prunes through this, so a buffered visit is never pruned around.
+    func afterBufferedWrites(_ operation: @escaping @Sendable (any DatabaseWriter) async throws -> Void) async throws {
+        startBatchWrite()
+        try await afterPendingWrites(operation)
+    }
+
     /// Runs `operation` after every write already started, in the same chain (deletes, maintenance).
     func afterPendingWrites(_ operation: @escaping @Sendable (any DatabaseWriter) async throws -> Void) async throws {
         let previous = lastWrite

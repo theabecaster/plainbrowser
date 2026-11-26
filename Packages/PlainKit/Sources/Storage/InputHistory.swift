@@ -6,18 +6,12 @@ import GRDB
 /// address bar after typing what. Next time, typing text that starts the same way makes that page
 /// the top hit (`PageCandidate.adaptiveUse`).
 ///
-/// Each pick sets `useCount = useCount * 0.9 + 1` (Firefox's update), so repeated picks approach
-/// 10 and an old habit gives way to a new one in a few picks. Daily maintenance decays every count
+/// Each pick sets `useCount = useCount * FixedChoices.inputHistoryPickRetention + 1` (Firefox's
+/// update). Daily maintenance decays every count
 /// by `FixedChoices.inputHistoryDailyDecay` and forgets those under
 /// `FixedChoices.inputHistoryMinimumUse`. Writes go through `HistoryRecorder` (`.pick`), so they
 /// are ordered with history deletes.
 enum InputHistory {
-    /// Weight kept from earlier picks on each new pick (Firefox's value).
-    static let pickRetention = 0.9
-    /// Picked pages offered per keystroke; only the strongest becomes the top hit, and a second
-    /// keeps a close runner-up in the list.
-    static let matchLimit = 2
-
     static func recordPick(input: String, url: URL, at date: Date, in db: Database) throws {
         let key = HistoryQuery(input).inputKey
         guard !key.isEmpty else { return }
@@ -25,7 +19,7 @@ enum InputHistory {
             sql: """
             INSERT INTO \(Schema.inputHistory) (input, url, useCount, lastUsedAt) VALUES (?, ?, 1, ?)
             ON CONFLICT(input, url) DO UPDATE SET
-                useCount = useCount * \(pickRetention) + 1,
+                useCount = useCount * \(FixedChoices.inputHistoryPickRetention) + 1,
                 lastUsedAt = max(lastUsedAt, excluded.lastUsedAt)
             """,
             arguments: [key, url.absoluteString, date]
@@ -50,7 +44,7 @@ enum InputHistory {
             LIMIT ?
             """)
         // Every string that starts with `inputKey` sorts below it plus the highest code point.
-        let rows = try Row.fetchAll(statement, arguments: [inputKey, inputKey + "\u{10FFFF}", matchLimit])
+        let rows = try Row.fetchAll(statement, arguments: [inputKey, inputKey + "\u{10FFFF}", FixedChoices.inputHistoryMatches])
         return rows.compactMap { row in
             guard let url = URL(string: row["url"]) else { return nil }
             return PageCandidate(

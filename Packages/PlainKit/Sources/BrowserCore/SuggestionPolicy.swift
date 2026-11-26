@@ -23,14 +23,37 @@ public enum SuggestionPolicy {
         guard !trimmed.isEmpty else { return false }
         let lower = trimmed.lowercased()
 
-        // A URL anywhere at the start, even with words after it (a pasted link plus a note).
+        // A URL at the start, even with words after it (a pasted link plus a note).
         if hasScheme(lower) { return false }
-        if lower.contains(where: \.isWhitespace) { return true }
+        if isIPv6(lower) || lower.hasPrefix("[") { return false }
+        if let space = lower.firstIndex(where: \.isWhitespace) {
+            // Words after an address: still held back when the address names a path, a port or a
+            // local machine ("localhost/admin notes", "nas:8080 login", "10.0.0.1 router"). A bare
+            // public domain followed by words ("github.com down") is a search about that site.
+            let first = String(lower[..<space])
+            return !(isLocal(first) || (looksLikeHost(first) && (first.contains("/") || first.contains(":"))))
+        }
 
         if case .url = AddressBarInput(trimmed) { return false }
-        if lower.hasPrefix("www.") || lower.hasPrefix("[") { return false }
+        if lower.hasPrefix("www.") { return false }
         if looksLikeHost(lower) { return false }
         return true
+    }
+
+    /// `localhost` or an IP address, with or without a port or path.
+    private static func isLocal(_ token: String) -> Bool {
+        let host = token.split(whereSeparator: { $0 == "/" || $0 == ":" }).first.map(String.init) ?? token
+        if host == "localhost" || host.hasSuffix(".localhost") || isIPv6(token) { return true }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        return parts.count == 4 && parts.allSatisfy { !$0.isEmpty && $0.count <= 3 && $0.allSatisfy(\.isNumber) }
+    }
+
+    /// A bare IPv6 address (`::1`, `fe80::1%en0`): two or more colons and only hex digits, colons,
+    /// dots and a zone index.
+    private static func isIPv6(_ token: String) -> Bool {
+        let address = token.split(separator: "%", maxSplits: 1).first ?? Substring(token)
+        return address.filter { $0 == ":" }.count >= 2
+            && address.allSatisfy { $0.isHexDigit || $0 == ":" || $0 == "." }
     }
 
     /// `scheme:` at the start, as a URL has it: `https://…`, `about:blank`, `mailto:x@y`. A word

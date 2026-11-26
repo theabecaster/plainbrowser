@@ -202,4 +202,27 @@ final class StateRulesTests: XCTestCase {
         XCTAssertTrue(waitForTabCount(gallery, 1), "opens on the private list, which has the tab")
         XCTAssertEqual(app.buttons["galleryPrivate"].value as? String, "On")
     }
+
+    /// While a page loads, the page menu offers Stop in Reload's place; stopped before it
+    /// committed, the tab stays on the page it showed.
+    func testStopReplacesReloadWhileLoading() throws {
+        let app = try launch()
+        go(app, to: "/a")
+        waitForPage(app, "Page A")
+        app.buttons["more"].tap()
+        XCTAssertTrue(app.buttons["menu.reload"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["menu.stop"].exists)
+        app.buttons["menu.reload"].tap()
+        Thread.sleep(forTimeInterval: 1)
+
+        go(app, to: "/slow")
+        Thread.sleep(forTimeInterval: 1)
+        app.buttons["more"].tap()
+        let stop = app.buttons["menu.stop"]
+        XCTAssertTrue(stop.waitForExistence(timeout: 3), "Stop shows while the page loads")
+        XCTAssertFalse(app.buttons["menu.reload"].exists, "Reload and Stop share one place")
+        stop.tap()
+        // Stopped before it committed: the tab stays on Page A.
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 3))
+    }
 }

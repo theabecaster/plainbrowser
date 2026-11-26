@@ -309,6 +309,63 @@ final class CaptureTests: XCTestCase {
         pause(1)
     }
 
+    /// The bar in each main state of docs/state-rules.md: first run, the start screen, one page,
+    /// several tabs, loading and private; plus the More and tabs menus.
+    func testCaptureStateRules() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication()
+        app.launchArguments = ["-PlainInMemoryStore"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        pause(1)
+        shot("s1-first-run")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        pause(1)
+        shot("s2-start")
+        app.buttons["more"].tap()
+        pause(1)
+        shot("s2b-start-more")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        pause(0.8)
+
+        app.buttons["addressPill"].tap()
+        field.typeText(server.address("/a") + "\n")
+        pause(2)
+        shot("s3-one-page")
+        app.buttons["tabs"].press(forDuration: 1)
+        pause(1)
+        shot("s3b-one-page-tabs-menu")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        field.typeText(server.address("/b") + "\n")
+        pause(2)
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        field.typeText(server.address("/c") + "\n")
+        pause(2)
+        shot("s4-several-tabs")
+        app.buttons["more"].tap()
+        pause(1)
+        shot("s4b-several-tabs-more")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        pause(0.8)
+
+        app.buttons["addressPill"].tap()
+        field.typeText(server.address("/slow") + "\n")
+        pause(1.5)
+        shot("s5-loading")
+        pause(8)
+
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Private Tab'")).firstMatch.tap()
+        field.typeText(server.address("/b") + "\n")
+        pause(2)
+        shot("s6-private")
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

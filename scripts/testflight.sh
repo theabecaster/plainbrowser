@@ -13,7 +13,11 @@
 # TESTFLIGHT_APP_ID, TESTFLIGHT_GROUP_ID. See docs/development.md, TestFlight.
 set -euo pipefail
 source "${0:A:h}/lib/common.zsh"
+# scripts/local.env fills in what the environment leaves unset; the environment wins.
+typeset -A _env
+for v in ASC_KEY_ID ASC_ISS ASC_KEY TESTFLIGHT_APP_ID TESTFLIGHT_GROUP_ID; do [[ -n ${(P)v:-} ]] && _env[$v]=${(P)v}; done
 [[ -f scripts/local.env ]] && source scripts/local.env
+for v in ${(k)_env}; do typeset -g $v=${_env[$v]}; done
 
 usage() { print -u2 "usage: scripts/testflight.sh <notes-file> [--build N] [--skip-upload] [--dry-run]"; exit 2; }
 die() { print -u2 "testflight.sh: $*"; exit 1; }
@@ -157,6 +161,12 @@ if (( ! INTERNAL )); then
   [[ $RS == APPROVED ]] || die "not approved in 2 hours; rerun with --skip-upload --build $BUILD"
 fi
 
+# An internal group set to "all builds" gets every valid build by itself.
+if (( INTERNAL )); then
+  rm -rf build/testflight
+  say "done: build $BUILD is available to ${GROUP% *}"
+  exit 0
+fi
 for i in {1..5}; do
   if asc POST "/v1/betaGroups/$GROUP_ID/relationships/builds" "{\"data\":[{\"type\":\"builds\",\"id\":\"$ID\"}]}" >/dev/null; then
     rm -rf build/testflight

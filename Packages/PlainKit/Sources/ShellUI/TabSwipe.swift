@@ -48,7 +48,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
 
         init(current: Tab) {
             self.current = current
-            interval = Signposts.signposter.beginInterval(Signposts.tabSwipe, id: Signposts.signposter.makeSignpostID())
+            // Exclusive: one swipe at a time, and XCTOSSignpostMetric (perf gate) matches it.
+            interval = Signposts.signposter.beginInterval(Signposts.tabSwipe)
         }
     }
 

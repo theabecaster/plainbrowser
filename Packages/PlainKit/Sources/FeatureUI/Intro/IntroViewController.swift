@@ -71,12 +71,27 @@ public final class IntroViewController: UIViewController {
         layoutMark()
     }
 
-    /// The splash starts before the first frame is committed, so that frame already shows the
-    /// animations' first state (the empty field), never the finished mark.
+    /// The first frame is the launch color alone: no mark yet, the field transparent.
     override public func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
         guard !didStart else { return }
+        mark.isHidden = true
+        backdrop.alpha = 0
+    }
+
+    override public func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !didStart else { return }
         didStart = true
+        // The splash's clock starts at the vsync after the first frame reached the render server,
+        // not when the view appears: the first frame of a cold launch can take a few hundred ms,
+        // and the mark would otherwise show up already half drawn.
+        let link = CADisplayLink(target: self, selector: #selector(firstFrameDidCommit(_:)))
+        link.add(to: .main, forMode: .common)
+    }
+
+    @objc private func firstFrameDidCommit(_ link: CADisplayLink) {
+        link.invalidate()
         playSplash()
     }
 
@@ -90,7 +105,7 @@ public final class IntroViewController: UIViewController {
         isSplashing = true
         splashInterval = Signposts.signposter.beginAnimationInterval(Signposts.introSplash)
         // The field fades in over the launch color while the mark starts drawing.
-        backdrop.alpha = 0
+        mark.isHidden = false
         UIView.animate(withDuration: Motion.prefersCrossfade ? Motion.crossfadeDuration : 0.4) { self.backdrop.alpha = 1 }
         mark.assemble(onLanded: { Haptic.tap.play() }, completion: { [weak self] in self?.splashEnded() })
     }

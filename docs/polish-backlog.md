@@ -65,3 +65,12 @@ Newest feature last.
   resting pill, and the edge's full-width hairline reads as a shelf behind the floating pill,
   mostly when collapsed. Try the soft style again on the device (it left text refracting through
   the pill on the simulator), or a stronger glass tint. (Design review, round 3.)
+
+## Tab model (lane M2a, 2026-11-26)
+
+- **Engine seam: keep state files for closed and archived tabs.** `WebViewPool.close` deletes the
+  tab's state file, but Reopen Closed Tab and archive restore want it (back/forward list, scroll).
+  The shell should drop the engine tab without deleting the file after `close` and
+  `archiveIdleTabs`; Storage's `TabSessionWriter` deletes state files once no row names the tab.
+- **Thumbnail files.** Storage keeps only the file name and revision; the engine should prune
+  thumbnail files outside `AppDatabase.referencedTabIDs()` at launch.

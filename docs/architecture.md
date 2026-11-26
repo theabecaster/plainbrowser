@@ -21,8 +21,8 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 
 | Target | Isolation | Imports | Holds today (M0) |
 |---|---|---|---|
-| `BrowserCore` | nonisolated | Foundation | `AddressBarInput` (URL vs search rules), `SearchEngine` |
-| `Storage` | nonisolated | GRDB | `AppDatabase` (migrations, async reads/writes), `HistoryVisit` |
+| `BrowserCore` | nonisolated (`TabStore` MainActor) | Foundation | `AddressBarInput` (URL vs search rules), `SearchEngine`, `TabStore` (tabs, windows, panes, recently closed, auto-archive) and its value types (`TabModel.swift`), `TabPersistence` seam |
+| `Storage` | nonisolated | GRDB | `AppDatabase` (migrations, async reads/writes), `HistoryVisit`, `TabSessionWriter` (the one tab writer), `loadTabSession`, archive reads and search, `TabStateStore` |
 | `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`: warm-up, tiers, popups, crash recovery), `Tab` (observed page state), `TabWebViewHandler` (navigation/UI delegate), `NavigationRules` (pure policy), `DownloadCoordinator`, `ThumbnailService`, `EngineChoices`, seams in `EngineProtocols` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
 | `Reader` | nonisolated; WebKit types MainActor | WebKit | `ReaderExtractor` (Readability in its own content world), `ReaderRenderer` (page template), `ReaderSchemeHandler` (`plain-reader:` scheme), `ReaderArticle` |
@@ -156,6 +156,33 @@ exactly what the app emits.
 | `tab.discard` | interval | discard start (state read) → web view released |
 | `tab.snapshot` | interval | thumbnail `takeSnapshot` → image returned |
 | `tab.crash` | event | a tab's WebContent process terminated |
+| `tab.open` / `tab.close` / `tab.select` | interval | shell, around the `TabStore` call → page on screen |
+| `tab.archive` | interval | shell, around `archiveIdleTabs` (launch, foreground) |
+| `tab.unarchive` / `tab.reopen` / `tab.closeAll` | event | archive restore / Reopen Closed Tab / Close All Tabs |
+| `tab.sessionLoad` / `tab.save` | interval | Storage: launch read / one batched write, off main |
+
+## Tabs
+
+`TabStore` (BrowserCore, MainActor, `@Observable`) is the single owner of the tab list. Engine
+`Tab`s, web views, state files and thumbnails use the same `TabID`.
+
+1. **Launch:** off main, `database.loadTabSession()` reads windows, open tabs and the recently
+   closed stack (not the archive). On main, `TabStore(session:persistence: database.tabSession)`
+   builds the store. Measured on macOS with 100 open + 1,000 archived tabs: read 1.5–1.6 ms off
+   main, store build 0.14 ms on main (budget 5 ms).
+2. **Model:** windows in order; each has regular tabs (pinned first), private tabs, and one or two
+   panes, each showing a tab or the start page, with one focused pane. `open`, `select`, `close`,
+   `closeAllTabs`, `move`, `setPinned`, `split`/`closePane`/`focusPane`/`swapPanes`,
+   `reopenLastClosed`, `restoreArchived`. Rules and their reasons are in `FixedChoices` ("Tabs").
+3. **Engine in step:** the shell calls `updatePage` and `setThumbnail` when the engine's `Tab`
+   changes, and answers `isTabInUse` (media, PiP, fullscreen, capture, download) for the archive.
+4. **Persistence:** every change hands `TabPersistence.enqueue` an ordered `TabChange`. Storage's
+   `TabSessionWriter` writes 500 ms after the first change, off main, touching only changed rows;
+   `flush()` on background. Private tabs never reach it.
+5. **Auto-archive:** at launch and on each foreground, `archiveIdleTabs(after: settings.archiveAfter)`
+   moves tabs not on screen for the interval to the archive, never pinned, visible, private or in-use
+   tabs. Archived rows keep their state file; `searchArchivedTabs` (FTS5, title + address) and
+   `archivedTabs` read it on demand. The archive keeps the newest 1,000.
 
 ## Web engine
 

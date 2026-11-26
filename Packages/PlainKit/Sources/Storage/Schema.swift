@@ -13,6 +13,9 @@ enum Schema {
     static let favicon = "favicon"
     static let setting = "setting"
     static let inputHistory = "inputHistory"
+    static let tabWindow = "tabWindow"
+    static let closedTab = "closedTab"
+    static let tabSearch = "tabSearch"
 
     static func register(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1.history") { db in
@@ -121,6 +124,58 @@ enum Schema {
                 CREATE INDEX historyPlace_sites ON \(historyPlace)(address)
                 WHERE instr(address, '/') = 0 AND instr(address, '?') = 0
                 """)
+        }
+
+        // The tab model (`TabStore`): windows with their pane selection, each tab's window,
+        // opener, pin and thumbnail, the recently closed stack, and full-text search over the
+        // archive.
+        migrator.registerMigration("v4.tabSession") { db in
+            try db.alter(table: tab) { t in
+                t.add(column: "windowID", .text)
+                t.add(column: "openerID", .text)
+                t.add(column: "isPinned", .boolean).notNull().defaults(to: false)
+                t.add(column: "createdAt", .datetime)
+                t.add(column: "thumbnailFile", .text)
+                t.add(column: "thumbnailRevision", .integer)
+            }
+            try db.create(index: "tab_on_isArchived_archivedAt", on: tab, columns: ["isArchived", "archivedAt"])
+            try db.create(table: tabWindow) { t in
+                t.primaryKey("id", .text)
+                t.column("position", .integer).notNull()
+                // The tab id each pane shows, comma separated; an empty item is the start page.
+                t.column("panes", .text).notNull()
+                t.column("focusedPane", .integer).notNull()
+            }
+            try db.create(table: closedTab) { t in
+                t.autoIncrementedPrimaryKey("rowID")
+                // Batches are only appended and removed whole, so `rowID` order is stack order.
+                t.column("batchID", .text).notNull().indexed()
+                // The tab's position in its batch.
+                t.column("tabPosition", .integer).notNull()
+                t.column("closedAt", .datetime).notNull()
+                t.column("id", .text).notNull()
+                t.column("windowID", .text).notNull()
+                t.column("windowIndex", .integer).notNull()
+                t.column("previousTabID", .text)
+                // The pane it was shown in, if any, and whether that pane had focus.
+                t.column("pane", .integer)
+                t.column("wasFocused", .boolean).notNull()
+                t.column("url", .text)
+                t.column("title", .text)
+                t.column("openerID", .text)
+                t.column("isPinned", .boolean).notNull()
+                t.column("createdAt", .datetime).notNull()
+                t.column("lastActiveAt", .datetime).notNull()
+                t.column("thumbnailFile", .text)
+                t.column("thumbnailRevision", .integer)
+            }
+            try db.create(virtualTable: tabSearch, using: FTS5()) { t in
+                t.synchronize(withTable: tab)
+                t.tokenizer = .unicode61(diacritics: .remove)
+                t.prefixes = [2]
+                t.column("title")
+                t.column("url")
+            }
         }
     }
 }

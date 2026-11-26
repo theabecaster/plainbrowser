@@ -260,7 +260,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             let x = flickStart + gesture.translation(in: contentView).x
             let velocity = gesture.state == .ended ? gesture.velocity(in: contentView).x : 0
             if gesture.state == .ended, CardFlick.shouldClose(translation: x, velocity: velocity, cardWidth: width) {
-                throwAway(toward: velocity == 0 ? x : velocity)
+                throwAway(translation: x, velocity: velocity)
             } else {
                 Motion.animate(Motion.throwClose) {
                     self.cardView.transform = .identity
@@ -272,15 +272,34 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         }
     }
 
-    /// Sends the card off the side it was thrown toward. The spring keeps the flick's velocity.
-    private func throwAway(toward direction: CGFloat) {
-        let distance = (window?.bounds.width ?? contentView.bounds.width * 2) + contentView.bounds.width
-        let target = direction < 0 ? -distance : distance
+    /// Sends the card off the side it was thrown toward, with the flick's velocity. A snapshot
+    /// flies, so the collection view can delete the cell and reflow the others at the same time.
+    private func throwAway(translation: CGFloat, velocity: CGFloat) {
         Haptic.close.play()
         isUserInteractionEnabled = false
-        Motion.animate(Motion.throwClose) {
-            self.cardView.transform = CGAffineTransform(translationX: target, y: 0)
-            self.cardView.alpha = 0
+        let direction: CGFloat = (velocity != 0 ? velocity : translation) < 0 ? -1 : 1
+        if let host = superview, let ghost = cardView.snapshotView(afterScreenUpdates: false) {
+            let presented = cardView.layer.presentation()
+            ghost.frame = contentView.convert(presented?.frame ?? cardView.frame, to: host)
+            ghost.alpha = CGFloat(presented?.opacity ?? Float(cardView.alpha))
+            ghost.isUserInteractionEnabled = false
+            host.addSubview(ghost)
+            cardView.layer.removeAllAnimations()
+            cardView.alpha = 0
+            let distance = max(host.bounds.width, ghost.frame.width) + ghost.frame.width
+            let remaining = direction * distance - (ghost.frame.minX - contentView.convert(contentView.bounds, to: host).minX)
+            if Motion.prefersCrossfade {
+                UIView.animate(withDuration: Motion.crossfadeDuration, animations: { ghost.alpha = 0 }, completion: { _ in ghost.removeFromSuperview() })
+            } else {
+                let timing = Motion.throwCloseTiming(distance: remaining, velocity: velocity)
+                let animator = UIViewPropertyAnimator(duration: 0, timingParameters: timing)
+                animator.addAnimations {
+                    ghost.center.x += remaining
+                    ghost.alpha = 0.2
+                }
+                animator.addCompletion { _ in ghost.removeFromSuperview() }
+                animator.startAnimation()
+            }
         }
         onClose?(true)
     }

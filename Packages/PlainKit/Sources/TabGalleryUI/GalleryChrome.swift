@@ -28,6 +28,8 @@ final class GalleryBottomBar: UIView {
 
         var done = UIButton.Configuration.plain()
         done.title = "Done"
+        // Glass content draws text in the label color unless the button names its own.
+        done.baseForegroundColor = Palette.accent
         done.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = attributes
             attributes.font = UIFont.preferredFont(forTextStyle: .headline)
@@ -87,6 +89,7 @@ final class ReopenToast: UIView {
             return attributes
         }
         configuration.contentInsets = .init(top: 0, leading: Spacing.l, bottom: 0, trailing: Spacing.l)
+        configuration.baseForegroundColor = Palette.accent
         button.configuration = configuration
         button.tintColor = Palette.accent
         button.accessibilityIdentifier = "reopenTab"

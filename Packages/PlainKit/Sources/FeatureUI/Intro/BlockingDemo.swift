@@ -49,15 +49,28 @@ struct BlockingDemo: View {
 
     // MARK: The page
 
+    /// The page takes the height the step gives it, never its content's: the mock is a window onto
+    /// a longer page, clipped at the bottom, so a short screen (the Duo's outer screen) still fits
+    /// the title, the toggle and the button.
     private var page: some View {
-        ZStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 0) {
-                addressBar
-                if bannerAd { banner.transition(.clutter) }
-                article
-                Spacer(minLength: 0)
+        Color.white
+            .frame(minHeight: 220)
+            .overlay(alignment: .top) {
+                VStack(alignment: .leading, spacing: 0) {
+                    addressBar
+                    if bannerAd { banner.transition(.clutter) }
+                    article
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .overlay(alignment: .bottom) { overlays }
+            .clipShape(.rect(cornerRadius: 26, style: .continuous))
+            .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
+            .environment(\.colorScheme, .light)
+    }
+
+    /// The sticky video ad and the cookie wall, floating over the article.
+    private var overlays: some View {
+        ZStack(alignment: .bottom) {
             if videoAd {
                 video
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -69,10 +82,7 @@ struct BlockingDemo: View {
                 cookie.transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .background(Color.white)
-        .clipShape(.rect(cornerRadius: 26, style: .continuous))
-        .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
-        .environment(\.colorScheme, .light)
+        .frame(maxWidth: .infinity)
     }
 
     private var addressBar: some View {

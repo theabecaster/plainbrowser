@@ -14,7 +14,6 @@ final class GalleryBottomBar: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        Glass.addShadow(to: self)
         addSubview(glass)
 
         let symbols = UIImage.SymbolConfiguration(textStyle: .body, scale: .large)
@@ -57,7 +56,6 @@ final class GalleryBottomBar: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         glass.frame = bounds
-        Glass.updateShadowPath(of: self)
         let side = Metrics.tapTarget
         let y = ((bounds.height - side) / 2).rounded()
         menuButton.frame = CGRect(x: Self.padding, y: y, width: side, height: side)
@@ -76,7 +74,6 @@ final class ReopenToast: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        Glass.addShadow(to: self)
         addSubview(glass)
         var configuration = UIButton.Configuration.plain()
         configuration.title = "Reopen Tab"
@@ -110,7 +107,6 @@ final class ReopenToast: UIView {
         super.layoutSubviews()
         glass.frame = bounds
         button.frame = bounds
-        Glass.updateShadowPath(of: self)
     }
 
     /// Shows the toast, or keeps it up a little longer after another close.

@@ -413,3 +413,13 @@ Each entry: what was chosen, and why. Newest last.
 - **Manual start only, guarded.** The workflow has no triggers, so it never spends hours on its
   own. `setup` disables every other workflow, and `start` refuses past 20 hours in the last 31
   days. Without a subscription Apple can't bill: at 25 hours, builds stop until the next month.
+
+## App icon: the Coin mark (2026-11-26)
+
+- **Chosen:** a cream paper ring around the dawn, its top-right edge folded in (coral side up),
+  with a short stem that hides a P (`Brand/identity.md`). It replaces the letter-P icon.
+- **Why:** the owner wanted a symbol people recognize, not a letter. The P stays as a detail you
+  find second. The icon is generated (`Brand/tools/gen_icon.py`) so every change is reproducible,
+  and the tinted appearances are tuned so the mark stays crisp on the home screen's tinted styles.
+- **Not kept:** the window, page, Duo, loupe, pinwheel, boat and fold concepts from the review
+  rounds. They were rendered for review only and never committed.

@@ -70,11 +70,12 @@ let package = Package(
         ),
         .target(
             name: "FeatureUI",
-            dependencies: ["Storage", "BrowserCore", "DesignSystem"],
+            dependencies: ["Storage", "BrowserCore", "DesignSystem", "PerfSignposts"],
             swiftSettings: mainActorByDefault
         ),
 
         .testTarget(name: "BrowserCoreTests", dependencies: ["BrowserCore"]),
+        .testTarget(name: "FeatureUITests", dependencies: ["FeatureUI", "Storage", "BrowserCore"]),
         .testTarget(name: "StorageTests", dependencies: ["Storage", .product(name: "GRDB", package: "GRDB.swift")]),
         // WebKit tests; they run on an iOS simulator (xcodebuild) and are empty on macOS.
         .testTarget(name: "ContentBlockingTests", dependencies: ["ContentBlocking"]),

@@ -23,6 +23,13 @@ public enum Signposts {
     public static let navCommit: StaticString = "nav.commit"
     /// Interval from a navigation starting to it finishing (or failing).
     public static let navFinish: StaticString = "nav.finish"
+    /// Interval: the History screen asking for visits (opening or typing a search), until the
+    /// grouped rows are ready to show.
+    public static let historyLoad: StaticString = "history.load"
+    /// Interval: a History "Clear" choice, until the visits are gone and the list reloaded.
+    public static let historyClear: StaticString = "history.clear"
+    /// Interval: Settings > Clear History and Data confirmed, until the data is cleared.
+    public static let clearBrowsingData: StaticString = "settings.clearData"
 
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {

@@ -53,6 +53,11 @@ public enum FixedChoices {
     public static let historyFlushInterval = Duration.seconds(2)
     /// A buffer this full is written right away, so a burst of loads stays bounded.
     public static let historyFlushBatchSize = 64
+    /// Visits the History screen loads at a time; more load as the list scrolls to the end. A few
+    /// days of browsing for most people, and cheap to group and show.
+    public static let historyPageSize = 300
+    /// Pause after the last keystroke before History searches, so fast typing runs one query.
+    public static let historySearchDelay = Duration.milliseconds(150)
 
     // MARK: Tabs
 

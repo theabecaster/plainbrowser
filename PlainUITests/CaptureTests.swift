@@ -68,6 +68,62 @@ final class CaptureTests: XCTestCase {
         shot("7-after-refresh")
     }
 
+    /// The sheets the shell presents: page menu, Settings, Search Engine, History, and the
+    /// favorites strip's menu and editor.
+    func testCaptureSheets() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication()
+        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        app.launch()
+
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        for (path, heading) in [("/a", "Page A"), ("/b", "Page B"), ("/long", "Long Read")] {
+            if !(field.exists && field.hasKeyboardFocus) { app.buttons["addressPill"].tap() }
+            field.typeText(server.address(path) + "\n")
+            XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 10))
+        }
+        pause(2.5)
+
+        app.buttons["more"].tap()
+        pause(1)
+        shot("s1-page-menu")
+        app.buttons["Settings…"].tap()
+        pause(1.5)
+        shot("s2-settings")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Search Engine'")).firstMatch.tap()
+        pause(1)
+        shot("s3-search-engine")
+        let back = app.otherElements["settingsSheet"].buttons["BackButton"]
+        if back.exists { back.tap() } else { app.navigationBars["Search Engine"].buttons.firstMatch.tap() }
+        pause(0.8)
+        app.buttons["Done"].tap()
+        pause(1)
+
+        app.buttons["more"].tap()
+        pause(1)
+        app.buttons["History"].tap()
+        pause(1.5)
+        shot("s4-history")
+        app.buttons["Done"].tap()
+        pause(1)
+
+        app.buttons["addressPill"].tap()
+        pause(1)
+        app.buttons["favorite.0"].press(forDuration: 1)
+        pause(1)
+        shot("s5-favorites-menu")
+        app.buttons["Edit Favorites"].tap()
+        pause(1.5)
+        shot("s6-favorites-editor")
+        app.buttons["Done"].tap()
+        pause(1.5)
+        shot("s7-back-to-search")
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

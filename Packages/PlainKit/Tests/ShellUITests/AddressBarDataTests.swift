@@ -40,6 +40,80 @@ struct AddressBarDataTests {
         #expect(updates.last?.dropFirst() == [.search("swift.org"), .search("swift ownership")])
     }
 
+    @Test func savedSettingsTakeEffectForTheNextSearch() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData()
+        await data.attach(database)
+        let store = LiveSettingsStore(database: database) { data.apply($0) }
+        var settings = try await store.settings()
+        settings.searchEngine = .duckDuckGo
+        settings.archiveAfter = .oneWeek
+        try await store.saveSettings(settings)
+        #expect(data.searchEngine == .duckDuckGo)
+        #expect(data.settings.archiveAfter == .oneWeek)
+        // Stored too, for the next launch.
+        #expect(try await database.settings().searchEngine == .duckDuckGo)
+        #expect(AddressBarInput("plain browser")?.destination(searchingWith: data.searchEngine)?.host() == "duckduckgo.com")
+    }
+
+    @Test func favoritesAreAddedAndRemovedByAddress() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData()
+        let url = URL(string: "https://a.example/page")!
+        #expect(await data.setFavorite(true, url: url, title: "A") == false, "nothing to write to before attach")
+        await data.attach(database)
+        #expect(await data.isFavorite(url) == false)
+        #expect(await data.setFavorite(true, url: url, title: "  "))
+        #expect(await data.isFavorite(url))
+        #expect(await data.favorites().first?.title == nil, "a blank title falls back to the address")
+        #expect(await data.setFavorite(false, url: url, title: nil))
+        #expect(await data.isFavorite(url) == false)
+    }
+
+    @Test func historyGoesThroughTheDatabaseRecorder() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData()
+        await data.attach(database)
+        let url = URL(string: "https://example.com/x")!
+        data.pageVisited(url: url, title: nil)
+        data.pageTitleChanged(url: url, title: "Example X")
+        await data.flush()
+        #expect(try await database.visits(matching: "example x", limit: 10).map(\.title) == ["Example X"])
+    }
+
+    @Test func historyScreenSeesAndDeletesVisitsStillQueuedInTheShell() async throws {
+        let database = try AppDatabase.inMemory()
+        let data = LiveAddressBarData()
+        await data.attach(database)
+        let sheets = FeatureSheets(addressBar: data)
+        sheets.attach(database)
+        let store = try #require(sheets.makeHistoryStore())
+
+        let url = URL(string: "https://just.example/now")!
+        data.pageVisited(url: url, title: "Just Now")
+        // No flush and no wait: the screen still shows the page.
+        #expect(try await store.visits(matching: "", limit: 10).map(\.url) == [url])
+
+        data.pageVisited(url: url, title: "Again")
+        try await store.deleteHistory(for: url)
+        await data.flush()
+        #expect(try await database.recentVisits(limit: 10).isEmpty, "a queued visit must not come back after a delete")
+
+        data.pageVisited(url: url, title: "Third")
+        try await store.clearHistory(since: nil)
+        await data.flush()
+        #expect(try await database.recentVisits(limit: 10).isEmpty)
+    }
+
+    @Test func settingsModelIsSharedAcrossPresentations() async throws {
+        let database = try AppDatabase.inMemory()
+        let sheets = FeatureSheets(addressBar: LiveAddressBarData())
+        #expect(sheets.makeSettingsModel() == nil, "nothing before the database opens")
+        sheets.attach(database)
+        let first = try #require(sheets.makeSettingsModel())
+        #expect(sheets.makeSettingsModel() === first)
+    }
+
     @Test func onlyWebPagesAreRecorded() {
         #expect(LiveAddressBarData.isRecordable(URL(string: "https://example.com")!))
         #expect(LiveAddressBarData.isRecordable(URL(string: "http://localhost:8080/a")!))

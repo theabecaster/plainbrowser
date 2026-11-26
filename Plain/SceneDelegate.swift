@@ -9,11 +9,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private let pool = WebViewPool()
     private let addressBarData = LiveAddressBarData()
+    /// Settings, History and the favorites editor. A saved setting goes straight to the address
+    /// bar, so the next search uses it.
+    private lazy var sheets = FeatureSheets(addressBar: addressBarData)
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: windowScene)
-        let browser = BrowserViewController(pool: pool, data: addressBarData) {
+        let browser = BrowserViewController(pool: pool, data: addressBarData, sheets: sheets) {
             Signposts.signposter.endInterval(Signposts.launch, launchInterval)
         }
         // The navigation controller gives the page buttons a place in the system's vertical bar
@@ -37,11 +40,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func openDatabase(then browser: BrowserViewController) {
         let options = LaunchOptions(arguments: ProcessInfo.processInfo.arguments)
         let data = addressBarData
+        let sheets = sheets
         Task(priority: .userInitiated) {
             // makeDatabase and seed are @concurrent: the disk work runs on the global executor.
             guard let database = try? await options.makeDatabase() else { return }
             await options.seed(database)
             await data.attach(database)
+            sheets.attach(database)
             browser.addressBarDataDidChange()
         }
     }

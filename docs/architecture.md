@@ -26,7 +26,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `WebEngine` | MainActor | WebKit | `WebViewPool` (owns every `WKWebView`, warm-up), `NavigationSignposter` |
 | `ContentBlocking` | nonisolated | CryptoKit | `RuleListSource` (content-hash identifiers for compiled lists) |
 | `Reader` | nonisolated | — | `ReaderWorld` (content world name) |
-| `ShellUI` | MainActor | UIKit, WebKit, Storage | `BrowserViewController` (page, URL pill, search sheet, page buttons), `AddressBarData` seam + `LiveAddressBarData`, `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
+| `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI | `BrowserViewController` (page, URL pill, search sheet, page buttons), `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, favorites editor), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS) |
 | `TabGalleryUI` | MainActor | — | `TabGalleryLayout` (even-column rule) |
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `Haptic`, `Glass` (the one Liquid Glass helper) |
@@ -63,7 +63,7 @@ and compile to nothing on macOS.
    `NavigationSignposter`, and puts it under the chrome. Later loads reuse it.
 4. `NavigationSignposter` emits `nav.commit` (start → commit) and `nav.finish` (start → finish or
    failure) for every main-frame navigation.
-5. A finished load is recorded through `HistoryRecorder` (batched, off main).
+5. A finished load is recorded through `AppDatabase.historyRecorder` (batched, off main).
 
 ### Page chrome
 
@@ -79,7 +79,27 @@ and compile to nothing on macOS.
 - **Pull to refresh.** The same delegate tracks a pull past the top; at 80 pt it arms with a
   selection haptic, and a release while armed reloads.
 - **Page menu.** From More and a long press on the pill: Reload, Find on Page
-  (`findInteraction`), Share, Copy Link, Desktop Site.
+  (`findInteraction`), Share, Copy Link, Desktop Site, Add to (or Remove from) Favorites, then
+  History, Edit Favorites and Settings… in their own last section. More is always enabled:
+  without a page the menu holds only that last section.
+
+### Sheets and settings
+
+- **Presenting.** `FeatureSheets` (ShellUI) builds the FeatureUI models over the database and
+  wraps each view in a page-sheet `UIHostingController`; `BrowserViewController` presents it.
+  Settings and History come from the page menu; the favorites editor from a long press on the
+  favorites strip ("Edit Favorites", after which the search field opens again) or the page menu. A History row
+  closes the sheet and loads its page.
+- **Live settings.** `LiveSettingsStore` saves through `AppDatabase`, then hands the saved
+  `BrowserSettings` to `LiveAddressBarData.apply`, so the next search and suggestion request use
+  the new engine. Tab layout and archive interval are stored and held there for the tab features.
+- **Clear History and Data.** `LiveBrowsingDataClearer`: history through the recorder, favicons,
+  then `WKWebsiteDataStore.default().removeData` for every type (the pool's configuration uses
+  the default store).
+- **History writes.** `AppDatabase.historyRecorder` is the one writer. Visits are recorded when a
+  load ends on a new back-forward item (a failed or stopped load is not recorded twice); title
+  changes only once that item is recorded, so a title never renames an earlier visit. History
+  reads and deletes first write what the shell has queued (`ShellHistoryStore`). `BrowserViewController.recordsHistory` is the seam for private tabs.
 
 ## Signposts
 
@@ -101,3 +121,5 @@ exactly what the app emits.
 | `pageMenu.open` | event | page menu built |
 | `nav.back` / `nav.forward` | event | Back / Forward button |
 | `share.open` | event | share sheet shown |
+| `page.favorite` | event | Add to / Remove from Favorites |
+| `settings.open` / `history.show` / `favorites.editorOpen` | event | sheet presented |

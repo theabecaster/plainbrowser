@@ -62,6 +62,8 @@ let package = Package(
             name: "ShellUI",
             dependencies: [
                 "WebEngine", "ContentBlocking", "Reader", "Storage", "BrowserCore", "DesignSystem", "PerfSignposts",
+                // The shell presents Settings, History and the favorites editor as sheets.
+                "FeatureUI",
             ],
             swiftSettings: mainActorByDefault
         ),
@@ -83,6 +85,6 @@ let package = Package(
         .testTarget(name: "ContentBlockingTests", dependencies: ["ContentBlocking"]),
         // The shell's chrome rules (collapse, pull to refresh, geometry) and the address bar's
         // data seam; plain values, so they run on macOS.
-        .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "BrowserCore", "Storage"]),
+        .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "FeatureUI", "BrowserCore", "Storage"]),
     ]
 )

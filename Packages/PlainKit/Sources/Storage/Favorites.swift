@@ -37,6 +37,21 @@ extension AppDatabase {
         }
     }
 
+    /// The favorite for `url`, or nil when the page is not a favorite.
+    public func favorite(for url: URL) async throws -> Favorite? {
+        try await writer.read { db in
+            try Favorite.filter(Column("url") == url).fetchOne(db)
+        }
+    }
+
+    /// Removes the favorite for `url`, if there is one.
+    public func removeFavorite(url: URL) async throws {
+        try await writer.write { db in
+            _ = try Favorite.filter(Column("url") == url).deleteAll(db)
+            try Self.renumberFavorites(in: db, order: nil)
+        }
+    }
+
     public func renameFavorite(id: Int64, title: String) async throws {
         try await writer.write { db in
             _ = try Favorite.filter(key: id).updateAll(db, Column("title").set(to: title))

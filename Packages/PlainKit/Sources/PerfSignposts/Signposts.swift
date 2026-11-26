@@ -65,6 +65,19 @@ public enum Signposts {
     public static let findOnPage: StaticString = "page.find"
     public static let copyLink: StaticString = "page.copyLink"
     public static let desktopSite: StaticString = "page.desktopSite"
+    /// Event: Add to Favorites or Remove from Favorites in the page menu.
+    public static let favoriteToggle: StaticString = "page.favorite"
+
+    // MARK: Sheets the shell presents
+
+    /// Event: Settings opened from the page menu.
+    public static let settingsOpen: StaticString = "settings.open"
+    /// Event: History opened from the page menu.
+    public static let historyShow: StaticString = "history.show"
+    /// Event: the favorites strip's long-press menu opened.
+    public static let favoritesMenu: StaticString = "favorites.menu"
+    /// Event: the favorites editor opened from the favorites strip.
+    public static let favoritesEditorOpen: StaticString = "favorites.editorOpen"
 
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {

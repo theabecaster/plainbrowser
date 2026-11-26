@@ -25,6 +25,10 @@ public protocol AddressBarData: AnyObject {
     func cancelSuggestions()
     /// Favorites, in the user's order.
     func favorites() async -> [FavoritePage]
+    /// Whether `url` is a favorite.
+    func isFavorite(_ url: URL) async -> Bool
+    /// Adds `url` to the end of the favorites, or removes it. Returns false when it couldn't.
+    func setFavorite(_ isFavorite: Bool, url: URL, title: String?) async -> Bool
     /// A page finished loading.
     func pageVisited(url: URL, title: String?)
     /// A visited page's title arrived or changed.
@@ -36,15 +40,25 @@ public protocol AddressBarData: AnyObject {
 ///
 /// It starts empty and works before the database is open: `attach` hands it the database once
 /// it has been opened off the main thread, so launch never waits on disk.
+///
+/// It holds the live copy of the settings: a Settings save calls `apply(_:)`, so the next search
+/// and the next suggestion request use the new engine.
 public final class LiveAddressBarData: AddressBarData {
-    public private(set) var searchEngine = FixedChoices.defaultSearchEngine
+    /// The settings in effect. Tab layout and archive interval wait here for the tab features.
+    public private(set) var settings = BrowserSettings.defaults
+    public var searchEngine: SearchEngine { settings.searchEngine }
     private var database: AppDatabase?
+    /// The database's one history writer.
     private var recorder: HistoryRecorder?
+    /// Bumped by `apply(_:)`, so the read in `attach` never undoes a newer save.
+    private var settingsEdits = 0
     /// Made on the first keystroke, not at launch: it builds a URL session.
     private lazy var client = makeClient()
     private let makeClient: () -> SuggestionClient
     /// The newest queued history change, so `flush` includes it.
     private var lastRecord: Task<Void, Never>?
+    /// The visit title changes belong to.
+    private var lastVisit: (url: URL, at: Date)?
 
     /// - Parameter makeClient: builds the engine suggestion client on first use (tests pass one
     ///   with a fake loader).
@@ -55,10 +69,17 @@ public final class LiveAddressBarData: AddressBarData {
     /// Starts using `database`: history, favorites and the saved search engine.
     public func attach(_ database: AppDatabase) async {
         self.database = database
-        recorder = HistoryRecorder(database: database)
-        if let settings = try? await database.settings() {
-            searchEngine = settings.searchEngine
+        recorder = database.historyRecorder
+        let edits = settingsEdits
+        if let stored = try? await database.settings(), edits == settingsEdits {
+            settings = stored
         }
+    }
+
+    /// Puts `settings` in effect; Settings calls it after each save.
+    public func apply(_ settings: BrowserSettings) {
+        settingsEdits += 1
+        self.settings = settings
     }
 
     /// Writes buffered history. Call when the app moves to the background.
@@ -91,9 +112,30 @@ public final class LiveAddressBarData: AddressBarData {
         return favorites.map { FavoritePage(url: $0.url, title: $0.title) }
     }
 
+    public func isFavorite(_ url: URL) async -> Bool {
+        guard let database else { return false }
+        return (try? await database.favorite(for: url)) != nil
+    }
+
+    public func setFavorite(_ isFavorite: Bool, url: URL, title: String?) async -> Bool {
+        guard let database else { return false }
+        do {
+            if isFavorite {
+                let title = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+                try await database.addFavorite(url: url, title: title?.isEmpty == false ? title : nil)
+            } else {
+                try await database.removeFavorite(url: url)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     public func pageVisited(url: URL, title: String?) {
         guard let recorder, Self.isRecordable(url) else { return }
         let visit = HistoryVisit(url: url, title: title, visitedAt: Date())
+        lastVisit = (url, visit.visitedAt)
         let previous = lastRecord
         lastRecord = Task {
             await previous?.value
@@ -101,12 +143,16 @@ public final class LiveAddressBarData: AddressBarData {
         }
     }
 
+    /// Names the last recorded visit only, and only when it is to `url`: a title never lands on
+    /// another visit, and does nothing once that visit has been cleared.
     public func pageTitleChanged(url: URL, title: String) {
-        guard let recorder, Self.isRecordable(url), !title.isEmpty else { return }
+        guard let recorder, Self.isRecordable(url), !title.isEmpty,
+              let lastVisit, lastVisit.url == url
+        else { return }
         let previous = lastRecord
         lastRecord = Task {
             await previous?.value
-            await recorder.recordTitle(title, for: url)
+            await recorder.recordTitle(title, for: url, visitedAt: lastVisit.at)
         }
     }
 

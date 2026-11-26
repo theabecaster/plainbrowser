@@ -5,3 +5,4 @@ DerivedData/
 *.xcodeproj
 xcuserdata/
 scripts/local.env
+.claude/worktrees/

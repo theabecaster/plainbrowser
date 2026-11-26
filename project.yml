@@ -34,6 +34,8 @@ targets:
       - package: PlainKit
         product: ShellUI
       - package: PlainKit
+        product: Storage
+      - package: PlainKit
         product: PerfSignposts
     settings:
       base:

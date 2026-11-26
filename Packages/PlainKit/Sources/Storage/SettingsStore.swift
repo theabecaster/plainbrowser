@@ -38,7 +38,7 @@ extension AppDatabase {
             case nil:
                 break
             }
-            if let raw = values[SettingKey.tabLayout.rawValue], let layout = TabLayout(rawValue: raw) {
+            if let raw = values[SettingKey.tabLayout.rawValue], let layout = TabLayout(stored: raw) {
                 settings.tabLayout = layout
             }
             if let raw = values[SettingKey.archiveAfter.rawValue], let archive = ArchiveAfter(rawValue: raw) {

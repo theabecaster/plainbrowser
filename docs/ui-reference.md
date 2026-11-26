@@ -5,10 +5,11 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 ## Settings
 
 - About five top-level rows, at most two levels deep, opened as a sheet with a single "Done" button.
-- Each row shows its current value, for example "Google", "Side tabs" or "After 1 day".
+- Each row shows its current value, for example "Google", "Left" or "After 1 day".
 - Every row is a choice the user understands and would want to make. Plain's rows are: Search Engine, Tab Layout, Archive Tabs, App Icon, Clear History and Data, and About.
 - Footers are one plain sentence that teaches, for example "Tabs you haven't opened in a day move to the archive."
 - Labels are Title Case nouns ("Search Engine", "Clear History and Data").
+- A row that doesn't apply on this screen stays, disabled, keeping its value, and its footer says why and what to use instead (Tab Layout on a narrow screen: "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs.").
 
 **Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, haptics follow iOS, text follows Dynamic Type, and the archive default is 1 day.
 

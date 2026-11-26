@@ -1,10 +1,27 @@
 import Foundation
 
-/// How tabs are shown. Side tabs apply only where the window is regular in both size classes;
-/// elsewhere the app shows regular tabs and keeps this choice for when the window grows.
+/// Where the tab list sits on a wide screen: a strip above the pages, or a sidebar on their left
+/// or right. It applies only where the window is regular in both size classes and wide enough;
+/// elsewhere (the Duo's outer screen, iPhones) the app switcher is the only tab list, and the
+/// choice is kept for when the window grows. The app switcher (a swipe up from the address bar)
+/// stays in every layout.
 public enum TabLayout: String, Hashable, Sendable, Codable, CaseIterable {
-    case regular
-    case sideTabs
+    case above
+    case left
+    case right
+
+    /// The layout stored under `raw`, including the values before M3's Above/Left/Right
+    /// ("sideTabs" was the left sidebar; "regular" had no tab list and takes the default).
+    public init?(stored raw: String) {
+        switch raw {
+        case "sideTabs": self = .left
+        case "regular": self = FixedChoices.defaultTabLayout
+        default: self.init(rawValue: raw)
+        }
+    }
+
+    /// A sidebar layout (left or right).
+    public var isSidebar: Bool { self != .above }
 }
 
 /// When an unused tab moves to the archive.

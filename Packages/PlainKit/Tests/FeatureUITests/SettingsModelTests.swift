@@ -23,10 +23,10 @@ import Testing
         #expect(model.isLoaded)
         #expect(model.settings == .defaults)
 
-        try await database.saveSettings(BrowserSettings(searchEngine: .kagi, tabLayout: .sideTabs, archiveAfter: .never))
+        try await database.saveSettings(BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never))
         await model.load()
         #expect(model.settings.searchEngine == .kagi)
-        #expect(model.settings.tabLayout == .sideTabs)
+        #expect(model.settings.tabLayout == .right)
         #expect(model.settings.archiveAfter == .never)
     }
 
@@ -34,12 +34,12 @@ import Testing
         let model = makeModel()
         await model.load()
         model.selectSearchEngine(.duckDuckGo)
-        model.setTabLayout(.sideTabs)
+        model.setTabLayout(.right)
         model.setArchiveAfter(.twelveHours)
         model.setArchiveAfter(.oneWeek)
         await model.waitForSaves()
         let saved = try await database.settings()
-        #expect(saved == BrowserSettings(searchEngine: .duckDuckGo, tabLayout: .sideTabs, archiveAfter: .oneWeek))
+        #expect(saved == BrowserSettings(searchEngine: .duckDuckGo, tabLayout: .right, archiveAfter: .oneWeek))
     }
 
     @Test func customEngineIsValidatedNamedAndSaved() async throws {
@@ -84,7 +84,7 @@ import Testing
     }
 
     @Test func choicesWaitForTheFirstLoad() async throws {
-        try await database.saveSettings(BrowserSettings(searchEngine: .kagi, tabLayout: .sideTabs, archiveAfter: .never))
+        try await database.saveSettings(BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never))
         let model = makeModel()
         model.setArchiveAfter(.oneWeek)
         model.selectSearchEngine(.bing)
@@ -99,12 +99,12 @@ import Testing
     @Test func failedSaveShowsWhatIsStoredSoItCanBeRetried() async throws {
         let model = SettingsModel(store: FlakySettings(database: database, failSaves: true), clearer: clearer, about: testAbout)
         await model.load()
-        model.setTabLayout(.sideTabs)
-        #expect(model.settings.tabLayout == .sideTabs)
+        model.setTabLayout(.right)
+        #expect(model.settings.tabLayout == .right)
         await model.waitForSaves()
         await model.waitForSaves()
         #expect(model.errorMessage != nil)
-        #expect(model.settings.tabLayout == .regular, "back to the stored value, so choosing again saves again")
+        #expect(model.settings.tabLayout == .left, "back to the stored value, so choosing again saves again")
     }
 
     @Test func aLoadWaitsForSavesStillRunning() async throws {
@@ -113,9 +113,9 @@ import Testing
             clearer: clearer, about: testAbout
         )
         await model.load()
-        model.setTabLayout(.sideTabs)
+        model.setTabLayout(.right)
         await model.load()
-        #expect(model.settings.tabLayout == .sideTabs)
+        #expect(model.settings.tabLayout == .right)
     }
 
     @Test func clearHistoryAndDataCallsTheClearer() async {
@@ -134,7 +134,7 @@ import Testing
     }
 
     @Test func wordingIsTitleCaseAndFootersAreSentences() {
-        #expect(TabLayout.allCases.map(\.title) == ["Regular Tabs", "Side Tabs"])
+        #expect(TabLayout.allCases.map(\.title) == ["Above", "Left", "Right"])
         #expect(ArchiveAfter.allCases.map(\.title) == ["After 12 Hours", "After 1 Day", "After 1 Week", "Never"])
         for archive in ArchiveAfter.allCases {
             #expect(archive.footer.hasSuffix("."))

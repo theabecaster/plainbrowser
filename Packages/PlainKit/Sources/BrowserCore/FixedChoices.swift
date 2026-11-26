@@ -8,8 +8,10 @@ public enum FixedChoices {
 
     /// Most people already search with Google; it is the first-launch default (plan, section 11).
     public static let defaultSearchEngine = SearchEngine.google
-    /// Regular tabs work on every screen; side tabs are an opt-in for big windows.
-    public static let defaultTabLayout = TabLayout.regular
+    /// Tabs on the left: on the Duo's inner screen a sidebar uses the spare width beside a page
+    /// (a top strip takes height from a short landscape screen), its rail costs 64 pt, and the
+    /// leading edge is where a list is read from. The system's vertical bar sits on the right.
+    public static let defaultTabLayout = TabLayout.left
     /// A day keeps today's tabs at hand and clears yesterday's clutter without asking.
     public static let defaultArchiveAfter = ArchiveAfter.oneDay
 
@@ -201,6 +203,12 @@ public enum FixedChoices {
     /// The expanded sidebar: favicon and title. Wide enough for about 25 characters of a title;
     /// where the page would drop under `sideTabsMinimumPageWidth` it floats over the page instead.
     public static let sidebarExpandedWidth: Double = 260
+    /// The tab strip above the pages (Tab Layout: Above): one 44 pt tap target with a small
+    /// margin, the least height a short landscape screen can give up.
+    public static let tabStripHeight: Double = 48
+    /// A tab in the strip: room for about 18 characters of a title, so five or six tabs show at once
+    /// on the Duo's inner screen; the rest scroll.
+    public static let tabStripItemWidth: Double = 170
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375

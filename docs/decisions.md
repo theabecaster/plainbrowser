@@ -115,8 +115,9 @@ Each entry: what was chosen, and why. Newest last.
   iOS 27.2 Duo simulator: the four items land in the trailing column, with the keyboard up too.
 - **Elsewhere a custom glass bar, not the system toolbar:** hiding a system toolbar changes the
   page's safe area, which relayouts the page on every collapse. The custom bar moves by transform
-  and alpha only, and the page's `obscuredContentInsets` stays at the collapsed size
-  (docs/plan.md, engine rule 4).
+  and alpha only. The page's bottom `obscuredContentInsets` follows the bar's resting state,
+  switched when a snap ends (never during the top bounce), so the expanded bar never covers
+  fixed page footers (docs/plan.md, engine rule 4; docs/research/design-audit.md).
 - **Address bar data behind a protocol (`AddressBarData`):** the shell never touches GRDB or the
   network. `LiveAddressBarData` joins Storage, settings and `SuggestionClient`; tests and later
   wiring (tabs, private mode) can swap it.

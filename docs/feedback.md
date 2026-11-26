@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Paper texture:** a subtle, elegant paper texture on the app's own surfaces, never costing frames or quality, never called out in the UI. (Paper lane.)
+
 - **Intro styling:** keep the intro's steps, words and simplicity, but restyle it in Plain's own colors and look (paper, dawn, coral fold) so it no longer reads as Arc's. (Intro restyle lane.)
 
 - **Suggestions over the start-screen mark:** typing in a new tab can draw suggestion rows over the white mark, making them unreadable. Keep the design; the mark should yield smoothly while suggestions show. (State fix lane.)

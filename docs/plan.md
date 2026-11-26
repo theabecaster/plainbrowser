@@ -93,6 +93,28 @@ One local package, targets:
 5. **Crash recovery:** `webViewWebContentProcessDidTerminate` reloads the visible tab (crash-loop guard), flags background tabs to reload on select.
 6. **Speed tricks:** preconnect on link touch-down (injected `<link rel=preconnect>`), back-forward cache on, HTTPS upgrade via `preferredHTTPSNavigationPolicy`, JIT left on (`securityRestrictionMode = .none`).
 
+## 4b. Product principle: opinionated and simple
+
+Plain is a fast, opinionated browser. It makes the decisions so users don't have to.
+
+**The Settings screen holds these items and nothing else:**
+- Search engine. Google by default, plus the popular engines and a custom one.
+- Tab layout: Regular or Side tabs. Only shown where side tabs are possible.
+- Archive tabs after: 12 hours, 1 day (default), 1 week, or never.
+- Clear history and website data.
+
+**Decided for the user, with no setting:**
+- Ad, tracker and cookie-banner blocking is always on. The page menu has "Turn off on this site".
+- HTTPS upgrade, preconnect and tab memory tiers.
+- Desktop or mobile site: picked from the pane width. The page menu can override it, and the choice is remembered per site.
+- Page zoom: remembered per site, automatically.
+- Text size and dark mode follow the system.
+- Haptics and motion follow the system's Reduce Motion setting.
+
+**Not built:** themes, toolbar customization, gesture remapping, per-feature toggles.
+
+**Rule for new settings:** a setting is added only when no single default can serve most people. When in doubt, decide in the logic.
+
 ## 5. Feel: interaction model and motion spec
 
 Model: Arc Search's loop plus Safari's best gestures, minus their known flaws.

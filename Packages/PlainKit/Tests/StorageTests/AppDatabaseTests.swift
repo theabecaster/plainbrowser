@@ -4,7 +4,7 @@ import Testing
 
 @Suite struct AppDatabaseTests {
     @Test func recordedVisitsComeBackNewestFirst() async throws {
-        let database = try AppDatabase.inMemory()
+        let database = try await AppDatabase.inMemory()
         let start = Date(timeIntervalSince1970: 1_800_000_000)
         try await database.record(HistoryVisit(url: URL(string: "https://a.example")!, title: "A", visitedAt: start))
         try await database.record(HistoryVisit(
@@ -17,7 +17,7 @@ import Testing
     }
 
     @Test func limitIsHonored() async throws {
-        let database = try AppDatabase.inMemory()
+        let database = try await AppDatabase.inMemory()
         for minute in 0..<5 {
             try await database.record(HistoryVisit(
                 url: URL(string: "https://example.com/\(minute)")!, title: nil,

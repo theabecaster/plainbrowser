@@ -6,13 +6,16 @@ import GRDB
 public final class AppDatabase: Sendable {
     private let writer: any DatabaseWriter
 
-    /// Opens (or creates) the database at `url` and migrates it to the current schema.
-    public static func open(at url: URL) throws -> AppDatabase {
+    /// Opens (or creates) the database at `url` and migrates it to the current schema. Opening and
+    /// migrating touch the disk, so they run on the global executor, never on the caller's actor.
+    @concurrent
+    public static func open(at url: URL) async throws -> AppDatabase {
         try AppDatabase(DatabasePool(path: url.path))
     }
 
     /// An empty database in memory, for tests and previews.
-    public static func inMemory() throws -> AppDatabase {
+    @concurrent
+    public static func inMemory() async throws -> AppDatabase {
         try AppDatabase(DatabaseQueue())
     }
 

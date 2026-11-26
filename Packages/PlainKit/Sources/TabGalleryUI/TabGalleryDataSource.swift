@@ -77,10 +77,27 @@ public protocol TabGalleryDataSource: AnyObject {
     /// Reopens the most recently closed tab, if any, and returns its id.
     @discardableResult func reopenClosedTab() -> UUID?
     func openInOtherPane(_ id: UUID)
+
+    /// Whether the gallery offers private browsing (its private toggle shows).
+    var supportsPrivateTabs: Bool { get }
+    /// The gallery lists private tabs instead of regular ones; New Tab then opens a private one.
+    var isShowingPrivateTabs: Bool { get }
+    /// The private toggle. The gallery reads `tabs` again after it.
+    func setShowingPrivateTabs(_ isPrivate: Bool)
+
+    /// Whether the gallery menu offers the archive.
+    var canShowArchive: Bool { get }
+    /// "Archived Tabs" from the gallery menu: the shell presents the archive.
+    func showArchive()
 }
 
 extension TabGalleryDataSource {
     public var canOpenInOtherPane: Bool { false }
     public func openInOtherPane(_ id: UUID) {}
+    public var supportsPrivateTabs: Bool { false }
+    public var isShowingPrivateTabs: Bool { false }
+    public func setShowingPrivateTabs(_ isPrivate: Bool) {}
+    public var canShowArchive: Bool { false }
+    public func showArchive() {}
 }
 #endif

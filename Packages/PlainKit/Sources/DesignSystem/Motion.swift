@@ -19,6 +19,9 @@ public enum Motion {
     public static let toolbarSnap = Spring.smooth(duration: 0.25)
     /// Tab switch by bar swipe (M2), with the gesture's velocity.
     public static let tabSwitch = Animation.spring(duration: 0.35, bounce: 0.12)
+    /// The same spring as a value, for `SpringDriver`: the bar swipe runs frame by frame so a
+    /// finger can grab the page mid-flight.
+    public static let tabSwitchSpring = Spring(duration: 0.35, bounce: 0.12)
     /// Page zooms into its card in the tab gallery (M2).
     public static let galleryZoom = Animation.spring(duration: 0.42, bounce: 0)
     /// A thrown card closing (M2).

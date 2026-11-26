@@ -62,10 +62,14 @@ final class TestServer: @unchecked Sendable {
             let agent = request.split(separator: "\r\n")
                 .first { $0.lowercased().hasPrefix("user-agent:") }.map(String.init) ?? ""
             let (status, body) = self.page(for: path, userAgent: agent)
-            let type = path.hasSuffix(".js") ? "application/javascript" : "text/html; charset=utf-8"
+            let isFile = path.hasPrefix("/file.txt")
+            let type = path.hasSuffix(".js") ? "application/javascript" : (isFile ? "text/plain" : "text/html; charset=utf-8")
+            // A download: the browser saves it instead of showing it.
+            let disposition = isFile ? "Content-Disposition: attachment; filename=\"plain-notes.txt\"\r\n" : ""
             let header = """
             HTTP/1.1 \(status)\r
             Content-Type: \(type)\r
+            \(disposition)\
             Content-Length: \(body.utf8.count)\r
             Cache-Control: no-store\r
             Connection: close\r
@@ -86,6 +90,12 @@ final class TestServer: @unchecked Sendable {
             return ("200 OK", html("Plain Test A", "<h1>Page A</h1><p><a href=\"/b\">Go to B</a></p>"))
         case "/b":
             return ("200 OK", html("Plain Test B", "<h1>Page B</h1>"))
+        case "/c":
+            return ("200 OK", html("Plain Test C", "<h1>Page C</h1><p>A third page, for tab switching.</p>"))
+        case "/files":
+            return ("200 OK", html("Plain Files", "<h1>Files</h1><p><a href=\"/file.txt\">Download notes</a></p>"))
+        case "/file.txt":
+            return ("200 OK", "Notes from the Plain test server.\n")
         case "/count":
             loads += 1
             return ("200 OK", html("Plain Counter", "<h1>Load \(loads)</h1>"))

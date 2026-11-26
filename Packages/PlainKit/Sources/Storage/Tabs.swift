@@ -72,6 +72,11 @@ public struct ArchivedTab: Hashable, Sendable, Identifiable {
     public var entry: TabEntry
     public var archivedAt: Date
     public var id: TabID { entry.id }
+
+    public init(entry: TabEntry, archivedAt: Date) {
+        self.entry = entry
+        self.archivedAt = archivedAt
+    }
 }
 
 /// One window's pane selection.
@@ -246,10 +251,16 @@ extension AppDatabase {
     /// state file. Files written after cleanup started are skipped. A file written before that
     /// belongs to a row saved before that, which the id snapshot (taken after the start) holds.
     /// File work runs off GRDB's queues, so other writes never wait for it.
-    public func removeOrphanedTabStates() async throws {
-        let started = Date()
+    ///
+    /// - Parameters:
+    ///   - extra: ids to keep besides the rows' (the caller's open tabs whose rows may not be
+    ///     written yet).
+    ///   - cutoff: only files written before it may go; take it before anything the caller
+    ///     flushes, so a tab made meanwhile keeps its file. Defaults to now.
+    public func removeOrphanedTabStates(alsoKeeping extra: Set<TabID> = [], writtenBefore cutoff: Date? = nil) async throws {
+        let started = cutoff ?? Date()
         let ids = try await writer.read { db in try Self.referencedTabIDs(db) }
-        await tabStates.removeOrphans(keeping: ids, writtenBefore: started)
+        await tabStates.removeOrphans(keeping: ids.union(extra), writtenBefore: started)
     }
 
     static func referencedTabIDs(_ db: Database) throws -> Set<TabID> {

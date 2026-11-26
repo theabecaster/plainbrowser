@@ -91,7 +91,7 @@ extension WebViewPool {
         guard let menu = await linkMenu(for: linkURL, in: tab) else { return nil }
         let preview: UIContextMenuContentPreviewProvider?
         if menu.hasPreview, let url = menu.element.linkURL {
-            preview = { [weak self] in self?.makeLinkPreview(url) }
+            preview = { [weak self] in self?.makeLinkPreview(url, isPrivate: tab.isPrivate) }
         } else {
             preview = nil
         }
@@ -130,10 +130,10 @@ extension WebViewPool {
 
     /// A preview web view: the shared configuration with its own controller and the content
     /// rules, but no delegates, so it can't open windows, show dialogs or download.
-    func makeLinkPreview(_ url: URL) -> UIViewController {
+    func makeLinkPreview(_ url: URL, isPrivate: Bool) -> UIViewController {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.linkPreview, id: signposter.makeSignpostID())
-        let (webView, controller) = makePreviewWebView()
+        let (webView, controller) = makePreviewWebView(isPrivate: isPrivate)
         contentRules?.apply(to: controller, forMainFrameURL: url)
         webView.load(URLRequest(url: url))
         signposter.endInterval(Signposts.linkPreview, interval)

@@ -27,6 +27,17 @@ import Testing
         #expect(try await database.siteContentModes() == ["b.example": "mobile"])
     }
 
+    @Test func pageZoomsSetReplaceAndForget() async throws {
+        let database = try AppDatabase.inMemory()
+        #expect(try await database.sitePageZooms().isEmpty)
+        try await database.setSitePageZoom(1.25, forSite: "a.example")
+        try await database.setSitePageZoom(0.85, forSite: "b.example")
+        try await database.setSitePageZoom(1.5, forSite: "a.example")
+        #expect(try await database.sitePageZooms() == ["a.example": 1.5, "b.example": 0.85])
+        try await database.setSitePageZoom(nil, forSite: "a.example")
+        #expect(try await database.sitePageZooms() == ["b.example": 0.85])
+    }
+
     @Test func blockingAllowListSavesWhole() async throws {
         let database = try AppDatabase.inMemory()
         #expect(try await database.blockingAllowList().isEmpty)

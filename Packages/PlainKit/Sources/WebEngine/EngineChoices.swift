@@ -34,6 +34,10 @@ nonisolated public enum EngineChoices {
     public static let thumbnailPixelsPerPoint: CGFloat = 2
     /// JPEG quality on disk: invisible loss at card size, a third of PNG's size and write time.
     public static let thumbnailJPEGQuality: CGFloat = 0.7
+    /// The bar swipe's full-screen preview of a neighbour tab, in pixels per point (docs/plan.md,
+    /// motion table): sharp enough full width, and a third fewer pixels than a 3x screen. Only the
+    /// two neighbours of the tab on screen keep one.
+    public static let swipeSnapshotPixelsPerPoint: CGFloat = 2
     /// Decoded thumbnails kept in memory. About 8 cards; the rest reload from disk on demand.
     public static let thumbnailMemoryBytes = 24 * 1024 * 1024
 

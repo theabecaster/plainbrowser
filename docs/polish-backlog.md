@@ -63,12 +63,8 @@ Newest feature last.
 
 ## Tab model (lane M2a, 2026-11-26)
 
-- **Engine seam: keep state files for closed and archived tabs.** `WebViewPool.close` deletes the
-  tab's state file, but Reopen Closed Tab and archive restore want it (back/forward list, scroll).
-  The shell should drop the engine tab without deleting the file after `close` and
-  `archiveIdleTabs`; Storage's `TabSessionWriter` deletes state files once no row names the tab.
-- **Thumbnail files.** Storage keeps only the file name and revision; the engine should prune
-  thumbnail files outside `AppDatabase.referencedTabIDs()` at launch.
+- Both items (state files kept on close and archive, thumbnail pruning) are done in the M2 shell
+  wiring.
 
 ## M4 completeness (lane M4, 2026-11-26)
 
@@ -85,14 +81,12 @@ Newest feature last.
 - **Check on the Duo:** long-press menus and the live preview on real links and images (WebKit's
   element info for an unlinked image), the find bar above the keyboard with the bottom pill, PiP
   and fullscreen flags with a real video, `<input type=file>` and `capture` pickers.
-- **Downloads title.** The "Downloads" title sits beside Show in Files instead of centered. (Lead review.)
 
 ## M2b tab gallery (2026-11-26)
 
 - **Decided values outside FixedChoices.** `TabGalleryChoices` (Reopen toast 4 s, 64 MB preview
   cache, 180 pt minimum grid card) and `TabGalleryMetrics.gridAspect` (0.62–1.1) belong in
-  `FixedChoices`; the gallery signposts (`TabGallerySignposts.swift`) belong in `PerfSignposts`.
-  Kept in TabGalleryUI because this lane could not edit BrowserCore or PerfSignposts.
+  `FixedChoices`. (The gallery signposts moved to `PerfSignposts` with the M2 shell wiring.)
 - **Blurry previews on big cards.** `ThumbnailService` captures 200 pt wide; a compact card is
   about 370 pt wide, so its preview is upscaled. Capture visible and neighbour tabs at card width.
 - **Bar over a dense grid.** In the inner-landscape grid, titles and close buttons still show
@@ -114,11 +108,6 @@ Newest feature last.
 - **Reader web view ownership.** The pool makes the reader's web view (`makeAuxiliaryWebView`) but
   `ReaderPresenter` holds it while it shows. Move holding and release into the pool (an
   auxiliary slot per pane) if a second auxiliary view appears. (Code review, round 1.)
-- **Downloads list.** A finished download is an alert with Open; there is no list of downloads
-  in progress or past ones yet. M4 can add one in the page menu.
-- **Restored tabs beyond the last.** Only the last selected tab comes back after a relaunch; the
-  other rows stay in Storage for M2's tab gallery.
-- **Zoom in the page menu.** Not built yet; the reference menu lists it. (Design review, round 1.)
 - **Back and Forward when unavailable.** They stay visible and disabled (system style, stable
   layout); the design review asked to hide them. Decide with the shell lane.
 - **Page menu on the Duo outer screen.** The last section (Edit Favorites, Settings) scrolls below
@@ -128,3 +117,27 @@ Newest feature last.
   shown through a debug launch argument. Check location and camera prompts on the device.
 - **Duo inner screen captures.** The simulator's fold state is set only in Device Hub, so this
   round has iPhone 17 and Duo outer screenshots only.
+
+## M2 shell wiring: tabs, gallery, bar swipe, private (2026-11-26)
+
+- **Blurry card previews.** Still the M2b item above: thumbnails are 200 pt at 2x (400 px) and a
+  phone card is about 370 pt at 3x. A sharper capture needs a bigger file per tab or a top-only
+  crop at card width; decide with the memory budget on the Duo. (Design review, round 1.)
+- **Page menu length.** The Zoom row adds a row to a menu that already scrolls on the Duo outer
+  screen and on iPhone 17 (the last section is cut with no cue). Move History / Edit Favorites /
+  Settings to their own submenu or the tabs button, or drop a section. (Design review, round 1.)
+- **Zoom from the Duo's vertical bar.** UIKit gives no way to update an open `UIBarButtonItem`
+  menu, so there each zoom step closes the menu (the pill's and the glass bar's menus stay open
+  and update).
+- **Blocking per site in private tabs.** Hidden: the allow-list is persistent. A memory-only
+  private allow-list in `ContentBlocker` would bring the toggle back. (Code review, round 1.)
+- **gallery.show measures the spring's settle, not what the eye sees.** `TabGalleryTransition`
+  completes when Core Animation settles the 0.42 s spring, a steady ~1.48 s (perf gate, sim), so the
+  budget is set to it and the metric catches stalls on top. End the interval (and drop the snapshot)
+  at the perceptual duration instead, then tighten the budget.
+- **Gallery selection ring weight.** The blue ring reads strong in the calm gallery; try a thinner
+  ring or the on-glass blue. (Design review, round 1.)
+- **Inner screen and device checks.** No Duo inner screen captures (fold not settable from the
+  CLI). Check on the device: the bar swipe at 120 Hz with a live neighbour, a swipe started on a
+  page still loading, the swipe-up gallery with the system's vertical bar, private tint in dark
+  mode.

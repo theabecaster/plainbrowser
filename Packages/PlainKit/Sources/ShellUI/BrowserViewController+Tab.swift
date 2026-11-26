@@ -4,7 +4,6 @@ import DesignSystem
 import Observation
 import os
 import PerfSignposts
-import QuickLook
 import Reader
 import UIKit
 import WebEngine
@@ -25,8 +24,6 @@ final class EngineUIState {
     #if DEBUG
     var didPreviewPermissionPrompt = false
     #endif
-    /// The file Quick Look shows after "Open" on a finished download.
-    let preview = DownloadPreview()
 }
 
 // MARK: - The tab on screen
@@ -59,14 +56,22 @@ extension BrowserViewController {
         }
     }
 
+    /// Whether `tab`'s visits go into history: never for a private tab.
+    func recordsHistory(for tab: Tab) -> Bool {
+        !tab.isPrivate
+    }
+
     /// After the first frame: warms the engine, then shows the last session's tab under the
     /// search sheet when the user has not opened a page meanwhile.
     func startSession() {
         data.firstFrameDidCommit()
         Task { [weak self, session] in
             let restored = await session.start()
-            guard let self, let restored, self.currentTab == nil else { return }
-            self.show(restored)
+            guard let self else { return }
+            if let restored, self.currentTab == nil { self.show(restored) }
+            self.tabsDidChange()
+            // Idle tabs move to the archive once both the saved tabs and the settings are in.
+            self.archiveIdleTabs()
         }
     }
 
@@ -81,13 +86,16 @@ extension BrowserViewController {
     /// Puts `tab` on screen in place of the current one, which stays in the store.
     func show(_ tab: Tab) {
         guard self.currentTab !== tab else { return }
+        tabsUI.swipe.cancel()
         if let current = self.currentTab {
             closeReader(animated: false)
             engineUI.observation?.cancel()
             current.onProgress = nil
+            keepPreview(of: current, beside: tab)
             session.pool.detach(current)
         }
         self.currentTab = tab
+        setPrivateChrome(tab.isPrivate)
         // A typed load that ended while the tab was off screen left its marker behind.
         if !tab.isLoading { engineUI.typedVisitTabs.remove(tab.id) }
         session.tabs.select(tab)
@@ -113,11 +121,11 @@ extension BrowserViewController {
         tab.onVisit = { [weak self, weak tab] url, title in
             guard let self, let tab else { return }
             let kind: VisitKind = self.engineUI.typedVisitTabs.remove(tab.id) != nil ? .typed : .link
-            guard self.recordsHistory else { return }
+            guard self.recordsHistory(for: tab) else { return }
             self.data.pageVisited(url: url, title: title, kind: kind)
         }
-        tab.onVisitTitleChange = { [weak self] url, title in
-            guard let self, self.recordsHistory else { return }
+        tab.onVisitTitleChange = { [weak self, weak tab] url, title in
+            guard let self, let tab, self.recordsHistory(for: tab) else { return }
             self.data.pageTitleChanged(url: url, title: title)
         }
         engineUI.observation = TabObservation(tab) { [weak self] old, new in
@@ -126,41 +134,66 @@ extension BrowserViewController {
         #if DEBUG
         previewPermissionPromptIfAsked(for: tab)
         #endif
+        refreshNeighbourPreviews()
+        updateButtons()
     }
 
-    /// Closes `tab` and shows the next one (its opener for a popup). With no tab left, the search
-    /// field opens, as after the last tab closes (docs/ui-reference.md).
-    func closeTab(_ tab: Tab) {
-        let wasShown = tab === self.currentTab
-        if wasShown {
+    /// Takes the page off screen with no tab in its place (the tab on screen is closing, or the
+    /// pane shows the start page).
+    func clearPage() {
+        tabsUI.swipe.cancel()
+        if let current = currentTab {
             closeReader(animated: false)
             engineUI.observation?.cancel()
             engineUI.observation = nil
-            self.currentTab = nil
+            current.onProgress = nil
+            session.pool.detach(current)
+            engineUI.crashedTabs.remove(current.id)
+            engineUI.typedVisitTabs.remove(current.id)
         }
+        currentTab = nil
+        pill.display(url: nil)
+        pill.progressBar.finish()
+        setPrivateChrome(false)
+        refreshNeighbourPreviews()
+        updateButtons()
+        updatePageState()
+    }
+
+    /// Closes `tab` and shows the next one (its opener for a popup). With no tab left, the search
+    /// field opens, as after the last tab closes (docs/ui-reference.md). `offerReopen` shows the
+    /// Reopen toast (a close from the tabs menu).
+    func closeTab(_ tab: Tab, offerReopen: Bool = false) {
+        let wasShown = tab === self.currentTab
+        if wasShown { clearPage() }
         engineUI.crashedTabs.remove(tab.id)
         engineUI.typedVisitTabs.remove(tab.id)
-        let next = session.tabs.close(tab)
+        session.tabs.close(tab.id)
+        if offerReopen, !tab.isPrivate { self.offerReopen() }
         guard wasShown else { return }
-        if let next {
+        if let next = session.tabs.selected {
             show(next)
         } else {
-            pill.display(url: nil)
-            updateButtons()
-            pillTappedToEdit()
+            beginAddressEditing()
         }
     }
 
-    private func pillTappedToEdit() {
-        applyEditingLayout(true, animated: true)
-        if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
+    /// The chrome's private tint, and private suggestions (no remote ones) in the search field.
+    func setPrivateChrome(_ isPrivate: Bool) {
+        data.isPrivate = isPrivate
+        guard pill.isPrivateTint != isPrivate else { return }
+        pill.isPrivateTint = isPrivate
+        Motion.animate(Motion.quick) {
+            self.pill.setPrivate(isPrivate)
+            self.buttonBar.setPrivate(isPrivate)
+            self.tabsUI.toast.setPrivate(isPrivate)
+            // The strip under the status bar too, so the whole screen says private, quietly.
+            self.view.backgroundColor = isPrivate ? Palette.privateBackground : Palette.background
+        }
     }
 
     /// Follows the tab's observed state: the pill, the buttons, progress and the page's state.
     private func tabChanged(from old: TabSnapshot?, to new: TabSnapshot) {
-        if let tab = currentTab, old?.url != new.url || old?.title != new.title {
-            session.tabs.pageChanged(tab)
-        }
         if old?.url != new.url || old?.security != new.security {
             pill.display(url: new.url, notSecure: new.security == .notSecure || new.security == .certificateBypassed)
             if !isEditingAddress { pill.textField.text = new.url?.absoluteString }
@@ -273,6 +306,9 @@ extension BrowserViewController {
             tab?.setContentModeOverride(isDesktop ? .mobile : .desktop)
         }
         desktop.accessibilityIdentifier = "menu.desktopSite"
+        // The blocking allow-list is saved to disk: a private tab must not add its site to it.
+        // Private tabs follow the regular choice instead (polish backlog: a private-only toggle).
+        guard !tab.isPrivate else { return [desktop] }
 
         let blocking = session.isBlockingEnabled(for: url)
         let toggle = UIAction(
@@ -325,7 +361,7 @@ extension BrowserViewController {
                 tab.load(url)
             }
             reader.onShown = { [weak self] in self?.updateButtons() }
-            reader.prepare(pool: session.pool, in: self.webContainer, scrollDelegate: self)
+            reader.prepare(pool: session.pool, isPrivate: tab.isPrivate, in: self.webContainer, scrollDelegate: self)
             // A tap on the status bar scrolls the reader, not the page under it.
             session.pool.scrollView(for: tab)?.scrollsToTop = false
             self.attachEdgeEffects()
@@ -431,18 +467,4 @@ final class PromptQueue {
     }
 }
 
-// MARK: - Download preview
-
-/// Quick Look's data source for one finished download.
-final class DownloadPreview: NSObject, QLPreviewControllerDataSource {
-    var file: URL?
-
-    nonisolated func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
-        MainActor.assumeIsolated { file == nil ? 0 : 1 }
-    }
-
-    nonisolated func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> any QLPreviewItem {
-        MainActor.assumeIsolated { (file ?? URL(fileURLWithPath: "/")) as NSURL }
-    }
-}
 #endif

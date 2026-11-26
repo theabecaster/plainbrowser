@@ -64,6 +64,37 @@ extension AppDatabase {
         }
     }
 
+    // MARK: Page zoom
+
+    /// Every remembered page zoom, site to zoom (1 is 100%). Read once at launch: the engine applies
+    /// it at every page commit, so the shell answers from memory.
+    public func sitePageZooms() async throws -> [String: Double] {
+        try await writer.read { db in
+            var zooms: [String: Double] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT site, zoom FROM \(Schema.sitePageZoom)") {
+                zooms[row["site"]] = row["zoom"]
+            }
+            return zooms
+        }
+    }
+
+    /// Remembers `zoom` for `site`; nil forgets it (the site is back at 100%).
+    public func setSitePageZoom(_ zoom: Double?, forSite site: String) async throws {
+        try await writer.write { db in
+            if let zoom {
+                try db.execute(
+                    sql: """
+                    INSERT INTO \(Schema.sitePageZoom) (site, zoom) VALUES (?, ?)
+                    ON CONFLICT(site) DO UPDATE SET zoom = excluded.zoom
+                    """,
+                    arguments: [site, zoom]
+                )
+            } else {
+                try db.execute(sql: "DELETE FROM \(Schema.sitePageZoom) WHERE site = ?", arguments: [site])
+            }
+        }
+    }
+
     // MARK: Blocking off per site
 
     public func blockingAllowList() async throws -> Set<String> {

@@ -136,6 +136,43 @@ public enum Signposts {
     public static let tabSessionLoad: StaticString = "tab.sessionLoad"
     /// Interval: one batched tab write, off the main thread (Storage emits it).
     public static let tabSave: StaticString = "tab.save"
+    /// Interval: a swipe along the expanded address bar, from the finger starting to move until the
+    /// page settles. Exclusive and without an end message, so XCTOSSignpostMetric measures it.
+    public static let tabSwipe: StaticString = "tab.swipe"
+    /// Event right after `tab.swipe` ends: where it landed, "switched" (the neighbour tab),
+    /// "stayed", "newTab" (past the last tab) or "cancelled".
+    public static let tabSwipeEnd: StaticString = "tab.swipeEnd"
+    /// Event: the tab gallery opened from the tabs button ("button") or a swipe up from the address
+    /// bar ("swipe"); the page then zooms into its card under `gallery.show`.
+    public static let galleryOpen: StaticString = "gallery.open"
+    /// Event: the archive screen opened from the gallery.
+    public static let archiveShow: StaticString = "archive.show"
+    /// Event: private browsing turned on or off in the gallery.
+    public static let privateMode: StaticString = "tab.privateMode"
+    /// Event: a short toast over the chrome (Reopen Tab after a close, a finished download).
+    public static let toast: StaticString = "toast.show"
+
+    // MARK: Tab gallery (TabGalleryUI emits these)
+
+    /// Interval: the page zooming into its card, until the gallery is settled.
+    public static let galleryShow: StaticString = "gallery.show"
+    /// Interval: a card zooming into its page, until the page is settled.
+    public static let galleryOpenTab: StaticString = "gallery.openTab"
+    /// Interval: a card flicked away (or closed from its button or menu), until the cards reflow.
+    public static let galleryCardClose: StaticString = "gallery.cardClose"
+    /// Interval: one scroll of the gallery, from the finger down until it stops moving.
+    public static let galleryScroll: StaticString = "gallery.scroll"
+    /// Interval: applying a new tab list to the gallery (diff and layout).
+    public static let galleryReload: StaticString = "gallery.reload"
+    /// Events: gallery actions with no motion of their own.
+    public static let galleryNewTab: StaticString = "gallery.newTab"
+    public static let galleryReopen: StaticString = "gallery.reopen"
+    public static let galleryCloseAll: StaticString = "gallery.closeAll"
+    public static let galleryReorder: StaticString = "gallery.reorder"
+    public static let galleryMenu: StaticString = "gallery.menu"
+    public static let galleryCopyLink: StaticString = "gallery.copyLink"
+    public static let galleryShare: StaticString = "gallery.share"
+    public static let galleryOtherPane: StaticString = "gallery.otherPane"
 
     /// Interval: putting a tab's page on screen (tab switch). Restoring a discarded tab starts here
     /// too; its page coming back is `tab.restore`.

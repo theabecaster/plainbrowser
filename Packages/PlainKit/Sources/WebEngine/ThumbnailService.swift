@@ -41,6 +41,7 @@ public final class ThumbnailService {
         )
         configuration.afterScreenUpdates = false
         let id = tab.id
+        let isPrivate = tab.isPrivate
         let generation = generations[id, default: 0] + 1
         generations[id] = generation
         let signposter = Signposts.signposter
@@ -56,6 +57,8 @@ public final class ThumbnailService {
             guard let self, let image, self.generations[id] == generation else { return }
             self.cache.setObject(image, forKey: id as NSUUID, cost: Self.cost(of: image))
             tab?.thumbnailRevision += 1
+            // A private tab's page never reaches the disk; its thumbnail lives in memory only.
+            guard !isPrivate else { return }
             let url = self.fileURL(for: id)
             let directory = self.directory
             self.enqueue {
@@ -65,6 +68,11 @@ public final class ThumbnailService {
                 self.onStored?(id, snapshotTime, encodeAndWrite)
             }
         }
+    }
+
+    /// The tab's thumbnail if it is decoded in memory now, else nil. Never touches the disk.
+    public func cachedThumbnail(for id: UUID) -> UIImage? {
+        cache.object(forKey: id as NSUUID)
     }
 
     /// The tab's thumbnail, ready to draw without a decode on the main thread.
@@ -81,6 +89,35 @@ public final class ThumbnailService {
         cache.removeObject(forKey: id as NSUUID)
         let url = fileURL(for: id)
         enqueue { await Self.delete(url) }
+    }
+
+    /// Drops the tab's thumbnail from memory and stops a capture in flight, but keeps its file: a
+    /// closed or archived tab can come back with its card.
+    func forget(_ id: UUID) {
+        generations[id, default: 0] += 1
+        cache.removeObject(forKey: id as NSUUID)
+    }
+
+    /// Deletes thumbnail files of tabs not in `keep` (no row names them any more) that were written
+    /// before `cutoff`, so a tab opened meanwhile keeps its new file. Off the main thread; run once
+    /// at launch.
+    public func prune(keeping keep: Set<UUID>, writtenBefore cutoff: Date) async {
+        let directory = directory
+        enqueue { await Self.prune(directory, keeping: keep, writtenBefore: cutoff) }
+        await fileWork?.value
+    }
+
+    @concurrent
+    private nonisolated static func prune(_ directory: URL, keeping keep: Set<UUID>, writtenBefore cutoff: Date) async {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: [.contentModificationDateKey]
+        )) ?? []
+        for file in files where file.pathExtension == "jpg" {
+            if let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent), keep.contains(id) { continue }
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            guard let modified, modified < cutoff else { continue }
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 
     private func enqueue(_ work: @escaping () async -> Void) {

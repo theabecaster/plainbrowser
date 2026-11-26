@@ -27,6 +27,12 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     /// The bar is collapsed, or on its way there: only the tap works.
     var isCompact = false
     private var url: URL?
+    private var notSecure = false
+    /// The glass has the private tint (`setPrivate`).
+    var isPrivateTint = false
+    private var menuInteraction: UIContextMenuInteraction?
+    /// The neighbour tab's host, sliding in during a bar swipe.
+    private var incomingHost: UILabel?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -39,6 +45,8 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         hostLabel.lineBreakMode = .byTruncatingHead
         hostLabel.translatesAutoresizingMaskIntoConstraints = false
         glass.contentView.addSubview(hostLabel)
+        // The hosts slide inside the capsule during a bar swipe, never past it.
+        glass.contentView.clipsToBounds = true
 
         textField.accessibilityIdentifier = "searchField"
         textField.placeholder = "Search or enter address"
@@ -109,7 +117,9 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         progressBar.layer.cornerRadius = 1.25
 
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
-        addInteraction(UIContextMenuInteraction(delegate: self))
+        let menuInteraction = UIContextMenuInteraction(delegate: self)
+        addInteraction(menuInteraction)
+        self.menuInteraction = menuInteraction
 
         accessibilityIdentifier = "addressPill"
         accessibilityLabel = "Address"
@@ -139,26 +149,90 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     /// host, as Safari does.
     func display(url: URL?, notSecure: Bool = false) {
         self.url = url
+        self.notSecure = notSecure
+        hostLabel.attributedText = Self.hostText(for: url, notSecure: notSecure, placeholder: textField.placeholder ?? "")
+        accessibilityValue = url?.absoluteString ?? hostLabel.text
+    }
+
+    /// What the resting pill says for `url`: its host without `www.`, after "Not Secure —" when
+    /// the page is not secure; the placeholder without a page.
+    private static func hostText(for url: URL?, notSecure: Bool, placeholder: String) -> NSAttributedString {
         if let url, let host = url.host(), !host.isEmpty {
             let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-            if notSecure {
-                let text = NSMutableAttributedString(
-                    string: "Not Secure — ", attributes: [.foregroundColor: Palette.textSecondary]
-                )
-                text.append(NSAttributedString(string: name, attributes: [.foregroundColor: Palette.textPrimary]))
-                hostLabel.attributedText = text
-            } else {
-                hostLabel.text = name
-                hostLabel.textColor = Palette.textPrimary
+            guard notSecure else {
+                return NSAttributedString(string: name, attributes: [.foregroundColor: Palette.textPrimary])
             }
+            let text = NSMutableAttributedString(string: "Not Secure — ", attributes: [.foregroundColor: Palette.textSecondary])
+            text.append(NSAttributedString(string: name, attributes: [.foregroundColor: Palette.textPrimary]))
+            return text
         } else if let url {
-            hostLabel.text = url.absoluteString
-            hostLabel.textColor = Palette.textPrimary
-        } else {
-            hostLabel.text = textField.placeholder
-            hostLabel.textColor = Palette.textSecondary
+            return NSAttributedString(string: url.absoluteString, attributes: [.foregroundColor: Palette.textPrimary])
         }
-        accessibilityValue = url?.absoluteString ?? hostLabel.text
+        return NSAttributedString(string: placeholder, attributes: [.foregroundColor: Palette.textSecondary])
+    }
+
+    /// The glass tint: Paper, or the quiet private tint while a private tab is on screen.
+    func setPrivate(_ isPrivate: Bool) {
+        let effect = UIGlassEffect(style: .regular)
+        effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
+        effect.isInteractive = true
+        glass.effect = effect
+        accessibilityLabel = isPrivate ? "Private Address" : "Address"
+    }
+
+    // MARK: Bar swipe
+
+    /// How fast the hosts fade per unit of swipe: each is fully gone or in by 80% of the way, and
+    /// both show at half opacity or more around the middle, so the pill never reads empty.
+    private static let hostFadeRate: CGFloat = 1.25
+
+    /// Starts a bar swipe toward the tab showing `url`: its host waits beside the current one,
+    /// inside the glass, which itself never moves.
+    func beginHostSlide(to url: URL?) {
+        incomingHost?.removeFromSuperview()
+        let label = UILabel()
+        label.font = hostLabel.font
+        label.adjustsFontForContentSizeCategory = true
+        label.textAlignment = .center
+        label.lineBreakMode = .byTruncatingHead
+        label.attributedText = Self.hostText(for: url, notSecure: false, placeholder: "New Tab")
+        label.alpha = 0
+        label.isAccessibilityElement = false
+        let height = max(hostLabel.bounds.height, label.font.lineHeight)
+        label.frame = CGRect(
+            x: Spacing.l, y: (hostLabel.center.y - height / 2).rounded(),
+            width: max(0, bounds.width - Spacing.l * 2), height: height
+        )
+        glass.contentView.addSubview(label)
+        incomingHost = label
+    }
+
+    /// Moves the hosts with the page: `progress` is the page's offset over its width (negative
+    /// toward the next tab). The current host slides and fades out, the neighbour's in.
+    func slideHost(progress: CGFloat) {
+        let travel = bounds.width * 0.5
+        let p = min(max(progress, -1), 1)
+        hostLabel.transform = CGAffineTransform(translationX: p * travel, y: 0)
+        // A crossfade that overlaps, so some host always reads mid-swipe.
+        hostLabel.alpha = max(0, 1 - abs(p) * Self.hostFadeRate)
+        guard let incoming = incomingHost else { return }
+        let side: CGFloat = p < 0 ? 1 : -1
+        incoming.transform = CGAffineTransform(translationX: (p + side) * travel, y: 0)
+        incoming.alpha = min(1, abs(p) * Self.hostFadeRate)
+    }
+
+    /// Ends a bar swipe: the current host comes back (the new tab's host arrives through
+    /// `display(url:)` when it switched).
+    func endHostSlide() {
+        incomingHost?.removeFromSuperview()
+        incomingHost = nil
+        hostLabel.transform = .identity
+        hostLabel.alpha = isEditing ? 0 : 1
+    }
+
+    /// Replaces the page menu while it is open (the zoom row's percentage changed).
+    func updateVisibleMenu(_ menu: UIMenu) {
+        menuInteraction?.updateVisibleMenu { _ in menu }
     }
 
     /// Switches between the resting pill and the search field. Animatable: call it inside an

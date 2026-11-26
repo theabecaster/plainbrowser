@@ -45,6 +45,12 @@ public protocol AddressBarData: AnyObject {
     /// The first frame is on screen: work held back from launch (`prepareForTyping`'s
     /// preconnect, which builds a URL session) may start.
     func firstFrameDidCommit()
+    /// A private tab is on screen: no remote suggestions and no preconnect (docs/plan.md, data
+    /// rule 6).
+    var isPrivate: Bool { get set }
+    /// Settings > Archive Tabs, once the saved settings are read; nil before, so nothing is
+    /// archived on a default the user may have changed.
+    var archiveAfter: ArchiveAfter? { get }
 }
 
 extension AddressBarData {
@@ -66,10 +72,14 @@ extension AddressBarData {
 /// It holds the live copy of the settings: a Settings save calls `apply(_:)`, so the next search
 /// and the next suggestion request use the new engine.
 public final class LiveAddressBarData: AddressBarData {
-    /// The settings in effect. Tab layout and archive interval wait here for the tab features.
+    /// The settings in effect: the search engine here, the archive interval for the shell.
     public private(set) var settings = BrowserSettings.defaults
-    /// Private browsing: no remote suggestions, no preconnect. False until M2 adds private tabs.
+    /// Private browsing: no remote suggestions, no preconnect. The shell sets it from the tab on
+    /// screen.
     public var isPrivate = false
+    /// True once the saved settings are read (or a save replaced them).
+    private var hasSettings = false
+    public var archiveAfter: ArchiveAfter? { hasSettings ? settings.archiveAfter : nil }
     private var hasFirstFrame = false
     private var preconnectAfterFirstFrame = false
     public var searchEngine: SearchEngine { settings.searchEngine }
@@ -100,12 +110,14 @@ public final class LiveAddressBarData: AddressBarData {
         if let stored = try? await database.settings(), edits == settingsEdits {
             settings = stored
         }
+        hasSettings = true
     }
 
     /// Puts `settings` in effect; Settings calls it after each save.
     public func apply(_ settings: BrowserSettings) {
         settingsEdits += 1
         self.settings = settings
+        hasSettings = true
     }
 
     /// Writes buffered history. Call when the app moves to the background.

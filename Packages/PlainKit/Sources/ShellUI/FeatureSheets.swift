@@ -76,6 +76,21 @@ public final class FeatureSheets {
         return Self.sheet(FavoritesEditor(model: model, onDone: onDone), identifier: "favoritesSheet")
     }
 
+    /// Archived tabs. Restores and deletes go to the shell, which hands them to `TabStore`.
+    func archive(
+        footer: String, onRestore: @escaping (ArchivedTab) -> Void, onDelete: @escaping ([TabID]) -> Void,
+        onDone: @escaping () -> Void
+    ) -> UIViewController? {
+        guard let database else { return nil }
+        let model = ArchiveModel(store: database, onRestore: onRestore, onDelete: onDelete)
+        return Self.sheet(ArchiveView(model: model, footer: footer, onDone: onDone), identifier: "archiveSheet")
+    }
+
+    /// Downloads in progress and finished ones, from the engine's coordinator.
+    func downloads<Source: DownloadListSource>(source: Source, onDone: @escaping () -> Void) -> UIViewController {
+        Self.sheet(DownloadsView(source: source, onDone: onDone), identifier: "downloadsSheet")
+    }
+
     /// A page sheet: every screen is a list that wants the room.
     private static func sheet(_ view: some View, identifier: String) -> UIViewController {
         let host = UIHostingController(rootView: view)

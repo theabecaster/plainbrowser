@@ -175,4 +175,17 @@ public enum FixedChoices {
     /// Tab gallery columns below and above `tabGalleryWideWidth`. Always even, so on the Duo's
     /// inner screen no card straddles the fold (docs/plan.md, section 6).
     public static let tabGalleryColumns = (narrow: 2, wide: 4)
+
+    // MARK: Tab switching and toasts
+
+    /// A bar swipe past the last tab shows a New Tab card; pulled this far, letting go opens a
+    /// new tab (docs/plan.md, motion table). Far enough not to happen by accident.
+    public static let newTabSwipeThreshold: Double = 80
+    /// A swipe up from the address bar opens the gallery once it has covered this share of the
+    /// screen's height, or at any speed upward past `galleryFlickSpeed` points per second.
+    public static let gallerySwipeCommit: Double = 0.3
+    public static let galleryFlickSpeed: Double = 600
+    /// A short toast (Reopen Tab after a close, a finished download) stays this long: time to
+    /// read a few words and reach the button, gone before it is in the way. Same as the gallery's.
+    public static let toastDuration = Duration.seconds(4)
 }

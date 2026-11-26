@@ -116,7 +116,7 @@ struct BlockingDemo: View {
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 12)
-        .frame(height: 54)
+        .frame(height: 44)
         .background(LinearGradient(colors: [Color(red: 1, green: 0.55, blue: 0.1), Color(red: 0.95, green: 0.15, blue: 0.45)],
                                    startPoint: .leading, endPoint: .trailing))
     }
@@ -127,15 +127,8 @@ struct BlockingDemo: View {
                 .font(.system(size: 22, weight: .black, design: .serif))
                 .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
-                .padding(.top, 10)
-            HStack(spacing: 14) {
-                ForEach(["Trails", "Gear", "Maps", "Camps"], id: \.self) { Text($0) }
-            }
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.black.opacity(0.6))
-            .frame(maxWidth: .infinity)
-            .padding(.top, 4)
-            .padding(.bottom, 12)
+                .padding(.top, 6)
+                .padding(.bottom, 8)
             Text("Twelve Quiet Trails Near the Coast")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.black)
@@ -157,7 +150,7 @@ struct BlockingDemo: View {
                     }
                 }
                 .padding(.horizontal, 14)
-                .padding(.top, 10)
+                .padding(.top, 8)
             lines(3).padding(.top, 12)
             if inlineAd { sponsored.transition(.clutter) }
             lines(4).padding(.top, 10)
@@ -231,7 +224,7 @@ struct BlockingDemo: View {
                 .background(Color(red: 0.1, green: 0.4, blue: 0.95), in: .rect(cornerRadius: 6)).foregroundStyle(.white)
         }
         .padding(12)
-        .padding(.bottom, 22)
+        .padding(.bottom, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.white)
         .overlay(alignment: .top) { Rectangle().fill(.black.opacity(0.08)).frame(height: 1) }

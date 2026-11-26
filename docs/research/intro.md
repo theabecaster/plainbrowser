@@ -61,7 +61,7 @@ own words. It uses no Arc text, logo or image assets.
 | Promise line | "The web, *plainly*." with "Nothing in the way of the page." |
 | "Meet your new favorite browser" | "Built to stay *out of your way*", with four cream-paper cards: Blocking, Everywhere; Tabs Tidy Themselves; Private Tabs; Made for iPhone Duo. |
 | 3 x 3 icon grid | "Pick your *icon*": 2 x 2 grid of the Stem colorways (Dawn, Night, Coral, Paper), a coral check under the picked one. Settings > App Icon changes it later. |
-| Seam wipe between two page versions | "The page, *minus the junk*": one page mock whose clutter leaves piece by piece (the cookie wall drops away, the video ad shrinks into its corner, the banner and sponsored box fold shut, the tracker count turns into "9 blocked") while the article reflows up. A reflow shows what blocking does to the page; a wipe only compares two pictures. The caption says Plain blocks these on every site, because blocking is always on. |
+| Seam wipe between two page versions | "The page, minus the *junk*": one page mock whose clutter leaves piece by piece (the cookie wall drops away, the video ad shrinks into its corner, the banner and sponsored box fold shut, the tracker count turns into "9 blocked") while the article reflows up. A reflow shows what blocking does to the page; a wipe only compares two pictures. The caption says Plain blocks these on every site, because blocking is always on. |
 | "Never see another ad" on white | "Make Plain your *default*" on cream paper with the mark (behind `FixedChoices.defaultBrowserPromptsEnabled` until the entitlement lands). |
 | Dissolve into search | The step blurs away, the browser comes up under the intro with its search field focused, and the field fades over the rising keyboard. |
 

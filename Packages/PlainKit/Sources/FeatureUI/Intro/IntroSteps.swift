@@ -255,7 +255,7 @@ private struct BlockingStep: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DisplayText(lead: "The page,", emphasis: "minus the junk", trail: "")
+            DisplayText(lead: "The page, minus the", emphasis: "junk", trail: "")
                 .padding(.top, 4)
                 .entrance(1)
             BlockingDemo(model: model)

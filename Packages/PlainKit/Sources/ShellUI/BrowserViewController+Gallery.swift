@@ -361,6 +361,9 @@ extension BrowserViewController: GalleryHost {
         }
         let showsStart = currentTab.map { session.tabs.isEmpty($0.id) } ?? true
         start.isHidden = !showsStart
+        // Back on an idle start screen with the field closed (a load stopped before it
+        // committed): the mark and its company return.
+        if showsStart, !isEditingAddress, start.isReceded { start.setReceded(false, animated: true) }
         if showsStart { applyStartShortcuts() }
         // Over a blank tab's web view, under the page-state message.
         if showsStart {

@@ -236,5 +236,7 @@ Newest feature last.
 - **Fixed choices.** The tabs tip's trigger (2 gallery opens) and display count, the bump's
   travel and the edge swipe's commit distance live in their files; move them to `FixedChoices`
   when that file is free of other lanes' edits. (Code review, round 1.)
+- **Start screen recede values.** The 94 % scale and the drift live in `EmptyTabView.setReceded`;
+  move them to `Motion` with the other motion values. (Code review, round 3.)
 - **Signposts.** New Tab reusing an empty tab emits no `tab.open`; the tip's display and
   retirement emit none. (Code review, round 1.)

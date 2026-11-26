@@ -56,8 +56,10 @@ public final class FeatureSheets {
 
     #if os(iOS)
     /// Settings, with a single Done button.
-    func settings(onDone: @escaping () -> Void) -> UIViewController? {
+    /// - Parameter showsTabLayout: the Tab Layout row shows only where side tabs can show.
+    func settings(showsTabLayout: Bool = true, onDone: @escaping () -> Void) -> UIViewController? {
         guard let model = makeSettingsModel() else { return nil }
+        model.showsTabLayout = showsTabLayout
         return Self.sheet(SettingsView(model: model, onDone: onDone), identifier: "settingsSheet")
     }
 

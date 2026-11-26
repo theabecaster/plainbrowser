@@ -20,10 +20,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }()
     /// The engine: pool, tabs, content blocking and reader. Its stores wait for the database.
-    private lazy var session = BrowserSession(
-        database: { [database] in await database.value },
-        tabStates: TabStateStore(directory: options.tabStateDirectory)
-    )
+    /// Made when the scene connects, for the window the scene showed last time.
+    private var session: BrowserSession!
+    /// Where a scene keeps its window's id across launches (per-window state, docs/plan.md,
+    /// section 6): each scene comes back to its own tabs and panes.
+    private static let windowIDKey = "plain.windowID"
     private let addressBarData = LiveAddressBarData()
     /// Settings, History and the favorites editor. A saved setting goes straight to the address
     /// bar, so the next search uses it.
@@ -77,6 +78,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func showBrowser(in windowScene: UIWindowScene) {
         browserShown = true
         let window = UIWindow(windowScene: windowScene)
+        let savedWindow = (windowScene.session.userInfo?[Self.windowIDKey] as? String).flatMap(UUID.init(uuidString:))
+        self.session = BrowserSession(
+            database: { [database] in await database.value },
+            tabStates: TabStateStore(directory: self.options.tabStateDirectory),
+            windowID: savedWindow
+        )
         let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) {
             Signposts.signposter.endInterval(Signposts.launch, launchInterval)
         }
@@ -89,6 +96,25 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.makeKeyAndVisible()
         self.window = window
         attachDatabase(to: browser)
+        #if DEBUG
+        // `-PlainOpen <url>,<url>` opens pages after launch, `-PlainSplit` puts the last one in a
+        // split's other pane and `-PlainSidebar rail|expanded|hidden` turns side tabs on in that
+        // state: screenshots of Duo states the simulator reaches only through Device Hub.
+        let arguments = ProcessInfo.processInfo.arguments
+        func value(after flag: String) -> String? {
+            arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+        }
+        let pages = value(after: "-PlainOpen")?.split(separator: ",").compactMap { URL(string: String($0)) } ?? []
+        browser.debugSetUp(open: pages, split: arguments.contains("-PlainSplit"), sidebar: value(after: "-PlainSidebar"))
+        #endif
+    }
+
+    func sceneWillResignActive(_ scene: UIScene) {
+        // Final once the saved tabs are in; written each time so the next launch finds it.
+        guard let session else { return }
+        var info = scene.session.userInfo ?? [:]
+        info[Self.windowIDKey] = session.windowID.uuidString
+        scene.session.userInfo = info
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
@@ -98,7 +124,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         Task { await data.flush() }
         // The pool saves every tab's page state on its own (willResignActive); this writes the
         // tab list.
-        let session = session
+        guard let session else { return }
         Task { await session.saveTabs() }
     }
 

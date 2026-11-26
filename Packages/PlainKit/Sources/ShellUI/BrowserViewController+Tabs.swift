@@ -18,6 +18,8 @@ extension BrowserViewController {
 
     /// The tabs button: the gallery. Pressed while the gallery is up, it goes back to the page.
     func tabsButtonTapped() {
+        // With side tabs, the button shows and hides the sidebar; the gallery stays in the menu.
+        if !isShowingGallery, toggleSidebar() { return }
         if isShowingGallery {
             if let id = currentTab?.id, tabsUI.galleryTabs?.isShowingPrivateTabs == currentTab?.isPrivate {
                 galleryOpenTab(id)
@@ -208,13 +210,15 @@ extension BrowserViewController {
 // MARK: - Link menu
 
 extension BrowserViewController {
-    /// The other pane arrives with the Duo split (M3).
-    public func canOpenInOtherPane(from tab: Tab) -> Bool { false }
+    /// Where a split can show (the Duo's inner screen): it opens one, or uses the other pane.
+    public func canOpenInOtherPane(from tab: Tab) -> Bool { canSplit }
 
     /// Open in New Tab shows the link at once; Open in Background loads it behind the page and
     /// says so with a toast that can show it.
     public func tab(_ tab: Tab, open url: URL, placement: LinkOpenPlacement) {
         switch placement {
+        case .otherPane where canSplit:
+            openInOtherPane(url, opener: tab)
         case .newTab, .otherPane:
             let new = session.tabs.newTab(opener: tab)
             new.load(url)

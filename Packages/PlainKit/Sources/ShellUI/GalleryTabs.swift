@@ -16,6 +16,8 @@ protocol GalleryHost: AnyObject {
     func galleryReopenClosedTab() -> TabID?
     func galleryShowArchive()
     var galleryCanShowArchive: Bool { get }
+    var galleryCanOpenInOtherPane: Bool { get }
+    func galleryOpenInOtherPane(_ id: TabID)
 }
 
 /// The tab gallery's data source over `EngineTabs` (and so BrowserCore's `TabStore`, the one owner
@@ -32,21 +34,17 @@ final class GalleryTabs: TabGalleryDataSource {
     }
 
     var tabs: [TabGalleryItem] {
-        engineTabs.entries(private: isShowingPrivateTabs).map { entry in
-            let tab = engineTabs.existingTab(entry.id)
-            return TabGalleryItem(
-                id: entry.id,
-                title: tab?.title ?? entry.title ?? "",
-                url: tab?.url ?? entry.url,
-                isPrivate: entry.isPrivate,
-                thumbnailRevision: entry.thumbnail?.revision ?? 0
-            )
-        }
+        engineTabs.galleryItems(private: isShowingPrivateTabs)
     }
 
     var selectedTabID: UUID? { engineTabs.selectedID }
     var canReopenClosedTab: Bool { !isShowingPrivateTabs && engineTabs.canReopenClosedTab }
     var supportsPrivateTabs: Bool { true }
+    var canOpenInOtherPane: Bool { host?.galleryCanOpenInOtherPane ?? false }
+
+    func openInOtherPane(_ id: UUID) {
+        host?.galleryOpenInOtherPane(id)
+    }
     var canShowArchive: Bool { !isShowingPrivateTabs && (host?.galleryCanShowArchive ?? false) }
 
     func thumbnail(for id: UUID) async -> UIImage? {

@@ -1,0 +1,83 @@
+# Source of truth for Plain.xcodeproj, which is generated and not tracked.
+# Run `xcodegen generate` after cloning and after adding, moving or deleting files.
+name: Plain
+options:
+  bundleIdPrefix: dev.abrahamgonzalez
+  deploymentTarget:
+    iOS: "27.1"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: R2PVQ496X7
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    TARGETED_DEVICE_FAMILY: "1"
+packages:
+  PlainKit:
+    path: Packages/PlainKit
+targets:
+  # A thin wrapper: launch, scene and window. Everything else lives in Packages/PlainKit.
+  Plain:
+    type: application
+    platform: iOS
+    sources:
+      - path: Plain
+      # The app icon, an Icon Composer document. actool compiles it into the layered icon and
+      # the flat ones older systems use.
+      - path: Brand/AppIcon.icon
+    dependencies:
+      - package: PlainKit
+        product: ShellUI
+      - package: PlainKit
+        product: PerfSignposts
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser
+        PRODUCT_NAME: Plain
+        # The name under the icon.
+        APP_DISPLAY_NAME: Plain
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_FILE: Plain/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        # UI code: MainActor by default, like the package's UI targets. (Not on the UI tests:
+        # XCTestCase's overrides are nonisolated, so those classes say @MainActor themselves.)
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  # UI smoke tests and the launch/hitch perf tests the perf gate runs on the device.
+  PlainUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: PlainUITests
+        excludes:
+          - "*.xctestplan"
+    dependencies:
+      - target: Plain
+      # Signpost names, shared with the app so the metrics measure exactly what the app emits.
+      - package: PlainKit
+        product: PerfSignposts
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Plain
+schemes:
+  Plain:
+    build:
+      targets:
+        Plain: all
+        PlainUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      testPlans:
+        # Every UI test except the perf tests. scripts/test.sh runs it on simulators.
+        - path: PlainUITests/Smoke.xctestplan
+          defaultPlan: true
+        # Only the perf tests. scripts/perf-gate.sh runs it on the device in Release.
+        - path: PlainUITests/Perf.xctestplan
+    archive:
+      config: Release

@@ -1,0 +1,34 @@
+{
+  "configurations" : [
+    {
+      "id" : "8A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Plain.xcodeproj",
+      "identifier" : "4B32C1CDDD0A4D2F137F5F2A",
+      "name" : "Plain"
+    }
+  },
+  "testTargets" : [
+    {
+      "selectedTests" : [
+        "PerfTests\/testLaunch()",
+        "PerfTests\/testLaunchToSearchFieldReady()",
+        "PerfTests\/testPageScrollHitches()"
+      ],
+      "target" : {
+        "containerPath" : "container:Plain.xcodeproj",
+        "identifier" : "7E2C5837224225F691EC81FA",
+        "name" : "PlainUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

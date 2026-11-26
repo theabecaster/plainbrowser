@@ -1,0 +1,31 @@
+{
+  "configurations" : [
+    {
+      "id" : "5D3C2A1E-7B4F-4E8A-9C61-1F2E3D4C5B6A",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Plain.xcodeproj",
+      "identifier" : "4B32C1CDDD0A4D2F137F5F2A",
+      "name" : "Plain"
+    }
+  },
+  "testTargets" : [
+    {
+      "skippedTests" : [
+        "PerfTests"
+      ],
+      "target" : {
+        "containerPath" : "container:Plain.xcodeproj",
+        "identifier" : "7E2C5837224225F691EC81FA",
+        "name" : "PlainUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

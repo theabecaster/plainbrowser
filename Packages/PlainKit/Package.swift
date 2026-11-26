@@ -9,7 +9,7 @@ import PackageDescription
 //
 // DesignSystem and PerfSignposts are leaves that any layer above BrowserCore may use.
 // BrowserCore and Storage never import UIKit or WebKit, so `swift test` runs their tests on macOS.
-// The UI-side targets are iOS-only; on macOS their sources compile to nothing (`#if os(iOS)`),
+// The UI-side targets are iOS-only; on macOS their UIKit files compile to nothing (`#if canImport(UIKit)`),
 // which keeps `swift test` working without a second package.
 
 let mainActorByDefault: [SwiftSetting] = [.defaultIsolation(MainActor.self)]

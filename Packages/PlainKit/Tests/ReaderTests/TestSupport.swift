@@ -1,5 +1,6 @@
 #if os(iOS)
 import Foundation
+import Reader
 import WebKit
 
 /// Saved pages from Readability's own test suite (`Fixtures/<name>/source.html`), served offline
@@ -35,8 +36,9 @@ import WebKit
     func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {}
 
     /// A web view that loads fixtures with the network blocked.
-    func makeWebView() async throws -> WKWebView {
+    func makeWebView(extractor: ReaderExtractor? = nil) async throws -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        if let extractor { try await extractor.install(in: configuration.userContentController) }
         configuration.setURLSchemeHandler(self, forURLScheme: Self.scheme)
         configuration.websiteDataStore = .nonPersistent()
         configuration.userContentController.add(try await Self.offline())

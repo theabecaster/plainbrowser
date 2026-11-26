@@ -82,7 +82,7 @@ public enum Signposts {
     // MARK: Reader
 
     /// Interval: a reader request, from asking for the page's article until it is returned (or
-    /// found not readerable). Short when the prefetch at `didFinish` already has it.
+    /// found not readerable). Near zero for a repeat open of the same page.
     public static let readerExtract: StaticString = "reader.extract"
     /// Interval: showing an article in the reader view, from the request until the rendered page
     /// is handed to the reader web view.

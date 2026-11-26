@@ -9,8 +9,15 @@ enum ReaderResources {
         case missing(String)
     }
 
+    /// `Readability-readerable.js` alone (about 4 KB): defines `isProbablyReaderable`. This is the
+    /// only part that runs on every page.
+    @concurrent static func readerableScript() async throws -> String {
+        try readerable.get()
+    }
+
     /// `Readability-readerable.js` followed by `Readability.js`. Evaluating it defines
-    /// `isProbablyReaderable` and `Readability` in the reader's content world.
+    /// `isProbablyReaderable` and `Readability` in the reader's content world. Injected only when
+    /// the user opens reader mode.
     @concurrent static func readabilityScript() async throws -> String {
         try readability.get()
     }
@@ -28,10 +35,12 @@ enum ReaderResources {
     // Static lets are initialized lazily and exactly once, on the first caller's thread, which is
     // always one of the `@concurrent` accessors above.
 
+    private static let readerable: Result<String, any Error> = Result {
+        try text("Readability-readerable", "js")
+    }
+
     private static let readability: Result<String, any Error> = Result {
-        let readerable = try text("Readability-readerable", "js")
-        let readability = try text("Readability", "js")
-        return readerable + "\n;\n" + readability + "\n;true;"
+        try readerable.get() + "\n;\n" + text("Readability", "js") + "\n;true;"
     }
 
     private static let parsedTemplate: Result<ReaderTemplate, any Error> = Result {

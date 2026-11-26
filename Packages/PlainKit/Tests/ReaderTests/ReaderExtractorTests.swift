@@ -57,40 +57,38 @@ import WebKit
         let article = try await extractor.article(in: webView)
         print("reader.extract \(FixtureServer.nonArticle): nil in \(format(milliseconds(clock.now - start)))")
         #expect(article == nil)
-
-        extractor.prefetch(in: webView)
-        #expect(try await extractor.article(in: webView) == nil)
     }
 
-    /// Prefetch at `didFinish` does the work ahead, so the request itself is near instant.
-    @Test func prefetchMakesTheRequestCheap() async throws {
-        let webView = try await load("ars-1")
+    /// Only the small readerable check runs at document end; full Readability waits for a request.
+    @Test(arguments: FixtureServer.articles + [FixtureServer.nonArticle])
+    func reportsAvailabilityWithoutFullReadability(_ name: String) async throws {
         let extractor = ReaderExtractor()
-        extractor.prefetch(in: webView)
-        try await Task.sleep(for: .milliseconds(500))
+        var reports: [Bool] = []
+        extractor.onAvailability = { _, available in reports.append(available) }
+        let webView = try await server.makeWebView(extractor: extractor)
+        try await waiter.load(URLRequest(url: FixtureServer.url(name)), in: webView)
+        // The report is a script message; it can land just after didFinish.
+        for _ in 0..<100 where reports.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
 
+        #expect(reports == [name != FixtureServer.nonArticle])
+        #expect(extractor.isAvailable(in: webView) == (name != FixtureServer.nonArticle))
+        let world = WKContentWorld.world(name: ReaderWorld.contentWorldName)
+        let types = try await webView.evaluateJavaScript(
+            "typeof isProbablyReaderable + ' ' + typeof Readability", in: nil, contentWorld: world) as? String
+        #expect(types == "function undefined")
+
+        guard name != FixtureServer.nonArticle else { return }
         let clock = ContinuousClock()
         let start = clock.now
         let article = try await extractor.article(in: webView)
-        let ms = milliseconds(clock.now - start)
-        print("reader.extract ars-1 after prefetch: \(format(ms))")
+        let first = milliseconds(clock.now - start)
+        let again = clock.now
+        let kept = try await extractor.article(in: webView)
+        let keptMs = milliseconds(clock.now - again)
+        print("reader.extract \(name) on open: \(format(first)), kept \(format(keptMs))")
         #expect(article != nil)
-        #expect(ms < 5)
-    }
-
-    /// A page over the element limit skips the parse at prefetch, and the request still works.
-    @Test func largePagesWaitForTheRequest() async throws {
-        let webView = try await load("wikipedia")
-        _ = try await webView.evaluateJavaScript("""
-            const box = document.createElement('div');
-            for (let i = 0; i < 5000; i++) box.appendChild(document.createElement('span'));
-            document.body.appendChild(box); true
-            """)
-        let elements = try await webView.evaluateJavaScript("document.getElementsByTagName('*').length") as? Int ?? 0
-        #expect(elements > ReaderExtractor.prefetchElementLimit)
-        let extractor = ReaderExtractor()
-        extractor.prefetch(in: webView)
-        #expect(try await extractor.article(in: webView)?.title == "Mozilla - Wikipedia")
+        #expect(kept == article)
+        #expect(keptMs < 5)
     }
 
     /// Readability lives in the reader world: the page's own scripts cannot see it.

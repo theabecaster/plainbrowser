@@ -160,20 +160,22 @@ Each entry: what was chosen, and why. Newest last.
   Plain's tests use four of its saved pages (`Tests/ReaderTests/Fixtures`, from the same
   release's `test/test-pages`) and its expected titles and bylines.
 - **Isolation:** it runs only in the `WKContentWorld` named in `ReaderWorld`, never the page
-  world, so page scripts cannot see or replace it. It is injected on demand (once per document),
-  not as a user script on every page, so pages that never use reader mode pay nothing.
+  world, so page scripts cannot see or replace it.
+- **Two steps, so browsing pays almost nothing:** only `Readability-readerable.js` (about 4 KB)
+  runs on every page, as a main-frame user script at document end (DOMContentLoaded). It runs
+  `isProbablyReaderable` and posts "reader available" to `ReaderExtractor.onAvailability`. The
+  full `Readability.js` (about 90 KB) is injected into that document's reader world only when
+  the user opens reader mode, and the article is kept for repeat opens of the same page.
 - **Main thread:** the page returns one JSON string; decoding runs `@concurrent`. Bundle reads and
   template rendering run `@concurrent` too.
-- **Prefetch:** at `didFinish`, the readerable check always runs, and the full parse runs only on
-  pages under 4,000 elements (`ReaderExtractor.prefetchElementLimit`), so a reader tap is
-  usually instant without parsing huge pages nobody reads.
 - **Reader view:** a template and stylesheet served from the `plain-reader:` scheme, with page
   JavaScript off and a content security policy that allows no scripts. No reader settings: text
   size follows Dynamic Type (`-apple-system-body`), colors follow light and dark mode, the
   measure is 66ch, and Lagoon Blue marks links, quotes and the header rule. Link text keeps the
   body color, with the accent as the underline, because #2973FF on the paper background is
   about 4:1, under the 4.5:1 body-text minimum.
-- **Perf cost:** 94 KB of JavaScript in the bundle, read on the first reader use. Simulator
-  (iPhone 17, iOS 27.2): first extraction on a page 11–66 ms including the injection, 6–52 ms
-  on the next page; a non-article page returns nil in 6–30 ms; a request after prefetch is
-  under 1 ms; rendering and loading the reader page about 70 ms warm.
+- **Perf cost:** a 4 KB check per page load, off the main thread in the web content process.
+  94 KB of JavaScript in the bundle, read on first use. Simulator (iPhone 17, iOS 27.2): opening
+  reader mode extracts in 7–68 ms including the Readability injection (most pages 7–18 ms); a
+  non-article page returns nil in about 4 ms; a repeat open of the same page is under 1 ms;
+  rendering and loading the reader page about 50 ms warm.

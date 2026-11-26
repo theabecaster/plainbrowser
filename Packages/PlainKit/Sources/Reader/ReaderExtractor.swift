@@ -5,120 +5,133 @@ import WebKit
 
 /// Finds a page's main article with Mozilla Readability.
 ///
-/// Readability runs in the reader's own `WKContentWorld` (`ReaderWorld`), never the page world,
-/// so page scripts can neither see it nor tamper with it. `isProbablyReaderable` runs first; a
-/// page that fails it gives `nil` without the full parse.
+/// Everything runs in the reader's own `WKContentWorld` (`ReaderWorld`), never the page world, so
+/// page scripts can neither see nor tamper with it.
 ///
-/// Work split:
-/// - The web content process does the DOM work (the check, the clone, the parse).
-/// - The page returns one JSON string. It is decoded off the main thread.
-/// - The main thread only starts the calls and receives that string.
-///
-/// Use: call `prefetch(in:)` from the navigation delegate's `didFinish`. It runs the cheap
-/// readerable check and, on a small page, the full parse, and keeps the result for that web view
-/// and URL. `article(in:)` returns the kept result when the URL still matches, and extracts
-/// otherwise.
-@MainActor public final class ReaderExtractor {
-    /// Pages with more elements than this skip the full parse at prefetch; it waits for a request.
-    /// Readability's cost grows with the DOM, and most articles are well under this.
-    static let prefetchElementLimit = 4_000
+/// Two steps, so ordinary browsing pays almost nothing:
+/// 1. **Availability.** `install(in:)` adds only `Readability-readerable.js` (about 4 KB) as a
+///    main-frame user script at document end (DOMContentLoaded). It runs `isProbablyReaderable`
+///    and reports the answer; `onAvailability` hears it, so the shell can offer reader mode.
+/// 2. **Extraction.** `article(in:)`, when the user opens reader mode, injects the full
+///    `Readability.js` (about 90 KB) into that document's reader world and parses a clone of the
+///    page. The page returns one JSON string, decoded off the main thread.
+@MainActor public final class ReaderExtractor: NSObject, WKScriptMessageHandler {
+    /// Called on the main thread when a page's readerable check reports: `true` when the page
+    /// probably has an article.
+    public var onAvailability: ((WKWebView, Bool) -> Void)?
 
-    private enum Outcome: Sendable {
-        case article(ReaderArticle)
-        case notReaderable
-        /// Readerable, but too big to parse ahead of a request.
-        case deferred
-    }
-
-    private struct Entry {
+    private struct Availability {
         weak var webView: WKWebView?
         let url: URL?
-        let task: Task<Outcome, any Error>
+        let available: Bool
     }
+
+    private struct Kept {
+        weak var webView: WKWebView?
+        let url: URL?
+        let article: ReaderArticle?
+    }
+
+    private static let messageName = "plainReaderAvailability"
 
     private let world = WKContentWorld.world(name: ReaderWorld.contentWorldName)
-    private var entries: [ObjectIdentifier: Entry] = [:]
+    private var availability: [ObjectIdentifier: Availability] = [:]
+    private var kept: [ObjectIdentifier: Kept] = [:]
 
-    public init() {}
+    public override init() {}
 
-    /// Starts extraction for the page that just finished loading: the readerable check, and the
-    /// full parse when the page is small. Replaces anything kept for this web view.
-    public func prefetch(in webView: WKWebView) {
-        pruneEntries()
-        let task = Task { [weak webView] () throws -> Outcome in
-            guard let webView else { return .notReaderable }
-            return try await self.run(in: webView, deferLargePages: true)
-        }
-        entries[ObjectIdentifier(webView)] = Entry(webView: webView, url: webView.url, task: task)
+    // MARK: Availability
+
+    /// Adds the readerable check to `controller`, in the reader world. Call it while building a
+    /// web view's configuration, before its first navigation. Reads the script off the main thread.
+    public func install(in controller: WKUserContentController) async throws {
+        let check = try await ReaderResources.readerableScript()
+        let source = check + """
+
+            ;(() => {
+              let available = false;
+              try { available = !!document.body && isProbablyReaderable(document); } catch (e) {}
+              window.webkit.messageHandlers.\(Self.messageName).postMessage(available);
+            })();
+            """
+        controller.addUserScript(WKUserScript(
+            source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: world))
+        controller.add(WeakMessageHandler(self), contentWorld: world, name: Self.messageName)
     }
 
-    /// The page's article, or `nil` when the page isn't readerable.
+    /// The last readerable report for the page `webView` shows now, or `nil` before it reports.
+    public func isAvailable(in webView: WKWebView) -> Bool? {
+        guard let entry = availability[ObjectIdentifier(webView)], entry.webView === webView,
+              entry.url == webView.url
+        else { return nil }
+        return entry.available
+    }
+
+    public func userContentController(
+        _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
+    ) {
+        guard message.name == Self.messageName, message.frameInfo.isMainFrame,
+              let webView = message.webView, let available = message.body as? Bool
+        else { return }
+        let key = ObjectIdentifier(webView)
+        prune()
+        availability[key] = Availability(webView: webView, url: webView.url, available: available)
+        if kept[key]?.url != webView.url { kept[key] = nil }
+        onAvailability?(webView, available)
+    }
+
+    // MARK: Extraction
+
+    /// The page's article, or `nil` when the page isn't readerable. Repeated calls for the same
+    /// page return the article already found.
     public func article(in webView: WKWebView) async throws -> ReaderArticle? {
         let signposter = Signposts.signposter
         let state = signposter.beginInterval(Signposts.readerExtract)
         defer { signposter.endInterval(Signposts.readerExtract, state) }
 
         let key = ObjectIdentifier(webView)
-        if let entry = entries[key], entry.webView === webView, entry.url == webView.url,
-           let outcome = try? await entry.task.value {
-            switch outcome {
-            case .article(let article): return article
-            case .notReaderable: return nil
-            case .deferred: break
-            }
-        }
-
         let url = webView.url
-        let task = Task { [weak webView] () throws -> Outcome in
-            guard let webView else { return .notReaderable }
-            return try await self.run(in: webView, deferLargePages: false)
+        if let entry = kept[key], entry.webView === webView, entry.url == url {
+            return entry.article
         }
-        entries[key] = Entry(webView: webView, url: url, task: task)
-        switch try await task.value {
-        case .article(let article): return article
-        case .notReaderable, .deferred: return nil
+        let article = try await extract(in: webView)
+        // Keep it only if the web view still shows the page it came from.
+        if webView.url == url {
+            prune()
+            kept[key] = Kept(webView: webView, url: url, article: article)
         }
+        return article
     }
 
     /// Forgets what was kept for `webView`, for example when its tab closes.
     public func forget(_ webView: WKWebView) {
-        entries[ObjectIdentifier(webView)]?.task.cancel()
-        entries[ObjectIdentifier(webView)] = nil
+        availability[ObjectIdentifier(webView)] = nil
+        kept[ObjectIdentifier(webView)] = nil
     }
 
-    // MARK: Running Readability
-
-    /// Runs the check (and the parse) in the reader world. Installs Readability first when this
+    /// Runs the check and the parse in the reader world, installing Readability first when this
     /// document's reader world doesn't have it yet.
-    private func run(in webView: WKWebView, deferLargePages: Bool) async throws -> Outcome {
-        var result = try await callExtract(in: webView, deferLargePages: deferLargePages)
+    private func extract(in webView: WKWebView) async throws -> ReaderArticle? {
+        let url = webView.url
+        var result = try await callExtract(in: webView)
         if result == Self.missing {
             let script = try await ReaderResources.readabilityScript()
             try Task.checkCancellation()
             _ = try await webView.evaluateJavaScript(script, in: nil, contentWorld: world)
-            result = try await callExtract(in: webView, deferLargePages: deferLargePages)
+            result = try await callExtract(in: webView)
         }
-        switch result {
-        case Self.notReaderable, Self.missing: return .notReaderable
-        case Self.deferred: return .deferred
-        default: return try await Self.decode(result, pageURL: webView.url).map(Outcome.article) ?? .notReaderable
-        }
+        guard result != Self.missing, result != Self.notReaderable else { return nil }
+        return try await Self.decode(result, pageURL: url)
     }
 
-    private func callExtract(in webView: WKWebView, deferLargePages: Bool) async throws -> String {
+    private func callExtract(in webView: WKWebView) async throws -> String {
         try Task.checkCancellation()
-        let value = try await webView.callAsyncJavaScript(
-            Self.extractBody,
-            arguments: ["elementLimit": deferLargePages ? Self.prefetchElementLimit : 0],
-            in: nil,
-            contentWorld: world
-        )
+        let value = try await webView.callAsyncJavaScript(Self.extractBody, in: nil, contentWorld: world)
         return value as? String ?? Self.notReaderable
     }
 
     private static let missing = "missing"
     private static let notReaderable = "none"
-    private static let deferred = "deferred"
 
     /// The body of an async function run in the reader world. It returns one string: a status,
     /// or the article as JSON, so the app receives a single value instead of a bridged dictionary.
@@ -126,7 +139,6 @@ import WebKit
         if (typeof Readability !== "function" || typeof isProbablyReaderable !== "function") return "missing";
         try {
           if (!document.body || !isProbablyReaderable(document)) return "none";
-          if (elementLimit > 0 && document.getElementsByTagName("*").length > elementLimit) return "deferred";
           const a = new Readability(document.cloneNode(true)).parse();
           if (!a || !a.content || !(a.textContent || "").trim()) return "none";
           return JSON.stringify({
@@ -151,7 +163,22 @@ import WebKit
         return article
     }
 
-    private func pruneEntries() {
-        entries = entries.filter { $0.value.webView != nil }
+    private func prune() {
+        availability = availability.filter { $0.value.webView != nil }
+        kept = kept.filter { $0.value.webView != nil }
+    }
+}
+
+/// `WKUserContentController` keeps its message handlers strongly. This keeps the extractor weakly,
+/// so a long-lived controller never keeps it alive.
+@MainActor private final class WeakMessageHandler: NSObject, WKScriptMessageHandler {
+    private weak var target: (any WKScriptMessageHandler)?
+
+    init(_ target: any WKScriptMessageHandler) {
+        self.target = target
+    }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        target?.userContentController(controller, didReceive: message)
     }
 }

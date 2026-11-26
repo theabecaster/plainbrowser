@@ -103,11 +103,13 @@ and compile to nothing on macOS.
 
 ### Reader
 
-1. At `didFinish` the shell calls `ReaderExtractor.prefetch(in:)`. In the reader content world it
-   installs Readability (once per document), runs `isProbablyReaderable`, and on pages under
-   4,000 elements runs the full parse. The result is kept for that web view and URL.
-2. On a reader request, `article(in:)` returns the kept result when the URL still matches, or
-   extracts now. The page returns one JSON string; it is decoded off the main thread.
+1. While building a tab's configuration, the shell calls `ReaderExtractor.install(in:)`. It adds
+   only `Readability-readerable.js` (about 4 KB) as a main-frame user script at document end, in
+   the reader content world. Each page reports `isProbablyReaderable` through
+   `onAvailability`, and `isAvailable(in:)` returns the last report for the current URL.
+2. When the user opens reader mode, `article(in:)` injects the full `Readability.js` into that
+   document's reader world and parses a clone of the page. The page returns one JSON string,
+   decoded off the main thread. The article is kept per web view and URL for repeat opens.
 3. `ReaderSchemeHandler.install(in:)` sets up the reader web view's configuration (the
    `plain-reader:` scheme, page JavaScript off) before the pool creates it. `show(_:in:)` renders
    the template off the main thread and loads `plain-reader://article/<id>`. The page and

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Ready for the day Apple grants Plain the default-browser entitlement. Not used by the build yet:
+  signing with a managed entitlement the team does not have fails provisioning.
+
+  To turn it on (docs/research/sign-in.md, "When Apple grants it"):
+  1. In project.yml, under the Plain target's settings.base, add
+       CODE_SIGN_ENTITLEMENTS: Plain/Plain-WebBrowser.entitlements
+  2. Set FixedChoices.passkeysEnabled and FixedChoices.defaultBrowserPromptsEnabled to true.
+  3. xcodegen generate, build for the device, and run the device checks in sign-in.md.
+
+  com.apple.developer.web-browser lets Plain be chosen as the default browser and gives its
+  WKWebView passkeys (WebAuthn) for every site, service workers and full script access on all
+  domains. On iOS it is the only key needed for passkeys.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.web-browser</key>
+	<true/>
+</dict>
+</plist>

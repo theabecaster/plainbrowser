@@ -27,6 +27,9 @@ public final class SettingsModel {
     private let store: any SettingsStoring
     private let clearer: any BrowsingDataClearing
     private let writes = WriteQueue()
+    /// Bumped by every change the user makes, so a read that started before it is not applied
+    /// over it.
+    private var edits = 0
 
     public init(store: any SettingsStoring, clearer: any BrowsingDataClearing, about: AboutInfo = .current) {
         self.store = store
@@ -34,12 +37,16 @@ public final class SettingsModel {
         self.about = about
     }
 
-    /// Reads the stored settings. Safe to call more than once.
+    /// Reads the stored settings. Safe to call more than once. The choices stay disabled until
+    /// the first read finishes, so a change can never save defaults over the stored values.
     public func load() async {
+        let editsAtStart = edits
         do {
             async let settings = store.settings()
             async let custom = store.savedCustomSearchEngine()
             let (loaded, savedCustom) = try await (settings, custom)
+            // A change made while reading is newer than what was read.
+            guard edits == editsAtStart else { return }
             self.settings = loaded
             customEngine = savedCustom ?? (loaded.searchEngine.isCustom ? loaded.searchEngine : nil)
             if customTemplate.isEmpty, let customEngine { customTemplate = customEngine.template }
@@ -57,19 +64,19 @@ public final class SettingsModel {
     }
 
     public func selectSearchEngine(_ engine: SearchEngine) {
-        guard engine != settings.searchEngine else { return }
+        guard isLoaded, engine != settings.searchEngine else { return }
         settings.searchEngine = engine
         save()
     }
 
     public func setTabLayout(_ layout: TabLayout) {
-        guard layout != settings.tabLayout else { return }
+        guard isLoaded, layout != settings.tabLayout else { return }
         settings.tabLayout = layout
         save()
     }
 
     public func setArchiveAfter(_ archive: ArchiveAfter) {
-        guard archive != settings.archiveAfter else { return }
+        guard isLoaded, archive != settings.archiveAfter else { return }
         settings.archiveAfter = archive
         save()
     }
@@ -78,6 +85,7 @@ public final class SettingsModel {
     /// whether it was accepted; otherwise `customError` says why.
     @discardableResult
     public func useCustomTemplate() -> Bool {
+        guard isLoaded else { return false }
         do {
             let engine = try Self.customEngine(from: customTemplate)
             customEngine = engine
@@ -125,11 +133,22 @@ public final class SettingsModel {
     // MARK: Saving
 
     private func save() {
+        edits += 1
+        Signposts.signposter.emitEvent(Signposts.settingsChange)
         let snapshot = settings
         let store = store
         writes.enqueue({ try await store.saveSettings(snapshot) }) { [weak self] _ in
-            self?.errorMessage = Wording.saveFailed
+            guard let self else { return }
+            errorMessage = Wording.saveFailed
+            // Show what is really stored, so the failed choice can be made again.
+            writes.enqueue({ [weak self] in await self?.reloadAfterFailure() }, onError: { _ in })
         }
+    }
+
+    private func reloadAfterFailure() async {
+        let editsAtStart = edits
+        guard let stored = try? await store.settings(), edits == editsAtStart else { return }
+        settings = stored
     }
 
     /// Returns when every change so far is saved.
@@ -164,9 +183,9 @@ extension ArchiveAfter {
     /// The section footer: one sentence on what the current choice does.
     public var footer: String {
         switch self {
-        case .twelveHours: "Tabs you haven't opened in 12 hours move to the archive."
-        case .oneDay: "Tabs you haven't opened in a day move to the archive."
-        case .oneWeek: "Tabs you haven't opened in a week move to the archive."
+        case .twelveHours: "Tabs you haven't used in 12 hours move to the archive."
+        case .oneDay: "Tabs you haven't used in a day move to the archive."
+        case .oneWeek: "Tabs you haven't used in a week move to the archive."
         case .never: "Tabs stay open until you close them."
         }
     }
@@ -179,9 +198,10 @@ enum Wording {
     static let clearFailed = "Plain couldn't clear everything. Try again."
     static let historyFailed = "Plain couldn't load your history. Try again."
     static let historyEditFailed = "Plain couldn't change your history. Try again."
+    static let favoritesFooter = "Tap a favorite to rename it."
     static let favoritesFailed = "Plain couldn't change your favorites. Try again."
 
-    static let tabLayoutFooter = "Side tabs show when the window is wide, like the Duo's inner screen."
+    static let tabLayoutFooter = "Side Tabs moves your tabs to a sidebar when the window is wide."
     static let searchEngineFooter = "Searches from the address bar use this engine."
     static let customEngineFooter = "Paste a search results address with %s where the search words go."
     static let clearFooter = "Removes your history, cookies and website data from this device."

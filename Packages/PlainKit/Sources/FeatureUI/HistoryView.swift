@@ -22,14 +22,14 @@ public struct HistoryView: View {
                 ForEach(model.days) { day in
                     Section(day.title) {
                         ForEach(day.rows) { row in
-                            HistoryRowView(row: row) { onOpen(row.url) }
+                            HistoryRowView(row: row) { open(row) }
                                 .swipeActions {
                                     Button("Delete", role: .destructive) {
                                         Task { await model.delete(row) }
                                     }
                                 }
                                 .contextMenu {
-                                    Button("Open", systemImage: "arrow.up.forward.app") { onOpen(row.url) }
+                                    Button("Open", systemImage: "arrow.up.forward.app") { open(row) }
                                     Button("Copy Link", systemImage: "doc.on.doc") {
                                         UIPasteboard.general.url = row.url
                                     }
@@ -87,6 +87,11 @@ public struct HistoryView: View {
         .task { await model.load() }
     }
 
+    private func open(_ row: HistoryRow) {
+        model.opened(row)
+        onOpen(row.url)
+    }
+
     static func confirmTitle(_ range: HistoryClearRange) -> String {
         switch range {
         case .lastHour: "Clear the last hour of history?"
@@ -119,7 +124,7 @@ struct HistoryRowView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .truncationMode(.middle)
+                        .truncationMode(.tail)
                 }
                 Spacer(minLength: 0)
                 Text(row.visitedAt, format: .dateTime.hour().minute())

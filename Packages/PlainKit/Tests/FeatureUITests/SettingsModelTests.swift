@@ -14,7 +14,7 @@ import Testing
     }
 
     func makeModel() -> SettingsModel {
-        SettingsModel(store: database, clearer: clearer, about: PreviewData.about)
+        SettingsModel(store: database, clearer: clearer, about: testAbout)
     }
 
     @Test func loadsDefaultsThenSavedValues() async throws {
@@ -83,6 +83,30 @@ import Testing
         #expect(try SettingsModel.customEngine(from: " http://x.example/?q=%s ").template == "http://x.example/?q=%s")
     }
 
+    @Test func choicesWaitForTheFirstLoad() async throws {
+        try await database.saveSettings(BrowserSettings(searchEngine: .kagi, tabLayout: .sideTabs, archiveAfter: .never))
+        let model = makeModel()
+        model.setArchiveAfter(.oneWeek)
+        model.selectSearchEngine(.bing)
+        model.customTemplate = "https://x.example/?q=%s"
+        #expect(model.useCustomTemplate() == false)
+        await model.waitForSaves()
+        #expect(try await database.settings().searchEngine == .kagi, "nothing saved before loading")
+        await model.load()
+        #expect(model.settings.archiveAfter == .never)
+    }
+
+    @Test func failedSaveShowsWhatIsStoredSoItCanBeRetried() async throws {
+        let model = SettingsModel(store: FlakySettings(database: database, failSaves: true), clearer: clearer, about: testAbout)
+        await model.load()
+        model.setTabLayout(.sideTabs)
+        #expect(model.settings.tabLayout == .sideTabs)
+        await model.waitForSaves()
+        await model.waitForSaves()
+        #expect(model.errorMessage != nil)
+        #expect(model.settings.tabLayout == .regular, "back to the stored value, so choosing again saves again")
+    }
+
     @Test func clearHistoryAndDataCallsTheClearer() async {
         let model = makeModel()
         await model.clearHistoryAndData()
@@ -92,7 +116,7 @@ import Testing
     }
 
     @Test func clearFailureShowsAMessage() async {
-        let model = SettingsModel(store: database, clearer: FailingClearer(), about: PreviewData.about)
+        let model = SettingsModel(store: database, clearer: FailingClearer(), about: testAbout)
         await model.clearHistoryAndData()
         #expect(model.errorMessage != nil)
         #expect(model.isClearing == false)
@@ -105,6 +129,24 @@ import Testing
             #expect(archive.footer.hasSuffix("."))
             #expect(archive.footer.filter { $0 == "." }.count == 1)
         }
+    }
+}
+
+let testAbout = AboutInfo(name: "Plain", version: "1.0", build: "1", documents: [])
+
+/// Settings in a real database, with saves that fail on demand.
+final class FlakySettings: SettingsStoring {
+    let database: AppDatabase
+    let failSaves: Bool
+    init(database: AppDatabase, failSaves: Bool) {
+        self.database = database
+        self.failSaves = failSaves
+    }
+    func settings() async throws -> BrowserSettings { try await database.settings() }
+    func savedCustomSearchEngine() async throws -> SearchEngine? { try await database.savedCustomSearchEngine() }
+    func saveSettings(_ settings: BrowserSettings) async throws {
+        if failSaves { throw URLError(.unknown) }
+        try await database.saveSettings(settings)
     }
 }
 

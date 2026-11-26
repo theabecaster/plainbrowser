@@ -24,6 +24,7 @@ public struct SettingsView: View {
                     } label: {
                         LabeledContent("Search Engine", value: model.isLoaded ? model.settings.searchEngine.name : "")
                     }
+                    .disabled(!model.isLoaded)
                 } footer: {
                     Text(Wording.searchEngineFooter)
                 }
@@ -35,6 +36,7 @@ public struct SettingsView: View {
                         ForEach(TabLayout.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.menu)
+                    .disabled(!model.isLoaded)
                 } footer: {
                     Text(Wording.tabLayoutFooter)
                 }
@@ -46,6 +48,7 @@ public struct SettingsView: View {
                         ForEach(ArchiveAfter.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.menu)
+                    .disabled(!model.isLoaded)
                 } footer: {
                     Text(model.settings.archiveAfter.footer)
                 }
@@ -108,7 +111,12 @@ struct SearchEngineView: View {
                         model.selectSearchEngine(engine)
                     } label: {
                         HStack {
-                            Text(engine.name).foregroundStyle(.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(engine.name).foregroundStyle(.primary)
+                                if engine.isCustom {
+                                    Text("Custom").font(.footnote).foregroundStyle(.secondary)
+                                }
+                            }
                             Spacer()
                             if engine == model.settings.searchEngine {
                                 Image(systemName: "checkmark")

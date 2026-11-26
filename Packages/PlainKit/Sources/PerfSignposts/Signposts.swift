@@ -30,6 +30,14 @@ public enum Signposts {
     public static let historyClear: StaticString = "history.clear"
     /// Interval: Settings > Clear History and Data confirmed, until the data is cleared.
     public static let clearBrowsingData: StaticString = "settings.clearData"
+    /// Event: the user changed a setting (search engine, tab layout or archive interval).
+    public static let settingsChange: StaticString = "settings.change"
+    /// Event: the user opened a page from History.
+    public static let historyOpen: StaticString = "history.open"
+    /// Interval: deleting a page from History, until it is gone from the store.
+    public static let historyDelete: StaticString = "history.delete"
+    /// Event: the user reordered, renamed or deleted favorites.
+    public static let favoritesEdit: StaticString = "favorites.edit"
 
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {

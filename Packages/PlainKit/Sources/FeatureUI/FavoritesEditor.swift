@@ -18,29 +18,33 @@ public struct FavoritesEditor: View {
     public var body: some View {
         NavigationStack {
             List {
-                ForEach(model.favorites, id: \.id) { favorite in
-                    Button {
-                        newTitle = FavoritesModel.displayTitle(favorite)
-                        renaming = favorite
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(FavoritesModel.displayTitle(favorite))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Text(HistoryModel.displayAddress(favorite.url))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+                Section {
+                    ForEach(model.favorites, id: \.id) { favorite in
+                        Button {
+                            newTitle = FavoritesModel.displayTitle(favorite)
+                            renaming = favorite
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(FavoritesModel.displayTitle(favorite))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Text(HistoryModel.displayAddress(favorite.url))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(.rect)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
+                        .tint(.primary)
+                        .accessibilityHint("Renames this favorite")
                     }
-                    .tint(.primary)
-                    .accessibilityHint("Renames this favorite")
+                    .onMove { model.move(fromOffsets: $0, toOffset: $1) }
+                    .onDelete { model.delete(atOffsets: $0) }
+                } footer: {
+                    if !model.favorites.isEmpty { Text(Wording.favoritesFooter) }
                 }
-                .onMove { model.move(fromOffsets: $0, toOffset: $1) }
-                .onDelete { model.delete(atOffsets: $0) }
             }
             .environment(\.editMode, .constant(.active))
             .overlay {

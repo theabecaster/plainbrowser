@@ -70,6 +70,11 @@ public final class HistoryModel {
         await reload()
     }
 
+    /// Records that the user opened a row's page. The view calls the presenter's open callback.
+    public func opened(_ row: HistoryRow) {
+        Signposts.signposter.emitEvent(Signposts.historyOpen)
+    }
+
     /// Loads the next page when `row` is the last one shown.
     public func rowAppeared(_ row: HistoryRow) {
         guard mayHaveMore, row.id == days.last?.rows.last?.id else { return }
@@ -80,7 +85,13 @@ public final class HistoryModel {
 
     /// Removes every visit to the row's page.
     public func delete(_ row: HistoryRow) async {
+        let state = Signposts.signposter.beginInterval(Signposts.historyDelete)
+        defer { Signposts.signposter.endInterval(Signposts.historyDelete, state) }
         let url = row.url
+        // A load already under way may still hold this page; drop it, and reload once the
+        // page is gone from the store.
+        loadTask?.cancel()
+        generation += 1
         days = days.compactMap { day in
             var day = day
             day.rows.removeAll { $0.url == url }
@@ -90,8 +101,8 @@ public final class HistoryModel {
             try await store.deleteHistory(for: url)
         } catch {
             errorMessage = Wording.historyEditFailed
-            await reload()
         }
+        await reload()
     }
 
     public func clear(_ range: HistoryClearRange) async {
@@ -109,6 +120,8 @@ public final class HistoryModel {
 
     private func scheduleReload(after delay: Duration?) {
         loadTask?.cancel()
+        // Results for the old query or page are stale from now on, even if they arrive first.
+        generation += 1
         loadTask = Task { [weak self] in
             if let delay {
                 try? await Task.sleep(for: delay)

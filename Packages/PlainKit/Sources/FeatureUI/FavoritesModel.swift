@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import PerfSignposts
 import Storage
 
 /// State for the favorites editor: reorder, rename and delete. The list changes at once and the
@@ -12,14 +13,19 @@ public final class FavoritesModel {
 
     private let store: any FavoritesStoring
     private let writes = WriteQueue()
+    /// Bumped by every edit, so a read that started before an edit is not applied over it.
+    private var edits = 0
 
     public init(store: any FavoritesStoring) {
         self.store = store
     }
 
     public func load() async {
+        let editsAtStart = edits
         do {
-            favorites = try await store.favorites()
+            let stored = try await store.favorites()
+            // An edit made while reading is newer than what was read.
+            if edits == editsAtStart { favorites = stored }
         } catch {
             errorMessage = Wording.favoritesFailed
         }
@@ -83,11 +89,21 @@ public final class FavoritesModel {
     }
 
     private func persist(_ operation: @escaping @Sendable () async throws -> Void) {
+        edits += 1
+        Signposts.signposter.emitEvent(Signposts.favoritesEdit)
         writes.enqueue(operation) { [weak self] _ in
             guard let self else { return }
             errorMessage = Wording.favoritesFailed
-            Task { await self.load() }
+            // Re-read through the write queue, after every write queued so far, so the list
+            // shows what is stored. An edit made after the failure wins over the re-read.
+            writes.enqueue({ [weak self] in await self?.reloadAfterFailure() }, onError: { _ in })
         }
+    }
+
+    private func reloadAfterFailure() async {
+        let editsAtStart = edits
+        guard let stored = try? await store.favorites(), edits == editsAtStart else { return }
+        favorites = stored
     }
 
     /// Returns when every change so far is saved.

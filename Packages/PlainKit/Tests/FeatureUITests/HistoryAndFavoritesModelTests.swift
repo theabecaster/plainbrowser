@@ -35,6 +35,31 @@ actor FakeHistory: HistoryStoring {
     }
 }
 
+/// History whose next read waits until released, returning what was stored when it started.
+actor GatedHistory: HistoryStoring {
+    var visits: [HistoryVisit]
+    private var armed = false
+    private var waiting: CheckedContinuation<Void, Never>?
+
+    init(_ visits: [HistoryVisit]) { self.visits = visits }
+
+    func arm() { armed = true }
+    var isWaiting: Bool { waiting != nil }
+    func release() { waiting?.resume(); waiting = nil }
+
+    func visits(matching query: String, limit: Int) async throws -> [HistoryVisit] {
+        let snapshot = Array(visits.filter { query.isEmpty || ($0.title ?? "").contains(query) }.prefix(limit))
+        if armed {
+            armed = false
+            await withCheckedContinuation { waiting = $0 }
+        }
+        return snapshot
+    }
+
+    func deleteHistory(for url: URL) async throws { visits.removeAll { $0.url == url } }
+    func clearHistory(since start: Date?) async throws { visits.removeAll() }
+}
+
 @MainActor
 @Suite struct HistoryModelTests {
     static var calendar: Calendar {
@@ -60,7 +85,7 @@ actor FakeHistory: HistoryStoring {
         visit(5, "e.example", "Epsilon", hoursAgo: 24 * 400),
     ]
 
-    func makeModel(_ store: FakeHistory) -> HistoryModel {
+    func makeModel(_ store: any HistoryStoring) -> HistoryModel {
         let now = Self.now
         return HistoryModel(store: store, now: { now }, calendar: Self.calendar, locale: Locale(identifier: "en_US"))
     }
@@ -105,6 +130,33 @@ actor FakeHistory: HistoryStoring {
         await model.delete(row)
         #expect(!model.days.flatMap(\.rows).contains { $0.url == row.url })
         #expect(await store.visits.count == 4)
+    }
+
+    @Test func aLoadStartedBeforeADeleteCannotBringTheRowBack() async throws {
+        let store = GatedHistory(Self.sample)
+        let model = makeModel(store)
+        await model.load()
+        let row = model.days[0].rows[0]
+        await store.arm()
+        let slowLoad = Task { await model.load() }
+        while await !store.isWaiting { await Task.yield() }
+        await model.delete(row)
+        await store.release()
+        await slowLoad.value
+        #expect(!model.days.flatMap(\.rows).contains { $0.url == row.url })
+    }
+
+    @Test func anOldSearchCannotReplaceANewerOne() async throws {
+        let store = GatedHistory(Self.sample)
+        let model = makeModel(store)
+        await store.arm()
+        let slowLoad = Task { await model.load() }
+        while await !store.isWaiting { await Task.yield() }
+        model.query = "Gamma"
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        await store.release()
+        await slowLoad.value
+        #expect(model.days.flatMap(\.rows).map(\.id) == [3])
     }
 
     @Test func failedDeleteReloadsAndShowsAMessage() async {

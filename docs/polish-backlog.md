@@ -61,3 +61,7 @@ Newest feature last.
 - **Other springs.** Only the snap asks for 80–120 Hz. The URL-focus and sheet springs run through
   `UIView.animate(Animation)`, which takes no frame-rate range; move them to `SpringDriver` if the
   device trace shows them below 120 Hz.
+- **Hard edge look.** With the hard edge, page text still shows blurred below and beside the
+  resting pill, and the edge's full-width hairline reads as a shelf behind the floating pill,
+  mostly when collapsed. Try the soft style again on the device (it left text refracting through
+  the pill on the simulator), or a stronger glass tint. (Design review, round 3.)

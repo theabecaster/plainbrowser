@@ -69,6 +69,14 @@ final class ShellToast: UIView {
         label.frame = CGRect(x: Spacing.l, y: 0, width: max(0, labelRight - Spacing.l), height: bounds.height)
     }
 
+    /// The glass tint: Paper, or the private tint while a private tab is on screen.
+    func setPrivate(_ isPrivate: Bool) {
+        let effect = UIGlassEffect(style: .regular)
+        effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
+        effect.isInteractive = true
+        glass.effect = effect
+    }
+
     /// Shows `message` with an optional button, replacing a toast already up.
     func show(_ message: String, button title: String? = nil, action: (() -> Void)? = nil) {
         Signposts.signposter.emitEvent(Signposts.toast)

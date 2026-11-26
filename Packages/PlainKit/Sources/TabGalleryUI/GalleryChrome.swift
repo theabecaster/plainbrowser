@@ -217,7 +217,7 @@ final class GalleryEmptyView: UIView {
     /// The sentence and button for regular or private tabs.
     func setPrivate(_ isPrivate: Bool) {
         label.text = isPrivate
-            ? "Private tabs show up here. Plain keeps no history of them."
+            ? "Private tabs show up here, and Plain keeps no history of them."
             : "Your open tabs show up here."
         button.configuration?.title = isPrivate ? "New Private Tab" : "New Tab"
         setNeedsLayout()

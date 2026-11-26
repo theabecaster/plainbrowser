@@ -45,6 +45,8 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         hostLabel.lineBreakMode = .byTruncatingHead
         hostLabel.translatesAutoresizingMaskIntoConstraints = false
         glass.contentView.addSubview(hostLabel)
+        // The hosts slide inside the capsule during a bar swipe, never past it.
+        glass.contentView.clipsToBounds = true
 
         textField.accessibilityIdentifier = "searchField"
         textField.placeholder = "Search or enter address"
@@ -207,11 +209,12 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         let travel = bounds.width * 0.5
         let p = min(max(progress, -1), 1)
         hostLabel.transform = CGAffineTransform(translationX: p * travel, y: 0)
-        hostLabel.alpha = max(0, 1 - abs(p) * 2)
+        // A crossfade that overlaps, so some host always reads mid-swipe.
+        hostLabel.alpha = max(0, 1 - abs(p) * 1.25)
         guard let incoming = incomingHost else { return }
         let side: CGFloat = p < 0 ? 1 : -1
         incoming.transform = CGAffineTransform(translationX: (p + side) * travel, y: 0)
-        incoming.alpha = max(0, abs(p) * 2 - 1)
+        incoming.alpha = min(1, abs(p) * 1.25)
     }
 
     /// Ends a bar swipe: the current host comes back (the new tab's host arrives through

@@ -38,7 +38,8 @@ final class GalleryTabs: TabGalleryDataSource {
                 id: entry.id,
                 title: tab?.title ?? entry.title ?? "",
                 url: tab?.url ?? entry.url,
-                isPrivate: entry.isPrivate,
+                // The private gallery's tint already says so: no badge on every card.
+                isPrivate: false,
                 thumbnailRevision: entry.thumbnail?.revision ?? 0
             )
         }

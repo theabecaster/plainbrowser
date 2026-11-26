@@ -30,6 +30,8 @@ public final class TabGalleryViewController: UIViewController {
     private(set) var metrics = TabGalleryMetrics(width: 0, height: 0, isCompactWidth: true, titleLineHeight: 20)
 
     private let bottomBar = GalleryBottomBar()
+    /// An empty view over the status bar that carries the top scroll edge effect.
+    private let statusBarEdge = UIView()
     private let toast = ReopenToast()
     private let emptyView = GalleryEmptyView()
     private var scrollInterval: OSSignpostIntervalState?
@@ -89,6 +91,13 @@ public final class TabGalleryViewController: UIViewController {
         edge.scrollView = collectionView
         edge.edge = .bottom
         bottomBar.addInteraction(edge)
+        // And under the status bar, so cards scrolling up never sit behind the clock.
+        statusBarEdge.isUserInteractionEnabled = false
+        root.addSubview(statusBarEdge)
+        let topEdge = UIScrollEdgeElementContainerInteraction()
+        topEdge.scrollView = collectionView
+        topEdge.edge = .top
+        statusBarEdge.addInteraction(topEdge)
 
         toast.button.addAction(UIAction { [weak self] _ in self?.reopenClosedTab() }, for: .primaryActionTriggered)
         root.addSubview(toast)
@@ -113,6 +122,7 @@ public final class TabGalleryViewController: UIViewController {
         let bounds = view.bounds
         if collectionView.frame != bounds { collectionView.frame = bounds }
         let safe = view.safeAreaInsets
+        statusBarEdge.frame = CGRect(x: 0, y: 0, width: bounds.width, height: safe.top)
 
         // Floating controls center on the safe area: on the Duo's outer screen the system's
         // vertical bar takes one side.

@@ -87,7 +87,7 @@ final class TabGalleryViewTests: XCTestCase {
         transition.cancel()
         XCTAssertEqual(ended, .page)
         XCTAssertEqual(cell?.thumbnailContainer.alpha, 1)
-        XCTAssertNil(page.superview)
+        XCTAssertNil(page.superview?.superview, "the moving snapshot is gone")
     }
 
     func testReorderMovesTheTab() {
@@ -137,7 +137,8 @@ final class TabGalleryViewTests: XCTestCase {
         let p95 = sorted[Int(Double(sorted.count) * 0.95)]
         let worst = sorted.last!
         let mean = frames.reduce(Duration.zero, +) / frames.count
-        print("[plain-measure] gallery.scroll100 frames=\(frames.count) mean=\(mean) p95=\(p95) max=\(worst)")
+        let p99 = sorted[Int(Double(sorted.count) * 0.99)]
+        print("[plain-measure] gallery.scroll100 frames=\(frames.count) mean=\(mean) p95=\(p95) p99=\(p99) max=\(worst)")
         XCTAssertLessThan(p95, .microseconds(8_333), "95% of frames fit 120 Hz")
     }
 
@@ -149,14 +150,17 @@ final class TabGalleryViewTests: XCTestCase {
         let ids = data.tabs.map(\.id)
         let elapsed = await clock.measure {
             for id in ids {
-                let key = ThumbnailPipeline.Key(id: id, revision: 0, pixelWidth: 1110, kind: .thumbnail)
+                let key = ThumbnailPipeline.Key(id: id, revision: 0, pixelWidth: 1110, maxAspectPermille: 720, kind: .thumbnail)
                 let image = await pipeline.image(for: key) { await data.thumbnail(for: id) }
                 XCTAssertNotNil(image)
             }
         }
         print("[plain-measure] gallery.thumbnails100 \(elapsed)")
-        let key = ThumbnailPipeline.Key(id: ids[0], revision: 0, pixelWidth: 1110, kind: .thumbnail)
-        XCTAssertNotNil(pipeline.cached(key))
+        // Only the top of each page is kept (600 x 432 px here), and the most recent stay cached.
+        let key = ThumbnailPipeline.Key(id: ids[ids.count - 1], revision: 0, pixelWidth: 1110, maxAspectPermille: 720, kind: .thumbnail)
+        let first = pipeline.cached(key)
+        XCTAssertNotNil(first)
+        XCTAssertEqual(first.map { $0.size.height / $0.size.width } ?? 0, 0.72, accuracy: 0.01)
     }
 }
 #endif

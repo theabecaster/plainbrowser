@@ -251,12 +251,16 @@ public final class TabGalleryViewController: UIViewController {
 
     private func thumbnailKey(for item: TabGalleryItem) -> ThumbnailPipeline.Key {
         let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 3
-        return .init(id: item.id, revision: item.thumbnailRevision, pixelWidth: Int(metrics.cardWidth * scale), kind: .thumbnail)
+        let aspect = Int((metrics.thumbnailAspect * 1000).rounded(.up))
+        return .init(
+            id: item.id, revision: item.thumbnailRevision, pixelWidth: Int(metrics.cardWidth * scale),
+            maxAspectPermille: aspect, kind: .thumbnail
+        )
     }
 
     private func faviconKey(for item: TabGalleryItem) -> ThumbnailPipeline.Key {
         let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 3
-        return .init(id: item.id, revision: 0, pixelWidth: Int(18 * scale), kind: .favicon)
+        return .init(id: item.id, revision: 0, pixelWidth: Int(18 * scale), maxAspectPermille: 0, kind: .favicon)
     }
 
     // MARK: Actions

@@ -13,6 +13,9 @@ final class ThumbnailPipeline {
         let revision: Int
         /// Pixel width the image is prepared at; a new card width prepares a new copy.
         let pixelWidth: Int
+        /// The tallest part kept, as height over width in thousandths (0 keeps all). A card shows
+        /// only the top of its page, so only that part is decoded and cached.
+        let maxAspectPermille: Int
         let kind: Kind
     }
 
@@ -35,7 +38,7 @@ final class ThumbnailPipeline {
         if let task = inFlight[key] { return await task.value }
         let task = Task { () -> UIImage? in
             guard let original = await source() else { return nil }
-            return await Self.prepare(original, pixelWidth: key.pixelWidth)
+            return await Self.prepare(original, pixelWidth: key.pixelWidth, maxAspectPermille: key.maxAspectPermille, opaque: key.kind == .thumbnail)
         }
         inFlight[key] = task
         let image = await task.value
@@ -57,21 +60,27 @@ final class ThumbnailPipeline {
         cache.removeAllObjects()
     }
 
-    /// Downsamples to `pixelWidth`, keeping the aspect ratio, and decodes. Runs off the main
-    /// thread: `byPreparingThumbnail(ofSize:)` and `byPreparingForDisplay()` are UIKit's
-    /// asynchronous decoders.
-    @concurrent private nonisolated static func prepare(_ image: UIImage, pixelWidth: Int) async -> UIImage? {
+    /// Downsamples to `pixelWidth`, keeps the top `maxAspectPermille` of it, and decodes, all off
+    /// the main thread (`@concurrent`). Drawing into an image renderer leaves a decoded bitmap, so
+    /// Core Animation never decodes it during a scroll.
+    @concurrent private nonisolated static func prepare(
+        _ image: UIImage, pixelWidth: Int, maxAspectPermille: Int, opaque: Bool
+    ) async -> UIImage? {
         let pixelSize = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
         guard pixelSize.width > 0, pixelSize.height > 0 else { return nil }
-        if pixelSize.width <= CGFloat(pixelWidth) {
+        let width = min(CGFloat(pixelWidth), pixelSize.width).rounded()
+        let fullHeight = (width * pixelSize.height / pixelSize.width).rounded()
+        var height = fullHeight
+        if maxAspectPermille > 0 { height = min(fullHeight, (width * CGFloat(maxAspectPermille) / 1000).rounded(.up)) }
+        if width == pixelSize.width, height == fullHeight {
             return await image.byPreparingForDisplay() ?? image
         }
-        let height = (CGFloat(pixelWidth) * pixelSize.height / pixelSize.width).rounded()
-        // byPreparingThumbnail returns a scale-1 image; size is in pixels.
-        if let thumbnail = await image.byPreparingThumbnail(ofSize: CGSize(width: CGFloat(pixelWidth), height: height)) {
-            return thumbnail
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = opaque
+        return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { _ in
+            image.draw(in: CGRect(x: 0, y: 0, width: width, height: fullHeight))
         }
-        return await image.byPreparingForDisplay() ?? image
     }
 }
 

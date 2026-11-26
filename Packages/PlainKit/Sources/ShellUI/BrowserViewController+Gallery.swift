@@ -55,6 +55,9 @@ extension BrowserViewController: GalleryHost {
         view.insertSubview(gallery.view, aboveSubview: pageClip)
         gallery.didMove(toParent: self)
         tabsUI.gallery = gallery
+        // The gallery has its own bar: the system's vertical bar (Duo) empties rather than hides,
+        // so its column keeps its width and nothing under the gallery lays out again.
+        setToolbarItems([], animated: true)
         updateButtons()
 
         guard let tab = currentTab, tab.isPrivate == tabs.isShowingPrivateTabs,
@@ -137,6 +140,7 @@ extension BrowserViewController: GalleryHost {
         gallery.view.removeFromSuperview()
         gallery.removeFromParent()
         tabsUI.gallery = nil
+        setToolbarItems(PageButton.allCases.compactMap { barItems[$0] }, animated: true)
         setChromeHiddenForGallery(false, animated: false)
         updateButtons()
         updatePageState()

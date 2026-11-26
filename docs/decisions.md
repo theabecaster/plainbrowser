@@ -144,3 +144,7 @@ Each entry: what was chosen, and why. Newest last.
   Reloads and same-document (pushState) changes are not new visits for now.
 - **Settings reach the shell after each save,** through a `SettingsStoring` adapter, rather than a
   re-read when Settings closes, so the order of saves is the order they apply.
+
+## Deployment target iOS 27.2 (2026-11-26)
+
+- **Chosen:** iOS 27.2, up from 27.1, because `UIView.LayoutRegion.bar(onEdge:)` (Duo vertical bar layout) needs 27.2.

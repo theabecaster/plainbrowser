@@ -4,7 +4,7 @@ name: Plain
 options:
   bundleIdPrefix: dev.abrahamgonzalez
   deploymentTarget:
-    iOS: "27.1"
+    iOS: "27.2"
   createIntermediateGroups: true
 # Signing team comes from the gitignored Config/Signing.local.xcconfig.
 configFiles:

@@ -1,7 +1,7 @@
 # Plain Browser — build plan
 
 Status: approved 2026-11-26. Build in progress.
-Inputs: 7 research reports (WebKit performance, motion/feel, feature completeness + reference browsers, on-device AI, stack/build pipeline, iPhone Duo design, naming).
+Inputs: 7 research reports (WebKit performance, motion/feel, feature completeness + reference browsers, on-device AI, stack/build pipeline, iPhone Duo design, naming), plus the design audit against reference browsers (`docs/research/design-audit.md`).
 
 ## 1. Bottom line
 
@@ -19,7 +19,7 @@ The build fails if a budget is broken. Budgets are measured on the Duo, never th
 |---|---|---|
 | Cold launch to a focused search field | < 300 ms target, fail at 400 ms | `XCTApplicationLaunchMetric` + signpost when the field becomes first responder |
 | Hitch ratio (scroll, tab gallery, transitions) | < 5 ms/s, fail at 10 ms/s | `XCTHitchMetric`, `XCTOSSignpostMetric`, `xctrace` Animation Hitches |
-| Frame rate | 120 Hz on all motion | `CADisableMinimumFrameDurationOnPhone`, `CAFrameRateRange(80,120,120)` for big motion |
+| Frame rate | 120 Hz on all motion | `CADisableMinimumFrameDurationOnPhone` is set. No `CAFrameRateRange` exists yet: add `CAFrameRateRange(80,120,120)` where a display link drives big motion, and verify 120 Hz on the Duo with the Animation Hitches trace. |
 | Omnibox query on 100k history rows | p95 < 16 ms | unit perf test |
 | Tap-to-visual-response | same frame | no async hop before the first visual change |
 | App memory per discarded tab | < 1 MB | `XCTMemoryMetric` |
@@ -37,7 +37,7 @@ The build fails if a budget is broken. Budgets are measured on the Duo, never th
 | Storage | GRDB 7 (SQLite + FTS5) | Full-text omnibox search, async off-main writes, Sendable. SwiftData has no full-text search and degrades past ~100k rows. |
 | Concurrency | Swift 6, default MainActor in UI modules only; storage/core nonisolated, `@concurrent` for heavy work | Keeps database work off the main thread. |
 | Project | XcodeGen spec + one local SPM package with many targets | Agent-friendly, fast incremental builds, no `.pbxproj` merge pain (same as Rex DUO). |
-| Deployment target | iOS 27.1 | All Duo APIs start there. Duo runs 27.3. |
+| Deployment target | iOS 27.2 | Duo APIs start at 27.1, but `UIView.LayoutRegion.bar(onEdge:)` needs 27.2. Duo runs 27.3. |
 
 Dependencies (whole list):
 - GRDB.swift (MIT).
@@ -83,15 +83,31 @@ One local package, targets:
 
    | Tier | Which tabs | Holds |
    |---|---|---|
-   | Live | visible + ~3 recent (2 visible on the Duo split) | full `WKWebView` |
-   | Suspended | next few | detached, `inactiveSchedulingPolicy = .suspend` |
+   | Live | visible + their left and right neighbours + a few recent (2 visible on the Duo split) | full `WKWebView`, attached or parked |
+   | Kept | next few | detached; WebKit suspends it (default `inactiveSchedulingPolicy`, `.suspend`) |
    | Discarded | the rest | `interactionState` + sessionStorage blob + thumbnail |
 
+   No throttle tier: copied configurations share one `WKPreferences`, so a per-tab policy would change every tab. The kept cap has a hard ceiling (Firefox crashed at ~50 live web views).
    On a memory warning, everything except visible tabs drops to Discarded (Firefox's fix for 7.8M watchdog kills).
-3. **Thumbnails:** taken once when a tab leaves the screen, `snapshotWidth` ~200 pt, written off-main, decoded with `byPreparingForDisplay`. Never per cell. Full-size snapshots cost 70+ MiB.
-4. **Collapsing toolbar without page relayout:** set `obscuredContentInsets` once to the collapsed size and change it only when the bar settles. Animate the bar with `transform`/`alpha` only. Set `setMinimumViewportInset(_:maximumViewportInset:)` so CSS `svh`/`lvh` stay stable. Drive it from the scroll-view delegate, not KVO.
-5. **Crash recovery:** `webViewWebContentProcessDidTerminate` reloads the visible tab (crash-loop guard), flags background tabs to reload on select.
-6. **Speed tricks:** preconnect on link touch-down (injected `<link rel=preconnect>`), back-forward cache on, HTTPS upgrade via `preferredHTTPSNavigationPolicy`, JIT left on (`securityRestrictionMode = .none`).
+   Never discard a tab that plays media, is in PiP or fullscreen, uses the camera or microphone, or is downloading, even on a memory warning.
+3. **Thumbnails:** taken once when a tab leaves the screen, at ~2x the card size (`snapshotWidth` is in points and WebKit multiplies by screen scale, so 200 pt gave 3x), written off-main, decoded with `byPreparingForDisplay`. Never per cell. Full-size snapshots cost 70+ MiB.
+4. **Collapsing toolbar without page relayout:** `obscuredContentInsets.bottom` follows the bar's resting state: the expanded height when the bar settles expanded, the collapsed height when it settles collapsed. It changes once, at the end of each snap, never per frame, and waits while the page bounces at the top (WebKit clamps overscroll on any inset change). A fixed collapsed inset would hide fixed-bottom page UI and the page's last lines under the expanded bar. Animate the bar with `transform`/`alpha` only. Set `setMinimumViewportInset(_:maximumViewportInset:)` to collapsed/expanded so CSS `svh`/`lvh` stay stable. Drive it from the scroll-view delegate, not KVO.
+5. **Save and restore:**
+   - Save `interactionState` after each load (debounced) and on detach. Flush every non-discarded tab on resign active, inside a background task.
+   - `takeSnapshot`, `fetchData(of: .sessionStorage)` and `restoreData` get a ~300–500 ms timeout; on timeout, continue with `interactionState` only. Skip the sessionStorage fetch on a memory warning.
+   - After setting `interactionState`, check `webView.url`; if it is nil, load the URL. A restored POST page asks before it resubmits.
+6. **Crash recovery:** `webViewWebContentProcessDidTerminate` reloads the visible tab (crash-loop guard); while the app is in the background, it waits for become-active. A killed hidden tab is a discard, not a crash: keep its `interactionState`, mark it Discarded, and restore it in place on select.
+7. **Speed tricks:** preconnect on link touch-down (injected `<link rel=preconnect>`), back-forward cache on, HTTPS upgrade via `preferredHTTPSNavigationPolicy`, JIT left on (`securityRestrictionMode = .none`).
+
+### Data rules: blocking, reader, storage, suggestions
+
+1. **Blocking has no gap on update:** when a list changes, the last compiled list with the same name stays attached until the new one compiles; then they swap and the old one is deleted.
+2. **First launch blocks the most first:** `blocklist-01` holds the highest-value rules (EasyPrivacy network blocks + EasyList third-party domains) and compiles first.
+3. **Cosmetic rules in one list,** placed first, so each frame gets one hide stylesheet. Measure on the Duo before dropping generic selectors.
+4. **Reader check is small:** only `isProbablyReaderable` (4 KB) runs per page, as a user script at DOMContentLoaded in the reader world. The full Readability parse runs only when the check passes and the tab is visible, or on tap.
+5. **Storage maintenance:** after Clear History, `PRAGMA wal_checkpoint(TRUNCATE)` then `VACUUM`, off main. Daily: prune old visits, cap history and favicon size, FTS `optimize`, `PRAGMA optimize`.
+6. **Suggestions:** never send URL-like or intranet input to the remote engine; no remote suggestions in private tabs. Preconnect to the suggestion host on focus. A small prefix cache fills the list while a request is in flight.
+7. **Omnibox ranking:** the top hit is site-level (`github.com` before a deep page) until the text reaches a path; typed visits weigh more than link clicks; the suggestion picked for an input ranks first the next time.
 
 ## 4b. Product principle: opinionated and simple
 
@@ -121,7 +137,8 @@ Model: Arc Search's loop plus Safari's best gestures, minus their known flaws.
 
 - Launch straight into search, keyboard up, favorites above the keyboard.
 - Minimal bottom bar (outer screen): URL pill + tabs + actions.
-- Swipe along the bar to switch tabs; swipe past the last tab shows a "new tab" card first (fixes Safari's no-warning behavior).
+- Swipe along the expanded bar to switch tabs; swipe past the last tab shows a "new tab" card first (fixes Safari's no-warning behavior). Swipe up from the bar opens the gallery.
+- The collapsed pill takes taps only (tap expands). It sits in the home-indicator zone, where swipes belong to the system.
 - Tab gallery: cards, flick up to close, tap to zoom in.
 - Tabs auto-archive after a chosen time (12h / 1d / 3d / 7d / 30d / off), archive searchable.
 - Gesture start zones stay out of the bottom 20 pt (Home indicator fights, an Arc complaint).
@@ -132,15 +149,17 @@ Motion principles: springs with no bounce by default; bounce only when a flick w
 | Interaction | Animation | Parameters | Haptic |
 |---|---|---|---|
 | URL bar focus | bar grows into search sheet | `.snappy(duration: 0.3)`, bounce 0, follows `keyboardLayoutGuide` | none |
-| Switch tab by bar swipe | 1:1 tracking, then spring with gesture velocity | `.spring(duration: 0.35, bounce: 0.12)`, commit at 50% projected travel | selection on commit |
+| Switch tab by bar swipe | 1:1 tracking, then spring with gesture velocity. Preview: the neighbour's live web view, else a 2x full-screen snapshot kept for the two neighbours only. A snapshot of the glass bar slides, never live glass. | `.spring(duration: 0.35, bounce: 0.12)`, commit at 50% projected travel | selection on commit |
 | Swipe past last tab | rubber-band, new-tab card at 80 pt | as above | selection at threshold, light impact on commit |
-| Open tab gallery | page zooms into its card | `.spring(duration: 0.42, bounce: 0)`, 80–120 Hz | none |
-| Open tab | system `.zoom` transition, interruptible | system | none |
+| Open tab gallery | page zooms into its card; custom snapshot animator, also driven by swipe up from the bar | `.spring(duration: 0.42, bounce: 0)`, 80–120 Hz | none |
+| Open tab | same custom animator in reverse, interruptible; not the system `.zoom` (tabs are re-parented web views, not pushed controllers); target cell hidden by tab ID; live web view swapped in at the end | `.spring(duration: 0.42, bounce: 0)` | none |
 | Close tab | projected throw, cards reflow | close at −40% height or > 800 pt/s; throw `.spring(0.3, bounce 0.15)`; reflow `.snappy(0.3)` | soft impact |
 | Pull to refresh | rubber-band, arms at 80 pt | — | selection at arm |
-| Toolbar collapse | tied to scroll, snaps at scroll end | `.smooth(0.25)` | none |
+| Toolbar collapse | tied to scroll; snaps on release, toward the release velocity when it is clear; a drag during the snap retargets from the on-screen position | `.smooth(0.25)` | none |
 | Link preview | `UIContextMenuInteraction` | system | system |
 | Fold / unfold | none custom; system bounds change | — | none |
+
+Chrome: the pill and the button bar share one Liquid Glass container (`UIGlassContainerEffect`) with no extra layer shadow, plus the system scroll edge effect on the page edge under them.
 
 All values are starting points, tuned on the Duo.
 
@@ -158,10 +177,10 @@ Facts that shape it:
 |---|---|
 | Outer portrait (466×678, ~382 pt content) | System vertical side bar: Back, Forward, Tabs, Share, More (`.verticalPreferred`). Custom bottom URL pill that shrinks on scroll. One pane. |
 | Outer landscape (678×466) | Same; primary pane only. |
-| Inner landscape, flat (951×669) | Vertical bar off (Safari's precedent). Collapsible tab sidebar on the leading edge. Each pane has its own top URL pill. Split tabs on demand. |
+| Inner landscape, flat (951×669) | System vertical bar stays on, as on the outer screen (HIG; confirm Safari on the device). Tab sidebar on the leading edge. Each pane has its own top URL pill. Split tabs on demand. |
 | Inner portrait (669×951) | System horizontal bars, one pane; stacked second pane off by default. |
-| Book pose (vertical fold, partially open) | Split panes snap to the two halves; floating controls avoid the fold region. |
-| Tabletop / laptop pose (horizontal fold) | Video or page on top half, controls + tab strip on bottom half. |
+| Book pose (vertical fold, partially open) | Split panes snap to the two halves. Pills and toasts shift off the fold region (`reservedRegions(kind: .division)`) and avoid the inner camera (`.occlusion`); the page never moves. |
+| Tabletop / laptop pose (horizontal fold) | No custom layout; the page keeps spanning the screen. Only floating controls avoid the fold. |
 | Regular iPhones (375 / 402 / 440 pt) and resizable windows | Same code. Second pane only when width and height are both regular. |
 
 ### Tab layouts: side tabs (option) and regular tabs
@@ -173,9 +192,10 @@ Facts that shape it:
   - Pro Max in landscape: regular width but compact height, so no side tabs. Checking width alone would wrongly allow it here.
   - iPad and iOS 27 resizable windows follow the same rule.
 - **Why not screen size:** Apple's Duo guidance says never use `UIScreen.main`, the device type or orientation for layout. `UIScreen` is ambiguous with two screens, and iOS 27 windows can be resized. Size classes on the window scene's traits are the supported signal.
-- **Mechanics:** read the root view controller's `traitCollection`, and use `registerForTraitChanges([UITraitHorizontalSizeClass.self, UITraitVerticalSizeClass.self])` to switch the layout. The switch rides the system's fold/unfold bounds animation, with no custom animation and no web view reload. A minimum-width guard of about 640 pt protects against future odd sizes.
+- **Mechanics:** read the root view controller's `traitCollection`, and use `registerForTraitChanges([UITraitHorizontalSizeClass.self, UITraitVerticalSizeClass.self])` to switch the layout. The switch rides the system's fold/unfold bounds animation, with no custom animation and no web view reload. A minimum-width guard of about 640 pt protects against future odd sizes. It applies to the width left for pages after the sidebar, measured in layout, not to the window.
 - **Side tabs design (inner screen):**
-  - Collapsible leading sidebar of about 260 pt, with pinned favorites on top and a tab list below (favicon + title).
+  - Leading sidebar with three states: Hidden, Rail (~64 pt, favicons only) and Expanded (~260 pt, pinned favorites on top and a tab list below, favicon + title).
+  - Rail is forced while a split is showing. A fold (active vertical division) forces Rail or Hidden; Expanded then floats over the page. A 260 pt sidebar beside a split would leave ~345 pt per pane, narrower than the outer screen.
   - Collapse with a swipe or button. It also collapses on its own in inner portrait when the page needs the width.
   - Drag tabs to reorder, or drop one on the other pane to split.
   - It works with the split panes: the sidebar plus up to two pages.
@@ -183,17 +203,17 @@ Facts that shape it:
   - Outer screen: Arc-style card gallery with flick-to-close and bar-swipe switching.
   - Inner screen: a grid with an even number of columns (2 or 4), so no card sits on the fold. It uses the same zoom transitions and gestures.
 
-Built with: one `UIArrangementViewController` (`.split.axes(.horizontal)`) holding the two web panes; `reservedRegions(kind: .division, options: .includeInactive)` to reserve fold space ahead of time; `verticalBarEdge` + `UIView.LayoutRegion.bar(onEdge:)` for the side bar; `windowScene.displayLink` for 120 Hz.
+Built with: one `UIArrangementViewController` (`.split.axes(.horizontal)`) holding the two web panes; `reservedRegions(kind: .division, options: .includeInactive)` for the fold's position only (a flat fold's division has zero width), to pick column counts and the pill's side, never to inset content; `verticalBarEdge` + `UIView.LayoutRegion.bar(onEdge:)` for the side bar; `windowScene.displayLink` for 120 Hz.
 
 Duo features, ranked:
 1. Adaptive shell across all states (table above).
-2. Fold-safe: same `WKWebView` objects stay in the same parents, only frames change; final frame set once, transient sizes ignored, heavy work after ~150 ms settle.
-3. Split tabs across the crease: "Open in other pane" from the link menu, drag a tab to the other pane, swap panes, long-press to move. A tab moves by re-parenting its web view under a snapshot cover, no reload.
+2. Fold-safe: same `WKWebView` objects stay in the same parents, only frames change. Each web view's final frame is set once, from the target size in `viewWillTransition(to:with:)`; `obscuredContentInsets` and the viewport insets are applied once in its completion. No snapshot cover for a fold: WebKit scales its tiles, then reflows. (Verify on the Duo that a fold calls `viewWillTransition`.)
+3. Split tabs across the crease: "Open in other pane" from the link menu, drag a tab to the other pane, swap panes, long-press to move. A tab moves by re-parenting its web view under a snapshot cover, no reload. In a split, one pane is focused (the one touched last, marked on its pill); shared bar buttons act on it.
 4. Supporting pane (~30%, 250 pt min): reader, find results, history or (later) summary next to the page.
 5. Desktop pages by default on the inner screen (content mode chosen at navigation start from pane width; never switched on fold, which would force a reload).
-6. Tabletop video (later; check whether WebKit's fullscreen player adapts on its own first).
+6. Per-window browser state (app-wide stores, per-scene tabs and restoration), so "Open in New Window" can ship later without a rewrite.
 
-Dropped: outer-screen "peek" (no API), hinge gestures (gimmick).
+Dropped: outer-screen "peek" (no API), hinge gestures (gimmick), tabletop video (WebKit's fullscreen player already splits around the fold; check once on the device).
 
 ## 7. Features and milestones
 
@@ -211,12 +231,14 @@ Dropped: outer-screen "peek" (no API), hinge gestures (gimmick).
 - Content blocking (EasyList + EasyPrivacy + tracker list), HTTPS upgrade.
 
 **M2 — Tabs**
-- Tab gallery, flick to close, zoom open, bar-swipe switching, new-tab card.
+- Tab gallery with the custom snapshot open/close animator, flick to close, bar-swipe switching on the expanded pill (live or 2x neighbour preview), swipe up to the gallery, new-tab card.
+- Toolbar: bottom inset follows the bar's resting state, interruptible velocity-aware snap, one shared glass container.
 - Tab tiers, thumbnails, session restore after kill, recently closed, auto-archive + searchable archive.
 - Private tabs (non-persistent store, no history).
 
 **M3 — Duo layouts**
-- Adaptive shell for every state in section 6, split tabs, fold safety.
+- Adaptive shell for every state in section 6, split tabs with one focused pane, fold safety, per-window state.
+- Sidebar Hidden / Rail / Expanded; pills off the fold and the inner camera.
 - Tab layout setting: regular tabs everywhere (card gallery outside, even-column grid inside) and side tabs on the inner screen only, gated by regular/regular size classes.
 - Verified on the Duo in outer, inner landscape, inner portrait and partial fold; plus 375 / 402 / 440 pt simulators.
 
@@ -232,7 +254,7 @@ Dropped: outer-screen "peek" (no API), hinge gestures (gimmick).
 - Reader mode, Apple Translation (in-page, on-device), print/PDF export, per-site settings, cookie banners, dark mode for sites.
 - Bookmarks UI, reading list, tab groups, profiles.
 - App Intents / Shortcuts, Spotlight, search widget, Control Center control, Handoff.
-- Supporting pane, tabletop video.
+- Supporting pane, "Open in New Window".
 - On-device AI (section 8).
 - Web-browser entitlement (default browser, passkeys, service workers) once Apple grants it.
 

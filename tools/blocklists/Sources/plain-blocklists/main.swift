@@ -137,7 +137,7 @@ struct Chunk {
 func convert(_ lines: [String]) -> Chunk {
     let result = ContentBlockerConverter().convertArray(
         rules: lines,
-        // Safari 26 is the newest engine the converter knows; Plain needs iOS 27.1, which has it.
+        // Safari 26 is the newest engine the converter knows; Plain needs iOS 27.2, which has it.
         safariVersion: .safari26,
         advancedBlocking: false
     )

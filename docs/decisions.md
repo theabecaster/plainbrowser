@@ -548,8 +548,9 @@ Each entry: what was chosen, and why. Newest last.
   would point at a choice that is not there. Both prompts are built and tested
   (`-PlainForceDefaultBrowserPrompts` in Debug). The button opens the Default Apps settings
   (`openDefaultApplicationsSettingsURLString`). The empty-tab card is `DefaultBrowserCard` in
-  FeatureUI for the start screen to host; hosting it from TabGalleryUI needs that target to depend
-  on FeatureUI (or the card to move to DesignSystem).
+  FeatureUI for the start screen to host: ShellUI installs the start screen (`EmptyTabView`) and
+  already imports FeatureUI, so it can place `makeDefaultBrowserCard` there when
+  `DefaultBrowserPrompts.showsEmptyTabCard()` says so. No module dependency changes.
 - **Brand art colors** (`DesignSystem.BrandArt`): the mark's and the field's colors live in
   DesignSystem, used only by the mark and the intro. The demo page's fake ads keep their own loud
   colors on purpose.

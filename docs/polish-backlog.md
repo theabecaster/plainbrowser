@@ -186,8 +186,12 @@ Newest feature last.
 - **Duo cluttered demo.** The cookie wall still covers most of the photo on the Duo's outer
   screen. Fine as a picture of clutter; a shorter wall or a smaller masthead would show more.
   (Design review, round 3.)
-- **Hosting the empty-tab card.** `DefaultBrowserCard` lives in FeatureUI; the start screen is in
-  TabGalleryUI, which does not depend on FeatureUI. Add the dependency (or move the card to
-  DesignSystem) when the start screen hosts it.
+- **Hosting the empty-tab card.** `DefaultBrowserCard` lives in FeatureUI. ShellUI installs the
+  start screen (TabGalleryUI's `EmptyTabView`) and already imports FeatureUI, so it can add the
+  card there behind `DefaultBrowserPrompts.showsEmptyTabCard()`. The card shows its own mark, so
+  hosted on the start screen it should replace that screen's mark and sentence, not stack on them.
+- **Two Stem mark views.** The intro's `StemMarkView` (FeatureUI, animated assembly) and the start
+  screen's `MarkView` (TabGalleryUI, spinnable) were built in parallel lanes. Move one shared mark
+  (geometry from `Brand/tools/gen_icon.py`) to DesignSystem and have both use it.
 - **Device numbers.** Splash frame rate and hitches are measured on the simulator only (60 Hz);
   check 120 Hz and the `intro.splash` animation interval on the Duo.

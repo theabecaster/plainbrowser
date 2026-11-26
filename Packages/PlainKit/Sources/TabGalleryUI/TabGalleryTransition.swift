@@ -61,7 +61,7 @@ public final class TabGalleryTransition {
         signpostName = start == .page ? Signposts.galleryShow : Signposts.galleryOpenTab
         signpostState = Signposts.signposter.beginInterval(signpostName)
 
-        gallery.prepareForTransition(to: tabID)
+        gallery.prepareForTransition(to: tabID, revealFully: start == .page)
         cardFrame = gallery.thumbnailFrame(for: tabID, in: container)
             ?? CGRect(x: pageFrame.midX - 1, y: pageFrame.midY - 1, width: 2, height: 2)
         gallery.setThumbnailHidden(for: tabID)
@@ -172,7 +172,8 @@ public final class TabGalleryTransition {
         wrapper.layer.cornerRadius = lerp(0, Radius.large, t)
         // The tab being opened or left is the selected one: its card's ring grows in with the
         // zoom, so nothing pops when the real card takes over.
-        wrapper.layer.borderWidth = TabCardCell.selectionWidth * t
+        // Only over the last stretch, so a page on its way to full screen never reads as a tile.
+        wrapper.layer.borderWidth = TabCardCell.selectionWidth * max(0, (t - 0.7) / 0.3)
         wrapper.alpha = 1
         let zoom = 1 + Self.galleryZoom * (1 - progress)
         if let cards = content.first {

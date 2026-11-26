@@ -40,11 +40,22 @@ struct TabGalleryMetrics: Equatable {
     static let titleRowPadding: CGFloat = 12
 
     var columns: Int {
-        isCompactWidth ? 1 : TabGalleryLayout.columnCount(forWidth: width)
+        if isCompactWidth { return 1 }
+        let wide = TabGalleryLayout.columnCount(forWidth: width)
+        // Fewer, wider cards when the wide count would leave titles unreadable (the Duo's inner
+        // screen in portrait). Still even, so the middle gap stays on the fold.
+        if wide > FixedChoices.tabGalleryColumns.narrow, cardWidth(columns: wide) < TabGalleryChoices.minGridCardWidth {
+            return FixedChoices.tabGalleryColumns.narrow
+        }
+        return wide
     }
 
     /// The card's full width.
     var cardWidth: CGFloat {
+        cardWidth(columns: columns)
+    }
+
+    private func cardWidth(columns: Int) -> CGFloat {
         let count = CGFloat(columns)
         let available = width - Self.margin * 2 - Self.spacing * (count - 1)
         return max(1, (available / count).rounded(.down))
@@ -119,4 +130,7 @@ enum TabGalleryChoices {
     /// Decoded previews kept in memory. 100 phone-size previews at 3x are about 60 MB; the cache
     /// evicts under pressure, and the rest decode again in about a frame each.
     static let thumbnailCacheCost = 64 * 1024 * 1024
+    /// A grid card is never narrower than this: below it a title shows only a word or two. The Duo's
+    /// inner screen gets four columns in landscape (217 pt cards) and two in portrait.
+    static let minGridCardWidth: CGFloat = 180
 }

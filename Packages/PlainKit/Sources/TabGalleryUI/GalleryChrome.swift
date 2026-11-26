@@ -7,7 +7,7 @@ final class GalleryBottomBar: UIView {
     let menuButton = UIButton(type: .system)
     let newTabButton = UIButton(type: .system)
     let doneButton = UIButton(type: .system)
-    private let glass = Glass.makeView(shape: .capsule)
+    private let glass = Glass.makeView(shape: .capsule, tint: Palette.glassTintOnPaper)
 
     private static let height: CGFloat = 52
     private static let padding: CGFloat = 4
@@ -29,7 +29,7 @@ final class GalleryBottomBar: UIView {
         var done = UIButton.Configuration.plain()
         done.title = "Done"
         // Glass content draws text in the label color unless the button names its own.
-        done.baseForegroundColor = Palette.accent
+        done.baseForegroundColor = Palette.accentOnGlass
         done.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var attributes = attributes
             attributes.font = UIFont.preferredFont(forTextStyle: .headline)
@@ -40,7 +40,7 @@ final class GalleryBottomBar: UIView {
         doneButton.accessibilityIdentifier = "galleryDone"
 
         for button in [menuButton, newTabButton, doneButton] {
-            button.tintColor = Palette.accent
+            button.tintColor = Palette.accentOnGlass
             glass.contentView.addSubview(button)
         }
     }
@@ -70,7 +70,7 @@ final class GalleryBottomBar: UIView {
 /// "Reopen Tab", shown only after a close and gone a few seconds later (docs/ui-reference.md).
 final class ReopenToast: UIView {
     let button = UIButton(type: .system)
-    private let glass = Glass.makeView(shape: .capsule, interactive: true)
+    private let glass = Glass.makeView(shape: .capsule, interactive: true, tint: Palette.glassTintOnPaper)
     private var hideTask: Task<Void, Never>?
     private(set) var isShowing = false
 
@@ -89,9 +89,9 @@ final class ReopenToast: UIView {
             return attributes
         }
         configuration.contentInsets = .init(top: 0, leading: Spacing.l, bottom: 0, trailing: Spacing.l)
-        configuration.baseForegroundColor = Palette.accent
+        configuration.baseForegroundColor = Palette.accentOnGlass
         button.configuration = configuration
-        button.tintColor = Palette.accent
+        button.tintColor = Palette.accentOnGlass
         button.accessibilityIdentifier = "reopenTab"
         glass.contentView.addSubview(button)
         alpha = 0

@@ -23,7 +23,9 @@ struct TabGalleryMetricsTests {
 
     @Test func regularWidthIsAnEvenGrid() {
         #expect(innerLandscape.columns == 4)
-        #expect(innerPortrait.columns == 4)
+        // Four columns would make 147 pt cards in portrait: two instead.
+        #expect(innerPortrait.columns == 2)
+        #expect(innerPortrait.cardWidth >= TabGalleryChoices.minGridCardWidth)
         #expect(TabGalleryMetrics(width: 600, height: 800, isCompactWidth: false, titleLineHeight: 18).columns == 2)
         for metrics in [innerLandscape, innerPortrait] {
             #expect(metrics.columns % 2 == 0)

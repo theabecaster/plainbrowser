@@ -31,6 +31,16 @@ public enum Palette {
         light: UIColor(rgb: 0xFFF6E6, alpha: 0.78), dark: UIColor(rgb: 0x16344A, alpha: 0.72)
     )
 
+    /// A lighter tint for glass that floats over the Paper background itself (the tab gallery's
+    /// bar), where the full `glassTint` doubles the Paper and reads as gold.
+    public static let glassTintOnPaper = UIColor(
+        light: UIColor(rgb: 0xFFFFFF, alpha: 0.35), dark: UIColor(rgb: 0x16344A, alpha: 0.45)
+    )
+
+    /// Lagoon Blue for text and symbols on glass: in dark mode a lighter step of the same blue,
+    /// so labels keep their contrast on the dark glass.
+    public static let accentOnGlass = UIColor(light: accent, dark: UIColor(rgb: 0x7AA7FF))
+
     /// The soft shadow under floating controls, so glass lifts off a white page.
     public static let floatingShadow = UIColor(light: UIColor(rgb: 0x0A2133), dark: .black)
 

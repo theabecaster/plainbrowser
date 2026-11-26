@@ -82,6 +82,11 @@ public final class TabGalleryViewController: UIViewController {
         }])
         bottomBar.menuButton.showsMenuAsPrimaryAction = true
         root.addSubview(bottomBar)
+        // The system's scroll edge effect softens the cards passing under the floating bar.
+        let edge = UIScrollEdgeElementContainerInteraction()
+        edge.scrollView = collectionView
+        edge.edge = .bottom
+        bottomBar.addInteraction(edge)
 
         toast.button.addAction(UIAction { [weak self] _ in self?.reopenClosedTab() }, for: .primaryActionTriggered)
         root.addSubview(toast)
@@ -379,10 +384,18 @@ public final class TabGalleryViewController: UIViewController {
     }
 
     /// Gets the tab's card on screen and laid out before a transition measures it.
-    public func prepareForTransition(to id: UUID) {
+    /// - Parameter revealFully: scroll a partly hidden card fully into view. True when the gallery
+    ///   is about to appear; false when the user just tapped a card, which must not jump.
+    public func prepareForTransition(to id: UUID, revealFully: Bool = true) {
         loadViewIfNeeded()
         view.layoutIfNeeded()
-        scrollToTab(id, animated: false)
+        if revealFully {
+            scrollToTab(id, animated: false)
+        } else if let indexPath = diffable.indexPath(for: id),
+                  let attributes = collectionView.layoutAttributesForItem(at: indexPath),
+                  !collectionView.bounds.intersects(attributes.frame) {
+            collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: false)
+        }
         collectionView.layoutIfNeeded()
     }
 

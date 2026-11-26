@@ -32,7 +32,7 @@ public enum Motion {
 
     /// Runs `changes` with `animation`. Under Reduce Motion the changes instead apply at once
     /// inside a 0.2 s crossfade of `view` (the container whose contents move), so nothing slides.
-    /// Without a `view`, Reduce Motion gets a plain 0.2 s ease instead of the spring.
+    /// Without a `view`, Reduce Motion applies the changes at once, with no movement.
     public static func animate(
         _ animation: Animation,
         crossfading view: UIView? = nil,
@@ -47,7 +47,8 @@ public enum Motion {
                 completion: { _ in completion?() }
             )
         } else if prefersCrossfade {
-            UIView.animate(Animation.easeInOut(duration: crossfadeDuration), changes: changes, completion: completion)
+            UIView.performWithoutAnimation(changes)
+            completion?()
         } else {
             UIView.animate(animation, changes: changes, completion: completion)
         }

@@ -25,33 +25,34 @@ struct AddressBarDataTests {
         #expect(favorites.first?.title == "A")
     }
 
-    @Test func visitedPagesBecomeSuggestions() async throws {
+    @Test func visitedPagesComeFirstThenEngineSuggestions() async throws {
         let database = try AppDatabase.inMemory()
-        let data = LiveAddressBarData()
+        let data = LiveAddressBarData { SuggestionClient(http: FakeEngine(body: #"["swift.o", ["swift.org", "swift ownership"]]"#)) }
         await data.attach(database)
         data.pageVisited(url: URL(string: "https://swift.org/documentation")!, title: "Swift Docs")
-        // Give the queued record a turn, then write it.
-        try await Task.sleep(for: .milliseconds(50))
         await data.flush()
 
-        var first: [AddressBarSuggestion]?
-        let task = Task {
-            await data.suggestions(for: "swift.o") { if first == nil { first = $0 } }
-        }
-        // The engine request may fail without a network; the local pass is all this test needs.
-        try await Task.sleep(for: .milliseconds(300))
-        task.cancel()
-        _ = await task.value
-        let pages = (first ?? []).compactMap { suggestion -> URL? in
-            if case .page(let url, _, _) = suggestion { return url }
-            return nil
-        }
-        #expect(pages.map(\.absoluteString) == ["https://swift.org/documentation"])
+        var updates: [[AddressBarSuggestion]] = []
+        await data.suggestions(for: "swift.o") { updates.append($0) }
+
+        #expect(updates.count == 2)
+        #expect(updates.first == [.page(url: URL(string: "https://swift.org/documentation")!, title: "Swift Docs", isFavorite: false)])
+        #expect(updates.last?.dropFirst() == [.search("swift.org"), .search("swift ownership")])
     }
 
     @Test func onlyWebPagesAreRecorded() {
         #expect(LiveAddressBarData.isRecordable(URL(string: "https://example.com")!))
         #expect(LiveAddressBarData.isRecordable(URL(string: "http://localhost:8080/a")!))
         #expect(!LiveAddressBarData.isRecordable(URL(string: "about:blank")!))
+    }
+}
+
+/// An engine endpoint that answers every request with `body`, without the network.
+private struct FakeEngine: HTTPLoading {
+    let body: String
+
+    func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        return (Data(body.utf8), response)
     }
 }

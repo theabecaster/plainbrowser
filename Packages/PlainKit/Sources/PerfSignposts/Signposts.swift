@@ -60,6 +60,11 @@ public enum Signposts {
     public static let navForward: StaticString = "nav.forward"
     /// Event: the share sheet opened.
     public static let share: StaticString = "share.open"
+    /// Events: page menu actions.
+    public static let reload: StaticString = "page.reload"
+    public static let findOnPage: StaticString = "page.find"
+    public static let copyLink: StaticString = "page.copyLink"
+    public static let desktopSite: StaticString = "page.desktopSite"
 
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {

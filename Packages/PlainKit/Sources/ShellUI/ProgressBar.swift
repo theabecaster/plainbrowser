@@ -9,6 +9,8 @@ import UIKit
 final class ProgressBar: UIView {
     private let fill = GradientView()
     private(set) var progress: Double = 0
+    /// Bumped by every new load, so a fade from the previous load cannot hide this one.
+    private var generation = 0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -51,15 +53,25 @@ final class ProgressBar: UIView {
         }
     }
 
+    /// Starts a new load: empties the bar, cancelling the previous load's fill and fade.
+    func begin() {
+        generation += 1
+        layer.removeAllAnimations()
+        fill.layer.removeAllAnimations()
+        reset()
+    }
+
     /// Fills the bar, then fades it out (the load finished).
     func finish() {
         guard alpha > 0 else { return }
         progress = 1
+        let load = generation
         Motion.animate(Motion.quick, changes: { self.applyProgress() }) {
+            guard load == self.generation else { return }
             UIView.animate(withDuration: Motion.crossfadeDuration, delay: 0, options: [.allowUserInteraction]) {
                 self.alpha = 0
             } completion: { _ in
-                if self.alpha == 0 { self.reset() }
+                if load == self.generation { self.reset() }
             }
         }
     }

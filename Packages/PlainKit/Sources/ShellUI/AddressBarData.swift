@@ -41,9 +41,16 @@ public final class LiveAddressBarData: AddressBarData {
     private var database: AppDatabase?
     private var recorder: HistoryRecorder?
     /// Made on the first keystroke, not at launch: it builds a URL session.
-    private lazy var client = SuggestionClient()
+    private lazy var client = makeClient()
+    private let makeClient: () -> SuggestionClient
+    /// The newest queued history change, so `flush` includes it.
+    private var lastRecord: Task<Void, Never>?
 
-    public init() {}
+    /// - Parameter makeClient: builds the engine suggestion client on first use (tests pass one
+    ///   with a fake loader).
+    public init(makeClient: @escaping () -> SuggestionClient = { SuggestionClient() }) {
+        self.makeClient = makeClient
+    }
 
     /// Starts using `database`: history, favorites and the saved search engine.
     public func attach(_ database: AppDatabase) async {
@@ -56,6 +63,7 @@ public final class LiveAddressBarData: AddressBarData {
 
     /// Writes buffered history. Call when the app moves to the background.
     public func flush() async {
+        await lastRecord?.value
         await recorder?.flush()
     }
 
@@ -86,12 +94,20 @@ public final class LiveAddressBarData: AddressBarData {
     public func pageVisited(url: URL, title: String?) {
         guard let recorder, Self.isRecordable(url) else { return }
         let visit = HistoryVisit(url: url, title: title, visitedAt: Date())
-        Task { await recorder.record(visit) }
+        let previous = lastRecord
+        lastRecord = Task {
+            await previous?.value
+            await recorder.record(visit)
+        }
     }
 
     public func pageTitleChanged(url: URL, title: String) {
         guard let recorder, Self.isRecordable(url), !title.isEmpty else { return }
-        Task { await recorder.recordTitle(title, for: url) }
+        let previous = lastRecord
+        lastRecord = Task {
+            await previous?.value
+            await recorder.recordTitle(title, for: url)
+        }
     }
 
     /// Only web pages go into history: not `about:blank` or other internal pages.

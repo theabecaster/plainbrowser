@@ -88,6 +88,16 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Only whole rows show: one that would be cut by the top edge fades out instead.
+        rowsClip.layoutIfNeeded()
+        for row in rows where !row.isHidden {
+            let top = row.convert(row.bounds, to: rowsClip).minY
+            row.alpha = top < -0.5 ? 0 : 1
+        }
+    }
+
     /// Shows `suggestions`, best first, the first one nearest the field.
     func show(_ suggestions: [AddressBarSuggestion]) {
         let shown = Array(suggestions.prefix(rows.count))

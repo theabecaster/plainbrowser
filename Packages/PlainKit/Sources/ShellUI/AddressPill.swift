@@ -38,6 +38,10 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
 
         textField.accessibilityIdentifier = "searchField"
         textField.placeholder = "Search or enter address"
+        // Darker than the system placeholder, which washes out on paper glass.
+        textField.attributedPlaceholder = NSAttributedString(
+            string: "Search or enter address", attributes: [.foregroundColor: Palette.textSecondary]
+        )
         textField.font = .preferredFont(forTextStyle: .body)
         textField.adjustsFontForContentSizeCategory = true
         textField.textColor = Palette.textPrimary

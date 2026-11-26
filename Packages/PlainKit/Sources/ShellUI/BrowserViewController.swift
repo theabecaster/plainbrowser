@@ -45,7 +45,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var isEditingAddress = true
     private var didFocusAtLaunch = false
     private var didWarmUp = false
-    private var isDesktopSite = false
+    /// Hosts this session asked for their desktop site (Desktop Site in the page menu).
+    private var desktopHosts: Set<String> = []
     private var collapse = ChromeCollapse()
     private var collapseInterval: OSSignpostIntervalState?
     private var pullTracker = PullToRefreshTracker()
@@ -84,7 +85,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.menuProvider = { [weak self] in self?.webView?.url == nil ? nil : self?.pageMenu() }
 
         sheet.onPick = { [weak self] pick in self?.open(pick) }
-        sheet.onDismiss = { [weak self] in self?.pill.textField.resignFirstResponder() }
+        sheet.onDismiss = { [weak self] in self?.endEditing() }
 
         buildButtons()
         layOut()
@@ -275,7 +276,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
         pill.textField.text = webView?.url?.absoluteString ?? ""
-        pill.beginEditing()
+        // The layout switches before the keyboard starts, so the keyboard's own animation carries
+        // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.
+        applyEditingLayout(true, animated: true)
+        if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
         Signposts.signposter.endInterval(Signposts.urlBarFocus, interval)
     }
 
@@ -357,8 +361,18 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         Signposts.signposter.endInterval(Signposts.addressSubmit, state, "picked")
     }
 
+    /// Closes the search sheet: the layout switches first, so the pill rides the keyboard down.
+    private func endEditing() {
+        applyEditingLayout(false, animated: true)
+        pill.textField.resignFirstResponder()
+    }
+
     /// Moves between the resting pill and the open search sheet. The pill itself grows into the
     /// field above the keyboard (`.snappy(0.3)`, bounce 0, following `keyboardLayoutGuide`).
+    ///
+    /// The pill's move is laid out inside the keyboard's animation, which UIKit runs for views
+    /// tied to `keyboardLayoutGuide`, so it tracks the keyboard frame by frame. The sheet's
+    /// fade, the field's rim and the bar use the spring.
     private func applyEditingLayout(_ editing: Bool, animated: Bool) {
         let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
         isEditingAddress = editing
@@ -373,13 +387,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self.sheet.alpha = editing ? 1 : 0
             self.sheet.content.transform = editing ? .identity : CGAffineTransform(translationX: 0, y: Spacing.l)
             self.buttonBar.alpha = editing ? 0 : ChromeGeometry.barAlpha(progress: self.collapse.progress)
-            self.view.layoutIfNeeded()
         }
         guard animated else {
-            UIView.performWithoutAnimation(changes)
+            UIView.performWithoutAnimation {
+                changes()
+                self.view.layoutIfNeeded()
+            }
             sheet.isHidden = !editing
             return
         }
+        view.setNeedsLayout()
         Motion.animate(Motion.urlFocus, crossfading: view, changes: changes) { [weak self] in
             guard let self, !self.isEditingAddress else { return }
             self.sheet.isHidden = true
@@ -390,10 +407,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     private func load(_ url: URL) {
         let webView = self.webView ?? installWebView()
+        applyUserAgent(for: url)
         webView.load(URLRequest(url: url))
         pill.display(url: url)
         pill.textField.text = url.absoluteString
-        pill.textField.resignFirstResponder()
+        if isEditingAddress { endEditing() }
     }
 
     private func installWebView() -> WKWebView {
@@ -437,6 +455,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             if webView.isLoading {
                 // A new load brings the bar back. Same-document URL changes (pushState) do not.
                 controller.expandChrome(animated: true)
+                controller.pill.progressBar.begin()
                 controller.pill.progressBar.setProgress(max(0.1, webView.estimatedProgress))
             } else {
                 controller.pill.progressBar.finish()
@@ -445,6 +464,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         on(\.url) { controller, webView in
             controller.pill.display(url: webView.url)
+            if let url = webView.url { controller.applyUserAgent(for: url) }
             if !controller.isEditingAddress { controller.pill.textField.text = webView.url?.absoluteString }
             controller.updateButtons()
         }
@@ -627,9 +647,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private func pageMenuElements() -> [UIMenuElement] {
         guard let webView, let url = webView.url else { return [] }
         let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { _ in
+            Signposts.signposter.emitEvent(Signposts.reload)
             webView.reload()
         }
         let find = UIAction(title: "Find on Page", image: UIImage(systemName: "doc.text.magnifyingglass")) { _ in
+            Signposts.signposter.emitEvent(Signposts.findOnPage)
             webView.findInteraction?.presentFindNavigator(showingReplace: false)
         }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
@@ -639,6 +661,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self.share(from: source)
         }
         let copy = UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { _ in
+            Signposts.signposter.emitEvent(Signposts.copyLink)
             UIPasteboard.general.url = url
             Haptic.success.play()
         }
@@ -662,13 +685,28 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         present(sheet, animated: true)
     }
 
-    /// Asks this tab's pages for their desktop layout. Until the navigation delegate can set the
-    /// content mode per navigation (WebEngine), this sends a desktop Safari user agent.
+    private var isDesktopSite: Bool {
+        guard let host = webView?.url?.host() else { return false }
+        return desktopHosts.contains(host)
+    }
+
+    /// Asks this site for its desktop layout, or back for the mobile one, and reloads.
+    ///
+    /// Stopgap until WebEngine's navigation delegate sets `preferredContentMode` per navigation
+    /// and Storage remembers the choice per site: a desktop Safari user agent, remembered per
+    /// host for this session. A link to another host uses the old agent for that one load.
     private func toggleDesktopSite() {
-        guard let webView else { return }
-        isDesktopSite.toggle()
-        webView.customUserAgent = isDesktopSite ? Self.desktopUserAgent : nil
+        guard let webView, let url = webView.url, let host = url.host() else { return }
+        Signposts.signposter.emitEvent(Signposts.desktopSite)
+        if desktopHosts.remove(host) == nil { desktopHosts.insert(host) }
+        applyUserAgent(for: url)
         webView.reload()
+    }
+
+    private func applyUserAgent(for url: URL) {
+        guard let webView else { return }
+        let agent = url.host().map(desktopHosts.contains) == true ? Self.desktopUserAgent : nil
+        if webView.customUserAgent != agent { webView.customUserAgent = agent }
     }
 
     /// Safari on a Mac, which sites answer with their desktop layout.

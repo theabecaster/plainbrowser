@@ -22,8 +22,11 @@ final class SmokeTests: XCTestCase {
         field.typeText("example.com\n")
 
         XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10), "no web view after submit")
-        XCTAssertEqual(field.value as? String, "https://example.com")
-        XCTAssertFalse(field.hasKeyboardFocus, "field should give up focus after submit")
+        // After submit the field rests as the URL pill, which carries the full address.
+        let pill = app.buttons["addressPill"]
+        XCTAssertTrue(pill.waitForExistence(timeout: 5))
+        XCTAssertTrue((pill.value as? String)?.hasPrefix("https://example.com") ?? false)
+        XCTAssertFalse(field.exists && field.hasKeyboardFocus, "field should give up focus after submit")
     }
 }
 

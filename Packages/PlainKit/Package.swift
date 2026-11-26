@@ -22,6 +22,8 @@ let package = Package(
         .library(name: "TabGalleryUI", targets: ["TabGalleryUI"]),
         .library(name: "FeatureUI", targets: ["FeatureUI"]),
         .library(name: "PerfSignposts", targets: ["PerfSignposts"]),
+        // The app opens the database at launch (off the main thread) and hands it to the shell.
+        .library(name: "Storage", targets: ["Storage"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.12.0"),
@@ -59,7 +61,7 @@ let package = Package(
         .target(
             name: "ShellUI",
             dependencies: [
-                "WebEngine", "ContentBlocking", "Reader", "BrowserCore", "DesignSystem", "PerfSignposts",
+                "WebEngine", "ContentBlocking", "Reader", "Storage", "BrowserCore", "DesignSystem", "PerfSignposts",
             ],
             swiftSettings: mainActorByDefault
         ),
@@ -79,5 +81,8 @@ let package = Package(
         .testTarget(name: "StorageTests", dependencies: ["Storage", .product(name: "GRDB", package: "GRDB.swift")]),
         // WebKit tests; they run on an iOS simulator (xcodebuild) and are empty on macOS.
         .testTarget(name: "ContentBlockingTests", dependencies: ["ContentBlocking"]),
+        // The shell's chrome rules (collapse, pull to refresh, geometry) and the address bar's
+        // data seam; plain values, so they run on macOS.
+        .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "BrowserCore", "Storage"]),
     ]
 )

@@ -28,7 +28,7 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `Reader` | nonisolated | — | `ReaderWorld` (content world name) |
 | `ShellUI` | MainActor | UIKit, WebKit | `BrowserViewController` (search field + page) |
 | `TabGalleryUI` | MainActor | — | `TabGalleryLayout` (even-column rule) |
-| `FeatureUI` | MainActor | SwiftUI | `AboutView` |
+| `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit | `Palette` (Paper & Lagoon colors) |
 | `PerfSignposts` | nonisolated | os | signpost subsystem, category and names |
 

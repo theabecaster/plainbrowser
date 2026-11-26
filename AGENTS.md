@@ -8,11 +8,12 @@ Plain is an iOS web browser built for speed and feel. It has a UIKit shell, uses
 - `Packages/PlainKit`: all code, split into modules. The app target is a thin wrapper.
 - `Brand/`: app icon (Icon Composer `.icon`) and color identity.
 - `scripts/`: build, test, install, screenshot and perf gate. See `docs/development.md`.
-- `docs/`: `architecture.md` (modules and data flow), `decisions.md` (what was chosen and why), `feedback.md` (owner feedback from testing, open and done), `development.md` (commands and device setup), `perf-log.md` (perf numbers per merge), `research/notes.md` (verified API facts), `research/design-audit.md` (comparison with reference browsers), `ui-reference.md` (interface rules: settings, menus, chrome, wording).
+- `docs/`: `architecture.md` (modules and data flow), `decisions.md` (what was chosen and why), `feedback.md` (owner feedback from testing, open and done), `development.md` (commands and device setup), `perf-log.md` (perf numbers per merge), `research/notes.md` (verified API facts), `research/design-audit.md` (comparison with reference browsers), `ui-reference.md` (interface rules: settings, menus, chrome, wording), `state-rules.md` (which control shows in which state).
 
 ## Rules
 
 - **Opinionated and simple.** Plain makes the decisions in its internal logic. Users get the fewest possible settings and options. Add a setting only when no single default can be right for most people, and prefer a smart automatic behavior over a toggle. Per-site choices are remembered automatically, not configured. Options live in menus on the thing they act on. Every value Plain decides goes in `FixedChoices.swift` with a reason. See `docs/ui-reference.md`.
+- **Every control earns its place in the current state.** See `docs/state-rules.md`.
 - **Performance is a requirement.** Every change runs `scripts/perf-gate.sh` on the device before it lands on `dev`. A budget breach blocks the change, the same as a failing test. Budgets live in `perf/budgets.json`.
 - **Layers point one way:** UI → WebEngine/ContentBlocking/Reader → Storage → BrowserCore. `BrowserCore` and `Storage` never import UIKit or WebKit.
 - **One owner per piece of state.** `TabStore` owns tabs. Each `Tab` owns its own state. The web view pool owns every `WKWebView`; UI code never creates one.

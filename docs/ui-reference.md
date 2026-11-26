@@ -26,6 +26,20 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - No badges, banners or standing overlays.
 - Plus buttons act at once when there is one obvious action, and become a menu only when there is a real choice.
 
+## State rules
+
+- Every control earns its place in the current state. The full matrix, with the reason for every
+  cell and the open gaps, is `docs/state-rules.md`.
+- A button, its gesture and its menu item follow one condition. The tabs button, the swipe up and
+  Show All Tabs show only when there is another tab to switch to; with one tab the slot is New Tab.
+- A gesture with nothing to do rubber-bands with the "nothing there" haptic. It never does
+  something else instead.
+- The bar changes shape only between modes (start screen, page, search, gallery). Inside a mode a
+  control dims or hides in place, so nothing moves under the thumb. Menus leave out items that do
+  not apply and dim items at a limit.
+- Empty tabs are never left behind, and there is at most one New Tab button on screen, none on an
+  empty tab.
+
 ## Empty and first-run states
 
 - Each empty state is one sentence and one main button.

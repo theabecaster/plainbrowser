@@ -1,11 +1,12 @@
 #!/bin/zsh
-# Run the perf tests (PlainUITests/Perf.xctestplan, Release build), record the numbers in
+# Run the perf tests (PlainUITests/Perf.xctestplan, Release build, no coverage), record the numbers in
 # docs/perf-log.md, and fail on a breach.
 #
 # Usage: scripts/perf-gate.sh [--sim | --device]
 #   --sim (default)  On the plain-perf-duo simulator (iPhone Duo), created when missing and shut
 #                    down afterwards. Fails on a test failure, or when a metric is more than
 #                    simRegressionTolerance (perf/budgets.json) worse than the previous `sim` row.
+#                    The hitch ratio is device-only: XCTHitchMetric reports nothing on a simulator.
 #   --device         On the device from PLAIN_DEVICE or scripts/local.env (also:
 #                    PLAIN_PERF_TARGET=device). Fails on a test failure or when a metric reaches
 #                    its `fail` budget in perf/budgets.json.
@@ -55,7 +56,7 @@ xcodegen generate --quiet
 tests_ok=1
 xcodebuild -project Plain.xcodeproj -scheme Plain -testPlan Perf -configuration Release \
   -destination "$destination" -derivedDataPath build/perf/dd -resultBundlePath $result $extra \
-  test > build/perf/$stamp.log 2>&1 || tests_ok=0
+  -enableCodeCoverage NO test > build/perf/$stamp.log 2>&1 || tests_ok=0
 if [[ ! -d $result ]]; then
   grep -E 'error:' build/perf/$stamp.log | sort -u | head -20
   print -u2 "no test results; log: build/perf/$stamp.log"
@@ -93,7 +94,11 @@ for m in $METRICS; do
   v=${value[$m]}
   label=$(jq -r --arg m $m '.metrics[$m].label' $BUDGETS)
   line=$(printf '%-38s %8s' "$label" "$v")
-  if [[ $v == "—" ]]; then
+  if [[ $v == "—" && $MODE == sim && $m == hitchMsPerS ]]; then
+    # XCTHitchMetric reports nothing on a simulator (Xcode 27.2); the device measures it.
+    value[$m]="n/a"
+    line=$(printf '%-38s %8s' "$label" "n/a")"   (device only)"
+  elif [[ $v == "—" ]]; then
     failures+="$m: no measurement"
   elif [[ $MODE == device ]]; then
     fail=$(jq -r --arg m $m '.metrics[$m].fail' $BUDGETS)
@@ -102,7 +107,7 @@ for m in $METRICS; do
     (( v >= fail )) && failures+="$m $v ≥ fail budget $fail"
   else
     p=${previous[$m]:-—}
-    if [[ $p != "—" && -n $p ]]; then
+    if [[ $p == <->(|.<->) ]]; then
       limit=$(( p * (1 + tolerance) ))
       line+=$(printf '   previous sim %s, limit %.1f' $p $limit)
       (( v > limit )) && failures+="$m $v regressed more than $(printf %.0f $(( tolerance * 100 )))% from $p"

@@ -37,7 +37,7 @@ reads the metrics with `xcrun xcresulttool get test-results metrics`, and append
 |---|---|---|
 | `launchMs` | `testLaunch`: `XCTApplicationLaunchMetric(waitUntilResponsive: true)` | target 300, fail ≥ 400 |
 | `searchFieldMs` | `testLaunchToSearchFieldReady`: the `launch` signpost interval | target 300, fail ≥ 400 |
-| `hitchMsPerS` | `testPageScrollHitches`: scroll hitch ratio on a Wikipedia article (needs network) | target 5, fail ≥ 10 |
+| `hitchMsPerS` | `testPageScrollHitches`: `XCTHitchMetric` while scrolling a Wikipedia article (needs network). Device only: the simulator reports no hitch data. | target 5, fail ≥ 10 |
 
 - **Simulator (default):** runs on the `plain-perf-duo` simulator (iPhone Duo), created when
   missing and shut down afterwards. Fails on a test failure or on a regression of more than 20%

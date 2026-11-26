@@ -270,3 +270,38 @@ Each entry: what was chosen, and why. Newest last.
   attach call 4–20 ms, page back 400–490 ms (new WebContent process, local server), scroll back
   with it; thumbnail snapshot 0.75 ms main-thread wait, JPEG encode + write 2–3 ms off main;
   thumbnail read + decode from disk 23–53 ms off main.
+
+## Toolbar snap, page inset and glass container (Lane H, 2026-11-26)
+
+- **The snap runs frame by frame, not as a Core Animation spring.** `SpringDriver` (DesignSystem)
+  samples `Motion.toolbarSnap` (`Spring.smooth(0.25)`) from a `UIUpdateLink` tied to the view,
+  with `CAFrameRateRange(80, 120, 120)`, and applies transform and alpha. Why: the value on screen
+  is always known, so a drag that starts mid-snap continues from it with no jump and no
+  presentation-layer reads, and a retarget keeps the current velocity. UIKit's
+  `UIView.animate(Animation)` has no frame-rate range, so this is also where the 120 Hz request
+  lives. Cost: two transforms and an alpha per frame on the main thread for 0.25 s, the same work
+  the scroll already does 1:1.
+- **Snap starts at release** (`scrollViewWillEndDragging`), toward the release velocity when it is
+  clear (0.2 pt/ms), with the bar's own speed under the finger carried over (capped at 8 progress/s).
+  It runs alongside the page's deceleration; coasting into the top brings the bar back. A page
+  that starts loading under the finger brings the bar back when the finger lifts, so the drag
+  keeps the bar. Under Reduce Motion the snap is a 0.2 s crossfade of the chrome.
+- **Page inset follows the resting bar** (plan, engine rule 4): `PageInsetState` switches
+  `obscuredContentInsets.bottom` between the collapsed and expanded chrome once per rest, and
+  waits while the page is pulled past its top or bottom; a new snap drops a change still waiting. WebKit already extends a fixed footer's
+  background to the screen edge under the bar (measured on the simulator).
+- **One glass container, no shadow.** `Glass.makeContainer` wraps `UIGlassContainerEffect` in a
+  view that passes touches through, so it can cover the screen. Merge spacing 4 pt, under the
+  6 pt gap, so the resting pill and bar stay two shapes.
+- **Scroll edge effect per control.** An interaction on the full-screen container stretched the
+  edge effect over the whole page (seen with the hard style), so the pill and the bar each carry
+  one. WebKit hides the bottom effect itself where it shows a fixed footer's color extension. The
+  style is `.hard`: the page area under the resting bar is obscured anyway (the inset follows the
+  bar), and an opaque edge stops body text refracting through the glass. The soft style left that
+  text legible as ghost lettering in the pill (design review, rounds 1 and 2), and `.automatic`
+  showed no effect at all on WebKit's scroll view. The hard edge follows the collapsed pill too.
+- **Glass tint 0.88 (light) / 0.84 (dark), up from 0.78 / 0.72:** the design review saw body
+  text refracted through the pill as ghost lettering; the denser paper tint keeps the host legible.
+- **Collapsed pill: taps only.** `AddressPill.isCompact` turns away every recognizer except its
+  own tap, and the page menu waits for the expanded pill.
+

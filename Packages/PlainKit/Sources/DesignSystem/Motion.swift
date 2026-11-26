@@ -14,8 +14,9 @@ public enum Motion {
     public static let urlFocus = Animation.spring(duration: 0.3, bounce: 0)
     /// Small state changes: a row highlight, an armed indicator.
     public static let quick = Animation.snappy(duration: 0.15)
-    /// Toolbar snaps collapsed or expanded when a scroll ends.
-    public static let toolbarSnap = Animation.smooth(duration: 0.25)
+    /// Toolbar snaps collapsed or expanded when a drag ends, from the release velocity. A spring
+    /// value, not an `Animation`: `SpringDriver` runs it frame by frame so a new drag can grab it.
+    public static let toolbarSnap = Spring.smooth(duration: 0.25)
     /// Tab switch by bar swipe (M2), with the gesture's velocity.
     public static let tabSwitch = Animation.spring(duration: 0.35, bounce: 0.12)
     /// Page zooms into its card in the tab gallery (M2).
@@ -40,18 +41,24 @@ public enum Motion {
         completion: (() -> Void)? = nil
     ) {
         if prefersCrossfade, let view {
-            UIView.transition(
-                with: view, duration: crossfadeDuration,
-                options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState],
-                animations: changes,
-                completion: { _ in completion?() }
-            )
+            crossfade(view, changes: changes, completion: completion)
         } else if prefersCrossfade {
             UIView.performWithoutAnimation(changes)
             completion?()
         } else {
             UIView.animate(animation, changes: changes, completion: completion)
         }
+    }
+
+    /// Applies `changes` at once inside a 0.2 s crossfade of `view`: the Reduce Motion form of a
+    /// move, for motion that is not a `UIView` animation (a `SpringDriver`).
+    public static func crossfade(_ view: UIView, changes: @escaping () -> Void, completion: (() -> Void)? = nil) {
+        UIView.transition(
+            with: view, duration: crossfadeDuration,
+            options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState],
+            animations: changes,
+            completion: { _ in completion?() }
+        )
     }
 }
 #endif

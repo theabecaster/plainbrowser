@@ -7,6 +7,9 @@ import UIKit
 /// Resting, it shows the page's host and the load progress; a tap asks to edit it and a long
 /// press opens the page menu. Editing, it is the search field, with the mint-to-blue focus rim.
 /// The same view does both, so focusing is the bar growing, not a second view appearing.
+///
+/// Collapsed (`isCompact`), it takes taps only: it sits in the home-indicator zone, where swipes
+/// and holds belong to the system. Every other gesture attaches to the expanded pill.
 final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     let textField = UITextField()
     let progressBar = ProgressBar()
@@ -21,11 +24,12 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     var menuProvider: () -> UIMenu? = { nil }
 
     private(set) var isEditing = false
+    /// The bar is collapsed, or on its way there: only the tap works.
+    var isCompact = false
     private var url: URL?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        Glass.addShadow(to: self)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
 
@@ -120,7 +124,6 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        Glass.updateShadowPath(of: self)
         let inset = rimMask.lineWidth / 2
         let shape = bounds.insetBy(dx: inset, dy: inset)
         rimMask.frame = bounds
@@ -171,6 +174,13 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         return textField.becomeFirstResponder()
     }
 
+    /// Collapsed, only the tap begins: no hold, no swipe (the context menu's and any later
+    /// gesture's recognizers are turned away here, in one place).
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard isCompact, !isEditing else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
+        return gestureRecognizer is UITapGestureRecognizer && gestureRecognizer.view === self
+    }
+
     @objc private func tapped() {
         guard !isEditing else { return }
         onTap()
@@ -181,7 +191,7 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     func contextMenuInteraction(
         _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
-        guard !isEditing, let menu = menuProvider() else { return nil }
+        guard !isEditing, !isCompact, let menu = menuProvider() else { return nil }
         return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
     }
 }

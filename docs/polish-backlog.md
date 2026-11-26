@@ -47,3 +47,21 @@ Newest feature last.
 - Screenshots so far come from simulator Safari loading the rendered page (an SPM test bundle has
   no window server). Recheck in the app once reader mode is wired, including accessibility text
   sizes and the Duo outer screen.
+
+## Shell audit (lane H, 2026-11-26)
+
+- **Fixed values.** The snap's clear-velocity (0.2 pt/ms) and speed cap (8 progress/s) and the glass
+  merge spacing (4 pt) live in `ShellUI/ChromeModel.swift` with the other shell constants; move
+  any that count as product decisions to `FixedChoices` (BrowserCore, outside the shell lane).
+  (Code review, round 1.)
+- **Duo inner screen.** Not captured: the fold state is set only from the Device Hub and the Mac
+  was locked. Check the bar, the edge effect and the footer inset on the inner screen.
+- **Device checks.** On the Duo: 120 Hz during the snap (Animation Hitches trace), how the hard
+  edge looks while the bar moves, and the merge of pill and bar glass mid-collapse.
+- **Other springs.** Only the snap asks for 80–120 Hz. The URL-focus and sheet springs run through
+  `UIView.animate(Animation)`, which takes no frame-rate range; move them to `SpringDriver` if the
+  device trace shows them below 120 Hz.
+- **Hard edge look.** With the hard edge, page text still shows blurred below and beside the
+  resting pill, and the edge's full-width hairline reads as a shelf behind the floating pill,
+  mostly when collapsed. Try the soft style again on the device (it left text refracting through
+  the pill on the simulator), or a stronger glass tint. (Design review, round 3.)

@@ -49,6 +49,11 @@ public enum Signposts {
     public static let suggestionsShown: StaticString = "search.suggestions"
     /// Interval from the toolbar starting to collapse or expand to it settling.
     public static let toolbarCollapse: StaticString = "toolbar.collapse"
+    /// Interval: one toolbar snap, from the finger lifting (or a tap or load expanding the bar) to
+    /// the bar at rest. Ends "settled", or "grabbed" when a new drag takes over mid-snap.
+    public static let toolbarSnap: StaticString = "toolbar.snap"
+    /// Event: the page's bottom inset followed the bar's resting state (expanded or collapsed).
+    public static let pageInset: StaticString = "toolbar.pageInset"
     /// Event: pull to refresh crossed its threshold and is armed.
     public static let pullToRefreshArm: StaticString = "ptr.arm"
     /// Event: pull to refresh was released armed and the page reloads.

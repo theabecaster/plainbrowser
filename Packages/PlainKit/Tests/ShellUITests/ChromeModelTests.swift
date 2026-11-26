@@ -43,13 +43,29 @@ struct ChromeGeometryTests {
         #expect(se.collapsedBottom == se.restBottom)
     }
 
-    @Test func obscuredInsetIsTheCollapsedChromeAndSmallerThanTheExpanded() {
+    @Test func collapsedInsetIsTheCollapsedChromeAndSmallerThanTheExpanded() {
         for geometry in [phone, se, duo] {
-            let collapsed = geometry.obscuredBottom(pageBottom: geometry.viewHeight)
-            let expanded = geometry.expandedBottom(pageBottom: geometry.viewHeight)
+            let collapsed = geometry.collapsedInset(pageBottom: geometry.viewHeight)
+            let expanded = geometry.expandedInset(pageBottom: geometry.viewHeight)
             #expect(collapsed == geometry.viewHeight - geometry.collapsedTop)
             #expect(expanded > collapsed)
         }
+    }
+
+    @Test func obscuredInsetFollowsTheRestingBar() {
+        for geometry in [phone, se, duo] {
+            let bottom = geometry.viewHeight
+            // Expanded, the inset reaches the pill's top: nothing under the bar is hidden.
+            #expect(geometry.obscuredInset(pageBottom: bottom, collapsed: false) == bottom - geometry.expandedTop)
+            #expect(geometry.obscuredInset(pageBottom: bottom, collapsed: true) == geometry.collapsedInset(pageBottom: bottom))
+        }
+        // iPhone 17: the expanded pill and bar cover 136 pt of the page, the collapsed pill 54 pt.
+        #expect(phone.obscuredInset(pageBottom: 874, collapsed: false) == 136)
+        #expect(phone.obscuredInset(pageBottom: 874, collapsed: true) == 54)
+    }
+
+    @Test func glassMergesOnlyBelowTheRestingGap() {
+        #expect(ChromeGeometry.glassMergeSpacing < ChromeGeometry.gap)
     }
 
     @Test func buttonBarLeavesPastTheEdgeAndFadesFirst() {
@@ -109,6 +125,75 @@ struct ChromeCollapseTests {
         collapse.scrolled(to: 140, top: 0, bottom: 1000)
         #expect(collapse.settleTarget() == 1)
         #expect(collapse.settleTarget(velocity: -1) == 0)
+    }
+}
+
+@MainActor
+struct ToolbarSnapTests {
+    @Test func snapKeepsTheSpeedTheBarHadUnderTheFinger() {
+        var collapse = ChromeCollapse(distance: 50)
+        collapse.scrolled(to: 100, top: 0, bottom: 1000)
+        collapse.scrolled(to: 125, top: 0, bottom: 1000)
+        // 0.2 pt/ms over a 50 pt collapse is 4 progress per second.
+        #expect(collapse.snapVelocity(scrollVelocity: 0.2, toward: 1) == 4)
+        #expect(collapse.snapVelocity(scrollVelocity: -0.2, toward: 0) == -4)
+    }
+
+    @Test func snapVelocityIsCappedAndNeverAwayFromTheTarget() {
+        var collapse = ChromeCollapse(distance: 50)
+        collapse.scrolled(to: 100, top: 0, bottom: 1000)
+        collapse.scrolled(to: 125, top: 0, bottom: 1000)
+        #expect(collapse.snapVelocity(scrollVelocity: 5, toward: 1) == ChromeCollapse.maxSnapVelocity)
+        #expect(collapse.snapVelocity(scrollVelocity: 0.1, toward: 0) == 0)
+    }
+}
+
+@MainActor
+struct PageInsetStateTests {
+    @Test func startsExpandedAndFollowsEachRest() {
+        var inset = PageInsetState()
+        #expect(inset.collapsed == false)
+        inset.barRested(collapsed: true)
+        #expect(inset.applyIfSettled(offset: 300, top: 0, bottom: 2000) == true)
+        #expect(inset.collapsed)
+        inset.barRested(collapsed: true)
+        #expect(inset.pending == nil)
+        #expect(inset.applyIfSettled(offset: 300, top: 0, bottom: 2000) == false)
+    }
+
+    @Test func waitsWhileThePageBouncesPastAnEdge() {
+        var inset = PageInsetState()
+        inset.barRested(collapsed: true)
+        #expect(inset.applyIfSettled(offset: -40, top: 0, bottom: 2000) == false)
+        #expect(inset.applyIfSettled(offset: 2030, top: 0, bottom: 2000) == false)
+        #expect(inset.collapsed == false)
+        #expect(inset.applyIfSettled(offset: 0, top: 0, bottom: 2000) == true)
+        #expect(inset.collapsed)
+    }
+
+    @Test func aNewMoveDropsAChangeThatWaitedForABounce() {
+        var inset = PageInsetState()
+        inset.barRested(collapsed: true)
+        #expect(inset.applyIfSettled(offset: 2030, top: 0, bottom: 2000) == false)
+        inset.barMoved()
+        #expect(inset.applyIfSettled(offset: 1990, top: 0, bottom: 2000) == false)
+        #expect(inset.collapsed == false)
+    }
+
+    @Test func aShortPageRestsAtItsTop() {
+        var inset = PageInsetState()
+        inset.barRested(collapsed: true)
+        #expect(inset.applyIfSettled(offset: 0, top: 0, bottom: -300) == true)
+    }
+
+    @Test func aRestBackToTheShownStateCancelsTheWait() {
+        var inset = PageInsetState()
+        inset.barRested(collapsed: true)
+        #expect(inset.applyIfSettled(offset: -40, top: 0, bottom: 2000) == false)
+        inset.barRested(collapsed: false)
+        #expect(inset.pending == nil)
+        #expect(inset.applyIfSettled(offset: 0, top: 0, bottom: 2000) == false)
+        #expect(inset.collapsed == false)
     }
 }
 

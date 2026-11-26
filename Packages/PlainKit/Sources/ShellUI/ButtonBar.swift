@@ -47,7 +47,6 @@ final class ButtonBar: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        Glass.addShadow(to: self)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
         let stack = UIStackView()
@@ -82,11 +81,6 @@ final class ButtonBar: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        Glass.updateShadowPath(of: self)
-    }
 
     func button(_ kind: PageButton) -> UIButton { buttons[kind]! }
 }

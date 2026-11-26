@@ -138,5 +138,36 @@ final class ShellTests: XCTestCase {
         wait(for: [XCTNSPredicateExpectation(predicate: back, object: nil)], timeout: 3)
         XCTAssertFalse(app.textFields["searchField"].exists)
     }
-}
 
+    /// The page's bottom inset follows the bar's resting state: a fixed footer sits above the
+    /// expanded bar, moves down when the bar rests collapsed, and comes back up with the bar.
+    func testFixedFooterClearsTheRestingBar() throws {
+        let app = try launch()
+        go(app, to: "/footer")
+        waitForPage(app, "Footer Page")
+        let pill = app.buttons["addressPill"]
+        let footer = app.webViews.staticTexts["Fixed Footer"]
+        XCTAssertTrue(footer.waitForExistence(timeout: 5))
+        let expandedHeight = pill.frame.height
+
+        func waitUntil(_ what: String, _ condition: @escaping () -> Bool) {
+            let predicate = NSPredicate { _, _ in condition() }
+            let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+            expectation.expectationDescription = what
+            wait(for: [expectation], timeout: 4)
+        }
+
+        waitUntil("footer above the expanded bar") { footer.frame.maxY <= pill.frame.minY + 1 }
+        let expandedFooterBottom = footer.frame.maxY
+
+        app.webViews.firstMatch.swipeUp(velocity: .slow)
+        waitUntil("bar collapsed") { pill.frame.height < expandedHeight - 4 }
+        waitUntil("footer down to the collapsed bar") {
+            footer.frame.maxY > expandedFooterBottom + 20 && footer.frame.maxY <= pill.frame.minY + 1
+        }
+
+        pill.tap()
+        waitUntil("bar back") { abs(pill.frame.height - expandedHeight) < 1 }
+        waitUntil("footer back above the expanded bar") { footer.frame.maxY <= pill.frame.minY + 1 }
+    }
+}

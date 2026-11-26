@@ -124,6 +124,34 @@ final class CaptureTests: XCTestCase {
         shot("s7-back-to-search")
     }
 
+    /// The bar over a page with a fixed footer, expanded and collapsed: the footer sits above
+    /// the resting bar, and the scroll edge effect keeps text under the bar readable.
+    func testCaptureFixedFooter() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication()
+        app.launchArguments = ["-PlainInMemoryStore"]
+        app.launch()
+
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/footer") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Footer Page"].waitForExistence(timeout: 10))
+        pause(2)
+        shot("f1-footer-expanded")
+        app.webViews.firstMatch.swipeUp(velocity: .slow)
+        pause(2)
+        shot("f2-footer-collapsed")
+        // The page's end with the bar expanded: the last line clears the bar.
+        for _ in 0..<10 { app.webViews.firstMatch.swipeUp(velocity: .fast) }
+        pause(2)
+        app.buttons["addressPill"].tap()
+        pause(2)
+        shot("f3-page-end")
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

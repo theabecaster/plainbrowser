@@ -116,6 +116,8 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         // VoiceOver reads best first.
         rowsStack.accessibilityElements = rows.filter { !$0.isHidden }.reversed()
         updateFavoritesVisibility()
+        // Re-check which rows fit (layoutSubviews) once the stack has its new rows.
+        setNeedsLayout()
     }
 
     /// Whether the favorites strip may show: only while the field is empty.

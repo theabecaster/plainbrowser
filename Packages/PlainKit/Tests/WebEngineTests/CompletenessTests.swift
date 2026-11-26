@@ -151,7 +151,7 @@ struct CompletenessTests {
         defer { harness.cleanUp() }
         let tab = try await harness.loadedTab("/linked")
         let link = harness.server.url("/b")
-        var preview: UIViewController? = harness.pool.makeLinkPreview(link)
+        var preview: UIViewController? = harness.pool.makeLinkPreview(link, isPrivate: false)
         let webView = try #require(preview?.view as? WKWebView)
         #expect(webView !== harness.pool.existingWebView(for: tab))
         #expect(webView.uiDelegate == nil && webView.navigationDelegate == nil)

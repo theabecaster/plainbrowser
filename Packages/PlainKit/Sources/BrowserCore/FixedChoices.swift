@@ -39,6 +39,13 @@ public enum FixedChoices {
     /// Page zoom and desktop/mobile site are remembered per site, automatically.
     public static let perSiteChoicesRemembered = true
 
+    // MARK: Page
+
+    /// Page zoom steps, Safari's set: fine steps near 100% where people adjust, bigger ones past
+    /// 150% where they only want "much larger". Every zoom lands on one of these, so a site's
+    /// remembered zoom always matches a step.
+    public static let pageZoomSteps: [Double] = [0.5, 0.75, 0.85, 1.0, 1.15, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
+
     // MARK: Address bar
 
     /// Suggestions older than this are useless while typing; give up and show what we have.

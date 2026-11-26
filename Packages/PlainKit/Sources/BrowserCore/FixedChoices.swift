@@ -188,6 +188,23 @@ public enum FixedChoices {
     /// inner screen no card straddles the fold (docs/plan.md, section 6).
     public static let tabGalleryColumns = (narrow: 2, wide: 4)
 
+    // MARK: Duo layouts (docs/plan.md, section 6)
+
+    /// The narrowest page side tabs may leave: a sidebar is docked only when the page beside it
+    /// keeps at least this width, measured in layout after the sidebar and the system's bars, not
+    /// on the window. Below it a phone-width page beside a sidebar reads as cramped, and sites
+    /// switch to their mobile layout anyway.
+    public static let sideTabsMinimumPageWidth: Double = 640
+    /// The sidebar's rail: favicons only, one 44 pt target plus margins. It is forced while a
+    /// split shows or the screen is partly folded, where a wider sidebar would squeeze the pages.
+    public static let sidebarRailWidth: Double = 64
+    /// The expanded sidebar: favicon and title. Wide enough for about 25 characters of a title;
+    /// where the page would drop under `sideTabsMinimumPageWidth` it floats over the page instead.
+    public static let sidebarExpandedWidth: Double = 260
+    /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
+    /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
+    public static let splitMinimumPaneWidth: Double = 375
+
     // MARK: Tab switching and toasts
 
     /// A bar swipe past the last tab shows a New Tab card; pulled this far, letting go opens a

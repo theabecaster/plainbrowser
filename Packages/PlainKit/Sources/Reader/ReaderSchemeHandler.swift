@@ -15,6 +15,8 @@ import WebKit
     private var pages: [String: Data] = [:]
     private var pageOrder: [String] = []
     private var stylesheet: Data?
+    /// The latest `show` per web view. An older call that finishes later never loads.
+    private var latestShow: [ObjectIdentifier: UUID] = [:]
 
     public override init() {}
 
@@ -28,18 +30,26 @@ import WebKit
         return handler
     }
 
-    /// Renders `article` off the main thread, then loads it in `webView`.
+    /// Renders `article` off the main thread, then loads it in `webView`. When a newer `show` for
+    /// the same web view started meanwhile, or the task was cancelled, this one loads nothing and
+    /// throws `CancellationError`.
     public func show(_ article: ReaderArticle, in webView: WKWebView) async throws {
         let signposter = Signposts.signposter
         let state = signposter.beginInterval(Signposts.readerShow)
         defer { signposter.endInterval(Signposts.readerShow, state) }
 
-        async let html = renderer.page(for: article)
-        async let css = ReaderResources.stylesheet()
-        let (page, sheet) = try await (Data(html.utf8), css)
-        stylesheet = sheet
+        let key = ObjectIdentifier(webView)
+        let request = UUID()
+        latestShow[key] = request
 
-        let id = UUID().uuidString
+        async let html = renderer.pageData(for: article)
+        async let css = ReaderResources.stylesheet()
+        let (page, sheet) = try await (html, css)
+        stylesheet = sheet
+        guard latestShow[key] == request, !Task.isCancelled else { throw CancellationError() }
+        latestShow[key] = nil
+
+        let id = request.uuidString
         pages[id] = page
         pageOrder.append(id)
         while pageOrder.count > Self.keptPages { pages[pageOrder.removeFirst()] = nil }

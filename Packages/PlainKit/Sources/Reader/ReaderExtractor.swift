@@ -76,14 +76,17 @@ import WebKit
         let key = ObjectIdentifier(webView)
         prune()
         availability[key] = Availability(webView: webView, url: webView.url, available: available)
-        if kept[key]?.url != webView.url { kept[key] = nil }
+        // Every document reports once, including a reload of the same URL, so a new report means
+        // the kept article may be out of date.
+        kept[key] = nil
         onAvailability?(webView, available)
     }
 
     // MARK: Extraction
 
     /// The page's article, or `nil` when the page isn't readerable. Repeated calls for the same
-    /// page return the article already found.
+    /// document return the article already found (with `install(in:)`, a reload starts over).
+    /// Throws `CancellationError` when the web view navigates away while extracting.
     public func article(in webView: WKWebView) async throws -> ReaderArticle? {
         let signposter = Signposts.signposter
         let state = signposter.beginInterval(Signposts.readerExtract)
@@ -95,11 +98,10 @@ import WebKit
             return entry.article
         }
         let article = try await extract(in: webView)
-        // Keep it only if the web view still shows the page it came from.
-        if webView.url == url {
-            prune()
-            kept[key] = Kept(webView: webView, url: url, article: article)
-        }
+        // The page navigated while extracting: the result belongs to a page no longer shown.
+        guard webView.url == url else { throw CancellationError() }
+        prune()
+        kept[key] = Kept(webView: webView, url: url, article: article)
         return article
     }
 
@@ -112,7 +114,6 @@ import WebKit
     /// Runs the check and the parse in the reader world, installing Readability first when this
     /// document's reader world doesn't have it yet.
     private func extract(in webView: WKWebView) async throws -> ReaderArticle? {
-        let url = webView.url
         var result = try await callExtract(in: webView)
         if result == Self.missing {
             let script = try await ReaderResources.readabilityScript()
@@ -121,7 +122,7 @@ import WebKit
             result = try await callExtract(in: webView)
         }
         guard result != Self.missing, result != Self.notReaderable else { return nil }
-        return try await Self.decode(result, pageURL: url)
+        return try await Self.decode(result)
     }
 
     private func callExtract(in webView: WKWebView) async throws -> String {
@@ -135,21 +136,50 @@ import WebKit
 
     /// The body of an async function run in the reader world. It returns one string: a status,
     /// or the article as JSON, so the app receives a single value instead of a bridged dictionary.
+    ///
+    /// Readability is not a sanitizer, so the content is cleaned here too, in an inert
+    /// `<template>`: no elements that load, navigate, submit or style (`meta` refresh, `base`,
+    /// frames, plugins, forms, SVG animation), no event handlers or inline styles, and no
+    /// `javascript:`/`data:` URLs except `data:` images. The reader page's CSP and JavaScript-off
+    /// configuration are the second layer.
     private static let extractBody = """
         if (typeof Readability !== "function" || typeof isProbablyReaderable !== "function") return "missing";
         try {
           if (!document.body || !isProbablyReaderable(document)) return "none";
           const a = new Readability(document.cloneNode(true)).parse();
           if (!a || !a.content || !(a.textContent || "").trim()) return "none";
+          const t = document.createElement("template");
+          t.innerHTML = a.content;
+          t.content.querySelectorAll(
+            "script,style,link,meta,base,iframe,frame,frameset,object,embed,applet,form,input,button," +
+            "select,textarea,noscript,template,dialog,foreignObject,animate,set,animateMotion,animateTransform"
+          ).forEach(e => e.remove());
+          const urlAttrs = ["href", "src", "xlink:href", "action", "formaction", "poster", "srcset",
+                            "background", "cite", "data", "ping"];
+          for (const el of t.content.querySelectorAll("*")) {
+            for (const { name, value } of Array.from(el.attributes)) {
+              const n = name.toLowerCase();
+              const v = value.replace(/[\\s\\u0000-\\u001f]+/g, "").toLowerCase();
+              if (n.startsWith("on") || n === "style" || n === "srcdoc" || n === "http-equiv" || n === "formaction") {
+                el.removeAttribute(name);
+              } else if (urlAttrs.includes(n) && /^(javascript|vbscript|data):/.test(v)
+                         && !(n === "src" && el.localName === "img" && v.startsWith("data:image/"))) {
+                el.removeAttribute(name);
+              }
+            }
+          }
+          const box = document.createElement("div");
+          box.appendChild(t.content);
           return JSON.stringify({
             title: a.title || document.title || "",
             byline: a.byline || null,
             siteName: a.siteName || null,
-            contentHTML: a.content,
+            contentHTML: box.innerHTML,
             textLength: a.length || 0,
             lang: a.lang || document.documentElement.lang || null,
             dir: a.dir || null,
-            excerpt: a.excerpt || null
+            excerpt: a.excerpt || null,
+            url: document.URL
           });
         } catch (e) {
           return "none";
@@ -157,10 +187,8 @@ import WebKit
         """
 
     /// Decodes the page's JSON off the main thread.
-    @concurrent private static func decode(_ json: String, pageURL: URL?) async throws -> ReaderArticle? {
-        var article = try JSONDecoder().decode(ReaderArticle.self, from: Data(json.utf8))
-        article.url = pageURL
-        return article
+    @concurrent private static func decode(_ json: String) async throws -> ReaderArticle? {
+        try JSONDecoder().decode(ReaderArticle.self, from: Data(json.utf8))
     }
 
     private func prune() {

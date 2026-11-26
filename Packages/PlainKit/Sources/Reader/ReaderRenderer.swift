@@ -12,7 +12,8 @@ public struct ReaderRenderer: Sendable {
     /// The page's content security policy: no scripts, no frames, styles only from the reader
     /// scheme. Article images and video may still load from the web.
     static let contentSecurityPolicy =
-        "default-src 'none'; style-src \(scheme):; img-src https: http: data:; media-src https: http:"
+        "default-src 'none'; style-src \(scheme):; img-src https: http: data:; media-src https: http:; "
+        + "base-uri 'none'; form-action 'none'"
 
     public init() {}
 
@@ -20,6 +21,17 @@ public struct ReaderRenderer: Sendable {
     /// the main thread.
     @concurrent public func page(for article: ReaderArticle) async throws -> String {
         try await ReaderResources.template().render(Self.values(for: article))
+    }
+
+    /// The page as UTF-8 data, ready to serve. Built off the main thread.
+    @concurrent func pageData(for article: ReaderArticle) async throws -> Data {
+        Data(try await page(for: article).utf8)
+    }
+
+    /// Whether `url` is a reader page or its stylesheet. The reader web view's navigation
+    /// delegate allows only these in the reader view and opens every other link in the tab.
+    public static func isReaderURL(_ url: URL?) -> Bool {
+        url?.scheme == scheme
     }
 
     /// The template slots for `article`. Text values are escaped; `content` is Readability's

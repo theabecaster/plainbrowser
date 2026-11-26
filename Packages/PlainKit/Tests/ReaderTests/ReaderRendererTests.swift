@@ -66,6 +66,30 @@ import WebKit
         #expect(!webView.configuration.defaultWebpagePreferences.allowsContentJavaScript)
     }
 
+    /// A cancelled show loads nothing; the next one loads.
+    @Test func cancelledShowLoadsNothing() async throws {
+        let (webView, handler) = readerWebView(width: 402, height: 874)
+        let older = ReaderArticle(title: "Older", contentHTML: "<p>old</p>", textLength: 3)
+        let newer = ReaderArticle(title: "Newer", contentHTML: "<p>new</p>", textLength: 3)
+        let cancelled = Task { try await handler.show(older, in: webView) }
+        cancelled.cancel()
+        await #expect(throws: CancellationError.self) { try await cancelled.value }
+        #expect(webView.url == nil)
+
+        try await waiter.run(in: webView) { try await handler.show(newer, in: webView) }
+        #expect(try await webView.evaluateJavaScript("document.title") as? String == "Newer")
+    }
+
+    @Test func cspBlocksBaseFormsAndScripts() {
+        let csp = ReaderRenderer.contentSecurityPolicy
+        for directive in ["default-src 'none'", "base-uri 'none'", "form-action 'none'"] {
+            #expect(csp.contains(directive))
+        }
+        #expect(!csp.contains("script-src"))
+        #expect(ReaderRenderer.isReaderURL(URL(string: "plain-reader://article/x")))
+        #expect(!ReaderRenderer.isReaderURL(URL(string: "https://example.com")))
+    }
+
     /// Writes rendered reader pages and the stylesheet to READER_SHOTS_DIR, for screenshots in
     /// a simulator browser: a test bundle has no window server, so it cannot snapshot a web view.
     @Test func writesPagesForScreenshots() async throws {

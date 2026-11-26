@@ -91,6 +91,43 @@ import WebKit
         #expect(keptMs < 5)
     }
 
+    /// Readability is not a sanitizer: active markup is stripped before the article leaves the page.
+    @Test func stripsActiveMarkup() async throws {
+        let webView = try await load("hostile")
+        let article = try #require(try await ReaderExtractor().article(in: webView))
+        let html = article.contentHTML.lowercased()
+        for banned in ["<meta", "<base", "<iframe", "<object", "<embed", "<form", "<input", "<button",
+                       "<animate", "<foreignobject", "onerror", "style=", "javascript:", "formaction"] {
+            #expect(!html.contains(banned), "\(banned) survived")
+        }
+        #expect(html.contains("https://example.com/ok"))
+        #expect(html.contains("data:image/png"))
+        #expect(html.contains("after the trap"))
+    }
+
+    /// A reload of the same URL is a new document, so the kept article is dropped.
+    @Test func reloadDropsTheKeptArticle() async throws {
+        let extractor = ReaderExtractor()
+        var reports = 0
+        extractor.onAvailability = { _, _ in reports += 1 }
+        let webView = try await server.makeWebView(extractor: extractor)
+        try await waiter.load(URLRequest(url: FixtureServer.url("v8-blog")), in: webView)
+        for _ in 0..<100 where reports == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        let first = try #require(try await extractor.article(in: webView))
+
+        // Change the live page, then reload: the reload must parse the reloaded document.
+        _ = try await webView.evaluateJavaScript("document.title = 'changed'; true")
+        #expect(try await extractor.article(in: webView) == first)
+        try await waiter.run(in: webView) { webView.reload() }
+        for _ in 0..<100 where reports < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(reports == 2)
+        #expect(extractor.isAvailable(in: webView) == true)
+        let types = try await webView.evaluateJavaScript(
+            "typeof Readability", in: nil, contentWorld: .world(name: ReaderWorld.contentWorldName)) as? String
+        #expect(types == "undefined", "a reload starts without full Readability")
+        #expect(try await extractor.article(in: webView) == first)
+    }
+
     /// Readability lives in the reader world: the page's own scripts cannot see it.
     @Test func runsOutsideThePageWorld() async throws {
         let webView = try await load("v8-blog")

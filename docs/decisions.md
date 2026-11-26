@@ -168,6 +168,11 @@ Each entry: what was chosen, and why. Newest last.
   the user opens reader mode, and the article is kept for repeat opens of the same page.
 - **Main thread:** the page returns one JSON string; decoding runs `@concurrent`. Bundle reads and
   template rendering run `@concurrent` too.
+- **Sanitizing:** Readability is not a sanitizer (its SECURITY.md says so). Before the article
+  leaves the page, the reader world cleans it in an inert `<template>`: no `meta`, `base`, frames,
+  plugins, forms, styles or SVG animation, no event handlers or inline styles, and no
+  `javascript:`/`data:` URLs except `data:` images. The reader page adds a second layer: page
+  JavaScript off and a CSP with `default-src 'none'`, `base-uri 'none'` and `form-action 'none'`.
 - **Reader view:** a template and stylesheet served from the `plain-reader:` scheme, with page
   JavaScript off and a content security policy that allows no scripts. No reader settings: text
   size follows Dynamic Type (`-apple-system-body`), colors follow light and dark mode, the

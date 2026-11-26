@@ -305,3 +305,29 @@ Each entry: what was chosen, and why. Newest last.
 - **Collapsed pill: taps only.** `AddressPill.isCompact` turns away every recognizer except its
   own tap, and the page menu waits for the expanded pill.
 
+## Tab model and persistence (2026-11-26)
+
+- **`TabStore` in BrowserCore, values only.** It holds `TabEntry` values (id, URL, title, opener,
+  pin, private, times, thumbnail file) keyed by `TabID`, not engine `Tab` objects, so every rule
+  is tested on macOS. The shell keeps engine tabs in step by id. Page state stays in the engine's
+  `Tab` (one owner); the store only keeps the URL and title it needs for relaunch and archive search.
+- **Windows and panes from the start.** Each window has its own tabs and one or two panes with a
+  focused one, so M3's split and "Open in New Window" need no model change. A tab is never in two
+  panes (one web view).
+- **Persistence through one seam, `TabPersistence`.** `enqueue` is synchronous and ordered (a lock
+  and a buffer, no actor hop, so changes never reorder); a newer session replaces an older one
+  still waiting. Writes run off main, 500 ms after the first change, in one transaction, and touch
+  only rows that changed (a title change writes one row instead of 100).
+- **Archive rows stay in the `tab` table** with `isArchived`, searched through an FTS5 index synced
+  to it (diacritics removed, word prefixes). The archive is not loaded at launch.
+- **Recently closed is a stack of batches** (one close, Close All Tabs or a closed window), so
+  reopen brings back what one action closed, each tab after the tab that preceded it. Its state
+  file is kept until the batch leaves the stack.
+- **Tab ids are text.** GRDB 7 only honours `databaseUUIDEncodingStrategy(for:)`; the earlier
+  `static let` was ignored and stored 16-byte blobs, which raw SQL could not match. No tab rows
+  were written by the app before this change.
+- **Signposts:** BrowserCore stays Foundation-only, so the shell emits `tab.open/close/select/archive`
+  around its calls; Storage emits `tab.sessionLoad` and `tab.save`.
+- **Perf (macOS `swift test`, file database, 100 open + 1,000 archived, median of 30):**
+  `loadTabSession` 1.5–1.6 ms off main; `TabStore(session:)` 0.14 ms on main (p95 0.17 ms, budget
+  5 ms); archive search over 1,000 rows 1.3–1.4 ms.

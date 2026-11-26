@@ -37,6 +37,17 @@ public enum Palette {
         light: UIColor(rgb: 0xFFFFFF, alpha: 0.35), dark: UIColor(rgb: 0x16344A, alpha: 0.45)
     )
 
+    // MARK: Private browsing
+
+    /// The glass tint of the chrome while a private tab is on screen: a quiet dusk violet instead
+    /// of Paper, so private browsing is plain to see without a banner or badge.
+    public static let privateGlassTint = UIColor(
+        light: UIColor(rgb: 0xE4E0F2, alpha: 0.9), dark: UIColor(rgb: 0x2A2445, alpha: 0.86)
+    )
+
+    /// The tab gallery's background while it shows private tabs.
+    public static let privateBackground = UIColor(light: UIColor(rgb: 0xEEEBF6), dark: UIColor(rgb: 0x15122A))
+
     /// Lagoon Blue for text and symbols on glass: in dark mode a lighter step of the same blue,
     /// so labels keep their contrast on the dark glass.
     public static let accentOnGlass = UIColor(light: accent, dark: UIColor(rgb: 0x8DB6FF))

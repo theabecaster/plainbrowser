@@ -34,7 +34,7 @@ Run both from the feature's worktree, with output to files under `build/reviews/
 3. **Verify.** The lead runs the build and tests, installs on the Duo when it's reachable, runs `scripts/perf-gate.sh` (simulator mode: fails on a >20% regression against the last simulator row; device mode: fails on the absolute budgets), and captures screenshots (`scripts/shot.sh`) and a short screen recording of each new interaction (`xcrun devicectl device capture screen-record`, frames extracted with `ffmpeg`). Any failure goes straight back to the implementer, without a review round.
 4. **Review.** The two Codex reviews run in parallel. Each finding is tagged **blocking** (wrong behavior, a budget miss, a rule break, or something that visibly looks or feels off) or **polish**.
 5. **Iterate.** The implementer fixes all blocking findings, plus polish items that are cheap. Then go back to step 3. Each later round reviews only what changed.
-6. **Land.** Merge into `dev` and push. Append the perf numbers to `docs/perf-log.md`. Leave the build installed on the Duo. Remove the worktree, the branch, and any simulators and captures the loop created.
+6. **Land.** Merge into `dev` and push. Append the perf numbers to `docs/perf-log.md`. Leave the build installed on the Duo, and ship it to TestFlight with `scripts/testflight.sh` (one or two lines of notes on what changed). Remove the worktree, the branch, and any simulators and captures the loop created.
 
 ## Keeping it lean
 

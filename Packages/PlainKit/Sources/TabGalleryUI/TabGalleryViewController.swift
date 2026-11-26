@@ -240,6 +240,8 @@ public final class TabGalleryViewController: UIViewController {
             emptyView.setPrivate(isPrivate)
         }
         let isEmpty = items.isEmpty
+        // VoiceOver hears how many tabs there are, cards off screen included.
+        collectionView.accessibilityValue = items.count == 1 ? "1 tab" : "\(items.count) tabs"
         emptyView.isHidden = !isEmpty
         // With the private toggle, the bar stays: it is the way between regular and private tabs.
         bottomBar.isHidden = isEmpty && !dataSource.supportsPrivateTabs

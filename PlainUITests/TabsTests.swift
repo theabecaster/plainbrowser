@@ -69,13 +69,16 @@ final class TabsTests: XCTestCase {
         return gallery
     }
 
-    private func cards(_ gallery: XCUIElement) -> XCUIElementQuery {
-        gallery.cells.matching(identifier: "tabCard")
+    private func card(_ gallery: XCUIElement, _ title: String) -> XCUIElement {
+        gallery.cells.matching(identifier: "tabCard").matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
     }
 
-    private func waitForCount(_ query: XCUIElementQuery, _ count: Int, timeout: TimeInterval = 4) -> Bool {
-        let predicate = NSPredicate(format: "count == %d", count)
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: query)
+    /// Waits until the gallery says it holds `count` tabs (its accessibility value), cards off
+    /// screen included: XCUITest lists only the cells on screen.
+    private func waitForTabCount(_ gallery: XCUIElement, _ count: Int, timeout: TimeInterval = 4) -> Bool {
+        let value = count == 1 ? "1 tab" : "\(count) tabs"
+        let predicate = NSPredicate(format: "value == %@", value)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: gallery)
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
@@ -83,21 +86,23 @@ final class TabsTests: XCTestCase {
         let app = try launch()
         openTabs(app, [("/a", "Page A"), ("/b", "Page B"), ("/c", "Page C")])
         let gallery = openGallery(app)
-        XCTAssertTrue(waitForCount(cards(gallery), 3), "the gallery shows \(cards(gallery).count) cards, not 3")
+        XCTAssertTrue(waitForTabCount(gallery, 3), "the gallery holds \(String(describing: gallery.value)), not 3 tabs")
 
-        // Flick the first card sideways: it closes, and the toast offers it back.
-        let first = cards(gallery).element(boundBy: 0)
-        XCTAssertTrue(first.label.contains("Plain Test A"), "first card: \(first.label)")
+        // Flick Page A's card sideways (scrolled to the top: on a small screen the gallery opens
+        // on the selected, last card): it closes, and the toast offers it back.
+        gallery.swipeDown(velocity: .fast)
+        let first = card(gallery, "Plain Test A")
+        XCTAssertTrue(first.waitForExistence(timeout: 2))
         first.swipeLeft(velocity: .fast)
-        XCTAssertTrue(waitForCount(cards(gallery), 2))
+        XCTAssertTrue(waitForTabCount(gallery, 2))
         let reopen = app.buttons["reopenTab"]
         XCTAssertTrue(reopen.waitForExistence(timeout: 2))
         reopen.tap()
-        XCTAssertTrue(waitForCount(cards(gallery), 3))
-        XCTAssertTrue(cards(gallery).element(boundBy: 0).label.contains("Plain Test A"), "Page A came back first")
+        XCTAssertTrue(waitForTabCount(gallery, 3))
+        XCTAssertTrue(card(gallery, "Plain Test A").waitForExistence(timeout: 2), "Page A came back")
 
         // Opening a card shows its page with its history.
-        cards(gallery).element(boundBy: 0).tap()
+        card(gallery, "Plain Test A").tap()
         waitForPage(app, "Page A")
         XCTAssertFalse(gallery.exists)
         XCTAssertEqual(app.buttons["addressPill"].value as? String, address("/a"))
@@ -138,9 +143,12 @@ final class TabsTests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
         waitForPage(app, "Page C")
         let gallery = openGallery(app)
-        XCTAssertTrue(waitForCount(cards(gallery), 3), "\(cards(gallery).count) tabs came back, not 3")
+        XCTAssertTrue(waitForTabCount(gallery, 3), "\(String(describing: gallery.value)) came back, not 3 tabs")
         // A tab that was never on screen this launch opens with its page.
-        cards(gallery).element(boundBy: 0).tap()
+        gallery.swipeDown(velocity: .fast)
+        let first = card(gallery, "Plain Test A")
+        XCTAssertTrue(first.waitForExistence(timeout: 2))
+        first.tap()
         waitForPage(app, "Page A")
     }
 

@@ -1,4 +1,5 @@
 import BrowserCore
+import FeatureUI
 import Foundation
 import PerfSignposts
 import ShellUI
@@ -28,10 +29,51 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// bar, so the next search uses it.
     private lazy var sheets = FeatureSheets(addressBar: addressBarData)
 
+    /// The first-run intro's window, above the browser's, only while the intro is up.
+    private var introWindow: UIWindow?
+
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
-        let window = UIWindow(windowScene: windowScene)
         _ = database
+        let arguments = ProcessInfo.processInfo.arguments
+        #if DEBUG
+        if arguments.contains("-PlainPreviewEmptyTabCard") {
+            let window = UIWindow(windowScene: windowScene)
+            window.rootViewController = DefaultBrowserCardPreviewController()
+            window.makeKeyAndVisible()
+            self.window = window
+            return
+        }
+        #endif
+        // After the intro was seen this is one defaults read; no intro code runs.
+        if IntroGate.shouldShow(arguments: arguments) {
+            showIntro(in: windowScene)
+        } else {
+            showBrowser(in: windowScene)
+        }
+    }
+
+    /// The intro in its own window. On finish the browser comes up underneath (its search field
+    /// takes focus and the keyboard rises) while the intro dissolves off the top.
+    private func showIntro(in windowScene: UIWindowScene) {
+        let intro = IntroViewController()
+        let window = UIWindow(windowScene: windowScene)
+        window.windowLevel = .normal + 1
+        window.rootViewController = intro
+        intro.onFinish = { [weak self, weak intro] in
+            guard let self else { return }
+            self.showBrowser(in: windowScene)
+            intro?.dissolve { [weak self] in
+                self?.introWindow?.isHidden = true
+                self?.introWindow = nil
+            }
+        }
+        window.makeKeyAndVisible()
+        introWindow = window
+    }
+
+    private func showBrowser(in windowScene: UIWindowScene) {
+        let window = UIWindow(windowScene: windowScene)
         let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) {
             Signposts.signposter.endInterval(Signposts.launch, launchInterval)
         }

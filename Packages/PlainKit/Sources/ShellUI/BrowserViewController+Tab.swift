@@ -104,9 +104,9 @@ extension BrowserViewController {
         if let scrollView = session.pool.scrollView(for: tab) {
             scrollView.delegate = self
             scrollView.alwaysBounceVertical = true
-            // Hard: the page under the resting bar is obscured anyway, and an opaque edge keeps
-            // text from refracting through the glass.
-            scrollView.bottomEdgeEffect.style = .hard
+            // No edge effect: the page runs under the bar and the pill floats on it (owner's
+            // choice). The pill's own dense glass keeps its text readable.
+            scrollView.bottomEdgeEffect.isHidden = true
         }
         attachEdgeEffects()
         // The page's first web view is off screen until attached: size it before insets apply.

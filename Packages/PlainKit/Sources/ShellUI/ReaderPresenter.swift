@@ -37,7 +37,7 @@ final class ReaderPresenter: NSObject, WKNavigationDelegate {
         webView.backgroundColor = Palette.background
         webView.scrollView.backgroundColor = Palette.background
         webView.scrollView.alwaysBounceVertical = true
-        webView.scrollView.bottomEdgeEffect.style = .hard
+        webView.scrollView.bottomEdgeEffect.isHidden = true
         webView.scrollView.delegate = scrollDelegate
         webView.accessibilityIdentifier = "readerView"
         webView.alpha = 0

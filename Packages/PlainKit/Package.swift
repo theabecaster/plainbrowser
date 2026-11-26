@@ -1,0 +1,74 @@
+// swift-tools-version: 6.2
+import PackageDescription
+
+// Every module of Plain except the app target itself. The target graph enforces the layering in
+// AGENTS.md ("Architecture rules"): a lower layer never lists a higher one, so an illegal import
+// does not compile.
+//
+//   App -> ShellUI / TabGalleryUI / FeatureUI -> WebEngine / ContentBlocking / Reader -> Storage -> BrowserCore
+//
+// DesignSystem and PerfSignposts are leaves that any layer above BrowserCore may use.
+// BrowserCore and Storage never import UIKit or WebKit, so `swift test` runs their tests on macOS.
+// The UI-side targets are iOS-only; on macOS their sources compile to nothing (`#if os(iOS)`),
+// which keeps `swift test` working without a second package.
+
+let mainActorByDefault: [SwiftSetting] = [.defaultIsolation(MainActor.self)]
+
+let package = Package(
+    name: "PlainKit",
+    platforms: [.iOS("27.1"), .macOS(.v15)],
+    products: [
+        .library(name: "ShellUI", targets: ["ShellUI"]),
+        .library(name: "TabGalleryUI", targets: ["TabGalleryUI"]),
+        .library(name: "FeatureUI", targets: ["FeatureUI"]),
+        .library(name: "PerfSignposts", targets: ["PerfSignposts"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.12.0"),
+    ],
+    targets: [
+        // Layer 0: pure models and rules. Foundation only, nonisolated.
+        .target(name: "BrowserCore"),
+
+        // Layer 1: persistence. GRDB, nonisolated, async API.
+        .target(
+            name: "Storage",
+            dependencies: ["BrowserCore", .product(name: "GRDB", package: "GRDB.swift")]
+        ),
+
+        // Leaves.
+        .target(name: "PerfSignposts"),
+        .target(name: "DesignSystem", swiftSettings: mainActorByDefault),
+
+        // Layer 2: the web engine and what plugs into it.
+        .target(
+            name: "WebEngine",
+            dependencies: ["Storage", "BrowserCore", "PerfSignposts"],
+            swiftSettings: mainActorByDefault
+        ),
+        .target(name: "ContentBlocking", dependencies: ["Storage", "BrowserCore"]),
+        .target(name: "Reader", dependencies: ["Storage", "BrowserCore"]),
+
+        // Layer 3: UI.
+        .target(
+            name: "ShellUI",
+            dependencies: [
+                "WebEngine", "ContentBlocking", "Reader", "BrowserCore", "DesignSystem", "PerfSignposts",
+            ],
+            swiftSettings: mainActorByDefault
+        ),
+        .target(
+            name: "TabGalleryUI",
+            dependencies: ["WebEngine", "BrowserCore", "DesignSystem", "PerfSignposts"],
+            swiftSettings: mainActorByDefault
+        ),
+        .target(
+            name: "FeatureUI",
+            dependencies: ["Storage", "BrowserCore", "DesignSystem"],
+            swiftSettings: mainActorByDefault
+        ),
+
+        .testTarget(name: "BrowserCoreTests", dependencies: ["BrowserCore"]),
+        .testTarget(name: "StorageTests", dependencies: ["Storage"]),
+    ]
+)

@@ -9,10 +9,11 @@ median of each test's iterations. SHA ends in `-dirty` when the tree had uncommi
 - `device` rows come from the phone and are held to `perf/budgets.json`.
 
 Columns: launch = cold launch until responsive (ms), field = `main` to search field focused (ms),
-hitch = page scroll hitch ratio (ms/s).
+hitch = page scroll hitch ratio (ms/s), gallery = tabs button to gallery settled (`gallery.show`, ms),
+swipe = bar swipe to page settled (`tab.swipe`, ms). Rows before the M2 shell wiring have neither.
 
-| Date | SHA | Target | Launch ms | Field ms | Hitch ms/s | Result |
-|---|---|---|---|---|---|---|
+| Date | SHA | Target | Launch ms | Field ms | Hitch ms/s | Gallery ms | Swipe ms | Result |
+|---|---|---|---|---|---|---|---|---|
 | 2026-11-26 05:23 | 9b9ba4e | sim | 3353.9 | 2064.4 | n/a | pass |
 | 2026-11-26 06:16 | 6ba5947 | sim | 3578.5 | 2035.5 | n/a | pass |
 | 2026-11-26 06:33 | 2c966cc | sim | 3529.1 | 1851.1 | n/a | pass |

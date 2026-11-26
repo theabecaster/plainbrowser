@@ -16,6 +16,16 @@
       "label": "Page scroll hitch ratio (ms/s)",
       "target": 5,
       "fail": 10
+    },
+    "galleryMs": {
+      "label": "Tabs button to gallery settled (ms)",
+      "target": 650,
+      "fail": 900
+    },
+    "swipeMs": {
+      "label": "Bar swipe to page settled (ms)",
+      "target": 650,
+      "fail": 900
     }
   }
 }

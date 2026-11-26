@@ -31,6 +31,58 @@ final class PerfTests: XCTestCase {
         }
     }
 
+    /// Two local pages in two tabs, with the search sheet closed: the start of the tab tests.
+    private func launchWithTwoTabs(_ server: TestServer) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/a") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        field.typeText(server.address("/long") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Long Read"].waitForExistence(timeout: 10))
+        return app
+    }
+
+    /// The tabs button to the gallery settled (`gallery.show`: the page zooming into its card).
+    func testGalleryOpen() throws {
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = launchWithTwoTabs(server)
+        let metric = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.galleryShow)
+        )
+        let gallery = app.collectionViews["tabGallery"]
+        measure(metrics: [metric], options: options) {
+            app.buttons["tabs"].tap()
+            XCTAssertTrue(gallery.waitForExistence(timeout: 3))
+            app.buttons["galleryDone"].tap()
+            XCTAssertTrue(gallery.waitForNonExistence(timeout: 3))
+        }
+    }
+
+    /// A fast swipe along the address bar to the neighbour tab, until the page settles
+    /// (`tab.swipe`). Alternates direction, so each iteration has a neighbour.
+    func testBarSwipe() throws {
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = launchWithTwoTabs(server)
+        let metric = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.tabSwipe)
+        )
+        let pill = app.buttons["addressPill"]
+        var toPrevious = true
+        measure(metrics: [metric], options: options) {
+            if toPrevious { pill.swipeRight(velocity: .fast) } else { pill.swipeLeft(velocity: .fast) }
+            toPrevious.toggle()
+        }
+    }
+
     /// Scrolling a long real page. Needs the network: it loads a Wikipedia article.
     func testPageScrollHitches() {
         let app = XCUIApplication()

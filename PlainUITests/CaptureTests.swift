@@ -202,6 +202,110 @@ final class CaptureTests: XCTestCase {
         pause(1)
     }
 
+    /// Tabs (M2): a few real pages, the gallery, a slow bar swipe and a slow swipe up (for the
+    /// screen recording's mid-gesture frames), private tabs, the archive, the page menu with its
+    /// zoom row, and the Downloads sheet. Real sites need the network; the download comes from the
+    /// TestServer.
+    func testCaptureTabs() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication()
+        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites", "-PlainSeedArchive"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+
+        let sites = ["en.wikipedia.org/wiki/Web_browser", "news.ycombinator.com", "www.apple.com/iphone/", "github.com/WebKit/WebKit"]
+        for (index, site) in sites.enumerated() {
+            if index > 0 {
+                app.buttons["tabs"].press(forDuration: 1)
+                app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+            }
+            if !(field.exists && field.hasKeyboardFocus) { app.buttons["addressPill"].tap() }
+            field.typeText(site + "\n")
+            _ = app.webViews.firstMatch.waitForExistence(timeout: 10)
+            pause(4)
+        }
+        shot("t1-page")
+
+        // Gallery from the tabs button, then back with a card.
+        app.buttons["tabs"].tap()
+        pause(1.5)
+        shot("t2-gallery")
+        let cards = app.collectionViews["tabGallery"].cells.matching(identifier: "tabCard")
+        cards.element(boundBy: 1).tap()
+        pause(1.5)
+
+        // A slow bar swipe toward the next tab, held mid-way, then let go.
+        let pill = app.buttons["addressPill"]
+        let start = pill.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: pill.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)),
+                    withVelocity: .slow, thenHoldForDuration: 1.2)
+        pause(1.5)
+        // And back.
+        pill.swipeRight(velocity: .fast)
+        pause(1.5)
+
+        // A slow swipe up from the bar into the gallery.
+        pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+            forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)),
+            withVelocity: .slow, thenHoldForDuration: 0.8
+        )
+        pause(1.5)
+        shot("t3-gallery-swipe")
+
+        // Private: the toggle, a private page, the private gallery.
+        app.buttons["galleryPrivate"].tap()
+        pause(1.2)
+        shot("t4-private-empty")
+        app.buttons["galleryNewTab"].tap()
+        pause(1)
+        field.typeText("en.wikipedia.org/wiki/Private_browsing\n")
+        pause(4)
+        shot("t5-private-page")
+        app.buttons["tabs"].tap()
+        pause(1.5)
+        shot("t6-private-gallery")
+        app.buttons["galleryPrivate"].tap()
+        pause(1)
+
+        // The archive from the gallery's menu.
+        app.buttons["galleryMenu"].tap()
+        pause(0.8)
+        app.buttons["Archived Tabs"].tap()
+        pause(1.5)
+        shot("t7-archive")
+        app.navigationBars.buttons["Done"].tap()
+        pause(1)
+        app.buttons["galleryDone"].tap()
+        pause(1.5)
+
+        // The page menu with the zoom row, after one step in.
+        app.buttons["more"].tap()
+        pause(1)
+        app.buttons["menu.zoomIn"].tap()
+        pause(1)
+        shot("t8-page-menu-zoom")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        pause(1)
+
+        // A download: the toast, then the Downloads sheet.
+        app.buttons["addressPill"].tap()
+        field.typeText(server.address("/files") + "\n")
+        XCTAssertTrue(app.webViews.links["Download notes"].waitForExistence(timeout: 10))
+        app.webViews.links["Download notes"].tap()
+        pause(1.5)
+        shot("t9-download-toast")
+        let show = app.buttons["toastButton"]
+        if show.waitForExistence(timeout: 3) { show.tap() }
+        pause(1.5)
+        shot("t10-downloads")
+        app.navigationBars.buttons["Done"].tap()
+        pause(1)
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

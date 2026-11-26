@@ -21,7 +21,9 @@
       "selectedTests" : [
         "PerfTests\/testLaunch()",
         "PerfTests\/testLaunchToSearchFieldReady()",
-        "PerfTests\/testPageScrollHitches()"
+        "PerfTests\/testPageScrollHitches()",
+        "PerfTests\/testGalleryOpen()",
+        "PerfTests\/testBarSwipe()"
       ],
       "target" : {
         "containerPath" : "container:Plain.xcodeproj",

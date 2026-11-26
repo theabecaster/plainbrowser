@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 import PerfSignposts
 import ShellUI
@@ -76,6 +77,8 @@ private nonisolated struct LaunchOptions: Sendable {
     var inMemory = false
     /// `-PlainSeedFavorites`: a few favorites, for screenshots. Debug builds only.
     var seedFavorites = false
+    /// `-PlainSeedArchive`: a few archived tabs, for screenshots of the archive. Debug builds only.
+    var seedArchive = false
     /// `-PlainTestStore`: a database and tab state on disk in a temporary folder that survives
     /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. Debug
     /// builds only.
@@ -86,6 +89,7 @@ private nonisolated struct LaunchOptions: Sendable {
         #if DEBUG
         inMemory = arguments.contains("-PlainInMemoryStore")
         seedFavorites = arguments.contains("-PlainSeedFavorites")
+        seedArchive = arguments.contains("-PlainSeedArchive")
         testStore = arguments.contains("-PlainTestStore")
         resetStore = arguments.contains("-PlainResetStore")
         #endif
@@ -115,6 +119,21 @@ private nonisolated struct LaunchOptions: Sendable {
     }
 
     @concurrent func seed(_ database: AppDatabase) async {
+        if seedArchive {
+            let pages: [(String, String, Double)] = [
+                ("https://www.theverge.com/tech", "The Verge — Tech", 3),
+                ("https://en.wikipedia.org/wiki/Liquid_glass", "Liquid glass — Wikipedia", 20),
+                ("https://developer.apple.com/documentation/webkit", "WebKit | Apple Developer Documentation", 30),
+                ("https://news.ycombinator.com/item?id=1", "Show HN: A plain browser", 50),
+                ("https://www.nytimes.com/section/food", "Food — The New York Times", 80),
+            ]
+            for (address, title, hours) in pages {
+                let date = Date().addingTimeInterval(-hours * 3600)
+                let entry = TabEntry(url: URL(string: address), title: title, createdAt: date, lastActiveAt: date)
+                database.tabSession.enqueue(.archive([entry], at: date))
+            }
+            await database.tabSession.flush()
+        }
         guard seedFavorites else { return }
         let pages: [(String, String)] = [
             ("https://en.wikipedia.org", "Wikipedia"),

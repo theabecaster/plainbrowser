@@ -18,7 +18,7 @@ final class TabGalleryViewTests: XCTestCase {
         window = nil
     }
 
-    private func show(_ data: TabGalleryDemoData, size: CGSize = CGSize(width: 402, height: 874)) -> TabGalleryViewController {
+    private func show(_ data: any TabGalleryDataSource, size: CGSize = CGSize(width: 402, height: 874)) -> TabGalleryViewController {
         window.frame = CGRect(origin: .zero, size: size)
         let gallery = TabGalleryViewController(dataSource: data)
         window.rootViewController = gallery
@@ -56,12 +56,12 @@ final class TabGalleryViewTests: XCTestCase {
         gallery.onLastTabClosed = { emptied = true }
         let first = data.tabs[0].id
         let cell = gallery.collectionView.cellForItem(at: IndexPath(item: 0, section: 0)) as! TabCardCell
-        cell.onClose?(false)
+        cell.onClose?(nil)
         XCTAssertFalse(data.tabs.contains { $0.id == first })
         XCTAssertEqual(gallery.collectionView.numberOfItems(inSection: 0), 1)
         XCTAssertFalse(emptied)
         let last = gallery.collectionView.cellForItem(at: IndexPath(item: 0, section: 0)) as! TabCardCell
-        last.onClose?(false)
+        last.onClose?(nil)
         XCTAssertTrue(emptied)
         XCTAssertTrue(data.tabs.isEmpty)
     }
@@ -88,6 +88,22 @@ final class TabGalleryViewTests: XCTestCase {
         XCTAssertEqual(ended, .page)
         XCTAssertEqual(cell?.thumbnailContainer.alpha, 1)
         XCTAssertNil(page.superview?.superview, "the moving snapshot is gone")
+    }
+
+    /// An image that is not there yet is asked for again once the tab says it has one.
+    func testAFaviconThatArrivesLaterShows() async throws {
+        let data = LateIconData()
+        let gallery = show(data)
+        try await Task.sleep(for: .milliseconds(300))
+        let cell = gallery.collectionView.cellForItem(at: IndexPath(item: 0, section: 0)) as! TabCardCell
+        XCTAssertEqual(data.faviconRequests, 1)
+        XCTAssertNil(cell.faviconKey, "a missing icon leaves no request behind")
+        data.iconReady = true
+        data.tabs[0].faviconRevision += 1
+        gallery.reloadTabs(animated: false)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(data.faviconRequests, 2)
+        XCTAssertNotNil(cell.faviconKey)
     }
 
     func testReorderMovesTheTab() {
@@ -119,6 +135,15 @@ final class TabGalleryViewTests: XCTestCase {
         var work: [Duration] = []
         var late: [Duration] = []
 
+        // The timer's own lateness with the main thread idle: the floor the scroll is held to.
+        var idle: [Duration] = []
+        var idleDeadline = clock.now + frame
+        for _ in 0..<120 {
+            try await Task.sleep(until: idleDeadline, tolerance: .zero, clock: clock)
+            idle.append(max(.zero, clock.now - idleDeadline))
+            idleDeadline = clock.now + frame
+        }
+
         var offset: CGFloat = 0
         var deadline = clock.now
         while offset < maxOffset {
@@ -138,12 +163,13 @@ final class TabGalleryViewTests: XCTestCase {
         }
         let w = stats(work)
         let l = stats(late)
+        let floor = stats(idle)
         let ms = { (d: Duration) in String(format: "%.2f", Double(d.components.attoseconds) / 1e15 + Double(d.components.seconds) * 1000) }
-        print("[plain-measure] gallery.scroll100 frames=\(work.count) work p95=\(ms(w.p95))ms p99=\(ms(w.p99))ms max=\(ms(w.max))ms late p95=\(ms(l.p95))ms p99=\(ms(l.p99))ms max=\(ms(l.max))ms")
+        print("[plain-measure] gallery.scroll100 frames=\(work.count) work p95=\(ms(w.p95))ms p99=\(ms(w.p99))ms max=\(ms(w.max))ms late p95=\(ms(l.p95))ms p99=\(ms(l.p99))ms max=\(ms(l.max))ms idle-late p95=\(ms(floor.p95))ms")
         XCTAssertLessThan(w.p99, .milliseconds(4), "a frame's scroll work leaves room in 8.3 ms")
-        // Sleep wake-ups on the simulator jitter by a millisecond or two; a decode on the main
-        // thread would show up as tens of milliseconds.
-        XCTAssertLessThan(l.p95, .milliseconds(4), "nothing between frames blocks the main thread")
+        // Sleep wake-ups on the simulator run a few milliseconds late even when idle; a decode on
+        // the main thread would add tens of milliseconds on top.
+        XCTAssertLessThan(l.p95 - floor.p95, .milliseconds(2), "nothing between frames blocks the main thread")
 
         // XCTest metrics for the trend: a warm pass, stepped without pausing.
         measure(metrics: [XCTClockMetric(), XCTCPUMetric()]) {
@@ -178,5 +204,26 @@ final class TabGalleryViewTests: XCTestCase {
         XCTAssertNotNil(first)
         XCTAssertEqual(first.map { $0.size.height / $0.size.width } ?? 0, 0.72, accuracy: 0.01)
     }
+}
+/// One tab whose icon is missing until `iconReady`.
+@MainActor
+private final class LateIconData: TabGalleryDataSource {
+    var tabs = [TabGalleryItem(id: UUID(), title: "Late", url: URL(string: "https://example.com"))]
+    var selectedTabID: UUID? { tabs.first?.id }
+    var canReopenClosedTab: Bool { false }
+    var iconReady = false
+    var faviconRequests = 0
+
+    func thumbnail(for id: UUID) async -> UIImage? { nil }
+    func favicon(for id: UUID) async -> UIImage? {
+        faviconRequests += 1
+        return iconReady ? UIImage(systemName: "star") : nil
+    }
+    func selectTab(_ id: UUID) {}
+    func closeTab(_ id: UUID) {}
+    func closeAllTabs() {}
+    func moveTab(_ id: UUID, to index: Int) {}
+    func newTab() -> UUID { UUID() }
+    func reopenClosedTab() -> UUID? { nil }
 }
 #endif

@@ -242,7 +242,7 @@ public final class TabGalleryViewController: UIViewController {
             item: item, isSelected: id == selectedID,
             thumbnailHeight: metrics.thumbnailHeight, hidesThumbnail: id == hiddenThumbnailID
         )
-        cell.onClose = { [weak self] thrown in self?.closeTab(id, thrown: thrown) }
+        cell.onClose = { [weak self] interval in self?.closeTab(id, flick: interval) }
 
         let thumbKey = thumbnailKey(for: item)
         if cell.thumbnailKey != thumbKey {
@@ -254,6 +254,8 @@ public final class TabGalleryViewController: UIViewController {
                     guard let self else { return }
                     let image = await pipeline.image(for: thumbKey) { [dataSource] in await dataSource.thumbnail(for: id) }
                     guard let cell, cell.thumbnailKey == thumbKey else { return }
+                    // Nothing yet: forget the request, so the next configure asks again.
+                    if image == nil { cell.thumbnailKey = nil }
                     cell.setThumbnail(image)
                 }
             }
@@ -268,6 +270,7 @@ public final class TabGalleryViewController: UIViewController {
                     guard let self else { return }
                     let image = await pipeline.image(for: iconKey) { [dataSource] in await dataSource.favicon(for: id) }
                     guard let cell, cell.faviconKey == iconKey else { return }
+                    if image == nil { cell.faviconKey = nil }
                     cell.setFavicon(image)
                 }
             }
@@ -285,8 +288,11 @@ public final class TabGalleryViewController: UIViewController {
 
     private func faviconKey(for item: TabGalleryItem) -> ThumbnailPipeline.Key {
         let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 3
-        // A tab that moves to another site gets that site's icon.
-        return .init(id: item.id, revision: item.host?.hashValue ?? 0, pixelWidth: Int(18 * scale), maxAspectPermille: 0, kind: .favicon)
+        // A tab that moves to another site, or whose icon arrives, gets the new icon.
+        var hasher = Hasher()
+        hasher.combine(item.host)
+        hasher.combine(item.faviconRevision)
+        return .init(id: item.id, revision: hasher.finalize(), pixelWidth: Int(18 * scale), maxAspectPermille: 0, kind: .favicon)
     }
 
     // MARK: Actions
@@ -309,9 +315,10 @@ public final class TabGalleryViewController: UIViewController {
         dataSource.newTab()
     }
 
-    private func closeTab(_ id: UUID, thrown: Bool) {
-        let state = Signposts.signposter.beginInterval(Signposts.galleryCardClose)
-        if !thrown { Haptic.close.play() }
+    /// - Parameter flick: the interval a flicked card already began; nil for a button or menu.
+    private func closeTab(_ id: UUID, flick: OSSignpostIntervalState? = nil) {
+        let state = flick ?? Signposts.signposter.beginInterval(Signposts.galleryCardClose)
+        if flick == nil { Haptic.close.play() }
         dataSource.closeTab(id)
         if dataSource.tabs.isEmpty {
             reloadTabs(animated: false)
@@ -492,7 +499,7 @@ extension TabGalleryViewController: UICollectionViewDelegate, UICollectionViewDa
             })
         }
         let close = UIAction(title: "Close Tab", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
-            self?.closeTab(id, thrown: false)
+            self?.closeTab(id)
         }
         return UIMenu(children: top + [UIMenu(options: .displayInline, children: [close])])
     }

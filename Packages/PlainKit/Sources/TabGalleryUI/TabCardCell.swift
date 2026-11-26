@@ -1,5 +1,7 @@
 #if canImport(UIKit)
 import DesignSystem
+import os
+import PerfSignposts
 import UIKit
 
 /// One tab's card: the page preview on top, the site icon, title and close button under it.
@@ -15,8 +17,9 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     var thumbnailKey: ThumbnailPipeline.Key?
     var faviconKey: ThumbnailPipeline.Key?
     /// Called when the card was flicked far or fast enough, or its close button was tapped.
-    /// `thrown` is true for a flick: the card is already flying off.
-    var onClose: ((_ thrown: Bool) -> Void)?
+    /// `thrown` carries the `galleryCardClose` interval a flick already began (it includes
+    /// rendering the flying card); nil for a button or menu close.
+    var onClose: ((_ thrown: OSSignpostIntervalState?) -> Void)?
 
     /// The part that moves when flicked. The collection view owns the cell's own frame and
     /// transform, so the gesture moves this instead.
@@ -87,7 +90,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
             .applying(UIImage.SymbolConfiguration(weight: .semibold))
         closeButton.setImage(UIImage(systemName: "xmark", withConfiguration: symbol), for: .normal)
         closeButton.tintColor = Palette.textSecondary
-        closeButton.addAction(UIAction { [weak self] _ in self?.onClose?(false) }, for: .primaryActionTriggered)
+        closeButton.addAction(UIAction { [weak self] _ in self?.onClose?(nil) }, for: .primaryActionTriggered)
         closeButton.isAccessibilityElement = false
         cardView.addSubview(closeButton)
 
@@ -144,7 +147,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         accessibilityHint = String(localized: "Opens the tab.")
         accessibilityCustomActions = [
             UIAccessibilityCustomAction(name: String(localized: "Close Tab")) { [weak self] _ in
-                self?.onClose?(false)
+                self?.onClose?(nil)
                 return true
             },
         ]
@@ -230,7 +233,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
         }
         let button = Metrics.tapTarget
         // The whole 44 pt target stays inside the cell, so all of it takes touches.
-        closeButton.frame = CGRect(x: width - button + 4, y: (midY - button / 2).rounded(), width: button - 4, height: button)
+        closeButton.frame = CGRect(x: width - button, y: (midY - button / 2).rounded(), width: button, height: button)
         let titleHeight = ceil(titleLabel.font.lineHeight)
         titleLabel.frame = CGRect(
             x: titleX, y: (midY - titleHeight / 2).rounded(),
@@ -288,6 +291,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
     /// Sends the card off the side it was thrown toward, with the flick's velocity. A snapshot
     /// flies, so the collection view can delete the cell and reflow the others at the same time.
     private func throwAway(translation: CGFloat, velocity: CGFloat) {
+        let interval = Signposts.signposter.beginInterval(Signposts.galleryCardClose)
         Haptic.close.play()
         isUserInteractionEnabled = false
         let direction: CGFloat = (velocity != 0 ? velocity : translation) < 0 ? -1 : 1
@@ -318,7 +322,7 @@ final class TabCardCell: UICollectionViewCell, UIGestureRecognizerDelegate {
                 animator.startAnimation()
             }
         }
-        onClose?(true)
+        onClose?(interval)
     }
 
     override func apply(_ layoutAttributes: UICollectionViewLayoutAttributes) {

@@ -11,13 +11,18 @@ public struct TabGalleryItem: Hashable, Sendable, Identifiable {
     public var isPrivate: Bool
     /// Bumps when the tab has a newer thumbnail, so the gallery drops its decoded copy.
     public var thumbnailRevision: Int
+    /// Bumps when the tab's site icon arrives or changes.
+    public var faviconRevision: Int
 
-    public init(id: UUID, title: String, url: URL?, isPrivate: Bool = false, thumbnailRevision: Int = 0) {
+    public init(
+        id: UUID, title: String, url: URL?, isPrivate: Bool = false, thumbnailRevision: Int = 0, faviconRevision: Int = 0
+    ) {
         self.id = id
         self.title = title
         self.url = url
         self.isPrivate = isPrivate
         self.thumbnailRevision = thumbnailRevision
+        self.faviconRevision = faviconRevision
     }
 
     /// The host without a leading "www.", for the card and VoiceOver.

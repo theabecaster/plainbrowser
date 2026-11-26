@@ -47,8 +47,6 @@ public enum Signposts {
     /// Interval from a keystroke in the address bar to its local suggestions (history and
     /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
     public static let suggestionsShown: StaticString = "search.suggestions"
-    /// Event: an address or search was submitted (Return or a suggestion tap).
-    public static let searchSubmit: StaticString = "search.submit"
     /// Interval from the toolbar starting to collapse or expand to it settling.
     public static let toolbarCollapse: StaticString = "toolbar.collapse"
     /// Event: pull to refresh crossed its threshold and is armed.

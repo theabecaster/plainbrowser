@@ -37,11 +37,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func openDatabase(then browser: BrowserViewController) {
         let options = LaunchOptions(arguments: ProcessInfo.processInfo.arguments)
         let data = addressBarData
-        Task.detached(priority: .userInitiated) {
-            guard let database = try? options.makeDatabase() else { return }
+        Task(priority: .userInitiated) {
+            // makeDatabase and seed are @concurrent: the disk work runs on the global executor.
+            guard let database = try? await options.makeDatabase() else { return }
             await options.seed(database)
             await data.attach(database)
-            await browser.addressBarDataDidChange()
+            browser.addressBarDataDidChange()
         }
     }
 }
@@ -60,15 +61,15 @@ private nonisolated struct LaunchOptions: Sendable {
         #endif
     }
 
-    func makeDatabase() throws -> AppDatabase {
+    @concurrent func makeDatabase() async throws -> AppDatabase {
         if inMemory { return try AppDatabase.inMemory() }
         let support = try FileManager.default.url(
             for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
         )
-        return try AppDatabase.open(at: support.appending(path: "Plain/Plain.sqlite"))
+        return try await AppDatabase.open(at: support.appending(path: "Plain/Plain.sqlite"))
     }
 
-    func seed(_ database: AppDatabase) async {
+    @concurrent func seed(_ database: AppDatabase) async {
         guard seedFavorites else { return }
         let pages: [(String, String)] = [
             ("https://en.wikipedia.org", "Wikipedia"),

@@ -32,7 +32,13 @@ public final class TabSessionWriter: TabPersistence {
         /// compares with the rows instead.
         var written: TabSession?
         var lastError: (any Error)?
+        /// Failed attempts of the batch at the front of `pending`.
+        var failures = 0
     }
+
+    /// A batch that fails this many times in a row is dropped, so one bad change can't block
+    /// every later one; `lastError` keeps the reason.
+    static let maxAttempts = 3
 
     private let state = Mutex(State())
 
@@ -57,25 +63,51 @@ public final class TabSessionWriter: TabPersistence {
                 state.pending.removeAll { if case .session = $0 { true } else { false } }
             }
             state.pending.append(change)
-            guard state.scheduled == nil else { return }
-            let delay = delay
-            state.scheduled = Task.detached(priority: .utility) { [weak self] in
-                try? await Task.sleep(for: delay)
-                guard !Task.isCancelled else { return }
-                self?.startWrite()
-            }
+            schedule(&state)
         }
     }
 
-    public func flush() async {
-        startWrite()
-        let last = state.withLock { $0.lastWrite }
-        await last?.value
+    private func schedule(_ state: inout State) {
+        guard state.scheduled == nil else { return }
+        let delay = delay
+        state.scheduled = Task.detached(priority: .utility) { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.startWrite()
+        }
     }
 
-    /// What `loadTabSession` read, so the first write only touches what changed since.
-    func setWritten(_ session: TabSession) {
-        state.withLock { $0.written = session }
+    /// Writes everything enqueued so far and returns when it is on disk, retrying a failed batch
+    /// at once (up to `maxAttempts`), since the app may be suspended right after.
+    public func flush() async {
+        for _ in 0 ..< Self.maxAttempts {
+            startWrite()
+            let last = state.withLock { $0.lastWrite }
+            await last?.value
+            if state.withLock({ $0.pending.isEmpty }) { return }
+        }
+    }
+
+    /// Reads the session in the write chain, after every write already started, and keeps it as
+    /// the diff baseline, so a write can never land between the read and the baseline.
+    func load() async throws -> TabSession {
+        let read: Task<Result<TabSession, any Error>, Never> = state.withLock { state in
+            let previous = state.lastWrite
+            let writer = writer
+            let task = Task.detached(priority: .userInitiated) { [self] () -> Result<TabSession, any Error> in
+                await previous?.value
+                do {
+                    let session = try await writer.read { db in try AppDatabase.readTabSession(db) }
+                    self.state.withLock { $0.written = session }
+                    return .success(session)
+                } catch {
+                    return .failure(error)
+                }
+            }
+            state.lastWrite = Task { _ = await task.value }
+            return task
+        }
+        return try await read.value.get()
     }
 
     /// Takes the buffer and chains its write after the previous one, without waiting for it.
@@ -104,15 +136,29 @@ public final class TabSessionWriter: TabPersistence {
             let result = try await writer.write { db in
                 try Self.apply(batch, written: written, archiveLimit: archiveLimit, in: db)
             }
-            state.withLock { $0.written = result.written }
+            state.withLock {
+                $0.written = result.written
+                $0.failures = 0
+            }
             if !result.unreferenced.isEmpty {
                 await tabStates.delete(Array(result.unreferenced))
             }
         } catch {
-            // Unknown state on disk: the next write compares with the rows.
-            state.withLock {
-                $0.lastError = error
-                $0.written = nil
+            // The transaction rolled back, so the rows are as before; put the batch back in front
+            // of newer changes and try again later. A newer session supersedes the batch's own.
+            state.withLock { state in
+                state.lastError = error
+                state.failures += 1
+                guard state.failures < Self.maxAttempts else {
+                    state.failures = 0
+                    return
+                }
+                var retry = batch
+                if state.pending.contains(where: { if case .session = $0 { true } else { false } }) {
+                    retry.removeAll { if case .session = $0 { true } else { false } }
+                }
+                state.pending = retry + state.pending
+                schedule(&state)
             }
         }
     }
@@ -208,6 +254,9 @@ public final class TabSessionWriter: TabPersistence {
             let oldClosed = Set((old?.recentlyClosed ?? []).flatMap { $0.tabs.map(\.entry.id) })
             let newClosed = Set(session.recentlyClosed.flatMap { $0.tabs.map(\.entry.id) })
             gone.formUnion(oldClosed.subtracting(newClosed))
+            // Only an open tab can close, so a closed tab is no longer archived, even when the
+            // session that restored it was superseded before it was written.
+            try deleteRows(newClosed.subtracting(oldClosed).map(\.uuidString), archived: true, in: db)
         }
         return gone
     }
@@ -238,6 +287,10 @@ public final class TabSessionWriter: TabPersistence {
                 guard let entry = entries[id], records[id] == nil else { continue }
                 records[id] = TabRecord(entry: entry, windowID: window.id, position: position)
             }
+        }
+        // Tabs no window lists (rows from before windows existed) are rows too.
+        for (position, entry) in session.tabs.enumerated() where records[entry.id] == nil {
+            records[entry.id] = TabRecord(entry: entry, windowID: nil, position: position)
         }
         return records
     }

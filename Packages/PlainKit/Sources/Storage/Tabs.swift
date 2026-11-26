@@ -113,7 +113,8 @@ struct ClosedTabRecord: Hashable, Codable, FetchableRecord, PersistableRecord {
     var windowID: UUID
     var windowIndex: Int
     var previousTabID: UUID?
-    var wasSelected: Bool
+    var pane: Int?
+    var wasFocused: Bool
     var url: URL?
     var title: String?
     var openerID: UUID?
@@ -131,7 +132,8 @@ struct ClosedTabRecord: Hashable, Codable, FetchableRecord, PersistableRecord {
         windowID = tab.windowID
         windowIndex = tab.index
         previousTabID = tab.previousTabID
-        wasSelected = tab.wasSelected
+        pane = tab.pane
+        wasFocused = tab.wasFocused
         url = tab.entry.url
         title = tab.entry.title
         openerID = tab.entry.openerID
@@ -149,7 +151,8 @@ struct ClosedTabRecord: Hashable, Codable, FetchableRecord, PersistableRecord {
                 lastActiveAt: lastActiveAt,
                 thumbnail: thumbnailFile.map { TabThumbnail(fileName: $0, revision: thumbnailRevision ?? 0) }
             ),
-            windowID: windowID, index: windowIndex, previousTabID: previousTabID, wasSelected: wasSelected
+            windowID: windowID, index: windowIndex, previousTabID: previousTabID, pane: pane,
+            wasFocused: wasFocused
         )
     }
 }
@@ -162,9 +165,7 @@ extension AppDatabase {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.tabSessionLoad, id: signposter.makeSignpostID())
         defer { signposter.endInterval(Signposts.tabSessionLoad, interval) }
-        let session = try await writer.read { db in try Self.readTabSession(db) }
-        tabSession.setWritten(session)
-        return session
+        return try await tabSession.load()
     }
 
     static func readTabSession(_ db: Database) throws -> TabSession {

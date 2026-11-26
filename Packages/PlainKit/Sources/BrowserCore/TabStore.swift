@@ -326,7 +326,7 @@ public final class TabStore {
         guard let batch = recentlyClosed.popLast() else { return [] }
         let date = now()
         var reopened: [TabID] = []
-        var toSelect: [TabID] = []
+        var toShow: [ClosedTab] = []
         for closed in batch.tabs where tabs[closed.entry.id] == nil {
             let windowID = windowIndex(closed.windowID) != nil ? closed.windowID : windows[0].id
             let index = windowIndex(windowID)!
@@ -343,12 +343,16 @@ public final class TabStore {
             tabs[entry.id] = entry
             windowOfTab[entry.id] = windowID
             reopened.append(entry.id)
-            if closed.wasSelected { toSelect.append(entry.id) }
+            if closed.pane != nil { toShow.append(closed) }
         }
-        if toSelect.isEmpty, let first = reopened.first { toSelect = [first] }
-        for id in toSelect {
+        if toShow.isEmpty, let first = batch.tabs.first(where: { reopened.contains($0.entry.id) }) {
+            toShow = [first]
+        }
+        // Each back in its own pane (a closed split comes back whole); the focused one last.
+        for closed in toShow.sorted(by: { !$0.wasFocused && $1.wasFocused }) {
+            let id = closed.entry.id
             guard let windowID = windowOfTab[id], let index = windowIndex(windowID) else { continue }
-            show(id, inPane: nil, windowIndex: index)
+            show(id, inPane: closed.pane, windowIndex: index)
         }
         saveSession()
         return reopened
@@ -503,7 +507,11 @@ public final class TabStore {
                     window.panes[current] = nil
                     window.panes[target] = id
                     windows[index] = window
-                    windows[index].panes[current] = replacement(nearIndex: window.tabIDs.firstIndex(of: id), in: window, closing: nil)
+                    let isPrivate = tabs[id]?.isPrivate == true
+                    let list = isPrivate ? window.privateTabIDs : window.tabIDs
+                    windows[index].panes[current] = replacement(
+                        nearIndex: list.firstIndex(of: id), in: window, opener: nil, isPrivate: isPrivate
+                    )
                     windows[index].focusedPane = target
                     touch(id)
                     return
@@ -535,7 +543,9 @@ public final class TabStore {
         }
         for pane in window.panes.indices where window.panes[pane] == id {
             window.panes[pane] = nil
-            window.panes[pane] = replacement(nearIndex: position, in: window, closing: entry)
+            window.panes[pane] = replacement(
+                nearIndex: position, in: window, opener: entry.openerID, isPrivate: entry.isPrivate
+            )
         }
         windows[index] = window
         tabs[id] = nil
@@ -544,10 +554,10 @@ public final class TabStore {
 
     /// The tab a pane shows after its tab goes away: the closing tab's opener, else the tab now at
     /// its index, else earlier ones; never one already in another pane.
-    private func replacement(nearIndex position: Int?, in window: TabWindow, closing: TabEntry?) -> TabID? {
+    private func replacement(nearIndex position: Int?, in window: TabWindow, opener: TabID?, isPrivate: Bool) -> TabID? {
         let shown = Set(window.panes.compactMap { $0 })
-        let list = closing?.isPrivate == true ? window.privateTabIDs : window.tabIDs
-        if FixedChoices.closingChildSelectsOpener, let opener = closing?.openerID,
+        let list = isPrivate ? window.privateTabIDs : window.tabIDs
+        if FixedChoices.closingChildSelectsOpener, let opener,
            list.contains(opener), !shown.contains(opener) {
             return opener
         }
@@ -577,7 +587,7 @@ public final class TabStore {
                 batch.append(ClosedTab(
                     entry: entry, windowID: windowID, index: position,
                     previousTabID: position > 0 ? window.tabIDs[position - 1] : nil,
-                    wasSelected: window.panes.contains(id)
+                    pane: window.panes.firstIndex(of: id), wasFocused: window.selectedTabID == id
                 ))
             }
         }
@@ -601,7 +611,7 @@ public final class TabStore {
             return ClosedTab(
                 entry: entry, windowID: window.id, index: position,
                 previousTabID: position > 0 ? ids[position - 1] : nil,
-                wasSelected: window.panes.contains(id)
+                pane: window.panes.firstIndex(of: id), wasFocused: window.selectedTabID == id
             )
         }
         pushClosed(batch)

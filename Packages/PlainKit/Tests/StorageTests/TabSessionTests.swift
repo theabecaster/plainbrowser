@@ -2,6 +2,7 @@ import BrowserCore
 import Foundation
 import GRDB
 @testable import Storage
+import Synchronization
 import Testing
 
 @MainActor
@@ -180,6 +181,60 @@ import Testing
         await store.flush()
         #expect(try await database.tabStates.read(for: first) == nil)
         #expect(try await !database.referencedTabIDs().contains(first))
+    }
+
+    @Test func aRestoredTabClosedBeforeTheWriteLeavesTheArchive() async throws {
+        let database = try AppDatabase.inMemory()
+        let store = try await makeStore(database)
+        let entry = TabEntry(url: url("old"), createdAt: t0)
+        database.tabSession.enqueue(.archive([entry], at: t0))
+        await database.tabSession.flush()
+        store.restoreArchived(entry)
+        store.close(entry.id)
+        await store.flush()
+        #expect(try await database.archivedTabCount() == 0)
+        #expect(try await database.loadTabSession().recentlyClosed.first?.tabs.first?.entry.id == entry.id)
+    }
+
+    @Test func aFailedWriteIsRetriedInOrder() async throws {
+        let database = try AppDatabase.inMemory()
+        let calls = Mutex(0)
+        try await database.writer.write { db in
+            db.add(function: DatabaseFunction("plainFailOnce", argumentCount: 0) { _ in
+                let first = calls.withLock { count in
+                    count += 1
+                    return count == 1
+                }
+                if first { throw DatabaseError(message: "injected failure") }
+                return nil
+            })
+            try db.execute(sql: "CREATE TEMP TRIGGER failOnce BEFORE INSERT ON tabWindow BEGIN SELECT plainFailOnce(); END")
+        }
+        let store = try await makeStore(database)
+        let archived = TabEntry(url: url("archived"), createdAt: t0)
+        database.tabSession.enqueue(.archive([archived], at: t0))
+        let a = store.open(url("a"))
+        await store.flush()
+        #expect(database.tabSession.lastError != nil)
+        #expect(try await database.archivedTabs().map(\.id) == [archived.id])
+        #expect(try await database.loadTabSession().windows.first?.tabIDs == [a])
+    }
+
+    @Test func aTabFromBeforeWindowsClosedBeforeTheFirstSaveIsDeleted() async throws {
+        let database = try AppDatabase.inMemory()
+        let ids = [UUID(), UUID()]
+        try await database.writer.write { db in
+            for (position, id) in ids.enumerated() {
+                try TabRecord(id: id, url: URL(string: "https://old\(position).example/"), title: nil, position: position, lastActiveAt: t0)
+                    .insert(db)
+            }
+        }
+        let store = try await makeStore(database)
+        store.close(ids[0])
+        await store.flush()
+        let loaded = try await database.loadTabSession()
+        #expect(loaded.windows.first?.tabIDs == [ids[1]])
+        #expect(loaded.tabs.map(\.id) == [ids[1]])
     }
 
     // MARK: Migration

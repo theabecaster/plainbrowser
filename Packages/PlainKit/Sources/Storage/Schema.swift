@@ -157,7 +157,9 @@ enum Schema {
                 t.column("windowID", .text).notNull()
                 t.column("windowIndex", .integer).notNull()
                 t.column("previousTabID", .text)
-                t.column("wasSelected", .boolean).notNull()
+                // The pane it was shown in, if any, and whether that pane had focus.
+                t.column("pane", .integer)
+                t.column("wasFocused", .boolean).notNull()
                 t.column("url", .text)
                 t.column("title", .text)
                 t.column("openerID", .text)

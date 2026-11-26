@@ -92,15 +92,18 @@ public struct ClosedTab: Hashable, Sendable, Codable {
     public var index: Int
     /// The tab right before it then; reopening goes after it when it is still open.
     public var previousTabID: TabID?
-    /// It was shown in a pane; reopening selects it.
-    public var wasSelected: Bool
+    /// The pane it was shown in, if any; reopening shows it there again.
+    public var pane: Int?
+    /// Its pane was the focused one; reopening focuses it again.
+    public var wasFocused: Bool
 
-    public init(entry: TabEntry, windowID: WindowID, index: Int, previousTabID: TabID?, wasSelected: Bool) {
+    public init(entry: TabEntry, windowID: WindowID, index: Int, previousTabID: TabID?, pane: Int? = nil, wasFocused: Bool = false) {
         self.entry = entry
         self.windowID = windowID
         self.index = index
         self.previousTabID = previousTabID
-        self.wasSelected = wasSelected
+        self.pane = pane
+        self.wasFocused = wasFocused
     }
 }
 

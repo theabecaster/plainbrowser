@@ -150,6 +150,20 @@ final class RecordingPersistence: TabPersistence {
         #expect(store.windows[0].tabIDs == [a, d, c])
     }
 
+    @Test func reopeningAClosedSplitBringsBothPanesBack() {
+        let store = makeStore()
+        let window = store.windows[0].id
+        let a = store.open(url("a")), b = store.open(url("b"))
+        store.open(url("c"))
+        store.select(a)
+        store.split(window, showing: b)
+        store.focusPane(0, in: window)
+        store.close([a, b])
+        #expect(Set(store.reopenLastClosed()) == [a, b])
+        #expect(store.windows[0].panes == [a, b])
+        #expect(store.windows[0].focusedPane == 0)
+    }
+
     @Test func recentlyClosedIsCapped() {
         let store = makeStore()
         for index in 0 ..< FixedChoices.recentlyClosedLimit + 5 {
@@ -224,6 +238,16 @@ final class RecordingPersistence: TabPersistence {
         #expect(store.windows[0].focusedPane == 1)
         store.split(window, showing: a)
         #expect(store.windows[0].panes.count == 2, "at most two panes")
+    }
+
+    @Test func splittingAShownPrivateTabRefillsFromPrivateTabs() {
+        let store = makeStore()
+        let window = store.windows[0].id
+        store.open(url("regular"), inBackground: true)
+        let p1 = store.open(url("p1"), isPrivate: true)
+        let p2 = store.open(url("p2"), isPrivate: true)
+        store.split(window, showing: p2)
+        #expect(store.windows[0].panes == [p1, p2])
     }
 
     @Test func selectingATabInTheOtherPaneSwapsPanes() {

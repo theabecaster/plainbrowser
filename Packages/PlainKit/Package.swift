@@ -75,7 +75,7 @@ let package = Package(
         ),
 
         .testTarget(name: "BrowserCoreTests", dependencies: ["BrowserCore"]),
-        .testTarget(name: "StorageTests", dependencies: ["Storage"]),
+        .testTarget(name: "StorageTests", dependencies: ["Storage", .product(name: "GRDB", package: "GRDB.swift")]),
         // WebKit tests; they run on an iOS simulator (xcodebuild) and are empty on macOS.
         .testTarget(name: "ContentBlockingTests", dependencies: ["ContentBlocking"]),
     ]

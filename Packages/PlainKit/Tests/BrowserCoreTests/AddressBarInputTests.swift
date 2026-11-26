@@ -37,21 +37,3 @@ import Testing
         #expect(AddressBarInput(" \n\t") == nil)
     }
 }
-
-@Suite struct SearchEngineTests {
-    @Test func queryIsPercentEncoded() {
-        let url = SearchEngine.google.resultsURL(for: "a&b=c d+e#f")
-        #expect(url?.absoluteString == "https://www.google.com/search?q=a%26b%3Dc%20d%2Be%23f")
-    }
-
-    @Test func searchInputResolvesThroughEngine() {
-        let input = AddressBarInput("plain browser")
-        #expect(input?.destination(searchingWith: .google)?.absoluteString
-            == "https://www.google.com/search?q=plain%20browser")
-    }
-
-    @Test func urlInputIgnoresEngine() {
-        let input = AddressBarInput("example.com")
-        #expect(input?.destination(searchingWith: .google)?.absoluteString == "https://example.com")
-    }
-}

@@ -20,6 +20,7 @@ struct BlockingDemo: View {
     @State private var trackersBlocked = false
     @State private var autoPlay: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let trackerCount = 9
 
@@ -66,6 +67,8 @@ struct BlockingDemo: View {
                 }
             }
             .overlay(alignment: .bottom) { overlays }
+            // At night the white page is dimmed a little, so it does not glare on the night paper.
+            .overlay { Color.black.opacity(colorScheme == .dark ? 0.1 : 0).allowsHitTesting(false) }
             .clipShape(.rect(cornerRadius: 20, style: .continuous))
             // A sheet on the paper: a hairline edge and a soft shadow, as the feature cards.
             .overlay {

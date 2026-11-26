@@ -382,6 +382,7 @@ struct IntroButtonLabel: View {
     var body: some View {
         Text(title)
             .font(.headline)
+            .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: 36)
     }
 }
@@ -414,7 +415,7 @@ enum IntroStyle {
     static var sheet: some View {
         let shape = RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
         return shape
-            .fill(Color(uiColor: Palette.surface).shadow(.drop(color: Color(uiColor: Palette.floatingShadow).opacity(0.08), radius: 10, y: 4)))
+            .fill(Color(uiColor: IntroPaper.sheet).shadow(.drop(color: Color(uiColor: Palette.floatingShadow).opacity(0.08), radius: 10, y: 4)))
             .overlay { shape.strokeBorder(text.opacity(0.07), lineWidth: 1) }
     }
     /// The column the steps keep to on wide screens (the Duo's inner screen).

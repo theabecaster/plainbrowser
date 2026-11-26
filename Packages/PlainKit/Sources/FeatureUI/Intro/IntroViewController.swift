@@ -44,6 +44,10 @@ public final class IntroViewController: UIViewController {
         // The paper is the launch screen's color, so the launch hands over without a change.
         view.backgroundColor = Palette.background
         view.accessibilityIdentifier = "intro"
+        let ground = IntroPaper.makeGround()
+        ground.frame = view.bounds
+        ground.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(ground)
         dawn.frame = view.bounds
         dawn.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(dawn)
@@ -240,5 +244,21 @@ public final class IntroViewController: UIViewController {
             completion()
         }
     }
+}
+
+/// The intro's paper in one place: the ground under every step and the fill of its sheets (the
+/// feature cards). A shared paper texture, when DesignSystem has one, is applied here and nowhere
+/// else in the intro.
+enum IntroPaper {
+    /// The ground under the dawn and the steps.
+    static func makeGround() -> UIView {
+        let ground = UIView()
+        ground.backgroundColor = Palette.background
+        ground.isUserInteractionEnabled = false
+        return ground
+    }
+
+    /// A sheet of paper lying on the ground.
+    static let sheet = Palette.surface
 }
 #endif

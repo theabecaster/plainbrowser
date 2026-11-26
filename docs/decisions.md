@@ -655,3 +655,6 @@ Each entry: what was chosen, and why. Newest last.
   holds 4.5:1 (Lagoon itself gives 4.2:1). The demo's tracker badge uses ink text on mint and coral.
 - **The mark's shadow** on paper comes from a shadow path on its own layer
   (`StemMarkView(shadowed:)`), not a SwiftUI shadow, so it needs no offscreen pass.
+- **One paper hook** (`IntroPaper`): the intro's ground view and its sheets' fill come from one
+  place, so the shared paper texture (a parallel lane) is applied there and nowhere else in the
+  intro. The intro builds no texture of its own.

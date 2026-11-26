@@ -10,10 +10,11 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Discoverable tab features:** with one tab the tabs button becomes "+"; New Private Tab, Reopen Closed Tab and Archived Tabs must stay obviously reachable (More menu, start-screen shortcuts), not only behind a long press. (State fix lane.)
 
-- **Tab Layout values:** "Above", "Left" and "Right" instead of "Regular Tabs" and "Side Tabs". The name "Tab Layout" stays. (M3 lane.)
 - **State-aware controls:** a control appears only when it does something useful in the current state, for example no tab switcher or new-tab button with a single empty tab. Rules in `docs/state-rules.md`. (State audit, then a fix lane.)
 
 ## Done
+
+- **Tab Layout values:** Above (tab strip), Left and Right (sidebar), on the Duo inner screen. (dev, next build.)
 
 - **First-run intro:** Arc Search's intro look and feel in Plain's identity: Stem splash, icon picker (Dawn, Night, Coral, Paper), live blocking demo. The default-browser step and empty-tab card are built and wait for Apple's entitlement. (dev, next build.)
 

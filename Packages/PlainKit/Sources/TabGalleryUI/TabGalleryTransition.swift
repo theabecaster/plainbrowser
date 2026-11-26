@@ -120,9 +120,10 @@ public final class TabGalleryTransition {
     public func track(translation: CGPoint) -> CGFloat {
         guard !isFinished else { return progress(of: destination) }
         let progress = SwitcherSwipe.progress(translationY: translation.y, pageHeight: pageFrame.height)
+        // Kept under Reduce Motion too: nothing moves, but the release still decides from it.
+        lastProgress = progress
         guard !Motion.prefersCrossfade else { return progress }
         generation += 1
-        lastProgress = progress
         // The bottom edge where the finger is; sideways 1:1.
         let bottom = lerp(pageFrame.maxY, cardFrame.maxY, progress)
         let offset = CGPoint(x: translation.x, y: pageFrame.maxY + min(0, translation.y) - bottom)

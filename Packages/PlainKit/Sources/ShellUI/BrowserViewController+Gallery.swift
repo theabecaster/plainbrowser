@@ -272,18 +272,24 @@ extension BrowserViewController: GalleryHost {
     /// keyboard is down. The search sheet goes clear over it, so it shows with the keyboard up too.
     func updateStartScreen() {
         let start = tabsUI.start
-        if start.superview !== pageClip {
-            start.frame = pageClip.bounds
+        // In the page's own container: it moves with a bar swipe and is in the page's snapshot
+        // when the page zooms into its card.
+        if start.superview !== webContainer {
+            start.frame = webContainer.bounds
             start.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             start.buttonTitle = String(localized: "Search")
             // The field and the favorites strip sit in this space above the keyboard or the bar.
             start.bottomReserve = Metrics.favoriteTile + Metrics.rowHeight * 2
             start.onAction = { [weak self] in self?.beginAddressEditing() }
-            pageClip.addSubview(start)
+            webContainer.addSubview(start)
         }
         let showsStart = currentTab.map { $0.url == nil && !$0.isLoading } ?? true
         start.isHidden = !showsStart
-        if showsStart { pageClip.bringSubviewToFront(start) }
+        // Over a blank tab's web view, under the page-state message.
+        if showsStart {
+            webContainer.bringSubviewToFront(start)
+            webContainer.bringSubviewToFront(engineUI.pageState)
+        }
         sheet.backgroundColor = showsStart ? .clear : Palette.background
     }
 

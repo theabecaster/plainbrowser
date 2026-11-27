@@ -4,6 +4,7 @@
 #
 #   scripts/matrix.sh [--quick|--full] [--rows <id,id>] [--out <dir>] [--host <name> | --local]
 #                     [--no-build] [--resizable] [-only-testing:<test>]...
+#   scripts/matrix.sh --sheets-only --out <dir>    remake the contact sheets of an earlier run
 #
 #   --quick      the five screen-class rows (default): se, 17, max, duo-outer, duo-inner.
 #   --full       every row: also mini, air, landscape, Duo inner portrait, large text, dark,
@@ -59,7 +60,7 @@ ROWS=(
   "17-motion|iPhone-17|portrait|large|light|reduce|"
 )
 
-mode=quick out=build/matrix build=1 resizable=0 picked="" tests=() host="" local_run=0 forward=()
+mode=quick out=build/matrix build=1 resizable=0 picked="" tests=() host="" local_run=0 forward=() sheets_only=0
 while (( $# )); do
   case $1 in
     --quick|--full) mode=${1#--}; forward+=$1 ;;
@@ -67,10 +68,11 @@ while (( $# )); do
     --out) out=$2; shift ;;
     --host) host=$2; shift ;;
     --local) local_run=1 ;;
+    --sheets-only) sheets_only=1 ;;
     --no-build) build=0; forward+=$1 ;;
     --resizable) resizable=1; forward+=$1 ;;
     -only-testing:*) tests+=$1; forward+=$1 ;;
-    -h|--help) sed -n '2,33p' $0; exit 0 ;;
+    -h|--help) sed -n '2,34p' $0; exit 0 ;;
     *) print -u2 "unknown argument: $1 (see --help)"; exit 1 ;;
   esac
   shift
@@ -88,35 +90,86 @@ for row in $ROWS; do
 done
 (( ${#rows} )) || { print -u2 "no rows match: $picked"; exit 1; }
 
-# A contact sheet per screen: that screen on every row, in the matrix's order, the same height.
-# Needs ImageMagick; without it (a test Mac) the Mac that pulls the results makes them.
+# Picks each shot's screen: a test may attach every screen (FocusCaptureTests), and on the Duo
+# the screen that is off (the inner one while closed, the outer one while open) is black. The
+# shot is the largest screen that shows something. In the resizable window that is the whole
+# Resizable display, cut here to the window in its top left corner (<row>/.crop).
+pick_shots() {
+  local dir=$1 f base best area best_area crop="" picked=""
+  [[ -f $dir/.crop ]] && crop=$(<$dir/.crop)
+  local -A bases
+  for f in $dir/*@*.png(N); do bases[${${f:t}%@*}]=1; done
+  for base in ${(k)bases}; do
+    best="" best_area=-1
+    for f in $dir/$base@*.png(N); do
+      # A black screen: (almost) no light in a small copy.
+      (( $(magick $f -scale 64x64 -format '%[fx:int(mean*1000)]' info:) > 5 )) || continue
+      area=$(magick identify -format '%[fx:w*h]' $f)
+      (( area > best_area )) && { best=$f; best_area=$area; }
+    done
+    [[ -n $best ]] || best=$(ls -S $dir/$base@*.png | head -1)
+    if [[ -n $crop && $best == *@2560x1440.png ]]; then
+      magick $best -crop $crop +repage $dir/$base.png
+    else
+      magick $best $dir/$base.png
+    fi
+    picked=${best:t}
+    rm -f $dir/$base@*.png(N)
+  done
+  if [[ -n $crop && -n $picked && $picked != *@2560x1440.png ]]; then
+    print -r -- "${dir:t}: the resizable window showed nothing; its shots are another screen (see their sizes)" >> $out/summary.txt
+  fi
+  rm -f $dir/.crop
+}
+
+# A contact sheet per screen: that screen on every row, in the matrix's order, the same height,
+# each labeled with its row and pixel size. Needs ImageMagick; without it (a test Mac) the Mac
+# that pulls the results makes them.
 make_sheets() {
   if ! command -v magick >/dev/null; then
     print "sheets: none here (no ImageMagick)" >> $out/summary.txt
     return
   fi
-  mkdir -p $out/sheets
+  local font=/System/Library/Fonts/Helvetica.ttc
   local -A seen
-  local order=() s f row id args
+  local order=() s f row id tiles tmp
   for row in $rows; do
+    pick_shots $out/${row%%|*}
     for f in $out/${row%%|*}/*.png(N); do
       s=${f:t:r}
       (( ${+seen[$s]} )) || { seen[$s]=1; order+=$s; }
     done
   done
+  mkdir -p $out/sheets
+  tmp=$out/sheets/.tiles
   for s in $order; do
-    args=()
+    rm -rf $tmp; mkdir -p $tmp
+    tiles=()
     for row in $rows; do
       id=${row%%|*}
       f=$out/$id/$s.png
-      [[ -f $f ]] && args+=(-label "$id $(magick identify -format '%wx%h' $f)" $f)
+      [[ -f $f ]] || continue
+      magick $f -resize x900 -background '#e8e8e8' -gravity south -splice 0x40 -font $font \
+        -pointsize 22 -annotate +0+8 "$id $(magick identify -format '%wx%h' $f)" \
+        -bordercolor '#e8e8e8' -border 16 $tmp/${#tiles}.png
+      tiles+=$tmp/${#tiles}.png
     done
-    magick montage $args -tile x1 -geometry x900+16+16 -pointsize 22 -background '#e8e8e8' \
-      -title $s $out/sheets/$s.png
+    magick $tiles +append -background '#e8e8e8' -gravity north -splice 0x48 -font $font \
+      -pointsize 28 -annotate +0+12 $s $out/sheets/$s.png
   done
-  sed -i '' '/^sheets: none here/d' $out/summary.txt
+  rm -rf $tmp
+  sed -i '' '/^sheets: /d' $out/summary.txt
   print -r -- "sheets: ${#order} in $out/sheets" | tee -a $out/summary.txt
 }
+
+if (( sheets_only )); then
+  [[ -f $out/summary.txt ]] || { print -u2 "no matrix run in $out"; exit 1; }
+  rows=()
+  for row in $ROWS; do [[ -d $out/${row%%|*} ]] && rows+=$row; done
+  rm -rf $out/sheets
+  make_sheets
+  exit 0
+fi
 
 # On a test Mac: sync this checkout there, run the same matrix under the host's simulator lock,
 # bring the shots, sheets, logs and summary back (not the result bundles), and make the sheets
@@ -178,17 +231,14 @@ sim_udid() {
   xcrun simctl list devices -j | jq -r --arg n "$1" '[.devices[][] | select(.name == $n)][0].udid // empty'
 }
 
-# Pixel area of an image (sips ships with macOS).
-area() {
-  sips -g pixelWidth -g pixelHeight $1 2>/dev/null | awk '/pixelWidth/ {w=$2} /pixelHeight/ {h=$2} END {print w*h+0}'
-}
-
 # Keeps the app in the simulator's resizable window at the given size while the tests run,
 # starting a new appResize session each time the tests relaunch the app.
 keep_resized() {
   local udid=$1 size=$2 last="" pid session=""
   while true; do
     pid=$(xcrun simctl spawn $udid launchctl list 2>/dev/null | awk '/UIKitApplication:dev\.abrahamgonzalez\.plainbrowser\[/ {print $1; exit}')
+    # A new app (the tests relaunched it), or a session that ended without taking the app.
+    [[ -n $session ]] && ! kill -0 $session 2>/dev/null && last=""
     if [[ -n $pid && $pid != - && $pid != $last ]]; then
       [[ -n $session ]] && kill $session 2>/dev/null
       sleep 1
@@ -223,6 +273,8 @@ for row in $rows; do
   timeout 600 xcrun simctl bootstatus $udid >/dev/null
   xcrun simctl ui $udid appearance $appearance
   xcrun simctl ui $udid content_size $size
+  # A new simulator's keyboard first shows its slide-to-type introduction over the keys.
+  xcrun simctl spawn $udid defaults write com.apple.Preferences DidShowContinuousPathIntroduction -bool true
   if [[ $motion == reduce ]]; then
     xcrun simctl spawn $udid defaults write com.apple.Accessibility ReduceMotionEnabled -bool true
   fi
@@ -276,24 +328,27 @@ for row in $rows; do
   if [[ -f $result/Info.plist ]]; then
     counts=$(xcrun xcresulttool get test-results summary --path $result 2>/dev/null \
       | jq -r '"\(.passedTests) passed, \(.failedTests) failed, \(.skippedTests) skipped"' 2>/dev/null) || counts=""
-    # The shots: one per screen name, the largest when a test attached every screen (the open
-    # Duo's inner screen; FocusCaptureTests names those <screen>-<width>x<height>).
+    # Every screen a test attached, as <screen>@<width>x<height>.png (FocusCaptureTests names
+    # each <screen>-<width>x<height>); make_sheets picks one per screen (pick_shots).
     if xcrun xcresulttool export attachments --path $result --output-path $dir/attachments >/dev/null 2>&1; then
       jq -r '.[].attachments[] | [.exportedFileName, .suggestedHumanReadableName] | @tsv' \
         $dir/attachments/manifest.json | while IFS=$'\t' read -r file label; do
         [[ $file == *.png || $file == *.jpeg || $file == *.jpg ]] || continue
         shot=${label%.*}
         shot=${shot%_[0-9]*_*}              # Xcode's _<index>_<uuid> suffix
-        shot=${shot%-[0-9]##x[0-9]##}       # FocusCaptureTests' size suffix
-        shot=${shot//[^A-Za-z0-9._-]/_}
-        src=$dir/attachments/$file
-        dst=$dir/$shot.png
-        if [[ ! -f $dst ]] || (( $(area $src) > $(area $dst) )); then
-          sips -s format png $src --out $dst >/dev/null
+        size=main
+        if [[ $shot == *-[0-9]##x[0-9]## ]]; then
+          size=${shot##*-}
+          shot=${shot%-*}
         fi
+        shot=${shot//[^A-Za-z0-9._-]/_}
+        sips -s format png $dir/attachments/$file --out $dir/$shot@$size.png >/dev/null
       done
     fi
     rm -rf $dir/attachments
+    # In the resizable window the shots are the whole Resizable display (3x), the window in its
+    # top left corner.
+    [[ -n $extra ]] && print -r -- "$(( ${window%x*} * 3 ))x$(( ${window#*x} * 3 ))+0+0" > $dir/.crop
   fi
   note "$id: $verdict${counts:+ ($counts)}$([[ -f $result/Info.plist ]] || print ' (no complete result bundle)'); log: $id/xcodebuild.log"
   # One booted simulator at a time: the machine is shared and often loaded.

@@ -804,8 +804,8 @@ Research and sources: docs/research/dark-mode.md.
   (`PaperBackground()`, day cream / night lagoon). Rows stay grouped, on flat paper cards a hair
   lighter than the ground (`Palette.paperCard`: `#FFFBF4` by day, `#11293D` by night) with ink
   hairlines (`Palette.paperHairline`). Text is ink (`Palette.ink`), supporting text the ink's
-  secondary step (`Palette.inkSecondary`, 4.5:1 or better on ground and card), actions and
-  checkmarks Lagoon a step deeper on paper (`Palette.accentOnPaper`: `#2366F0` by day, 4.7:1 on
+  secondary step (`Palette.inkSecondary`: ink at 72 % by day, paper at 76 % by night, well over
+  4.5:1), actions and checkmarks Lagoon a step deeper on paper (`Palette.accentOnPaper`: `#2366F0` by day, 4.7:1 on
   the card; `#8DB6FF` by night), destructive the system red. Titles are New York like the intro's
   headlines; body text stays SF. About shows the name in the intro's display line with its coral
   fold.
@@ -821,8 +821,14 @@ Research and sources: docs/research/dark-mode.md.
   6–10 pt rule, as for the system menus): matching it would mean drawing every card by hand.
 - **Ink caveat:** the sheet's ink foreground replaces the system's footer gray and a button's
   tint, so footers, values (`ValueLabel`), Clear History and Use Custom Engine name their color.
+- **Search field:** History's and Archive's floating search field gets the system's hard bottom
+  scroll edge (`.scrollEdgeEffectStyle(.hard, for: .bottom)`), so rows fade under it instead of
+  showing through its glass on paper.
+- **Duo outer screen:** the bar's leading button moves to the side column there, which left the
+  system title off center ("Downloads"); the serif title is a `.principal` item, which the bar
+  centers.
 - **Accessibility:** Increase Contrast drops the texture (as everywhere), lifts the cards to white
-  / `#1A3850`, and strengthens hairlines (38–42 %) and supporting text (82 %). Reduce
+  / `#1A3850`, and strengthens hairlines (38–42 %) and supporting text (88–90 %). Reduce
   Transparency drops the texture. The cards are opaque either way.
 - **Performance:** the texture is the ground's pattern color only; a row is one opaque color, no
   layer, texture, shadow or mask. 1,000-row History scroll on the iPhone 17 simulator (Release,

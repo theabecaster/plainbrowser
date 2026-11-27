@@ -64,6 +64,38 @@ public enum FixedChoices {
     /// at most, so a slow network never leaves a frozen picture on screen.
     public static let launchPictureMaxHold: Duration = .seconds(3)
 
+    // MARK: Launch splash (docs/decisions.md, "Launch splash: through the P")
+
+    /// A cold launch opens with the chosen icon's world and a dive through the P's counter (the
+    /// owner's choice, 2026-11-27). The app is built and interactive underneath from its first
+    /// frame; the splash only covers it.
+    public static let launchSplashEnabled = true
+    /// The mark's width on the splash, in points: a little under half the narrowest phone, so
+    /// the P reads as the subject with the icon's field around it on every screen.
+    public static let splashMarkWidth: Double = 152
+    /// The dive starts no sooner than this after the process started, so the mark is seen for a
+    /// moment on a fast launch and never lingers on a slow one.
+    public static let splashMinimumTime: TimeInterval = 0.55
+    /// ...and no sooner than this after the app's first frame: iOS crossfades from the launch
+    /// screen to that frame, and a dive begun inside the fade would show both at once.
+    public static let splashHandoff: TimeInterval = 0.3
+    /// The whole dive, from the first movement to the app filling the screen. Short: the app is
+    /// already there, and the dive is the way in, not a show.
+    public static let splashDive: TimeInterval = 0.66
+    /// The first frame waits at most this long for the splash's pictures, drawn off the main
+    /// thread from the moment the scene connects (they usually finish first). Past it the launch
+    /// goes on with no splash rather than wait.
+    public static let splashArtWait: Duration = .milliseconds(30)
+    /// The GPU renderer must be ready this long before the dive starts, or Core Animation plays
+    /// the plain iris instead. The dive never waits for a shader.
+    public static let splashRendererLead: TimeInterval = 0.08
+    /// A touch (or a link from another app) ends the splash with this fade: gone at once, without
+    /// a hard cut. The touch itself already went to the app underneath.
+    public static let splashSkipFade: TimeInterval = 0.12
+    /// The app starts this much larger under the hole and settles to its size as the hole opens,
+    /// so the page comes up toward the viewer instead of sitting flat behind a growing circle.
+    public static let splashContentZoom: Double = 1.08
+
     // MARK: First run
 
     /// A short intro on first launch only (the owner's choice, docs/ui-reference.md, "First run"),

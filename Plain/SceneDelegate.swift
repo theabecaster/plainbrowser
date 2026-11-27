@@ -137,6 +137,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// When the scene last went to the background: a long absence opens a fresh search on return.
     private var leftAt: Date?
     private var currentMemory: LaunchMemory?
+    /// The launch splash, from the scene connecting until it is gone (a cold launch's first
+    /// scene only; docs/state-rules.md, "Launch splash").
+    private var launchSplash: LaunchSplash?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -164,6 +167,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // App Intents run in this process; their commands come to the window that connected or
         // became active last (waiting ones arrive now).
         takeCommandInbox(in: windowScene)
+        // The launch splash, if this launch has one: its pictures and shaders start off the main
+        // thread now, while the browser is built. A link from another app (or a widget, a
+        // shortcut) and a new window get none.
+        launchSplash = LaunchSplash(
+            scene: windowScene, arguments: arguments, launchedForCommand: !pendingCommands.isEmpty,
+            isNewWindow: newWindowRequest != nil
+        )
+        launchSplash?.onEnd = { [weak self] in self?.launchSplash = nil }
         // After the intro was seen this is one defaults read; no intro code runs. A link from
         // another app (or a widget, a shortcut) opens at once: the intro waits for the next launch.
         // So does a new window.
@@ -172,6 +183,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         } else {
             showBrowser(in: windowScene)
         }
+        // Over whichever came up, in the same first frame: the app under it is whole and takes
+        // every touch.
+        launchSplash?.show { [weak self] in (self?.introWindow ?? self?.window)?.rootViewController?.view }
     }
 
     /// The intro in its own window. On finish the browser comes up underneath (its search field
@@ -300,6 +314,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {
         guard let windowScene = scene as? UIWindowScene else { return }
         takeCommandInbox(in: windowScene)
+        launchSplash?.sceneDidBecomeActive()
     }
 
     private func takeCommandInbox(in windowScene: UIWindowScene) {
@@ -332,6 +347,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// shows now and the intro comes back on the next launch.
     private func receive(_ commands: [PlainCommand], in scene: UIScene) {
         guard !commands.isEmpty else { return }
+        // A link always wins: the splash gives way at once.
+        launchSplash?.end()
         pendingCommands += commands
         if browser?.viewIfLoaded?.window != nil {
             performPendingCommands()
@@ -368,6 +385,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
+        launchSplash?.sceneDidLeave()
         // Final once the saved tabs are in; written each time so the next launch finds it.
         guard let session else { return }
         SceneState.set(session.windowID.uuidString, forKey: Windows.windowIDKey, in: scene.session)

@@ -233,6 +233,19 @@ public enum Signposts {
     public static let launchPictureHandoff: StaticString = "launch.pictureHandoff"
     /// Event: a fresh search opened over the last tab (message: "launch" or "return").
     public static let freshSearch: StaticString = "launch.freshSearch"
+    /// Interval: the launch splash's work on the main thread before the first frame (its window,
+    /// its layers, the icon read). Inside `launch.firstFrame`.
+    public static let launchSplashBuild: StaticString = "launch.splashBuild"
+    /// Interval: the first frame waiting for the splash's pictures (message: "ready" or
+    /// "timedOut"); absent when they were already drawn.
+    public static let launchSplashArtWait: StaticString = "launch.splashArtWait"
+    /// Interval: the launch splash on screen, from the app's first frame to the splash gone
+    /// (message: how it ended: "metal", "iris", "crossfade", "skipped" or "left").
+    public static let launchSplash: StaticString = "launch.splash"
+    /// Interval: the dive itself, from its first movement to the app filling the screen.
+    public static let launchSplashDive: StaticString = "launch.splashDive"
+    /// Event: the dive's frame timing (message: frames, intervals, late frames, CPU and GPU time).
+    public static let launchSplashFrames: StaticString = "launch.splashFrames"
 
     // MARK: Tabs (TabStore). The shell emits these around its `TabStore` calls.
 

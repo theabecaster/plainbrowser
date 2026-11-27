@@ -83,10 +83,15 @@ final class PerfTests: XCTestCase {
         )
         measure(metrics: [metric], options: options) {
             let app = XCUIApplication.introSeen()
-            app.launchArguments += ["-PlainTestStore"]
+            app.launchArguments += ["-PlainTestStore", Self.splashArgument]
             app.launch()
         }
     }
+
+    /// The measured launches play the launch splash, as a user's cold launch does (an isolated
+    /// run has none unless it asks): the splash's window, layers and pictures are inside
+    /// `launch.firstFrame`, so the budget holds the launch people get.
+    private static let splashArgument = "-PlainSplash"
 
     /// The launch tests open a database on disk like a real launch, not the in-memory one: the
     /// isolated test store, emptied and migrated once here, then reopened by every measured launch.
@@ -103,7 +108,7 @@ final class PerfTests: XCTestCase {
 
     private static func launchOnDiskStore() -> XCUIApplication {
         let app = XCUIApplication.introSeen()
-        app.launchArguments += ["-PlainTestStore"]
+        app.launchArguments += ["-PlainTestStore", splashArgument]
         return app
     }
 

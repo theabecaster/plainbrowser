@@ -31,6 +31,9 @@ public nonisolated enum TestIsolation {
     /// The accessibility identifier of the marker every window carries in an isolated run. The UI
     /// tests check for it right after each launch and stop when it is missing.
     public static let markerIdentifier = "plainTestIsolation"
+    /// Added to the marker's value once the database is open, migrated and attached, so a test
+    /// can wait for the store without driving the UI.
+    public static let storeReadyValue = "store:ready"
     /// The user-defaults suite isolated runs use instead of the app's own domain: one per mode, so
     /// an in-memory run (which empties its suite) never clears what the test store keeps.
     public static var defaultsSuiteName: String { suiteName(for: mode) }

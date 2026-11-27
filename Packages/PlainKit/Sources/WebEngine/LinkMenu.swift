@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import Foundation
 import Photos
 import PerfSignposts
@@ -227,6 +228,8 @@ extension WebViewPool {
 
     @concurrent
     nonisolated static func addToPhotos(_ data: Data) async -> Bool {
+        // An isolated test run never adds to the owner's photo library.
+        if TestIsolation.isActive { return true }
         do {
             try await PHPhotoLibrary.shared().performChanges {
                 PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)

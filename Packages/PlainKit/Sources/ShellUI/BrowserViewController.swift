@@ -1050,7 +1050,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         let copy = UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { _ in
             Signposts.signposter.emitEvent(Signposts.copyLink)
-            UIPasteboard.general.url = url
+            UIPasteboard.plain.url = url
             Haptic.success.play()
         }
         copy.accessibilityIdentifier = "menu.copyLink"

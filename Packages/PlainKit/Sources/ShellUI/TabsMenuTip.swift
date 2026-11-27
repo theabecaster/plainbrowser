@@ -31,6 +31,13 @@ struct TabsMenuTip: Tip {
     static var isEnabled: Bool {
         !ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("-Plain") }
     }
+
+    /// TipKit's datastore: the app's own normally; in an isolated test run a temporary folder, so
+    /// a test that ever turns tips on never counts toward, or uses up, the owner's tip.
+    static var configuration: [Tips.ConfigurationOption] {
+        guard let folder = TestIsolation.folder("Tips") else { return [] }
+        return [.datastoreLocation(.url(folder))]
+    }
 }
 
 /// Shows `TabsMenuTip` over the tabs slot when TipKit says it should, waiting while the search
@@ -43,7 +50,7 @@ final class TabsTipPresenter {
     /// Starts listening, once, after launch.
     func start(in browser: BrowserViewController) {
         guard task == nil, TabsMenuTip.isEnabled else { return }
-        try? Tips.configure()
+        try? Tips.configure(TabsMenuTip.configuration)
         task = Task { [weak self, weak browser] in
             for await shouldDisplay in TabsMenuTip().shouldDisplayUpdates {
                 guard let self, let browser else { return }

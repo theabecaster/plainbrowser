@@ -287,6 +287,23 @@ public enum FixedChoices {
     public static let minTitleSearchLength = 2
     /// Total rows in the suggestion list; fits above the keyboard on the Duo's outer screen.
     public static let maxAddressBarSuggestions = 8
+
+    /// Recently visited pages the focused address bar shows before typing (Arc shows one, Safari
+    /// a row of Frequently Visited). Four read at a glance and leave room for favorites, the page
+    /// itself and a copied link above the keyboard on the Duo's outer screen.
+    public static let focusRecentPages = 4
+    /// How many of the newest visits `recentPages` reads to find that many distinct pages: enough
+    /// for a few reloads and back-and-forth, bounded so the read stays an index scan.
+    public static let recentPagesScan = 64
+    /// Recently closed tabs the focused address bar offers to reopen: the last two batches, the
+    /// ones people still remember closing.
+    public static let focusClosedTabs = 2
+    /// How long the copy button in the address bar shows its check mark: long enough to read,
+    /// short enough to copy again.
+    public static let copiedConfirmation: TimeInterval = 1.2
+    /// A web address on the pasteboard is offered ("Open Copied Link") only this long after Plain
+    /// first sees it, as Chrome does: an old copy is no longer an intention.
+    public static let copiedLinkFreshness: TimeInterval = 10 * 60
     /// Private tabs never send what is typed to the search engine: a private tab should leave no
     /// trace anywhere, and Firefox makes the same call (`browser.search.suggest.enabled.private`
     /// is false). History and favorites still suggest, from the device only.

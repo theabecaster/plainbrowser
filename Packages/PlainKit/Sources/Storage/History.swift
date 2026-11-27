@@ -265,6 +265,42 @@ extension AppDatabase {
         }
     }
 
+    /// The pages visited most recently, newest first, one per address (as the address bar
+    /// dedupes them), for the focused address bar before typing. Reads the newest visits through
+    /// the `visitedAt` index (a bounded scan, the same cost at 100k visits as at 100), so a page
+    /// visited many times in a row still takes one place. A visit without a title takes its
+    /// page's.
+    public func recentPages(limit: Int) async throws -> [PageCandidate] {
+        guard limit > 0 else { return [] }
+        return try await writer.read { db in
+            let visits = try HistoryVisit.order(Column("visitedAt").desc)
+                .limit(FixedChoices.recentPagesScan).fetchAll(db)
+            var seen: Set<String> = []
+            var pages: [PageCandidate] = []
+            for visit in visits {
+                let key = AddressBarSuggestions.addressKey(visit.url)
+                guard seen.insert(key).inserted else { continue }
+                pages.append(PageCandidate(url: visit.url, title: visit.title, frecency: nil, isFavorite: false))
+                if pages.count == limit { break }
+            }
+            let untitled = pages.filter { ($0.title ?? "").isEmpty }.map(\.url.absoluteString)
+            guard !untitled.isEmpty else { return pages }
+            let marks = Array(repeating: "?", count: untitled.count).joined(separator: ",")
+            let rows = try Row.fetchAll(
+                db, sql: "SELECT url, title FROM \(Schema.historyPlace) WHERE url IN (\(marks))",
+                arguments: StatementArguments(untitled)
+            )
+            var titles: [String: String] = [:]
+            for row in rows {
+                if let url: String = row["url"], let title: String = row["title"] { titles[url] = title }
+            }
+            for index in pages.indices where (pages[index].title ?? "").isEmpty {
+                pages[index].title = titles[pages[index].url.absoluteString]
+            }
+            return pages
+        }
+    }
+
     /// History pages whose title or address contain words starting with each typed word. Pages
     /// whose address starts with the typed text come first, so the address bar's top hit is never
     /// crowded out; the rest follow by frecency. This is the address bar's query; it must stay

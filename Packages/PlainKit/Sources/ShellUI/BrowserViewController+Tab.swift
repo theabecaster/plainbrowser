@@ -69,6 +69,8 @@ extension BrowserViewController {
     /// search sheet when the user has not opened a page meanwhile.
     func startSession() {
         data.firstFrameDidCommit()
+        // After the first frame: is there a copied link to offer (asked without reading it)?
+        refreshCopiedLink()
         Task { [weak self, session] in
             let restored = await session.start()
             guard let self else { return }
@@ -147,10 +149,12 @@ extension BrowserViewController {
             let kind: VisitKind = self.engineUI.typedVisitTabs.remove(tab.id) != nil ? .typed : .link
             guard self.recordsHistory(for: tab) else { return }
             self.data.pageVisited(url: url, title: title, kind: kind)
+            self.noteVisit(url: url, title: title)
         }
         tab.onVisitTitleChange = { [weak self, weak tab] url, title in
             guard let self, let tab, self.recordsHistory(for: tab) else { return }
             self.data.pageTitleChanged(url: url, title: title)
+            self.noteVisit(url: url, title: title)
         }
         engineUI.observation = TabObservation(tab) { [weak self] old, new in
             self?.tabChanged(from: old, to: new)

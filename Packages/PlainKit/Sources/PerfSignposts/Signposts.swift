@@ -56,6 +56,20 @@ public enum Signposts {
     /// Interval from a tap on the URL pill to the field being first responder with the search
     /// sheet's layout applied (the first visual response).
     public static let urlBarFocus: StaticString = "urlBar.focus"
+    /// Interval: building the focused field's content (copied link, the page, recent and closed
+    /// pages) from what is already in memory, before the frame that shows the field. Main thread;
+    /// no disk.
+    public static let focusContent: StaticString = "urlBar.focusContent"
+    /// Interval: reading the favorites and recent pages for the focused field, off the main
+    /// thread, ahead of the next focus.
+    public static let focusContentLoad: StaticString = "urlBar.focusContentLoad"
+    /// Event: a row the focused field offered before typing was used ("copy", "edit", "copied",
+    /// "recent", "closed").
+    public static let focusAction: StaticString = "urlBar.focusAction"
+    /// Event: the page sheet opened (More, or a long press on the pill).
+    public static let pageSheet: StaticString = "pageSheet.open"
+    /// Event: editing the page's address began (the page sheet's address, or the page's row).
+    public static let editAddress: StaticString = "urlBar.editAddress"
     /// Interval from a keystroke in the address bar to its local suggestions (history and
     /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
     public static let suggestionsShown: StaticString = "search.suggestions"

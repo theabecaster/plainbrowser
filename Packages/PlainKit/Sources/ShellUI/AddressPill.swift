@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import UIKit
 
@@ -22,6 +23,22 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     var onTap: () -> Void = {}
     /// The page menu for a long press, or nil when there is no page.
     var menuProvider: () -> UIMenu? = { nil }
+    /// Copy inside the field, while it edits the page's own address.
+    var onCopy: () -> Void = {}
+    private lazy var copyButton: UIButton = {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "doc.on.doc")
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
+        configuration.baseForegroundColor = Palette.accentOnGlass
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: Spacing.s, bottom: 0, trailing: Spacing.s)
+        let button = UIButton(configuration: configuration)
+        button.frame = CGRect(x: 0, y: 0, width: Metrics.tapTarget, height: Metrics.tapTarget)
+        button.accessibilityLabel = String(localized: "Copy Link")
+        button.accessibilityIdentifier = "field.copy"
+        button.addAction(UIAction { [weak self] _ in self?.copyTapped() }, for: .touchUpInside)
+        return button
+    }()
+    private var copyToken = 0
 
     private(set) var isEditing = false
     /// The bar is collapsed, or on its way there: only the tap works.
@@ -253,6 +270,43 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         progressBar.isHidden = editing
         // Resting, the pill is one button for VoiceOver; editing, the field inside is reachable.
         isAccessibilityElement = !editing
+    }
+
+    /// Shows Copy inside the field (editing the page's own address) in place of the clear
+    /// button, or takes it away. No layout: the field's text area keeps its frame either way
+    /// within the pill.
+    func setCopyShown(_ shown: Bool) {
+        let showing = textField.rightView != nil && textField.rightViewMode == .always
+        guard shown != showing else { return }
+        if shown {
+            copyToken += 1
+            setCopyGlyph(copied: false)
+            textField.rightView = copyButton
+            textField.rightViewMode = .always
+            textField.clearButtonMode = .never
+        } else {
+            textField.rightView = nil
+            textField.rightViewMode = .never
+            textField.clearButtonMode = .whileEditing
+        }
+    }
+
+    private func copyTapped() {
+        onCopy()
+        copyToken += 1
+        let token = copyToken
+        setCopyGlyph(copied: true)
+        UIAccessibility.post(notification: .announcement, argument: String(localized: "Copied"))
+        DispatchQueue.main.asyncAfter(deadline: .now() + FixedChoices.copiedConfirmation) { [weak self] in
+            guard let self, self.copyToken == token else { return }
+            self.setCopyGlyph(copied: false)
+        }
+    }
+
+    /// The copy glyph, or a check mark for a moment after a copy: same size, so nothing moves.
+    private func setCopyGlyph(copied: Bool) {
+        copyButton.configuration?.image = UIImage(systemName: copied ? "checkmark" : "doc.on.doc")
+        copyButton.accessibilityLabel = copied ? String(localized: "Copied") : String(localized: "Copy Link")
     }
 
     /// Makes the field first responder. Resting, the field takes no touches (taps belong to the

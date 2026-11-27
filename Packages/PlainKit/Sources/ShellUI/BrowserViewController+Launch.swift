@@ -254,12 +254,14 @@ extension BrowserViewController {
         }
     }
 
-    /// The tab a submitted address loads in: a new one from a fresh search over a page, so the page
-    /// the user came back to stays as it was; otherwise the tab on screen (or a new one).
+    /// The tab a submitted address loads in: a new one from a search over a page (the pill, or a
+    /// fresh search after time away), so the page stays as it was; otherwise the tab on screen
+    /// (or a new one). Editing the page's own address loads in its tab.
     func tabForSubmittedAddress() -> Tab {
-        if launchUI.isFreshSearch, let tab = currentTab, !session.tabs.isEmpty(tab.id) {
-            // Private stays private.
-            let fresh = session.tabs.newTab(isPrivate: tab.isPrivate)
+        if launchUI.isFreshSearch, isEditingAddress, let tab = currentTab, !session.tabs.isEmpty(tab.id) {
+            // Private stays private. The page is its opener: Back on the new tab's first page
+            // closes it and returns there (state rules §8).
+            let fresh = session.tabs.newTab(isPrivate: tab.isPrivate, opener: tab)
             show(fresh)
             return fresh
         }

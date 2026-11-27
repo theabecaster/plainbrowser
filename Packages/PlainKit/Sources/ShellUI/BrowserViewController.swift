@@ -64,6 +64,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let tabsUI = TabsUIState()
     /// What launch opened to: the last tab's picture and the fresh search's frost (`+Launch`).
     let launchUI = LaunchUIState()
+    /// What the focused address bar offers before typing, and whether it edits the page's
+    /// address (`+AddressFocus`).
+    let focusUI = AddressFocusState()
     /// The page menu's last Add to / Remove from Favorites answer, for rebuilding the open menu.
     var lastFavoriteAnswer: Bool?
     /// Show Tabs asked for before the saved tabs were in (a cold launch from Siri); it runs once
@@ -168,9 +171,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
+        pill.onCopy = { [weak self] in self?.copyPageAddress() }
         pill.menuProvider = { [weak self] in self?.pageMenu(source: .pill) }
 
-        sheet.onPick = { [weak self] pick in self?.open(pick) }
+        sheet.onPick = { [weak self] pick in
+            guard let self, !self.handleFocusPick(pick) else { return }
+            self.open(pick)
+        }
         sheet.onDismiss = { [weak self] in self?.endEditing() }
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
         // A swipe down closes the search, as a sheet closes (Arc Search's way back to the tab).
@@ -226,6 +233,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Back from the background: idle tabs move to the archive.
     @objc private func willEnterForeground() {
         archiveIdleTabs()
+        // Another app may have copied a link (checked without reading it).
+        refreshCopiedLink()
     }
 
     private func layOut() {
@@ -553,8 +562,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func addressBarDataDidChange() {
         // The settings are in: idle tabs can move to the archive.
         archiveIdleTabs()
-        guard isEditingAddress else { return }
-        loadFavorites()
+        // Favorites and recent pages for the next focus (an open field takes them at once).
+        refreshFocusContent()
     }
 
     // MARK: Address bar
@@ -568,7 +577,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             return
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
-        pill.textField.text = pageAddress?.absoluteString ?? ""
+        // Go somewhere new (Arc): the field opens empty over the page, which stays behind the
+        // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
+        // Editing the page's address is its own door: the page's row, or the page sheet.
+        let overPage = currentTab.map { !session.tabs.isEmpty($0.id) } ?? false
+        focusUI.isEditingPage = false
+        pill.setCopyShown(false)
+        launchUI.isFreshSearch = overPage
+        if overPage { Signposts.signposter.emitEvent(Signposts.freshSearch, "pill") }
+        pill.textField.text = ""
+        updateStartScreen()
         // The layout switches before the keyboard starts, so the keyboard's own animation carries
         // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.
         applyEditingLayout(true, animated: true)
@@ -583,13 +601,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if !(textField.text ?? "").isEmpty {
             textField.selectAll(nil)
         }
-        loadFavorites()
+        // The content is already in memory (`refreshFocusContent`); only the pasteboard is asked
+        // again, without reading it.
+        refreshCopiedLink()
         queryChanged()
     }
 
     public func textFieldDidEndEditing(_ textField: UITextField) {
         suggestionTask?.cancel()
         data.cancelSuggestions()
+        focusUI.isEditingPage = false
+        pill.setCopyShown(false)
         updateStartForTyping(query: "")
         applyEditingLayout(false, animated: true)
     }
@@ -609,18 +631,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         return false
     }
 
-    @objc private func queryChanged() {
+    @objc func queryChanged() {
         let query = pill.textField.text ?? ""
         suggestionTask?.cancel()
         // The current page's address, untouched, is not a query: show favorites, as for an
         // empty field, until the user types.
         let isCurrentAddress = !query.isEmpty && query == pageAddress?.absoluteString
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
-        updateStartForTyping(query: query)
+        // Copy sits in the field while it still shows the page's own address.
+        pill.setCopyShown(focusUI.isEditingPage && isCurrentAddress)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            sheet.show([])
+            // Before typing: never empty (docs/decisions.md, "Address focus").
+            let items = focusItems()
+            updateStartForTyping(query: query, showsRows: !items.isEmpty)
+            sheet.show(items: items)
             return
         }
+        updateStartForTyping(query: query)
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.suggestionsShown)
         suggestionTask = Task { [weak self, data] in
@@ -638,12 +665,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     private func loadFavorites() {
-        favoritesTask?.cancel()
-        favoritesTask = Task { [weak self, data] in
-            let favorites = await data.favorites()
-            guard let self, !Task.isCancelled else { return }
-            self.sheet.setFavorites(favorites)
-        }
+        refreshFocusContent()
     }
 
     private func open(_ pick: SearchPick) {
@@ -658,6 +680,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 data.suggestionPicked(input: input, url: page)
             }
         case .search(let query): url = data.searchEngine.resultsURL(for: query)
+        default: return
         }
         guard let url else { return }
         let state = Signposts.signposter.beginInterval(Signposts.addressSubmit)
@@ -683,6 +706,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
+        focusUI.isEditingPage = false
+        pill.setCopyShown(false)
         pill.textField.text = pageAddress?.absoluteString ?? ""
         applyEditingLayout(true, animated: true)
         if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
@@ -706,8 +731,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
         isEditingAddress = editing
         // A fresh search lasts as long as its field: closing it uncovers the page.
-        if !editing { launchUI.isFreshSearch = false }
-        let frostAlpha: CGFloat = editing && launchUI.isFreshSearch ? 1 : 0
+        if !editing {
+            launchUI.isFreshSearch = false
+            focusUI.isEditingPage = false
+        }
+        // The page stays behind the veil for both intents: searching over it, or editing its
+        // address.
+        let frostAlpha: CGFloat = editing && (launchUI.isFreshSearch || focusUI.isEditingPage) ? 1 : 0
         guard changed || !animated else { return }
         // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
         // screen's button and shortcuts step aside for the field.
@@ -1301,10 +1331,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self.share(from: source)
         }
         share.accessibilityIdentifier = "menu.share"
-        let copy = UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { _ in
-            Signposts.signposter.emitEvent(Signposts.copyLink)
-            UIPasteboard.plain.url = url
-            Haptic.success.play()
+        let copy = UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { [weak self] _ in
+            self?.copyPageAddress()
         }
         copy.accessibilityIdentifier = "menu.copyLink"
         let siteItems = siteMenuItems(
@@ -1369,8 +1397,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
         Signposts.signposter.emitEvent(Signposts.favoriteToggle)
-        Task { [data] in
+        Task { [weak self, data] in
             if await data.setFavorite(isFavorite, url: url, title: title) {
+                self?.refreshFocusContent()
                 Haptic.success.play()
             } else {
                 Haptic.nothingThere.play()
@@ -1438,6 +1467,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         showPendingToast()
         tabsUI.tip.showIfPossible(in: self)
         session.tabs.refreshArchiveState()
+        // History may have been cleared, favorites edited.
+        refreshFocusContent()
     }
 
     /// The sheet was swiped down.

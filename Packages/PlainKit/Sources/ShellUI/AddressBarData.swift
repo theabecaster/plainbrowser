@@ -14,6 +14,23 @@ public struct FavoritePage: Hashable, Sendable {
     }
 }
 
+/// What the focused address bar shows before typing (docs/decisions.md, "Address focus"): the
+/// favorites and the pages visited most recently. Read off the main thread ahead of focus, so the
+/// field's first frame already has it.
+public struct FocusContent: Equatable, Sendable {
+    public var favorites: [FavoritePage]
+    /// Newest first, one per address; never the favorites. Empty in private tabs (the shell
+    /// leaves them out).
+    public var recent: [FavoritePage]
+
+    public init(favorites: [FavoritePage] = [], recent: [FavoritePage] = []) {
+        self.favorites = favorites
+        self.recent = recent
+    }
+
+    public static let empty = FocusContent()
+}
+
 /// What the address bar needs from history, favorites, settings and the search engine. The shell
 /// talks only to this seam, so it never reaches into storage or the network itself.
 public protocol AddressBarData: AnyObject {
@@ -26,6 +43,8 @@ public protocol AddressBarData: AnyObject {
     func cancelSuggestions()
     /// Favorites, in the user's order.
     func favorites() async -> [FavoritePage]
+    /// Favorites and the most recently visited pages, in one read.
+    func focusContent() async -> FocusContent
     /// Whether `url` is a favorite.
     func isFavorite(_ url: URL) async -> Bool
     /// Adds `url` to the end of the favorites, or removes it. Returns false when it couldn't.
@@ -62,6 +81,10 @@ public protocol AddressBarData: AnyObject {
 }
 
 extension AddressBarData {
+    public func focusContent() async -> FocusContent {
+        FocusContent(favorites: await favorites())
+    }
+
     public func prepareForTyping() {}
     public func firstFrameDidCommit() {}
 
@@ -280,6 +303,20 @@ public final class LiveAddressBarData: AddressBarData {
     public func favorites() async -> [FavoritePage] {
         guard let database, let favorites = try? await database.favorites() else { return [] }
         return favorites.map { FavoritePage(url: $0.url, title: $0.title) }
+    }
+
+    public func focusContent() async -> FocusContent {
+        guard let database else { return .empty }
+        async let saved = database.favorites()
+        async let visited = database.recentPages(limit: FixedChoices.focusRecentPages + FixedChoices.maxPageSuggestions)
+        let favorites = ((try? await saved) ?? []).map { FavoritePage(url: $0.url, title: $0.title) }
+        let favoriteKeys = Set(favorites.map { AddressBarSuggestions.addressKey($0.url) })
+        // Favorites have their own strip: a page is in one place only.
+        let recent = ((try? await visited) ?? [])
+            .filter { !favoriteKeys.contains(AddressBarSuggestions.addressKey($0.url)) }
+            .prefix(FixedChoices.focusRecentPages + 1)
+            .map { FavoritePage(url: $0.url, title: $0.title) }
+        return FocusContent(favorites: favorites, recent: Array(recent))
     }
 
     public func isFavorite(_ url: URL) async -> Bool {

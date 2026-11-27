@@ -1419,3 +1419,72 @@ routed to the lanes that own them.
 - **Start screen shortcuts use the page menu's captions** ("Reopen Tab", "Archive") in equal
   columns, full names for VoiceOver; an empty private tab's sentence says it is private ("A private
   tab: Plain keeps no history of it."), with no badge.
+## Address focus and the page sheet: Arc's two intents (2026-11-27)
+
+Owner, on TestFlight: "When a user taps the URL bar it just looks empty still." On the Duo's
+outer screen, dark, on apple.com: the page vanished behind flat paper, the field rose with
+`https://www.apple.com/` selected, and nothing else showed for as long as the field was open (no
+favorites saved, so the only content, the strip, said nothing). The owner's reference is Arc
+Search, recorded on the same phone: "Arc keeps it all very intuitive." Research in
+docs/research/address-focus.md.
+
+**Two intents, two doors (Arc's model).**
+
+1. **Go somewhere new: tap the pill.** The field opens empty ("Search or enter address"), the
+   page stays behind a paper veil (the fresh search's `FrostView`), and what is submitted opens in
+   a new tab whose opener is the page, so Back on its first page closes it and returns there (the
+   link rule, state rules §8). Dismissing creates nothing. On the start screen (an empty tab) it
+   loads in place, as before. Arc and Chrome's "new tab" habit; the page the user was reading is
+   never replaced by a stray search.
+2. **Do something to this page: More (or a long press on the pill).** The page sheet: the
+   address row first (Back, Forward, the host, Copy Link, Reload or Stop), captioned tiles, then
+   rows. Tapping the host edits the address: the sheet goes down as the field comes up with the
+   page's address selected and a Copy button inside the field; Return loads in the same tab.
+   One field for both intents, so suggestions, keyboard and motion are one design.
+
+The focused field's first row on a page is the page itself (its title and host, Copy, Edit), so
+editing the address is also one tap from the search.
+
+**What the focused field shows (nothing empty).** Above the field, nearest first, the way the
+suggestions sit (best nearest the thumb); every item comes from memory, so it is on screen in
+the frame the keyboard starts:
+
+| Item | When | Why |
+|---|---|---|
+| Copied link ("Open Copied Link") | The pasteboard holds a web address (`detectPatterns`, no paste alert) that Plain has not offered since it changed, and it is not the page on screen | The most likely next address. The address is shown only when Plain copied it itself; others are read only on the tap. |
+| This page (title, host; Copy, Edit) | A page is on screen, search intent | Edit and copy stay one tap away (Chrome's current-page row). |
+| Favorites strip | At least one favorite (private tabs too) | Unchanged. |
+| Recently visited (up to 4) | Regular tab; history has pages other than this one and the favorites | Arc's "context" row; Safari's Frequently Visited. Newest first, one row per page. |
+| Recently closed (up to 2) | Regular tab; the closed stack has a batch | Reopens that batch in place (`reopenClosed`). |
+| One sentence | None of the above (first run) | "Search, or enter an address. Pages you visit and your favorites show up here." |
+
+Private tabs show no history and no closed tabs: only this page, a copied link and favorites.
+When typing starts, the same rows machinery takes over: a recent page that is also a suggestion
+keeps its row, the rest crossfade (0.12 s), one update per frame.
+
+**Layouts.**
+
+- **iPhone 17, Duo outer:** the pill rises above the keyboard (keyboard layout guide), the page
+  sheet is a bottom sheet sized to its content with a grabber.
+- **Duo inner, landscape and portrait (top bar in the status row):** the field still rises above
+  the keyboard, as on every screen (decided with the top bar: suggestions stay nearest the
+  thumb). The page sheet is a popover under More in the top bar (Safari on wide screens), the
+  same content at 360 pt.
+- **Split panes:** both intents act on the focused pane; a new tab from search goes to it.
+- **Dynamic Type XL:** rows grow; only whole rows show above the field (the top ones drop);
+  the page sheet scrolls past its largest detent.
+- **Reduce Motion:** every move below is a 0.2 s crossfade; the rows' crossfade is unchanged.
+- **Light and dark:** Palette and Paper tokens only; the veil is paper at 70 % in both.
+
+**Transitions.** Transform and opacity only, nothing lays out mid-motion, every one can be
+interrupted from where it is on screen, and nothing animates without a reason.
+
+| Transition | Purpose | Motion | What moves | No flicker because |
+|---|---|---|---|---|
+| Pill to field | The bar becomes the field: one object, so the eye follows it | `urlFocus` (spring 0.3, bounce 0) riding the keyboard | pill frame (keyboard layout guide), veil and sheet opacity, content 16 pt rise | Rows built from the cached focus snapshot in the same run-loop turn, before Core Animation commits; no fetch on focus |
+| Focused content to suggestions | The list answers the typing | `suggestionFade` 0.12 s linear | row opacity | Rows keyed by identity; one flush per turn; shared rows untouched |
+| Edit from the page row | The field takes the page's address | none: text swaps in place, selected | rows crossfade (0.12 s) | Field and pill keep their frame |
+| Copy in the field | Confirms the copy | `quick` | the glyph swaps to a check for 1.2 s, success haptic | No layout: same-size glyph |
+| More to the page sheet | Page actions over the page | system sheet / popover | system | Content and favorite state built before presenting |
+| Host to edit field | Hand over to the one field | sheet dismisses while the keyboard rises | system + `urlFocus` | The field is focused in the dismissal's first frame |
+| Field closes | Back to the page | `urlFocus` | the reverse of focus | |

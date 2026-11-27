@@ -48,6 +48,8 @@ enum PageButton: CaseIterable {
 /// The glass button bar under the pill on iPhones without a vertical bar.
 final class ButtonBar: UIView {
     private let glass = Glass.makeView(shape: .capsule)
+    /// The soft paper glow under the glass shapes, so the symbols read over any page.
+    private let scrim = ChromeScrim()
     private(set) var stack = UIStackView()
     private(set) var buttons: [PageButton: UIButton] = [:]
     /// Beside the pill on the start screen: only the buttons that show, each a round glass slot.
@@ -77,6 +79,9 @@ final class ButtonBar: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        scrim.frame = bounds
+        scrim.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(scrim)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
         stack.axis = .horizontal
@@ -187,6 +192,7 @@ final class ButtonBar: UIView {
         if glass.isHidden == showsLeading { glass.isHidden = !showsLeading }
         let showsTrailing = trailingStack.arrangedSubviews.contains { $0.isUserInteractionEnabled }
         if trailingGlass.isHidden == showsTrailing { trailingGlass.isHidden = !showsTrailing }
+        setNeedsLayout()
     }
 
     /// In the split shape only the two capsules take touches: the pill sits in the gap.
@@ -258,6 +264,19 @@ final class ButtonBar: UIView {
         effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
         glass.effect = effect
         trailingGlass.effect = effect
+        scrim.isPrivate = isPrivate
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateScrim()
+    }
+
+    /// The glow follows the glass shapes that show: one capsule, the round slot beside the pill,
+    /// or the split shape's two.
+    private func updateScrim() {
+        let shown = [glass, trailingGlass].filter { $0.superview === self && !$0.isHidden }
+        scrim.shapes = shown.map(\.frame)
     }
 }
 

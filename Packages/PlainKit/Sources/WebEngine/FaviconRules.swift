@@ -92,25 +92,40 @@ nonisolated enum FaviconRules {
     }
 
     /// A host on this device or the local network: localhost, `.local` and `.internal` names,
-    /// and loopback, private, link-local, carrier-NAT and unspecified IP addresses.
+    /// single-label names, and loopback, private, link-local, carrier-NAT, multicast and
+    /// unspecified addresses, IPv4 in any spelling `inet_aton` reads (decimal, hex, octal, short
+    /// forms) and IPv6 in any spelling, with IPv4-mapped ones judged by the IPv4 inside. A public
+    /// name that resolves to a local address is not caught here: such a request carries no
+    /// cookies and its answer never reaches the page, the same reach an `<img>` on the page has.
     static func isLocal(_ host: String) -> Bool {
-        let name = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-        if name == "localhost" || name.hasSuffix(".localhost") || name.hasSuffix(".local") || name.hasSuffix(".internal")
-            || name.hasSuffix(".lan") || name.hasSuffix(".home.arpa") || !name.contains(".") && !name.contains(":") {
-            return true
-        }
-        let parts = name.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
-        if parts.count == 4, let a = parts[0], let b = parts[1], parts[2] != nil, parts[3] != nil {
-            return a == 0 || a == 10 || a == 127 || (a == 169 && b == 254) || (a == 172 && (16...31).contains(b))
-                || (a == 192 && b == 168) || (a == 100 && (64...127).contains(b)) || a >= 224
-        }
-        // A number in another spelling (decimal, hex) is no host name a site's icon lives on.
-        if name.allSatisfy({ $0.isNumber || $0 == "." }) || name.hasPrefix("0x") { return true }
+        var name = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        while name.hasSuffix(".") { name.removeLast() }
+        if let zone = name.firstIndex(of: "%") { name = String(name[..<zone]) }
+        guard !name.isEmpty else { return true }
+        var v6 = in6_addr()
         if name.contains(":") {
-            return name == "::1" || name == "::" || name.hasPrefix("fe80") || name.hasPrefix("fc") || name.hasPrefix("fd")
-                || name.hasPrefix("::ffff:")
+            guard inet_pton(AF_INET6, name, &v6) == 1 else { return true }
+            let bytes = withUnsafeBytes(of: &v6) { Array($0) }
+            if bytes[0..<10].allSatisfy({ $0 == 0 }), bytes[10] == 0xff, bytes[11] == 0xff {
+                return isLocalIPv4(bytes[12], bytes[13])
+            }
+            // Unspecified and loopback (::, ::1) and the rest of ::/96, link-local fe80::/10,
+            // unique local fc00::/7, multicast ff00::/8.
+            if bytes[0..<12].allSatisfy({ $0 == 0 }) { return true }
+            return (bytes[0] == 0xfe && bytes[1] & 0xc0 == 0x80) || bytes[0] & 0xfe == 0xfc || bytes[0] == 0xff
         }
-        return false
+        var v4 = in_addr()
+        if inet_aton(name, &v4) != 0 {
+            let bytes = withUnsafeBytes(of: &v4) { Array($0) }
+            return isLocalIPv4(bytes[0], bytes[1])
+        }
+        return name == "localhost" || !name.contains(".")
+            || [".localhost", ".local", ".internal", ".lan", ".home.arpa", ".intranet", ".corp", ".home"].contains { name.hasSuffix($0) }
+    }
+
+    private static func isLocalIPv4(_ a: UInt8, _ b: UInt8) -> Bool {
+        a == 0 || a == 10 || a == 127 || (a == 169 && b == 254) || (a == 172 && (16...31).contains(b))
+            || (a == 192 && b == 168) || (a == 100 && (64...127).contains(b)) || a >= 224
     }
 
     /// `/favicon.ico` at the page's origin.

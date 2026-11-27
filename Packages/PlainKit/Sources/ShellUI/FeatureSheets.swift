@@ -46,10 +46,6 @@ public final class FeatureSheets {
     public var settingsSaved: ((BrowserSettings) -> Void)?
 
     private func runClearHook() async {
-        // The stored site icons are gone: every window's lists go back to letters.
-        #if os(iOS)
-        NotificationCenter.default.post(name: FaviconService.storedIconsCleared, object: nil)
-        #endif
         await didClearBrowsingData()
     }
 
@@ -231,8 +227,14 @@ nonisolated struct LiveBrowsingDataClearer: BrowsingDataClearing {
 
     func clearHistoryAndData() async throws {
         #if os(iOS)
+        // Whatever happens, the icon services fetch again afterwards.
+        defer {
+            Task { @MainActor in NotificationCenter.default.post(name: FaviconService.storedIconsCleared, object: nil) }
+        }
+        #endif
+        #if os(iOS)
         // Before the rows go: an icon still being fetched is not written after the clear.
-        await MainActor.run { NotificationCenter.default.post(name: FaviconService.storedIconsCleared, object: nil) }
+        await MainActor.run { NotificationCenter.default.post(name: FaviconService.storedIconsWillClear, object: nil) }
         #endif
         await settle()
         let others = await otherProfiles()

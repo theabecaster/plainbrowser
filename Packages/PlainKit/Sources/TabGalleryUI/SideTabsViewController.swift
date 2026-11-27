@@ -319,10 +319,14 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     private func scrollFocusedIntoViewIfNeeded(animated: Bool) {
         guard needsFocusScroll, collectionView.bounds.height > 0, let focusedID,
               let indexPath = diffable.indexPath(for: focusedID) else { return }
-        needsFocusScroll = false
         collectionView.layoutIfNeeded()
-        guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame,
-              !collectionView.bounds.contains(frame) else { return }
+        // No geometry yet (a row just inserted): the next layout pass tries again.
+        guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame, frame.height > 0 else {
+            view.setNeedsLayout()
+            return
+        }
+        needsFocusScroll = false
+        guard !collectionView.bounds.contains(frame) else { return }
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
     }
 

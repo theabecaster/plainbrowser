@@ -159,9 +159,11 @@ struct FaviconServiceTests {
 
         // A decode still running when the session ends gives nothing and leaves nothing behind.
         async let late = favicons.icon(site: Self.site, scope: .privateTabs, pixelSize: 44)
+        async let joined = favicons.icon(site: Self.site, scope: .privateTabs, pixelSize: 44)
         pool.close(secret)
         pool.endPrivateSession()
         #expect(await late == nil)
+        #expect(await joined == nil, "a row that joined the decode gets nothing either")
         #expect(favicons.cachedIcon(site: Self.site, scope: .privateTabs, pixelSize: 44) == nil)
         #expect(await favicons.icon(site: Self.site, scope: .privateTabs, pixelSize: 60) == nil)
         #expect(favicons.cachedIcon(site: Self.site, scope: .privateTabs, pixelSize: 60) == nil)
@@ -178,7 +180,12 @@ struct FaviconServiceTests {
         #expect(stored.data.count < 20_000)
 
         // Clear History and Data: memory follows the database.
+        NotificationCenter.default.post(name: FaviconService.storedIconsWillClear, object: nil)
+        // While the clear runs no icon is fetched, so none can be written after it.
+        tab.load(server.url("/linked2"))
+        try await Task.sleep(for: .milliseconds(600))
         try await database.clearFavicons()
+        #expect(try await database.favicon(forHost: Self.site) == nil)
         NotificationCenter.default.post(name: FaviconService.storedIconsCleared, object: nil)
         #expect(favicons.cachedIcon(site: Self.site, scope: Self.personal, pixelSize: 60) == nil)
         #expect(await favicons.icon(site: Self.site, scope: Self.personal, pixelSize: 60) == nil)

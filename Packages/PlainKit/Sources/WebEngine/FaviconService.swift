@@ -76,24 +76,40 @@ public final class FaviconService {
     private let privateCache = NSCache<CacheKey, IconBox>()
     private var decoding: [CacheKey: Task<SiteIcon?, Never>] = [:]
 
-    /// Posted on the main thread after the stored icons were deleted (Clear History and Data):
-    /// every window's service drops what it holds in memory.
+    /// Posted on the main thread around Clear History and Data deleting the stored icons: from
+    /// `storedIconsWillClear` every window's service drops what it holds, forgets its fetches
+    /// and starts none; from `storedIconsCleared` it fetches again. So no icon is written into a
+    /// database after its clear.
+    public nonisolated static let storedIconsWillClear = Notification.Name("plain.favicons.willClear")
     public nonisolated static let storedIconsCleared = Notification.Name("plain.favicons.cleared")
-    private var clearObserver: (any NSObjectProtocol)?
+    private var clearObservers: [any NSObjectProtocol] = []
+    /// Clears under way (one per notification pair): no fetch starts and none is kept.
+    private var clearing = 0
 
     init(databases: Databases?) {
         self.databases = databases
         cache.totalCostLimit = FixedChoices.faviconMemoryBytes
         privateCache.totalCostLimit = FixedChoices.faviconMemoryBytes / 4
-        clearObserver = NotificationCenter.default.addObserver(
-            forName: Self.storedIconsCleared, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.clear() }
-        }
+        let center = NotificationCenter.default
+        clearObservers = [
+            center.addObserver(forName: Self.storedIconsWillClear, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.clearing += 1
+                    self?.clear()
+                }
+            },
+            center.addObserver(forName: Self.storedIconsCleared, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    clearing = max(0, clearing - 1)
+                    clear()
+                }
+            },
+        ]
     }
 
     isolated deinit {
-        if let clearObserver { NotificationCenter.default.removeObserver(clearObserver) }
+        clearObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     // MARK: Reading
@@ -126,7 +142,11 @@ public final class FaviconService {
         let plate = plated ? plateColors : nil
         let cacheKey = CacheKey(scope: scope, site: site, revision: asked, pixelSize: pixelSize, plated: plated)
         if let box = cache(for: scope).object(forKey: cacheKey) { return box.icon }
-        if let task = decoding[cacheKey] { return await task.value }
+        if let running = decoding[cacheKey] {
+            // A row joining a decode gets the same check as the row that started it.
+            let icon = await running.value
+            return revision(site: site, scope: scope) == asked ? icon : nil
+        }
         if absent.contains(key) { return nil }
         if case .missing = status[key] { return nil }
         let task = Task<SiteIcon?, Never> { [weak self] in
@@ -167,7 +187,8 @@ public final class FaviconService {
     /// A main-frame load finished in `tab`: its site's icon is fetched unless one is stored and
     /// fresh, or the site was asked not long ago. One dictionary lookup for a site already seen.
     func pageDidFinish(_ webView: WKWebView, tab: Tab) {
-        guard let page = webView.url, let site = FaviconRules.siteKey(for: page) else { return }
+        // During Clear History and Data nothing is fetched: the site is asked on its next load.
+        guard clearing == 0, let page = webView.url, let site = FaviconRules.siteKey(for: page) else { return }
         let key = Key(scope: tab.isPrivate ? .privateTabs : .profile(tab.profileID), site: site)
         switch status[key] {
         case .loading, .stored: return

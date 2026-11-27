@@ -68,7 +68,9 @@ import Testing
         #expect(!allowed("http://example.com/i.png", page), "no plain HTTP for an HTTPS page")
         #expect(!allowed("ftp://example.com/i.png", page))
         for local in ["localhost", "127.0.0.1", "10.0.0.5", "192.168.1.1", "172.16.4.2", "169.254.169.254", "100.64.0.1",
-                      "printer.local", "router", "[::1]", "[fe80::1]", "[fd00::2]", "0.0.0.0", "2130706433", "0x7f000001"] {
+                      "printer.local", "router", "[::1]", "[fe80::1]", "[fd00::2]", "0.0.0.0", "2130706433", "0x7f000001",
+                      "localhost.", "127.1", "0177.0.0.1", "[0:0:0:0:0:0:0:1]", "[::ffff:10.0.0.1]", "[::ffff:7f00:1]",
+                      "[ff02::1]", "nas.home.arpa."] {
             #expect(!allowed("https://\(local)/favicon.ico", page), "\(local)")
         }
         // A page on the local network may show its own icon, and only its own.
@@ -76,6 +78,8 @@ import Testing
         #expect(allowed("http://192.168.1.10:8080/favicon.ico", home))
         #expect(!allowed("http://192.168.1.1/favicon.ico", home))
         #expect(allowed("https://example.com/i.png", home))
+        #expect(allowed("https://[2606:4700::1111]/i.png", page), "a public IPv6 address is a public host")
+        #expect(allowed("https://[::ffff:8.8.8.8]/i.png", page))
     }
 
     @Test func styleFollowsThePixels() {

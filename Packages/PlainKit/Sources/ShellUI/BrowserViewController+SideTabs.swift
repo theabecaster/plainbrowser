@@ -57,18 +57,21 @@ extension BrowserViewController {
             scrim.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             scrim.backgroundColor = Palette.drawerScrim
             scrim.alpha = 0
-            scrim.isAccessibilityElement = true
-            scrim.accessibilityLabel = String(localized: "Hide Titles")
-            scrim.accessibilityTraits = .button
             scrim.accessibilityIdentifier = "sideTabs.scrim"
             scrim.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(sidebarScrimTapped)))
             view.insertSubview(scrim, aboveSubview: chromeGlass)
             view.insertSubview(sidebar.view, aboveSubview: scrim)
             duo.sidebarScrim = scrim
+            // VoiceOver stays in the drawer while it covers the page and the bar; Hide Titles
+            // (its last row) and the escape gesture close it.
+            sidebar.view.accessibilityViewIsModal = true
+            UIAccessibility.post(notification: .screenChanged, argument: sidebar.view)
         } else {
             duo.sidebarScrim?.removeFromSuperview()
             duo.sidebarScrim = nil
+            sidebar.view.accessibilityViewIsModal = false
             view.insertSubview(sidebar.view, aboveSubview: panes.view)
+            UIAccessibility.post(notification: .screenChanged, argument: nil)
         }
     }
 

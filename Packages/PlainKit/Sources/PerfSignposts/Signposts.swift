@@ -12,6 +12,12 @@ public enum Signposts {
 
     /// Interval from `main` entering to the search field becoming first responder.
     public static let launch: StaticString = "launch"
+    /// Interval from `main` entering to the first frame of the first window committed with the
+    /// main thread free again: the next display refresh after the window became visible calls
+    /// back on the main thread. The perf gate's cold launch (`launchMs`): Apple's
+    /// XCTApplicationLaunchMetric records nothing for Plain on the device and only some runs on a
+    /// simulator. Time before `main` (dyld, static initializers) is not in it.
+    public static let launchFirstFrame: StaticString = "launch.firstFrame"
     /// Event: the search field became first responder at launch.
     public static let searchFieldReady: StaticString = "launch.searchFieldReady"
     /// Interval: the pool creating the warm web view after the first frame.

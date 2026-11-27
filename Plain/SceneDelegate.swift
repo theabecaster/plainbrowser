@@ -79,6 +79,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         window.makeKeyAndVisible()
         introWindow = window
+        LaunchFirstFrame.endAtNextFrame()
     }
 
     private func showBrowser(in windowScene: UIWindowScene) {
@@ -107,6 +108,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.makeKeyAndVisible()
         self.window = window
         self.browser = browser
+        LaunchFirstFrame.endAtNextFrame()
         attachDatabase(to: browser)
         #if DEBUG
         // `-PlainOpen <url>,<url>` opens pages after launch, `-PlainSplit` puts the last one in a
@@ -197,6 +199,31 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             browser.addressBarDataDidChange()
             // Pruning and SQLite upkeep, at most daily, at background priority after launch settles.
             database.scheduleDailyMaintenance()
+        }
+    }
+}
+
+/// Ends the `launch.firstFrame` interval at the first display refresh after the first window became
+/// visible: by then that window's first frame is committed and the main thread is free to take
+/// input. Once per process; later windows and scenes do nothing.
+@MainActor
+private enum LaunchFirstFrame {
+    private static var pending = true
+
+    static func endAtNextFrame() {
+        guard pending else { return }
+        pending = false
+        let link = CADisplayLink(target: Tick.shared, selector: #selector(Tick.fire(_:)))
+        link.add(to: .main, forMode: .common)
+    }
+
+    @MainActor
+    private final class Tick: NSObject {
+        static let shared = Tick()
+
+        @objc func fire(_ link: CADisplayLink) {
+            link.invalidate()
+            Signposts.signposter.endInterval(Signposts.launchFirstFrame, launchFirstFrameInterval)
         }
     }
 }

@@ -3,7 +3,7 @@
   "simRegressionTolerance": 0.20,
   "metrics": {
     "launchMs": {
-      "label": "Cold launch until responsive (ms)",
+      "label": "main() to first frame, responsive (ms)",
       "target": 300,
       "fail": 400
     },

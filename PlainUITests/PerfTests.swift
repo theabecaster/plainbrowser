@@ -17,9 +17,14 @@ final class PerfTests: XCTestCase {
         return options
     }
 
-    /// Cold launch until the main thread is responsive after the first frame.
+    /// Cold launch: from `main` to the first frame committed with the main thread free (the
+    /// `launch.firstFrame` interval). Not XCTApplicationLaunchMetric: on iOS 27 it records nothing
+    /// for Plain on the device and only in some runs on a simulator.
     func testLaunch() {
-        measure(metrics: [XCTApplicationLaunchMetric(waitUntilResponsive: true)], options: options) {
+        let metric = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launchFirstFrame)
+        )
+        measure(metrics: [metric], options: options) {
             XCUIApplication.introSeen().launch()
         }
     }

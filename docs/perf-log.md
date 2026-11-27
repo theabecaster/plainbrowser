@@ -41,3 +41,7 @@ scene connected, hundreds of ms before the first frame, so the first frame never
 | 2026-11-27 00:46 | 503cd9a | device | 246.6 | 224.8 | 0 | 559.6 | 1090.5 | FAIL |
 | 2026-11-27 02:28 | 9560a3b | sim | 751.9 | 492.9 | n/a | 556.1 | 307.4 | pass |
 | 2026-11-27 10:30 | ad4b8f6 | sim | 803.8 | 424.7 | n/a | 553.8 | 309.7 | 618.1 | pass |
+| 2026-11-27 11:21 | d9da72b | device | — | — | — | — | — | — | FAIL |
+| 2026-11-27 11:25 | d9da72b | device | — | — | 0 | 690.5 | 528.7 | 223.9 | FAIL |
+| 2026-11-27 11:52 | 5788977 | device | 225.4 | 198.1 | 0 | — | — | 214.3 | FAIL |
+| 2026-11-27 12:00 | 6c1231f | device | 225.4 | 198.1 | 0 | 680 | 526 | 214.3 | pass (gallery/swipe rerun alone after a notification interrupted them) |

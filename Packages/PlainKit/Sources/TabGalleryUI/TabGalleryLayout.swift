@@ -85,6 +85,10 @@ struct TabGalleryMetrics: Equatable {
     var titleLineHeight: CGFloat
     /// Room the floating bar takes at the bottom, from the bottom edge of the safe area.
     var bottomChrome: CGFloat = 0
+    /// In the grid, this many slots (a lone card and its New Tab card) sit in one row centered on
+    /// the screen instead of filling the grid from its top left; 0 fills the grid as usual. With
+    /// an even column count the pair meets on the fold.
+    var centeredRow = 0
 
     /// Space around the cards and between grid cards.
     static let margin: CGFloat = 16
@@ -202,12 +206,22 @@ struct TabGalleryMetrics: Equatable {
 
     /// The center of grid card `index`'s preview, in content coordinates (scroll offset 0).
     func gridPoint(_ index: Int) -> CGPoint {
+        let rowHeight = headerHeight + thumbnailHeight
+        if (1...columns).contains(centeredRow), index >= 0, index < centeredRow {
+            let count = CGFloat(centeredRow)
+            let used = cardWidth * count + Self.spacing * (count - 1)
+            let left = contentMinX + ((contentWidth - used) / 2).rounded(.down)
+            let top = contentMinY + ((contentHeight - rowHeight) / 2).rounded()
+            return CGPoint(
+                x: left + CGFloat(index) * (cardWidth + Self.spacing) + cardWidth / 2,
+                y: top + headerHeight + thumbnailHeight / 2
+            )
+        }
         let perPage = cardsPerPage
         let page = index / perPage
         let within = index % perPage
         let row = within / columns
         let column = within % columns
-        let rowHeight = headerHeight + thumbnailHeight
         let block = CGFloat(rows) * rowHeight + CGFloat(rows - 1) * Self.spacing
         let top = contentMinY + ((contentHeight - block) / 2).rounded()
         let x = CGFloat(page) * pageWidth + contentMinX + sideInset + CGFloat(column) * (cardWidth + Self.spacing) + cardWidth / 2

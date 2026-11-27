@@ -117,6 +117,24 @@ struct TabGalleryMetricsTests {
         }
     }
 
+    @Test func aLoneCardAndItsNewTabCardCenterOnTheFold() {
+        for var metrics in [innerLandscape, innerPortrait] {
+            metrics.centeredRow = 2
+            let card = metrics.gridPoint(0), newTab = metrics.gridPoint(1)
+            // Side by side in one row, meeting on the fold, in the middle of the space top to bottom.
+            #expect(card.y == newTab.y)
+            let gapCenter = (card.x + metrics.cardWidth / 2 + newTab.x - metrics.cardWidth / 2) / 2
+            #expect(abs(gapCenter - metrics.width / 2) <= 1)
+            let middle = metrics.contentMinY + metrics.contentHeight / 2
+            let blockCenter = card.y - metrics.thumbnailHeight / 2 - metrics.headerHeight + metrics.cardSize.height / 2
+            #expect(abs(blockCenter - middle) <= 1)
+        }
+        // The cascade ignores it: the lone card rests in the focus.
+        var phone = phone
+        phone.centeredRow = 2
+        #expect(phone.placement(slot: 0, offset: 0).center == phone.focusPoint)
+    }
+
     @Test func gridCardsTakeThePageShapeWithinBounds() {
         #expect(abs(innerLandscape.thumbnailAspect - 669.0 / 951) < 0.001)
         #expect(innerPortrait.thumbnailAspect == TabGalleryMetrics.gridAspect.upperBound)

@@ -275,9 +275,12 @@ classification and Safari's stated rules, and Dark Reader's style-sheet rewritin
    CSS background pictures, emoji, colored SVG logos. The one exception is Safari's: a
    **black-and-white logo** (a picture at most 640x240 on the page, at least 15% transparent, the
    rest greys under 4% colored and under 15% white, that would show under 3:1 on the darkened
-   page) gets `invert(0.92)`. It is read off a 64 px copy in idle time, once per address, at most
-   16 per page: the page's own picture, or another origin's read again with CORS. CSS background
-   logos (an empty box, its name hidden by `text-indent`) are judged the same way.
+   page) gets `invert(0.92)`. A raster picture is read off a 64 px copy in idle time, once per
+   address, at most 16 per page: the page's own picture, or another origin's read again with
+   CORS. An SVG is judged from its source instead (every paint a grey without white, no embedded
+   picture), never rasterized: drawing an SVG on the main thread cost 14-30 ms in the simulator.
+   CSS background logos (an empty box with one unrepeated picture, its name hidden by
+   `text-indent`) are judged the same way. Values in `FixedChoices`.
 6a. **Open shadow roots** are their own scopes: each gets twins of its sheets (`<style>` and
    adopted; a sheet shared by every instance of a component is rewritten once) and Plain's patch
    sheet, its changes are watched, and the walk goes through the shadow tree before the host's own

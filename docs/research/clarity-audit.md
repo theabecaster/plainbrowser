@@ -250,6 +250,12 @@ change to make. Captures: `clarity/<config>/<shot>.jpg` in the session scratchpa
 25. **Intro, "Made for iPhone Duo — Unfold for two pages side by side" on a phone that cannot
     unfold** (item 16 of the last audit). **Intro lane.** [i17-light/intro-02, small-light/intro-02]
 
+26. **Duo inner screen, side pane: its picker is three bare symbols** (a page, a magnifier, a
+    clock) for Reader, Find and History. The selected one is clear and each opens on a sentence
+    or a titled list, so a wrong guess costs one tap. **Lead to route (side pane):** the selected
+    segment could carry its word. [inner-land-stills/still-pane-reader, still-pane-find,
+    still-pane-history]
+
 ### Checked and clear
 
 The intro's steps and Skip; the start screen's sentence, Search and captioned shortcuts; the
@@ -261,4 +267,7 @@ toast; Close All's count; the profile capsule, New, Rename and the Delete confir
 names everything that goes; History, its search, swipe and Clear menu; Reading List; the archive;
 Settings and every screen under it; Browse for Me from the row to its sources, and Summarize
 Page; no trace of either without the model; launch to the last tab, the fresh search after four
-hours and the way back; cookie banners; the form bar; the permission questions.
+hours and the way back; cookie banners; the form bar; the permission questions. On the Duo's
+inner screen (stills): the strip's titles and its "+", the split's rim around the pane the bar
+acts on, Tab Layout Left and Right with titles and a close on every row, the side pane's Reader,
+Find ("11 matches" and the list) and History.

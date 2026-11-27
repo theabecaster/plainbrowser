@@ -47,10 +47,15 @@ targets:
         product: PerfSignposts
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser
+        # Local device installs pass PLAIN_BUNDLE_SUFFIX=.dev and PLAIN_DISPLAY_SUFFIX=" Dev"
+        # (scripts/install-duo.sh, perf-gate.sh --device), so they sit beside the TestFlight app
+        # instead of replacing it and never touch its data. TestFlight and Xcode Cloud leave both empty.
+        PLAIN_BUNDLE_SUFFIX: ""
+        PLAIN_DISPLAY_SUFFIX: ""
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser$(PLAIN_BUNDLE_SUFFIX)
         PRODUCT_NAME: Plain
         # The name under the icon.
-        APP_DISPLAY_NAME: Plain
+        APP_DISPLAY_NAME: Plain$(PLAIN_DISPLAY_SUFFIX)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # actool compiles these into the app and lists them under CFBundleAlternateIcons, so
         # UIApplication.setAlternateIconName can switch to them. Names match FeatureUI's AppIconChoice.

@@ -44,8 +44,8 @@ extension XCUIApplication {
     /// owner's real tabs, history or settings. `-PlainTestStore` (a temporary on-disk store)
     /// takes precedence where a test needs relaunch persistence.
     static func isolated() -> XCUIApplication {
-        // `XCUIApplication.init()` itself, not this factory.
-        let app = XCUIApplication(bundleIdentifier: "dev.abrahamgonzalez.plainbrowser")
+        // The test target's app, whatever bundle id it was built with (".dev" on the owner's device).
+        let app = XCUIApplication()
         app.launchArguments = ["-PlainInMemoryStore"]
         return app
     }

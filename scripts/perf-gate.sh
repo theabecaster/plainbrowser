@@ -37,7 +37,8 @@ if [[ $MODE == device ]]; then
   require_device
   check_device_unlocked || exit 2
   destination="id=$PLAIN_DEVICE"
-  extra=(-allowProvisioningUpdates -allowProvisioningDeviceRegistration)
+  # Device runs build "Plain Dev" (dev bundle id), beside the TestFlight app, never over it.
+  extra=(-allowProvisioningUpdates -allowProvisioningDeviceRegistration PLAIN_BUNDLE_SUFFIX=.dev "PLAIN_DISPLAY_SUFFIX= Dev")
 else
   [[ $SIM_NAME == plain-* ]] || { print -u2 "PLAIN_SIM_PREFIX must start with plain"; exit 1; }
   udid=$(xcrun simctl list devices -j | jq -r --arg n $SIM_NAME '[.devices[][] | select(.name == $n)][0].udid // empty')

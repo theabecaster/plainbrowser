@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Build a Release copy of the current tree, install it on the device and launch it.
+# Build a Release copy of the current tree, install it on the device and launch it. It installs
+# as "Plain Dev" (dev.abrahamgonzalez.plainbrowser.dev), beside the TestFlight app, never over it.
 # The device comes from PLAIN_DEVICE or scripts/local.env.
 # Usage: scripts/install-duo.sh [--no-launch] [build-number]   (default build: yyMMddHHmm)
 #   --no-launch   install only; never touches the running apps (works on a locked phone).
@@ -18,7 +19,8 @@ xcodegen generate --quiet
 mkdir -p build
 if ! xcodebuild -project Plain.xcodeproj -scheme Plain -configuration Release -destination "id=$PLAIN_DEVICE" \
     -derivedDataPath build/device -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
-    CURRENT_PROJECT_VERSION=$BUILD build > build/install-duo.log 2>&1; then
+    CURRENT_PROJECT_VERSION=$BUILD PLAIN_BUNDLE_SUFFIX=.dev "PLAIN_DISPLAY_SUFFIX= Dev" \
+    build > build/install-duo.log 2>&1; then
   grep -E 'error:' build/install-duo.log | sort -u | head -20 || true
   print -u2 "build failed; full log: build/install-duo.log"
   exit 1
@@ -36,5 +38,5 @@ if ! check_device_unlocked; then
   exit 0
 fi
 xcrun devicectl device process launch --device "$PLAIN_DEVICE" --timeout 60 --terminate-existing \
-  dev.abrahamgonzalez.plainbrowser > /dev/null || echo "note: installed, but the launch failed"
+  dev.abrahamgonzalez.plainbrowser.dev > /dev/null || echo "note: installed, but the launch failed"
 echo "launched build $BUILD"

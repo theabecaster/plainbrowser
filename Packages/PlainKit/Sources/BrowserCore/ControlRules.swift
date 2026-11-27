@@ -125,8 +125,15 @@ public struct ControlRules: Sendable, Equatable {
     // MARK: The bar (§3)
 
     /// Editing hides the button bar (the keyboard and the field take the bottom), in the glass bar
-    /// and in the Duo's vertical bar alike (§6).
-    public var barShown: Bool { !state.isEditing }
+    /// and in the Duo's vertical bar alike (§6). So does Find on Page: the find bar replaces the
+    /// page's bar (§7).
+    public var barShown: Bool { !state.isEditing && !state.isFindOpen }
+
+    /// Start mode with the field closed, in the glass bar: the bar holds at most Tabs and More, so
+    /// it shrinks to a round glass button beside the pill (a capsule with both) instead of a
+    /// full-width bar with one button at its end. Start is its own mode, so the bar may change
+    /// shape (§1, principle 5). The Duo's vertical bar packs its own items.
+    public var barBesidePill: Bool { isStart && !state.isEditing && !state.usesVerticalBar }
 
 
     /// Leftmost; dim inside Page so its place stays muscle memory. Hidden on Start.

@@ -60,6 +60,31 @@ final class StateRulesTests: XCTestCase {
 
     // MARK: Tests
 
+    /// A failed load names the address that was tried, and Find on Page takes the bar's place.
+    func testFailedPillAndFindReplacesTheBar() throws {
+        let app = try launch()
+        go(app, to: "/long")
+        waitForPage(app, "Long Read")
+        let pill = app.buttons["addressPill"]
+
+        app.buttons["more"].tap()
+        let find = app.buttons["Find on Page"]
+        XCTAssertTrue(find.waitForExistence(timeout: 3))
+        find.tap()
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: pill)
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 3), .completed, "the find bar replaces the page's bar")
+        app.typeText("Paragraph\n")
+        let close = app.buttons.matching(NSPredicate(format: "label IN {'Done', 'Close'}")).firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 3))
+        close.tap()
+        XCTAssertTrue(pill.waitForExistence(timeout: 3), "the bar comes back when the find bar closes")
+
+        pill.tap()
+        app.textFields["searchField"].typeText("127.0.0.1:9/nothing-here\n")
+        let tried = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS '127.0.0.1:9'"), object: pill)
+        XCTAssertEqual(XCTWaiter.wait(for: [tried], timeout: 10), .completed, "the pill shows the address that was tried")
+    }
+
     /// Nothing open: no switcher, no Back, Forward or Share; More and the shortcuts reach the rest.
     func testEmptyStartScreenHasNoSwitcher() throws {
         let app = try launch()
@@ -70,6 +95,13 @@ final class StateRulesTests: XCTestCase {
         XCTAssertFalse(app.buttons["forward"].exists)
         XCTAssertFalse(app.buttons["share"].exists)
         XCTAssertTrue(app.buttons["more"].exists)
+        if !app.toolbars.firstMatch.exists {
+            // The glass bar: More is a round button beside the pill, not a full-width bar.
+            let more = app.buttons["more"].frame
+            let pill = app.buttons["addressPill"].frame
+            XCTAssertEqual(more.midY, pill.midY, accuracy: 2, "More sits beside the pill on the start screen")
+            XCTAssertGreaterThan(more.minX, pill.maxX)
+        }
         XCTAssertTrue(app.buttons["start.privateTab"].exists, "a private tab is always one tap away")
         XCTAssertFalse(app.buttons["start.reopenClosedTab"].exists, "nothing was closed")
 

@@ -116,7 +116,8 @@ press means the same thing whatever it shows.
 | Share | — | shown when the tab has an address | Hide on Start | Nothing to share on Start. On a failed page it shares the address that was tried. |
 | More (page menu) | shown | shown | Never hidden | History, Settings and Edit Favorites apply everywhere. |
 | Tabs slot | see above | see above | | |
-| Pill | placeholder "Search or enter address" | host, "Not Secure —" first on http, mixed content or a passed certificate | Never hidden | The one way to search. |
+| Bar shape | beside the pill: the bar shrinks to a round glass button (More), or a capsule (Tabs and More), at the pill's trailing end, and the pill takes the rest of the row at the bottom (`ControlRules.barBesidePill`) | under the pill, full width | Changes between modes only | A full-width bar holding one button read as unfinished. Start is its own mode, so the bar may change shape (principle 5); the Duo's vertical bar packs its items itself. |
+| Pill | placeholder "Search or enter address" | host, "Not Secure —" first on http, mixed content or a passed certificate; on a failed page the address that was tried | Never hidden | The one way to search. |
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
 | Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. |
@@ -128,7 +129,10 @@ press means the same thing whatever it shows.
 
 ## 4. The page menu (More, and a long press on the pill)
 
-Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen.
+Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: Reload
+(or Stop), Share and Copy Link are one row of three; Desktop Site, blocking and Dark Pages fold
+into a "Site Settings" submenu when two or more apply; History, Edit Favorites and Settings are
+one row of three, so the whole menu fits the Duo's outer screen.
 
 | Item | Start | Loading | Loaded | Failed / offline | Crashed | Reader open | Notes |
 |---|---|---|---|---|---|---|---|

@@ -73,6 +73,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var pillOnKeyboard: NSLayoutConstraint!
     /// The button bar's own constraints, activated again when it comes back after a vertical bar.
     private var buttonBarConstraints: [NSLayoutConstraint] = []
+    /// The chrome's row: the lane less its margins, at most 640 pt, centered. The pill and the bar
+    /// span it on a page; on the start screen the bar shrinks to its trailing end, beside the pill.
+    private var pillSpansRow: NSLayoutConstraint!
+    private var pillBesideBar: NSLayoutConstraint!
+    private var barSpansRow: NSLayoutConstraint!
+    /// Set while `applyEditingLayout` runs, which lays out the bar's shape in its own animation.
+    private var isApplyingEditingLayout = false
     private var geometry = ChromeGeometry(viewHeight: 0, safeBottom: 0, hasButtonBar: true)
     private(set) var usesVerticalBar = false
 
@@ -211,14 +218,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Set before every layout pass (`updateDuoLayout`, from `viewWillLayoutSubviews`).
         duo.laneWidth = lane.widthAnchor.constraint(equalToConstant: 0)
 
-        func capWidth(_ item: UIView) -> [NSLayoutConstraint] {
-            let fill = item.widthAnchor.constraint(equalTo: lane.widthAnchor, constant: -2 * margin)
+        let row = UILayoutGuide()
+        view.addLayoutGuide(row)
+
+        func capWidth(centerX: NSLayoutXAxisAnchor, width: NSLayoutDimension) -> [NSLayoutConstraint] {
+            let fill = width.constraint(equalTo: lane.widthAnchor, constant: -2 * margin)
             // Just under required: only the 640 pt cap may override it, never content size.
             fill.priority = .required - 1
             return [
-                item.centerXAnchor.constraint(equalTo: lane.centerXAnchor),
+                centerX.constraint(equalTo: lane.centerXAnchor),
                 fill,
-                item.widthAnchor.constraint(lessThanOrEqualToConstant: 640),
+                width.constraint(lessThanOrEqualToConstant: 640),
             ]
         }
 
@@ -265,12 +275,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             tabsUI.toast.centerXAnchor.constraint(equalTo: pill.centerXAnchor),
             tabsUI.toast.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
             tabsUI.toast.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
-        ] + capWidth(pill) + capWidth(sheet.content))
+        ] + capWidth(centerX: row.centerXAnchor, width: row.widthAnchor)
+            + capWidth(centerX: sheet.content.centerXAnchor, width: sheet.content.widthAnchor))
 
+        pillSpansRow = pill.trailingAnchor.constraint(equalTo: row.trailingAnchor)
+        pillBesideBar = pill.trailingAnchor.constraint(equalTo: buttonBar.leadingAnchor, constant: -ChromeGeometry.gap)
+        barSpansRow = buttonBar.leadingAnchor.constraint(equalTo: row.leadingAnchor)
+        NSLayoutConstraint.activate([
+            row.topAnchor.constraint(equalTo: lane.topAnchor),
+            row.bottomAnchor.constraint(equalTo: lane.bottomAnchor),
+            pill.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            pillSpansRow,
+        ])
         buttonBarConstraints = [
             buttonBar.heightAnchor.constraint(equalToConstant: ChromeGeometry.barHeight),
             buttonBar.bottomAnchor.constraint(equalTo: rest.topAnchor),
-        ] + capWidth(buttonBar)
+            buttonBar.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            barSpansRow,
+        ]
         NSLayoutConstraint.activate(buttonBarConstraints)
     }
 
@@ -351,16 +373,39 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     private func updatePillRestConstraint() {
+        let beside = rules.barBesidePill && buttonBar.superview != nil
         pillOnKeyboard.isActive = false
         pillOnBar.isActive = false
         pillOnEdge.isActive = false
         if isEditingAddress {
             pillOnKeyboard.isActive = true
-        } else if usesVerticalBar {
+        } else if usesVerticalBar || beside {
             pillOnEdge.isActive = true
         } else {
             pillOnBar.isActive = true
         }
+        // The start screen's bar: a round glass button at the row's end, the pill beside it.
+        buttonBar.setBesidePill(beside)
+        if beside {
+            barSpansRow.isActive = false
+            pillSpansRow.isActive = false
+            pillBesideBar.isActive = true
+        } else {
+            pillBesideBar.isActive = false
+            pillSpansRow.isActive = true
+            if buttonBar.superview != nil { barSpansRow.isActive = true }
+        }
+    }
+
+    /// Start and Page are different modes (state rules, principle 5): on the start screen the bar
+    /// sits beside the pill, on a page under it. Called whenever the rules change; the editing
+    /// layout moves the bar itself, inside the keyboard's animation.
+    func updateBarShapeIfNeeded() {
+        let beside = rules.barBesidePill && buttonBar.superview != nil
+        guard pillOnBar != nil, beside != buttonBar.isBesidePill, !isApplyingEditingLayout else { return }
+        updatePillRestConstraint()
+        guard view.window != nil else { return }
+        Motion.animate(Motion.reflow) { self.view.layoutIfNeeded() }
     }
 
     override public func viewWillLayoutSubviews() {
@@ -440,7 +485,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             return
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
-        pill.textField.text = currentTab?.url?.absoluteString ?? ""
+        pill.textField.text = pageAddress?.absoluteString ?? ""
         // The layout switches before the keyboard starts, so the keyboard's own animation carries
         // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.
         applyEditingLayout(true, animated: true)
@@ -486,7 +531,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         suggestionTask?.cancel()
         // The current page's address, untouched, is not a query: show favorites, as for an
         // empty field, until the user types.
-        let isCurrentAddress = !query.isEmpty && query == currentTab?.url?.absoluteString
+        let isCurrentAddress = !query.isEmpty && query == pageAddress?.absoluteString
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
         updateStartForTyping(query: query)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -526,7 +571,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // What the user typed, unless the field still shows the page's own address.
             let input = pill.textField.text ?? ""
             // A private tab teaches the address bar nothing.
-            if input != currentTab?.url?.absoluteString, currentTab?.isPrivate != true {
+            if input != pageAddress?.absoluteString, currentTab?.isPrivate != true {
                 data.suggestionPicked(input: input, url: page)
             }
         case .search(let query): url = data.searchEngine.resultsURL(for: query)
@@ -551,7 +596,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
-        pill.textField.text = currentTab?.url?.absoluteString ?? ""
+        pill.textField.text = pageAddress?.absoluteString ?? ""
         applyEditingLayout(true, animated: true)
         if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
     }
@@ -573,7 +618,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         guard changed || !animated else { return }
         // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
         // screen's button and shortcuts step aside for the field.
+        isApplyingEditingLayout = true
         updateButtons()
+        isApplyingEditingLayout = false
         tabsUI.start.isSearchFieldActive = editing
         if editing {
             sheet.isHidden = false
@@ -928,7 +975,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // The database is still opening (the first moments after launch).
             for item in [history, favorites, settings] { item.attributes = .disabled }
         }
-        let app = UIMenu(options: .displayInline, children: downloadsMenuItems() + [history, favorites, settings])
+        // The app's own places, always there and rarely needed mid-page: one row of three, with
+        // Downloads (and its progress) above it while there are any. Short titles fit the row.
+        favorites.title = "Favorites"
+        favorites.accessibilityLabel = "Edit Favorites"
+        let appRow = UIMenu(options: .displayInline, children: [history, favorites, settings])
+        appRow.preferredElementSize = .medium
+        let downloads = downloadsMenuItems()
+        let app = UIMenu(options: .displayInline, children: downloads.isEmpty ? [appRow] : downloads + [appRow])
         // Every item below follows docs/state-rules.md §4 through ControlRules: items that never
         // apply to this page are left out, Stop takes Reload's place while loading.
         let rules = currentRules()
@@ -940,21 +994,22 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             return [top] + (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
         }
         var pageItems: [UIMenuElement] = []
+        var reload: UIAction?
         switch rules.reload {
         case .reload:
-            let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+            let action = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
                 Signposts.signposter.emitEvent(Signposts.reload)
                 self?.reloadPage()
             }
-            reload.accessibilityIdentifier = "menu.reload"
-            pageItems.append(reload)
+            action.accessibilityIdentifier = "menu.reload"
+            reload = action
         case .stop:
-            let stop = UIAction(title: "Stop", image: UIImage(systemName: "xmark")) { [weak tab] _ in
+            let action = UIAction(title: "Stop", image: UIImage(systemName: "xmark")) { [weak tab] _ in
                 Signposts.signposter.emitEvent(Signposts.reload, "stop")
                 tab?.stopLoading()
             }
-            stop.accessibilityIdentifier = "menu.stop"
-            pageItems.append(stop)
+            action.accessibilityIdentifier = "menu.stop"
+            reload = action
         case .hidden:
             break
         }
@@ -978,10 +1033,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIPasteboard.general.url = url
             Haptic.success.play()
         }
-        var siteItems = siteMenuItems(
+        copy.accessibilityIdentifier = "menu.copyLink"
+        let siteItems = siteMenuItems(
             for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
         )
-            + paneMenuItems(for: tab, rules: rules)
+        let paneItems = paneMenuItems(for: tab, rules: rules)
+        var favoriteItem: UIAction?
         if rules.favorite, let isFavorite {
             let title = tab.title
             let favorite = UIAction(
@@ -991,14 +1048,36 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 self?.setFavorite(!isFavorite, url: url, title: title)
             }
             favorite.accessibilityIdentifier = "menu.favorite"
-            siteItems.append(favorite)
+            favoriteItem = favorite
         }
+        // The menu fits the Duo's outer screen (docs/ui-reference.md, page menu): the most used
+        // actions are one row, the per-site choices one submenu, the app's places one row.
         var sections: [UIMenuElement] = []
+        let actions = UIMenu(options: .displayInline, children: (reload.map { [$0] } ?? []) + [share, copy])
+        actions.preferredElementSize = .medium
+        sections.append(actions)
         if !pageItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: pageItems)) }
-        sections.append(UIMenu(options: .displayInline, children: [share, copy]))
         if rules.zoom { sections.append(zoomMenu(for: tab, source: source)) }
-        if !siteItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: siteItems)) }
+        var placeItems: [UIMenuElement] = favoriteItem.map { [$0] } ?? []
+        if siteItems.count > 1, let host = url.host() {
+            // Desktop Site, blocking and dark pages: set once per site, then remembered.
+            let site = UIMenu(
+                title: "Site Settings", subtitle: Self.siteName(host), image: UIImage(systemName: "slider.horizontal.3"),
+                children: siteItems
+            )
+            site.accessibilityIdentifier = "menu.siteSettings"
+            placeItems.append(site)
+        } else {
+            placeItems += siteItems
+        }
+        placeItems += paneItems
+        if !placeItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: placeItems)) }
         return [top] + sections + [app]
+    }
+
+    /// A site's name as the pill shows it: the host without `www.`.
+    static func siteName(_ host: String) -> String {
+        host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {

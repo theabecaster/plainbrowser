@@ -52,8 +52,13 @@ final class GalleryBottomBar: UIView {
         privateButton.isHidden = true
         setPrivate(false)
 
+        // The glyphs are the label color (white on the always-dark gallery), so they read as
+        // active on the dark glass; Done keeps the accent as the bar's one main action.
+        for button in [menuButton, privateButton, newTabButton] {
+            button.tintColor = Palette.textPrimary
+        }
+        doneButton.tintColor = Palette.accentOnGlass
         for button in [menuButton, privateButton, newTabButton, doneButton] {
-            button.tintColor = Palette.accentOnGlass
             glass.contentView.addSubview(button)
         }
     }

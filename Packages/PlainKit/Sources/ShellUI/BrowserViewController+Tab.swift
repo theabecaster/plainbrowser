@@ -21,6 +21,9 @@ final class EngineUIState {
     /// Tabs whose page kept crashing after the engine's automatic reloads.
     var crashedTabs: Set<UUID> = []
     let prompts = PromptQueue()
+    /// Checks a few times a second, while the find bar is open, whether it has closed: UIKit
+    /// tells no one when the system find bar goes away (it can close without the keyboard).
+    var findWatch: Task<Void, Never>?
     #if DEBUG
     var didPreviewPermissionPrompt = false
     #endif
@@ -231,9 +234,12 @@ extension BrowserViewController {
 
     /// Follows the tab's observed state: the pill, the buttons, progress and the page's state.
     private func tabChanged(from old: TabSnapshot?, to new: TabSnapshot) {
-        if old?.url != new.url || old?.security != new.security {
-            pill.display(url: new.url, notSecure: new.security == .notSecure || new.security == .certificateBypassed)
-            if !isEditingAddress { pill.textField.text = new.url?.absoluteString }
+        if old?.shownAddress != new.shownAddress || old?.security != new.security || old?.isFailed != new.isFailed {
+            // A failed load shows the address that was tried, as Share and Copy Link use it
+            // (state rules §4), not the page before it. Nothing loaded, so nothing is "Not Secure".
+            let notSecure = !new.isFailed && (new.security == .notSecure || new.security == .certificateBypassed)
+            pill.display(url: new.shownAddress, notSecure: notSecure)
+            if !isEditingAddress { pill.textField.text = new.shownAddress?.absoluteString }
         }
         if let old, old.url != new.url, isShowingReader, !ReaderRenderer.isReaderURL(new.url) {
             // The page went somewhere else under the reader: the article no longer belongs to it.
@@ -327,6 +333,51 @@ extension BrowserViewController {
             reader.findInteraction?.presentFindNavigator(showingReplace: false)
         } else {
             currentTab?.beginFind()
+        }
+        watchFindBar()
+    }
+
+    /// The find bar replaces the page's bar while it is open (state rules §7): the pill and the
+    /// buttons fade out, so the find bar never sits on top of them once the keyboard goes down,
+    /// and come back when it closes.
+    private func watchFindBar() {
+        engineUI.findWatch?.cancel()
+        setChromeHiddenForFind(true)
+        // The Duo's vertical bar empties too (`ControlRules.barShown`).
+        updateButtons()
+        engineUI.findWatch = Task { [weak self] in
+            // The find bar can take a moment to show (it rides in with the keyboard): the chrome
+            // stays hidden until it has shown and closed again, or never showed within 2 s.
+            var hasShown = false
+            var checks = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, !Task.isCancelled else { return }
+                checks += 1
+                let isOpen = self.isFindOpen
+                hasShown = hasShown || isOpen
+                // Bar gestures follow the rules, which read the find bar when they are applied.
+                if isOpen != self.rules.state.isFindOpen { self.updateButtons() }
+                guard !isOpen, hasShown || checks >= 8 else { continue }
+                self.engineUI.findWatch = nil
+                self.setChromeHiddenForFind(false)
+                return
+            }
+        }
+    }
+
+    private func setChromeHiddenForFind(_ hidden: Bool) {
+        let content = chromeGlass.contentView
+        content.isUserInteractionEnabled = !hidden
+        let alpha: CGFloat = hidden ? 0 : 1
+        guard content.alpha != alpha else { return }
+        // Once faded, the whole glass container hides, so the pill and the bar also leave the
+        // accessibility tree: the glass exposes its controls even inside a hidden content view.
+        // The gallery hides the same container; it cannot open while the find bar is up.
+        if !hidden { chromeGlass.isHidden = isShowingGallery }
+        Motion.animate(Motion.quick, changes: { content.alpha = alpha }) { [weak self] in
+            guard let self, content.alpha == 0, engineUI.findWatch != nil else { return }
+            chromeGlass.isHidden = true
         }
     }
 
@@ -450,6 +501,15 @@ struct TabSnapshot: Equatable {
         security = tab.security
         loadError = tab.loadError
         isAwaitingResubmit = tab.isAwaitingResubmit
+    }
+
+    /// The load failed and nothing newer is loading.
+    var isFailed: Bool { loadError != nil && !isLoading }
+
+    /// The address the pill shows: the page's, or the one a failed load tried (`pageAddress`).
+    var shownAddress: URL? {
+        if isFailed, let tried = loadError?.url { return tried }
+        return url
     }
 }
 

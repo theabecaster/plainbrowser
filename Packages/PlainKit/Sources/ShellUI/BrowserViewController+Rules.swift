@@ -104,6 +104,7 @@ extension BrowserViewController {
         duo.sidebar?.setNewTabShown(rules.menuNewTab)
         if !tabsUI.start.isHidden { applyStartShortcuts() }
         applyToolbarItems()
+        updateBarShapeIfNeeded()
     }
 
     /// The system's vertical bar (Duo) holds the page buttons only where the bar shows (state

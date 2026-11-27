@@ -202,8 +202,10 @@ public enum FixedChoices {
 
     /// Tabs kept fully live besides the visible ones (plan, section 4, tab tiers).
     public static let extraLiveTabs = 3
-    /// Tab thumbnails are this wide in points; full-size snapshots cost 70+ MiB (research notes).
-    public static let thumbnailWidth: Double = 200
+    /// Tab thumbnails are this wide in points: a phone's switcher card (two-thirds of a 393 pt
+    /// page), so the card shows them at their own size, never upscaled and blurred. Full-size
+    /// snapshots cost 70+ MiB (research notes).
+    public static let thumbnailWidth: Double = 260
     /// Panes per window: one, or two side by side on the Duo's inner screen. A third would leave
     /// each page narrower than the outer screen.
     public static let maxPanesPerWindow = 2

@@ -129,7 +129,14 @@ public final class TabGalleryTransition {
         generation += 1
         // The bottom edge where the finger is; sideways 1:1.
         let bottom = lerp(pageFrame.maxY, cardFrame.maxY, progress)
-        let offset = CGPoint(x: translation.x, y: pageFrame.maxY + min(0, translation.y) - bottom)
+        var offset = CGPoint(x: translation.x, y: pageFrame.maxY + min(0, translation.y) - bottom)
+        // The page's top stays out of the status bar: past the page's own top edge it resists
+        // like a rubber band, so the page's heading never slides under the clock and the island.
+        let top = lerp(pageFrame.minY, cardFrame.minY, progress) + offset.y
+        if top < pageFrame.minY {
+            let overshoot = pageFrame.minY - top
+            offset.y += overshoot - Self.rubberBand(overshoot, limit: Self.topOvershoot)
+        }
         UIView.animate(Motion.tracking) {
             self.offset = offset
             self.apply(progress: progress, crossfade: false)
@@ -235,8 +242,8 @@ public final class TabGalleryTransition {
             cards.alpha = 1
         }
         // The gallery's bar comes in over the second half, after the page's bar has faded out over
-        // the first (the shell's `setChromeGalleryProgress`): two sets of controls never share the
-        // bottom of the screen.
+        // the first third (the shell's `setChromeGalleryProgress`): two sets of controls never
+        // share the bottom of the screen.
         for view in content.dropFirst() { view.alpha = min(1, max(0, (progress - 0.5) * 2)) }
         // Titles stay out of the status bar while the cards are zoomed in, or lifted by the finger
         // (a swipe up holds the card high): they fade in over the last part of the way down.
@@ -246,6 +253,14 @@ public final class TabGalleryTransition {
     }
 
     private static let ringKey = "selectionRing"
+    /// The most a held page's top goes above its resting top (into the status bar), in points.
+    private static let topOvershoot: CGFloat = 12
+
+    /// UIScrollView's rubber band: `distance` past an edge shows as at most `limit`.
+    static func rubberBand(_ distance: CGFloat, limit: CGFloat) -> CGFloat {
+        guard distance > 0, limit > 0 else { return 0 }
+        return limit * (1 - 1 / (distance * 0.55 / limit + 1))
+    }
     /// Lifted this far above its resting place, a card's title is gone.
     private static let liftFadeDistance: CGFloat = 60
 

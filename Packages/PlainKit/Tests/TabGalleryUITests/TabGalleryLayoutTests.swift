@@ -63,8 +63,10 @@ struct TabGalleryMetricsTests {
         for metrics in [phone, outer] {
             #expect(metrics.style == .cascade)
             #expect(metrics.cardWidth <= (metrics.contentWidth * TabGalleryMetrics.cascadeWidthFraction).rounded(.down))
-            // The card is the page's shape, so opening it is one continuous zoom.
-            #expect(abs(metrics.thumbnailHeight / metrics.cardWidth - metrics.height / metrics.width) < 0.01)
+            // The card is the page's shape (under the status bar, beside a vertical bar), so
+            // opening it is one continuous zoom and the page's picture fills it.
+            let page = (metrics.height - metrics.safeTop) / (metrics.width - metrics.safeLeft - metrics.safeRight)
+            #expect(abs(metrics.thumbnailHeight / metrics.cardWidth - page) < 0.01)
             // It fits between the status bar and the floating bar.
             #expect(metrics.cardSize.height <= metrics.contentHeight)
             let focus = metrics.focusPoint
@@ -136,7 +138,7 @@ struct TabGalleryMetricsTests {
     }
 
     @Test func gridCardsTakeThePageShapeWithinBounds() {
-        #expect(abs(innerLandscape.thumbnailAspect - 669.0 / 951) < 0.001)
+        #expect(abs(innerLandscape.thumbnailAspect - (669.0 - 24) / 951) < 0.001)
         #expect(innerPortrait.thumbnailAspect == TabGalleryMetrics.gridAspect.upperBound)
     }
 

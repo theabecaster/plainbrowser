@@ -5,9 +5,6 @@ Newest feature last.
 
 ## M1 shell (Lane A, 2026-11-26)
 
-- **Favorites strip edge.** The last visible favorite is cut by the strip's trailing edge. The strip
-  scrolls sideways, but an edge fade or a spacing that ends on a half tile would say so more
-  clearly. (Design review, round 1.)
 - **Edge swipe in UI tests.** `allowsBackForwardNavigationGestures` is on and the swipe tracks
   under XCUITest, but a synthesized release never commits it, so the UI test checks Back and
   Forward through the buttons only. Check the swipe by hand on the Duo.
@@ -22,10 +19,6 @@ Newest feature last.
 
 ## Integration 1: sheets and history wiring (2026-11-26)
 
-- **Favorites strip edge on the Duo.** The last tile is cut where the strip meets the vertical bar
-  (same item as Lane A's strip-edge note). (Design review, round 1.)
-- **Tab Layout footer.** Two choices joined by a semicolon; one teaching sentence would read
-  better ("Side Tabs shows tabs in a sidebar when the window is wide."). FeatureUI wording.
 - **Grouped-list radii and the focus rim.** System grouped lists in the sheets use larger radii
   than the 6–10 pt rule, and the field's mint-to-blue rim reads as a second accent. Either adjust
   or record them as exceptions in docs/ui-reference.md.
@@ -87,8 +80,6 @@ Newest feature last.
 - **Decided values outside FixedChoices.** `TabGalleryChoices` (Reopen toast 4 s, 64 MB preview
   cache, 180 pt minimum grid card) and `TabGalleryMetrics.gridAspect` (0.62–1.1) belong in
   `FixedChoices`. (The gallery signposts moved to `PerfSignposts` with the M2 shell wiring.)
-- **Blurry previews on big cards.** `ThumbnailService` captures 200 pt wide; a compact card is
-  about 370 pt wide, so its preview is upscaled. Capture visible and neighbour tabs at card width.
 - **Bar over a dense grid.** In the inner-landscape grid, titles and close buttons still show
   through the floating bar; the scroll edge effect could suppress more there. (Design review,
   round 2.)
@@ -108,10 +99,6 @@ Newest feature last.
 - **Reader web view ownership.** The pool makes the reader's web view (`makeAuxiliaryWebView`) but
   `ReaderPresenter` holds it while it shows. Move holding and release into the pool (an
   auxiliary slot per pane) if a second auxiliary view appears. (Code review, round 1.)
-- **Back and Forward when unavailable.** They stay visible and disabled (system style, stable
-  layout); the design review asked to hide them. Decide with the shell lane.
-- **Page menu on the Duo outer screen.** The last section (Edit Favorites, Settings) scrolls below
-  the fold of the menu with no cue. (Design review, round 2.)
 - **Geolocation and motion prompts on the simulator.** WebKit never asked the UI delegate for
   `http://localhost` test pages (not a secure context), so the captured prompt is the camera one,
   shown through a debug launch argument. Check location and camera prompts on the device.
@@ -120,12 +107,6 @@ Newest feature last.
 
 ## M2 shell wiring: tabs, gallery, bar swipe, private (2026-11-26)
 
-- **Blurry card previews.** Still the M2b item above: thumbnails are 200 pt at 2x (400 px) and a
-  phone card is about 370 pt at 3x. A sharper capture needs a bigger file per tab or a top-only
-  crop at card width; decide with the memory budget on the Duo. (Design review, round 1.)
-- **Page menu length.** The Zoom row adds a row to a menu that already scrolls on the Duo outer
-  screen and on iPhone 17 (the last section is cut with no cue). Move History / Edit Favorites /
-  Settings to their own submenu or the tabs button, or drop a section. (Design review, round 1.)
 - **Zoom from the Duo's vertical bar.** UIKit gives no way to update an open `UIBarButtonItem`
   menu, so there each zoom step closes the menu (the pill's and the glass bar's menus stay open
   and update).
@@ -168,9 +149,6 @@ Newest feature last.
 - **A new tab's card after an appearance change.** Its paper resolves from the window scene's
   appearance when shown; switching the system appearance while the always-dark gallery is open
   leaves it stale until the card is configured again. (Code review, round 3.)
-- **Dark band at the bottom of page previews.** The shell's thumbnails include the area under the
-  resting bar, which shows as a solid dark footer on the cards. Crop it in `ThumbnailService`.
-  (Design review, round 3.)
 
 ## First-run intro (2026-11-26)
 
@@ -223,26 +201,14 @@ Newest feature last.
 
 ## State rules (state lane, 2026-11-26)
 
-- **Find on Page and the bar.** Bar gestures stop while the find bar is open, but the page's bar
-  is not replaced by it (§7, §8 "Find open"); the keyboard covers it today. Hide the bar while
-  Find is open. (Code review, round 1.)
 - **Book pose.** Pills and toasts avoiding the fold (§8 "Book pose") are the M3 layout's, not
   `ControlRules`'; check them on the device with the state rules in mind.
 - **Sheet failure states.** History, Archive and Favorites show OK on a failed read, not Try
   Again, and History's Clear is enabled with an empty history while a search is typed (§6,
   Sheets; pre-existing, not in the gaps list). (Code review, round 1.)
-- **The pill on a failed page** shows the last committed address, not the one that was tried;
-  Share and Copy already use the tried address. (Code review, round 1.)
 - **Fixed choices.** The tabs tip's trigger (2 gallery opens) and display count, the bump's
   travel and the edge swipe's commit distance live in their files; move them to `FixedChoices`
   when that file is free of other lanes' edits. (Code review, round 1.)
-- **The bar on the start screen.** With nothing open, the full-width glass bar holds only More at
-  its right end. Start is its own mode, so the bar may change shape: a compact More capsule, as the
-  Duo's vertical bar shows it, would read better. (Design review, round 1.)
-- **Long page menu.** With every item that applies, More on a page runs past the screen and
-  History is cut at the bottom edge; the system menu scrolls, but nothing says so. Consider moving
-  the app section (Downloads, History, Edit Favorites, Settings) into a submenu. (Design review,
-  round 1.)
 - **Start screen recede values.** The 94 % scale and the drift live in `EmptyTabView.setReceded`;
   move them to `Motion` with the other motion values. (Code review, round 3.)
 - **Signposts.** New Tab reusing an empty tab emits no `tab.open`; the tip's display and
@@ -268,24 +234,11 @@ Newest feature last.
 - **Crossfade duration** (0.3 s) lives in `AppAppearance`; move it to `Motion` when the
   DesignSystem lane is free. (Code review, polish.)
 - **Settings polish seen in captures, not this lane's:** the dark sheet's Done capsule reads low
-  contrast; rows are full capsules where ui-reference says 6–10 pt corners; the Archive Tabs
-  footer says "used" where ui-reference says "opened". (Design review, polish.)
+  contrast; rows are full capsules where ui-reference says 6–10 pt corners. (Design review,
+  polish.)
 
 ## One-tab switcher (2026-11-26)
 
-- **Card footer band.** A page's card shows a dark band under the page picture: the thumbnail is
-  shorter than the card (the card takes the whole screen's shape), so the card's surface shows.
-  Every gallery card has it, not only the lone one. Capture the thumbnail at the card's aspect or
-  fill the card with the page's background. (Design review, round 1; flagged blocking, left here
-  because it predates this lane and touches the thumbnail pipeline.)
-- **Heading under the status bar mid-swipe.** Held part way up, the shrinking page's top passes
-  under the clock and the Dynamic Island, as in the app switcher. Consider keeping the page's top
-  inset while it shrinks. (Design review, round 1.)
-- **Gallery bar contrast and backdrop blur.** The bar's pale blue glyphs on the dark glass read a
-  little inactive, and the blurred backdrop reads mostly as flat slate. (Design review, round 1.)
-- **Duo outer: the next card under the status column.** The New Tab card (like any next card in the
-  cascade) runs under the system's vertical bar, where the status icons draw over it. Clip the
-  cascade to the safe area there.
 - **New Tab card entrance.** It grows in after the page has landed on its card, which reads as a
   second animation. Starting it as the zoom settles would feel like one motion, but while the page
   still moves above the gallery the card's overlap would pop at the end; solve both together.
@@ -311,3 +264,14 @@ Newest feature last.
 - **Render-pass check on the device.** The simulator test checks the layer gets a pattern color
   with no contents, mask, shadow or rasterizing. Confirm no offscreen pass with Instruments' Core
   Animation instrument on the Duo during the device perf gate.
+
+## Polish lane (2026-11-26)
+
+- **Fixed values outside FixedChoices.** The find bar's close check (every 0.25 s,
+  `BrowserViewController+Tab.swift`), the favorites strip's edge fade (28 pt, `SearchSheet.swift`)
+  and the held page's top overshoot (12 pt, `TabGalleryTransition.swift`) live in their files;
+  move them to `FixedChoices` or `Motion` when those files are free of other lanes' edits. (Code
+  review, round 1.)
+- **Thumbnail memory on the device.** Thumbnails are now 3x at card width (about 5 MB decoded
+  each, 40 MB cache). Check memory with many tabs on the Duo and lower the cache if it pushes the
+  app toward a memory warning.

@@ -127,11 +127,12 @@ extension BrowserViewController: GalleryHost {
     }
 
     /// The chrome while the gallery is up: it slides down a little and fades, the gallery's own
-    /// bar taking its place. `progress` 0 is the page, 1 the gallery (a swipe drives it).
+    /// bar taking its place. `progress` 0 is the page, 1 the gallery (a swipe drives it). It is gone
+    /// by a third of the way, so a page held part way up never shows a faint ghost of the pill.
     func setChromeGalleryProgress(_ progress: CGFloat) {
         let t = min(max(progress, 0), 1)
         chromeGlass.isHidden = false
-        chromeGlass.alpha = max(0, 1 - t * 2)
+        chromeGlass.alpha = max(0, 1 - t * 3)
         chromeGlass.transform = CGAffineTransform(translationX: 0, y: t * Spacing.xl)
     }
 

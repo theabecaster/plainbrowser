@@ -310,11 +310,20 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         titleLabel.frame = CGRect(x: titleX, y: (midY - titleHeight / 2).rounded(), width: max(0, width - titleX - 2), height: titleHeight)
     }
 
-    /// The preview is the top of the page at the card's width: pages are anchored at the top.
+    /// The preview is the top of the page at the card's width: pages are anchored at the top. A
+    /// picture shorter than the card (a page wider than the card's shape, in the grid) grows to
+    /// the card's height and centers sideways, so the card's own surface never shows as a band.
     private func layoutImage() {
         let width = size.width
-        if let image = imageView.image, image.size.width > 0 {
-            imageView.frame = CGRect(x: 0, y: 0, width: width, height: (width * image.size.height / image.size.width).rounded())
+        let cardHeight = size.height - headerHeight
+        if let image = imageView.image, image.size.width > 0, image.size.height > 0 {
+            let height = (width * image.size.height / image.size.width).rounded()
+            if height >= cardHeight {
+                imageView.frame = CGRect(x: 0, y: 0, width: width, height: height)
+            } else {
+                let filled = (cardHeight * image.size.width / image.size.height).rounded()
+                imageView.frame = CGRect(x: ((width - filled) / 2).rounded(), y: 0, width: filled, height: cardHeight)
+            }
         } else {
             imageView.frame = .zero
         }

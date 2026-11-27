@@ -285,11 +285,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// Clear History and Data empties Spotlight through it.
     private func startSystemSync(_ database: AppDatabase) {
         guard systemSync == nil else { return }
-        let sync = SystemSync(
-            file: SharedFavoritesFile.shared,
-            indexed: AppGroup.containerURL.map { SharedFavoritesFile(url: $0.appending(path: "spotlight.json")) },
-            index: CoreSpotlightIndex(), widgets: WidgetCenterReloader()
-        ) {
+        // An isolated test run gets its own folder and a Spotlight, widgets and Shortcuts that
+        // keep nothing (`SystemSync.live`, TestIsolation).
+        let sync = SystemSync.live {
             // "Open <favorite> in Plain" learns the new names.
             PlainShortcuts.updateAppShortcutParameters()
         }

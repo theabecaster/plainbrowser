@@ -9,6 +9,11 @@
     }
   ],
   "defaultOptions" : {
+    "commandLineArgumentEntries" : [
+      {
+        "argument" : "-PlainInMemoryStore"
+      }
+    ],
     "targetForVariableExpansion" : {
       "containerPath" : "container:Plain.xcodeproj",
       "identifier" : "4B32C1CDDD0A4D2F137F5F2A",

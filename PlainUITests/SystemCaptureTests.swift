@@ -1,32 +1,38 @@
 import XCTest
 
 /// Screenshots of Plain outside Plain, for design review: the search widget on the Home Screen
-/// and a favorite in Spotlight. Drives SpringBoard and Spotlight,
+/// and Plain's actions in Spotlight. Drives SpringBoard and Spotlight,
 /// so it is best effort and skips itself unless `PLAIN_CAPTURE=1` reaches the runner (like
 /// CaptureTests). Export the attachments with `xcrun xcresulttool export attachments`.
+///
+/// Simulator only: it adds widgets to the Home Screen, which on the owner's phone is theirs. The
+/// app runs isolated, so its favorites stay in the run's own folder: the widget on the Home Screen
+/// shows its empty face and Spotlight has no favorites from a test (TestIsolation). The faces
+/// with favorites are rendered by SystemIntegrationTests (WidgetTests) instead.
 @MainActor
 final class SystemCaptureTests: XCTestCase {
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
     override func setUp() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        #if !targetEnvironment(simulator)
+        throw XCTSkip("never on a device: it changes the owner's Home Screen")
+        #endif
         continueAfterFailure = true
     }
 
-    /// Plain runs once with favorites, so the widget has them (the sync writes them a few seconds
-    /// after launch) and iOS knows its widgets and shortcuts.
-    private func launchPlainWithFavorites() {
+    /// Plain runs once, so iOS knows its widgets and shortcuts.
+    private func launchPlain() {
         let app = XCUIApplication.introSeen()
-        app.launchArguments += ["-PlainSeedFavorites"]
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
-        pause(8)
+        pause(2)
         XCUIDevice.shared.press(.home)
         pause(1.5)
     }
 
     func testCaptureHomeScreenWidgets() {
-        launchPlainWithFavorites()
+        launchPlain()
         addWidget(sizeSwipes: 1)
         addWidget(sizeSwipes: 0)
         pause(2)
@@ -34,7 +40,7 @@ final class SystemCaptureTests: XCTestCase {
     }
 
     func testCaptureSpotlight() {
-        launchPlainWithFavorites()
+        launchPlain()
         // The Home Screen's Search pill, or a swipe down where there is none.
         let pill = springboard.descendants(matching: .any).matching(NSPredicate(format: "label == 'Search'")).firstMatch
         if pill.waitForExistence(timeout: 2) { pill.tap() } else { springboard.swipeDown(velocity: .slow) }
@@ -44,11 +50,6 @@ final class SystemCaptureTests: XCTestCase {
         spotlight.typeText("Plain")
         pause(3)
         shot("spotlight-plain")
-        let clear = spotlight.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'clear'")).firstMatch
-        if clear.exists { clear.tap() }
-        spotlight.typeText("Wikipedia")
-        pause(3)
-        shot("spotlight-favorite")
         XCUIDevice.shared.press(.home)
     }
 

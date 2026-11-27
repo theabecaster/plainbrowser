@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 import os
 import PlainShared
@@ -12,13 +13,22 @@ public protocol WidgetReloading: Sendable {
 }
 
 #if canImport(WidgetKit)
+/// WidgetKit's reload. Never in an isolated test run (`TestIsolation`): the owner's widgets read
+/// the owner's App Group, which such a run never writes, so a reload would only redraw them.
 public struct WidgetCenterReloader: WidgetReloading {
     public init() {}
     public func reloadWidgets() {
+        guard !TestIsolation.isActive else { return }
         WidgetCenter.shared.reloadAllTimelines()
     }
 }
 #endif
+
+/// An isolated run's widgets: nothing to reload.
+public struct IsolatedWidgetReloader: WidgetReloading {
+    public init() {}
+    public func reloadWidgets() {}
+}
 
 /// Keeps the system's copies of the favorites in step with the database: the App Group file the
 /// widgets and App Intents read, the Spotlight index, and the widgets' timelines. It follows the
@@ -62,6 +72,26 @@ public actor SystemSync {
         self.index = index
         self.widgets = widgets
         self.onChange = onChange
+    }
+
+    /// The app's sync: the App Group file, Spotlight and WidgetKit, or in an isolated test run
+    /// (`TestIsolation`) the run's own folder (`AppGroup.containerURL`) with a Spotlight and
+    /// widgets that keep nothing, so the owner's Spotlight, widgets and Shortcuts never see a test.
+    /// `onChange` (the App Shortcuts' parameters) never runs in an isolated run either.
+    public static func live(onChange: @escaping @Sendable () -> Void) -> SystemSync {
+        let isolated = TestIsolation.isActive
+        #if canImport(CoreSpotlight) && canImport(WidgetKit)
+        let index: any SpotlightIndexing = isolated ? IsolatedSpotlightIndex() : CoreSpotlightIndex()
+        let widgets: any WidgetReloading = isolated ? IsolatedWidgetReloader() : WidgetCenterReloader()
+        #else
+        let index: any SpotlightIndexing = IsolatedSpotlightIndex()
+        let widgets: any WidgetReloading = IsolatedWidgetReloader()
+        #endif
+        return SystemSync(
+            file: SharedFavoritesFile.shared,
+            indexed: AppGroup.containerURL.map { SharedFavoritesFile(url: $0.appending(path: "spotlight.json")) },
+            index: index, widgets: widgets, onChange: isolated ? {} : onChange
+        )
     }
 
     /// Follows the favorites until the calling task is cancelled.

@@ -78,10 +78,11 @@ extension BrowserViewController {
     /// browser on an iPad, picks it up from the Dock or the app switcher. A private tab offers
     /// nothing (`FixedChoices.handoffInPrivateTabs`), nor does the start screen, a failed load or
     /// the reader's own page. The activity is never eligible for search or Siri suggestions, so
-    /// iOS keeps no record of it.
+    /// iOS keeps no record of it. An isolated test run (`TestIsolation`) offers nothing: its pages
+    /// would show up on the owner's Mac and iPad.
     func updateHandoff(page: URL?, title: String, isPrivate: Bool) {
         let shared: URL? = {
-            guard !isPrivate || FixedChoices.handoffInPrivateTabs, let page,
+            guard !TestIsolation.isActive, !isPrivate || FixedChoices.handoffInPrivateTabs, let page,
                   let scheme = page.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return nil }
             return page
         }()

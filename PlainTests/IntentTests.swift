@@ -1,16 +1,25 @@
 import AppIntents
+import BrowserCore
 @testable import Plain
 import PlainShared
 import XCTest
 
 /// Performs each App Intent inside the app and checks the command it hands the browser. The
 /// scene's handler is swapped for a recorder for each test, then put back.
+///
+/// The host app is isolated: Smoke.xctestplan passes `-PlainInMemoryStore` to it, so it never
+/// opens the owner's store, App Group, Spotlight or widgets (scripts/lib/check-isolation.zsh
+/// checks the plan). Each test stops first if the host is not isolated.
 @MainActor
 final class IntentTests: XCTestCase {
     private var received: [PlainCommand] = []
     private var sceneHandler: ((PlainCommand) -> Void)?
 
     override func setUp() async throws {
+        guard TestIsolation.isActive else {
+            XCTFail("the host app is not isolated; Smoke.xctestplan must pass -PlainInMemoryStore")
+            throw XCTSkip("not isolated")
+        }
         sceneHandler = CommandInbox.shared.handler
         received = []
         CommandInbox.shared.handler = { [unowned self] in self.received.append($0) }

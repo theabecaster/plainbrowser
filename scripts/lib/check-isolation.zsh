@@ -12,8 +12,11 @@
 #   3. The app honors the isolation arguments in every build configuration: TestIsolation has no
 #      #if DEBUG, and the app's store and the shared website data, thumbnails and downloads read it.
 #   4. App code touches the owner's state (standard defaults, general pasteboard, default website
-#      data, icon, Documents, scene state, Photos, tips, Spotlight, widgets, App Groups, Keychain)
-#      only in the files that route it through TestIsolation.
+#      data, icon, Documents, scene state, Photos, tips, Spotlight, widgets, App Groups and their
+#      defaults, Handoff, App Shortcuts and intent donations, Keychain) only in the files that
+#      route it through TestIsolation; the system hooks' files must check TestIsolation.isActive.
+#   5. The hosted unit tests (PlainTests) launch their host app isolated: the Smoke plan passes
+#      the isolation argument to it.
 set -euo pipefail
 cd "${0:A:h:h:h}"
 
@@ -24,7 +27,7 @@ code_matching() { grep -nE "$1" $tests | grep -vE '^[^:]+:[0-9]+: *//' || true; 
 
 while IFS= read -r line; do
   [[ -n $line ]] && problems+="bare XCUIApplication (use XCUIApplication.isolated()): $line"
-done < <(code_matching 'XCUIApplication\(' | grep -v 'bundleIdentifier: "com.apple.springboard"' || true)
+done < <(code_matching 'XCUIApplication\(' | grep -v -e 'bundleIdentifier: "com.apple.springboard"' -e 'bundleIdentifier: "com.apple.Spotlight")' || true)
 
 while IFS= read -r line; do
   [[ -n $line ]] && problems+="launchArguments overwritten or edited (append with +=): $line"
@@ -51,7 +54,7 @@ done
 
 # 4. App code reaches the owner's state only through the isolation-aware places. A new use of one of
 #    these elsewhere must go through TestIsolation (or join this list after a look at isolation).
-sources=(Plain/**/*.swift(N) Packages/PlainKit/Sources/**/*.swift(N))
+sources=(Plain/**/*.swift(N) PlainWidgets/**/*.swift(N) Packages/PlainKit/Sources/**/*.swift(N))
 typeset -A allowed=(
   'UserDefaults\.standard'        'BrowserCore/TestIsolation.swift'
   'UIPasteboard\.general'         'WebEngine/AppWebsiteData.swift|FeatureUI/Pasteboard.swift'
@@ -62,7 +65,16 @@ typeset -A allowed=(
   'session\.userInfo|sessionRole' 'ShellUI/SceneState.swift|Plain/AppDelegate.swift'
   'PHPhotoLibrary'                'WebEngine/LinkMenu.swift'
   'Tips\.configure'               'ShellUI/TabsMenuTip.swift'
-  'CSSearchableIndex|WidgetCenter|containerURL\(forSecurityApplicationGroupIdentifier|SecItem(Add|Update|Delete|CopyMatching)' '^$'
+  'SecItem(Add|Update|Delete|CopyMatching)' '^$'
+  # The system hooks (docs/development.md, "Test isolation"): an isolated run keeps its own App
+  # Group folder and never indexes Spotlight, reloads widgets, offers Handoff or updates Shortcuts.
+  'CSSearchableIndex|deleteAllSavedUserActivities' 'SystemSync/SpotlightIndex.swift'
+  'WidgetCenter|ControlCenter\.shared' 'SystemSync/SystemSync.swift'
+  'CoreSpotlightIndex\(\)|[^A-Za-z]SystemSync\(' 'SystemSync/SystemSync.swift'
+  'containerURL\(forSecurityApplicationGroupIdentifier' 'PlainShared/SharedFavorites.swift'
+  'UserDefaults\(suiteName' 'BrowserCore/TestIsolation.swift|WebEngine/AppWebsiteData.swift'
+  'becomeCurrent\(|NSUserActivity\(' 'ShellUI/BrowserViewController\+System.swift'
+  'updateAppShortcutParameters|IntentDonationManager|\.donate\(' 'ShellUI/TabsMenuTip.swift|Plain/SceneDelegate.swift'
 )
 for pattern in ${(k)allowed}; do
   while IFS= read -r line; do
@@ -71,6 +83,25 @@ for pattern in ${(k)allowed}; do
     [[ $file =~ ${allowed[$pattern]} ]] && continue
     problems+="owner state outside TestIsolation ($pattern): $line"
   done < <(grep -nE "$pattern" $sources | grep -vE '^[^:]+:[0-9]+: *//' || true)
+done
+
+# The files above that reach the system for Plain decide with TestIsolation themselves, and the
+# app makes its sync only through SystemSync.live (isolated stand-ins in a test run).
+for file in Packages/PlainKit/Sources/SystemSync/SpotlightIndex.swift Packages/PlainKit/Sources/SystemSync/SystemSync.swift \
+    Packages/PlainKit/Sources/PlainShared/SharedFavorites.swift Packages/PlainKit/Sources/ShellUI/BrowserViewController+System.swift; do
+  [[ -f $file ]] || continue
+  grep -q 'TestIsolation.isActive' $file || problems+="$file reaches the system without checking TestIsolation.isActive"
+done
+if grep -q 'updateAppShortcutParameters' Plain/SceneDelegate.swift; then
+  grep -q 'SystemSync.live' Plain/SceneDelegate.swift \
+    || problems+="Plain/SceneDelegate.swift updates App Shortcuts outside SystemSync.live (which skips it in isolated runs)"
+fi
+
+# 5. A plan that runs the hosted unit tests passes the isolation argument to their host app.
+for plan in PlainUITests/*.xctestplan(N); do
+  grep -q '"name" : "PlainTests"' $plan || continue
+  grep -q '"argument" : "-PlainInMemoryStore"' $plan \
+    || problems+="$plan runs PlainTests without -PlainInMemoryStore for the host app"
 done
 
 if (( ${#problems} )); then

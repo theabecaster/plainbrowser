@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 import PlainShared
 #if canImport(CoreSpotlight)
@@ -42,13 +43,26 @@ public protocol SpotlightIndexing: Sendable {
     func deleteAll() async throws
 }
 
+/// An isolated test run's Spotlight: takes every call and keeps nothing, so a UI or perf run on
+/// the owner's phone never indexes into, or clears, their Spotlight.
+public struct IsolatedSpotlightIndex: SpotlightIndexing {
+    public init() {}
+    public func replace(_ items: [SpotlightItem], inDomain domain: String) async throws {}
+    public func deleteAll() async throws {}
+}
+
 #if canImport(CoreSpotlight)
 /// Core Spotlight's default index, on device only: nothing leaves the phone.
+///
+/// An isolated test run (`TestIsolation`) never touches it: Spotlight is the owner's, on their
+/// phone, and a test's favorites must never show in it or clear what Plain indexed for them. The
+/// app also gives an isolated run `IsolatedSpotlightIndex` instead (`SystemSync.live`); this guard
+/// is the second line.
 public struct CoreSpotlightIndex: SpotlightIndexing {
     public init() {}
 
     public func replace(_ items: [SpotlightItem], inDomain domain: String) async throws {
-        guard CSSearchableIndex.isIndexingAvailable() else { return }
+        guard !TestIsolation.isActive, CSSearchableIndex.isIndexingAvailable() else { return }
         let index = CSSearchableIndex.default()
         try await index.deleteSearchableItems(withDomainIdentifiers: [domain])
         guard !items.isEmpty else { return }
@@ -56,7 +70,7 @@ public struct CoreSpotlightIndex: SpotlightIndexing {
     }
 
     public func deleteAll() async throws {
-        guard CSSearchableIndex.isIndexingAvailable() else { return }
+        guard !TestIsolation.isActive, CSSearchableIndex.isIndexingAvailable() else { return }
         try await CSSearchableIndex.default().deleteAllSearchableItems()
         #if os(iOS)
         // Handoff activities are never eligible for search, so this is a safety net: whatever iOS

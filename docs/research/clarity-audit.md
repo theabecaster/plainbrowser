@@ -256,6 +256,11 @@ change to make. Captures: `clarity/<config>/<shot>.jpg` in the session scratchpa
     segment could carry its word. [inner-land-stills/still-pane-reader, still-pane-find,
     still-pane-history]
 
+27. **Duo inner screen, portrait, side pane open: the pill reads "…ure — localhost".** The head
+    truncation cuts into "Not Secure". **Strip lane (top bar):** when the pill is this narrow,
+    drop the lead word's text for its symbol, or truncate the host, never the word.
+    [inner-port-stills/still-pane-find, still-pane-reader]
+
 ### Checked and clear
 
 The intro's steps and Skip; the start screen's sentence, Search and captioned shortcuts; the

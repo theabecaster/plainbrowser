@@ -380,11 +380,8 @@ extension BrowserViewController: GalleryHost {
         if showsStart, !isEditingAddress, start.isReceded { start.setReceded(false, animated: true) }
         if showsStart {
             applyStartShortcuts()
-            // An empty private tab says what it is: the start screen otherwise looks the same as
-            // a regular one, with only the glass tinted (no badge, docs/ui-reference.md).
-            start.message = currentTab?.isPrivate == true
-                ? String(localized: "A private tab: Plain keeps no history of it.")
-                : String(localized: "Start with a search or an address.")
+            // An empty private tab says what it is; with profiles, the window's is named.
+            updateStartScreenMessage()
         }
         // Over a blank tab's web view, under the page-state message.
         if showsStart {
@@ -462,8 +459,6 @@ extension BrowserViewController: GalleryHost {
         // A tab closed or archived elsewhere may have left the other pane.
         syncPanes()
         updateStartScreen()
-        // A profile made, renamed or deleted: the start screen names the window's profile.
-        updateStartScreenMessage()
     }
 
     var galleryCanOpenInOtherPane: Bool { canSplit }

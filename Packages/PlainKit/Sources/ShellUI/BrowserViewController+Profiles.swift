@@ -39,12 +39,20 @@ extension BrowserViewController {
     /// The start screen names the profile once there is more than one, so a new search never
     /// starts in the wrong one unnoticed.
     func updateStartScreenMessage() {
-        let tabs = session.tabs
-        let name = tabs.profiles.count > 1 && currentTab?.isPrivate != true
-            ? tabs.store.profile(tabs.activeProfile)?.name : nil
-        let message = name.map { String(localized: "Start with a search or an address in \($0).") }
-            ?? String(localized: "Start with a search or an address.")
+        let message = startScreenMessage
         if tabsUI.start.message != message { tabsUI.start.message = message }
+    }
+
+    /// The start screen's sentence: an empty private tab says what it is (the start screen
+    /// otherwise looks the same, with only the glass tinted: no badge, docs/ui-reference.md); with
+    /// two or more profiles a regular one names the window's profile.
+    var startScreenMessage: String {
+        if currentTab?.isPrivate == true { return String(localized: "A private tab: Plain keeps no history of it.") }
+        let tabs = session.tabs
+        guard tabs.profiles.count > 1, let name = tabs.store.profile(tabs.activeProfile)?.name else {
+            return String(localized: "Start with a search or an address.")
+        }
+        return String(localized: "Start with a search or an address in \(name).")
     }
 
     // MARK: The switcher's menu

@@ -99,6 +99,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var barSpansRow: NSLayoutConstraint!
     /// The pill's leading edge on the bottom row (off while the top bar holds it, `+TopBar`).
     private var pillOnRowLeading: NSLayoutConstraint!
+    /// The pill between the split bar's capsules in the single bottom row (compact height).
+    private var pillInSingleRow: [NSLayoutConstraint] = []
     /// Set while `applyEditingLayout` runs, which lays out the bar's shape in its own animation.
     private var isApplyingEditingLayout = false
     private var geometry = ChromeGeometry(viewHeight: 0, safeBottom: 0, hasButtonBar: true)
@@ -370,6 +372,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pillBesideBar = pill.trailingAnchor.constraint(equalTo: buttonBar.leadingAnchor, constant: -ChromeGeometry.gap)
         barSpansRow = buttonBar.leadingAnchor.constraint(equalTo: row.leadingAnchor)
         pillOnRowLeading = pill.leadingAnchor.constraint(equalTo: row.leadingAnchor)
+        // A fixed place, room for both of Back and Forward, so the pill never moves when Forward
+        // comes and goes (state rules, principle 5).
+        pillInSingleRow = [
+            pill.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: ButtonBar.splitLeadingWidth + ChromeGeometry.gap),
+            pill.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -(ButtonBar.splitTrailingWidth + ChromeGeometry.gap)),
+        ]
         NSLayoutConstraint.activate([
             row.topAnchor.constraint(equalTo: lane.topAnchor),
             row.bottomAnchor.constraint(equalTo: lane.bottomAnchor),
@@ -463,10 +471,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if changed { updateButtons() }
     }
 
+    /// Compact height (an iPhone on its side): one bottom row, Back and Forward, the pill, then
+    /// Tabs, Share and More, as Safari keeps one row there; the two rows took about 40% of the
+    /// height (ux-audit item 12). The start screen keeps its own one-row shape, More beside the
+    /// pill.
+    var usesSingleRow: Bool {
+        !usesVerticalBar && !chromeOnTop && traitCollection.verticalSizeClass == .compact && buttonBar.superview != nil
+    }
+
     func updatePillRestConstraint() {
         let onTop = chromeOnTop
         let hasBar = buttonBar.superview != nil
         let beside = !onTop && rules.barBesidePill && hasBar
+        let singleRow = usesSingleRow && !beside
         // Under a top bar the pill leaves it only to edit, above the keyboard.
         let pillOnTop = onTop && !isEditingAddress
         pillOnKeyboard.isActive = false
@@ -475,22 +492,26 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pillOnRowLeading.isActive = false
         pillSpansRow.isActive = false
         pillBesideBar.isActive = false
+        NSLayoutConstraint.deactivate(pillInSingleRow)
         if hasBar { NSLayoutConstraint.deactivate(buttonBarConstraints) }
         setTopBarConstraints(pill: pillOnTop, bar: onTop && hasBar)
         if isEditingAddress {
             pillOnKeyboard.isActive = true
         } else if pillOnTop {
             // The top bar places it.
-        } else if usesVerticalBar || beside {
+        } else if usesVerticalBar || beside || singleRow {
             pillOnEdge.isActive = true
         } else {
             pillOnBar.isActive = true
         }
         // The start screen's bar: a round glass button at the row's end, the pill beside it.
         // Under a top bar: two capsules at the row's ends.
-        buttonBar.setSplit(onTop && hasBar)
+        // Compact height: the same two capsules at the bottom row's ends, the pill between them.
+        buttonBar.setSplit((onTop || singleRow) && hasBar)
         buttonBar.setBesidePill(beside)
-        if !pillOnTop {
+        if singleRow, !isEditingAddress {
+            NSLayoutConstraint.activate(pillInSingleRow)
+        } else if !pillOnTop {
             pillOnRowLeading.isActive = true
             if beside { pillBesideBar.isActive = true } else { pillSpansRow.isActive = true }
         }
@@ -520,7 +541,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let next = ChromeGeometry(
-            viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar
+            viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom,
+            hasButtonBar: !usesVerticalBar && !usesSingleRow
         )
         let top = duo.layout?.chromeOnTop == true
             ? makeTopGeometry(stripHeight: duo.layout?.stripHeight ?? 0) : nil

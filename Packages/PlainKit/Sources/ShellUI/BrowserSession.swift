@@ -30,7 +30,12 @@ public final class BrowserSession {
     ///     nil keeps them in memory only.
     ///   - windowID: the window this scene showed last time (`UISceneSession.userInfo`), so each
     ///     scene comes back to its own tabs and panes; nil for a new scene.
-    public init(database: @escaping DatabaseProvider, tabStates: TabStateStore?, windowID: UUID? = nil) {
+    ///   - thumbnailDirectory: where tab thumbnails live; nil for Caches/Thumbnails. A test store
+    ///     passes its own, since launch prunes thumbnails no tab in the database names.
+    public init(
+        database: @escaping DatabaseProvider, tabStates: TabStateStore?, windowID: UUID? = nil,
+        thumbnailDirectory: URL? = nil
+    ) {
         self.database = database
         contentModes = StorageSiteContentModeStore(database: database)
         pageZooms = StorageSitePageZoomStore(database: database)
@@ -43,6 +48,7 @@ public final class BrowserSession {
             contentModes: contentModes,
             contentRules: blocker,
             pageScripts: readerScripts,
+            thumbnailDirectory: thumbnailDirectory,
             pageZooms: pageZooms,
             darkPages: darkPages
         )

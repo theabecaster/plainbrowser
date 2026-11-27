@@ -210,6 +210,7 @@ exactly what the app emits.
 | `contentBlocking.prepare` / `.compile` / `.siteToggle` | interval | lists loaded / one list compiled / per-site toggle applied |
 | `launch.restoreTab` | interval | after the first frame: the saved tab list read and the selected tab handed to the page |
 | `tab.swipe` / `tab.swipeEnd` | interval / event | bar swipe: finger starts moving → page settled / where it landed ("switched", "stayed", "newTab", "cancelled") |
+| `tab.swipeSettle` / `tab.swipeHandoff` | interval | bar swipe: finger lifts → page visibly at rest and handed over / the neighbour's web view taking the page |
 | `gallery.open` | event | gallery opened ("button", "swipe", "menu"); the zoom is `gallery.show` |
 | `gallery.show` / `gallery.openTab` | interval | page zooms into its card / card grows into its page, until settled |
 | `gallery.cardClose` / `gallery.scroll` / `gallery.reload` | interval | a card closed until reflowed / one scroll / a list applied |

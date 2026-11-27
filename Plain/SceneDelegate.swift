@@ -91,7 +91,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.session = BrowserSession(
             database: { [database] in await database.value },
             tabStates: TabStateStore(directory: self.options.tabStateDirectory),
-            windowID: savedWindow
+            windowID: savedWindow,
+            thumbnailDirectory: self.options.thumbnailDirectory
         )
         let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) { [weak self] in
             Signposts.signposter.endInterval(Signposts.launch, launchInterval)
@@ -236,18 +237,20 @@ private nonisolated struct LaunchOptions: Sendable {
     /// `-PlainSeedArchive`: a few archived tabs, for screenshots of the archive. Debug builds only.
     var seedArchive = false
     /// `-PlainTestStore`: a database and tab state on disk in a temporary folder that survives
-    /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. Debug
-    /// builds only.
+    /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. Release
+    /// builds too: the perf tests start each launch from an empty session this way, on disk like the
+    /// real store, and never read or write the user's own tabs. The reset only ever touches that
+    /// temporary folder.
     var testStore = false
     var resetStore = false
 
     init(arguments: [String]) {
+        testStore = arguments.contains("-PlainTestStore")
+        resetStore = testStore && arguments.contains("-PlainResetStore")
         #if DEBUG
         inMemory = arguments.contains("-PlainInMemoryStore")
         seedFavorites = arguments.contains("-PlainSeedFavorites")
         seedArchive = arguments.contains("-PlainSeedArchive")
-        testStore = arguments.contains("-PlainTestStore")
-        resetStore = arguments.contains("-PlainResetStore")
         #endif
         let temporary = FileManager.default.temporaryDirectory
         if testStore {
@@ -265,6 +268,12 @@ private nonisolated struct LaunchOptions: Sendable {
     /// Where tabs' history, scroll and sessionStorage are saved for relaunch, next to the database.
     /// A path only: nothing touches the disk until the first save.
     var tabStateDirectory: URL { directory.appending(path: "TabState", directoryHint: .isDirectory) }
+
+    /// Thumbnails next to a test database (nil: the pool's Caches/Thumbnails). Launch prunes
+    /// thumbnails that no tab in the database names, so a test store must never share the user's.
+    var thumbnailDirectory: URL? {
+        testStore || inMemory ? directory.appending(path: "Thumbnails", directoryHint: .isDirectory) : nil
+    }
 
     @concurrent func makeDatabase() async throws -> AppDatabase {
         if inMemory, !testStore { return try AppDatabase.inMemory() }

@@ -20,7 +20,9 @@ import WebEngine
 /// new tab with the search field.
 final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     weak var browser: BrowserViewController?
-    private let driver = SpringDriver(spring: Motion.tabSwitchSpring)
+    /// Lands once the page is visibly at rest (`Signposts.visualSettle`), so the hand-off to the new
+    /// tab, and the page taking touches, does not wait out the spring's sub-point tail.
+    private let driver = SpringDriver(spring: Motion.tabSwitchSpring, restDistance: CGFloat(Signposts.visualSettle))
     private var swipe: Swipe?
     private var galleryTransition: TabGalleryTransition?
     private var mode = Mode.none
@@ -194,6 +196,9 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         Paper.apply(to: swipe.preview)
         swipe.preview.bounds = browser.webContainer.bounds
         swipe.preview.center = browser.webContainer.center
+        // Hidden until the finger picks a side (`apply`): over the page and untransformed, the
+        // empty preview would blank it for the frame or two before the first move arrives.
+        swipe.preview.isHidden = true
         browser.pageClip.insertSubview(swipe.preview, aboveSubview: browser.webContainer)
         self.swipe = swipe
         Haptic.selection.prepare()
@@ -352,8 +357,10 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             Haptic.selection.play()
             let cover = swipe.attachedLive ? nil : swipe.preview.subviews.first
             // The neighbour's web view moves from the preview to the page container (no reload).
+            let handoff = signposter.beginInterval(Signposts.tabSwipeHandoff)
             browser.completeTabSwipe(to: neighbour, cover: cover)
             reset(swipe, browser: browser, detachingNeighbour: false)
+            signposter.endInterval(Signposts.tabSwipeHandoff, handoff)
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)
             if let settle = swipe.settleInterval { signposter.endInterval(Signposts.tabSwipeSettle, settle) }
             signposter.emitEvent(Signposts.tabSwipeEnd, "switched")

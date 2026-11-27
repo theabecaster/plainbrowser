@@ -20,6 +20,10 @@ public final class SpringDriver {
     public var isRunning: Bool { link != nil }
 
     private let spring: Spring
+    /// When set, the spring lands on its target once the value is within this distance of it and
+    /// moves less than this a frame (the motion is visibly over), instead of after the
+    /// spring's long sub-point tail. The jump to the target is below what the eye can see.
+    private let restDistance: CGFloat?
     private var link: UIUpdateLink?
     private var origin: CGFloat = 0
     private var initialVelocity: CGFloat = 0
@@ -29,8 +33,11 @@ public final class SpringDriver {
     private var onFrame: ((CGFloat) -> Void)?
     private var completion: (() -> Void)?
 
-    public init(spring: Spring, value: CGFloat = 0) {
+    /// - Parameter restDistance: lands on the target, and completes, once the motion is visibly
+    ///   over (see `restDistance`); nil runs the spring to its full settle.
+    public init(spring: Spring, value: CGFloat = 0, restDistance: CGFloat? = nil) {
         self.spring = spring
+        self.restDistance = restDistance
         self.value = value
         self.target = value
     }
@@ -48,7 +55,8 @@ public final class SpringDriver {
     ///   - velocity: the starting velocity in value units per second (a gesture's release).
     ///   - view: the view whose display paces the frames.
     ///   - onFrame: applies a value; runs once per frame, and once with `target` at the end.
-    ///   - completion: runs when the spring settles, not when it is stopped or retargeted.
+    ///   - completion: runs when the spring settles (or comes to rest, with `restDistance`), not
+    ///     when it is stopped or retargeted.
     ///
     /// Under Reduce Motion, or with the view off screen, the value jumps to `target`; under Reduce
     /// Motion the caller wraps the call in `Motion.crossfade`.
@@ -103,15 +111,31 @@ public final class SpringDriver {
     }
 
     private func step(to time: TimeInterval) {
+        let previousTime = lastTime
         lastTime = max(time, startTime)
         let elapsed = lastTime - startTime
         guard elapsed < duration else {
             finish(at: target)
             return
         }
-        value = origin + spring.value(target: target - origin, initialVelocity: initialVelocity, time: elapsed)
+        let next = origin + spring.value(target: target - origin, initialVelocity: initialVelocity, time: elapsed)
+        if let restDistance, elapsed > 0, abs(target - next) <= restDistance {
+            // Moving less than `restDistance` a frame, from the spring's own velocity over this
+            // frame's interval (at least a 120 Hz frame): a sample that repeats a time, or a start
+            // near the target with a flick's velocity, never reads as rest.
+            let frame = max(lastTime - previousTime, Self.shortestFrame)
+            let speed = abs(spring.velocity(target: target - origin, initialVelocity: initialVelocity, time: elapsed))
+            if speed * frame <= restDistance {
+                finish(at: target)
+                return
+            }
+        }
+        value = next
         onFrame?(value)
     }
+
+    /// The top rate's frame (`frameRateRange`), the shortest interval a rest check assumes.
+    private static let shortestFrame: TimeInterval = 1 / 120
 
     private func finish(at target: CGFloat) {
         endLink()

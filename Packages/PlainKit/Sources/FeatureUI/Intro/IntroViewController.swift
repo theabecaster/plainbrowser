@@ -172,23 +172,25 @@ public final class IntroViewController: UIViewController {
             model.start()
             return
         }
+        // Two independent tasks, whichever ends first starts the intro (`start` runs once): a task
+        // group would wait for the answer even after the timeout.
         Task { [weak self] in
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { await firstAnswer.value }
-                group.addTask { try? await Task.sleep(for: IntroMotion.aiAnswerWait) }
-                await group.next()
-                group.cancelAll()
-            }
+            await firstAnswer.value
+            self?.model.start()
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: IntroMotion.aiAnswerWait)
             self?.model.start()
         }
     }
 
     // MARK: Apple Intelligence
 
-    /// Reads the answer again while the Browse for Me step is in the intro, and keeps reading it
-    /// every few seconds while the model is getting ready and its step is on screen.
+    /// Reads the answer again while the Browse for Me step is on screen (on arriving, and back
+    /// from Settings), and every few seconds while the model is getting ready.
     private func checkAI() {
-        guard model.steps.contains(.browseForMe), model.step != nil else { return }
+        // Only on its own step: the other steps never read it.
+        guard model.step == .browseForMe else { return }
         aiCheck?.cancel()
         aiCheck = Task { [weak self, aiAvailability] in
             while !Task.isCancelled {

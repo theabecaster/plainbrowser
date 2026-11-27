@@ -329,6 +329,7 @@ private struct BlockingStep: View {
 /// buttons change in place when it is turned on or finishes getting ready.
 private struct BrowseForMeStep: View {
     @Bindable var model: IntroModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -373,7 +374,7 @@ private struct BrowseForMeStep: View {
                 Text("Apple Intelligence is ready.")
             }
             .fontWeight(.semibold)
-            .transition(.scale(scale: 0.9).combined(with: .opacity))
+            .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("introAIReady")
         case .ready, nil:

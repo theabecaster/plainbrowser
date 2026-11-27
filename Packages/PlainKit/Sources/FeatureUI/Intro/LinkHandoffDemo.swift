@@ -1,5 +1,7 @@
 #if os(iOS)
 import DesignSystem
+import os
+import PerfSignposts
 import SwiftUI
 
 /// The default-browser step's demo: a link in a message is tapped and opens in Plain's pill, with
@@ -44,7 +46,7 @@ struct LinkHandoffDemo: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color(uiColor: .secondarySystemFill), in: .rect(cornerRadius: 18, style: .continuous))
-        .scaleEffect(pressed ? 0.97 : 1)
+        .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -62,7 +64,7 @@ struct LinkHandoffDemo: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(IntroStyle.mint, in: .capsule)
-            .scaleEffect(blocked ? 1 : 0.6)
+            .scaleEffect(blocked || reduceMotion ? 1 : 0.6)
             .opacity(blocked ? 1 : 0)
         }
         .padding(.horizontal, 16)
@@ -72,7 +74,9 @@ struct LinkHandoffDemo: View {
 
     private func play(delay: Double = 0.2) {
         run?.cancel()
+        let interval = Signposts.signposter.beginAnimationInterval(Signposts.introLinkDemo)
         run = Task {
+            defer { Signposts.signposter.endInterval(Signposts.introLinkDemo, interval) }
             withAnimation(IntroMotion.crossfade) {
                 opened = false
                 blocked = false

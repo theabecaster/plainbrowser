@@ -147,8 +147,7 @@ final class IntroTests: XCTestCase {
         // Settings comes up; coming back is what a user does after turning it on.
         XCTAssertTrue(app.wait(for: .runningBackground, timeout: 10), "Settings did not open")
         app.activate()
-        XCTAssertTrue(app.otherElements["introAIReady"].waitForExistence(timeout: 5)
-            || app.staticTexts["introAIReady"].waitForExistence(timeout: 1), "no check mark after returning")
+        XCTAssertTrue(app.descendants(matching: .any)["introAIReady"].waitForExistence(timeout: 5), "no check mark after returning")
         XCTAssertFalse(app.buttons["introTurnOnAI"].exists)
         let go = app.buttons["introLetsGo"]
         XCTAssertTrue(go.waitForExistence(timeout: 3))
@@ -170,11 +169,9 @@ final class IntroTests: XCTestCase {
     func testBrowseForMeGettingReadyUpdates() {
         let app = launch(["-PlainAIAvailability", "notReady,notReady,available"])
         reachBrowseForMe(app)
-        XCTAssertTrue(app.otherElements["introAIGettingReady"].waitForExistence(timeout: 3)
-            || app.staticTexts["introAIGettingReady"].exists, "no getting-ready line")
+        XCTAssertTrue(app.descendants(matching: .any)["introAIGettingReady"].waitForExistence(timeout: 3), "no getting-ready line")
         XCTAssertFalse(app.buttons["introTurnOnAI"].exists)
-        XCTAssertTrue(app.otherElements["introAIReady"].waitForExistence(timeout: 8)
-            || app.staticTexts["introAIReady"].exists, "the step did not update when the model was ready")
+        XCTAssertTrue(app.descendants(matching: .any)["introAIReady"].waitForExistence(timeout: 8), "the step did not update when the model was ready")
         app.buttons["introLetsGo"].tap()
         assertSearchFieldFocused(app)
     }
@@ -296,7 +293,7 @@ final class IntroCaptureTests: XCTestCase {
             app.activate()
             pause(1.5)
             shot("ai-\(tag)-c-returned", app)
-        } else if app.otherElements["introAIGettingReady"].exists || app.staticTexts["introAIGettingReady"].exists {
+        } else if app.descendants(matching: .any)["introAIGettingReady"].exists {
             pause(3.0)
             shot("ai-\(tag)-c-ready", app)
         }

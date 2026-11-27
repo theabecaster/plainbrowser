@@ -34,13 +34,21 @@ public final class EmptyTabView: UIView {
     /// A small shortcut under the main button: a private tab, Reopen Closed Tab, Archived Tabs.
     public struct Shortcut {
         public let id: String
+        /// The short caption under the symbol, the one the page menu's captioned row uses
+        /// ("Reopen Tab"), so every shortcut fits one line.
         public let title: String
+        /// The full name for VoiceOver ("Reopen Closed Tab"); the caption when nil.
+        public let accessibilityLabel: String?
         public let symbol: String
         public let action: () -> Void
 
-        public init(id: String, title: String, symbol: String, action: @escaping () -> Void) {
+        public init(
+            id: String, title: String, accessibilityLabel: String? = nil, symbol: String,
+            action: @escaping () -> Void
+        ) {
             self.id = id
             self.title = title
+            self.accessibilityLabel = accessibilityLabel
             self.symbol = symbol
             self.action = action
         }
@@ -106,6 +114,8 @@ public final class EmptyTabView: UIView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         shortcutRow.axis = .horizontal
         shortcutRow.alignment = .top
+        // Equal columns: the row stays centered under the main button whatever the captions.
+        shortcutRow.distribution = .fillEqually
         shortcutRow.spacing = Spacing.s
         shortcutRow.accessibilityIdentifier = "startShortcuts"
         for view in [mark, label, button, shortcutRow] { stack.addArrangedSubview(view) }
@@ -161,6 +171,7 @@ public final class EmptyTabView: UIView {
             }
             let item = UIButton(configuration: configuration)
             item.accessibilityIdentifier = shortcut.id
+            item.accessibilityLabel = shortcut.accessibilityLabel ?? shortcut.title
             item.titleLabel?.numberOfLines = 2
             item.addAction(UIAction { _ in shortcut.action() }, for: .primaryActionTriggered)
             item.widthAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget).isActive = true

@@ -17,6 +17,7 @@ extension BrowserViewController {
             return
         }
         let sidebar = installSidebarIfNeeded()
+        placeSidebarRows(layout.chromeOnTop ? makeTopGeometry(stripHeight: layout.stripHeight) : nil, layout: layout)
         sidebar.floats = layout.sidebarFloats
         sidebar.isOnRight = layout.sidebarOnRight
         // The outgoing edge lets go first, so the two never pin the sidebar together.

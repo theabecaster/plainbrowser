@@ -182,6 +182,7 @@ extension BrowserViewController {
                 duo.panesTop.isActive = true
             }
         }
+        placeSidebarRows(geometry, layout: layout)
         guard let geometry else { return }
         Self.set(top.pillTop, geometry.rowTop)
         Self.set(top.barTop, geometry.rowTop)
@@ -194,6 +195,18 @@ extension BrowserViewController {
             Self.set(top.stripClearance[0], strip.leading)
             Self.set(top.stripClearance[1], -strip.trailing)
         }
+    }
+
+    /// The rail's first row sits on the top bar's row where the status zone beside it is empty
+    /// (the status items keep to the other corner); else its rows start under the safe area.
+    func placeSidebarRows(_ geometry: TopChromeGeometry?, layout: DuoLayout) {
+        guard let sidebar = duo.sidebar else { return }
+        var center: CGFloat?
+        if let geometry, let corner = geometry.corner {
+            let cornerOnTrailing = corner.midX > geometry.width / 2
+            if cornerOnTrailing != layout.sidebarOnRight { center = geometry.rowTop + TopChromeGeometry.rowHeight / 2 }
+        }
+        sidebar.setFirstRowCenter(center)
     }
 
     private static func set(_ constraint: NSLayoutConstraint?, _ constant: CGFloat) {

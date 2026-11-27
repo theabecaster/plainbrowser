@@ -8,10 +8,11 @@ public enum FixedChoices {
 
     /// Most people already search with Google; it is the first-launch default (plan, section 11).
     public static let defaultSearchEngine = SearchEngine.google
-    /// Tabs on the left: on the Duo's inner screen a sidebar uses the spare width beside a page
-    /// (a top strip takes height from a short landscape screen), its rail costs 64 pt, and the
-    /// leading edge is where a list is read from. The system's vertical bar sits on the right.
-    public static let defaultTabLayout = TabLayout.left
+    /// Tabs above the page, as Safari does on the Duo's inner screen: the strip sits under the
+    /// top bar, shows only with two or more tabs, costs 34 pt and leaves the page its full width.
+    /// It looks the same in landscape and portrait (a sidebar does not fit beside a portrait
+    /// page), and it hides with the bar while reading.
+    public static let defaultTabLayout = TabLayout.above
     /// A day keeps today's tabs at hand and clears yesterday's clutter without asking.
     public static let defaultArchiveAfter = ArchiveAfter.oneDay
     /// Follow iOS: people set light or dark once for every app, often on a schedule, and Safari,
@@ -333,18 +334,24 @@ public enum FixedChoices {
     /// on the window. Below it a phone-width page beside a sidebar reads as cramped, and sites
     /// switch to their mobile layout anyway.
     public static let sideTabsMinimumPageWidth: Double = 640
-    /// The sidebar's rail: favicons only, one 44 pt target plus margins. It is forced while a
-    /// split shows or the screen is partly folded, where a wider sidebar would squeeze the pages.
-    public static let sidebarRailWidth: Double = 64
+    /// The sidebar's rail: site tiles only, one 44 pt target plus a 4 pt margin each side, close
+    /// to Safari's vertical-tab strip. It is forced while a split shows or the screen is partly
+    /// folded, where a wider sidebar would squeeze the pages.
+    public static let sidebarRailWidth: Double = 52
     /// The expanded sidebar: favicon and title. Wide enough for about 25 characters of a title;
     /// where the page would drop under `sideTabsMinimumPageWidth` it floats over the page instead.
     public static let sidebarExpandedWidth: Double = 260
-    /// The tab strip above the pages (Tab Layout: Above): one 44 pt tap target with a small
-    /// margin, the least height a short landscape screen can give up.
-    public static let tabStripHeight: Double = 48
-    /// A tab in the strip: room for about 18 characters of a title, so five or six tabs show at once
-    /// on the Duo's inner screen; the rest scroll.
-    public static let tabStripItemWidth: Double = 170
+    /// The tab strip under the top bar (Tab Layout: Above): 30 pt tabs, Safari's compact tab
+    /// height on iPad, with 2 pt above and below. Each tab still takes a 44 pt touch.
+    public static let tabStripHeight: Double = 34
+    /// Tabs in the strip share its width, as Safari's tab bar does, between these widths: at the
+    /// narrowest about 14 characters of a title show, and past it the strip scrolls; the widest
+    /// keeps two tabs from stretching across the whole screen.
+    public static let tabStripItemWidth: (minimum: Double, maximum: Double) = (140, 280)
+    /// The top bar on a wide screen (the Duo's inner screen, iPad-size windows): one row of 44 pt
+    /// controls under the status bar, as Safari puts it there. The page gets the full width and
+    /// height under it, and the bar shrinks to the address while reading.
+    public static let topBarHeight: Double = 44
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375

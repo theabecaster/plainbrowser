@@ -106,7 +106,7 @@ import Testing
         await model.waitForSaves()
         await model.waitForSaves()
         #expect(model.errorMessage != nil)
-        #expect(model.settings.tabLayout == .left, "back to the stored value, so choosing again saves again")
+        #expect(model.settings.tabLayout == FixedChoices.defaultTabLayout, "back to the stored value, so choosing again saves again")
     }
 
     @Test func aLoadWaitsForSavesStillRunning() async throws {

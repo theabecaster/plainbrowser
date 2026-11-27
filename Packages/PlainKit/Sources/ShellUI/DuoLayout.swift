@@ -20,6 +20,8 @@ struct DuoLayoutInput: Equatable {
     var requestedSidebar: SidebarState
     /// Panes in the window (TabStore): one, or two for a split.
     var paneCount: Int
+    /// Page tabs in the window (regular and private): the strip shows only for two or more.
+    var tabCount: Int
     var focusedPane: Int
     /// The fold's region (`reservedRegions(kind: .division, options: .includeInactive)`): its
     /// position even when the screen is flat, where its width is zero.
@@ -33,7 +35,7 @@ struct DuoLayoutInput: Equatable {
 
     init(
         pageArea: CGRect, isRegularWidth: Bool, isRegularHeight: Bool, tabLayout: TabLayout = FixedChoices.defaultTabLayout,
-        requestedSidebar: SidebarState = .rail, paneCount: Int = 1, focusedPane: Int = 0,
+        requestedSidebar: SidebarState = .rail, paneCount: Int = 1, tabCount: Int = 2, focusedPane: Int = 0,
         division: CGRect? = nil, isDivisionActive: Bool = false, occlusions: [CGRect] = [],
         chromeBand: ClosedRange<CGFloat> = 0...0
     ) {
@@ -43,6 +45,7 @@ struct DuoLayoutInput: Equatable {
         self.tabLayout = tabLayout
         self.requestedSidebar = requestedSidebar
         self.paneCount = paneCount
+        self.tabCount = tabCount
         self.focusedPane = focusedPane
         self.division = division
         self.isDivisionActive = isDivisionActive
@@ -64,7 +67,10 @@ struct DuoLayout: Equatable {
     var showsSidebar: Bool
     /// The sidebar is on the trailing side (Right).
     var sidebarOnRight: Bool
-    /// The tab strip is on screen above the pages (Above in effect).
+    /// The chrome is a top bar (Safari on the Duo's inner screen, iPad): wherever Tab Layout
+    /// applies. Elsewhere it is the bottom pill (and its button bar or the system's vertical bar).
+    var chromeOnTop: Bool
+    /// The tab strip is on screen under the top bar (Above in effect, two or more tabs).
     var showsStrip: Bool
     /// The state the sidebar rests in now (the request, limited by split and fold).
     var sidebar: SidebarState
@@ -76,7 +82,7 @@ struct DuoLayout: Equatable {
     var sidebarDockWidth: CGFloat
     /// Expanded floats over the page: docked, it would leave the page under the minimum width.
     var sidebarFloats: Bool
-    /// How far the strip pushes the pages down.
+    /// The strip's height. It floats under the top bar, over the pages, and hides with the bar.
     var stripHeight: CGFloat
     /// A split can show here (regular both ways, each pane at least the minimum width).
     var splitAvailable: Bool
@@ -85,8 +91,9 @@ struct DuoLayout: Equatable {
     var splitShown: Bool
     /// The panes' frames: one, or two side by side (primary, then secondary).
     var paneFrames: [CGRect]
-    /// The horizontal lane for the pill, the search field and toasts: the focused pane, moved off
-    /// a floating sidebar, an active fold and the camera.
+    /// The horizontal lane for the pill, the search field and toasts: the focused pane (all the
+    /// pages under a top bar, which acts on the focused one), moved off a floating sidebar, an
+    /// active fold and the camera.
     var chromeLane: ClosedRange<CGFloat>
 
     /// The focused pane's frame.
@@ -106,9 +113,11 @@ struct DuoLayout: Equatable {
         } else {
             tabLayout = input.tabLayout
         }
+        chromeOnTop = tabLayoutAvailable
         showsSidebar = tabLayout?.isSidebar ?? false
         sidebarOnRight = tabLayout == .right
-        showsStrip = tabLayout == .above
+        // One tab has nothing to switch to: the strip earns its place from the second.
+        showsStrip = tabLayout == .above && input.tabCount > 1
         stripHeight = showsStrip ? CGFloat(FixedChoices.tabStripHeight) : 0
 
         let vertical = input.division.flatMap { Self.verticalFold($0) }
@@ -131,9 +140,10 @@ struct DuoLayout: Equatable {
             sidebarDockWidth = 0
         }
 
+        // The strip floats with the top bar; only a docked sidebar moves the pages.
         let panes = CGRect(
-            x: area.minX + (sidebarOnRight ? 0 : sidebarDockWidth), y: area.minY + stripHeight,
-            width: max(0, area.width - sidebarDockWidth), height: max(0, area.height - stripHeight)
+            x: area.minX + (sidebarOnRight ? 0 : sidebarDockWidth), y: area.minY,
+            width: max(0, area.width - sidebarDockWidth), height: area.height
         )
         if splitShown {
             // Flat: on the crease when it leaves both panes their minimum, else halves. Partly
@@ -153,7 +163,10 @@ struct DuoLayout: Equatable {
             focusedPaneFrame = panes
         }
 
-        var lane = focusedPaneFrame.minX...focusedPaneFrame.maxX
+        // A top bar spans the pages: a pane of a split is too narrow for a bar of its own. Partly
+        // folded, the panes sit either side of the fold and the bar keeps to the focused one.
+        let spansPanes = chromeOnTop && !(splitShown && input.isDivisionActive)
+        var lane = spansPanes ? panes.minX...panes.maxX : focusedPaneFrame.minX...focusedPaneFrame.maxX
         // Expanded floating over the page: the pill stays clear of it.
         if sidebarFloats {
             let width = SidebarState.expanded.width

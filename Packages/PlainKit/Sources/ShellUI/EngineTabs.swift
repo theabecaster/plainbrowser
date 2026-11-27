@@ -397,8 +397,14 @@ final class EngineTabs {
         scheduleChange()
     }
 
+    /// Called when the last private tab closed, after the pool dropped the private session: the
+    /// session's other private-only state (cookie banner choices) goes with it.
+    var privateSessionDidEnd: (() -> Void)?
+
     private func endPrivateSessionIfEmpty() {
-        if entries(private: true).isEmpty { pool.endPrivateSession() }
+        guard entries(private: true).isEmpty else { return }
+        pool.endPrivateSession()
+        privateSessionDidEnd?()
     }
 
     private func scheduleChange() {

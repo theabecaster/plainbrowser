@@ -50,6 +50,7 @@ extension BrowserViewController {
             let scheme = url.scheme?.lowercased()
             state.isWebPage = scheme == "http" || scheme == "https"
             state.isRecordable = LiveAddressBarData.isRecordable(url)
+            state.isCookieBannersOff = session.cookieBanners.isOff(for: url, isPrivate: tab.isPrivate)
         }
         state.isPDF = tab.isPDF
         // Both only while Plain is dark: the page reports `.inactive` otherwise.

@@ -7,3 +7,4 @@ xcuserdata/
 scripts/local.env
 Config/Signing.local.xcconfig
 .claude/worktrees/
+node_modules/

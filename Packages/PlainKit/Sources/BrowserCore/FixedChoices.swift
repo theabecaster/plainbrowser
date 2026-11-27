@@ -119,6 +119,41 @@ public enum FixedChoices {
     /// burst): a few microseconds of work twice a second at most, back before a line is read.
     public static let darkPagesSheetCheckInterval = 500
 
+    // MARK: Print and Save as PDF (docs/research/print-pdf.md)
+
+    /// Regions whose standard paper is US Letter (ISO 3166 codes); everywhere else gets A4. A
+    /// saved PDF should print on the paper in the drawer, and nobody wants to pick a size.
+    public static let letterPaperRegions: Set<String> = ["US", "CA", "MX", "PH", "CL", "CO", "VE", "GT", "CR", "PR"]
+    /// Half an inch: what Safari and most printers leave, enough that no printer clips text.
+    public static let exportMargin: Double = 36
+    /// How long Print and Save as PDF wait for lazily loaded pictures before going ahead without
+    /// the stragglers: long enough for a page's pictures on a normal connection, short enough
+    /// that the sheet still feels immediate.
+    public static let exportImageWait = Duration.milliseconds(800)
+    /// A saved PDF's name is the page title cut to this many characters: long titles stay
+    /// recognizable in Files without becoming a paragraph.
+    public static let exportFileNameLength = 100
+
+    // MARK: Cookie banners (docs/research/cookie-banners.md)
+
+    /// Cookie consent banners are answered automatically, rejecting wherever the banner offers it,
+    /// as DuckDuckGo and Brave do: nobody reads them, "reject" is what a privacy-first browser
+    /// should say, and a banner covering the page is the opposite of "the page gets the screen". A
+    /// site that breaks gets "Turn Off Cookie Banner Blocking" in Site Settings, remembered for it.
+    public static let cookieBannersHandled = true
+    /// How many times the engine looks for a banner on a page (autoconsent's default): banners
+    /// that load late are still found, and a page without one stops costing anything after it.
+    public static let cookieBannerDetectRetries = 20
+    /// Known banners are hidden from the first frame while they are judged, so they never flash;
+    /// after this many milliseconds a banner the engine could not answer shows again.
+    public static let cookieBannerPrehideTimeout = 2_000
+    /// A banner answered this many times on one site within `cookieBannerLoopWindow` (a page that
+    /// reloads itself after each answer) means the answer doesn't stick: the site is left alone
+    /// for the rest of the launch instead of reloading forever.
+    public static let cookieBannerLoopLimit = 3
+    public static let cookieBannerLoopWindow = Duration.seconds(60)
+
+    // MARK: Address bar
     // MARK: Address bar
 
     /// Suggestions older than this are useless while typing; give up and show what we have.

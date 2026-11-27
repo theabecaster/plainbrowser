@@ -17,7 +17,9 @@ public final class BrowserSession {
     let tabs: EngineTabs
     let blocker: ContentBlocker
     let reader = ReaderExtractor()
+    let cookieBanners: CookieBanners
     private let readerScripts: ReaderPageScripts
+    private let cookieBannerSites: StorageSiteCookieBannersStore
     private let contentModes: StorageSiteContentModeStore
     private let pageZooms: StorageSitePageZoomStore
     private let darkPages: StorageSiteDarkPagesStore
@@ -42,17 +44,20 @@ public final class BrowserSession {
         darkPages = StorageSiteDarkPagesStore(database: database)
         blocker = ContentBlocker(allowListStore: StorageSiteAllowListStore(database: database))
         readerScripts = ReaderPageScripts(extractor: reader)
+        cookieBannerSites = StorageSiteCookieBannersStore(database: database)
+        cookieBanners = CookieBanners(store: cookieBannerSites)
         pool = WebViewPool(
             tabStates: tabStates,
             permissionStore: StorageSitePermissionStore(database: database),
             contentModes: contentModes,
             contentRules: blocker,
-            pageScripts: readerScripts,
+            pageScripts: ShellPageScripts([readerScripts, cookieBanners]),
             thumbnailDirectory: thumbnailDirectory,
             pageZooms: pageZooms,
             darkPages: darkPages
         )
         tabs = EngineTabs(pool: pool, database: database, tabStates: tabStates, windowID: windowID)
+        tabs.privateSessionDidEnd = { [cookieBanners] in cookieBanners.endPrivateSession() }
     }
 
     /// The window this scene shows. Keep it with the scene (`UISceneSession.userInfo`) so the next
@@ -71,11 +76,14 @@ public final class BrowserSession {
         async let zooms: Void = pageZooms.load()
         async let darkSites = darkPages.load()
         async let scripts: Void = readerScripts.prepare()
+        async let cookieSites: Void = cookieBannerSites.load()
+        async let cookieEngine: Void = cookieBanners.prepare()
         // Lookups take about 1 ms when the lists are compiled; a first launch compiles them in the
         // background for several seconds, and pages load meanwhile without them.
         Task { [blocker] in await blocker.prepare() }
         let restored = await tabs.restoreSession()
-        _ = await (modes, zooms, scripts)
+        _ = await (modes, zooms, scripts, cookieSites, cookieEngine)
+        cookieBanners.storedSitesDidLoad()
         if await darkSites { pool.darkPagesSitesDidChange() }
         // Files of tabs gone for good, at background priority once launch has settled.
         Task(priority: .background) { [tabs] in await tabs.pruneFiles() }

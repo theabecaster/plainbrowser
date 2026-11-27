@@ -57,4 +57,15 @@ import Testing
         try await database.setDarkPagesOff(false, forSite: "a.example")
         #expect(try await database.darkPagesOffSites() == ["b.example"])
     }
+
+    @Test func cookieBannersOffSitesAreRemembered() async throws {
+        let database = try AppDatabase.inMemory()
+        #expect(try await database.cookieBannersOffSites().isEmpty)
+        try await database.setCookieBannersOff(true, forSite: "a.example")
+        try await database.setCookieBannersOff(true, forSite: "a.example")
+        try await database.setCookieBannersOff(true, forSite: "b.example")
+        #expect(try await database.cookieBannersOffSites() == ["a.example", "b.example"])
+        try await database.setCookieBannersOff(false, forSite: "a.example")
+        #expect(try await database.cookieBannersOffSites() == ["b.example"])
+    }
 }

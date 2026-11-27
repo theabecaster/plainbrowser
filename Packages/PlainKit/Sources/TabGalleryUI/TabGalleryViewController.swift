@@ -238,7 +238,7 @@ public final class TabGalleryViewController: UIViewController {
         guard !order.isEmpty else { return 0 }
         let stop = Int((scrollView.contentOffset.x / metrics.snapUnit).rounded())
         let slot = metrics.style == .cascade ? stop : stop * metrics.cardsPerPage
-        return min(max(slot, 0), order.count - 1)
+        return min(max(slot, 0), slotCount - 1)
     }
 
     /// Jumps or scrolls to `offset`, stopping any scroll in flight.
@@ -335,6 +335,12 @@ public final class TabGalleryViewController: UIViewController {
             }
             return
         }
+        if newTabCardLeaving {
+            // Back to one card while it was fading out: it stays, from where the fade had it.
+            newTabCardLeaving = false
+            if let fading = newTabCard.layer.presentation() { newTabCard.alpha = CGFloat(fading.opacity) }
+            newTabCard.layer.removeAllAnimations()
+        }
         let slot = CGFloat(order.count)
         let placement = metrics.placement(slot: slot, offset: offset)
         let appear = holdsNewTabCard ? 0 : motion.appearance(Self.newTabCardID)
@@ -345,7 +351,7 @@ public final class TabGalleryViewController: UIViewController {
         if newTabCard.center != center { newTabCard.center = center }
         let transform = scale == 1 ? CGAffineTransform.identity : CGAffineTransform(scaleX: scale, y: scale)
         if newTabCard.transform != transform { newTabCard.transform = transform }
-        if !newTabCardLeaving, newTabCard.alpha != appear { newTabCard.alpha = appear }
+        if newTabCard.alpha != appear { newTabCard.alpha = appear }
         if newTabCard.layer.zPosition != slot { newTabCard.layer.zPosition = slot }
         newTabCard.isUserInteractionEnabled = appear > 0.5
     }
@@ -449,7 +455,11 @@ public final class TabGalleryViewController: UIViewController {
         selectedID = dataSource.selectedTabID
         let showedNewTabCard = showsNewTabCard
         showsNewTabCard = GalleryRules(galleryState).newTabCard
-        metrics.centeredRow = showsNewTabCard ? slotCount : 0
+        let centeredRow = showsNewTabCard ? slotCount : 0
+        // The grid's lone pair sits centered: going to or from it moves every card at once, so
+        // the change crossfades instead of sliding from slot to slot.
+        let regrids = animated && metrics.style == .grid && metrics.centeredRow != centeredRow
+        metrics.centeredRow = centeredRow
 
         let oldOffset = scrollView.contentOffset.x
         updateContentSize()
@@ -500,7 +510,8 @@ public final class TabGalleryViewController: UIViewController {
             Signposts.signposter.endInterval(Signposts.galleryReload, state)
             completion?()
         }
-        if animated, Motion.prefersCrossfade {
+        if animated, Motion.prefersCrossfade || regrids {
+            if regrids { motion.reset() }
             Motion.crossfade(scrollView, changes: { self.layoutCards() }, completion: finish)
         } else {
             layoutCards()
@@ -880,13 +891,14 @@ public final class TabGalleryViewController: UIViewController {
         guard !order.isEmpty else { return false }
         let perScreen = metrics.style == .cascade ? 2 : metrics.cardsPerPage
         let current = focusedSlot()
-        let next = min(max(current + (forward ? perScreen : -perScreen), 0), order.count - 1)
-        let target = min(metrics.restingOffset(for: next), metrics.maxOffset(for: order.count))
+        let next = min(max(current + (forward ? perScreen : -perScreen), 0), slotCount - 1)
+        let target = min(metrics.restingOffset(for: next), metrics.maxOffset(for: slotCount))
         // The last grid page can be part full: moving within it is no scroll.
         guard abs(target - scrollView.contentOffset.x) > 0.5 else { return false }
         scroll(to: target, animated: false)
         layoutCards()
-        UIAccessibility.post(notification: .pageScrolled, argument: "Tab \(next + 1) of \(order.count)")
+        let announcement = next >= order.count ? String(localized: "New Tab") : "Tab \(next + 1) of \(order.count)"
+        UIAccessibility.post(notification: .pageScrolled, argument: announcement)
         return true
     }
 }

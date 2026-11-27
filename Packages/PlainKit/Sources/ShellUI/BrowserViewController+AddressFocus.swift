@@ -17,9 +17,6 @@ final class AddressFocusState {
     /// Copy button while it still shows that address. Otherwise a search over a page opens a new
     /// tab (`LaunchUIState.isFreshSearch`).
     var isEditingPage = false
-    /// What the user typed last (without an inline completion), so a completion is offered only
-    /// while typing forward, never after Delete.
-    var lastTyped = ""
 }
 
 // MARK: - The focused field's content
@@ -47,15 +44,20 @@ extension BrowserViewController {
             }
             return items
         }
-        let pageKey = page.map(AddressBarSuggestions.addressKey)
+        // A closed tab comes back with its own history, so it stands for its page: the page is
+        // not listed again as recent.
+        let closed: [SheetItem] = session.tabs.store.recentlyClosed.suffix(FixedChoices.focusClosedTabs).reversed()
+            .compactMap { batch in
+                guard let first = batch.tabs.first else { return nil }
+                return .closed(batch: batch.id, url: first.entry.url, title: first.entry.title, count: batch.tabs.count)
+            }
+        var taken = Set([page].compactMap { $0 }.map(AddressBarSuggestions.addressKey))
+        for case .closed(_, let url?, _, _) in closed { taken.insert(AddressBarSuggestions.addressKey(url)) }
         let recent = focusUI.content.recent
-            .filter { AddressBarSuggestions.addressKey($0.url) != pageKey }
+            .filter { !taken.contains(AddressBarSuggestions.addressKey($0.url)) }
             .prefix(FixedChoices.focusRecentPages)
         items += recent.map { SheetItem.recent(url: $0.url, title: $0.title) }
-        for batch in session.tabs.store.recentlyClosed.suffix(FixedChoices.focusClosedTabs).reversed() {
-            guard let first = batch.tabs.first else { continue }
-            items.append(.closed(batch: batch.id, url: first.entry.url, title: first.entry.title, count: batch.tabs.count))
-        }
+        items += closed
         // The start screen's own sentence keeps an empty start company; elsewhere one sentence.
         let showsStart = tab.map { session.tabs.isEmpty($0.id) } ?? true
         if items.isEmpty, focusUI.content.favorites.isEmpty, !showsStart {
@@ -109,30 +111,6 @@ extension BrowserViewController {
     func refreshCopiedLink() {
         focusUI.copiedLink.onChange = { [weak self] in self?.refreshFocusRowsIfShown() }
         focusUI.copiedLink.refresh()
-    }
-
-    // MARK: Inline completion
-
-    /// Completes the typed text in the field to the top page's address, the rest selected (Arc,
-    /// Safari): typing on replaces it, Delete removes it, Return goes there. Only while typing
-    /// forward at the end of the field, never over marked text or a search with spaces, and only
-    /// from the first (local) list, so the field never changes under the thumb a second time.
-    func completeInline(_ typed: String, with suggestions: [AddressBarSuggestion]) {
-        let field = pill.textField
-        guard field.text == typed, field.markedTextRange == nil, !typed.contains(" "),
-              let end = field.selectedTextRange?.end, field.offset(from: end, to: field.endOfDocument) == 0,
-              case .page(let url, _, _) = suggestions.first
-        else { return }
-        // Hosts only, as Arc does: a path is where a typed address and a visited one part ways.
-        let address = SuggestionRow.displayAddress(url)
-        let target = address.split(separator: "/", maxSplits: 1).first.map(String.init) ?? address
-        guard !typed.contains("/"), target.count > typed.count, target.lowercased().hasPrefix(typed.lowercased())
-        else { return }
-        let rest = String(target.dropFirst(typed.count))
-        field.text = typed + rest
-        if let start = field.position(from: field.beginningOfDocument, offset: typed.count) {
-            field.selectedTextRange = field.textRange(from: start, to: field.endOfDocument)
-        }
     }
 
     // MARK: Picks

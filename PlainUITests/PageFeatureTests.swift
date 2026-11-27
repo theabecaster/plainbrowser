@@ -139,19 +139,20 @@ final class PageFeatureTests: XCTestCase {
         // Show Reader waits for the article check, Translate Page for the language check.
         Thread.sleep(forTimeInterval: 2)
         openPageMenu(app)
-        for id in ["more.newPrivateTab", "more.reopenClosedTab", "menu.reload", "menu.find", "menu.reader",
-                   "menu.translate", "menu.zoomIn", "menu.favorite", "menu.history", "menu.settings"] {
-            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 3), "\(id) is in the menu")
+        let ids = ["pageSheet.address", "menu.copyLink", "menu.reload", "menu.find", "menu.reader", "menu.translate",
+                   "menu.share", "menu.zoomIn", "menu.favorite", "more.newPrivateTab", "more.reopenClosedTab",
+                   "menu.history", "menu.settings"]
+        for id in ids {
+            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 3), "\(id) is in the page sheet")
         }
+        Thread.sleep(forTimeInterval: 0.6)
         shot("m1-menu-tallest")
-        // The menu's own scroll view: an item outside its frame is only reachable by scrolling.
-        let menu = app.collectionViews.containing(.button, identifier: "menu.history").firstMatch
-        XCTAssertTrue(menu.exists)
-        let visible = menu.frame.intersection(app.windows.firstMatch.frame)
-        for id in ["more.newPrivateTab", "menu.history", "menu.settings"] {
+        // Every item on screen at once, without scrolling the sheet.
+        let window = app.windows.firstMatch.frame
+        for id in ids {
             let item = app.buttons[id]
             XCTAssertTrue(item.isHittable, "\(id) shows without scrolling")
-            XCTAssertTrue(visible.insetBy(dx: -1, dy: -1).contains(item.frame), "\(id) is inside the menu: \(item.frame) in \(visible)")
+            XCTAssertTrue(window.insetBy(dx: -1, dy: -1).contains(item.frame), "\(id) is on screen: \(item.frame) in \(window)")
         }
     }
 

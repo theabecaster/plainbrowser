@@ -23,7 +23,7 @@ final class OpenerEdgeSwipe: NSObject, UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let browser, let tab = browser.currentTab, !browser.isEditingAddress, !browser.isShowingGallery,
               browser.presentedViewController == nil else { return false }
-        return tab.openerID != nil && !tab.canGoBack && !browser.isShowingReader
+        return browser.returnsToOpener(tab) && !tab.canGoBack && !browser.isShowingReader
     }
 
     @objc private func panned(_ pan: UIScreenEdgePanGestureRecognizer) {

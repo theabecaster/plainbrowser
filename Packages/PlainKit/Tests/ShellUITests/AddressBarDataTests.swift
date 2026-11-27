@@ -25,6 +25,25 @@ struct AddressBarDataTests {
         #expect(favorites.first?.title == "A")
     }
 
+    @Test func focusContentHasFavoritesAndRecentPagesButNoFavoriteTwice() async throws {
+        let database = try AppDatabase.inMemory()
+        try await database.addFavorite(url: URL(string: "https://fav.example")!, title: "Fav")
+        let recorder = database.historyRecorder
+        let now = Date()
+        for (index, address) in ["https://old.example", "https://fav.example", "https://new.example"].enumerated() {
+            await recorder.record(HistoryVisit(
+                url: URL(string: address)!, title: nil, visitedAt: now.addingTimeInterval(Double(index)), kind: .link
+            ))
+        }
+        await recorder.flush()
+        let data = LiveAddressBarData()
+        #expect(await data.focusContent() == .empty, "empty before the database opens")
+        await data.attach(database)
+        let content = await data.focusContent()
+        #expect(content.favorites.map(\.title) == ["Fav"])
+        #expect(content.recent.map(\.url.host) == ["new.example", "old.example"], "newest first; the favorite has its strip")
+    }
+
     @Test func visitedPagesComeFirstThenEngineSuggestions() async throws {
         let database = try AppDatabase.inMemory()
         let data = LiveAddressBarData { SuggestionClient(http: FakeEngine(body: #"["swift docs", ["swift.org", "swift ownership"]]"#)) }

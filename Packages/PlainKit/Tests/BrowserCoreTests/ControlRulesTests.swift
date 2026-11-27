@@ -382,6 +382,15 @@ import Testing
         #expect(!ControlRules(page).startScreenRecedes, "no start screen on a page")
     }
 
+    @Test func theStartScreenRecedesForTheFieldsOwnRows() {
+        var state = Self.emptyTab()
+        state.isEditing = true
+        state.showsFocusRows = true
+        #expect(ControlRules(state).startScreenRecedes, "recent pages take the paper the mark kept company")
+        state.showsFocusRows = false
+        #expect(!ControlRules(state).startScreenRecedes, "first run: the mark keeps the empty field company")
+    }
+
     @Test func downloadsOnlyAfterOneRan() {
         var state = Self.page()
         #expect(!ControlRules(state).downloads)

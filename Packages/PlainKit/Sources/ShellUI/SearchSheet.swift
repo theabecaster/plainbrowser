@@ -606,6 +606,8 @@ final class SuggestionRow: UIControl {
     private var textTrailing: NSLayoutConstraint!
     private enum Accessory { case none, copy, paste }
     private var accessoryKind = Accessory.copy
+    /// The row's identifier while a button sits beside it (the row itself then is a container).
+    private(set) var mainIdentifier: String?
     /// A link the Paste button handed over.
     var onPaste: (URL) -> Void = { _ in }
     /// The row's main part for VoiceOver and UI tests while the accessory shows: the row itself
@@ -803,6 +805,9 @@ final class SuggestionRow: UIControl {
         accessibilityValue = detail.text
         accessibilityTraits = item.isHint ? .staticText : .button
         setAccessory(kind)
+        // With a button beside it, the row's main part carries its identifier (UI tests, VoiceOver).
+        mainIdentifier = accessibilityIdentifier
+        if kind != .none { accessibilityIdentifier = (mainIdentifier ?? "") + ".row" }
     }
 
     /// A page: its title over its address, or the address alone.
@@ -931,7 +936,7 @@ final class SuggestionRow: UIControl {
         }
 
         override var accessibilityIdentifier: String? {
-            get { row?.accessibilityIdentifier }
+            get { row?.mainIdentifier }
             set {}
         }
 

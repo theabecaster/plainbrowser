@@ -45,7 +45,15 @@ extension BrowserViewController {
     /// returns to the page that opened it.
     var canGoBack: Bool {
         guard let tab = currentTab else { return false }
-        return isShowingReader || tab.canGoBack || tab.openerID != nil
+        return isShowingReader || tab.canGoBack || returnsToOpener(tab)
+    }
+
+    /// The tab was opened from another one still open (a popup, a link, a search over a page):
+    /// Back on its first page closes it and shows that one again (state rules §8).
+    func returnsToOpener(_ tab: Tab) -> Bool {
+        if tab.openerID != nil { return true }
+        guard let opener = session.tabs.store.tabs[tab.id]?.openerID else { return false }
+        return session.tabs.store.tabs[opener] != nil
     }
 
     func performBack() {
@@ -55,7 +63,7 @@ extension BrowserViewController {
             closeReader(animated: true)
         } else if tab.canGoBack {
             tab.goBack()
-        } else if tab.openerID != nil {
+        } else if returnsToOpener(tab) {
             closeTab(tab)
         }
     }

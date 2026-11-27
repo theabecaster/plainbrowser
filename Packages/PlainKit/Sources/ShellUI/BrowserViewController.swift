@@ -648,15 +648,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             // Before typing: never empty (docs/decisions.md, "Address focus").
             let items = focusItems()
-            focusUI.lastTyped = ""
             updateStartForTyping(query: query, showsRows: !items.isEmpty)
             sheet.show(items: items)
             return
         }
         updateStartForTyping(query: query)
-        // Typing forward (not Delete): the field may complete inline.
-        let forward = query.count > focusUI.lastTyped.count && query.hasPrefix(focusUI.lastTyped)
-        focusUI.lastTyped = query
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.suggestionsShown)
         suggestionTask = Task { [weak self, data] in
@@ -667,8 +663,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 if !shown {
                     shown = true
                     signposter.endInterval(Signposts.suggestionsShown, interval)
-                    // The first list is the local one: the field completes from it, once.
-                    if forward { self.completeInline(query, with: suggestions) }
                 }
             }
             if !shown { signposter.endInterval(Signposts.suggestionsShown, interval, "cancelled") }

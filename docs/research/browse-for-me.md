@@ -126,7 +126,8 @@ From the iOS 27.2 SDK interface unless linked.
   - Summarize Page on a 12-paragraph article: tap to first words on screen
     (`summary.firstWords`) 1.62 s average over 5 runs, 1% spread (`PerfTests/testSummaryStart`).
   - Browse for Me, live web ("how do ocean tides work", DuckDuckGo lite): 5 of 5 sources read,
-    and the full answer written with citations, in about 25 s.
+    and the full answer written with citations; the whole UI test, launch and typing included,
+    took 41 s. Not a timing: the device run is the measure.
 - **Simulator.** The iOS Simulator runs the host Mac's model when the Mac has Apple Intelligence
   on. Its variant can differ from the Duo's. Apple says to test on a device.
   [Forum](https://developer.apple.com/forums/thread/787199)

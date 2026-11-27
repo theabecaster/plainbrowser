@@ -57,7 +57,8 @@ release the overshoot stays under half a point, hence 300 ms on the simulator.
 | 0.35, 0.12 (before) | 200–217 ms | 283 | 367 | 508 | 525 | 2.2–2.9 pt |
 | 0.35, 0 | 250–267 | 450 | 425 | 542 | 558 | 0 |
 | 0.30, 0 | 217–233 | 392 | 367 | 467 | 475 | 0 |
-| **0.30, 0.08 (now)** | 192–200 | 292 | 208 | 317 | 325 | < 0.5 pt |
+| 0.30, 0.08 | 192–200 | 292 | 208 | 317 | 325 | < 0.5 pt |
+| **0.28, 0.08 (now)** | 175–192 | 275 | 200 | 300 | 300 | < 0.5 pt |
 
 Critically damped (what one might reach for first) is slower to rest, not faster: it has no
 overshoot but crawls in. A damping of 0.92 arrives as briskly as the old spring and its overshoot
@@ -73,9 +74,10 @@ stays under the rest band at any width.
 1. **Gallery spring damping 1 → 0.94** (`Motion.galleryZoom`, `.spring(0.42, bounce 0.06)`). Same
    pace through the first half (50% at 117 ms either way), lands the last points ~25–70 ms
    sooner, overshoot under a fifth of a point (invisible). Saves ~100–150 ms of the tail.
-2. **Bar swipe spring 0.35/0.12 → 0.30/0.08** (`Motion.tabSwitchSpring`). The same pace to 95%
-   (a hair quicker), no visible overshoot on any width, at rest in ~0.3 s everywhere. Saves ~200 ms
-   on the Duo's inner page and after fast flicks; ~the same on the outer page.
+2. **Bar swipe spring 0.35/0.12 → 0.28/0.08** (`Motion.tabSwitchSpring`). 95% of the way a
+   touch sooner (~0.18 s, was ~0.21 s), no visible overshoot on any width, at rest in
+   ~0.26–0.30 s everywhere. Saves ~200 ms on the Duo's inner page and after fast flicks, ~10–30 ms
+   on the outer page. (0.30/0.08 first; the perf program's 320 ms device target asked for 0.28.)
 3. **A gallery kept ready.** The gallery view controller is no longer built on every tap and thrown
    away on close: one is built at idle (a second after the tab list changes, in the default run
    loop mode so never during a scroll or gesture) as a hidden child, laid out at the page's size,
@@ -122,4 +124,4 @@ lead's device gate decides):
 | | Before (device) | After (predicted) |
 |---|---|---|
 | Gallery open | 680 ms | ~520–550 ms (spring ~470–500 ms to rest, plus set-up now counted) |
-| Bar swipe settle | 526 ms | ~330–345 ms (spring ~317–325 ms plus the ~15 ms hand-off) |
+| Bar swipe settle | 526 ms | ~310–315 ms (spring ~292–300 ms plus the ~15 ms hand-off) |

@@ -28,14 +28,15 @@ public enum Motion {
     /// chrome leaves without drawing the eye. Coming back uses `toolbarSnap`: it answers the user.
     public static let toolbarHide = Spring.smooth(duration: 0.35)
     /// Tab switch by bar swipe (M2), with the gesture's velocity. Damping 0.92: the page reaches
-    /// the neighbour at about the old 0.35 s / 0.12 spring's pace (95% of the way in ~0.2 s) but
-    /// its overshoot stays under half a point, so it is at rest in ~0.3 s on any width. The old
+    /// the neighbour a touch quicker than the old 0.35 s / 0.12 spring (95% of the way in
+    /// ~0.18 s, was ~0.21 s) and its overshoot stays under half a point, so it is at rest in
+    /// ~0.26-0.30 s on any width (device target 320 ms with the hand-off). The old
     /// spring overshot 2–3 pt on the Duo's 951 pt inner page, or after a fast flick on any width,
     /// and crept back for ~0.2 s more (docs/research/perf-gallery-swipe.md).
-    public static let tabSwitch = Animation.spring(duration: 0.3, bounce: 0.08)
+    public static let tabSwitch = Animation.spring(duration: 0.28, bounce: 0.08)
     /// The same spring as a value, for `SpringDriver`: the bar swipe runs frame by frame so a
     /// finger can grab the page mid-flight.
-    public static let tabSwitchSpring = Spring(duration: 0.3, bounce: 0.08)
+    public static let tabSwitchSpring = Spring(duration: 0.28, bounce: 0.08)
     /// Page zooms into its card in the tab gallery (M2). Damping 0.94, not 1: the same pace
     /// through the first half, the last few points land sooner, and the overshoot is a fifth of a
     /// point at most (none the eye can see). A critically damped spring creeps over its last

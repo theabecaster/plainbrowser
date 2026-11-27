@@ -1707,12 +1707,16 @@ bar above every page. Research: docs/research/inset-fill.md.
   overshoots 2–3 pt on the Duo's 951 pt inner page and creeps back for ~0.2 s.
 - **Springs retuned, same pace:** the gallery zoom is `.spring(0.42, bounce 0.06)` (damping 0.94:
   the same first half, the last points sooner, overshoot under 0.2 pt) and the bar swipe
-  `Spring(0.30, bounce 0.08)` (damping 0.92: 95% of the way as fast as before, overshoot under
-  half a point on any width, at rest in ~0.3 s). Critically damped was tried on paper and is
+  `Spring(0.28, bounce 0.08)` (damping 0.92: 95% of the way a touch sooner than before, overshoot
+  under half a point on any width, at rest in ~0.26–0.30 s). Critically damped was tried on paper and is
   slower to rest. Motion table updated with the reasons.
 - **The settle rule is unchanged.** `gallery.show` and `tab.swipeSettle` still end when the motion
   is within 0.5 pt of its target and moving less than 0.5 pt a frame; the motion ends sooner, the
   metric does not end earlier. The gallery's settle watch now samples at 120 Hz.
+- **`gallery.openTab` ends at visual rest too**, and both zooms end their run there: the layers
+  stop at their model values (under half a point away) and the live page, or the gallery's
+  touches, take over then instead of after Core Animation's ~1 s settle (perf program: the
+  interval read ~1,490 ms on the simulator).
 - **`gallery.show` starts earlier: at the tap.** The shell begins it in `presentGallery` and hands
   it to the transition, so getting the gallery ready and the page's snapshot count. Stricter than
   before (the old start left out building the gallery), and the kept gallery cannot move work

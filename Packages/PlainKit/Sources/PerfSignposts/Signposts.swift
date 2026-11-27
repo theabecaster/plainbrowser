@@ -248,7 +248,8 @@ public enum Signposts {
     /// on every edge, and moving less than this in a frame (so a page still crossing the card's
     /// frame at speed doesn't count). Half a point is below what the eye can see move.
     public static let visualSettle: Double = 0.5
-    /// Interval: a card zooming into its page, until the page is settled.
+    /// Interval: a card zooming into its page, until the page visibly rests there (`visualSettle`,
+    /// the same rule as `gallery.show`, since 2026-11-27); the live page takes over then.
     public static let galleryOpenTab: StaticString = "gallery.openTab"
     /// Interval: a card flicked away (or closed from its button or menu), until the cards reflow.
     public static let galleryCardClose: StaticString = "gallery.cardClose"

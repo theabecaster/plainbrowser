@@ -43,8 +43,6 @@ public final class TabGalleryTransition {
     private let signpostName: StaticString
     private let signpostState: OSSignpostIntervalState
     private var signpostEnded = false
-    /// `gallery.show` ends when the page visibly rests on its card, not at the spring's settle.
-    private let endsAtVisualSettle: Bool
     /// Samples the moving page each frame while a spring runs, to end the signpost interval when
     /// the motion has visibly settled (`visualSettle`) rather than at the spring's long tail.
     private var settleWatch: CADisplayLink?
@@ -74,7 +72,6 @@ public final class TabGalleryTransition {
         self.completion = completion
         destination = start == .page ? .gallery : .page
         signpostName = start == .page ? Signposts.galleryShow : Signposts.galleryOpenTab
-        endsAtVisualSettle = start == .page
         // The shell may have begun the interval already, at the tap, so the gallery's set-up
         // before the first frame is inside it.
         signpostState = interval ?? Signposts.signposter.beginInterval(signpostName)
@@ -212,17 +209,18 @@ public final class TabGalleryTransition {
                 self.offset = .zero
                 self.apply(progress: self.progress(of: end), crossfade: false, setsRing: false)
             }, completion: finish)
-            // Only the page zooming into its card (the perf gate's `gallery.show`); a card
-            // opening into its page keeps ending at the spring's settle.
-            if endsAtVisualSettle { watchSettle() }
+            // Both ways the run ends when the motion is visibly over (`gallery.show`,
+            // `gallery.openTab`), not when Core Animation finishes the spring's sub-point tail.
+            watchSettle()
         }
     }
 
     // MARK: Signpost
 
-    /// Watches the page each frame until it is visibly at rest (`Signposts.visualSettle`). The
-    /// critically damped spring creeps over that last half point for several hundred
-    /// milliseconds more before Core Animation calls it finished.
+    /// Watches the page each frame until it is visibly at rest (`Signposts.visualSettle`), then
+    /// ends the run there: the spring would creep over that last half point for several hundred
+    /// milliseconds more before Core Animation calls it finished, with the live page (or the
+    /// gallery's touches) waiting on it.
     private func watchSettle() {
         lastShown = nil
         guard !signpostEnded, settleWatch == nil else { return }
@@ -240,8 +238,19 @@ public final class TabGalleryTransition {
         guard let last = lastShown else { return }
         let settle = CGFloat(Signposts.visualSettle)
         if Self.distance(shown, wrapper.frame) <= settle, Self.distance(shown, last) <= settle {
-            endSignpost()
+            landAtRest()
         }
+    }
+
+    /// The motion is visibly over: what is left of the spring is under half a point, so the
+    /// layers stop at their model values (a jump the eye cannot see) and the run ends now. The
+    /// spring's own completion, later, is ignored.
+    private func landAtRest() {
+        guard !isFinished else { return endSignpost() }
+        generation += 1
+        wrapper.layer.removeAllAnimations()
+        for view in gallery.transitionContent { view.layer.removeAllAnimations() }
+        complete(at: destination)
     }
 
     /// The largest gap between two frames' matching edges.

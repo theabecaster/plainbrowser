@@ -15,9 +15,9 @@ public enum Motion {
     /// Small state changes: a row highlight, an armed indicator.
     public static let quick = Animation.snappy(duration: 0.15)
     /// Address-bar suggestions changing while typing: new rows fade in, old ones fade out where
-    /// they stand, and a row that stays but changes place slides there. A no-bounce spring
-    /// (`UIView.animate(springDuration:bounce:…)` with this duration), so the next keystroke
-    /// retargets it from wherever the rows are on screen.
+    /// they stand, and a row that changes place crossfades there; nothing slides. An ease-out
+    /// fade of this duration, not a spring: a spring's long tail leaves the old text faintly
+    /// visible for a while. The next keystroke picks it up from what is on screen.
     public static let suggestionsDuration: TimeInterval = 0.18
     /// Toolbar snaps collapsed or expanded when a drag ends, from the release velocity. A spring
     /// value, not an `Animation`: `SpringDriver` runs it frame by frame so a new drag can grab it.

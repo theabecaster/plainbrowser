@@ -150,8 +150,9 @@ public final class LiveAddressBarData: AddressBarData {
     /// Delivers at most two lists per keystroke, and never one with fewer engine rows only to add
     /// them back a moment later (that reads as flicker):
     /// 1. At once: local pages with the engine rows already known for this text (the cached
-    ///    answer for its longest prefix). When none is cached, the previous keystroke's engine
-    ///    rows stay in place for `FixedChoices.suggestionHoldWindow` while the answer is on its way.
+    ///    answer for its longest prefix). Where that has fewer rows than the previous keystroke
+    ///    showed, the previous rows fill the rest for `FixedChoices.suggestionHoldWindow` while
+    ///    the answer is on its way.
     /// 2. The engine's answer, when it differs. If it has not come by the end of the hold, the
     ///    held rows go first, then the answer follows whenever it arrives.
     public func suggestions(for query: String, update: @escaping ([AddressBarSuggestion]) -> Void) async {
@@ -175,8 +176,13 @@ public final class LiveAddressBarData: AddressBarData {
         let now = ContinuousClock.now
         let typingOn = !shownQuery.isEmpty && (query.hasPrefix(shownQuery) || shownQuery.hasPrefix(query))
         let holdLeft = FixedChoices.suggestionHoldWindow - (heldSince.map { now - $0 } ?? .zero)
-        let held = cached.isEmpty && remote && typingOn && holdLeft > .zero ? shownSearches : []
-        var shown = cached.isEmpty ? held : cached
+        let canHold = remote && typingOn && holdLeft > .zero
+        let held = !canHold ? [] : Array(
+            shownSearches.filter { old in !cached.contains { $0.caseInsensitiveCompare(old) == .orderedSame } }
+                .prefix(max(0, shownSearches.count - cached.count))
+        )
+        let first = cached + held
+        var shown = first
         func deliver(_ searches: [String], holding: Bool = false) {
             shown = searches
             shownSearches = searches
@@ -184,7 +190,7 @@ public final class LiveAddressBarData: AddressBarData {
             if !holding { heldSince = nil } else if heldSince == nil { heldSince = now }
             update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: searches))
         }
-        deliver(shown, holding: !held.isEmpty)
+        deliver(first, holding: !held.isEmpty)
         guard remote else { return }
 
         let request = Task { try? await client.suggestions(for: query, engine: engine, isPrivate: isPrivate) }
@@ -194,7 +200,7 @@ public final class LiveAddressBarData: AddressBarData {
             }
             if !held.isEmpty, !Task.isCancelled {
                 // The answer is late: the rows for the old text go now.
-                deliver([])
+                deliver(cached)
             }
             return await request.value
         } onCancel: {
@@ -204,7 +210,7 @@ public final class LiveAddressBarData: AddressBarData {
         let fresh = answer ?? []
         if fresh.isEmpty {
             // No answer (offline, timed out, nothing to suggest): rows for the old text go.
-            if !held.isEmpty, shown == held { deliver([]) }
+            if !held.isEmpty, shown == first { deliver(cached) }
         } else if fresh != shown {
             deliver(fresh)
         }

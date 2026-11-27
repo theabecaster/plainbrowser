@@ -18,14 +18,14 @@ enum SearchPick {
 /// Typing changes the list on every keystroke, so it changes calmly (docs/plan.md, motion table,
 /// "Suggestions change"):
 /// - Each row belongs to one suggestion (a page's address or a search's text). A suggestion that
-///   stays keeps its row, so its text and icon never blink; it slides to its new place if it has
-///   one, and is not touched at all if it hasn't.
-/// - A new suggestion fades in where it lands; one that goes fades out where it stood. Where one
-///   replaces another at the same place, that reads as a crossfade.
+///   stays in its place keeps its row untouched, so its text and icon never blink.
+/// - Nothing slides while typing: a new suggestion fades in where it lands, one that goes fades
+///   out where it stood, and one that changes place crossfades there. Every place on screen only
+///   ever crossfades from one text to the next.
 /// - Lists that arrive in the same run loop turn are applied once, the latest, just before Core
 ///   Animation commits, so the first list for a keystroke still shows on the next frame.
 /// - Every change starts from what is on screen, so a keystroke mid-animation retargets it.
-/// - Reduce Motion: nothing slides; the list crossfades.
+/// - Reduce Motion: the whole list crossfades at once.
 final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// The sheet's content. The owner pins its bottom above the pill and its sides to the margins.
     let content = UIView()
@@ -62,6 +62,8 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     private var favoritesToken = 0
     /// True while `update` lays out, so `layoutSubviews` leaves the rows to it.
     private var isApplying = false
+    private var isToppingUp = false
+    private var didWarmRows = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -122,6 +124,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         let tap = UITapGestureRecognizer(target: self, action: #selector(backgroundTapped))
         tap.delegate = self
         addGestureRecognizer(tap)
+
+        // A full list's rows are made now, not on the first keystroke's frame.
+        spareRows = (0..<FixedChoices.maxAddressBarSuggestions).map { _ in makeRow() }
     }
 
     @available(*, unavailable)
@@ -219,19 +224,21 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         } else {
             update(items, showFavorites: showFavorites, animated: window != nil)
         }
+        topUpSpareRows()
     }
 
     private func update(_ items: [AddressBarSuggestion], showFavorites: Bool, animated: Bool) {
         // Where every row is on screen now, mid-animation included, in the clip's space.
         var before: [ObjectIdentifier: (frame: CGRect, alpha: CGFloat)] = [:]
-        // And where each was heading (its resting place), for rows about to leave.
-        var heading: [ObjectIdentifier: CGRect] = [:]
         for row in shownRows + leavingRows {
             before[ObjectIdentifier(row)] = presented(row)
-            heading[ObjectIdentifier(row)] = clipFrame(of: row)
         }
 
-        // Match suggestions to rows by identity: a suggestion that stays keeps its row.
+        // Match suggestions to rows by identity and place: a suggestion that stays in its place
+        // keeps its row. One that changes place crossfades there: its row fades out where it was
+        // (it leaves) while another row with the same suggestion fades in at the new place.
+        // Nothing slides while typing, so every place on screen only ever crossfades from one
+        // text to the next, and rows never drift past each other.
         var shownByID: [String: SuggestionRow] = [:]
         for row in shownRows { if let id = row.identity { shownByID[id] = row } }
         var next: [SuggestionRow] = []
@@ -239,10 +246,11 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         for (index, item) in items.enumerated() {
             let id = SuggestionRow.identity(of: item)
             let row: SuggestionRow
-            if let kept = shownByID.removeValue(forKey: id) {
+            if let kept = shownByID[id], kept.place == index {
+                shownByID[id] = nil
                 row = kept
-            } else if let back = leavingRows.firstIndex(where: { $0.identity == id }) {
-                // Still fading out: it comes back from where it is.
+            } else if let back = leavingRows.firstIndex(where: { $0.identity == id && $0.place == index }) {
+                // Still fading out at this place: it comes back from where it is.
                 row = leavingRows.remove(at: back)
                 row.leaveToken += 1
                 row.removeFromSuperview()
@@ -253,6 +261,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
                 entering.insert(ObjectIdentifier(row))
             }
             row.configure(item, index: index)
+            row.place = index
             next.append(row)
         }
         let leaving = shownRows.filter { row in row.identity.map { shownByID[$0] === row } ?? false }
@@ -269,20 +278,14 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         UIView.performWithoutAnimation { layoutIfNeeded() }
         isApplying = false
 
-        // Leaving rows fade out over the stack, from where they are on screen, finishing the move
-        // they were making: they line up with the rows fading in where they come to rest.
+        // Leaving rows fade out where they stand, over the stack.
         for row in leaving {
             let seen = before[ObjectIdentifier(row)] ?? (row.frame, row.alpha)
-            let rest = heading[ObjectIdentifier(row)] ?? seen.frame
             row.layer.removeAllAnimations()
             row.leaveToken += 1
             row.translatesAutoresizingMaskIntoConstraints = true
             row.transform = .identity
-            // Only a slide of at most one place is finished; anything else fades where it stands.
-            let offset = seen.frame.midY - rest.midY
-            let finishesSlide = animated && abs(offset) > 0.5 && abs(offset) <= rest.height + 0.5
-            row.frame = finishesSlide ? rest : seen.frame
-            if finishesSlide { row.transform = CGAffineTransform(translationX: 0, y: offset) }
+            row.frame = seen.frame
             row.alpha = seen.alpha
             row.isUserInteractionEnabled = false
             row.accessibilityElementsHidden = true
@@ -297,7 +300,6 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
 
         // Each staying row starts from where it is on screen; a new one from nothing, in place.
         var moves: [(SuggestionRow, CGFloat)] = []
-        var ghosts: [UIView] = []
         for row in next {
             let target: CGFloat = fits(row) ? 1 : 0
             row.fits = target == 1
@@ -320,24 +322,11 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             if !moved, abs(seen.alpha - target) < 0.01, row.layer.animationKeys()?.isEmpty ?? true {
                 continue
             }
-            // A row that jumps more than one place crossfades there instead of sliding across the
-            // rows in between: a copy fades out where it was while the row fades in.
-            if moved, abs(offset) > now.height * 1.5, seen.alpha > 0.01,
-               let ghost = row.snapshotView(afterScreenUpdates: false) {
-                ghost.frame = seen.frame
-                ghost.alpha = seen.alpha
-                ghost.isUserInteractionEnabled = false
-                rowsClip.addSubview(ghost)
-                ghosts.append(ghost)
-                row.layer.removeAllAnimations()
-                row.transform = .identity
-                row.alpha = 0
-                moves.append((row, target))
-                continue
-            }
+            // Its place moved on screen though its index did not (the favorites came or went):
+            // it fades in at the new place rather than sliding there.
             row.layer.removeAllAnimations()
-            row.transform = moved ? CGAffineTransform(translationX: 0, y: offset) : .identity
-            row.alpha = seen.alpha
+            row.transform = .identity
+            row.alpha = moved ? 0 : seen.alpha
             moves.append((row, target))
         }
         // VoiceOver reads best first.
@@ -359,8 +348,8 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         let leavingNow = leaving.filter { leavingRows.contains($0) }.map { ($0, $0.leaveToken) }
         setFavoritesShown(showFavorites, animated: true)
         UIView.animate(
-            springDuration: Motion.suggestionsDuration, bounce: 0, initialSpringVelocity: 0, delay: 0,
-            options: [.allowUserInteraction, .beginFromCurrentState]
+            withDuration: Motion.suggestionsDuration, delay: 0,
+            options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]
         ) {
             for (row, alpha) in moves {
                 row.transform = .identity
@@ -370,13 +359,58 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
                 row.transform = .identity
                 row.alpha = 0
             }
-            for ghost in ghosts { ghost.alpha = 0 }
             self.plate.alpha = plateAlpha
             if !area.isEmpty { self.plateMask.frame = area }
         } completion: { [weak self] _ in
             guard let self else { return }
-            for ghost in ghosts { ghost.removeFromSuperview() }
             for (row, token) in leavingNow { self.finishLeaving(row, token: token) }
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil, !didWarmRows else { return }
+        didWarmRows = true
+        // After the frame that showed the sheet, not on the launch path.
+        DispatchQueue.main.async { [weak self] in self?.warmRows() }
+    }
+
+    /// Lays the spare rows out once, out of sight, with a page and a search: the first keystroke
+    /// then doesn't pay for their fonts, symbols and constraints in its frame.
+    private func warmRows() {
+        guard shownRows.isEmpty, leavingRows.isEmpty, pending == nil else { return }
+        let samples: [AddressBarSuggestion] = [
+            .page(url: URL(string: "https://example.com/a")!, title: "Example", isFavorite: false), .search("example"),
+        ]
+        let rows = spareRows
+        UIView.performWithoutAnimation {
+            for (index, row) in rows.enumerated() {
+                row.prepareForList()
+                row.alpha = 0
+                row.configure(samples[index % samples.count], index: index)
+                rowsStack.addArrangedSubview(row)
+            }
+            layoutIfNeeded()
+            for row in rows {
+                rowsStack.removeArrangedSubview(row)
+                row.removeFromSuperview()
+                row.alpha = 1
+            }
+            layoutIfNeeded()
+        }
+    }
+
+    /// Keeps a full list's worth of rows ready, made after the frame that used them up rather
+    /// than during the next keystroke's frame.
+    private func topUpSpareRows() {
+        guard spareRows.count < FixedChoices.maxAddressBarSuggestions, !isToppingUp else { return }
+        isToppingUp = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isToppingUp = false
+            while self.spareRows.count < FixedChoices.maxAddressBarSuggestions {
+                self.spareRows.append(self.makeRow())
+            }
         }
     }
 
@@ -411,8 +445,8 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             return
         }
         UIView.animate(
-            springDuration: Motion.suggestionsDuration, bounce: 0, initialSpringVelocity: 0, delay: 0,
-            options: [.allowUserInteraction, .beginFromCurrentState]
+            withDuration: Motion.suggestionsDuration, delay: 0,
+            options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]
         ) {
             self.favoritesStrip.alpha = shown ? 1 : 0
         } completion: { [weak self] _ in
@@ -482,6 +516,9 @@ final class SuggestionRow: UIControl {
     private var shownIndex = -1
     /// Whether the row fits in the space above the field (only whole rows show).
     var fits = true
+    /// The row's index in the list (0 is the best, nearest the field); a leaving row keeps the
+    /// one it had.
+    var place = -1
     /// Bumped whenever the row starts or stops fading out, so a stale fade's end is ignored.
     var leaveToken = 0
 

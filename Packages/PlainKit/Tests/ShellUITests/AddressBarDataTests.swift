@@ -61,8 +61,9 @@ struct AddressBarDataTests {
 
         var updates: [[AddressBarSuggestion]] = []
         await data.suggestions(for: "swift d") { updates.append($0) }
-        // Local pages and the cached "swift" answer arrive together, never pages alone first.
-        #expect(updates.map(Self.searches) == [["swift docs"], ["swift docs", "swift data"]])
+        // Local pages and the cached "swift" answer arrive together, never pages alone first; the
+        // row the cache has no match for holds its place until the answer comes.
+        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], ["swift docs", "swift data"]])
     }
 
     @Test func engineRowsStayInPlaceUntilTheNextAnswer() async throws {

@@ -203,7 +203,7 @@ final class PageSheetController: UIViewController {
         configuration.imagePlacement = .top
         configuration.imagePadding = Spacing.s
         configuration.attributedTitle = AttributedString(Self.caption(action.title), attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .caption1), .foregroundColor: Palette.inkSecondary,
+            .font: UIFont.preferredFont(forTextStyle: .footnote), .foregroundColor: Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.contentInsets = NSDirectionalEdgeInsets(top: Spacing.m, leading: Spacing.xs, bottom: Spacing.s, trailing: Spacing.xs)
@@ -312,7 +312,7 @@ final class PageSheetController: UIViewController {
         configuration.imagePadding = Spacing.xs
         configuration.baseForegroundColor = Palette.ink
         configuration.attributedTitle = AttributedString(Self.caption(element.title), attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .caption1), .foregroundColor: Palette.inkSecondary,
+            .font: UIFont.preferredFont(forTextStyle: .footnote), .foregroundColor: Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.contentInsets = NSDirectionalEdgeInsets(top: Spacing.s, leading: Spacing.xxs, bottom: Spacing.s, trailing: Spacing.xxs)

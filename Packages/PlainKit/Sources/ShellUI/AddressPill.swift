@@ -27,7 +27,7 @@ final class AddressPill: UIView {
     var onCopy: () -> Void = {}
     private lazy var copyButton: UIButton = {
         var configuration = UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: "doc.on.doc")
+        configuration.image = UIImage(systemName: "link")
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
         configuration.baseForegroundColor = Palette.accentOnGlass
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: Spacing.s, bottom: 0, trailing: Spacing.s)
@@ -309,7 +309,7 @@ final class AddressPill: UIView {
 
     /// The copy glyph, or a check mark for a moment after a copy: same size, so nothing moves.
     private func setCopyGlyph(copied: Bool) {
-        copyButton.configuration?.image = UIImage(systemName: copied ? "checkmark" : "doc.on.doc")
+        copyButton.configuration?.image = UIImage(systemName: copied ? "checkmark" : "link")
         copyButton.accessibilityLabel = copied ? String(localized: "Copied") : String(localized: "Copy Link")
     }
 

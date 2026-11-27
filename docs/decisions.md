@@ -1445,15 +1445,17 @@ docs/research/address-focus.md.
 The focused field's first row on a page is the page itself (its title and host, Copy, Edit), so
 editing the address is also one tap from the search.
 
-**What the focused field shows (nothing empty).** Above the field, nearest first, the way the
-suggestions sit (best nearest the thumb); every item comes from memory, so it is on screen in
-the frame the keyboard starts:
+**What the focused field shows (nothing empty).** The favorites strip stays directly above the
+field, where it has always been (one row of big targets in thumb reach, Safari's Favorites); the
+rows sit above it, nearest first, the way the suggestions sit (best nearest the thumb). Every item
+comes from memory, so it is on screen in the frame the keyboard starts. Rows, in order:
 
 | Item | When | Why |
 |---|---|---|
 | Copied link ("Open Copied Link") | The pasteboard holds a web address (`detectPatterns`, no paste alert) that Plain has not offered since it changed, and it is not the page on screen | The most likely next address. The address is shown only when Plain copied it itself; others are read only on the tap. |
 | This page (title, host; Copy, Edit) | A page is on screen, search intent | Edit and copy stay one tap away (Chrome's current-page row). |
-| Favorites strip | At least one favorite (private tabs too) | Unchanged. |
+| Unread Reading List (up to 2) | Pages saved and not read yet (private tabs too, as favorites) | Saved on purpose to read next. |
+| Favorites strip (directly above the field) | At least one favorite (private tabs too) | Unchanged. |
 | Recently visited (up to 4) | Regular tab; history has pages other than this one and the favorites | Arc's "context" row; Safari's Frequently Visited. Newest first, one row per page. |
 | Recently closed (up to 2) | Regular tab; the closed stack has a batch | Reopens that batch in place (`reopenClosed`). |
 | One sentence | None of the above (first run) | "Search, or enter an address. Pages you visit and your favorites show up here." |

@@ -250,6 +250,9 @@ final class CopiedLinkWatcher {
         let board = UIPasteboard.plain
         let count = board.changeCount
         guard count != checkedCount else { return }
+        // An isolated run's private pasteboard outlives the run: what an earlier test copied is
+        // not this run's copy.
+        if checkedCount == .min, TestIsolation.isActive { usedCount = count }
         checkedCount = count
         firstSeen = .now
         offerNow = nil

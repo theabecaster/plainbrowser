@@ -108,6 +108,14 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         plate.isUserInteractionEnabled = false
         plate.alpha = 0
         Paper.apply(to: plate)
+        // By night the card is lifted a step above the veiled page (the sheets' card tone), so it
+        // reads as one surface; by day paper over a light page already does.
+        let lift = UIView()
+        lift.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? Palette.paperCard.resolvedColor(with: $0) : .clear }
+        lift.isUserInteractionEnabled = false
+        lift.frame = plate.bounds
+        lift.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        plate.addSubview(lift)
         plateMask.backgroundColor = .black
         plateMask.layer.cornerRadius = Radius.large
         plateMask.layer.cornerCurve = .continuous
@@ -663,7 +671,7 @@ final class SuggestionRow: UIControl {
         detail.lineBreakMode = .byTruncatingMiddle
 
         var copy = UIButton.Configuration.plain()
-        copy.image = UIImage(systemName: "doc.on.doc")
+        copy.image = UIImage(systemName: "link")
         copy.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
         copy.baseForegroundColor = Palette.accentOnPaper
         accessory.configuration = copy
@@ -890,7 +898,7 @@ final class SuggestionRow: UIControl {
         UIAccessibility.post(notification: .announcement, argument: String(localized: "Copied"))
         DispatchQueue.main.asyncAfter(deadline: .now() + FixedChoices.copiedConfirmation) { [weak self] in
             guard let self, self.copyToken == token else { return }
-            self.accessory.configuration?.image = UIImage(systemName: "doc.on.doc")
+            self.accessory.configuration?.image = UIImage(systemName: "link")
             self.accessory.accessibilityLabel = String(localized: "Copy Link")
         }
     }

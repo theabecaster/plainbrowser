@@ -29,7 +29,12 @@ import WebKit
     public static func install(in configuration: WKWebViewConfiguration) -> ReaderSchemeHandler {
         let handler = ReaderSchemeHandler()
         configuration.setURLSchemeHandler(handler, forURLScheme: ReaderRenderer.scheme)
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        // Its own preferences object: a copied configuration shares `defaultWebpagePreferences`
+        // with the one it was copied from, so changing it in place turned JavaScript off for
+        // every page loaded after the reader opened once.
+        let page = WKWebpagePreferences()
+        page.allowsContentJavaScript = false
+        configuration.defaultWebpagePreferences = page
         return handler
     }
 

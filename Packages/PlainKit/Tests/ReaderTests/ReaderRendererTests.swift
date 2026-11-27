@@ -124,6 +124,17 @@ import WebKit
         return try await ReaderExtractor().article(in: webView)
     }
 
+    /// The reader's configuration is a copy of the pages' one (`WebViewPool.makeAuxiliaryWebView`),
+    /// and a copy shares `defaultWebpagePreferences`: turning JavaScript off for the reader must
+    /// leave it on for every page.
+    @Test func installLeavesTheCopiedConfigurationsJavaScriptOn() {
+        let pages = WKWebViewConfiguration()
+        let reader = pages.copy() as! WKWebViewConfiguration
+        ReaderSchemeHandler.install(in: reader)
+        #expect(!reader.defaultWebpagePreferences.allowsContentJavaScript)
+        #expect(pages.defaultWebpagePreferences.allowsContentJavaScript)
+    }
+
     private func readerWebView(width: CGFloat, height: CGFloat) -> (WKWebView, ReaderSchemeHandler) {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()

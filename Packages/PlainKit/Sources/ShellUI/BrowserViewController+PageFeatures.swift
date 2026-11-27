@@ -76,6 +76,61 @@ extension BrowserViewController {
         return [save]
     }
 
+    // MARK: Translate Page
+
+    /// Translate Page on a page in a language the user doesn't read, subtitled with the pair
+    /// ("French to English"); Show Original while it is translated (state rules §4).
+    func translateMenuItems(for tab: Tab, item: TranslateItem) -> [UIMenuElement] {
+        switch item {
+        case .hidden:
+            return []
+        case .showOriginal:
+            let subtitle = tab.translation == .translating ? String(localized: "Translating…") : nil
+            let show = UIAction(title: "Show Original", subtitle: subtitle, image: UIImage(systemName: "translate")) { [weak tab] _ in
+                tab?.showOriginal()
+            }
+            show.accessibilityIdentifier = "menu.translate"
+            return [show]
+        case .translate:
+            let translate = UIAction(
+                title: "Translate Page", subtitle: Self.languagePair(tab), image: UIImage(systemName: "translate")
+            ) { [weak tab] _ in
+                tab?.translate()
+            }
+            translate.accessibilityIdentifier = "menu.translate"
+            return [translate]
+        }
+    }
+
+    /// "French to English", in the user's language; nil when either name is unknown.
+    static func languagePair(_ tab: Tab) -> String? {
+        guard let source = tab.pageLanguage.flatMap(languageName), let target = tab.translationTarget.flatMap(languageName)
+        else { return nil }
+        return String(localized: "\(source) to \(target)")
+    }
+
+    static func languageName(_ language: Locale.Language) -> String? {
+        guard let code = language.languageCode?.identifier else { return nil }
+        return Locale.current.localizedString(forLanguageCode: code)?.capitalized(with: .current)
+    }
+
+    /// The one quiet hint (`FixedChoices.translateHintShownOnce`): the first time ever a page in a
+    /// language the user doesn't read shows, a toast names the language with a Translate button.
+    /// After that, Translate Page waits in the page menu. No banner, no badge (ui-reference).
+    func offerTranslationOnce() {
+        let key = "PlainTranslateHintShown"
+        guard FixedChoices.translateHintShownOnce, !UserDefaults.standard.bool(forKey: key),
+              let tab = currentTab, let language = tab.pageLanguage.flatMap(Self.languageName)
+        else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        showToastWhenFree { [weak self, weak tab] in
+            guard let self, let tab, tab === self.currentTab, tab.translation == .original else { return }
+            self.tabsUI.toast.show(String(localized: "This page is in \(language)"), button: "Translate") { [weak tab] in
+                tab?.translate()
+            }
+        }
+    }
+
     // MARK: Print and Save as PDF
 
     /// Print and Save as PDF as one row of two (state rules §4: on what finished loading, or the

@@ -18,6 +18,8 @@ public final class BrowserSession {
     let blocker: ContentBlocker
     let reader = ReaderExtractor()
     let cookieBanners: CookieBanners
+    /// Translate Page's engine (Apple's Translation framework; a stand-in in UI tests).
+    let translator: any PageTranslator
     private let readerScripts: ReaderPageScripts
     private let cookieBannerSites: StorageSiteCookieBannersStore
     private let contentModes: StorageSiteContentModeStore
@@ -46,6 +48,12 @@ public final class BrowserSession {
         readerScripts = ReaderPageScripts(extractor: reader)
         cookieBannerSites = StorageSiteCookieBannersStore(database: database)
         cookieBanners = CookieBanners(store: cookieBannerSites)
+        #if DEBUG
+        translator = ProcessInfo.processInfo.arguments.contains("-PlainTestTranslator")
+            ? TestPageTranslator() : AppleTranslator()
+        #else
+        translator = AppleTranslator()
+        #endif
         pool = WebViewPool(
             tabStates: tabStates,
             permissionStore: StorageSitePermissionStore(database: database),
@@ -54,7 +62,8 @@ public final class BrowserSession {
             pageScripts: ShellPageScripts([readerScripts, cookieBanners]),
             thumbnailDirectory: thumbnailDirectory,
             pageZooms: pageZooms,
-            darkPages: darkPages
+            darkPages: darkPages,
+            translator: translator
         )
         tabs = EngineTabs(pool: pool, database: database, tabStates: tabStates, windowID: windowID)
         tabs.privateSessionDidEnd = { [cookieBanners] in cookieBanners.endPrivateSession() }

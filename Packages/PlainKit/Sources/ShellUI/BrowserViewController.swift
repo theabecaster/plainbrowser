@@ -121,6 +121,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         self.onSearchFieldReady = onSearchFieldReady
         super.init(nibName: nil, bundle: nil)
         session.pool.host = self
+        (session.translator as? AppleTranslator)?.presenter = self
     }
 
     @available(*, unavailable)
@@ -178,6 +179,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        session.pool.onTranslationFailed = { [weak self] tab in
+            guard let self, tab === self.currentTab else { return }
+            Haptic.nothingThere.play()
+            self.showToastWhenFree { [weak self] in self?.tabsUI.toast.show("This page couldn't be translated") }
+        }
         session.pool.onMemoryWarning = { [weak self] in
             self?.tabsUI.previews = [:]
             self?.tabsUI.fullPreviews = []
@@ -1021,6 +1027,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             pageItems.append(find)
         }
         pageItems += readerMenuItems(rules.reader)
+        pageItems += translateMenuItems(for: tab, item: rules.translate)
         if rules.savePDF { pageItems += pdfMenuItems(for: tab) }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
             guard let self else { return }

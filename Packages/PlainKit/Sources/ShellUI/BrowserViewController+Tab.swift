@@ -258,6 +258,7 @@ extension BrowserViewController {
                 if let tab = currentTab { engineUI.typedVisitTabs.remove(tab.id) }
             }
         }
+        if old != nil, old?.canTranslate == false, new.canTranslate { offerTranslationOnce() }
         updateButtons()
         updatePageState()
     }
@@ -510,6 +511,8 @@ struct TabSnapshot: Equatable {
     var security: SecurityState
     var loadError: LoadError?
     var isAwaitingResubmit: Bool
+    /// The page is in a language the user doesn't read (Translate Page applies).
+    var canTranslate: Bool
 
     init(_ tab: Tab) {
         url = tab.url
@@ -520,6 +523,7 @@ struct TabSnapshot: Equatable {
         security = tab.security
         loadError = tab.loadError
         isAwaitingResubmit = tab.isAwaitingResubmit
+        canTranslate = tab.translationTarget != nil && tab.translation == .original
     }
 
     /// The load failed and nothing newer is loading.

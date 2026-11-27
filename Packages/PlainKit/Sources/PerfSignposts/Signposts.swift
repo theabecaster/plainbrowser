@@ -16,6 +16,9 @@ public enum Signposts {
     public static let searchFieldReady: StaticString = "launch.searchFieldReady"
     /// Interval: the pool creating the warm web view after the first frame.
     public static let webViewWarmUp: StaticString = "webView.warmUp"
+    /// Interval: generating one paper texture tile (DesignSystem `PaperTexture`), off the main
+    /// thread, once per appearance.
+    public static let paperTile: StaticString = "paper.tile"
     /// Interval: the user submitting the address bar, until the load is handed to the web view
     /// (parsing the input, getting a web view, starting the load).
     public static let addressSubmit: StaticString = "address.submit"

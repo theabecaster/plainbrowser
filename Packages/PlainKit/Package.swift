@@ -41,7 +41,8 @@ let package = Package(
 
         // Leaves.
         .target(name: "PerfSignposts"),
-        .target(name: "DesignSystem", swiftSettings: mainActorByDefault),
+        // PerfSignposts: the paper tile's generation shows up in Instruments.
+        .target(name: "DesignSystem", dependencies: ["PerfSignposts"], swiftSettings: mainActorByDefault),
 
         // Layer 2: the web engine and what plugs into it.
         .target(
@@ -58,7 +59,8 @@ let package = Package(
         ),
         .target(
             name: "Reader",
-            dependencies: ["Storage", "BrowserCore", "PerfSignposts"],
+            // DesignSystem: the paper tile under the reader page (PaperTexture, no UIKit).
+            dependencies: ["Storage", "BrowserCore", "PerfSignposts", "DesignSystem"],
             // Mozilla Readability 0.6.0 (Apache-2.0), the reader page template and its stylesheet.
             resources: [.copy("Resources/Reader")]
         ),

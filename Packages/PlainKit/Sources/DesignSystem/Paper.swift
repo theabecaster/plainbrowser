@@ -1,5 +1,5 @@
 #if canImport(UIKit)
-import os
+import PerfSignposts
 import SwiftUI
 import UIKit
 
@@ -117,15 +117,15 @@ private final class Tiles {
     static let shared = Tiles()
 
     private var images: [PaperTexture.Sheet: CGImage] = [:]
-    private var patterns: [String: UIColor] = [:]
+    private struct Key: Hashable { var sheet: PaperTexture.Sheet; var scale: CGFloat }
+    private var patterns: [Key: UIColor] = [:]
     private var pending: Set<PaperTexture.Sheet> = []
-    private let signposter = OSSignposter(subsystem: "dev.abrahamgonzalez.plainbrowser", category: "paper")
 
     var bytes: Int { images.values.reduce(0) { $0 + $1.bytesPerRow * $1.height } }
 
     /// The pattern color for `sheet` at `scale`, or nil while its tile is being made.
     func pattern(_ sheet: PaperTexture.Sheet, scale: CGFloat) -> UIColor? {
-        let key = "\(sheet)@\(scale)"
+        let key = Key(sheet: sheet, scale: scale)
         if let pattern = patterns[key] { return pattern }
         guard let image = images[sheet] else {
             make(sheet)
@@ -139,11 +139,10 @@ private final class Tiles {
     /// Generates the tile on a background thread, then refreshes the surfaces.
     private func make(_ sheet: PaperTexture.Sheet) {
         guard pending.insert(sheet).inserted else { return }
-        let signposter = signposter
         Task.detached(priority: .userInitiated) {
-            let state = signposter.beginInterval("paper.tile")
+            let state = Signposts.signposter.beginInterval(Signposts.paperTile)
             let image = PaperTexture.makeImage(sheet)
-            signposter.endInterval("paper.tile", state)
+            Signposts.signposter.endInterval(Signposts.paperTile, state)
             await MainActor.run {
                 guard let image else { return }
                 Tiles.shared.images[sheet] = image

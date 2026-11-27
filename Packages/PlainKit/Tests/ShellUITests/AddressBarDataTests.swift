@@ -41,6 +41,88 @@ struct AddressBarDataTests {
         #expect(updates.last?.dropFirst() == [.search("swift.org"), .search("swift ownership")])
     }
 
+    // MARK: Calm updates while typing (docs/feedback.md, suggestions flicker)
+
+    private static let answers: [String: [String]] = [
+        "swift": ["swift docs", "swift ownership"],
+        "kotl": ["kotlin docs", "kotl app"],
+        "kotli": ["kotlin docs", "kotlin coroutines"],
+        "swiftx": ["swiftx one", "swiftx two"],
+        "kotlin": ["kotlin docs", "kotlin coroutines"],
+    ]
+
+    private static func searches(_ list: [AddressBarSuggestion]) -> [String] {
+        list.compactMap { if case .search(let query) = $0 { query } else { nil } }
+    }
+
+    @Test func theFirstListForAKeystrokeAlreadyHasTheCachedEngineRows() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "kotl") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        await data.suggestions(for: "kotli") { updates.append($0) }
+        // Local pages and the cached "kotl" answer arrive together, never pages alone first; the
+        // row the cache has no match for holds its place until the answer comes.
+        #expect(updates.map(Self.searches) == [["kotlin docs", "kotl app"], ["kotlin docs", "kotlin coroutines"]])
+    }
+
+    @Test func engineRowsStayInPlaceUntilTheNextAnswer() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        // Nothing cached fits "swiftx": the "swift" rows hold until its answer replaces them.
+        await data.suggestions(for: "swiftx") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], ["swiftx one", "swiftx two"]])
+    }
+
+    @Test func heldEngineRowsGoWhenTheAnswerIsLate() async throws {
+        let data = LiveAddressBarData {
+            SuggestionClient(http: ByQueryEngine(answers: Self.answers, delays: ["swiftx": .milliseconds(400)]))
+        }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        await data.suggestions(for: "swiftx") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], [], ["swiftx one", "swiftx two"]])
+    }
+
+    @Test func rowsForOtherTextAreNeverHeld() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        // Not typing on from "swift" (the field was cleared and new text typed): nothing held.
+        await data.suggestions(for: "kotlin") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [[], ["kotlin docs", "kotlin coroutines"]])
+    }
+
+    @Test func rowsNeverComeBackAfterTheFieldWasCleared() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        // "swift", cleared (the field asks for nothing), then "s": more than one keystroke on.
+        await data.suggestions(for: "s") { updates.append($0) }
+        #expect(updates.first.map(Self.searches) == [])
+    }
+
+    @Test func addressesNeverHoldEngineRows() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        // An address is never sent to the engine, so no answer is coming: nothing to hold for.
+        await data.suggestions(for: "swift.org") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [[]])
+    }
+
     @Test func savedSettingsTakeEffectForTheNextSearch() async throws {
         let database = try AppDatabase.inMemory()
         let data = LiveAddressBarData()
@@ -168,5 +250,21 @@ private struct FakeEngine: HTTPLoading {
     func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
         let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         return (Data(body.utf8), response)
+    }
+}
+
+/// An engine endpoint that answers each query from `answers` (an empty list otherwise), after
+/// `delays[query]` when given, without the network.
+private struct ByQueryEngine: HTTPLoading {
+    let answers: [String: [String]]
+    var delays: [String: Duration] = [:]
+
+    func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let components = request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        let query = components?.queryItems?.first { $0.name == "q" }?.value ?? ""
+        if let delay = delays[query] { try await Task.sleep(for: delay) }
+        let body = try JSONSerialization.data(withJSONObject: [query, answers[query] ?? []] as [Any])
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        return (body, response)
     }
 }

@@ -317,19 +317,18 @@ final class PerfTests: XCTestCase {
             XCTAssertTrue(card.waitForExistence(timeout: 3))
             // The cascade (compact width, TabGalleryMetrics) focuses the current tab's card and
             // stacks the others over and under it, so the other card's middle is covered. Scroll
-            // it into focus (with two tabs a swipe can only land on it), then tap the focused
-            // card's middle, left of where the next card to the right covers it. A grid shows
-            // every card whole: tap the card itself.
+            // it into focus first (with two tabs a swipe can only land on it); a focused card's
+            // middle shows. A grid shows every card whole and needs no scroll.
             let frame = Self.restingFrame(of: card)
             let current = gallery.descendants(matching: .any).matching(identifier: "tabCard")
                 .matching(NSPredicate(format: "NOT (label BEGINSWITH %@)", target.card)).firstMatch.frame
             if frame.intersects(current) {
                 if frame.midX < current.midX { gallery.swipeRight() } else { gallery.swipeLeft() }
+                // A tap while the scroll still decelerates only stops it.
                 _ = XCTWaiter.wait(for: [XCTestExpectation(description: "scroll settles")], timeout: Self.galleryZoomWait)
-                gallery.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5)).tap()
-            } else {
-                card.tap()
+                _ = Self.restingFrame(of: card)
             }
+            card.tap()
             // The card zooms into its page; `gallery.openTab` ends inside this wait.
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "page settles")], timeout: Self.galleryZoomWait)
             XCTAssertTrue(app.webViews.staticTexts[target.heading].waitForExistence(timeout: 3), "the card did not open its tab")

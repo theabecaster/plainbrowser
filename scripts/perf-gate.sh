@@ -109,7 +109,7 @@ measure() {  # $1 metric, $2 the bundle's metrics JSON
       else (map(. * \$k) | sort) as \$s | (\$s | length) as \$n | (\$s | add / \$n) as \$mean
         | (if \$n < 2 or \$mean == 0 then 0
            else ((\$s | map((. - \$mean) * (. - \$mean)) | add) / (\$n - 1) | sqrt) / \$mean * 100 end) as \$rsd
-        | \"\(\$s[\$n / 2 | floor] * 10 | round / 10) \(\$rsd * 10 | round / 10)\" end" <<<"$2" 2>/dev/null) || out="— —"
+        | \"\(\$s[\$n / 2 | floor] * 10 | round / 10) \(\$rsd * 1000 | round / 1000)\" end" <<<"$2" 2>/dev/null) || out="— —"
   [[ $out == <->(|.<->)\ <->(|.<->) ]] || out="— —"
   print -r -- $out
 }
@@ -189,7 +189,7 @@ for m in $METRICS; do
   v=${value[$m]}
   label=$(budget $m label)
   line=$(printf '%-44s %8s' "$label" "$v")
-  [[ $v != "—" ]] && line+=$(printf '  RSD %4s%%' ${rsd[$m]})
+  [[ $v != "—" ]] && line+=$(printf "  RSD %4.1f%%" ${rsd[$m]})
   if [[ $v == "—" && $MODE == sim && $(budget $m deviceOnly) == true ]]; then
     # XCTHitchMetric reports nothing on a simulator (Xcode 27.2); the device measures it.
     value[$m]="n/a"

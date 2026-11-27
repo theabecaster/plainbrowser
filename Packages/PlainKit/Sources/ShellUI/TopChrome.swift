@@ -202,17 +202,26 @@ struct TopChromeGeometry: Equatable {
     /// clock.
     var expandedInset: CGFloat { max(expandedBottom, corner?.maxY ?? 0, collapsedInset + 1) }
 
-    /// The page's obscured top inset for the bar resting collapsed or expanded.
+    /// The page's top inset (its scroll range's start) with the bar resting collapsed or expanded.
     func obscuredInset(collapsed: Bool) -> CGFloat {
         collapsed ? collapsedInset : expandedInset
     }
 
-    /// The page's obscured top inset for the bar resting at `rest`.
+    /// The page's obscured top inset (`obscuredContentInsets.top`) for the bar resting at `rest`.
+    ///
+    /// In the status zone 0 in every state: WebKit fills an obscured top inset above a fixed or
+    /// sticky header with the header's color, which read as a bar behind the floating controls at
+    /// rest and stayed behind once they had gone (owner, 2026-11-27: "let's get rid of it all").
+    /// The page's first line still starts under the controls at rest: that is the scroll range's
+    /// start (`expandedInset`, `setPageTopStart`), not this. The cost: revealed over a page read
+    /// part way down, the floating controls sit over a fixed header, as the glass floats over the
+    /// page everywhere else. Under a full-width status bar the inset follows the rest as before.
     func obscuredInset(rest: ChromeRest) -> CGFloat {
+        if isInStatusZone { return 0 }
         switch rest {
-        case .expanded: expandedInset
-        case .pill: collapsedInset
-        case .hidden: hiddenInset
+        case .expanded: return expandedInset
+        case .pill: return collapsedInset
+        case .hidden: return hiddenInset
         }
     }
 

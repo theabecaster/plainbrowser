@@ -23,6 +23,8 @@ extension BrowserViewController {
         state.usesAssistiveTech = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
         guard let tab = currentTab else {
             state.others = tabs.otherTabCount(besides: nil)
+            // The last tab's picture stands in until the restored session is in.
+            if let hint = launchUI.placeholder { placeholderState(hint, into: &state) }
             return state
         }
         state.hasTab = true
@@ -72,7 +74,7 @@ extension BrowserViewController {
 
     /// The address the tab on screen is about: its page, or the one a failed load tried.
     var pageAddress: URL? {
-        guard let tab = currentTab else { return nil }
+        guard let tab = currentTab else { return launchUI.placeholder?.url }
         if let error = tab.loadError, !tab.isLoading, let tried = error.url { return tried }
         return tab.url
     }

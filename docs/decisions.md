@@ -1712,6 +1712,10 @@ bar above every page. Research: docs/research/inset-fill.md.
 - **The settle rule is unchanged.** `gallery.show` and `tab.swipeSettle` still end when the motion
   is within 0.5 pt of its target and moving less than 0.5 pt a frame; the motion ends sooner, the
   metric does not end earlier. The gallery's settle watch now samples at 120 Hz.
+- **`gallery.show` starts earlier: at the tap.** The shell begins it in `presentGallery` and hands
+  it to the transition, so getting the gallery ready and the page's snapshot count. Stricter than
+  before (the old start left out building the gallery), and the kept gallery cannot move work
+  outside the metric.
 - **One gallery kept ready.** Built at idle (a second after the tab list changes, in the default
   run loop mode) as a hidden child laid out at the page's size, cards placed and pictures decoded
   off the main thread; closing hides it; opening calls `prepareToShow()` (a diff, no new views).

@@ -368,6 +368,13 @@ final class TabCardView: UIView {
 
     // MARK: Accessibility
 
+    /// Where the card's content is on screen, lifted or not, so VoiceOver's outline (and UI
+    /// tests) follow the body a finger moves.
+    override var accessibilityFrame: CGRect {
+        get { UIAccessibility.convertToScreenCoordinates(body.frame, in: self) }
+        set { super.accessibilityFrame = newValue }
+    }
+
     override func accessibilityActivate() -> Bool {
         onOpen?()
         return true

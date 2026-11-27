@@ -82,6 +82,9 @@ extension BrowserViewController: GalleryHost {
         tabs.setShowingProfile(profile)
         tabs.setShowingPrivateTabs(showsPrivate)
         Signposts.signposter.emitEvent(Signposts.galleryOpen, "\(source)")
+        // `gallery.show` runs from here: getting the gallery ready (a diff of the kept one, or a
+        // new one) and the page's snapshot are part of what the user waits for.
+        let showInterval = Signposts.signposter.beginInterval(Signposts.galleryShow)
         if isEditingAddress { endAddressEditing() }
         tabsUI.toast.hide(animated: false)
         let gallery = tabsUI.spareGallery ?? makeGallery(tabs)
@@ -103,7 +106,9 @@ extension BrowserViewController: GalleryHost {
               let snapshot = webContainer.snapshotView(afterScreenUpdates: false)
         else {
             gallery.view.alpha = 0
-            Motion.animate(Motion.quick) { gallery.view.alpha = 1 }
+            Motion.animate(Motion.quick, changes: { gallery.view.alpha = 1 }) {
+                Signposts.signposter.endInterval(Signposts.galleryShow, showInterval)
+            }
             setChromeHiddenForGallery(true, animated: true)
             return nil
         }
@@ -112,7 +117,7 @@ extension BrowserViewController: GalleryHost {
         let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: tab.id, gallery: gallery, container: view, snapshot: snapshot,
-            pageFrame: pageClip.convert(pageClip.bounds, to: view), from: .page
+            pageFrame: pageClip.convert(pageClip.bounds, to: view), from: .page, interval: showInterval
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }

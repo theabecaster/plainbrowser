@@ -59,7 +59,8 @@ public final class TabGalleryTransition {
     ///   - start: where it starts; it heads to the other end.
     public init(
         tabID: UUID, gallery: TabGalleryViewController, container: UIView, snapshot: UIView,
-        pageFrame: CGRect, from start: End, completion: @escaping (End) -> Void
+        pageFrame: CGRect, from start: End, interval: OSSignpostIntervalState? = nil,
+        completion: @escaping (End) -> Void
     ) {
         self.tabID = tabID
         self.gallery = gallery
@@ -70,7 +71,9 @@ public final class TabGalleryTransition {
         destination = start == .page ? .gallery : .page
         signpostName = start == .page ? Signposts.galleryShow : Signposts.galleryOpenTab
         endsAtVisualSettle = start == .page
-        signpostState = Signposts.signposter.beginInterval(signpostName)
+        // The shell may have begun the interval already, at the tap, so the gallery's set-up
+        // before the first frame is inside it.
+        signpostState = interval ?? Signposts.signposter.beginInterval(signpostName)
 
         gallery.prepareForTransition(to: tabID, revealFully: start == .page)
         cardFrame = gallery.thumbnailFrame(for: tabID, in: container)

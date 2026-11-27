@@ -26,8 +26,10 @@ final class CardDrag: NSObject, UIGestureRecognizerDelegate {
     private let closeHeight: () -> CGFloat
     /// The body's vertical offset on screen, in the card's coordinates (negative is up).
     private let driver = SpringDriver(spring: Motion.cardReturnSpring, restDistance: CGFloat(Signposts.visualSettle))
-    /// The offset when the finger went down, and the finger's travel when the lift began (the
-    /// direction lock's few points, paid back over `CardSwipe.takeUp` so the card does not jump).
+    /// Where the card was when the finger caught it, as finger travel (a card below its place is
+    /// rubber-banded, so its offset is turned back into the travel that shows it), and the
+    /// finger's travel when the lift began (the direction lock's few points, paid back over
+    /// `CardSwipe.takeUp` so the card does not jump).
     private var startOffset: CGFloat = 0
     private var takeUp: CGFloat = 0
     /// The last release's velocity in pt/s (negative up), for a throw that follows it.
@@ -75,15 +77,17 @@ final class CardDrag: NSObject, UIGestureRecognizerDelegate {
         switch gesture.state {
         case .began:
             // Grabbed where it is on screen, even mid-spring.
-            startOffset = driver.stop()
+            startOffset = CardSwipe.translation(forOffset: driver.stop(), cardHeight: closeHeight())
             takeUp = translation
             Haptic.close.prepare()
             set(offset(for: translation))
         case .changed:
             set(offset(for: translation))
-        case .ended, .cancelled, .failed:
-            let velocity = gesture.state == .ended ? gesture.velocity.y : 0
-            release(at: offset(for: translation), velocity: velocity)
+        case .ended:
+            release(at: offset(for: translation), velocity: gesture.velocity.y, canClose: true)
+        case .cancelled, .failed:
+            // Interrupted (a call, a system gesture): the card goes back, it never closes.
+            release(at: offset(for: translation), velocity: 0, canClose: false)
         default:
             break
         }
@@ -102,10 +106,10 @@ final class CardDrag: NSObject, UIGestureRecognizerDelegate {
         apply(offset)
     }
 
-    private func release(at offset: CGFloat, velocity: CGFloat) {
+    private func release(at offset: CGFloat, velocity: CGFloat, canClose: Bool) {
         guard let body else { return }
         releaseVelocity = velocity
-        if CardSwipe.shouldClose(translation: offset, velocity: velocity, cardHeight: closeHeight()) {
+        if canClose, CardSwipe.shouldClose(translation: offset, velocity: velocity, cardHeight: closeHeight()) {
             onClose?()
             return
         }

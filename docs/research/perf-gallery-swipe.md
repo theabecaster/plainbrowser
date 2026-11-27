@@ -86,7 +86,12 @@ stays under the rest band at any width.
    memory warning.
 4. **The settle watch samples at 120 Hz** (`SpringDriver.frameRateRange`) instead of the display
    link's default, so the end is seen within a frame of when it happens.
-5. **The settle definition is unchanged.** Both intervals still end when the moving thing is
+5. **`gallery.show` now starts at the tap** (the shell begins it in `presentGallery` and hands it
+   to the transition), not when the transition is made: getting the gallery ready and the page's
+   snapshot are inside it. Stricter than before (the old interval left out the 8–66 ms of
+   building the gallery), so keeping the gallery ready cannot hide work outside the metric
+   (Codex review, round 1).
+6. **The settle definition is unchanged.** Both intervals still end when the moving thing is
    within 0.5 pt of its target and moving less than 0.5 pt a frame (`Signposts.visualSettle`),
    what the eye sees. No metric was redefined; the motion itself now ends sooner.
 

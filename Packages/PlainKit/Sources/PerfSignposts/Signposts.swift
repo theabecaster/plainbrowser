@@ -240,8 +240,9 @@ public enum Signposts {
 
     // MARK: Tab gallery (TabGalleryUI emits these)
 
-    /// Interval: the page zooming into its card, until it visibly rests there (`visualSettle`;
-    /// Core Animation finishes the spring's tail a few hundred ms later).
+    /// Interval: opening the gallery, from the tabs button or the swipe up (the shell getting the
+    /// gallery ready and the page's snapshot, since 2026-11-27) until the page visibly rests on
+    /// its card (`visualSettle`; Core Animation finishes the spring's tail a few hundred ms later).
     public static let galleryShow: StaticString = "gallery.show"
     /// Where `gallery.show` counts the page as at rest, in points: within this distance of its card
     /// on every edge, and moving less than this in a frame (so a page still crossing the card's

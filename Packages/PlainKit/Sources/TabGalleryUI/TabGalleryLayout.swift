@@ -403,6 +403,14 @@ enum CardSwipe {
         guard translation > 0, cardHeight > 0 else { return translation }
         return (1 - 1 / (translation * rubberBand / cardHeight + 1)) * cardHeight
     }
+
+    /// The finger translation that `offset(translation:cardHeight:)` shows as `offset`: a card
+    /// caught while it springs back down picks the band up from where it is on screen.
+    static func translation(forOffset offset: CGFloat, cardHeight: CGFloat) -> CGFloat {
+        guard offset > 0, cardHeight > 0 else { return offset }
+        let fraction = min(offset / cardHeight, 0.999)
+        return (1 / (1 - fraction) - 1) * cardHeight / rubberBand
+    }
 }
 
 /// The swipe up from the address bar into the gallery, modeled on the home-indicator swipe into

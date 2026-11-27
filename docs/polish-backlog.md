@@ -438,5 +438,9 @@ Newest feature last.
 - **Download Linked File wraps** in the link menu beside a preview (the system sizes the menu).
 - **Fixed footer color under the bar.** WebKit fills the obscured strip under the bar with a
   fixed footer's color; the footer itself sits above the bar (design review read it as behind).
+- **Tuning values outside FixedChoices.** The glow's size and opacity (`ChromeScrim`), the
+  progress creep (`ProgressBar`) and the link preview's sizing (`LinkMenuRules`) live beside
+  their code, like the other shell constants in `ChromeModel`; move any that count as product
+  decisions to `FixedChoices` (code review, rounds 1 and 2).
 - **HTTPS-first wait.** Not reproduced for IP addresses on the simulator; check a `.local` or
   intranet name on the device to confirm WebKit no longer tries HTTPS there.

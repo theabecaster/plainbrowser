@@ -103,6 +103,15 @@ private struct StepView: View {
         case .browseForMe where model.browseForMe == .turnOn:
             // The one thing to set up: Settings, or on without it. Neither waits for the other.
             VStack(spacing: 4) {
+                // Where the switch is: with the button that goes there, so it is on screen at
+                // every text size (the step above it may scroll).
+                Text("Settings › Apple Intelligence & Siri")
+                    .font(.subheadline)
+                    .opacity(0.72)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 8)
+                    .accessibilityIdentifier("introAITurnOnLine")
                 Button { AppleIntelligenceSettings.open() } label: {
                     IntroButtonLabel(title: "Turn On Apple Intelligence")
                 }
@@ -335,12 +344,12 @@ private struct BrowseForMeStep: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        // Centered between the window and the buttons: the demo has a fixed height, so on a tall
-        // screen the room goes above and below it. Where it can't fit (the largest text sizes)
-        // the step scrolls, like the inside step, so the line is never cut.
+        // Near the window, with a little more room on a tall screen, and anchored there: when
+        // the buttons change (back from Settings) nothing above them moves. Where it can't fit
+        // (the largest text sizes) the step scrolls, like the inside step.
         ViewThatFits(in: .vertical) {
             VStack(spacing: 0) {
-                Spacer(minLength: 0)
+                Spacer(minLength: 0).frame(maxHeight: 36)
                 parts
                 Spacer(minLength: 0)
             }
@@ -372,10 +381,6 @@ private struct BrowseForMeStep: View {
 
     @ViewBuilder private var status: some View {
         switch model.browseForMe {
-        case .turnOn:
-            Text("In Settings › Apple Intelligence & Siri.")
-                .opacity(0.72)
-                .accessibilityIdentifier("introAITurnOnLine")
         case .gettingReady:
             HStack(spacing: 8) {
                 // A still mark: the line itself is what changes, once the model is ready.
@@ -398,7 +403,8 @@ private struct BrowseForMeStep: View {
             .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("introAIReady")
-        case .ready, nil:
+        case .ready, .turnOn, nil:
+            // Off, the same line: the button below says what to do, and the route sits with it.
             Text("Written on your iPhone, with every source cited.")
                 .opacity(0.72)
                 .accessibilityIdentifier("introAIAvailableLine")

@@ -709,11 +709,15 @@ Show it only where needed, elegantly; follow what credible research says."
   pressed, three source chips show an open ring and turn into numbers, and three short points arrive, each
   ending with its Lagoon citation, as the real summary writes them (about 3.5 s). It plays once by
   itself; a tap on its Browse for Me row plays it again, as the blocking demo's toggle flips. Every
-  part holds its place from the first frame, so nothing moves while it plays. One line under it,
+  part holds its place from the first frame, so nothing moves while it plays. The step sits near
+  the window and stays anchored there, so nothing moves when the buttons change; under Reduce
+  Motion the finished example shows at once. One line under it,
   by state:
   - available: "Written on your iPhone, with every source cited." Next. Nothing to do.
-  - Apple Intelligence off: "In Settings › Apple Intelligence & Siri." and Turn On
-    Apple Intelligence, with Not Now under it. Neither blocks: Skip and Not Now always go on.
+  - Apple Intelligence off: the same line, and in the buttons the route, "Settings › Apple
+    Intelligence & Siri", over Turn On Apple Intelligence, with Not Now under it. The route sits
+    with its button so it is on screen at every text size (the step above may scroll). Neither
+    blocks: Skip and Not Now always go on.
   - model downloading: a download mark and "Apple Intelligence is getting ready…", with Next.
   - device not eligible, or a language the model doesn't read: no step at all.
   Turned on in Settings, or finished downloading while the step is up, the line becomes a check

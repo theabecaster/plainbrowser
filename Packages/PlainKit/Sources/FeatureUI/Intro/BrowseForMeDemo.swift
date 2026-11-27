@@ -115,7 +115,7 @@ struct BrowseForMeDemo: View {
                                 .foregroundStyle(Color(uiColor: IntroPaper.sheet))
                                 .frame(width: 15, height: 15)
                                 .background(Color(uiColor: Palette.accentOnPaper), in: .circle)
-                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                                .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
                         } else {
                             // Reading: an open ring that fills with the number once read.
                             Circle()
@@ -202,8 +202,13 @@ struct BrowseForMeDemo: View {
                 pointsShown = 0
             }
             if reduceMotion {
-                guard await pause(typing ? 0.6 : 0.3) else { return }
-                withAnimation(IntroMotion.crossfade) { showFinished() }
+                // The finished example at once on arrival (no ghosted card), a crossfade on replay.
+                if typing {
+                    showFinished()
+                } else {
+                    guard await pause(0.3) else { return }
+                    withAnimation(IntroMotion.crossfade) { showFinished() }
+                }
                 model.browseDemoPlayed = true
                 return
             }

@@ -27,6 +27,7 @@ These are the key facts from seven research reports, kept for builders. The plan
 - **Security mode:** keep `WKWebpagePreferences.securityRestrictionMode = .none`. `.maximizeCompatibility` disables the JIT.
 - **Network:** `rel=preconnect` is on and `dns-prefetch` is on (Safari 26+). Speculation rules and `rel=prefetch` are not shipped.
 - **Back/forward cache:** on by default.
+- **Patching page APIs from a user script:** patch the prototype (`CredentialsContainer.prototype.get`), never the instance (`navigator.credentials.get`). A property set on a DOM wrapper object is lost when JavaScriptCore collects and remakes the wrapper: measured on the simulator, about half of fresh pages had lost it by the time a button was tapped.
 - **iOS 27.2:** a device-only `WKWebView` safe-area regression is reported (forum 853762).
 - **SwiftUI `WebPage` lacks:** a `createWebViewWith` hook, a `WKDownload` delegate, a media permission callback, `interactionState`, `takeSnapshot` and scroll-view access. This is why we use `WKWebView`.
 

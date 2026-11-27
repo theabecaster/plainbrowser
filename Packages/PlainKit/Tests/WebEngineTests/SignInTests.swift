@@ -220,10 +220,10 @@ struct SignInTests {
         defer { harness.cleanUp() }
         let tab = try await openLogin(harness)
         let untouched = try await page("""
-            // WebKit's `get` and `create` live on the prototype; the fallback puts its own on the
-            // instance.
-            return !Object.prototype.hasOwnProperty.call(navigator.credentials, 'get')
-              && !Object.prototype.hasOwnProperty.call(navigator.credentials, 'create');
+            // WebKit's own answer (on the simulator it claims a platform authenticator), not the
+            // fallback's "no".
+            const caps = await PublicKeyCredential.getClientCapabilities();
+            return caps.passkeyPlatformAuthenticator === true;
             """, in: harness, tab: tab) as? Bool
         #expect(untouched == true)
         _ = try await page(Self.passkeyRequest, in: harness, tab: tab)

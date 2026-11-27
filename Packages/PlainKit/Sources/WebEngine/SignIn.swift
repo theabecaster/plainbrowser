@@ -79,7 +79,10 @@ struct SignInScripts {
               for (const key of off) if (key in capabilities) capabilities[key] = false;
               return capabilities;
             }));
-          const credentials = navigator.credentials;
+          // On the prototype: a property set on the `navigator.credentials` object itself is lost
+          // when JavaScriptCore collects and remakes that DOM wrapper (measured: about half the
+          // time on a fresh page), and WebKit's own `get` then runs.
+          const credentials = window.CredentialsContainer && CredentialsContainer.prototype;
           if (!credentials) return;
           const refuse = (target, self, args) => {
             const options = args[0];

@@ -212,11 +212,7 @@ final class PrivateModeTests: XCTestCase {
     /// Screenshots of each private state for design review, with `PLAIN_CAPTURE=1` only.
     func testCapturePrivateStates() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
-        // With a hold, the runner shows the app in a resizable window standing in for the Duo's
-        // inner screen, which still reports the outer screen's sensor regions (docs/development.md).
-        let held = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_HOLD"] != nil
-        let app = try launch(held ? ["-PlainInMemoryStore", "-PlainIgnoreOcclusions"] : ["-PlainInMemoryStore"])
-        if held { pause(8) }
+        let app = try launch()
         go(app, to: "/long")
         waitForPage(app, "Long Read")
         pause(1.5)

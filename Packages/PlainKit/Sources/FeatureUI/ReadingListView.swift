@@ -1,5 +1,4 @@
 #if os(iOS)
-import PerfSignposts
 import SwiftUI
 
 /// The Reading List sheet: pages saved to read later, unread first, then read ones, searchable.
@@ -80,10 +79,7 @@ public struct ReadingListView: View {
                     Button(row.isRead ? "Mark as Unread" : "Mark as Read", systemImage: row.isRead ? "eyeglasses" : "checkmark") {
                         model.toggleRead(row)
                     }
-                    Button("Copy Link", systemImage: "doc.on.doc") {
-                        Signposts.signposter.emitEvent(Signposts.copyLink, "reading list")
-                        UIPasteboard.plain.url = row.url
-                    }
+                    Button("Copy Link", systemImage: "link") { copyLink(row.url) }
                     Section {
                         Button("Delete", systemImage: "trash", role: .destructive) { model.delete(row) }
                     }

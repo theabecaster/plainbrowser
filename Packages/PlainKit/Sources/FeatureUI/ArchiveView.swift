@@ -23,7 +23,7 @@ public struct ArchiveView: View {
                 ForEach(model.sections) { section in
                     Section {
                         ForEach(section.rows) { row in
-                            ArchiveRowView(row: row) { model.restore(row) }
+                            ArchiveRowView(row: row, period: section.period) { model.restore(row) }
                                 .swipeActions {
                                     Button("Delete", role: .destructive) { model.delete(row) }
                                 }
@@ -87,7 +87,19 @@ public struct ArchiveView: View {
 
 struct ArchiveRowView: View {
     let row: ArchiveRow
+    let period: ArchivePeriod
     let open: () -> Void
+
+    /// When it moved here, in the section's terms (like History's times): a time today and
+    /// yesterday, the weekday this week, the date before that.
+    private var archived: String {
+        let date = row.tab.archivedAt
+        return switch period {
+        case .today, .yesterday: date.formatted(.dateTime.hour().minute())
+        case .thisWeek: date.formatted(.dateTime.weekday(.wide))
+        case .earlier: date.formatted(.dateTime.month(.abbreviated).day())
+        }
+    }
 
     var body: some View {
         Button(action: open) {
@@ -104,7 +116,7 @@ struct ArchiveRowView: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Text(row.tab.archivedAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+                Text(archived)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

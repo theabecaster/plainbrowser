@@ -147,9 +147,14 @@ Three resting states: **expanded → pill → hidden**.
    per frame, and waits out bounces as before. So a fixed footer sits above the expanded bar,
    above the pill, and just above the home indicator while hidden. The viewport range is now
    hidden to expanded (`setMinimumViewportInset`), so `svh`/`lvh` stay fixed during motion.
-7. **Duo**: the system's vertical bar cannot hide and keeps its buttons; only the pill sinks away,
-   on the outer and the inner screen alike (in a split, over the focused pane, whose lane the edge
-   strip follows).
+7. **Duo**: on the outer screen the system's vertical bar cannot hide and keeps its buttons; only
+   the pill sinks away. The inner screen has Safari's top bar (docs/research/safari-duo.md) driven
+   by the same three states: expanded is the whole row (and the strip); the pill is the address
+   tucked under the status bar with the buttons and strip faded; hidden lifts the tucked address
+   off the top edge, so the page starts right under the status bar (top inset 0). The top bar is
+   clear of the home-indicator zone, so hiding it fights no system gesture. A status bar tap, the
+   bottom edge strip and every other reveal bring the row back. In a split, the focused pane's
+   lane holds the edge strip.
 8. **Reduce Motion**: the hide and the return are the chrome's 0.2 s crossfade; the 1:1 tracking
    to the pill stays (it is the finger's own motion).
 9. **Performance**: the scroll callback adds a few comparisons and, only while hidden and

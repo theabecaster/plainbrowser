@@ -158,6 +158,11 @@ The inset changes once, when a motion ends, never per frame (docs/plan.md, engin
 fixed footer sits above whatever rests there. Under Reduce Motion, hiding and revealing are a
 crossfade.
 
+**Duo inner screen (top bar).** The same three states drive the top bar: Expanded is the row
+(Back/Forward, the pill, Tabs/Share/More) and the strip; Pill is the address tucked under the
+status bar, buttons and strip faded; Hidden lifts the tucked address off the top edge and the
+page's top inset drops to 0 (only the status bar). Same triggers and the same never-hidden list.
+
 ## 4. The page menu (More, and a long press on the pill)
 
 Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: Reload

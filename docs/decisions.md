@@ -1053,6 +1053,10 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   expanded and the pill; a hide or reveal finishes, and the drag can still turn it around.
 - **Never hidden** while loading, on error pages, editing, finding, under VoiceOver or Switch
   Control (`ControlRules.chromeMayHide`), or on a page shorter than two screens.
+- **Inner screen top bar:** the lead's top bar lane reads the same collapse progress. Past the
+  pill (1 to 2) the tucked address rises off the top edge (`TopChromeGeometry.pillTransform`) and
+  the top inset goes to `hiddenInset` (0); the viewport range is hidden to expanded there too. The
+  top bar is clear of the home-indicator zone, so it hides fully like the bottom pill.
 - **Performance** (iPhone 17 simulator, Release, 25 scripted swipes on the long test page; the
   simulator has no hitch data, so two proxies). The shell's work per scroll callback
   (`toolbar.scrollStep` signpost, ~3,500 callbacks): before mean 6.7–8.0 µs, p95 5.8–9.1 µs, max

@@ -87,11 +87,16 @@ public actor SystemSync {
         let index: any SpotlightIndexing = IsolatedSpotlightIndex()
         let widgets: any WidgetReloading = IsolatedWidgetReloader()
         #endif
+        var changed = onChange
+        if isolated { changed = {} }
         return SystemSync(
-            file: SharedFavoritesFile.shared,
-            indexed: AppGroup.containerURL.map { SharedFavoritesFile(url: $0.appending(path: "spotlight.json")) },
-            index: index, widgets: widgets, onChange: isolated ? {} : onChange
+            file: SharedFavoritesFile.shared, indexed: spotlightRecord, index: index, widgets: widgets, onChange: changed
         )
+    }
+
+    /// What Spotlight last took, next to the shared file.
+    private static var spotlightRecord: SharedFavoritesFile? {
+        AppGroup.containerURL.map { SharedFavoritesFile(url: $0.appending(path: "spotlight.json")) }
     }
 
     /// Follows the favorites until the calling task is cancelled.

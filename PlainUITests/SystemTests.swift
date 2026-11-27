@@ -33,22 +33,24 @@ final class SystemTests: XCTestCase {
 
     /// Opens `url` as iOS would for a widget. A link opened from outside an app asks "Open in
     /// Plain?" first (a widget tap does not), so the test answers Open.
-    private func open(_ app: XCUIApplication, _ url: URL) {
-        app.open(url)
+    /// `XCUIApplication.open` relaunches the app; the system's open reaches the running one, as a
+    /// widget tap does. `cold` uses the first, for a launch from a link.
+    private func open(_ app: XCUIApplication, _ url: URL, cold: Bool = false) {
+        if cold { app.open(url) } else { XCUIDevice.shared.system.open(url) }
         let confirm = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
         if confirm.waitForExistence(timeout: 3) { confirm.tap() }
     }
 
     func testAWidgetFavoriteOpensItsPage() {
         let app = launch()
-        open(app, link("open", ["url": server.address("/a")]))
+        open(app, link("open", ["url": "http://" + server.address("/a")]))
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
     }
 
     func testAColdLaunchFromALinkOpensThePage() {
         let app = XCUIApplication.introSeen()
         app.launchArguments += ["-PlainInMemoryStore"]
-        open(app, link("open", ["url": server.address("/b")]))
+        open(app, link("open", ["url": "http://" + server.address("/b")]), cold: true)
         XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 15))
     }
 

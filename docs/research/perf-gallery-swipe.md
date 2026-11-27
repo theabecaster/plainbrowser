@@ -118,6 +118,16 @@ is built only after the launch has finished, a second after the tab list changes
 those intervals. Some gallery runs failed their page-load waits under that load (setup, not the
 measured step), as the before run did.
 
+Final build (Release, simulator `plain-speed-1`, iPhone Duo outer screen, load 66–300), the three
+gallery and swipe tests run alone after the perf program merged (`gallery.openTab` is its new
+metric; it read ~1,490 ms on the simulator before, ending at Core Animation's settle):
+
+| Metric (device target / fail) | Median | Runs |
+|---|---|---|
+| `gallery.show` (610 / 750) | 482.8 ms | 482.8, 482.7, 482.8, 482.8, 482.8 |
+| `gallery.openTab` (610 / 750) | 497.3 ms | 495.6, 498.6, 491.0, 497.3, 499.2 |
+| `tab.swipeSettle` (320 / 600) | 296.0 ms | 563.0 (a 127 ms hand-off under load), 271.7, 296.0, 297.1, 283.0 |
+
 Predicted on the Duo (inner screen, from the spring model and the device's before numbers; the
 lead's device gate decides):
 

@@ -11,8 +11,8 @@ import WebEngine
 protocol GalleryHost: AnyObject {
     func galleryOpenTab(_ id: TabID)
     func galleryCloseTab(_ id: TabID)
-    func galleryCloseAll(private isPrivate: Bool)
-    func galleryNewTab(private isPrivate: Bool) -> TabID
+    func galleryCloseAll(private isPrivate: Bool, profile: ProfileID)
+    func galleryNewTab(private isPrivate: Bool, profile: ProfileID) -> TabID
     func galleryReopen(batch: UUID?) -> TabID?
     var galleryLastClosedBatch: UUID? { get }
     func galleryShowArchive()
@@ -20,16 +20,22 @@ protocol GalleryHost: AnyObject {
     var galleryCanOpenInOtherPane: Bool { get }
     func galleryOpenInOtherPane(_ id: TabID)
     func galleryReturnToPage()
+    func galleryProfileMenu() -> [UIMenuElement]
+    func galleryNewProfile()
 }
 
 /// The tab gallery's data source over `EngineTabs` (and so BrowserCore's `TabStore`, the one owner
 /// of tabs): the list in order, the selected tab, thumbnails from the pool's `ThumbnailService`.
-/// It holds no tab state of its own besides which list the gallery shows, regular or private.
+/// It holds no tab state of its own besides which list the gallery shows: a profile's regular
+/// tabs, or the private ones.
 final class GalleryTabs: TabGalleryDataSource {
     private let engineTabs: EngineTabs
     weak var host: (any GalleryHost)?
     /// The gallery lists private tabs instead of regular ones.
     private(set) var isShowingPrivateTabs = false
+    /// The profile whose regular tabs the gallery lists. Showing another profile's list changes
+    /// nothing else: opening one of its cards (or a new tab there) makes it the window's.
+    private(set) var shownProfile = Profile.defaultID
 
     init(tabs: EngineTabs) {
         engineTabs = tabs
@@ -37,18 +43,21 @@ final class GalleryTabs: TabGalleryDataSource {
 
     /// The shown list's cards. An empty tab is never a card (docs/state-rules.md, principle 7).
     var tabs: [TabGalleryItem] {
-        engineTabs.galleryItems(private: isShowingPrivateTabs)
+        engineTabs.galleryItems(private: isShowingPrivateTabs, profile: shownProfile)
     }
 
     var selectedTabID: UUID? { engineTabs.selectedID }
-    var canReopenClosedTab: Bool { !isShowingPrivateTabs && engineTabs.canReopenClosedTab }
+    var canReopenClosedTab: Bool { !isShowingPrivateTabs && engineTabs.store.lastClosedBatch(in: shownProfile) != nil }
     var supportsPrivateTabs: Bool { true }
     var canOpenInOtherPane: Bool { host?.galleryCanOpenInOtherPane ?? false }
 
     func openInOtherPane(_ id: UUID) {
         host?.galleryOpenInOtherPane(id)
     }
-    var canShowArchive: Bool { !isShowingPrivateTabs && (host?.galleryCanShowArchive ?? false) }
+    /// The archive screen shows the window's profile's archive, so it is offered on that list.
+    var canShowArchive: Bool {
+        !isShowingPrivateTabs && shownProfile == engineTabs.activeProfile && (host?.galleryCanShowArchive ?? false)
+    }
 
     func thumbnail(for id: UUID) async -> UIImage? {
         await engineTabs.pool.thumbnails.thumbnail(for: id)
@@ -70,7 +79,7 @@ final class GalleryTabs: TabGalleryDataSource {
     }
 
     func closeAllTabs() {
-        host?.galleryCloseAll(private: isShowingPrivateTabs)
+        host?.galleryCloseAll(private: isShowingPrivateTabs, profile: shownProfile)
         offeredBatch = isShowingPrivateTabs ? nil : host?.galleryLastClosedBatch
     }
 
@@ -92,16 +101,43 @@ final class GalleryTabs: TabGalleryDataSource {
 
     @discardableResult
     func newTab() -> UUID {
-        host?.galleryNewTab(private: isShowingPrivateTabs) ?? UUID()
+        host?.galleryNewTab(private: isShowingPrivateTabs, profile: shownProfile) ?? UUID()
     }
 
+    /// The gallery menu's Reopen Closed Tab: the shown profile's last close.
     @discardableResult
     func reopenClosedTab() -> UUID? {
-        host?.galleryReopen(batch: nil)
+        guard let batch = engineTabs.store.lastClosedBatch(in: shownProfile) else { return nil }
+        return host?.galleryReopen(batch: batch.id)
     }
 
     func setShowingPrivateTabs(_ isPrivate: Bool) {
         isShowingPrivateTabs = isPrivate
+    }
+
+    /// Lists `profile`'s regular tabs (the switcher, or the window's profile when the gallery
+    /// opens).
+    func setShowingProfile(_ profile: ProfileID) {
+        isShowingPrivateTabs = false
+        shownProfile = profile
+    }
+
+    var profileCount: Int { engineTabs.profiles.count }
+
+    var profileTitle: String? { engineTabs.store.profile(shownProfile)?.name }
+
+    func profileMenuElements() -> [UIMenuElement] {
+        host?.galleryProfileMenu() ?? []
+    }
+
+    func newProfile() {
+        host?.galleryNewProfile()
+    }
+
+    /// With a second profile, an empty list says whose it is and what that means.
+    var emptyListText: String? {
+        guard profileCount > 1, let name = profileTitle else { return nil }
+        return String(localized: "Tabs in \(name) show up here, with \(name)'s own logins and history.")
     }
 
     func showArchive() {

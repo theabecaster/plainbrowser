@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import Reader
 import UIKit
@@ -22,11 +23,13 @@ final class ReaderPresenter: NSObject, WKNavigationDelegate {
     var isShowing: Bool { webView != nil }
 
     /// Makes the reader web view (once per opening) and puts it, still clear, over the page.
-    func prepare(pool: WebViewPool, isPrivate: Bool, in container: UIView, scrollDelegate: any UIScrollViewDelegate) {
+    func prepare(
+        pool: WebViewPool, isPrivate: Bool, profile: ProfileID, in container: UIView, scrollDelegate: any UIScrollViewDelegate
+    ) {
         guard webView == nil else { return }
         var schemeHandler: ReaderSchemeHandler?
-        // A private tab's article (and its images) loads with the private data store.
-        let webView = pool.makeAuxiliaryWebView(isPrivate: isPrivate) { configuration in
+        // The article (and its images) loads with the tab's own store: private, or its profile's.
+        let webView = pool.makeAuxiliaryWebView(isPrivate: isPrivate, profile: profile) { configuration in
             schemeHandler = ReaderSchemeHandler.install(in: configuration)
         }
         handler = schemeHandler

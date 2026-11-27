@@ -114,7 +114,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             tabStates: TabStateStore(directory: self.options.tabStateDirectory),
             // A scene the system made new shows the window whose page the first frame shows.
             windowID: savedWindow ?? launch.hint?.windowID,
-            thumbnailDirectory: self.options.thumbnailDirectory
+            thumbnailDirectory: self.options.thumbnailDirectory,
+            profileData: self.options.profileData
         )
         let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets, launch: launch) {
             [weak self] in
@@ -133,6 +134,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         TestIsolationMarker.install(in: window)
         self.window = window
         self.browser = browser
+        browser.onProfileDatabaseChange = { [weak self] database in self?.followFavorites(of: database) }
         LaunchFirstFrame.endAtNextFrame()
         attachDatabase(to: browser)
         #if DEBUG
@@ -259,12 +261,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let data = addressBarData
         let sheets = sheets
         let opening = database
+        let profiles = session?.profileData
         Task(priority: .userInitiated) { [weak self] in
             guard let database = await opening.value else {
                 self?.addressBarIsReady()
                 return
             }
-            await data.attach(database)
+            await data.attach(database) { await profiles?.database(for: $0) }
             sheets.attach(database)
             browser.addressBarDataDidChange()
             TestIsolationMarker.storeIsReady()
@@ -294,8 +297,27 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         systemSync = sync
         sheets.didClearBrowsingData = { await sync.browsingDataCleared() }
+        followFavorites(of: profileFavorites ?? database, after: FixedChoices.systemSyncLaunchDelay)
+    }
+
+    /// The window's profile's history database, when the browser moved to a profile before the
+    /// sync started.
+    private var profileFavorites: AppDatabase?
+    private weak var followedFavorites: AppDatabase?
+
+    /// Spotlight, the widgets and Shortcuts offer the window's profile's favorites
+    /// (docs/decisions.md, "Profiles, no tab groups"): the sync follows that profile's database
+    /// from here on.
+    private func followFavorites(of database: AppDatabase, after delay: Duration = .zero) {
+        guard let sync = systemSync else {
+            profileFavorites = database
+            return
+        }
+        guard database !== followedFavorites else { return }
+        followedFavorites = database
+        systemSyncTask?.cancel()
         systemSyncTask = Task.detached(priority: .background) {
-            try? await Task.sleep(for: FixedChoices.systemSyncLaunchDelay)
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             await sync.follow(database)
         }
@@ -373,6 +395,10 @@ private nonisolated struct LaunchOptions: Sendable {
     /// Where tabs' history, scroll and sessionStorage are saved for relaunch, next to the database.
     /// A path only: nothing touches the disk until the first save.
     var tabStateDirectory: URL { directory.appending(path: "TabState", directoryHint: .isDirectory) }
+
+    /// Where profiles other than Personal keep their history and favorites: beside the database,
+    /// in memory for an in-memory run (the test folder for the test store). A path only.
+    var profileData: ProfileDataLocation { ProfileDataLocation(directory: inMemory ? nil : directory) }
 
     /// The time the launch and return rules use (`-PlainAwayOffset` moves it ahead).
     var now: Date { Date().addingTimeInterval(awayOffset) }

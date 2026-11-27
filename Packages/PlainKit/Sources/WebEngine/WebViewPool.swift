@@ -96,6 +96,11 @@ public final class WebViewPool {
     /// with the first one and dropped by `endPrivateSession()`, so the next private tab starts with
     /// no cookies or storage.
     private var privateDataStore: WKWebsiteDataStore?
+    /// Where a profile's store comes from (every profile but Personal, whose store is
+    /// `dataStore`). Tests pass throwaway stores.
+    private let profileStore: (ProfileID) -> WKWebsiteDataStore
+    /// Each profile's store, made with its first web view this launch.
+    private var profileStores: [ProfileID: WKWebsiteDataStore] = [:]
     /// What private tabs answer and choose per site, kept in memory for the private session only.
     private var privateSiteChoices: SiteChoices?
     /// Private tabs' dark pages choices, for the private session only.
@@ -134,8 +139,11 @@ public final class WebViewPool {
     ///     passkeys. Tests pass both.
     ///   - darkPages: the sites where the user turned dark pages off.
     ///   - translator: Translate Page's engine (Apple's Translation framework, from the shell).
+    ///   - profileStore: the website data store of each profile but Personal (whose store is
+    ///     `dataStore`): its own, so profiles never share cookies or logins.
     public init(
         dataStore: WKWebsiteDataStore = AppWebsiteData.store,
+        profileStore: @escaping (ProfileID) -> WKWebsiteDataStore = { AppWebsiteData.store(forProfile: $0) },
         tabStates: TabStateStore? = nil,
         permissionStore: any SitePermissionStore = InMemorySitePermissionStore(),
         contentModes: any SiteContentModeStore = InMemorySiteContentModeStore(),
@@ -153,6 +161,7 @@ public final class WebViewPool {
         signInScripts = passkeysEnabled ? nil : SignInScripts()
         baseConfiguration = Self.makeBaseConfiguration(dataStore: dataStore)
         self.dataStore = dataStore
+        self.profileStore = profileStore
         self.tabStates = tabStates
         self.permissionStore = permissionStore
         self.contentModes = contentModes
@@ -216,9 +225,11 @@ public final class WebViewPool {
 
     /// Every web view gets its own copy of the configuration and its own
     /// `WKUserContentController`, so per-site content-blocking changes stay in one tab.
-    private func makeConfiguration(isPrivate: Bool = false) -> (WKWebViewConfiguration, WKUserContentController) {
+    private func makeConfiguration(
+        isPrivate: Bool = false, profile: ProfileID = Profile.defaultID
+    ) -> (WKWebViewConfiguration, WKUserContentController) {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
-        if isPrivate { configuration.websiteDataStore = privateStore() }
+        useStore(of: isPrivate, profile: profile, in: configuration)
         let controller = makeController(isPrivate: isPrivate)
         configuration.userContentController = controller
         return (configuration, controller)
@@ -297,9 +308,9 @@ public final class WebViewPool {
     /// A web view for a link preview: no engine scripts but dark pages (a light-only page
     /// previews dark in a dark app, as it will open), no delegates. The caller applies and
     /// releases the content rules on the returned controller.
-    func makePreviewWebView(isPrivate: Bool = false) -> (WKWebView, WKUserContentController) {
+    func makePreviewWebView(isPrivate: Bool = false, profile: ProfileID = Profile.defaultID) -> (WKWebView, WKUserContentController) {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
-        if isPrivate { configuration.websiteDataStore = privateStore() }
+        useStore(of: isPrivate, profile: profile, in: configuration)
         let controller = WKUserContentController()
         controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
         configuration.userContentController = controller
@@ -326,14 +337,14 @@ public final class WebViewPool {
         Signposts.signposter.endInterval(Signposts.webViewWarmUp, state)
     }
 
-    /// Takes the warmed web view, or makes a new one. Private tabs never take the warm one: it
-    /// uses the persistent data store.
-    private func takeWebView(isPrivate: Bool) -> (WKWebView, WKUserContentController) {
-        if !isPrivate, let warm {
+    /// Takes the warmed web view, or makes a new one. Only Personal's tabs take the warm one: it
+    /// uses Personal's data store.
+    private func takeWebView(isPrivate: Bool, profile: ProfileID) -> (WKWebView, WKUserContentController) {
+        if !isPrivate, profile == Profile.defaultID, let warm {
             self.warm = nil
             return warm
         }
-        let (configuration, controller) = makeConfiguration(isPrivate: isPrivate)
+        let (configuration, controller) = makeConfiguration(isPrivate: isPrivate, profile: profile)
         return (makeWebView(configuration: configuration, controller: controller), controller)
     }
 
@@ -341,9 +352,11 @@ public final class WebViewPool {
     /// the tabs' data store and identity, gets no content rules, page scripts or tab handler, and
     /// `configure` runs on its configuration first (custom schemes, JavaScript off). The caller
     /// shows it while its page is up and releases it after; it never becomes a tab.
-    public func makeAuxiliaryWebView(isPrivate: Bool = false, configure: (WKWebViewConfiguration) -> Void) -> WKWebView {
+    public func makeAuxiliaryWebView(
+        isPrivate: Bool = false, profile: ProfileID = Profile.defaultID, configure: (WKWebViewConfiguration) -> Void
+    ) -> WKWebView {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
-        if isPrivate { configuration.websiteDataStore = privateStore() }
+        useStore(of: isPrivate, profile: profile, in: configuration)
         configuration.userContentController = WKUserContentController()
         configure(configuration)
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -365,17 +378,20 @@ public final class WebViewPool {
     /// A new tab, without a web view until it is attached or loads something. Pass `restoring` to
     /// bring back a tab from a previous launch: it restores history, scroll and sessionStorage on
     /// first attach.
-    public func makeTab(id: UUID = UUID(), restoring state: TabRestorationState? = nil, isPrivate: Bool = false) -> Tab {
-        Tab(id: id, openerID: nil, isPrivate: isPrivate, pool: self, restoring: state)
+    public func makeTab(
+        id: UUID = UUID(), restoring state: TabRestorationState? = nil, isPrivate: Bool = false,
+        profile: ProfileID = Profile.defaultID
+    ) -> Tab {
+        Tab(id: id, openerID: nil, isPrivate: isPrivate, profileID: profile, pool: self, restoring: state)
     }
 
     /// A tab saved earlier (a relaunch, Reopen Closed Tab, the archive) that shows `url` and
     /// `title` until it is opened. Its history, scroll and sessionStorage come from its state file
     /// in `tabStates`, read and decoded off the main thread when it first gets a web view; without
     /// a readable file, `url` loads.
-    public func makeSavedTab(id: UUID, url: URL?, title: String) -> Tab {
+    public func makeSavedTab(id: UUID, url: URL?, title: String, profile: ProfileID = Profile.defaultID) -> Tab {
         let state = TabRestorationState(url: url, title: title, interactionState: nil, sessionStorage: nil)
-        let tab = Tab(id: id, openerID: nil, pool: self, restoring: state)
+        let tab = Tab(id: id, openerID: nil, profileID: profile, pool: self, restoring: state)
         tab.readsSavedState = tabStates != nil
         return tab
     }
@@ -785,7 +801,7 @@ public final class WebViewPool {
     @discardableResult
     private func ensureSlot(for tab: Tab) -> Slot {
         if let slot = slots[tab.id] { return slot }
-        let (webView, controller) = takeWebView(isPrivate: tab.isPrivate)
+        let (webView, controller) = takeWebView(isPrivate: tab.isPrivate, profile: tab.profileID)
         let slot = Slot(tab: tab, webView: webView, controller: controller, pool: self)
         slot.lastUse = tick()
         slots[tab.id] = slot
@@ -985,6 +1001,35 @@ public final class WebViewPool {
         return store
     }
 
+    /// The website data store a tab's pages use: the private session's, Personal's (`dataStore`)
+    /// or its profile's own.
+    func websiteDataStore(isPrivate: Bool, profile: ProfileID) -> WKWebsiteDataStore {
+        if isPrivate { return privateStore() }
+        if profile == Profile.defaultID { return dataStore }
+        if let store = profileStores[profile] { return store }
+        let store = profileStore(profile)
+        profileStores[profile] = store
+        return store
+    }
+
+    /// The store `tab`'s pages use.
+    public func websiteDataStore(for tab: Tab) -> WKWebsiteDataStore {
+        websiteDataStore(isPrivate: tab.isPrivate, profile: tab.profileID)
+    }
+
+    /// Points a configuration copied from the base (Personal's store) at another store when the
+    /// web view is private or another profile's.
+    private func useStore(of isPrivate: Bool, profile: ProfileID, in configuration: WKWebViewConfiguration) {
+        guard isPrivate || profile != Profile.defaultID else { return }
+        configuration.websiteDataStore = websiteDataStore(isPrivate: isPrivate, profile: profile)
+    }
+
+    /// A deleted profile's store is let go; the caller closed its tabs first and then removes
+    /// the store's data (`AppWebsiteData.removeProfileData`).
+    public func forgetProfile(_ profile: ProfileID) {
+        profileStores[profile] = nil
+    }
+
     private func tearDown(_ slot: Slot) {
         let tab = slot.tab
         slot.pendingSave?.cancel()
@@ -1015,7 +1060,9 @@ public final class WebViewPool {
         configuration.userContentController = controller
         let webView = makeWebView(configuration: configuration, controller: controller)
         // WebKit's configuration carries the opener's data store: a private opener's child is private.
-        let child = Tab(id: UUID(), openerID: opener.id, isPrivate: opener.isPrivate, pool: self, restoring: nil)
+        let child = Tab(
+            id: UUID(), openerID: opener.id, isPrivate: opener.isPrivate, profileID: opener.profileID, pool: self, restoring: nil
+        )
         let slot = Slot(tab: child, webView: webView, controller: controller, pool: self)
         slot.lastUse = tick()
         slots[child.id] = slot

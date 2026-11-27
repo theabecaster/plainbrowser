@@ -187,6 +187,12 @@ public final class TabSessionWriter: TabPersistence {
                     ?? String.fetchAll(db, sql: "SELECT id FROM \(Schema.tab) WHERE isArchived")
                 try deleteRows(doomed, archived: true, in: db)
                 candidates.formUnion(doomed.compactMap(UUID.init(uuidString:)))
+            case .deleteProfile(let profile):
+                let doomed = try String.fetchAll(
+                    db, sql: "SELECT id FROM \(Schema.tab) WHERE isArchived AND profileID = ?", arguments: [profile.uuidString]
+                )
+                try deleteRows(doomed, archived: true, in: db)
+                candidates.formUnion(doomed.compactMap(UUID.init(uuidString:)))
             }
         }
         guard !candidates.isEmpty else { return WriteResult(written: written, unreferenced: []) }
@@ -211,6 +217,13 @@ public final class TabSessionWriter: TabPersistence {
             gone = stored.subtracting(new.keys)
         }
         try deleteRows(gone.map(\.uuidString), archived: false, in: db)
+
+        if old?.profiles != session.profiles {
+            try ProfileRecord.deleteAll(db)
+            for (position, profile) in session.profiles.enumerated() {
+                try ProfileRecord(profile, position: position).insert(db)
+            }
+        }
 
         if old?.windows != session.windows {
             try TabWindowRecord.deleteAll(db)

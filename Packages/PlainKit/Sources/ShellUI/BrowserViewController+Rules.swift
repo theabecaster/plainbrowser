@@ -22,7 +22,7 @@ extension BrowserViewController {
         state.hasArchived = tabs.hasArchivedTabs
         state.usesAssistiveTech = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
         guard let tab = currentTab else {
-            state.others = tabs.otherTabCount(besides: nil)
+            state.others = tabs.otherTabCount(besides: nil) + tabs.otherProfilesTabCount
             // The last tab's picture stands in until the restored session is in.
             if let hint = launchUI.placeholder { placeholderState(hint, into: &state) }
             return state
@@ -43,7 +43,8 @@ extension BrowserViewController {
         state.canGoForward = tab.canGoForward
         state.isReaderOpen = isShowingReader
         state.isFindOpen = isFindOpen
-        state.others = tabs.otherTabCount(besides: tab.id)
+        // Tabs of other profiles count: the switcher is the way to them.
+        state.others = tabs.otherTabCount(besides: tab.id) + tabs.otherProfilesTabCount
         // The list the bar swipe moves through: the tab on screen and its list's page tabs.
         state.listCount = tabs.entries(private: tab.isPrivate).count { $0.id == tab.id || !tabs.isEmpty($0.id) }
         let neighbours = tabs.neighbours(of: tab.id)

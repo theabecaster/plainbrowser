@@ -146,11 +146,11 @@ extension BrowserViewController {
             guard let self, let tab else { return }
             let kind: VisitKind = self.engineUI.typedVisitTabs.remove(tab.id) != nil ? .typed : .link
             guard self.recordsHistory(for: tab) else { return }
-            self.data.pageVisited(url: url, title: title, kind: kind)
+            self.data.pageVisited(url: url, title: title, kind: kind, profile: tab.profileID)
         }
         tab.onVisitTitleChange = { [weak self, weak tab] url, title in
             guard let self, let tab, self.recordsHistory(for: tab) else { return }
-            self.data.pageTitleChanged(url: url, title: title)
+            self.data.pageTitleChanged(url: url, title: title, profile: tab.profileID)
         }
         engineUI.observation = TabObservation(tab) { [weak self] old, new in
             self?.tabChanged(from: old, to: new)
@@ -497,7 +497,9 @@ extension BrowserViewController {
                 tab.load(url)
             }
             reader.onShown = { [weak self] in self?.updateButtons() }
-            reader.prepare(pool: session.pool, isPrivate: tab.isPrivate, in: self.webContainer, scrollDelegate: self)
+            reader.prepare(
+                pool: session.pool, isPrivate: tab.isPrivate, profile: tab.profileID, in: self.webContainer, scrollDelegate: self
+            )
             // A tap on the status bar scrolls the reader, not the page under it.
             session.pool.scrollView(for: tab)?.scrollsToTop = false
             self.updatePageInsets()

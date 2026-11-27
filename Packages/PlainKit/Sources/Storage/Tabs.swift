@@ -29,11 +29,14 @@ public struct TabRecord: Hashable, Sendable, Codable, FetchableRecord, Persistab
     public var createdAt: Date?
     public var thumbnailFile: String?
     public var thumbnailRevision: Int?
+    /// The tab's profile; rows from before profiles are Personal's (the column's default).
+    public var profileID: UUID
 
     public init(
         id: UUID, url: URL?, title: String?, position: Int, lastActiveAt: Date,
         isArchived: Bool = false, archivedAt: Date? = nil, windowID: UUID? = nil, openerID: UUID? = nil,
-        isPinned: Bool = false, createdAt: Date? = nil, thumbnailFile: String? = nil, thumbnailRevision: Int? = nil
+        isPinned: Bool = false, createdAt: Date? = nil, thumbnailFile: String? = nil, thumbnailRevision: Int? = nil,
+        profileID: UUID = Profile.defaultID
     ) {
         self.id = id
         self.url = url
@@ -48,19 +51,21 @@ public struct TabRecord: Hashable, Sendable, Codable, FetchableRecord, Persistab
         self.createdAt = createdAt
         self.thumbnailFile = thumbnailFile
         self.thumbnailRevision = thumbnailRevision
+        self.profileID = profileID
     }
 
     init(entry: TabEntry, windowID: UUID?, position: Int) {
         self.init(
             id: entry.id, url: entry.url, title: entry.title, position: position, lastActiveAt: entry.lastActiveAt,
             windowID: windowID, openerID: entry.openerID, isPinned: entry.isPinned, createdAt: entry.createdAt,
-            thumbnailFile: entry.thumbnail?.fileName, thumbnailRevision: entry.thumbnail?.revision
+            thumbnailFile: entry.thumbnail?.fileName, thumbnailRevision: entry.thumbnail?.revision,
+            profileID: entry.profileID
         )
     }
 
     public var entry: TabEntry {
         TabEntry(
-            id: id, url: url, title: title, openerID: openerID, isPinned: isPinned,
+            id: id, url: url, title: title, openerID: openerID, isPinned: isPinned, profileID: profileID,
             createdAt: createdAt ?? lastActiveAt, lastActiveAt: lastActiveAt,
             thumbnail: thumbnailFile.map { TabThumbnail(fileName: $0, revision: thumbnailRevision ?? 0) }
         )
@@ -79,6 +84,26 @@ public struct ArchivedTab: Hashable, Sendable, Identifiable {
     }
 }
 
+/// One profile: its name and place in the switcher's list.
+struct ProfileRecord: Hashable, Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = Schema.profile
+    static func databaseUUIDEncodingStrategy(for column: String) -> DatabaseUUIDEncodingStrategy {
+        .uppercaseString
+    }
+
+    var id: UUID
+    var name: String
+    var position: Int
+
+    init(_ profile: Profile, position: Int) {
+        id = profile.id
+        name = profile.name
+        self.position = position
+    }
+
+    var profile: Profile { Profile(id: id, name: name) }
+}
+
 /// One window's pane selection.
 struct TabWindowRecord: Hashable, Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = Schema.tabWindow
@@ -90,12 +115,14 @@ struct TabWindowRecord: Hashable, Codable, FetchableRecord, PersistableRecord {
     var position: Int
     var panes: String
     var focusedPane: Int
+    var profileID: UUID
 
     init(_ window: WindowSession, position: Int) {
         id = window.id
         self.position = position
         panes = window.panes.map { $0?.uuidString ?? "" }.joined(separator: ",")
         focusedPane = window.focusedPane
+        profileID = window.profileID
     }
 
     var paneTabIDs: [TabID?] {
@@ -128,6 +155,7 @@ struct ClosedTabRecord: Hashable, Codable, FetchableRecord, PersistableRecord {
     var lastActiveAt: Date
     var thumbnailFile: String?
     var thumbnailRevision: Int?
+    var profileID: UUID
 
     init(_ tab: ClosedTab, batch: ClosedTabBatch, position: Int) {
         batchID = batch.id
@@ -147,13 +175,14 @@ struct ClosedTabRecord: Hashable, Codable, FetchableRecord, PersistableRecord {
         lastActiveAt = tab.entry.lastActiveAt
         thumbnailFile = tab.entry.thumbnail?.fileName
         thumbnailRevision = tab.entry.thumbnail?.revision
+        profileID = tab.entry.profileID
     }
 
     var closedTab: ClosedTab {
         ClosedTab(
             entry: TabEntry(
-                id: id, url: url, title: title, openerID: openerID, isPinned: isPinned, createdAt: createdAt,
-                lastActiveAt: lastActiveAt,
+                id: id, url: url, title: title, openerID: openerID, isPinned: isPinned, profileID: profileID,
+                createdAt: createdAt, lastActiveAt: lastActiveAt,
                 thumbnail: thumbnailFile.map { TabThumbnail(fileName: $0, revision: thumbnailRevision ?? 0) }
             ),
             windowID: windowID, index: windowIndex, previousTabID: previousTabID, pane: pane,
@@ -183,9 +212,10 @@ extension AppDatabase {
         let windows = windowRecords.map { record in
             WindowSession(
                 id: record.id, tabIDs: idsByWindow[record.id] ?? [], panes: record.paneTabIDs,
-                focusedPane: record.focusedPane
+                focusedPane: record.focusedPane, profileID: record.profileID
             )
         }
+        let profiles = try ProfileRecord.order(Column("position")).fetchAll(db).map(\.profile)
         let closedRecords = try ClosedTabRecord.order(Column("rowID")).fetchAll(db)
         var batches: [ClosedTabBatch] = []
         for record in closedRecords {
@@ -195,14 +225,17 @@ extension AppDatabase {
                 batches.append(ClosedTabBatch(id: record.batchID, closedAt: record.closedAt, tabs: [record.closedTab]))
             }
         }
-        return TabSession(windows: windows, tabs: records.map(\.entry), recentlyClosed: batches)
+        return TabSession(windows: windows, tabs: records.map(\.entry), recentlyClosed: batches, profiles: profiles)
     }
 
-    /// Archived tabs, most recently archived first, a page at a time.
-    public func archivedTabs(limit: Int = FixedChoices.archiveSearchLimit, offset: Int = 0) async throws -> [ArchivedTab] {
+    /// Archived tabs (of `profile`, or of every profile), most recently archived first, a page at
+    /// a time.
+    public func archivedTabs(
+        profile: ProfileID? = nil, limit: Int = FixedChoices.archiveSearchLimit, offset: Int = 0
+    ) async throws -> [ArchivedTab] {
         await tabSession.flush()
         return try await writer.read { db in
-            try TabRecord.filter(Column("isArchived") == true)
+            try Self.archived(of: profile)
                 .order(Column("archivedAt").desc)
                 .limit(limit, offset: offset)
                 .fetchAll(db)
@@ -212,8 +245,10 @@ extension AppDatabase {
 
     /// Archived tabs whose title or address has words starting with each typed word, most
     /// recently archived first. Empty text lists the archive.
-    public func searchArchivedTabs(_ text: String, limit: Int = FixedChoices.archiveSearchLimit) async throws -> [ArchivedTab] {
-        guard let pattern = Self.archivePattern(text) else { return try await archivedTabs(limit: limit) }
+    public func searchArchivedTabs(
+        _ text: String, profile: ProfileID? = nil, limit: Int = FixedChoices.archiveSearchLimit
+    ) async throws -> [ArchivedTab] {
+        guard let pattern = Self.archivePattern(text) else { return try await archivedTabs(profile: profile, limit: limit) }
         await tabSession.flush()
         return try await writer.read { db in
             try TabRecord.fetchAll(
@@ -222,19 +257,28 @@ extension AppDatabase {
                 SELECT \(Schema.tab).* FROM \(Schema.tab)
                 JOIN \(Schema.tabSearch) ON \(Schema.tabSearch).rowid = \(Schema.tab).rowid
                 WHERE \(Schema.tabSearch) MATCH ? AND \(Schema.tab).isArchived
+                  AND (? IS NULL OR \(Schema.tab).profileID = ?)
                 ORDER BY \(Schema.tab).archivedAt DESC
                 LIMIT ?
                 """,
-                arguments: [pattern, limit]
+                arguments: [pattern, profile?.uuidString, profile?.uuidString, limit]
             ).map(Self.archivedTab)
         }
     }
 
-    public func archivedTabCount() async throws -> Int {
+    /// Archived tabs of `profile`, or of every profile.
+    public func archivedTabCount(profile: ProfileID? = nil) async throws -> Int {
         await tabSession.flush()
         return try await writer.read { db in
-            try TabRecord.filter(Column("isArchived") == true).fetchCount(db)
+            try Self.archived(of: profile).fetchCount(db)
         }
+    }
+
+    /// Archived rows of `profile`, or of every profile.
+    private static func archived(of profile: ProfileID?) -> QueryInterfaceRequest<TabRecord> {
+        let archived = TabRecord.filter(Column("isArchived") == true)
+        guard let profile else { return archived }
+        return archived.filter(Column("profileID") == profile.uuidString)
     }
 
     /// Every tab id a row still names (open, archived or recently closed). The engine prunes

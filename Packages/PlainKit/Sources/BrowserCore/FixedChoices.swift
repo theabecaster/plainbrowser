@@ -395,6 +395,15 @@ public enum FixedChoices {
     /// Archive search results shown per query: more than fits on screen, cheap to fetch.
     public static let archiveSearchLimit = 200
 
+    // MARK: Profiles (docs/decisions.md, "Profiles, no tab groups")
+
+    /// Profiles a person can have, Personal included. Each is a row in the switcher's menu and a
+    /// website data store on the phone; six fit the menu on the Duo's outer screen without
+    /// scrolling, and work, personal and a few side projects fit with room to spare.
+    public static let maxProfiles = 6
+    /// A profile's name is a menu row and the switcher's title: about two short words.
+    public static let profileNameLimit = 24
+
     // MARK: Tab gallery
 
     /// Tab gallery width, in points, from which it shows the wide grid. Below it the gallery is

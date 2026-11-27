@@ -30,11 +30,17 @@ public protocol AddressBarData: AnyObject {
     func isFavorite(_ url: URL) async -> Bool
     /// Adds `url` to the end of the favorites, or removes it. Returns false when it couldn't.
     func setFavorite(_ isFavorite: Bool, url: URL, title: String?) async -> Bool
-    /// A page finished loading. `kind` is `.typed` when the address bar asked for it (an address,
-    /// a search or a picked suggestion), which weighs more in ranking.
-    func pageVisited(url: URL, title: String?, kind: VisitKind)
+    /// A page of a tab in `profile` finished loading. `kind` is `.typed` when the address bar
+    /// asked for it (an address, a search or a picked suggestion), which weighs more in ranking.
+    /// It goes into that profile's history, whichever profile is the window's now.
+    func pageVisited(url: URL, title: String?, kind: VisitKind, profile: ProfileID)
     /// A visited page's title arrived or changed.
-    func pageTitleChanged(url: URL, title: String)
+    func pageTitleChanged(url: URL, title: String, profile: ProfileID)
+    /// The window's profile: suggestions, favorites and typed-input learning use its history.
+    var profile: ProfileID { get set }
+    /// A profile is being deleted: what is queued for its history is written, and it is never
+    /// used again.
+    func forgetProfile(_ id: ProfileID) async
     /// The address field took focus: typing is likely next. A chance to preconnect to the
     /// suggestion host (docs/plan.md, data rule 6). Called on the main thread on every focus,
     /// including at launch before the first frame, so it must return at once and start any work
@@ -62,12 +68,13 @@ public protocol AddressBarData: AnyObject {
 }
 
 extension AddressBarData {
+    public func forgetProfile(_ id: ProfileID) async {}
     public func prepareForTyping() {}
     public func firstFrameDidCommit() {}
 
-    /// A visit the address bar did not ask for (a link, a redirect).
+    /// A visit the address bar did not ask for (a link, a redirect), in Personal.
     public func pageVisited(url: URL, title: String?) {
-        pageVisited(url: url, title: title, kind: .link)
+        pageVisited(url: url, title: title, kind: .link, profile: Profile.defaultID)
     }
 }
 
@@ -94,9 +101,13 @@ public final class LiveAddressBarData: AddressBarData {
     private var hasFirstFrame = false
     private var preconnectAfterFirstFrame = false
     public var searchEngine: SearchEngine { settings.searchEngine }
+    /// The main database: settings, and Personal's history and favorites.
     private var database: AppDatabase?
-    /// The database's one history writer.
-    private var recorder: HistoryRecorder?
+    /// Every other profile's history database (`ProfileDataLocation`), opened on first use.
+    private var profileDatabase: ((ProfileID) async -> AppDatabase?)?
+    public var profile = Profile.defaultID
+    /// The history writers visits went to, so `flush` writes them all.
+    private var recorders: [ProfileID: HistoryRecorder] = [:]
     /// Bumped by `apply(_:)`, so the read in `attach` never undoes a newer save.
     private var settingsEdits = 0
     /// Made on the first keystroke, not at launch: it builds a URL session.
@@ -105,7 +116,7 @@ public final class LiveAddressBarData: AddressBarData {
     /// The newest queued history change, so `flush` includes it.
     private var lastRecord: Task<Void, Never>?
     /// The visit title changes belong to.
-    private var lastVisit: (url: URL, at: Date)?
+    private var lastVisit: (url: URL, at: Date, profile: ProfileID)?
     /// The engine rows in the last list delivered, held in place for the next keystroke when no
     /// cached answer fits it (`suggestions(for:update:)`).
     private var shownSearches: [String] = []
@@ -121,10 +132,11 @@ public final class LiveAddressBarData: AddressBarData {
         self.makeClient = makeClient
     }
 
-    /// Starts using `database`: history, favorites and the saved search engine.
-    public func attach(_ database: AppDatabase) async {
+    /// Starts using `database`: Personal's history and favorites, and the saved search engine.
+    /// `profiles` opens each other profile's history database.
+    public func attach(_ database: AppDatabase, profiles: ((ProfileID) async -> AppDatabase?)? = nil) async {
         self.database = database
-        recorder = database.historyRecorder
+        profileDatabase = profiles
         let edits = settingsEdits
         if let stored = try? await database.settings(), edits == settingsEdits {
             settings = stored
@@ -144,7 +156,17 @@ public final class LiveAddressBarData: AddressBarData {
     /// Writes buffered history. Call when the app moves to the background.
     public func flush() async {
         await lastRecord?.value
-        await recorder?.flush()
+        await database?.historyRecorder.flush()
+        for recorder in recorders.values { await recorder.flush() }
+    }
+
+    /// `profile`'s history database: the main one for Personal.
+    private func database(for profile: ProfileID) async -> AppDatabase? {
+        guard profile != Profile.defaultID else { return database }
+        guard database != nil, let profileDatabase else { return nil }
+        let opened = await profileDatabase(profile)
+        if let opened { recorders[profile] = opened.historyRecorder }
+        return opened
     }
 
     /// Delivers at most two lists per keystroke, and never one with fewer engine rows only to add
@@ -163,7 +185,7 @@ public final class LiveAddressBarData: AddressBarData {
         async let cachedAnswer = client.cachedSuggestions(for: query, engine: engine, isPrivate: isPrivate)
         var history: [PageCandidate] = []
         var favorites: [PageCandidate] = []
-        if let database, let candidates = try? await database.addressBarCandidates(for: query) {
+        if let database = await database(for: profile), let candidates = try? await database.addressBarCandidates(for: query) {
             (history, favorites) = candidates
         }
         let cached = await cachedAnswer
@@ -260,13 +282,14 @@ public final class LiveAddressBarData: AddressBarData {
     }
 
     public func suggestionPicked(input: String, url: URL) {
-        guard let database, Self.isRecordable(url),
+        guard database != nil, Self.isRecordable(url),
               !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return }
         let previous = lastRecord
+        let profile = profile
         lastRecord = Task {
             await previous?.value
-            await database.recordPickedSuggestion(input: input, url: url)
+            await self.database(for: profile)?.recordPickedSuggestion(input: input, url: url)
         }
     }
 
@@ -278,17 +301,17 @@ public final class LiveAddressBarData: AddressBarData {
     }
 
     public func favorites() async -> [FavoritePage] {
-        guard let database, let favorites = try? await database.favorites() else { return [] }
+        guard let database = await database(for: profile), let favorites = try? await database.favorites() else { return [] }
         return favorites.map { FavoritePage(url: $0.url, title: $0.title) }
     }
 
     public func isFavorite(_ url: URL) async -> Bool {
-        guard let database else { return false }
+        guard let database = await database(for: profile) else { return false }
         return (try? await database.favorite(for: url)) != nil
     }
 
     public func setFavorite(_ isFavorite: Bool, url: URL, title: String?) async -> Bool {
-        guard let database else { return false }
+        guard let database = await database(for: profile) else { return false }
         do {
             if isFavorite {
                 let title = title?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -302,28 +325,35 @@ public final class LiveAddressBarData: AddressBarData {
         }
     }
 
-    public func pageVisited(url: URL, title: String?, kind: VisitKind) {
-        guard let recorder, Self.isRecordable(url) else { return }
+    public func pageVisited(url: URL, title: String?, kind: VisitKind, profile: ProfileID) {
+        guard database != nil, Self.isRecordable(url) else { return }
         let visit = HistoryVisit(url: url, title: title, visitedAt: Date(), kind: kind)
-        lastVisit = (url, visit.visitedAt)
+        lastVisit = (url, visit.visitedAt, profile)
         let previous = lastRecord
         lastRecord = Task {
             await previous?.value
-            await recorder.record(visit)
+            await self.database(for: profile)?.historyRecorder.record(visit)
         }
     }
 
-    /// Names the last recorded visit only, and only when it is to `url`: a title never lands on
-    /// another visit, and does nothing once that visit has been cleared.
-    public func pageTitleChanged(url: URL, title: String) {
-        guard let recorder, Self.isRecordable(url), !title.isEmpty,
-              let lastVisit, lastVisit.url == url
+    /// Names the last recorded visit only, and only when it is to `url` in the same profile: a
+    /// title never lands on another visit, and does nothing once that visit has been cleared.
+    public func pageTitleChanged(url: URL, title: String, profile: ProfileID) {
+        guard database != nil, Self.isRecordable(url), !title.isEmpty,
+              let lastVisit, lastVisit.url == url, lastVisit.profile == profile
         else { return }
         let previous = lastRecord
         lastRecord = Task {
             await previous?.value
-            await recorder.recordTitle(title, for: url, visitedAt: lastVisit.at)
+            await self.database(for: profile)?.historyRecorder.recordTitle(title, for: url, visitedAt: lastVisit.at)
         }
+    }
+
+    /// A deleted profile's history database is about to go: visits still queued for it are
+    /// written first, and it is never used again.
+    public func forgetProfile(_ id: ProfileID) async {
+        await lastRecord?.value
+        await recorders.removeValue(forKey: id)?.flush()
     }
 
     /// Only web pages go into history: not `about:blank` or other internal pages.

@@ -3,6 +3,7 @@ import BrowserCore
 import DesignSystem
 import os
 import PerfSignposts
+import Storage
 import UIKit
 import WebEngine
 import WebKit
@@ -32,6 +33,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let session: BrowserSession
     let data: any AddressBarData
     let sheets: FeatureSheets
+    /// The window moved to another profile and its history database is open: the app points
+    /// Spotlight, the widgets and Shortcuts at that profile's favorites.
+    public var onProfileDatabaseChange: ((AppDatabase) -> Void)?
     private let onLaunchReady: () -> Void
 
     /// The page panes: one, or two in a split on the Duo's inner screen (`+Panes`).
@@ -202,6 +206,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        wireProfiles()
         session.pool.onTranslationFailed = { [weak self] tab in
             guard let self, tab === self.currentTab else { return }
             Haptic.nothingThere.play()
@@ -642,7 +647,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
     }
 
-    private func loadFavorites() {
+    func loadFavorites() {
         favoritesTask?.cancel()
         favoritesTask = Task { [weak self, data] in
             let favorites = await data.favorites()

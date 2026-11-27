@@ -11,6 +11,9 @@
 #      tests only append with +=. The factory's one assignment is the exception.
 #   3. The app honors the isolation arguments in every build configuration: TestIsolation has no
 #      #if DEBUG, and the app's store and the shared website data, thumbnails and downloads read it.
+#      So do profiles: each profile's website data store goes through AppWebsiteData (a fresh,
+#      recorded store per profile in an isolated run) and its history database lives beside the
+#      app's store (the test folder, or memory).
 #   4. App code touches the owner's state (standard defaults, general pasteboard, default website
 #      data, icon, Documents, scene state, Photos, tips, Spotlight, widgets, App Groups and their
 #      defaults, Handoff, App Shortcuts and intent donations, Keychain) only in the files that
@@ -55,10 +58,17 @@ grep -q 'TestIsolation.directory' Plain/SceneDelegate.swift \
   || problems+="Plain/SceneDelegate.swift does not take its store folder from TestIsolation"
 grep -q 'TestIsolationMarker.install' Plain/SceneDelegate.swift \
   || problems+="Plain/SceneDelegate.swift does not install the isolation marker"
-for needle in 'AppWebsiteData.store' 'TestIsolation.folder("Thumbnails")' 'TestIsolation.folder(EngineChoices.downloadsFolderName)'; do
+for needle in 'AppWebsiteData.store' 'AppWebsiteData.store(forProfile:' 'TestIsolation.folder("Thumbnails")' 'TestIsolation.folder(EngineChoices.downloadsFolderName)'; do
   grep -qF "$needle" Packages/PlainKit/Sources/WebEngine/WebViewPool.swift \
     || problems+="WebViewPool does not use $needle"
 done
+websiteData=Packages/PlainKit/Sources/WebEngine/AppWebsiteData.swift
+for needle in 'guard let base = isolatedBase else { return id }' 'IsolatedStores().profileStore(for: id, base: base)'; do
+  grep -qF "$needle" $websiteData \
+    || problems+="AppWebsiteData does not map profile stores through the isolated run ($needle)"
+done
+grep -qF 'ProfileDataLocation(directory: inMemory ? nil : directory)' Plain/SceneDelegate.swift \
+  || problems+="Plain/SceneDelegate.swift does not keep profile data beside the (isolated) store" 
 
 # 4. App code reaches the owner's state only through the isolation-aware places. A new use of one of
 #    these elsewhere must go through TestIsolation (or join this list after a look at isolation).
@@ -83,6 +93,9 @@ typeset -A allowed=(
   'UserDefaults\(suiteName' 'BrowserCore/TestIsolation.swift|WebEngine/AppWebsiteData.swift'
   'becomeCurrent\(|NSUserActivity\(' 'ShellUI/BrowserViewController\+System.swift'
   'updateAppShortcutParameters|IntentDonationManager|\.donate\(' 'ShellUI/TabsMenuTip.swift|Plain/SceneDelegate.swift'
+  # Profiles: each profile's website data store, and its history database, through the isolated run.
+  'WKWebsiteDataStore\(forIdentifier|WKWebsiteDataStore\.remove\(forIdentifier|DataStoreIdentifiers' 'WebEngine/AppWebsiteData.swift'
+  'ProfileDataLocation\(directory:' 'Plain/SceneDelegate.swift|ShellUI/BrowserSession.swift'
 )
 for pattern in ${(k)allowed}; do
   while IFS= read -r line; do

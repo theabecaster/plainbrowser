@@ -21,7 +21,7 @@ public final class SpringDriver {
 
     private let spring: Spring
     /// When set, the spring lands on its target once the value is within this distance of it and
-    /// moved less than this in the last frame (the motion is visibly over), instead of after the
+    /// moves less than this a frame (the motion is visibly over), instead of after the
     /// spring's long sub-point tail. The jump to the target is below what the eye can see.
     private let restDistance: CGFloat?
     private var link: UIUpdateLink?
@@ -111,6 +111,7 @@ public final class SpringDriver {
     }
 
     private func step(to time: TimeInterval) {
+        let previousTime = lastTime
         lastTime = max(time, startTime)
         let elapsed = lastTime - startTime
         guard elapsed < duration else {
@@ -118,13 +119,23 @@ public final class SpringDriver {
             return
         }
         let next = origin + spring.value(target: target - origin, initialVelocity: initialVelocity, time: elapsed)
-        if let restDistance, abs(target - next) <= restDistance, abs(next - value) <= restDistance {
-            finish(at: target)
-            return
+        if let restDistance, elapsed > 0, abs(target - next) <= restDistance {
+            // Moving less than `restDistance` a frame, from the spring's own velocity over this
+            // frame's interval (at least a 120 Hz frame): a sample that repeats a time, or a start
+            // near the target with a flick's velocity, never reads as rest.
+            let frame = max(lastTime - previousTime, Self.shortestFrame)
+            let speed = abs(spring.velocity(target: target - origin, initialVelocity: initialVelocity, time: elapsed))
+            if speed * frame <= restDistance {
+                finish(at: target)
+                return
+            }
         }
         value = next
         onFrame?(value)
     }
+
+    /// The top rate's frame (`frameRateRange`), the shortest interval a rest check assumes.
+    private static let shortestFrame: TimeInterval = 1 / 120
 
     private func finish(at target: CGFloat) {
         endLink()

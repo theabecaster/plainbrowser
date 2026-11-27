@@ -448,9 +448,10 @@ Each entry: what was chosen, and why. Newest last.
 - **The swipe ends when the page is visibly at rest, not at the spring's settle.** The driver ran
   the spring to within 0.001 pt of the target: on a 400 pt page about 0.85 s, of which the last
   0.5 s moves under a point, while the new tab waited for the hand-off (pill text, touches). Now
-  `SpringDriver(restDistance:)` lands on the target once the page is within 0.5 pt and moved less
-  than 0.5 pt in the last frame (`Signposts.visualSettle`, the gallery's rule), then hands off.
-  The jump is below a pixel step the eye can follow. The spring is unchanged (0.35 s, bounce 0.12,
+  `SpringDriver(restDistance:)` lands on the target once the page is within 0.5 pt and its spring
+  velocity covers less than 0.5 pt over the frame (`Signposts.visualSettle`, the gallery's rule),
+  then hands off. Velocity, not the last sample's change, so a start near the target with a
+  flick's momentum never reads as rest. The jump is below a pixel step the eye can follow. The spring is unchanged (0.35 s, bounce 0.12,
   the motion table's row).
 - **One pan recognizer per bar view** decides by its first velocity: sideways switches tabs, up
   opens the gallery (the same `TabGalleryTransition`, finger-driven). It never begins on the

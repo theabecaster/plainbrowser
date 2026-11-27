@@ -157,7 +157,8 @@ public enum Signposts {
     /// finger's own travel, which in UI tests is the test's scripted drag.
     public static let tabSwipeSettle: StaticString = "tab.swipeSettle"
     /// Interval inside `tab.swipeSettle`: the page at rest on the neighbour, its web view moving
-    /// into the page container (`completeTabSwipe`) until the page takes touches.
+    /// into the page container (`completeTabSwipe`). A live neighbour takes touches when it ends; a
+    /// restored one keeps its picture over the page until it has loaded (up to 1.5 s).
     public static let tabSwipeHandoff: StaticString = "tab.swipeHandoff"
     /// Event right after `tab.swipe` ends: where it landed, "switched" (the neighbour tab),
     /// "stayed", "newTab" (past the last tab) or "cancelled".

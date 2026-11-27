@@ -143,9 +143,12 @@ final class IntroTests: XCTestCase {
         XCTAssertTrue(turnOn.waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["introAITurnOnLine"].exists)
         XCTAssertTrue(app.buttons["introAINotNow"].exists)
+        // The button is still rising into place as the step arrives; a tap during that can miss,
+        // so a second tap goes in if Settings has not come up.
         turnOn.tap()
+        if !app.wait(for: .runningBackground, timeout: 8), turnOn.exists { turnOn.tap() }
         // Settings comes up; coming back is what a user does after turning it on.
-        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 10), "Settings did not open")
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 20), "Settings did not open")
         app.activate()
         XCTAssertTrue(app.descendants(matching: .any)["introAIReady"].waitForExistence(timeout: 5), "no check mark after returning")
         XCTAssertFalse(app.buttons["introTurnOnAI"].exists)

@@ -217,12 +217,21 @@ Newest feature last.
   `AppearanceTests/testScrollHitchesDarkened` and `testScrollHitchesDarkPagesOff` on the Duo
   (`TEST_RUNNER_PLAIN_DARK_PERF=1`). If darkened is worse by a measurable margin, switch the
   darkening to Dark Reader's dynamic mode (MIT; research, section 4) behind the same judgement.
-- **Filter fidelity.** Darkening flips emoji and CSS-drawn artwork with the text, and pictures
-  given the filter twice lose a little saturation in very light or very dark saturated colors
-  (CSS filters clamp between steps): a pale yellow comes back cream. Colored text headers flip
-  in lightness (a blue bar with white text becomes light blue with black text). Inherent to the
-  filter; a style rewrite or Safari's in-engine darkening (private API on iOS 27) avoids it.
-  (Design review, round 1, blocking; accepted as the technique's trade, see decisions.)
+- **Filter fidelity.** Fixed 2026-11-27: the root filter was replaced by per-role darkening
+  (emoji, pictures and colored headers now keep their colors; see decisions).
+- **Device numbers for per-role darkening.** Script cost and first-frame time were measured in
+  the simulator (docs/research/dark-mode.md, section 9). Take `DarkPagesTests/largePageCost` and
+  the scroll hitch tests on the Duo; if the first frame on `/apple-big` passes ~33 ms there,
+  move the sheet rewrite of sheets below the fold behind the first paint.
+- **Dark cards on light sections lose their edge.** A #1d1d1f card on a #f5f5f7 section stays
+  #1d1d1f while the section becomes #202022, so the card reads only by its shadow. Safari's
+  stated rules do the same (dark backgrounds unchanged). A later pass could lift a dark box
+  whose parent was darkened by a few lightness steps.
+- **Black-and-white pictures.** Safari inverts simple black-and-white logos in `<img>` after a
+  histogram check; Plain leaves every `<img>` as made, so a black wordmark image on a light page
+  shows black on dark. Needs a same-origin canvas read; other-origin pictures can't be read.
+- **Shadow DOM and frames.** Open shadow roots (web components) and same-site iframes are not
+  darkened; their light boxes stay light.
 - **Link previews.** The link menu's preview web view has no dark pages script, so a light-only
   page previews white in a dark app.
 - **Frames.** Iframes are kept as made (an embed in a darkened page stays light), by design; a

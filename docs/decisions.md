@@ -908,8 +908,15 @@ Research and sources: docs/research/print-pdf.md.
 - **The reader prints the article**, not the page under it. Not on Start, while loading, or on an
   error or crashed page (state rules §4). A PDF tab prints, and keeps "Save PDF to Files" for the
   original file instead of Save as PDF.
+- **In the page menu, in Find on Page's row** ("Find", "Print…", "Save PDF"), so the two rare
+  actions take no section of their own. A row of icons without captions was tried and rejected in
+  design review (Find and Save PDF were not told apart).
+- **The same document:** an export marks the document with a token in the engine's world and checks
+  it, the tab and the web view before the sheet shows, so a reload or a tab switch meanwhile drops
+  the export instead of showing the wrong page.
 - **Perf cost:** the formatter lays the document out in the page's process and the first drawn page
-  waits for it on the main thread. Pages are drawn one per run-loop turn after that. Measured
+  waits for it on the main thread. Pages are drawn one per run-loop turn after that, and a document
+  over 20 pages shows "Saving as PDF…" first (`FixedChoices.exportProgressPages`). Measured
   (iPhone 17 simulator): a 3,000-paragraph page (121 A4 pages) holds the main thread for 14 ms
   (layout) plus 423 ms (first page), 558 ms in all; a two-page article is imperceptible. Only ever
   from a menu tap. A long-document spinner is in the polish backlog.

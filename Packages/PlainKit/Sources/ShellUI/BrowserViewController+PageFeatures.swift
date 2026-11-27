@@ -148,9 +148,10 @@ extension BrowserViewController {
             items.append(print)
         }
         if rules.saveAsPDF {
-            let save = UIAction(title: "Save as PDF", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
+            let save = UIAction(title: "Save PDF", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
                 self?.saveAsPDF()
             }
+            save.accessibilityLabel = "Save as PDF"
             save.accessibilityIdentifier = "menu.saveAsPDF"
             items.append(save)
         }
@@ -180,8 +181,8 @@ extension BrowserViewController {
         Task { [weak self] in
             let token = await PageExport.markDocument(in: webView)
             await PageExport.loadLazyImages(in: webView)
-            guard let self, self.isStillExporting(tab, webView, document: document),
-                  await PageExport.isSameDocument(webView, token: token)
+            guard await PageExport.isSameDocument(webView, token: token), let self,
+                  self.isStillExporting(tab, webView, document: document)
             else { return }
             Signposts.signposter.emitEvent(Signposts.printPage)
             let info = UIPrintInfo(dictionary: nil)
@@ -203,8 +204,8 @@ extension BrowserViewController {
         Task { [weak self] in
             let token = await PageExport.markDocument(in: webView)
             await PageExport.loadLazyImages(in: webView)
-            guard let self, self.isStillExporting(tab, webView, document: document),
-                  await PageExport.isSameDocument(webView, token: token)
+            guard await PageExport.isSameDocument(webView, token: token), let self,
+                  self.isStillExporting(tab, webView, document: document)
             else {
                 return Signposts.signposter.endInterval(Signposts.exportPDF, interval, "cancelled")
             }

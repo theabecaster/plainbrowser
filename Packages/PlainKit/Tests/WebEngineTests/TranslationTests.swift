@@ -45,6 +45,9 @@ struct TranslationTests {
         case "/fr": return .html(Pages.page(title: "Accueil", body: french).replacingOccurrences(of: "<html>", with: "<html lang=fr>"))
         case "/fr2": return .html(Pages.page(title: "Deux", body: "<p id=two>Une autre page en français, avec beaucoup de mots pour la reconnaître.</p>"))
         case "/en": return .html(Pages.page(title: "Home", body: "<p>Welcome to our site. We are happy to see you here today, read on.</p>"))
+        case "/fr-huge":
+            let sentence = "Une phrase assez longue pour remplir la page en français. "
+            return .html(Pages.page(title: "Énorme", body: "<p id=huge>\(String(repeating: sentence, count: 80))</p>"))
         case "/fr-long":
             var body = "<p id=first>Le premier paragraphe de cette longue page en français.</p>"
             for i in 0..<3_000 { body += "<p id=p\(i)>Paragraphe numéro \(i), avec <a href='#\(i)'>un lien</a> et quelques mots.</p>" }
@@ -220,6 +223,20 @@ struct TranslationTests {
             "(() => { __plainTranslate.restore(); const t = performance.now(); __plainTranslate.start(); return performance.now() - t; })()",
             in: nil, contentWorld: PageTranslation.world) as? Double ?? -1
         report(String(format: "translator start (collect and watch) on the long page: %.1f ms", restart))
+    }
+
+    @Test func aVeryLongTextGoesInPieces() async throws {
+        let translator = FakeTranslator()
+        let (harness, tab) = try await makeHarness(translator)
+        defer { harness.cleanUp() }
+        try await harness.load("/fr-huge", in: tab)
+        try await waitUntil("language") { tab.translationTarget != nil }
+        tab.translate()
+        try await waitUntil("translated") { tab.translation == .translated }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(translator.requests.joined().allSatisfy { $0.count <= 1_500 }, "each piece fits a batch")
+        #expect(translator.requests.joined().count > 1)
+        #expect(try await text("huge", in: harness, tab: tab)?.hasPrefix("EN Une phrase") == true)
     }
 
     @Test func recognizerPrefersTheTextOverAWrongDeclaration() {

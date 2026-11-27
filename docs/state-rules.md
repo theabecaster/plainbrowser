@@ -131,7 +131,8 @@ press means the same thing whatever it shows.
 
 Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: Reload
 (or Stop), Share and Copy Link are one row of three; Find on Page, Print… and Save as PDF are one
-row of three while the page can be printed (Find alone otherwise); Desktop Site, blocking, cookie
+row of three while the page can be printed, captioned "Find", "Print…" and "Save PDF" (Find on
+Page alone otherwise); Desktop Site, blocking, cookie
 banners and Dark Pages fold into a "Site Settings" submenu when two or more apply; History, Edit
 Favorites and Settings are one row of three, so the whole menu fits the Duo's outer screen.
 

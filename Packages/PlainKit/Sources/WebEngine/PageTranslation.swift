@@ -174,6 +174,23 @@ enum PageTranslation {
             node.nodeValue = value;
           };
 
+          // A text longer than a batch, cut after sentences (or spaces) into pieces that fit.
+          const split = (text) => {
+            if (text.length <= BATCH_CHARS) return [text];
+            const parts = [];
+            let rest = text;
+            while (rest.length > BATCH_CHARS) {
+              const head = rest.slice(0, BATCH_CHARS);
+              let cut = Math.max(head.lastIndexOf('. '), head.lastIndexOf('! '), head.lastIndexOf('? '));
+              if (cut < BATCH_CHARS / 2) cut = head.lastIndexOf(' ');
+              cut = cut < BATCH_CHARS / 2 ? BATCH_CHARS : cut + 1;
+              parts.push(rest.slice(0, cut).trim());
+              rest = rest.slice(cut);
+            }
+            if (rest.trim()) parts.push(rest.trim());
+            return parts;
+          };
+
           const report = (type) => h.postMessage({ type }).catch(() => {});
 
           const flush = () => {
@@ -184,14 +201,15 @@ enum PageTranslation {
                 const node = queue[0];
                 const original = node.nodeValue;
                 const key = original ? original.trim() : '';
-                // A batch stays under the size; one long text goes alone.
+                // A batch stays under the size; a text longer than a batch goes alone, in pieces.
                 if (batch.length > 0 && chars + key.length > BATCH_CHARS) break;
                 queue.shift();
                 queued.delete(node);
                 if (!node.isConnected || !original || written.get(node) === original || excluded(node)) continue;
                 if (cache.has(key)) { apply(node, original, cache.get(key)); continue; }
-                batch.push([node, original, key]);
-                texts.push(key);
+                const parts = split(key);
+                batch.push([node, original, key, parts.length]);
+                texts.push(...parts);
                 chars += key.length;
               }
               if (batch.length === 0) { if (!reported && originals.size > 0) { reported = true; report('translated'); } continue; }
@@ -199,11 +217,14 @@ enum PageTranslation {
               const mine = run;
               h.postMessage({ type: 'translate', texts }).then((translations) => {
                 if (!active || mine !== run) return;
-                if (!Array.isArray(translations) || translations.length !== batch.length) return fail(mine);
-                batch.forEach(([node, original, key], i) => {
-                  cache.set(key, translations[i]);
-                  apply(node, original, translations[i]);
-                });
+                if (!Array.isArray(translations) || translations.length !== texts.length) return fail(mine);
+                let at = 0;
+                for (const [node, original, key, count] of batch) {
+                  const translated = translations.slice(at, at + count).join(' ');
+                  at += count;
+                  cache.set(key, translated);
+                  apply(node, original, translated);
+                }
                 if (!reported) { reported = true; report('translated'); }
               }, () => fail(mine)).finally(() => {
                 if (mine !== run) return;

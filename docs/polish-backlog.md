@@ -303,4 +303,14 @@ Newest feature last.
 - **Cookie banners: engine cost per page.** Parsing the 129 KB engine at document start adds
   about 30–50 ms to a long page's load on the simulator; check on the Duo, and consider the
   document-end injection for pages without a known consent manager's prehide selectors.
-
+- **Page menu height on the Duo's outer screen.** The menu already filled the outer screen on a
+  readerable page (New Private Tab, actions, Find, Show Reader, zoom, Favorites, Site Settings, app
+  row). The Find / Print… / Save PDF row is taller than the Find item alone, and Translate Page adds
+  a row on foreign pages, so the History/Favorites/Settings row is cut by a few points there
+  (design review, blocking for the lead to decide). Options: Print and Save PDF in the share sheet
+  (Safari's and Chrome's place), Show Reader and Translate Page as captions in one row, or New
+  Private Tab out of the page menu on a page.
+- **Cookie switch wording.** Design review suggests "Cookie Banner Blocking" with a checkmark
+  instead of "Turn Off / On …"; it follows the blocking switch's wording today. Change both
+  together if at all.
+- **Zoom row's 100%.** Design review: the current value reads as disabled; use secondary text.

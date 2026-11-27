@@ -314,7 +314,11 @@ public final class CookieBanners {
         let state = loops.object(forKey: webView) ?? LoopState()
         loops.setObject(state, forKey: webView)
         let now = ContinuousClock.now
-        var answers = (state.answers[site] ?? []).filter { now - $0 < FixedChoices.cookieBannerLoopWindow }
+        state.answers = state.answers.compactMapValues { times in
+            let recent = times.filter { now - $0 < FixedChoices.cookieBannerLoopWindow }
+            return recent.isEmpty ? nil : recent
+        }
+        var answers = state.answers[site] ?? []
         answers.append(now)
         state.answers[site] = answers
         if answers.count >= FixedChoices.cookieBannerLoopLimit {

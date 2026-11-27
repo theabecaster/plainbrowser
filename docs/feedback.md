@@ -4,8 +4,6 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
-- **Duo inner screen: chrome takes too much space, portrait bottom menu looks broken — follow Safari on iPhone Duo.** The tab bar takes too much room and looks broken; the page should get the screen; the portrait bottom menu (pill over a full-width button bar) looks horrible. Safari's Duo layout is the model: its options, its use of space, how intuitive it is. (Duo layout lane.)
-
 - **Launch with tabs feels empty:** open to the last tab (or a search with the last tab behind it), like Arc but smoother. (Launch lane.)
 
 
@@ -13,6 +11,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 
 ## Done
+
+- **Duo inner screen: chrome takes too much space, portrait bottom menu looks broken — follow Safari on iPhone Duo:** done the Safari way. On the inner screen the system's side column is off and one top bar sits under the status bar in both orientations: Back and Forward on the left, the address in the middle, Tabs, Share and More on the right; the page gets the full width under it. There is no bottom menu on the inner screen any more. Tabs (Tab Layout Above, now the default) are a slim strip under the bar from the second tab, with short titles; Left and Right are a thinner 52 pt rail. While reading, the bar shrinks to the address and the strip hides. The page shows 89% of the landscape screen with one tab (was 76%), 83% with the strip, 91% while reading; portrait 88–94% (was 80%). The outer screen is unchanged. (dev, Duo layout lane; to check on the device, see the polish backlog.)
 
 - **Suggestions flicker while typing:** fixed. Each row belongs to one suggestion, so a suggestion that stays never blinks; new rows fade in and old ones fade out in place, and a row that changes place crossfades there (a 0.12 s crossfade; nothing slides). Local pages and cached engine rows arrive as one list, and the previous engine rows hold for up to 120 ms until the new answer replaces them. Also fixed: engine rows that turned invisible after the first keystroke. (dev, suggestions lane.)
 

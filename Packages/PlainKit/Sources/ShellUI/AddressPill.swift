@@ -245,6 +245,16 @@ final class AddressPill: UIView {
         guard isPrivate else { return text }
         let marked = NSMutableAttributedString(attachment: privateMark())
         marked.append(NSAttributedString(string: " "))
+        // On a page the word says it too (design review: the mark alone asked people to guess).
+        // Not over the placeholder: the empty private tab's screen says Private already.
+        if url != nil {
+            // Headline: the body size, semibold.
+            marked.append(NSAttributedString(
+                string: String(localized: "Private"),
+                attributes: [.foregroundColor: Palette.privateAccent, .font: UIFont.preferredFont(forTextStyle: .headline)]
+            ))
+            marked.append(NSAttributedString(string: "  ", attributes: [.foregroundColor: Palette.privateAccent]))
+        }
         // The night's text colors, fixed: the private glass is always dark, whatever the glass
         // decides from the page behind it.
         let dark = UITraitCollection(userInterfaceStyle: .dark)

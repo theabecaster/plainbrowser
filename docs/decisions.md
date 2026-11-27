@@ -2465,9 +2465,16 @@ modes: two visual cues, named modes, a labelled exit).
   bar on the inner screen): the glass turns a deep dusk violet in light and dark alike
   (`Palette.privateGlassTint`, drawn with the dark style so text and glyphs are light; white text
   above 10:1), and the private mark (`hand.raised.fill`, `Palette.privateAccent`) leads the host
-  and the field. The buttons' glass and the toast follow. Was a lilac tint that read as Paper in
-  light mode. Violet, not Safari's black: a dark page or the dark app never looks private. The
-  mark is the pill's content, like "Not Secure —", not a badge: nothing is added over the page.
+  and the field, with the word "Private" before the host on a page ("✋ Private  apple.com";
+  design review: the mark alone asked people to guess; not over the placeholder, which the empty
+  private tab's own screen explains). The buttons' glass and the toast follow. Was a lilac tint
+  that read as Paper in light mode. Violet, not Safari's black: a dark page or the dark app never
+  looks private. The mark and word are the pill's content, like "Not Secure —", not a badge:
+  nothing is added over the page. A long host loses its middle, never the mark.
+- **The glass is told it is dark.** Liquid Glass picks light or dark content from what is
+  behind it, so over a white page it drew dark text and glyphs on the violet. The effect views
+  get `overrideUserInterfaceStyle = .dark`, the pill's text is resolved for dark, and the bar's
+  glyphs are white (dimmed 45% when disabled) while private.
 - **The keyboard** is dark in a private tab, and the field also predicts, rewrites and
   grammar-checks nothing (it never corrected or spell-checked). iOS has no "don't learn" flag, so
   Plain claims nothing about learning. Page fields are WebKit's: no public control.
@@ -2499,3 +2506,8 @@ modes: two visual cues, named modes, a labelled exit).
 - **Not now:** a Face ID lock for private tabs and closing them on leaving the app (Safari,
   Firefox). Both add a setting or change behaviour the owner didn't ask for
   (docs/polish-backlog.md).
+- **Design review calls not taken:** "Private | Regular" instead of "Private | Tabs" (Safari's
+  words are Private and Tabs, and "regular" is jargon nobody else in the app says); a private
+  colour for the focused search sheet (it belongs to the search-bar lane; the field there is
+  violet with the mark, over a dark keyboard, and the row above it says private tabs keep no
+  history; in the polish backlog).

@@ -285,7 +285,7 @@ final class ButtonBar: UIView {
         for button in buttons.values {
             if isPrivate {
                 button.configurationUpdateHandler = { button in
-                    button.configuration?.baseForegroundColor = button.isEnabled ? .white : UIColor(white: 1, alpha: 0.35)
+                    button.configuration?.baseForegroundColor = button.isEnabled ? .white : UIColor(white: 1, alpha: 0.45)
                 }
             } else {
                 button.configurationUpdateHandler = nil

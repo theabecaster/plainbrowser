@@ -472,3 +472,6 @@ Newest feature last.
 - **Private tabs: lock and auto-close.** Safari and Chrome can lock private tabs behind Face ID;
   Firefox closes them when you leave the app. Both would be a setting or a behaviour change;
   revisit if the owner asks (docs/research/private-mode.md).
+- **Private search sheet.** In light mode the focused field of a private tab sits on the warm
+  paper sheet; a private tint for the sheet would carry the mode into that state (design review,
+  private mode lane). The sheet is the search-bar lane's; do it with them.

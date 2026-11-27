@@ -22,7 +22,7 @@ public enum Paper {
     /// tile is ready or Reduce Transparency changes.
     public static var background: UIColor { Surfaces.shared.current }
 
-    fileprivate static func makeDynamicColor() -> UIColor {
+    static func makeDynamicColor() -> UIColor {
         UIColor { traits in
             // UIKit resolves views' colors on the main thread; anywhere else, the flat color.
             guard Thread.isMainThread else { return flat(for: traits) }
@@ -78,7 +78,7 @@ public struct PaperBackground: UIViewRepresentable {
 /// The views showing Paper, so they pick up a tile that just finished and follow Reduce
 /// Transparency, which is a setting, not a trait.
 @MainActor
-private final class Surfaces {
+final class Surfaces {
     static let shared = Surfaces()
 
     private let views = NSHashTable<UIView>.weakObjects()

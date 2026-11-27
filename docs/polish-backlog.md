@@ -471,9 +471,9 @@ Newest feature last.
 ||||||| parent of 8710666 (Site icons: fetched once per site off the main thread, stored per profile, memory only for private tabs; the sidebar becomes a rail of icons that widens to titles and stays in portrait)
 ## Duo inner sidebar and site icons (2026-11-27)
 
-- **Favorites above the keyboard and the widgets still show letters.** The favorites strip can
-  take `FaviconService` icons (Personal's scope) once the address-focus work has landed; the
-  widgets need the icon written into the shared favorites file.
+- **The widgets still show letters:** the icon would have to be written into the shared
+  favorites file. A favorite never visited since site icons shipped keeps its letter until it
+  is visited; fetching icons for favorites at save time would close that.
 - **Pinned tabs in the rail:** no control pins a tab yet; when one does, pinned tabs go first as
   tiles without a close button (Arc's top grid).
 - **Drag a tab onto the other pane** to split (plan, section 6): the rows reorder within their

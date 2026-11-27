@@ -2410,7 +2410,8 @@ transition animations. Right now in portrait the sidebar disappears."
 ## Site icons (2026-11-27)
 
 Tabs showed the first letter of their host. They show the site's own icon now, everywhere tabs
-are listed: the sidebar, the strip and the switcher's cards.
+are listed: the sidebar, the strip and the switcher's cards. The favorites above the keyboard
+show theirs too, on their disc, once the site has been visited.
 
 - **Fetched once per site** (`WebEngine/FaviconService`). When a main-frame load finishes, a
   dictionary lookup decides: a site seen this launch costs nothing. Otherwise the profile's
@@ -2446,6 +2447,5 @@ are listed: the sidebar, the strip and the switcher's cards.
 - **Not chosen:** a favicon service on a server (a third party would learn every site), WebKit's
   private icon database, `LPMetadataProvider` (a second full page load per site), an injected
   user script on every page (work on every page for something needed once per site).
-- **Not built here:** icons on the favorites above the keyboard and in the widgets. The
-  favorites strip belongs to the address-focus work in flight; the widgets read a shared file.
-  Both are in the polish backlog.
+- **Not built here:** icons in the widgets (they read a shared file the app writes; polish
+  backlog). A favorite never visited since this build keeps its letter until it is.

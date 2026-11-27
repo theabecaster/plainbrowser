@@ -319,7 +319,7 @@ final class TabStripCell: UICollectionViewCell {
     private let titleLabel = UILabel()
     private let closeButton = UIButton(type: .system)
     private var isInOtherPane = false
-    private var isFocused = false
+    private var isOnScreen = false
     /// The tab the cell shows: a change of its mark animates only for the same tab.
     private var shownID: UUID?
     private static let tileSize: CGFloat = 22
@@ -370,12 +370,12 @@ final class TabStripCell: UICollectionViewCell {
             self.closeButton.alpha = isFocused ? 1 : 0
         }
         // The card fades from the tab left to the tab chosen; nothing moves.
-        if sameTab, isFocused != self.isFocused, window != nil {
+        if sameTab, isFocused != isOnScreen, window != nil {
             Motion.animate(Motion.quick, changes: changes)
         } else {
             UIView.performWithoutAnimation(changes)
         }
-        self.isFocused = isFocused
+        isOnScreen = isFocused
         self.isInOtherPane = isInOtherPane
         resolveBorder()
         closeButton.isHidden = !isFocused

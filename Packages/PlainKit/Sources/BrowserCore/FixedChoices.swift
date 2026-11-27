@@ -450,30 +450,6 @@ public enum FixedChoices {
     public static let faviconMemoryBytes = 4 * 1024 * 1024
     /// Private tabs' icons live in memory only, for this many sites at most.
     public static let faviconPrivateSites = 64
-    /// A stored icon is fetched again on a visit once it is this old, so a site's new icon shows
-    /// within two weeks and a site still visited never reaches `faviconMaxAge`.
-    public static let faviconRefreshAge: TimeInterval = 14 * 24 * 3600
-    /// A site that gave no icon is asked again after this long (kept in memory only, so also on
-    /// the next launch).
-    public static let faviconRetryAge: TimeInterval = 24 * 3600
-    /// The side, in pixels, a tab's tile shows a site icon at: 20 pt at 3x. Icons are picked for
-    /// it (`FaviconRules.ranked`) and decoded at exactly the size a view shows.
-    public static let faviconPixelSize = 60
-    /// Icons are stored no larger than this, as PNG: the largest tile (24 pt at 3x) with room to
-    /// spare, a few kilobytes a site.
-    public static let faviconStoredPixelSize = 96
-    /// An icon download stops past this size: real icons are a few kilobytes, a multi-size .ico
-    /// a few hundred.
-    public static let faviconMaxBytes = 768 * 1024
-    /// How many of a page's icons are tried before giving up (`/favicon.ico` is always the last).
-    public static let faviconAttempts = 4
-    /// An icon request gives up after this long; the tile keeps the site's letter.
-    public static let faviconTimeout: TimeInterval = 8
-    /// Decoded icons kept in memory: about 300 at 60 px. The rest decode again from the database,
-    /// off the main thread.
-    public static let faviconMemoryBytes = 4 * 1024 * 1024
-    /// Private tabs' icons live in memory only, for this many sites at most.
-    public static let faviconPrivateSites = 64
     /// Daily maintenance (pruning, FTS and SQLite `optimize`) runs at most this often.
     public static let maintenanceInterval: TimeInterval = 24 * 3600
     /// After a clear, compaction (VACUUM) waits this long, so Clear History and Data (history,

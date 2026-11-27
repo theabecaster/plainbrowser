@@ -112,7 +112,7 @@ public nonisolated enum SiteIconStyle: Sendable, Equatable {
     }
 }
 
-extension FaviconRules {
+nonisolated extension FaviconRules {
     /// An icon with more clear pixels than this is a shape on a clear ground. A full square with
     /// its corners rounded off clears about 4%.
     static let glyphClearShare = 0.05

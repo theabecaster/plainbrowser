@@ -199,6 +199,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.onBrowse = { [weak self] query in self?.browseForMe(query) }
         sheet.onDismiss = { [weak self] in self?.endEditing() }
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
+        // A favorite shows its site's icon, from the window's profile's stored ones.
+        sheet.favoriteIcons = FavoriteIcons(
+            cached: { [weak self] url, pixelSize in
+                guard let self, let site = FaviconService.site(of: url) else { return nil }
+                return session.pool.favicons.cachedIcon(site: site, scope: .profile(session.tabs.activeProfile), pixelSize: pixelSize)
+            },
+            load: { [weak self] url, pixelSize in
+                guard let self, let site = FaviconService.site(of: url) else { return nil }
+                return await session.pool.favicons.icon(site: site, scope: .profile(session.tabs.activeProfile), pixelSize: pixelSize)
+            }
+        )
         // A swipe down closes the search, as a sheet closes (Arc Search's way back to the tab).
         let swipeDown = UISwipeGestureRecognizer(target: self, action: #selector(sheetSwipedDown))
         swipeDown.direction = .down

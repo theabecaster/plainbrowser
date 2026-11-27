@@ -367,11 +367,6 @@ public final class TabGalleryViewController: UIViewController {
         if newTabCard.transform != transform { newTabCard.transform = transform }
         if newTabCard.alpha != appear { newTabCard.alpha = appear }
         if newTabCard.layer.zPosition != slot { newTabCard.layer.zPosition = slot }
-        // Its words sit in the middle of the part on screen: the strip that peeks in, or the card.
-        let halfWidth = metrics.cardWidth * scale / 2
-        let left = placement.center.x - halfWidth
-        let shownLeft = max(left, metrics.safeLeft), shownRight = min(placement.center.x + halfWidth, metrics.width - metrics.safeRight)
-        newTabCard.setVisibleSpan(minX: (shownLeft - left) / scale, maxX: (max(shownLeft, shownRight) - left) / scale)
         newTabCard.isUserInteractionEnabled = appear > 0.5
     }
 

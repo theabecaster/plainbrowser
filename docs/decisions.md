@@ -1462,9 +1462,9 @@ Research: docs/research/groups-profiles.md.
 - **No surprises:** the start screen says "Start with a search or an address in Work." once
   there are two profiles; an empty profile list says "Tabs in Work show up here, with Work's own
   logins and history."; the gallery opens on the window's profile (or, with nothing there, the
-  profile used last). **Delete asks once** and counts what goes: "Its 3 open tabs, its archived
-  tabs, history, favorites, and the logins and data sites kept in Work are deleted. This can't be
-  undone." Then its tabs close without a Reopen (their data is gone), its history database and
+  profile used last). **Delete asks once** and counts what goes: "This deletes 3 open tabs,
+  archived tabs, history, favorites, website logins and site data in Work. This can't be undone."
+  Delete Profile sits alone in the menu's last section. Then its tabs close without a Reopen (their data is gone), its history database and
   its website data store are deleted after its web views are released. WebKit refuses to remove a
   store still in use, so the removal is tried again a moment later and, failing that, at the next
   launch (`removeLeftoverProfileData`); a profile folder left by a crash goes at launch too.

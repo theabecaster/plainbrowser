@@ -75,7 +75,7 @@ extension BrowserViewController {
             self?.renameProfile(profile)
         }
         rename.accessibilityIdentifier = "profile.rename"
-        var edits: [UIMenuElement] = [rename]
+        elements.append(UIMenu(options: .displayInline, children: [rename]))
         if !profile.isDefault {
             let delete = UIAction(
                 title: String(localized: "Delete Profile…"), image: UIImage(systemName: "trash"), attributes: .destructive
@@ -83,9 +83,9 @@ extension BrowserViewController {
                 self?.confirmDeleteProfile(profile)
             }
             delete.accessibilityIdentifier = "profile.delete"
-            edits.append(delete)
+            // Destructive, so in its own last section.
+            elements.append(UIMenu(options: .displayInline, children: [delete]))
         }
-        elements.append(UIMenu(options: .displayInline, children: edits))
         return elements
     }
 
@@ -136,13 +136,10 @@ extension BrowserViewController {
     /// Asks once, saying what goes (docs/state-rules.md §6: no surprises), then deletes.
     private func confirmDeleteProfile(_ profile: Profile) {
         let count = session.tabs.entries(private: false, profile: profile.id).count
-        let tabsLine = count == 0
-            ? String(localized: "Its archived tabs")
-            : count == 1 ? String(localized: "Its open tab, its archived tabs")
-            : String(localized: "Its \(count) open tabs, its archived tabs")
+        let tabs = count == 0 ? "" : count == 1 ? String(localized: "1 open tab, ") : String(localized: "\(count) open tabs, ")
         let alert = UIAlertController(
             title: String(localized: "Delete “\(profile.name)”?"),
-            message: String(localized: "\(tabsLine), history, favorites, and the logins and data sites kept in \(profile.name) are deleted. This can't be undone."),
+            message: String(localized: "This deletes \(tabs)archived tabs, history, favorites, website logins and site data in \(profile.name). This can't be undone."),
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))

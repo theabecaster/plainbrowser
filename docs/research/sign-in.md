@@ -81,8 +81,10 @@ them.
     and `isConditionalMediationAvailable()` resolve false and `getClientCapabilities()` reports
     the passkey capabilities false. Sites then show password sign-in, as in a browser without
     passkeys. The overrides are `Proxy` objects, so they still read as native code.
-  - A passkey request a site makes anyway fails as WebKit fails it (`NotAllowedError`), so the
-    site's own fallback runs, and Plain shows one toast: "Passkeys will work once Apple approves
+  - A passkey request a site makes anyway is refused at once with `NotAllowedError`, the error
+    WebKit gives. WebKit itself answers only seconds later (**measured** on the simulator: about
+    3 s for a request with a 5 s timeout), and a site's timeout is often a minute or more. The
+    site's own fallback then runs right away, and Plain shows one toast: "Passkeys will work once Apple approves
     Plain". Once per site per launch, only for the page on screen, never for silent
     (conditional) requests. Signpost `signIn.passkeyUnavailable`.
 - **Default browser, ready for the grant:** `CFBundleURLTypes` declares http and https, the scene

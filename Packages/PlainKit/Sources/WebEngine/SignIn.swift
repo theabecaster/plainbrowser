@@ -3,29 +3,32 @@ import WebKit
 
 /// Sign-in in web pages (docs/research/sign-in.md).
 ///
-/// Passwords need nothing here: WebKit offers iOS AutoFill (the Passwords app and the password
-/// managers the user turned on) in the keyboard's suggestion bar for login fields on its own, and
-/// the engine keeps out of its way (no input accessory, no keyboard overrides, page fields left as
-/// the site wrote them).
+/// Passwords need no code: WebKit hands login fields to iOS AutoFill (the Passwords app and the
+/// password managers the user turned on), and the engine keeps out of its way (no input accessory,
+/// no keyboard overrides, page fields left as the site wrote them). The system shows AutoFill's
+/// Passwords button on web fields only to apps with Apple's web-browser entitlement (measured).
 ///
-/// Passkeys need Apple's web-browser entitlement (`com.apple.developer.web-browser`), which Plain
-/// does not have yet (`FixedChoices.passkeysEnabled`); with it WebKit handles them on its own. Without it WebKit still exposes `PublicKeyCredential`, and
-/// `getClientCapabilities()` even claims a platform authenticator, but every request fails. So until
-/// the entitlement lands the engine adds `passkeyFallback` to every frame:
+/// Passkeys need that entitlement (`com.apple.developer.web-browser`) too, which Plain does not
+/// have yet (`FixedChoices.passkeysEnabled`); with it WebKit handles them on its own. Without it
+/// WebKit still exposes `PublicKeyCredential`, and `getClientCapabilities()` even claims a platform
+/// authenticator, but every request fails, seconds later or only at the request's timeout. So
+/// until the entitlement lands the engine adds `passkeyFallback` to every frame:
 /// - Feature checks say "no passkeys": `isUserVerifyingPlatformAuthenticatorAvailable()` and
 ///   `isConditionalMediationAvailable()` resolve false, and `getClientCapabilities()` reports the
 ///   passkey capabilities false. Sites then show their password sign-in, as they do in a browser
 ///   without passkeys, instead of a passkey button or prompt that can only fail.
-/// - A passkey request a site makes anyway still fails as WebKit fails it (`NotAllowedError`), and
-///   the page reports it so the shell can say why, once per site per launch
-///   (`SignInPresenter.tab(_:couldNotUsePasskeysOn:)`). Silent (conditional) requests never report.
+/// - A passkey request a site makes anyway is refused at once with `NotAllowedError`, the error
+///   WebKit would give later, so the site's own fallback runs right away, and the page reports it
+///   so the shell can say why, once per site per launch
+///   (`SignInPresenter.tab(_:couldNotUsePasskeysOn:)`). Silent (conditional) requests go to WebKit
+///   untouched and never report.
 ///
 /// The overrides are `Proxy` objects around WebKit's own functions, so they keep their names and
 /// still read as native code to sites that check.
 enum SignInScripts {
     /// The engine-world message handler the passkey report arrives on.
     static let passkeyHandlerName = "plainPasskey"
-    /// The DOM event the page-world script fires on a failed passkey request; the engine-world
+    /// The DOM event the page-world script fires on a refused passkey request; the engine-world
     /// relay turns it into a message, so the page world gets no message handler of Plain's.
     static let passkeyFailedEvent = "plain-passkey-unavailable"
 
@@ -54,20 +57,16 @@ enum SignInScripts {
             }));
           const credentials = navigator.credentials;
           if (!credentials) return;
-          const report = (target, self, args) => {
-            const result = Reflect.apply(target, self, args);
+          const refuse = (target, self, args) => {
             const options = args[0];
-            if (options && options.publicKey && options.mediation !== 'conditional') {
-              result.catch((error) => {
-                if (error && error.name === 'NotAllowedError') {
-                  document.dispatchEvent(new CustomEvent('\(passkeyFailedEvent)'));
-                }
-              });
+            if (!options || !options.publicKey || options.mediation === 'conditional') {
+              return Reflect.apply(target, self, args);
             }
-            return result;
+            document.dispatchEvent(new CustomEvent('\(passkeyFailedEvent)'));
+            return Promise.reject(new DOMException('Passkeys are not available in this browser yet.', 'NotAllowedError'));
           };
-          replace(credentials, 'get', report);
-          replace(credentials, 'create', report);
+          replace(credentials, 'get', refuse);
+          replace(credentials, 'create', refuse);
         })();
         """
 
@@ -95,7 +94,7 @@ enum SignInScripts {
 /// What the shell says about sign-in. Every requirement has a default, so a shell without it keeps
 /// compiling.
 public protocol SignInPresenter: AnyObject {
-    /// A page in `tab` asked for a passkey and WebKit refused it, because Plain can't use passkeys
+    /// A page in `tab` asked for a passkey and was refused, because Plain can't use passkeys
     /// until Apple grants the web-browser entitlement (`FixedChoices.passkeysEnabled`). Called at
     /// most once per site per launch, for private tabs too. The shell says so in one sentence
     /// when `tab` is on screen. Default: nothing.

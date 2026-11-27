@@ -681,8 +681,10 @@ Research and sources: `docs/research/sign-in.md`.
   A page-world script makes the passkey feature checks answer "no", so sites show their password
   sign-in, like in a browser without passkeys. It keeps `PublicKeyCredential` itself (removing it
   breaks scripts that reference the type) and wraps with `Proxy` so functions still read as
-  native code to bot checks. A request made anyway still fails with WebKit's own
-  `NotAllowedError`, so the site's fallback runs, and one toast per site per launch says why.
+  native code to bot checks. A request made anyway is refused at once with
+  `NotAllowedError`, the error WebKit gives, which WebKit answers only seconds later or at the
+  request's timeout (measured); the site's fallback runs right away, and one toast per site per
+  launch says why. Silent (conditional) requests go to WebKit untouched.
   The page world gets no message handler of Plain's: the script fires a DOM event that the
   engine's world relays. Cost: one small script per frame at document start, a few proxies, no
   work until a site asks for a passkey.

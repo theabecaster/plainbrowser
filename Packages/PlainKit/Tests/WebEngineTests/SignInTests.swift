@@ -97,7 +97,7 @@ struct SignInTests {
         let harness = try await Harness(route: Self.route)
         defer { harness.cleanUp() }
         let tab = try await openLogin(harness)
-        // WebKit refuses it; the page still gets WebKit's own error.
+        // Refused at once, with the error WebKit would give.
         #expect(try await page(Self.passkeyRequest, in: harness, tab: tab) as? String == "NotAllowedError")
         try await waitUntil("passkey notice") { harness.host.passkeyNotices == ["127.0.0.1"] }
         // A second try on a new page of the same site says nothing more.

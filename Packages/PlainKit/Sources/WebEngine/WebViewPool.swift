@@ -478,7 +478,7 @@ public final class WebViewPool {
 
     // MARK: - Sign-in
 
-    /// A page in `tab` asked for a passkey and WebKit refused it (`SignInScripts`). Tells the shell
+    /// A page in `tab` asked for a passkey and was refused (`SignInScripts`). Tells the shell
     /// once per site per launch. The site is the tab's page, also when the request came from one
     /// of its frames: that is the site the user is signing in to.
     func passkeyRequestFailed(in tab: Tab) {

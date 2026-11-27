@@ -152,6 +152,22 @@ private final class FakeWidgets: WidgetReloading, @unchecked Sendable {
         try? FileManager.default.removeItem(at: folder)
     }
 
+    /// Removing the last favorite fails in Spotlight: the empty list is retried, not taken as
+    /// indexed because the record is gone.
+    @Test func aFailedRemovalOfTheLastFavoriteIsRetried() async throws {
+        let index = FakeIndex()
+        let sync = SystemSync(file: file, indexed: indexed, index: index, widgets: FakeWidgets())
+        await sync.apply([favorite("a")])
+        await index.setFailNext()
+        await sync.apply([])
+        #expect(indexed.readIfPresent() == nil)
+        let relaunched = SystemSync(file: file, indexed: indexed, index: index, widgets: FakeWidgets())
+        await relaunched.apply([])
+        #expect(await index.calls.count == 3)
+        #expect(indexed.readIfPresent() == [])
+        try? FileManager.default.removeItem(at: folder)
+    }
+
     @Test func clearingBrowsingDataEmptiesSpotlightThenKeepsFavorites() async throws {
         let index = FakeIndex()
         let sync = SystemSync(file: nil, index: index, widgets: FakeWidgets())

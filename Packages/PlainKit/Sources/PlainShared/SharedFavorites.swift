@@ -58,8 +58,14 @@ public struct SharedFavoritesFile: Sendable {
 
     /// The saved favorites in order; empty when there is no file or it can't be read.
     public func read() -> [SharedFavorite] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([SharedFavorite].self, from: data)) ?? []
+        readIfPresent() ?? []
+    }
+
+    /// The saved favorites, or nil when there is no file or it can't be read: "unknown", which an
+    /// empty list is not.
+    public func readIfPresent() -> [SharedFavorite]? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode([SharedFavorite].self, from: data)
     }
 
     /// Replaces the file atomically, so a widget never reads half a list.

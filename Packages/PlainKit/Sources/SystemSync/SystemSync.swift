@@ -95,7 +95,8 @@ public actor SystemSync {
 
     private func write(_ favorites: [SharedFavorite]) async {
         if shared == nil { shared = file?.read() }
-        if indexed == nil { indexed = indexedFile?.read() }
+        // No record means unknown (never indexed, or a replace failed), never "indexed empty".
+        if indexed == nil { indexed = indexedFile?.readIfPresent() }
         if shared != favorites {
             do {
                 try file?.write(favorites)

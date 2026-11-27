@@ -2473,7 +2473,8 @@ modes: two visual cues, named modes, a labelled exit).
   Plain claims nothing about learning. Page fields are WebKit's: no public control.
 - **The start screen of an empty private tab** is drawn dark on the private dusk with the
   night's violet glow, "Private" with the mark as its title over "Plain keeps no history of
-  private tabs." wording unchanged since the UX audit, and its shortcut back reads **"Leave
+  private tabs." (was "A private tab: Plain keeps no history of it.", which the title now says),
+  and its shortcut back reads **"Leave
   Private"** (`hand.raised.slash`; was "New Tab", UX audit item 26: it turns this tab regular).
   More's top item reads the same there. The status bar is light over it.
 - **The switcher's control is "Private | Tabs"** (`GalleryModeSwitch`), in the bar where the hand

@@ -46,11 +46,11 @@ extension BrowserViewController {
         if tabsUI.start.message != message { tabsUI.start.message = message }
     }
 
-    /// The start screen's sentence: an empty private tab says what it is (the start screen
-    /// otherwise looks the same, with only the glass tinted: no badge, docs/ui-reference.md); with
-    /// two or more profiles a regular one names the window's profile.
+    /// The start screen's sentence: an empty private tab says what it keeps (the screen is dark
+    /// and titled "Private"); with two or more profiles a regular one names the window's profile.
     var startScreenMessage: String {
-        if currentTab?.isPrivate == true { return String(localized: "A private tab: Plain keeps no history of it.") }
+        // Under the "Private" title (EmptyTabView.setPrivate), so it needn't say private twice.
+        if currentTab?.isPrivate == true { return String(localized: "Plain keeps no history of private tabs.") }
         let tabs = session.tabs
         guard tabs.profiles.count > 1, let name = tabs.store.profile(tabs.activeProfile)?.name else {
             return String(localized: "Start with a search or an address.")

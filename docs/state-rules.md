@@ -128,7 +128,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
 | Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. With two or more profiles the sentence names the window's profile ("Start with a search or an address in Work."), so a search never starts in the wrong one unnoticed. |
-| Start screen shortcuts (under the Search button) | Private Tab always (Regular Tab on an empty private tab: it leaves private browsing, so it says where it goes); Reopen Closed Tab with `closed`; Archived Tabs with `archived`. Only while the keyboard is down. | — | | Small, quiet, one tap: the tabs items in plain sight when no switcher shows (owner). |
+| Start screen shortcuts (under the Search button) | Private Tab always ("Leave Private" on an empty private tab: it turns this tab regular); Reopen Closed Tab with `closed`; Archived Tabs with `archived`. Only while the keyboard is down. | — | | Small, quiet, one tap: the tabs items in plain sight when no switcher shows (owner). |
 | Pull to refresh | off | on a loaded or loading page; off on failed and crashed pages (their Try Again / Reload owns it) and in the reader | Off | Nothing to reload on Start; a second reload control next to Try Again is noise. |
 | Bar swipe sideways | to neighbours in `list` | to neighbours in `list` | Rubber-band with no neighbour | The same gesture as on a page. Leaving an empty tab drops it. |
 | New Tab card past the last tab | never | when the tab has an address and is last in `list` | Not offered | Swiping past an empty tab would make a second empty tab. |
@@ -222,7 +222,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). Not while the side pane is open (it holds the second pane's place). |
 | Swap Panes, Close Pane | while a split shows | ← same | ← | ← | ← | ← | Not while the side pane covers the second pane. |
 | Show / Hide Side Pane | where the side pane can show | ← same | ← | ← | ← | ← | The top bar's screens only (the Duo's inner screen, both size classes regular). Hide while it is open. Start screen too: History is useful there. |
-| New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "New Tab": it turns this empty tab, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
+| New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "Leave Private": it turns this empty tab regular, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
 | Downloads | while any this session | ← same | ← | ← | ← | ← | Subtitle "1 in progress" while one runs. |
 | Reading List | shown | shown | shown | shown | shown | shown | Above the History row. Always there, like History: its empty state says how to fill it. Dims while the database opens. |
 | History, Edit Favorites, Settings | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. History opens in the side pane where the pane can show, a sheet elsewhere. |
@@ -240,6 +240,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | New Window | where a new window can open (both size classes regular and the app may have several scenes: the Duo's inner screen) | The system has no New Window button on iPhone; the outer screen takes no new windows. |
 | The other windows (one item each: the page it shows, its tab count) | another window exists (connected or in the app switcher) | iPhone has no window list (iPad's Show All Windows); a tap brings that window forward. |
 | Close Tab | `page` | Closing an empty tab does nothing useful; it goes away by itself. |
+| Close All Private Tabs | A private tab on screen and 2 or more private pages in `list` | Ends private browsing in one step, where Safari and Chrome keep Close All. With one, Close Tab does it. The screen goes to the regular tab seen last, else the search field. |
 
 ## 6. Other surfaces
 
@@ -293,6 +294,7 @@ is the time since the app last left the foreground; "long" is `FixedChoices.fres
 | Cold launch, a last tab, away ≥ 4 h | **Fresh search over the last tab**: keyboard up, empty field, the tab's picture behind a paper veil. Swipe down or tap outside: the tab, as it was. | Arc Search's sheet over the tab; Chrome's new tab after 4 hours. |
 | Cold launch, a link from another app | The link's page | A link always wins. |
 | Cold launch, the last screen was private, a split, the reader or the start screen | Search, keyboard up; the restored tab, if any, shows through the frost behind it | No picture is kept of private pages; a split or the reader restores differently from its picture. |
+| After private browsing, any launch | Out of private: private tabs are never kept, so the regular tab (or the start screen) comes back with the regular chrome | The private look never outlives the private tabs. |
 | Return from the background, away < 4 h | Exactly where the user left off | |
 | Return, away ≥ 4 h, a page on screen | Fresh search over the page | As cold launch. |
 | Return, away ≥ 4 h, the start screen | Search, keyboard up | |
@@ -339,13 +341,13 @@ has dark art; Night, Coral and Paper look the same in both.
 | Swipe a card up | Closes it; Reopen toast for regular tabs | |
 | Close button (×) on a card | Every card with at least half of it uncovered (grid, Duo inner columns, the front card of the cascade and the focused one with the next card over its trailing edge; the × then sits at the edge of the part that shows); hidden on a card the next one covers more than that. Private cards wear the private plate. | Owner, 2026-11-27: "tabs should have a close button besides the close gesture too." Same close as the swipe and the menu: same motion, same Reopen toast. The gesture stays the fast way; the button is the discoverable one. |
 | Closing the last card in the shown list | First match: the tab on screen still exists (it is in the other list) → the gallery opens it; the other list has tabs → the gallery switches to it; else → the search field. Never an empty gallery. The Reopen toast shows wherever this lands. | Arc: never an empty switcher. |
-| Private toggle | Always | The entrance to private browsing. |
+| Private \| Tabs switch | Always: two named sides, Private leading, each with its count (none at zero); the shown side filled (violet for Private, light for Tabs). The counts drop before the bar outgrows the screen, never the words. | The entrance and the exit of private browsing, one tap each, named (NN/g: label the modes, show the active one). Tapping the shown side does nothing. |
 | New Tab "+" | When the shown list has tabs. In an empty list the empty state's button is the one New Tab (principle 8). | |
 | Done | When the tab on screen is in the shown list; else hidden | Done returns to that tab. Tapping the background does the same. |
 | More (…) | Shown when its menu has at least one item | A menu button with an empty menu is a dead end. |
 | More → Reopen Closed Tab | `closed`, regular list | |
 | More → Archived Tabs | `archived`, regular list | |
-| More → Close All Tabs | The list has 2 or more tabs not pinned; the confirmation counts only those | With one card, its swipe or menu closes it. Only the shown profile's tabs. |
+| More → Close All Tabs | The regular list has 2 or more tabs not pinned; the confirmation counts only those. In the private list it reads "Close All Private Tabs" and shows with any card | With one regular card, its swipe or menu closes it. Only the shown profile's tabs. Private: where people expect to end private browsing; nothing comes back. |
 | Empty private list | "Private tabs show up here, and Plain keeps no history of them." + New Private Tab | The user chose this list; it is an intentional empty state. |
 | Empty regular list (toggled to it with only private tabs open) | "Your open tabs show up here." + New Tab | Same. |
 | Card menu | Open in Other Pane (Duo split possible), Copy Link and Share (card has an address), Close Tab | Context menu: hide what does not apply. |

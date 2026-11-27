@@ -44,7 +44,8 @@ area. Captures are named in brackets; they were taken into the session scratchpa
    private start page). The sentence under the mark now reads "A private tab: Plain keeps no
    history of it." No badge (docs/ui-reference.md). [i17-44-private-start, after-private-start
    (the field closed on purpose to show the screen; opening a private tab still focuses it)]
-6. **The gallery's Private toggle shows no on/off state.** The hand is the same white glyph in
+6. **Fixed, then replaced (2026-11-27, private mode lane): the toggle is now a named "Private |
+   Tabs" switch with counts** (docs/decisions.md, "Private mode you can't miss"). **The gallery's Private toggle shows no on/off state.** The hand is the same white glyph in
    both lists; only the backdrop colour changes (VoiceOver reads "Private, Off"). Safari
    highlights the selected group. A filled hand (`hand.raised.fill`) or a selected background
    when on would do. Owner: tab switcher lane. [i17-46-private-gallery, i17-47-regular-gallery]
@@ -118,7 +119,8 @@ area. Captures are named in brackets; they were taken into the session scratchpa
     New Tab card the same weight), and the thumbnail shows a white strip above the page's first
     line (the snapshot keeps the area under the top bar), so pages are hard to recognise. Review
     the card size before cropping the snapshot. Owner: tab switcher lane. [duo-i-02-gallery]
-26. **Fixed (lead: "Regular Tab").** On an empty private tab the start screen's "New Tab" shortcut leaves private browsing
+26. **Fixed: "Regular Tab" (lead), then "Leave Private" (private mode lane, 2026-11-27): the exit named for what it does (not
+    "Regular", a word no other control says).** **On an empty private tab the start screen's "New Tab" shortcut leaves private browsing**
     without saying so (state rules §3 name it New Tab there). "Regular Tab" would say where it
     goes. Owner: state rules (lead's call). [after-private-start]
 27. **Duo outer screen's system bar buttons are 38 x 38 pt** (the system's vertical bar sizes

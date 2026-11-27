@@ -51,6 +51,14 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
   pill in a fixed place, Tabs, Share and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
 - **Tab cards carry a ×:** top-trailing in the title row, a 24 pt plate (ink veil; the private violet on private cards) inside a 44 pt target, a bold 10 pt glyph in secondary text. A tap closes the tab with the same lift-and-fade as the flick, and a soft haptic. The target never takes a lift or a sideways scroll: a drag that starts on it still lifts or scrolls. VoiceOver: "Close <title>", right after its card.
+
+
+- **Private mode shows in the chrome itself, never on the page:** deep violet glass drawn dark on
+  the pill and buttons, the private mark (`hand.raised.fill`) before the host and in the field,
+  a dark keyboard, the empty private tab's start screen drawn dark and titled "Private", and the
+  switcher's "Private | Tabs" switch with the shown side filled. The two sides are always named;
+  the way out is the other word ("Tabs"), "Leave Private" on an empty private tab, or Close All
+  Private Tabs.
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, Share and
   More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab

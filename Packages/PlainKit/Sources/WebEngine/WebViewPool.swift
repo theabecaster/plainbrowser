@@ -294,14 +294,17 @@ public final class WebViewPool {
         return webView
     }
 
-    /// A web view for a link preview: no engine scripts, no delegates. The caller applies and
+    /// A web view for a link preview: no engine scripts but dark pages (a light-only page
+    /// previews dark in a dark app, as it will open), no delegates. The caller applies and
     /// releases the content rules on the returned controller.
     func makePreviewWebView(isPrivate: Bool = false) -> (WKWebView, WKUserContentController) {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
         if isPrivate { configuration.websiteDataStore = privateStore() }
         let controller = WKUserContentController()
+        controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
         configuration.userContentController = controller
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        applyInterfaceStyle(to: webView)
         return (webView, controller)
     }
 

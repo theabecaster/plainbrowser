@@ -670,6 +670,26 @@ struct DarkPagesTests {
         }
     }
 
+    /// A link preview shows a light-only page dark in a dark app, as the page will open.
+    @Test func linkPreviewsAreDarkenedToo() async throws {
+        let harness = try await makeHarness(style: .dark)
+        defer { harness.cleanUp() }
+        let (webView, _) = harness.pool.makePreviewWebView()
+        webView.frame = CGRect(x: 0, y: 0, width: 300, height: 400)
+        harness.window.addSubview(webView)
+        defer { webView.removeFromSuperview() }
+        webView.load(URLRequest(url: harness.server.url("/light")))
+        try await waitUntil("preview loaded") { !webView.isLoading && webView.url != nil }
+        let deadline = ContinuousClock.now + .seconds(5)
+        var background = ""
+        while ContinuousClock.now < deadline {
+            background = try await webView.evaluateJavaScript("getComputedStyle(document.body).backgroundColor") as? String ?? ""
+            if background != "rgb(255, 255, 255)" { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(background == "rgb(24, 24, 24)", "preview background \(background)")
+    }
+
     @Test func lightAppLeavesPagesAloneAndDarkensLiveWithoutReload() async throws {
         let harness = try await makeHarness(style: .light)
         defer { harness.cleanUp() }

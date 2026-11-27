@@ -8,7 +8,8 @@ import Foundation
 ///
 /// - the database and tab state: a temporary folder (`directory`), or an in-memory database;
 /// - user defaults: `defaults`, a separate suite, never `UserDefaults.standard`;
-/// - website data: a non-persistent store (WebEngine, `AppWebsiteData`);
+/// - website data: a separate store of its own, never the default one (WebEngine,
+///   `AppWebsiteData`);
 /// - thumbnails, downloads and TipKit's datastore: subfolders of `directory`;
 /// - the Home Screen icon, Photos and the general pasteboard: stubbed or a private pasteboard.
 ///
@@ -30,8 +31,13 @@ public nonisolated enum TestIsolation {
     /// The accessibility identifier of the marker every window carries in an isolated run. The UI
     /// tests check for it right after each launch and stop when it is missing.
     public static let markerIdentifier = "plainTestIsolation"
-    /// The user-defaults suite isolated runs use instead of the app's own domain.
-    public static let defaultsSuiteName = "plain.isolated-tests"
+    /// The user-defaults suite isolated runs use instead of the app's own domain: one per mode, so
+    /// an in-memory run (which empties its suite) never clears what the test store keeps.
+    public static var defaultsSuiteName: String { suiteName(for: mode) }
+
+    public static func suiteName(for mode: Mode) -> String {
+        "plain.isolated-tests.\(mode.rawValue)"
+    }
     /// The private pasteboard isolated runs copy to instead of the general one.
     public static let pasteboardName = "plain.isolated-tests"
 
@@ -79,12 +85,13 @@ public nonisolated enum TestIsolation {
     /// `nonisolated(unsafe)`: `UserDefaults` is documented thread-safe but not marked `Sendable`.
     nonisolated(unsafe) public static let defaults: UserDefaults = {
         guard mode != .off else { return .standard }
+        let name = defaultsSuiteName
         // Fails closed: an isolated run never falls back to the owner's defaults.
-        guard let suite = UserDefaults(suiteName: defaultsSuiteName) else {
-            fatalError("isolated test run without its defaults suite \(defaultsSuiteName)")
+        guard let suite = UserDefaults(suiteName: name) else {
+            fatalError("isolated test run without its defaults suite \(name)")
         }
         if mode == .inMemory || resetRequested {
-            suite.removePersistentDomain(forName: defaultsSuiteName)
+            suite.removePersistentDomain(forName: name)
         }
         return suite
     }()

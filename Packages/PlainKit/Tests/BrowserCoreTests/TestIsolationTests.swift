@@ -12,6 +12,11 @@ import Testing
         #expect(TestIsolation.mode(for: ["-PlainInMemoryStore", "-PlainTestStore", "-PlainResetStore"]) == .testStore)
     }
 
+    /// Each mode has its own suite, so an in-memory run's reset never clears the test store's.
+    @Test func suitePerMode() {
+        #expect(TestIsolation.suiteName(for: .inMemory) != TestIsolation.suiteName(for: .testStore))
+    }
+
     /// `swift test` runs with no Plain arguments: the real paths and standard defaults.
     @Test func offWithoutArguments() {
         #expect(TestIsolation.mode == .off)

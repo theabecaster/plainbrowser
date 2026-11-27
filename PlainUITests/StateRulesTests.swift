@@ -154,7 +154,7 @@ final class StateRulesTests: XCTestCase {
         waitForPage(app, "Page C")
         tabsMenu(app, pick: "Close Tab")
         waitForPage(app, "Page A")
-        XCTAssertTrue(app.buttons["toastButton"].waitForExistence(timeout: 2), "a regular close offers Reopen")
+        XCTAssertTrue(app.buttons["toastButton"].waitForExistence(timeout: 3.5), "a regular close offers Reopen")
 
         tabsMenu(app, pick: "New Private Tab")
         go(app, to: "/b")

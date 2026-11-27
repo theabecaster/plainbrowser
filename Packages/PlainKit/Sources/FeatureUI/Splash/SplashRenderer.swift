@@ -180,6 +180,8 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
     private var leads: [CFTimeInterval] = []
     private var firstDrawable: CAMetalDrawable?
     private let cancelled = Atomic(false)
+    /// The render thread's run loop while it runs, so `cancel` can wake it.
+    private let loop = Mutex<CFRunLoop?>(nil)
     private let stats = Mutex(SplashStats())
     private let onFinish: @Sendable (SplashStats) -> Void
 
@@ -209,8 +211,13 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
 
     /// Builds a renderer whose still first frame is drawn and scheduled, ready to swap in. Off
     /// the main thread: the first GPU submission waits several milliseconds.
-    static func make(kit: SplashKit, layout: SplashLayout, t0: CFTimeInterval, slow: Double,
+    ///
+    /// `wanted` says whether the splash still wants a renderer (it has not ended, and has not
+    /// chosen Core Animation): it is asked before anything is made and again before the frame
+    /// goes to the GPU, so nothing is drawn for a splash that is gone or an app in the background.
+    static func make(kit: SplashKit, layout: SplashLayout, t0: CFTimeInterval, slow: Double, wanted: @Sendable () -> Bool,
                      onFinish: @escaping @Sendable (SplashStats) -> Void) throws -> SplashRenderer {
+        guard wanted() else { throw SplashError(description: "not wanted any more") }
         // The pictures must be at the screen's scale, or the swap would show.
         guard abs(kit.art.scale - layout.scale) < 0.01 else { throw SplashError(description: "pictures are not at the screen's scale") }
         let vertices = SplashMesh.vertices(window: Float(layout.holeRadius), far: Float(hypot(layout.size.width, layout.size.height)))
@@ -229,6 +236,7 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
         guard let drawable = r.layer.nextDrawable(), let cb = r.encode(t: -1, into: drawable.texture) else {
             throw SplashError(description: "no first frame")
         }
+        guard wanted() else { throw SplashError(description: "not wanted any more") }
         cb.commit()
         cb.waitUntilScheduled()
         r.firstDrawable = drawable
@@ -258,9 +266,16 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
         thread.start()
     }
 
-    /// Stops early (the splash went away). Any thread. A renderer that never started is freed here.
+    /// Stops early (the splash went away, or the app left the foreground). Any thread. Nothing
+    /// more is drawn: the render thread is woken to stop, whether or not the display link ever
+    /// calls again. A renderer that never started is simply freed.
     func cancel() {
         cancelled.store(true, ordering: .relaxed)
+        loop.withLock { loop in
+            guard let loop else { return }
+            CFRunLoopPerformBlock(loop, CFRunLoopMode.defaultMode.rawValue) { [self] in self.finish() }
+            CFRunLoopWakeUp(loop)
+        }
     }
 
     private func renderLoop() {
@@ -269,9 +284,13 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
         link.delegate = self
         link.add(to: .current, forMode: .default)
         self.link = link
+        loop.withLock { $0 = CFRunLoopGetCurrent() }
+        // Cancelled before the thread got here: nothing woke it.
+        if cancelled.load(ordering: .relaxed) { running = false }
         while running {
             _ = RunLoop.current.run(mode: .default, before: .distantFuture)
         }
+        loop.withLock { $0 = nil }
         link.invalidate()
         self.link = nil
         msaa = nil
@@ -289,9 +308,10 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
     }
 
     func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+        // Cancelled: stop without drawing.
+        guard running, !cancelled.load(ordering: .relaxed) else { return finish() }
         let t = (update.targetPresentationTimestamp - t0) / slow
-        let stopped = cancelled.load(ordering: .relaxed)
-        let done = stopped || t >= SplashTimeline.duration
+        let done = t >= SplashTimeline.duration
         // Until the dive starts, the first frame (presented on the main thread) is still right.
         if t < 0 && !done { return }
         let begin = CACurrentMediaTime()

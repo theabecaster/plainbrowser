@@ -2034,7 +2034,8 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
   (`splashRendererLead`), or Metal fails, the dive is a plain iris scheduled whole on the
   render server: the dawn fades, the three layers scale about the pivot with the same zoom
   curve, and a depth bitmap in the opening (shadow and a lit rim, `SplashIrisArt`) stands in
-  for the rolled rim. No roll, same timing. The dive never waits for a shader.
+  for the rolled rim. No roll, same timing. The dive never waits for a shader. (Should even the
+  iris's own pictures be missing, the splash fades.)
 - **The app never waits for the splash.** The browser is built exactly as before, in the same
   turn, and is in the same first frame under the splash; the search field takes focus before
   that frame as it always did. The splash is a second window above it whose `hitTest` answers
@@ -2051,8 +2052,9 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
 - **What the launch numbers mean with a splash.** `launch.firstFrame` is still `main` to the
   first display-link callback after the first window showed, and that frame now has the browser
   and the splash in it: the splash's main-thread work (its window, five layers, the icon read:
-  `launch.splashBuild`) is inside the interval and inside the 150/300 ms budget, and so is any
-  wait for its pictures (`launch.splashArtWait`, at most 30 ms, then no splash). `launch` still
+  `launch.splashBuild`) is inside the interval and inside the 150/300 ms budget. The first frame
+  never waits for the splash's pictures: if they are not drawn when the window is made, that
+  launch has no splash (`launch.splash` event "missed"). `launch` still
   ends when the field is first responder. The perf launch tests pass `-PlainSplash`, so the gate
   measures the launch people get. Not in either: the splash's time on screen, which is by
   design and has its own intervals (`launch.splash`, `launch.splashDive`).

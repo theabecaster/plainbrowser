@@ -305,8 +305,7 @@ import Testing
     @Test func aFutureHandsItsValueOver() async {
         let future = SplashFuture<Int>()
         #expect(!future.isDone)
-        #expect(future.take(waitingUpTo: 0) == nil)
-        #expect(future.take(waitingUpTo: 0.01) == nil)
+        #expect(future.take() == nil)
         await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
             future.whenReady { value in
                 #expect(value == 7)
@@ -315,14 +314,14 @@ import Testing
             DispatchQueue.global().async { future.fulfill(7) }
         }
         #expect(future.isDone)
-        #expect(future.take(waitingUpTo: 0) == 7)
+        #expect(future.take() == 7)
         #expect(future.wait() == 7)
         // Fulfilled once: a second value is ignored.
         future.fulfill(9)
-        #expect(future.take(waitingUpTo: 0) == 7)
+        #expect(future.take() == 7)
         // One that could not be made answers nil at once.
         let failed = SplashFuture<Int>()
         failed.fulfill(nil)
-        #expect(failed.isDone && failed.take(waitingUpTo: 1) == nil)
+        #expect(failed.isDone && failed.take() == nil)
     }
 }

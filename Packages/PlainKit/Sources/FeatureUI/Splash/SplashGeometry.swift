@@ -51,16 +51,31 @@ nonisolated enum SplashGeometry {
     /// How far the opening reaches from the pivot before its edge is first met, in
     /// `extent.count` evenly spaced directions: entry `i` looks along the angle `2π i / count`,
     /// from the x axis toward the y axis, which points down.
+    ///
+    /// Closed form, a few hundred operations: a ray from the pivot leaves the opening where it
+    /// first meets the window's circle from inside or the flap's inner edge from outside (the
+    /// ring's outer circle mirrored over the crease). The crease itself lies outside the window.
     static let extent: [CGFloat] = {
-        let count = 180, step: CGFloat = 0.25
+        let count = 180
+        let c = StemGeometry.center
+        let k = 2 * StemGeometry.creaseDistance
+        let mirrored = CGPoint(x: c.x + normal.x * k, y: c.y + normal.y * k)
+        /// Where the ray from the pivot along (dx, dy) crosses the circle: the nearer or the
+        /// farther crossing, nil when it misses.
+        func crossing(_ centre: CGPoint, _ radius: CGFloat, _ dx: CGFloat, _ dy: CGFloat, far: Bool) -> CGFloat? {
+            let fx = pivot.x - centre.x, fy = pivot.y - centre.y
+            let b = fx * dx + fy * dy, q = fx * fx + fy * fy - radius * radius
+            let disc = b * b - q
+            guard disc >= 0 else { return nil }
+            let t = far ? -b + disc.squareRoot() : -b - disc.squareRoot()
+            return t > 0 ? t : nil
+        }
         return (0..<count).map { i in
             let angle = 2 * CGFloat.pi * CGFloat(i) / CGFloat(count)
             let dx = cos(angle), dy = sin(angle)
-            var reach: CGFloat = 0
-            while reach < 2 * StemGeometry.inner, opens(at: CGPoint(x: pivot.x + dx * (reach + step), y: pivot.y + dy * (reach + step))) {
-                reach += step
-            }
-            return reach
+            let window = crossing(c, StemGeometry.inner, dx, dy, far: true) ?? 0
+            let flap = crossing(mirrored, StemGeometry.outer, dx, dy, far: false) ?? .infinity
+            return min(window, flap)
         }
     }()
 

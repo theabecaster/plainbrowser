@@ -1,5 +1,6 @@
 import BrowserCore
 import Foundation
+import Synchronization
 
 /// Whether a launch opens with the splash (docs/state-rules.md, "Launch splash").
 public nonisolated enum SplashGate {
@@ -45,8 +46,8 @@ nonisolated struct SplashDebug: Sendable, Equatable {
     }
 }
 
-/// A value another thread is making: taken with a bounded wait (the first frame), waited for (a
-/// background queue) or handed to a callback once it is there.
+/// A value another thread is making: taken if it is there (the main thread never waits for one),
+/// waited for (a background queue) or handed to a callback once it is there.
 ///
 /// `@unchecked Sendable`: every access to the state is under the lock.
 nonisolated final class SplashFuture<Value: Sendable>: @unchecked Sendable {
@@ -71,12 +72,9 @@ nonisolated final class SplashFuture<Value: Sendable>: @unchecked Sendable {
 
     var isDone: Bool { lock.withLock { done } }
 
-    /// The value if it is made by now or within `timeout`; nil when it is not, or could not be made.
-    func take(waitingUpTo timeout: TimeInterval) -> Value? {
-        if lock.withLock({ done }) { return lock.withLock { value } }
-        guard timeout > 0, ready.wait(timeout: .now() + timeout) == .success else { return nil }
-        ready.signal()
-        return lock.withLock { value }
+    /// The value if it is made by now; nil when it is not, or could not be made. Never waits.
+    func take() -> Value? {
+        lock.withLock { value }
     }
 
     /// Blocks until it is made. Never on the main thread.
@@ -97,6 +95,13 @@ nonisolated final class SplashFuture<Value: Sendable>: @unchecked Sendable {
     }
 }
 
+/// A flag one thread clears and others read. Starts set.
+nonisolated final class SplashFlag: Sendable {
+    private let flag = Atomic(true)
+    var isSet: Bool { flag.load(ordering: .relaxed) }
+    func clear() { flag.store(false, ordering: .relaxed) }
+}
+
 #if canImport(UIKit)
 import Darwin
 import DesignSystem
@@ -112,7 +117,7 @@ import os
 /// The app never waits for it. The browser (or the intro) is built, laid out and interactive
 /// underneath from its own first frame; the splash is a window above that passes every touch
 /// through. Its pictures are drawn and its shaders compiled off the main thread from the moment
-/// the scene connects (`init`); the first frame takes the pictures with a bounded wait, and the
+/// the scene connects (`init`); the first frame takes the pictures only if they are drawn (it never waits), and the
 /// dive takes the GPU renderer only if it is ready a little before the start, else Core
 /// Animation plays a plain iris. A touch, a link from another app, typing, or the app leaving
 /// the foreground ends it at once.
@@ -164,6 +169,10 @@ public final class LaunchSplash {
     private var sceneActive = false
     private var ended = false
     private var typing: NSObjectProtocol?
+    /// Whether a GPU renderer is still wanted: until the splash ends or Core Animation is chosen.
+    /// Read by the renderer's builder on its own queue.
+    private let wantsRenderer = SplashFlag()
+    private var firstFrame: FirstFrame?
     private var splashInterval: OSSignpostIntervalState?
     private var diveInterval: OSSignpostIntervalState?
     /// Called once, when the splash is gone (or was never shown).
@@ -232,8 +241,12 @@ public final class LaunchSplash {
         let signposter = Signposts.signposter
         let build = signposter.beginInterval(Signposts.launchSplashBuild, "show")
         defer { signposter.endInterval(Signposts.launchSplashBuild, build) }
-        guard let art = takeArt() else {
+        // Only if the pictures are drawn by now (they are started as the scene connects and take a
+        // few milliseconds; the browser's build since then takes many times that). The first
+        // frame never waits for them: a launch that outran them goes on with no splash.
+        guard let art = art.take() else {
             Self.log.error("splash pictures not ready for the first frame: no splash")
+            Signposts.signposter.emitEvent(Signposts.launchSplash, "missed")
             return finish(.missed)
         }
         self.content = content
@@ -253,22 +266,39 @@ public final class LaunchSplash {
             MainActor.assumeIsolated { self?.end() }
         }
         sceneActive = scene.activationState == .foregroundActive
-        // Once the first frame is committed, so the clock starts from what is on screen.
-        DispatchQueue.main.async { [weak self] in
+        // The clock starts from what is on screen: a display link's first callback comes at the
+        // vsync after the first frame went to the render server (a dispatch to the main queue can
+        // run before that commit).
+        firstFrame = FirstFrame { [weak self] in
+            self?.firstFrame = nil
             self?.firstFrameDone = true
             self?.scheduleIfReady()
         }
     }
 
-    /// The pictures, if they are drawn by now or within `FixedChoices.splashArtWait`.
-    private func takeArt() -> SplashArt? {
-        if art.isDone { return art.take(waitingUpTo: 0) }
-        let signposter = Signposts.signposter
-        let wait = signposter.beginInterval(Signposts.launchSplashArtWait)
-        let seconds = Double(FixedChoices.splashArtWait.components.attoseconds) / 1e18 + Double(FixedChoices.splashArtWait.components.seconds)
-        let taken = art.take(waitingUpTo: seconds)
-        signposter.endInterval(Signposts.launchSplashArtWait, wait, "\(taken == nil ? "timedOut" : "ready")")
-        return taken
+    /// Calls back once, at the first display-link callback after it is made.
+    private final class FirstFrame: NSObject {
+        private let done: () -> Void
+        private var link: CADisplayLink?
+
+        init(_ done: @escaping () -> Void) {
+            self.done = done
+            super.init()
+            let link = CADisplayLink(target: self, selector: #selector(fire(_:)))
+            link.add(to: .main, forMode: .common)
+            self.link = link
+        }
+
+        @objc private func fire(_ link: CADisplayLink) {
+            link.invalidate()
+            self.link = nil
+            done()
+        }
+
+        func cancel() {
+            link?.invalidate()
+            link = nil
+        }
     }
 
     /// The scene is on screen and active (the app delegate's scene callback).
@@ -301,9 +331,10 @@ public final class LaunchSplash {
         DispatchQueue.global(qos: .userInitiated).async {
             iris.fulfill(SplashIrisArt.draw(theme: theme, layout: layout))
         }
+        // Put in while the splash is still (the hole is hidden under the ring), never mid-dive.
         iris.whenReady { [weak self] made in
             Task { @MainActor in
-                guard let self, let made, !self.ended, self.renderer == nil else { return }
+                guard let self, let made, !self.ended, self.choosing else { return }
                 self.view?.setIrisArt(made)
             }
         }
@@ -314,6 +345,7 @@ public final class LaunchSplash {
         let finished: @Sendable (SplashStats) -> Void = { [weak self] stats in
             Task { @MainActor in self?.rendererFinished(stats) }
         }
+        let wanted: @Sendable () -> Bool = { [wantsRenderer] in wantsRenderer.isSet }
         kit.whenReady { [weak self] kit in
             guard let kit else {
                 Task { @MainActor in self?.choose(nil, why: "no renderer") }
@@ -325,7 +357,7 @@ public final class LaunchSplash {
                 let made: SplashRenderer?
                 let why: String
                 do {
-                    made = try SplashRenderer.make(kit: kit, layout: layout, t0: start, slow: slow, onFinish: finished)
+                    made = try SplashRenderer.make(kit: kit, layout: layout, t0: start, slow: slow, wanted: wanted, onFinish: finished)
                     why = ""
                 } catch {
                     made = nil
@@ -360,11 +392,20 @@ public final class LaunchSplash {
             let limit = start - now + SplashTimeline.duration * k + 0.5
             DispatchQueue.main.asyncAfter(deadline: .now() + limit) { [weak self] in self?.finish(.metal) }
         } else {
+            wantsRenderer.clear()
             made?.cancel()
             let reason = made == nil ? why : "renderer too close to the start"
-            Self.log.debug("splash: Core Animation iris (\(reason, privacy: .public))")
+            Self.log.debug("splash: Core Animation (\(reason, privacy: .public))")
             frames = reason
-            if let iris = iris.take(waitingUpTo: 0), !view.hasIrisArt { view.setIrisArt(iris) }
+            if let iris = iris.take(), !view.hasIrisArt { view.setIrisArt(iris) }
+            guard view.hasIrisArt else {
+                // Without its own pictures the iris has no hole to open: fade instead.
+                if let diveInterval { Signposts.signposter.endInterval(Signposts.launchSplashDive, diveInterval, "crossfade") }
+                diveInterval = nil
+                view.crossfade(t0: start, duration: Motion.crossfadeDuration) { [weak self] in self?.finish(.crossfade) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + (start - now)) { [weak self] in self?.opening() }
+                return
+            }
             view.playIris(t0: start, slow: k) { [weak self] in self?.finish(.iris) }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + (start - now) + FixedChoices.splashKeyboardAt * k) { [weak self] in
@@ -408,6 +449,7 @@ public final class LaunchSplash {
         guard !ended, let view else { return finish(.skipped) }
         ended = true
         choosing = false
+        wantsRenderer.clear()
         content()?.layer.removeAnimation(forKey: Self.zoomKey)
         opening()
         view.fadeOut(duration: FixedChoices.splashSkipFade) { [weak self] in self?.remove(.skipped) }
@@ -430,6 +472,9 @@ public final class LaunchSplash {
 
     private func remove(_ ending: Ending) {
         guard window != nil || onEnd != nil || splashInterval != nil else { return }
+        wantsRenderer.clear()
+        firstFrame?.cancel()
+        firstFrame = nil
         renderer?.cancel()
         renderer = nil
         if let typing { NotificationCenter.default.removeObserver(typing) }

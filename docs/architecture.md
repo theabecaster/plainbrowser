@@ -73,8 +73,8 @@ and compile to nothing on macOS.
    drawn with Core Graphics (`SplashArt`: the icon's field, the mark, the dawn in its window;
    they depend only on the icon and the screen's scale) and the GPU kit (`SplashKit`: shaders
    compiled from source, two pipelines, the pictures as textures, the mesh's index buffer). The
-   first frame takes the pictures with a bounded wait (`splashArtWait`, 30 ms; no splash if they
-   are late) and shows them as three layers. The dive starts `splashMinimumTime` after the
+   first frame takes the pictures only if they are drawn by then (it never waits; a launch that
+   outran them has no splash) and shows them as three layers. The dive starts `splashMinimumTime` after the
    process started and at least `splashHandoff` after the first frame. If the kit is ready
    `splashRendererLead` before that, `SplashRenderer` draws its still first frame off the main
    thread (the same pixels as the layers), the main thread swaps it in within one transaction,
@@ -251,8 +251,7 @@ exactly what the app emits.
 | `launch.pictureSave` | interval | the picture encoded and written off main when the app resigns active |
 | `launch.freshSearch` | event | a fresh search opened over the last tab ("launch" or "return") |
 | `launch.splashBuild` | interval | the launch splash's main-thread work before the first frame (window, layers, the icon read); inside `launch.firstFrame` |
-| `launch.splashArtWait` | interval | the first frame waiting for the splash's pictures (only when not ready; "ready" or "timedOut") |
-| `launch.splash` | interval | the splash on screen: first frame → gone (message: "metal", "iris", "crossfade", "skipped", "left") |
+| `launch.splash` | interval | the splash on screen: first frame → gone (message: "metal", "iris", "crossfade", "skipped", "left"; an event "missed" when the pictures were late and no splash showed) |
 | `launch.splashDive` | interval | the dive: its renderer chosen → the app filling the screen |
 | `launch.splashFrames` | event | the GPU dive's frame timing: frames, intervals, late frames, CPU encode and GPU time |
 | `launch.searchFieldReady` | event | search field first responder |

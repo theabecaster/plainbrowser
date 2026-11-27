@@ -237,11 +237,8 @@ public enum Signposts {
     /// frame ("prepare": the icon read and starting the off-main work as the scene connects;
     /// "show": its window and layers). Inside `launch.firstFrame`.
     public static let launchSplashBuild: StaticString = "launch.splashBuild"
-    /// Interval: the first frame waiting for the splash's pictures (message: "ready" or
-    /// "timedOut"); absent when they were already drawn.
-    public static let launchSplashArtWait: StaticString = "launch.splashArtWait"
     /// Interval: the launch splash on screen, from the app's first frame to the splash gone
-    /// (message: how it ended: "metal", "iris", "crossfade", "skipped" or "left").
+    /// (message: how it ended: "metal", "iris", "crossfade", "skipped", "left", or "missed" when its pictures were not drawn in time and no splash showed).
     public static let launchSplash: StaticString = "launch.splash"
     /// Interval: the dive itself, from its first movement to the app filling the screen.
     public static let launchSplashDive: StaticString = "launch.splashDive"

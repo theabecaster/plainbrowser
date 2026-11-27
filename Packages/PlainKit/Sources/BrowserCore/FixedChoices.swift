@@ -82,10 +82,6 @@ public enum FixedChoices {
     /// The whole dive, from the first movement to the app filling the screen. Short: the app is
     /// already there, and the dive is the way in, not a show.
     public static let splashDive: TimeInterval = 0.66
-    /// The first frame waits at most this long for the splash's pictures, drawn off the main
-    /// thread from the moment the scene connects (they usually finish first). Past it the launch
-    /// goes on with no splash rather than wait.
-    public static let splashArtWait: Duration = .milliseconds(30)
     /// The GPU renderer must be ready this long before the dive starts, or Core Animation plays
     /// the plain iris instead. The dive never waits for a shader.
     public static let splashRendererLead: TimeInterval = 0.08

@@ -91,6 +91,50 @@ public enum Palette {
     /// Supporting text: a suggestion's address, a placeholder.
     public static let textSecondary = UIColor.secondaryLabel
 
+    // MARK: Paper sheets
+
+    // Settings, History, Favorites, Archive and Downloads sit on the textured Paper ground
+    // (`PaperBackground()`) with their rows grouped on flat cards a hair lifted from it. Each color
+    // also has an Increase Contrast step: flatter, plainer cards and stronger lines.
+
+    /// Ink on paper: the sheets' text. Deep Lagoon ink by day, Paper by night.
+    public static let ink = UIColor(light: UIColor(rgb: 0x0A2133), dark: UIColor(rgb: 0xFFF6E6))
+
+    /// Supporting text on paper: a row's address or value, a footer. Ink thinned to keep 4.5:1 on
+    /// the ground and the cards.
+    public static let inkSecondary = UIColor { traits in
+        let high = traits.accessibilityContrast == .high
+        return traits.userInterfaceStyle == .dark
+            ? UIColor(rgb: 0xFFF6E6, alpha: high ? 0.82 : 0.66)
+            : UIColor(rgb: 0x0A2133, alpha: high ? 0.82 : 0.68)
+    }
+
+    /// A card of rows on the Paper ground: a hair lighter by day, a hair lifted by night. Flat
+    /// and opaque, so a row costs no texture and no blending.
+    public static let paperCard = UIColor { traits in
+        let high = traits.accessibilityContrast == .high
+        return traits.userInterfaceStyle == .dark
+            ? UIColor(rgb: high ? 0x1A3850 : 0x11293D)
+            : UIColor(rgb: high ? 0xFFFFFF : 0xFFFBF4)
+    }
+
+    /// The hairline between rows on a card, in the ink's own tone.
+    public static let paperHairline = UIColor { traits in
+        let high = traits.accessibilityContrast == .high
+        return traits.userInterfaceStyle == .dark
+            ? UIColor(rgb: 0xFFF6E6, alpha: high ? 0.42 : 0.14)
+            : UIColor(rgb: 0x0A2133, alpha: high ? 0.38 : 0.12)
+    }
+
+    /// Lagoon Blue for actions and checkmarks on paper: a step deeper by day (`#2366F0`, 4.7:1 on
+    /// the card, where Lagoon itself gives 4.1:1) and the lighter glass step by night.
+    public static let accentOnPaper = UIColor { traits in
+        let high = traits.accessibilityContrast == .high
+        return traits.userInterfaceStyle == .dark
+            ? UIColor(rgb: high ? 0xB3CEFF : 0x8DB6FF)
+            : UIColor(rgb: high ? 0x1A52D0 : 0x2366F0)
+    }
+
     // MARK: Gradients
 
     /// The URL field's rim while it is focused, start to end.

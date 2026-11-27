@@ -80,8 +80,8 @@ turned off (Plain then reopens on its last tab), and keeps it running for locati
 |---|---|---|
 | Not determined | WebKit shows iOS's prompt (Plain's usage string), then Plain's alert "Allow site to use your camera?"; the answer is remembered per site | Unchanged |
 | Allowed, site never asked | Plain's alert, remembered | Unchanged |
-| Denied for Plain | WebKit denies before asking Plain; the page fails, **Plain says nothing** | One toast, once per site: "Camera is off for Plain" (or "Camera and microphone are off for Plain") with **Settings** |
-| Restricted (Screen Time, profile) | Silent failure | "Camera isn't allowed on this iPhone", no button |
+| Denied for Plain | WebKit denies before asking Plain; the page fails, **Plain says nothing** | One toast, once per site: "Camera is off for Plain" (or "Camera and mic are off for Plain") with **Settings** |
+| Restricted (Screen Time, profile) | Silent failure | "Camera is restricted", no button |
 | Later revoked | iOS ends Plain; it reopens on the last tab | Unchanged; the next request explains as above |
 | A site the user said Don't Allow | Remembered forever; **no way to change it** in Plain | Site Settings lists it: "Not Allowed"; a tap allows it |
 | Site allowed, camera off for Plain | Nothing showed | Site Settings: "Camera — Off in Settings"; a tap opens Settings |
@@ -93,7 +93,7 @@ turned off (Plain then reopens on its last tab), and keeps it running for locati
 | Not determined | WebKit asks iOS (when in use), then Plain's alert | Unchanged |
 | Denied for Plain | Silent: the page gets `PERMISSION_DENIED` | "Location is off for Plain" with Settings, once per site |
 | Location Services off for the phone | Silent | "Location Services are off" with Settings |
-| Restricted | Silent | "Location isn't allowed on this iPhone", no button |
+| Restricted | Silent | "Location is restricted", no button |
 | Approximate only | Pages get approximate positions | Unchanged (nothing is blocked; nothing to say) |
 | Later revoked | WebKit stops the page's updates; silent | The next request explains |
 | Site Settings | No row | "Location — Allowed / Not Allowed / Off in Settings" |
@@ -105,7 +105,7 @@ turned off (Plain then reopens on its last tab), and keeps it running for locati
 | Not determined | iOS's prompt on the first save | Unchanged; a No then gets the "nothing there" haptic only (the user just chose) |
 | Allowed (add only) | Saves, success haptic | Unchanged |
 | Denied | **Only a "nothing there" haptic** | "Saving to Photos is off for Plain" with Settings, every time (the user's own action) |
-| Restricted | Haptic only | "Saving to Photos isn't allowed on this iPhone" |
+| Restricted | Haptic only | "Saving to Photos is restricted" |
 | Later revoked | iOS ends Plain | Unchanged |
 
 ### Downloads and Files
@@ -140,7 +140,7 @@ Show. Nothing changed.
 | Feature | What depends on it | Before and now |
 |---|---|---|
 | Low Power Mode | Nothing of Plain's: no background refresh, no polling; iOS and WebKit lower their own work | Silent, correct |
-| Screen Time content limits | WebKit's built-in filter blocks a page (WebKit error 104 or 106) | Before: "Plain couldn't open this page." Now: "This site isn't allowed on this iPhone." Where the filter has its own page, WebKit loads it next and Plain's line clears |
+| Screen Time content limits | WebKit's built-in filter blocks a page (WebKit error 104 or 106) | Before: "Plain couldn't open this page." Now: "This site is restricted on this iPhone." Where the filter has its own page, WebKit loads it next and Plain's line clears |
 | Screen Time per-website time limits | Needs `STWebpageController` per tab | Not integrated (open, see below) |
 | Siri and Shortcuts | App Shortcuts and intents | Work in Shortcuts whatever Siri's state; nothing in the app depends on Siri. Silent, correct |
 | Spotlight off for Plain | Favorites indexed | iOS hides them; indexing calls still succeed. Silent, correct |

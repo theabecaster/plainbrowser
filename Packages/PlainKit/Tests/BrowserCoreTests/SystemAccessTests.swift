@@ -24,7 +24,7 @@ import Testing
         let both = SystemAccessRules.notice(
             for: [.camera, .microphone], access: states([.camera: .denied, .microphone: .denied])
         )
-        #expect(both?.message == "Camera and microphone are off for Plain")
+        #expect(both?.message == "Camera and mic are off for Plain")
         // Only the blocked one is named.
         let mic = SystemAccessRules.notice(for: [.camera, .microphone], access: states([.microphone: .denied]))
         #expect(mic?.message == "Microphone is off for Plain")
@@ -39,11 +39,11 @@ import Testing
 
     @Test func screenTimeExplainsWithoutAButton() {
         let notice = SystemAccessRules.notice(for: [.camera], access: states([.camera: .restricted]))
-        #expect(notice == SystemAccessNotice(message: "Camera isn't allowed on this iPhone", opensSettings: false))
+        #expect(notice == SystemAccessNotice(message: "Camera is restricted", opensSettings: false))
         let both = SystemAccessRules.notice(
             for: [.camera, .microphone], access: states([.camera: .restricted, .microphone: .restricted])
         )
-        #expect(both?.message == "Camera and microphone aren't allowed on this iPhone")
+        #expect(both?.message == "Camera and mic are restricted")
         // Restricted wins over denied: Settings could not fix the whole request.
         let mixed = SystemAccessRules.notice(
             for: [.camera, .microphone], access: states([.camera: .restricted, .microphone: .denied])
@@ -106,6 +106,7 @@ import Testing
         #expect(SystemAccessRules.siteValue(remembered: false, system: .servicesOff) == .offInSettings)
         #expect(SystemAccessRules.siteValue(remembered: true, system: .restricted) == .notAllowedOnPhone)
         #expect(SitePermissionValue.offInSettings.label == "Off in Settings")
+        #expect(SitePermissionValue.notAllowedOnPhone.label == "Restricted")
     }
 
     // MARK: Network

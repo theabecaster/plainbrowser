@@ -56,7 +56,7 @@ final class SystemAccessTests: XCTestCase {
     func testCameraAndMicrophoneOff() throws {
         let app = try launch(["-PlainSystemAccess", "camera=denied,microphone=denied"])
         go(app, to: "/camera", heading: "Camera denied")
-        XCTAssertTrue(app.staticTexts["Camera and microphone are off for Plain"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Camera and mic are off for Plain"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["toastButton"].exists)
         shot("c1-camera-off")
     }
@@ -65,16 +65,21 @@ final class SystemAccessTests: XCTestCase {
     func testScreenTimeRestrictionHasNoButton() throws {
         let app = try launch(["-PlainSystemAccess", "camera=restricted,microphone=restricted"])
         go(app, to: "/camera", heading: "Camera denied")
-        XCTAssertTrue(app.staticTexts["Camera and microphone aren't allowed on this iPhone"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Camera and mic are restricted"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["toastButton"].isHittable)
         shot("c2-camera-restricted")
     }
 
     /// Everything on (or never asked): the page's own answer, nothing of Plain's.
     func testNothingWhileNotSwitchedOff() throws {
-        // Location only: the simulator's stand-in cameras would reach Plain's own question.
+        // Location on for Plain: the site gets Plain's own question (on a simulator WebKit may ask
+        // it even with the switch off), and no line of Plain's about a switch.
         let app = try launch(["-PlainSystemAccess", "location=allowed"])
-        go(app, to: "/location", heading: "Location denied")
+        let field = app.textFields["searchField"]
+        field.typeText(server.address("/location") + "\n")
+        let dontAllow = app.alerts.buttons["Don't Allow"]
+        if dontAllow.waitForExistence(timeout: 5) { dontAllow.tap() }
+        XCTAssertTrue(app.webViews.staticTexts["Location denied"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.otherElements["toast"].waitForExistence(timeout: 2))
     }
 
@@ -101,7 +106,7 @@ final class SystemAccessTests: XCTestCase {
         try server.start()
         addTeardownBlock { [server] in server?.stop() }
         let app = try launch([
-            "-PlainSystemAccess", "camera=denied",
+            "-PlainSystemAccess", "camera=denied,location=allowed",
             "-PlainSeedSitePermissions", site, "camera=true,location=false",
         ])
         go(app, to: "/a", heading: "Page A")
@@ -127,7 +132,7 @@ final class SystemAccessTests: XCTestCase {
         let app = try launch()
         go(app, to: "/photo", heading: "Photo")
         Thread.sleep(forTimeInterval: 1)
-        app.webViews.images.firstMatch.press(forDuration: 1.2)
+        app.webViews.links.firstMatch.press(forDuration: 1.2)
         let save = app.buttons["Save Image"]
         XCTAssertTrue(save.waitForExistence(timeout: 4))
         save.tap()

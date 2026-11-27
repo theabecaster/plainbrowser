@@ -63,7 +63,8 @@ public nonisolated enum SitePermissionValue: Sendable, Equatable {
     case notAllowed
     /// Off for Plain in Settings: no site can use it until it is turned back on there.
     case offInSettings
-    /// Screen Time or a profile doesn't allow it on this phone.
+    /// Screen Time or a profile doesn't allow it on this phone ("Restricted", Apple's word in
+    /// Screen Time's Content & Privacy Restrictions).
     case notAllowedOnPhone
 
     /// The row's value, as Settings rows show theirs.
@@ -72,7 +73,7 @@ public nonisolated enum SitePermissionValue: Sendable, Equatable {
         case .allowed: "Allowed"
         case .notAllowed: "Not Allowed"
         case .offInSettings: "Off in Settings"
-        case .notAllowedOnPhone: "Off on This iPhone"
+        case .notAllowedOnPhone: "Restricted"
         }
     }
 }
@@ -89,8 +90,8 @@ public nonisolated enum SystemAccessRules {
         // Screen Time wins: Plain's page in Settings can't change it, so no button.
         if blocked.contains(where: { access($0) == .restricted }) {
             let restricted = blocked.filter { access($0) == .restricted }
-            let verb = restricted.count > 1 ? "aren't" : "isn't"
-            return SystemAccessNotice(message: "\(names(restricted)) \(verb) allowed on this iPhone", opensSettings: false)
+            let verb = restricted.count > 1 ? "are" : "is"
+            return SystemAccessNotice(message: "\(names(restricted)) \(verb) restricted", opensSettings: false)
         }
         if blocked == [.location], access(.location) == .servicesOff {
             return SystemAccessNotice(message: "Location Services are off", opensSettings: true)
@@ -103,7 +104,7 @@ public nonisolated enum SystemAccessRules {
     public static func photosNotice(_ access: SystemAccess) -> SystemAccessNotice? {
         switch access {
         case .denied: SystemAccessNotice(message: "Saving to Photos is off for Plain", opensSettings: true)
-        case .restricted: SystemAccessNotice(message: "Saving to Photos isn't allowed on this iPhone", opensSettings: false)
+        case .restricted: SystemAccessNotice(message: "Saving to Photos is restricted", opensSettings: false)
         case .notDetermined, .allowed, .servicesOff: nil
         }
     }
@@ -119,10 +120,11 @@ public nonisolated enum SystemAccessRules {
         }
     }
 
-    /// "Camera", "Camera and microphone".
+    /// "Camera", "Camera and mic": short enough for one line on the narrowest toast (the Duo's
+    /// outer screen), so a pair says "mic".
     static func names(_ features: [SystemFeature]) -> String {
         let words = features.enumerated().map { index, feature in
-            let word = name(feature)
+            let word = features.count > 1 && feature == .microphone ? "Mic" : name(feature)
             return index == 0 ? word : word.lowercased()
         }
         return ListFormatter.localizedString(byJoining: words)

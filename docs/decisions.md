@@ -2159,15 +2159,15 @@ users have things turned off", "don't be too annoying", following credible sourc
   their own changes. Only a changed answer updates anything, so returning never flickers.
 - **Once per site, in memory** (`SystemAccessNoticeMemory`): a site that asks on every page gets
   one line, and Plain keeps no list of which sites asked. A new launch may tell a site once more.
-- **Screen Time gets no button:** Plain's page in Settings can't lift it. "isn't allowed on
-  this iPhone" names the phone, not the user.
+- **Screen Time gets no button:** Plain's page in Settings can't lift it. "is restricted" is Screen
+  Time's own word, and names no one.
 - **Cellular data is not "offline."** `CTCellularData.restrictedState` (Plain's own switch) and
   `NWPath.unsatisfiedReason` (`cellularDenied`, `wifiDenied`) decide "Cellular data is off for
   Plain." with Open Settings and, under it, Try Again for joining Wi-Fi (Firefox does the same
   check). The one place a page state has two buttons. Turning cellular data back on for Plain
   reloads the page by itself: it is what the user went to Settings for.
 - **Site Settings lists permissions** a site asked for (read with one query when a page commits,
-  so the menu builds at once): Allowed, Not Allowed, Off in Settings, Off on This iPhone. Before
+  so the menu builds at once): Allowed, Not Allowed, Off in Settings, Restricted. Before
   this a Don't Allow could never be changed.
 - **Apple Intelligence** can't be turned off on iOS 27 (Apple's Foundation Models docs), so
   Plain never asks anyone to turn it on. While the model downloads (`modelNotReady`) Plain looks

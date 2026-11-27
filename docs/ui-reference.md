@@ -117,7 +117,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - The intro promises only what this screen can do: "Made for iPhone Duo" shows only where the
   window can be a foldable's (a vertical bar edge, or both size classes regular), from traits.
 - A feature that is off reads "<Feature> is off for Plain"; one Screen Time blocks reads
-  "<Feature> isn't allowed on this iPhone". The toast's button is "Settings"; a page's button,
+  "<Feature> is restricted" (Apple's word in Screen Time). The toast's button is "Settings"; a page's button,
   which has room, is "Open Settings".
 - An item captioned under its symbol uses the same short caption everywhere it shows (the page menu's rows and the start screen's shortcuts: "Private Tab", "Reopen Tab", "Archive"), with the full name for VoiceOver.
 - The same action has the same symbol everywhere: Copy Link is `link`, Share `square.and.arrow.up`, Close Tab `xmark`.

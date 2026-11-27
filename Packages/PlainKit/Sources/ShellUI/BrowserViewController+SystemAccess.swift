@@ -70,7 +70,7 @@ extension BrowserViewController {
     // MARK: Site Settings
 
     /// The permissions the site on screen has asked for, each with its value: Allowed, Not
-    /// Allowed, Off in Settings (a tap opens Settings) or Off on This iPhone (Screen Time, dimmed).
+    /// Allowed, Off in Settings (a tap opens Settings) or Restricted (Screen Time, dimmed).
     /// A tap on Allowed or Not Allowed changes the site's answer. Nothing for a site that never
     /// asked.
     func sitePermissionMenuItems(for tab: Tab) -> [UIMenuElement] {

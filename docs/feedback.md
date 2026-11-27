@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Launch with tabs feels empty:** open to the last tab (or a search with the last tab behind it), like Arc but smoother. (Launch lane.)
+
 - **Suggestions flicker while typing:** the list should update smoothly between keystrokes. (Suggestions lane.)
 
 

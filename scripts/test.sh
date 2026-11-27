@@ -22,6 +22,9 @@ sim_udid() {
   xcrun simctl list devices -j | jq -r --arg n "$1" '[.devices[][] | select(.name == $n)][0].udid // empty'
 }
 
+# Every UI test launch must use throwaway state, wherever it runs. Refuse otherwise.
+scripts/lib/check-isolation.zsh
+
 echo "== swift test (PlainKit)"
 (cd Packages/PlainKit && swift test 2>&1 | grep -E 'Test run with|error|failed' )
 

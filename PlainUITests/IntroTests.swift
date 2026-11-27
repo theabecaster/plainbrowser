@@ -32,19 +32,6 @@ final class IntroTests: XCTestCase {
         next.tap()
     }
 
-    /// Accepts the system's "You have changed the icon" alert.
-    private func acceptIconAlert(_ app: XCUIApplication) {
-        let alert = app.alerts.firstMatch
-        if alert.waitForExistence(timeout: 4) {
-            alert.buttons.firstMatch.tap()
-            return
-        }
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        if springboard.alerts.firstMatch.waitForExistence(timeout: 2) {
-            springboard.alerts.firstMatch.buttons.firstMatch.tap()
-        }
-    }
-
     func testSkipFromTheFirstStep() {
         let app = launch()
         let skip = app.buttons["introSkip"]
@@ -61,18 +48,19 @@ final class IntroTests: XCTestCase {
     }
 
     func testFullPath() {
-        let app = launch()
+        // The test store, so the "seen" flag (in the isolated defaults) survives the relaunch below.
+        let app = launch(["-PlainTestStore", "-PlainResetStore"])
         tapNext(app, step: "promise")
         tapNext(app, step: "inside")
 
-        // Pick an icon, then put the default back.
+        // Pick an icon, then put the default back. An isolated run keeps the choice in memory and
+        // never changes the Home Screen icon, so no system alert comes up.
         let night = app.buttons["introIcon.Night"]
         XCTAssertTrue(night.waitForExistence(timeout: 5))
         night.tap()
-        acceptIconAlert(app)
         XCTAssertTrue(night.isSelected, "the picked icon is not selected")
         app.buttons["introIcon.Dawn"].tap()
-        acceptIconAlert(app)
+        XCTAssertTrue(app.buttons["introIcon.Dawn"].isSelected, "the default icon is not selected again")
         tapNext(app, step: "icon")
 
         // The demo plays by itself (clean), then can be flipped back and forth.
@@ -90,10 +78,11 @@ final class IntroTests: XCTestCase {
         go.tap()
         assertSearchFieldFocused(app)
 
-        // Seen: the next plain launch (no test arguments at all) goes straight to the search field.
+        // Seen: the next launch, where the saved flag decides as for a real user, goes straight to
+        // the search field.
         app.terminate()
         let again = XCUIApplication.isolated()
-        again.launchArguments = []
+        again.launchArguments += ["-PlainTestStore", "-PlainRespectIntroSeen"]
         again.launch()
         assertSearchFieldFocused(again)
     }

@@ -70,7 +70,8 @@ reads the metrics with `xcrun xcresulttool get test-results metrics`, and append
 The tab tests (`testGalleryOpen`, `testBarSwipe`) launch with `-PlainTestStore -PlainResetStore`
 (honored in Release builds too): an empty store on disk in the app's temporary folder, so each run
 starts from the same two tabs, and on the device the owner's own tabs are never restored, archived
-or touched.
+or touched. Thumbnails live next to that store too. WebKit's website data (cookies, site storage)
+and the compiled blocking lists stay shared: the tests only visit their own local pages.
 
 Exit codes: 0 pass, 1 budget breach, regression or test failure, 2 device not ready.
 

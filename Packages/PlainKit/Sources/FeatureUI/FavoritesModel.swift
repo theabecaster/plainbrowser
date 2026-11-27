@@ -10,6 +10,9 @@ public final class FavoritesModel {
     public private(set) var favorites: [Favorite] = []
     public private(set) var isLoaded = false
     public var errorMessage: String?
+    /// The last read failed: the screen says so with Try Again, never as the empty state. A
+    /// failed write keeps the list and says so in `errorMessage`.
+    public private(set) var loadFailed = false
 
     private let store: any FavoritesStoring
     private let writes = WriteQueue()
@@ -28,8 +31,9 @@ public final class FavoritesModel {
             let stored = try await writes.perform { try await store.favorites() }
             // An edit made while reading is newer than what was read.
             if edits == editsAtStart { favorites = stored }
+            loadFailed = false
         } catch {
-            errorMessage = Wording.favoritesFailed
+            loadFailed = true
         }
         isLoaded = true
     }

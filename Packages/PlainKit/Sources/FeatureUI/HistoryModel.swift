@@ -38,6 +38,11 @@ public final class HistoryModel {
         }
     }
     public var errorMessage: String?
+    /// The last read failed: the screen says so with Try Again, never as the empty state.
+    public private(set) var loadFailed = false
+    /// Whether there is any history at all, whatever the search shows. Clear dims only when there
+    /// is none (docs/state-rules.md §6, Sheets).
+    public private(set) var hasHistory = false
 
     public var isEmpty: Bool { days.isEmpty }
 
@@ -110,6 +115,7 @@ public final class HistoryModel {
         defer { Signposts.signposter.endInterval(Signposts.historyClear, state) }
         do {
             try await store.clearHistory(since: range.start(now: now(), calendar: calendar))
+            if range == .all { hasHistory = false }
         } catch {
             errorMessage = Wording.historyEditFailed
         }
@@ -144,10 +150,13 @@ public final class HistoryModel {
             guard current == generation else { return }
             days = grouped
             mayHaveMore = visits.count >= limit
+            // A search that finds nothing says nothing about the rest of history.
+            if query.isEmpty || !visits.isEmpty { hasHistory = !visits.isEmpty }
+            loadFailed = false
             isLoaded = true
         } catch {
             guard current == generation, !(error is CancellationError) else { return }
-            errorMessage = Wording.historyFailed
+            loadFailed = true
             isLoaded = true
         }
     }

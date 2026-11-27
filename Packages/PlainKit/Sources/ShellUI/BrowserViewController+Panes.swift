@@ -199,7 +199,11 @@ extension BrowserViewController {
             guard let wanted else { continue }
             let tab = session.tabs.tab(wanted)
             session.pool.attach(tab, to: self.panes.slots[index].container)
-            session.pool.scrollView(for: tab)?.hideChromeEdgeEffects()
+            if let scrollView = session.pool.scrollView(for: tab) {
+                // Only for `keepPageTopUnderBar`: the other callbacks act on the focused page alone.
+                scrollView.delegate = self
+                scrollView.hideChromeEdgeEffects()
+            }
             record(wanted, inSlot: index)
             applyOtherPaneInsets(to: tab)
         }
@@ -228,12 +232,12 @@ extension BrowserViewController {
 
     /// The other pane has no chrome over it, but it keeps the expanded bar's inset: switching focus
     /// then never relayouts either page. Under a top bar, which spans both panes, it follows the
-    /// bar's resting state instead (`applyOtherPaneTopInsets`).
+    /// bar's insets instead, which never follow its resting state (`applyTopBarInsets(_:to:)`).
     func applyOtherPaneInsets(to tab: Tab) {
         // During a fold the transition's completion applies them.
         guard view.bounds.height > 0, !duo.isResizing else { return }
         if let top = duo.topGeometry {
-            applyOtherPaneTopInsets(to: tab, geometry: top, rest: pageInsetRest)
+            applyTopBarInsets(top, to: tab)
             return
         }
         setPageTopStart(0, for: session.pool.scrollView(for: tab))

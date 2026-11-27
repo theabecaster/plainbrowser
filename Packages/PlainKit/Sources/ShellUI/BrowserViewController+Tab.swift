@@ -613,6 +613,23 @@ extension UIScrollView {
         contentInset.bottom = bottom
     }
 
+    /// Keeps a page that WebKit put at its top under a floating top bar, not behind it. WebKit's
+    /// top for a page is its obscured top inset: a load's first paint, a history restore and a
+    /// page's own `scrollTo(0, 0)` move the scroll view to exactly minus that inset
+    /// (`-[WKWebView _initialContentOffsetForScrollView]`), and under the top bar that inset is the
+    /// status strip, not the bar (`TopChromeGeometry.obscuredInset`). The page's top rests lower,
+    /// at the scroll range's start under the expanded bar (`setPageTopStart`), so a move to
+    /// WebKit's top that no finger made goes on to there, in the same pass, before anything is
+    /// drawn. Moves under the finger, a fling's coast and a bounce are the reader's own and are
+    /// left alone. Returns true when it moved the page.
+    func keepPageTopUnderBar(webKitTop: CGFloat) -> Bool {
+        let start = -adjustedContentInset.top
+        guard start < -webKitTop - 0.5, abs(contentOffset.y + webKitTop) < 0.01,
+              !isTracking, !isDecelerating, !isZooming, !isZoomBouncing else { return false }
+        contentOffset.y = start
+        return true
+    }
+
     /// No scroll edge effect where Plain's chrome floats: the page runs under the bottom pill and
     /// under the inner screen's top bar, and the glass's own dense tint keeps the controls readable
     /// (owner's rule: no band, docs/decisions.md). The top one would otherwise blur and dim a band

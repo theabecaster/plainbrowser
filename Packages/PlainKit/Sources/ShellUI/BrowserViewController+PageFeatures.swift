@@ -5,6 +5,7 @@ import FeatureUI
 import PerfSignposts
 import UIKit
 import WebEngine
+import WebKit
 
 // FeatureUI can't import WebEngine; the engine's types already have exactly what its Downloads
 // list reads (docs/architecture.md, "Downloads UI").
@@ -73,6 +74,85 @@ extension BrowserViewController {
         }
         save.accessibilityIdentifier = "menu.savePDF"
         return [save]
+    }
+
+    // MARK: Print and Save as PDF
+
+    /// Print and Save as PDF as one row of two (state rules §4: on what finished loading, or the
+    /// reader's article, which they act on instead of the page under it).
+    func exportMenu(_ rules: ControlRules) -> UIMenu? {
+        var items: [UIMenuElement] = []
+        if rules.print {
+            let print = UIAction(title: "Print…", image: UIImage(systemName: "printer")) { [weak self] _ in
+                self?.printPage()
+            }
+            print.accessibilityIdentifier = "menu.print"
+            items.append(print)
+        }
+        if rules.saveAsPDF {
+            let save = UIAction(title: "Save as PDF", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
+                self?.saveAsPDF()
+            }
+            save.accessibilityIdentifier = "menu.saveAsPDF"
+            items.append(save)
+        }
+        guard !items.isEmpty else { return nil }
+        let row = UIMenu(options: .displayInline, children: items)
+        row.preferredElementSize = .medium
+        return row
+    }
+
+    /// What Print and Save as PDF act on: the reader's article while it shows, else the page.
+    private func exportTarget() -> (tab: Tab, webView: WKWebView)? {
+        guard let tab = currentTab else { return nil }
+        guard let webView = engineUI.reader.webView ?? session.pool.webView(for: tab) else { return nil }
+        return (tab, webView)
+    }
+
+    /// The system print sheet with the page's print formatter: paper, copies, range and printer
+    /// are the system's, and the page's `@media print` styles apply.
+    func printPage() {
+        guard let (tab, webView) = exportTarget() else { return Haptic.nothingThere.play() }
+        Task { [weak self] in
+            await PageExport.loadLazyImages(in: webView)
+            guard let self, self.currentTab === tab, self.presentedViewController == nil else { return }
+            Signposts.signposter.emitEvent(Signposts.printPage)
+            let info = UIPrintInfo(dictionary: nil)
+            info.outputType = .general
+            info.jobName = tab.title.isEmpty ? PageExport.fileName(title: nil, url: tab.url) : tab.title
+            let controller = UIPrintInteractionController.shared
+            controller.printInfo = info
+            controller.printFormatter = webView.viewPrintFormatter()
+            controller.present(animated: true)
+        }
+    }
+
+    /// A paginated PDF of the page in the share sheet (Save to Files, AirDrop, Mail). The file
+    /// lives in a temporary folder until the sheet closes.
+    func saveAsPDF() {
+        guard let (tab, webView) = exportTarget() else { return Haptic.nothingThere.play() }
+        let interval = Signposts.signposter.beginInterval(Signposts.exportPDF)
+        Task { [weak self] in
+            await PageExport.loadLazyImages(in: webView)
+            let title = tab.title
+            let data = await PageExport.pdf(of: webView, title: title)
+            let name = PageExport.fileName(title: title, url: tab.url)
+            let file = await Task.detached(priority: .userInitiated) {
+                try? PageExport.writeTemporaryFile(data, named: name)
+            }.value
+            Signposts.signposter.endInterval(Signposts.exportPDF, interval)
+            guard let self, self.currentTab === tab, self.presentedViewController == nil else { return }
+            guard let file, !data.isEmpty else {
+                Haptic.nothingThere.play()
+                return self.tabsUI.toast.show("This page couldn't be saved as a PDF")
+            }
+            let sheet = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+            sheet.completionWithItemsHandler = { _, _, _, _ in
+                Task.detached { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+            }
+            sheet.popoverPresentationController?.sourceItem = self.pill
+            self.present(sheet, animated: true)
+        }
     }
 
     /// Downloads, in the app section while there are any this session; "1 in progress" while one

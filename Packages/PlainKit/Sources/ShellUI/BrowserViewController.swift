@@ -1057,6 +1057,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         actions.preferredElementSize = .medium
         sections.append(actions)
         if !pageItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: pageItems)) }
+        if let export = exportMenu(rules) { sections.append(export) }
         if rules.zoom { sections.append(zoomMenu(for: tab, source: source)) }
         var placeItems: [UIMenuElement] = favoriteItem.map { [$0] } ?? []
         if siteItems.count > 1, let host = url.host() {

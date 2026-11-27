@@ -885,4 +885,7 @@ Research and sources: docs/research/dark-mode.md.
   sends web pages only to the default browser.
 - **Perf cost:** nothing new runs before the first frame except setting the inbox's handler. The
   sync starts 5 s after the database opens, at background priority; an unchanged list costs two
-  small file reads. The extension adds about 2.5 MB (Debug) to the app bundle.
+  small file reads. The extension adds about 2.5 MB (Debug) to the app bundle. Measured on the
+  Duo simulator, Release, five launches each, `dev` then this branch back to back (machine load
+  about 860, so noisy): `launch.firstFrame` median 937 → 908 ms, `launch` (main to field) 592 →
+  634 ms (fastest runs 562 and 575 ms). Within noise; confirm with the device perf gate.

@@ -91,14 +91,16 @@ final class DuoTests: XCTestCase {
         let pill = app.buttons["addressPill"]
         let headingA = app.webViews.staticTexts["Page A"]
         let headingB = app.webViews.staticTexts["Page B"]
-        XCTAssertGreaterThan(pill.frame.midX, headingB.frame.minX, "the pill sits over the focused pane")
+        // One top bar spans both panes (docs/decisions.md, "Duo inner screen: Safari's top bar"):
+        // the address is the focused pane's, and the bar stays where it is when focus moves.
+        XCTAssertLessThan(pill.frame.minX, headingB.frame.minX, "the bar spans the panes, not only the focused one")
 
-        // A touch on the first pane focuses it: the pill moves over it and shows its page.
+        // A touch on the first pane focuses it: the address shows its page; the bar still spans
+        // both panes (its back and forward buttons may change its width, not its place).
         headingA.tap()
         waitForPill(app, showing: "/a")
-        let moved = NSPredicate { _, _ in pill.frame.midX < headingB.frame.minX }
-        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: moved, object: nil)], timeout: 3), .completed,
-                       "the pill moved over the focused pane")
+        XCTAssertLessThan(pill.frame.minX, headingB.frame.minX, "the bar still spans both panes")
+        XCTAssertGreaterThan(pill.frame.maxX, headingA.frame.maxX, "the bar still spans both panes")
 
         // Close Pane closes the focused one; its tab stays open, the other page fills the window.
         pageMenu(app, pick: "menu.closePane")

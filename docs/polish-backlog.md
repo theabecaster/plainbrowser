@@ -430,9 +430,5 @@ Newest feature last.
 - **Reader at 250 pt:** infobox tables scroll sideways (by design) and look clipped; the
   publisher line, large title and accent rule take much of the first screen in the pane. A
   narrower reader style for the pane. (Design review, round 1.)
-- **A gray area above the page under the top bar** (the page's own top under the floating glass)
-  shows beside the paper pane; it belongs to the top bar's no-band work. (Design review, round 1.)
-- **DuoTests `testSplitOpensFromThePageMenuFocusesByTouchAndCloses`** fails before and after this
-  work: it expects the pill over the focused pane, but the top bar now spans both panes.
 - **Device checks:** two windows side by side in Split View, a fold with two windows, the edge
   swipe against WebKit's swipe forward, and the pane's header beside the real status corner.

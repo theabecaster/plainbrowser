@@ -583,7 +583,12 @@ extension DarkPages {
     const ours = new WeakSet();
     const sheet = (css) => { const s = new CSSStyleSheet(); s.replaceSync(css); s.disabled = true; ours.add(s); return s; };
     const guard = sheet(`html, body { background-color: ${PAGE_BG_CSS} !important; }`);
-    const base = sheet(':root { color-scheme: dark !important; }');
+    // The page's dark scheme, and a frame's default border (the browser's own bevel, drawn from
+    // the now light text color) in the darkened border grey; a border the site sets wins.
+    const BASE = ':root { color-scheme: dark !important; } :where(iframe, frame) { border-color: '
+      + css(mapRGBA('d', [0.75, 0.75, 0.75, 1])) + '; }';
+    const BASE_RULES = 2;
+    const base = sheet(BASE);
     const patch = sheet('');
     const twins = new Map(); // a page style sheet -> { sheet, signature, unknown, version }
     let order = [];          // the twins in the page's order
@@ -750,7 +755,8 @@ extension DarkPages {
     // like the document's.
     const addRoot = (root, deadline) => {
       shadowRoots.set(root, []);
-      timed(() => syncSheets(Math.max(1, deadline - now()), root), 'rewriteMs');
+      if (now() < deadline) timed(() => syncSheets(deadline - now(), root), 'rewriteMs');
+      else { adoptScope(root); sheetsDirty = true; later(); }
       if (observer) observer.observe(root, OBSERVED);
       stats.shadowRoots++;
     };
@@ -760,24 +766,29 @@ extension DarkPages {
     };
     // An element's descendants, through the open shadow roots below it.
     const below = (el) => {
-      const out = [...el.getElementsByTagName('*')];
-      for (let i = 0; i < out.length && out.length < 5000; i++) {
+      const out = [];
+      const add = (list) => { for (const d of list) out.push(d); };
+      if (el.shadowRoot && shadowRoots.has(el.shadowRoot)) add(el.shadowRoot.querySelectorAll('*'));
+      add(el.getElementsByTagName('*'));
+      // Every host found on the way adds its shadow tree, nested ones included.
+      for (let i = 0; i < out.length; i++) {
         const shadow = out[i].shadowRoot;
-        if (shadow && shadowRoots.has(shadow)) out.push(...shadow.querySelectorAll('*'));
+        if (shadow && shadowRoots.has(shadow)) add(shadow.querySelectorAll('*'));
       }
-      if (el.shadowRoot && shadowRoots.has(el.shadowRoot)) out.push(...el.shadowRoot.querySelectorAll('*'));
       return out;
     };
     // Custom elements whose shadow root may come later (defined after they were walked).
     const pendingHosts = new Set();
     const checkHosts = () => {
+      // One slice for all of them: a burst of upgraded components never holds a frame.
+      const deadline = now() + SLICE_MS;
       for (const host of pendingHosts) {
         if (!host.isConnected) { pendingHosts.delete(host); continue; }
         const root = host.shadowRoot;
         if (!root) continue;
         pendingHosts.delete(host);
         if (shadowRoots.has(root) || !info.has(host)) continue;
-        addRoot(root, now() + SLICE_MS);
+        addRoot(root, deadline);
         queue.push(root);
       }
       if (queue.length) pump();
@@ -1075,7 +1086,7 @@ extension DarkPages {
     // origin's is read again with CORS, which most image servers allow. Photos and colored logos
     // never qualify; a picture Plain can't read stays as made.
     const logoVerdicts = new Map(); // address -> the mark's color when it is one, else false
-    const logoWaiting = new WeakSet();
+    const logoWaiting = new WeakMap(); // a picture still loading -> the walk that waits for it
     const logoQueue = [];
     let logoRunning = false;
     // A read in flight belongs to one walk: switching off or walking again starts a new
@@ -1098,9 +1109,12 @@ extension DarkPages {
       const img = address ? null : el;
       if (img && (!img.complete || !img.naturalWidth)) {
         // Not loaded yet (lazy, or still on its way): looked at once it is.
-        if (!logoWaiting.has(img)) {
-          logoWaiting.add(img);
-          img.addEventListener('load', () => { logoWaiting.delete(img); if (enabled && img.isConnected && generation === logoGeneration) logo(img, bg, null); }, { once: true });
+        if (logoWaiting.get(img) !== generation) {
+          logoWaiting.set(img, generation);
+          img.addEventListener('load', () => {
+            if (logoWaiting.get(img) === generation) logoWaiting.delete(img);
+            if (enabled && img.isConnected && generation === logoGeneration) logo(img, bg, null);
+          }, { once: true });
         }
         return;
       }
@@ -1118,7 +1132,7 @@ extension DarkPages {
       }
       // Still the same walk and the same picture (a page may swap a picture while it is read).
       if (!ink || !enabled || !el.isConnected || generation !== logoGeneration || contrast(ink, bg) >= LOGO_VANISH) return;
-      if (!address && (img.currentSrc || img.src) !== src) return;
+      if (address ? !getComputedStyle(el).backgroundImage.includes(src) : (img.currentSrc || img.src) !== src) return;
       writes.push([el, token('filter:invert(' + LOGO_INVERT + ') !important')]);
       timed(write);
       stats.logos++;
@@ -1525,7 +1539,6 @@ extension DarkPages {
       if (original && c && c[3] > 0 && Math.abs(original[3] - c[3]) < 0.01 && close(mapRGBA('b', original), c)) return original;
       return c;
     };
-    const BASE = ':root { color-scheme: dark !important; }';
     // The twins are built first (style sheets only, no style pass) and the page is read with
     // them on, so judging costs no style pass beyond the one the darkened first frame needs. A
     // page found native switches them off again in `render`.
@@ -1533,7 +1546,7 @@ extension DarkPages {
       if (declaresDark()) return 'native';
       timed(syncSheets, 'rewriteMs');
       if (schemeDark || /\b(dark|only)\b/.test(document.documentElement.style.colorScheme || '')) return 'native';
-      if (base.cssRules.length !== 1) base.replaceSync(BASE);
+      if (base.cssRules.length !== BASE_RULES) base.replaceSync(BASE);
       guard.disabled = true;
       setEnabled(true);
       let color = ownBackground(document.documentElement);
@@ -1592,7 +1605,7 @@ extension DarkPages {
         const on = active && verdict === 'darken';
         if (on) {
           const text = BASE + (noBackground ? `html { background-color: ${PAGE_BG_CSS}; }` : '');
-          if (base.cssRules.length !== (noBackground ? 2 : 1)) base.replaceSync(text);
+          if (base.cssRules.length !== BASE_RULES + (noBackground ? 1 : 0)) base.replaceSync(text);
           setEnabled(true);
           if (!built) { built = true; build(); } else if (rewalkNeeded) { rewalkNeeded = false; rewalk(true); timed(() => { step(now() + FIRST_MS); write(); }, 'patchMs'); }
           if (stats.firstDark < 0) stats.firstDark = now();
@@ -1752,8 +1765,10 @@ extension DarkPages {
       // The frame's own guard (frameScript) gives way to the engine's in this same task.
       const early = globalThis.__plainDarkFrameGuard;
       if (early) { document.adoptedStyleSheets = document.adoptedStyleSheets.filter((s) => s !== early); globalThis.__plainDarkFrameGuard = null; }
-      TOP.follow(document, () => { if (TOP.off !== off) { off = TOP.off; refresh(); } else render(); });
+      const follow = () => { if (TOP.off !== off) { off = TOP.off; refresh(); } else render(); };
+      TOP.follow(document, follow);
       addEventListener('pagehide', () => { try { TOP.unfollow(document); } catch (e) {} });
+      addEventListener('pageshow', (e) => { if (e.persisted) try { TOP.follow(document, follow); follow(); } catch (e2) {} });
     }
     document.addEventListener('DOMContentLoaded', () => { stats.dcl = now(); decide(document.readyState === 'complete'); });
     addEventListener('load', () => { settled = false; decide(true); });

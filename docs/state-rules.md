@@ -305,7 +305,7 @@ above still says what it shows, and the splash only covers it.
 | Return from the background (the app still running), however long away | None | Not a startup; the user is where they left off. |
 | A second window (Open in New Window), or a scene the system makes later | None | Once per launch. |
 | A touch anywhere, typing, a link arriving, the screen rotating or folding | Ends at once (a 0.12 s fade); the touch has already gone to the app underneath | Nothing blocks input. |
-| The app leaves the foreground while it plays | Gone at once, nothing drawn in the background | |
+| The app leaves the foreground while it plays, or was launched in the background and never came forward | Gone at once, nothing drawn in the background; no splash when it comes forward later | That is a return, not a startup. |
 | Reduce Motion | The icon's world, then a 0.2 s crossfade to the app; no dive | The motion table's rule. |
 | An isolated test run | None, unless `-PlainSplash` is given | Hundreds of UI tests launch the app; the perf launch tests and the splash's own tests pass it. |
 

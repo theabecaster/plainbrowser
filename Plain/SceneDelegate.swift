@@ -410,6 +410,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        // Also a scene that goes to the background without ever becoming active (a launch the
+        // system made in the background): its splash never played, and never will.
+        launchSplash?.sceneDidLeave()
         // Nothing to save while the intro is up: the browser (and its engine) is not built yet.
         guard browserShown else { return }
         leftAt = Date()
@@ -451,6 +454,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// tabs, so the scene comes back to it; the app delegate closes it if the session is discarded.
     /// Intents wait in the inbox for the next window.
     func sceneDidDisconnect(_ scene: UIScene) {
+        launchSplash?.sceneDidLeave()
         CommandInbox.shared.handler = nil
         session?.sceneDidDisconnect()
     }

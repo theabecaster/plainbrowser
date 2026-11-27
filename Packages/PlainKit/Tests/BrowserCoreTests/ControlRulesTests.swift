@@ -520,3 +520,44 @@ import Testing
         #expect(GalleryRules.afterLastCard(screenTabStillOpen: false, otherListCount: 0) == .search)
     }
 }
+
+@Suite struct ChromeMayHideTests {
+    private func page(_ condition: PageCondition = .loaded) -> ChromeState {
+        var state = ChromeState()
+        state.hasTab = true
+        state.hasPage = true
+        state.condition = condition
+        return state
+    }
+
+    @Test func onlyALoadedPageLetsTheBarHide() {
+        #expect(ControlRules(page()).chromeMayHide)
+        for condition in [PageCondition.loading, .failed, .crashed, .awaitingResubmit] {
+            #expect(!ControlRules(page(condition)).chromeMayHide)
+        }
+        var start = ChromeState()
+        start.hasTab = true
+        #expect(!ControlRules(start).chromeMayHide)
+    }
+
+    @Test func editingFindAndAssistiveTechKeepTheBar() {
+        var editing = page()
+        editing.isEditing = true
+        #expect(!ControlRules(editing).chromeMayHide)
+        var finding = page()
+        finding.isFindOpen = true
+        #expect(!ControlRules(finding).chromeMayHide)
+        var voiceOver = page()
+        voiceOver.usesAssistiveTech = true
+        #expect(!ControlRules(voiceOver).chromeMayHide)
+    }
+
+    @Test func theReaderAndTheDuoBarCanHideThePill() {
+        var reader = page()
+        reader.isReaderOpen = true
+        #expect(ControlRules(reader).chromeMayHide)
+        var duo = page()
+        duo.usesVerticalBar = true
+        #expect(ControlRules(duo).chromeMayHide)
+    }
+}

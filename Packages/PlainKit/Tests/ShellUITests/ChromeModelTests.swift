@@ -56,12 +56,40 @@ struct ChromeGeometryTests {
         for geometry in [phone, se, duo] {
             let bottom = geometry.viewHeight
             // Expanded, the inset reaches the pill's top: nothing under the bar is hidden.
-            #expect(geometry.obscuredInset(pageBottom: bottom, collapsed: false) == bottom - geometry.expandedTop)
-            #expect(geometry.obscuredInset(pageBottom: bottom, collapsed: true) == geometry.collapsedInset(pageBottom: bottom))
+            #expect(geometry.obscuredInset(pageBottom: bottom, rest: .expanded) == bottom - geometry.expandedTop)
+            #expect(geometry.obscuredInset(pageBottom: bottom, rest: .pill) == geometry.collapsedInset(pageBottom: bottom))
+            #expect(geometry.obscuredInset(pageBottom: bottom, rest: .hidden) == geometry.hiddenInset(pageBottom: bottom))
         }
-        // iPhone 17: the expanded pill and bar cover 136 pt of the page, the collapsed pill 54 pt.
-        #expect(phone.obscuredInset(pageBottom: 874, collapsed: false) == 136)
-        #expect(phone.obscuredInset(pageBottom: 874, collapsed: true) == 54)
+        // iPhone 17: the expanded pill and bar cover 136 pt of the page, the collapsed pill 54 pt,
+        // the hidden bar only the home-indicator zone.
+        #expect(phone.obscuredInset(pageBottom: 874, rest: .expanded) == 136)
+        #expect(phone.obscuredInset(pageBottom: 874, rest: .pill) == 54)
+        #expect(phone.obscuredInset(pageBottom: 874, rest: .hidden) == 34)
+        // No home indicator: a 16 pt edge strip.
+        #expect(se.obscuredInset(pageBottom: 667, rest: .hidden) == 16)
+    }
+
+    @Test func hiddenInsetIsTheSmallestAndTheViewportSpansHiddenToExpanded() {
+        for geometry in [phone, se, duo] {
+            let bottom = geometry.viewHeight
+            let hidden = geometry.hiddenInset(pageBottom: bottom)
+            #expect(hidden < geometry.collapsedInset(pageBottom: bottom))
+            #expect(hidden < geometry.expandedInset(pageBottom: bottom))
+        }
+    }
+
+    @Test func hiddenPillSinksPastTheEdgeAndFades() {
+        for geometry in [phone, se, duo] {
+            let move = geometry.pillTransform(progress: 2)
+            let restCenter = geometry.pillRestBottom - ChromeGeometry.pillHeight / 2
+            let top = restCenter + move.translationY - ChromeGeometry.pillHeight * move.scale / 2
+            #expect(abs(top - geometry.viewHeight) < 0.001)
+            #expect(move.scale == ChromeGeometry.compactScale)
+        }
+        #expect(ChromeGeometry.pillAlpha(progress: 1) == 1)
+        #expect(ChromeGeometry.pillAlpha(progress: 1.5) == 0.5)
+        #expect(ChromeGeometry.pillAlpha(progress: 2) == 0)
+        #expect(ChromeGeometry.pillAlpha(progress: 0) == 1)
     }
 
     @Test func glassMergesOnlyBelowTheRestingGap() {
@@ -120,11 +148,136 @@ struct ChromeCollapseTests {
         collapse.scrolled(to: 100, top: 0, bottom: 1000)
         collapse.scrolled(to: 120, top: 0, bottom: 1000)
         #expect(collapse.isMidway)
-        #expect(collapse.settleTarget() == 0)
-        #expect(collapse.settleTarget(velocity: 1) == 1)
+        #expect(collapse.settleTarget() == .expanded)
+        #expect(collapse.settleTarget(velocity: 1) == .pill)
         collapse.scrolled(to: 140, top: 0, bottom: 1000)
-        #expect(collapse.settleTarget() == 1)
-        #expect(collapse.settleTarget(velocity: -1) == 0)
+        #expect(collapse.settleTarget() == .pill)
+        #expect(collapse.settleTarget(velocity: -1) == .expanded)
+    }
+}
+
+@MainActor
+struct ChromeHideTests {
+    /// A collapse that has reached the pill, on a 5000 pt page.
+    private func atThePill() -> ChromeCollapse {
+        var collapse = ChromeCollapse(distance: 50, hideDistance: 100)
+        collapse.scrolled(to: 100, top: 0, bottom: 5000, canHide: true)
+        collapse.scrolled(to: 150, top: 0, bottom: 5000, canHide: true)
+        #expect(collapse.progress == 1)
+        return collapse
+    }
+
+    @Test func keepScrollingPastThePillHides() {
+        var collapse = atThePill()
+        #expect(collapse.scrolled(to: 200, top: 0, bottom: 5000, canHide: true) == .none)
+        #expect(collapse.scrolled(to: 250, top: 0, bottom: 5000, canHide: true) == .hide)
+    }
+
+    @Test func hidingAddsUpOverSeveralDrags() {
+        var collapse = atThePill()
+        collapse.settle(at: 1)
+        collapse.scrolled(to: 150, top: 0, bottom: 5000, canHide: true)
+        #expect(collapse.scrolled(to: 220, top: 0, bottom: 5000, canHide: true) == .none)
+        collapse.resetTracking()
+        collapse.scrolled(to: 220, top: 0, bottom: 5000, canHide: true)
+        #expect(collapse.scrolled(to: 260, top: 0, bottom: 5000, canHide: true) == .hide)
+    }
+
+    @Test func neverHidesWhenTheStateOrPageSaysNo() {
+        var collapse = atThePill()
+        #expect(collapse.scrolled(to: 600, top: 0, bottom: 5000, canHide: false) == .none)
+        #expect(collapse.progress == 1)
+    }
+
+    @Test func aCoastAtThePillHidesToo() {
+        var collapse = atThePill()
+        collapse.head(to: .pill)
+        collapse.scrolled(to: 200, top: 0, bottom: 5000, tracking: false, snapping: true, canHide: true)
+        #expect(collapse.scrolled(to: 260, top: 0, bottom: 5000, tracking: false, canHide: true) == .hide)
+    }
+
+    @Test func aDeliberateMoveUpBringsAHiddenBarBackAndJitterDoesNot() {
+        var collapse = atThePill()
+        collapse.settle(at: 2)
+        #expect(collapse.rest == .hidden)
+        collapse.scrolled(to: 1000, top: 0, bottom: 5000)
+        #expect(collapse.scrolled(to: 990, top: 0, bottom: 5000) == .none)
+        #expect(collapse.scrolled(to: 995, top: 0, bottom: 5000) == .none)
+        // The move down at 995 started the count again: 15, then 20 pt up is not enough.
+        #expect(collapse.scrolled(to: 980, top: 0, bottom: 5000) == .none)
+        #expect(collapse.scrolled(to: 975, top: 0, bottom: 5000) == .none)
+        #expect(collapse.scrolled(to: 970, top: 0, bottom: 5000) == .reveal)
+        #expect(collapse.progress == 2)
+    }
+
+    @Test func aFastMoveUpBringsItBackSooner() {
+        var collapse = atThePill()
+        collapse.settle(at: 2)
+        collapse.scrolled(to: 1000, top: 0, bottom: 5000)
+        #expect(collapse.scrolled(to: 995, top: 0, bottom: 5000, velocity: -1) == .none)
+        #expect(collapse.scrolled(to: 990, top: 0, bottom: 5000, velocity: -1) == .reveal)
+    }
+
+    @Test func aHiddenBarStaysHiddenWhileCoasting() {
+        var collapse = atThePill()
+        collapse.settle(at: 2)
+        collapse.scrolled(to: 1000, top: 0, bottom: 5000, tracking: false)
+        #expect(collapse.scrolled(to: 900, top: 0, bottom: 5000, tracking: false) == .none)
+    }
+
+    @Test func theTopAndThePageEndBringItBack() {
+        var collapse = atThePill()
+        collapse.settle(at: 2)
+        collapse.scrolled(to: 30, top: 0, bottom: 5000, tracking: false)
+        #expect(collapse.scrolled(to: 0, top: 0, bottom: 5000, tracking: false) == .reveal)
+
+        var atEnd = atThePill()
+        atEnd.settle(at: 2)
+        atEnd.scrolled(to: 4800, top: 0, bottom: 5000, pageEnd: 4966, tracking: false)
+        #expect(atEnd.scrolled(to: 4970, top: 0, bottom: 5000, pageEnd: 4966, tracking: false) == .reveal)
+    }
+
+    @Test func nearThePageEndTheBarNeitherCollapsesNorHides() {
+        var collapse = ChromeCollapse(distance: 50, hideDistance: 100)
+        collapse.scrolled(to: 4900, top: 0, bottom: 5000, pageEnd: 4930, canHide: true)
+        #expect(collapse.scrolled(to: 4920, top: 0, bottom: 5000, pageEnd: 4930, canHide: true) == .none)
+        #expect(collapse.progress == 0)
+        // The expanded bar arriving at the end stays as it is.
+        #expect(collapse.scrolled(to: 4940, top: 0, bottom: 5000, pageEnd: 4930, canHide: true) == .none)
+    }
+
+    @Test func aRevealEndsTheHideTravel() {
+        var collapse = atThePill()
+        collapse.scrolled(to: 230, top: 0, bottom: 5000, canHide: true)
+        collapse.head(to: .expanded)
+        #expect(collapse.downTravel == 0)
+    }
+
+    @Test func aFlickPastTheHideTravelGoesStraightToHidden() {
+        var collapse = ChromeCollapse(distance: 50, hideDistance: 100)
+        collapse.scrolled(to: 100, top: 0, bottom: 5000)
+        collapse.scrolled(to: 130, top: 0, bottom: 5000)
+        #expect(collapse.settleTarget(velocity: 2, coast: 400, canHide: true) == .hidden)
+        #expect(collapse.settleTarget(velocity: 2, coast: 400, canHide: false) == .pill)
+        #expect(collapse.settleTarget(velocity: 2, coast: 400, canHide: true, coastReachesEnd: true) == .pill)
+        // A flick against the end, where the bar is out, keeps it out.
+        #expect(collapse.settleTarget(velocity: 2, coast: 0, canHide: true, coastReachesEnd: true, atEnd: true) == .expanded)
+        #expect(collapse.settleTarget(velocity: 0.5, coast: 60, canHide: true) == .pill)
+    }
+
+    @Test func aReleaseWhileHiddenStaysHiddenUnlessFlickedUp() {
+        var collapse = atThePill()
+        collapse.settle(at: 2)
+        #expect(collapse.settleTarget(velocity: 0) == .hidden)
+        #expect(collapse.settleTarget(velocity: 1) == .hidden)
+        #expect(collapse.settleTarget(velocity: -1) == .expanded)
+    }
+
+    @Test func restsFromProgress() {
+        #expect(ChromeRest(progress: 0) == .expanded)
+        #expect(ChromeRest(progress: 0.7) == .expanded)
+        #expect(ChromeRest(progress: 1) == .pill)
+        #expect(ChromeRest(progress: 2) == .hidden)
     }
 }
 
@@ -152,48 +305,58 @@ struct ToolbarSnapTests {
 struct PageInsetStateTests {
     @Test func startsExpandedAndFollowsEachRest() {
         var inset = PageInsetState()
-        #expect(inset.collapsed == false)
-        inset.barRested(collapsed: true)
+        #expect(inset.rest == .expanded)
+        inset.barRested(.pill)
         #expect(inset.applyIfSettled(offset: 300, top: 0, bottom: 2000) == true)
-        #expect(inset.collapsed)
-        inset.barRested(collapsed: true)
+        #expect(inset.rest == .pill)
+        inset.barRested(.pill)
         #expect(inset.pending == nil)
         #expect(inset.applyIfSettled(offset: 300, top: 0, bottom: 2000) == false)
     }
 
     @Test func waitsWhileThePageBouncesPastAnEdge() {
         var inset = PageInsetState()
-        inset.barRested(collapsed: true)
+        inset.barRested(.pill)
         #expect(inset.applyIfSettled(offset: -40, top: 0, bottom: 2000) == false)
         #expect(inset.applyIfSettled(offset: 2030, top: 0, bottom: 2000) == false)
-        #expect(inset.collapsed == false)
+        #expect(inset.rest == .expanded)
         #expect(inset.applyIfSettled(offset: 0, top: 0, bottom: 2000) == true)
-        #expect(inset.collapsed)
+        #expect(inset.rest == .pill)
     }
 
     @Test func aNewMoveDropsAChangeThatWaitedForABounce() {
         var inset = PageInsetState()
-        inset.barRested(collapsed: true)
+        inset.barRested(.pill)
         #expect(inset.applyIfSettled(offset: 2030, top: 0, bottom: 2000) == false)
         inset.barMoved()
         #expect(inset.applyIfSettled(offset: 1990, top: 0, bottom: 2000) == false)
-        #expect(inset.collapsed == false)
+        #expect(inset.rest == .expanded)
+    }
+
+    @Test func followsTheHiddenRestToo() {
+        var inset = PageInsetState()
+        inset.barRested(.hidden)
+        #expect(inset.applyIfSettled(offset: 300, top: 0, bottom: 2000) == true)
+        #expect(inset.rest == .hidden)
+        inset.barRested(.expanded)
+        #expect(inset.applyIfSettled(offset: 300, top: 0, bottom: 2000) == true)
+        #expect(inset.rest == .expanded)
     }
 
     @Test func aShortPageRestsAtItsTop() {
         var inset = PageInsetState()
-        inset.barRested(collapsed: true)
+        inset.barRested(.pill)
         #expect(inset.applyIfSettled(offset: 0, top: 0, bottom: -300) == true)
     }
 
     @Test func aRestBackToTheShownStateCancelsTheWait() {
         var inset = PageInsetState()
-        inset.barRested(collapsed: true)
+        inset.barRested(.pill)
         #expect(inset.applyIfSettled(offset: -40, top: 0, bottom: 2000) == false)
-        inset.barRested(collapsed: false)
+        inset.barRested(.expanded)
         #expect(inset.pending == nil)
         #expect(inset.applyIfSettled(offset: 0, top: 0, bottom: 2000) == false)
-        #expect(inset.collapsed == false)
+        #expect(inset.rest == .expanded)
     }
 }
 

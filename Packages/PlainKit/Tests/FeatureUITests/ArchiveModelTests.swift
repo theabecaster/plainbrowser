@@ -231,7 +231,7 @@ struct ArchiveModelTests {
     }
 
     @Test func footerSaysWhenTabsMoveHereAndThatTheyLeave() {
-        #expect(ArchiveAfter.oneWeek.archiveFooter == "Tabs you haven't opened in a week move here, and leave after 30 days.")
+        #expect(ArchiveAfter.oneWeek.archiveFooter == "Tabs you haven't opened in a week move here and leave 30 days later.")
         #expect(ArchiveAfter.oneDay.archiveFooter.contains("in a day"))
         #expect(ArchiveAfter.twelveHours.archiveFooter.contains("in 12 hours"))
         #expect(ArchiveAfter.never.archiveFooter == "Tabs here leave after 30 days.", "Never says nothing about moving")

@@ -1981,5 +1981,12 @@ Archive and makes it tidy by itself.
   stays at the top, and each row is still one tap to restore. With no query it reads the whole
   archive, so every section is complete; a search shows its best 200. Grouping runs off main.
 - **Footer**, once under the last section, follows the setting: "Tabs you haven't opened in a week
-  move here, and leave after 30 days." (12 hours, a day); with Never: "Tabs here leave after 30
-  days."
+  move here and leave 30 days later." (12 hours, a day); with Never: "Tabs here leave after 30
+  days." "30 days later" names the start (design review); one sentence, no comma.
+- **Each row's date speaks its section's terms**, as History's times do: a time for Today and
+  Yesterday, the weekday for This Week, the date for Earlier. Relative times ("17 hr. ago") read
+  oddly under "Today", and "yesterday" under Yesterday repeated the header.
+- **Measured** (macOS `swift test`; iPhone 17 simulator on a quiet host): the whole archive (1,000
+  rows) reads in 11.7 ms and groups in 3.5 ms, both off main; a prune of 500 expired tabs with their
+  state files takes 37 ms off main. The Archive's `archive.load` (read and sections, from the
+  sheet's first frame) is 66 ms with 1,000 tabs against 33 ms with 7. Rows are lazy (`List`).

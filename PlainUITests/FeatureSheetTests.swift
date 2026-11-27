@@ -66,7 +66,7 @@ final class FeatureSheetTests: XCTestCase {
             list.swipeUp(velocity: .slow)
         }
         XCTAssertEqual(seen, Set(headers), "a section is missing")
-        let footer = sheet.staticTexts["Tabs you haven't opened in a week move here, and leave after 30 days."]
+        let footer = sheet.staticTexts["Tabs you haven't opened in a week move here and leave 30 days later."]
         if !footer.exists { list.swipeUp(velocity: .slow) }
         XCTAssertTrue(footer.waitForExistence(timeout: 2), "the footer says when tabs come and go")
 

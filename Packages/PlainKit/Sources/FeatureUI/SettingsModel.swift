@@ -219,9 +219,9 @@ extension ArchiveAfter {
     /// there, so it says only how long tabs already there stay.
     public var archiveFooter: String {
         switch self {
-        case .twelveHours: "Tabs you haven't opened in 12 hours move here, and leave after 30 days."
-        case .oneDay: "Tabs you haven't opened in a day move here, and leave after 30 days."
-        case .oneWeek: "Tabs you haven't opened in a week move here, and leave after 30 days."
+        case .twelveHours: "Tabs you haven't opened in 12 hours move here and leave 30 days later."
+        case .oneDay: "Tabs you haven't opened in a day move here and leave 30 days later."
+        case .oneWeek: "Tabs you haven't opened in a week move here and leave 30 days later."
         case .never: "Tabs here leave after 30 days."
         }
     }

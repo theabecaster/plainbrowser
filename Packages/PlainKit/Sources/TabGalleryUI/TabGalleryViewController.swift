@@ -345,7 +345,7 @@ public final class TabGalleryViewController: UIViewController {
         let placement = metrics.placement(slot: slot, offset: offset)
         let appear = holdsNewTabCard ? 0 : motion.appearance(Self.newTabCardID)
         let scale = placement.scale * (0.92 + 0.08 * appear)
-        newTabCard.setSize(metrics.cardSize, headerHeight: metrics.headerHeight, centersContent: metrics.style == .grid)
+        newTabCard.setSize(metrics.cardSize, headerHeight: metrics.headerHeight)
         newTabCard.isHidden = false
         let center = CGPoint(x: (placement.center.x + contentX).rounded(toScale: 3), y: placement.center.y)
         if newTabCard.center != center { newTabCard.center = center }
@@ -353,6 +353,11 @@ public final class TabGalleryViewController: UIViewController {
         if newTabCard.transform != transform { newTabCard.transform = transform }
         if newTabCard.alpha != appear { newTabCard.alpha = appear }
         if newTabCard.layer.zPosition != slot { newTabCard.layer.zPosition = slot }
+        // Its words sit in the middle of the part on screen: the strip that peeks in, or the card.
+        let halfWidth = metrics.cardWidth * scale / 2
+        let left = placement.center.x - halfWidth
+        let shownLeft = max(left, metrics.safeLeft), shownRight = min(placement.center.x + halfWidth, metrics.width - metrics.safeRight)
+        newTabCard.setVisibleSpan(minX: (shownLeft - left) / scale, maxX: (max(shownLeft, shownRight) - left) / scale)
         newTabCard.isUserInteractionEnabled = appear > 0.5
     }
 

@@ -327,12 +327,21 @@ final class CaptureTests: XCTestCase {
         pause(2.5)
         shot("o1-page")
 
+        // The swipe up held at three heights, so the recording shows the page part way into its
+        // card (a continuous drag drops frames in the simulator's recorder). The first is short of
+        // the commit and goes back to the page; the others land in the switcher.
         let pill = app.buttons["addressPill"]
-        pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
-            forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
-            withVelocity: .slow, thenHoldForDuration: 1.0
-        )
-        pause(1.5)
+        for (index, height) in [0.8, 0.7, 0.6].enumerated() {
+            pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+                forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: height)),
+                withVelocity: .slow, thenHoldForDuration: 1.2
+            )
+            pause(1.5)
+            if index > 0, app.buttons["galleryDone"].exists, index < 2 {
+                app.buttons["galleryDone"].tap()
+                pause(1.5)
+            }
+        }
         shot("o2-switcher")
         let gallery = app.scrollViews["tabGallery"]
         gallery.swipeLeft(velocity: .slow)

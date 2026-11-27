@@ -18,8 +18,8 @@ final class NewTabCardView: UIView {
     private let symbol = UIImageView()
     private let label = UILabel()
     private let content = UIStackView()
-    private var leading: NSLayoutConstraint!
-    private var centered: NSLayoutConstraint!
+    /// Where the content's center sits across the card, in the card's own points.
+    private var contentX: CGFloat = -1
     private(set) var size: CGSize = .zero
     private var headerHeight: CGFloat = 0
     private var isPrivate = false
@@ -48,11 +48,12 @@ final class NewTabCardView: UIView {
         content.spacing = Spacing.s
         content.translatesAutoresizingMaskIntoConstraints = false
         paper.addSubview(content)
-        // Toward the leading edge in the cascade, so it reads while the card only peeks in from the
-        // side; centered in the grid, where the whole card shows.
-        leading = content.leadingAnchor.constraint(equalTo: paper.leadingAnchor, constant: Spacing.xl)
-        centered = content.centerXAnchor.constraint(equalTo: paper.centerXAnchor)
-        NSLayoutConstraint.activate([content.centerYAnchor.constraint(equalTo: paper.centerYAnchor), leading])
+        // Centered on the card; `setVisibleSpan` slides it (a transform, no layout) to the middle
+        // of the part on screen, so it reads while the card only peeks in from the side.
+        NSLayoutConstraint.activate([
+            content.centerYAnchor.constraint(equalTo: paper.centerYAnchor),
+            content.centerXAnchor.constraint(equalTo: paper.centerXAnchor),
+        ])
 
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
         isAccessibilityElement = true
@@ -67,11 +68,7 @@ final class NewTabCardView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     /// Same size and anchor as a tab card, so it sits in the cascade or the grid like one.
-    func setSize(_ size: CGSize, headerHeight: CGFloat, centersContent: Bool) {
-        if centered.isActive != centersContent {
-            leading.isActive = !centersContent
-            centered.isActive = centersContent
-        }
+    func setSize(_ size: CGSize, headerHeight: CGFloat) {
         guard size != self.size || headerHeight != self.headerHeight else { return }
         self.size = size
         self.headerHeight = headerHeight
@@ -82,6 +79,17 @@ final class NewTabCardView: UIView {
         paper.frame = frame
         shadowView.frame = frame
         shadowView.layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: frame.size), cornerRadius: Radius.large).cgPath
+    }
+
+    /// Centers "+" and "New Tab" in the part of the card on screen, `minX...maxX` in the card's
+    /// own points, never closer than a margin to its edges. Called every scroll frame: it only
+    /// moves a transform, and only when the place changes.
+    func setVisibleSpan(minX: CGFloat, maxX: CGFloat) {
+        let half = content.bounds.width / 2 + Spacing.l
+        let x = min(max((minX + maxX) / 2, half), max(half, size.width - half))
+        guard abs(x - contentX) > 0.5 else { return }
+        contentX = x
+        content.transform = CGAffineTransform(translationX: (x - size.width / 2).rounded(toScale: 3), y: 0)
     }
 
     /// The private list's card takes the private paper.

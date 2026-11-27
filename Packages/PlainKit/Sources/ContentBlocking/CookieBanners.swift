@@ -50,9 +50,17 @@ public final class InMemorySiteCookieBannersStore: SiteCookieBannersStore {
 ///
 /// The engine is DuckDuckGo's autoconsent (MPL-2.0), built by tools/autoconsent into
 /// `Resources/CookieBanners`. It runs in Plain's own content world, so pages can't see it:
-/// - **Main frames** get the engine at document start. It asks for its config and rules (`init`);
-///   the reply carries the generic rules plus the site-specific rules whose address pattern
-///   matches the page, matched here off the main thread, so a page never parses rules it can't use.
+/// - **Main frames** get a small probe at document start, not the 129 KB engine: parsing the engine
+///   on every page cost a long article 20–50 ms of load. The probe reports the page's address; a
+///   site with a rule of its own gets the engine at once. Otherwise the probe watches for signs of
+///   a consent manager (its script or frame host among the page's resources, or one of the common
+///   banner containers in the document, checked at DOMContentLoaded, at load and twice after) until
+///   `FixedChoices.cookieBannerWatchMilliseconds` after load; the engine goes into the page only
+///   when one shows. Pages without a banner never load the engine; the EasyList Cookie List still hides the
+///   long tail the probe doesn't know.
+/// - **The engine** asks for its config and rules (`init`); the reply carries the generic rules
+///   plus the site-specific rules whose address pattern matches the page, matched here off the
+///   main thread, so a page never parses rules it can't use.
 /// - **Subframes** get a one-line script that reports the frame's address. Only a frame a rule
 ///   targets (a consent dialog in an iframe, such as Sourcepoint's) gets the engine, injected into
 ///   that frame alone; ad and video frames cost nothing.
@@ -107,8 +115,8 @@ public final class CookieBanners {
         let rules: CookieBannerRules
     }
 
-    /// The engine for main frames, made once from `resources`.
-    private var mainScript: WKUserScript?
+    /// The probe for main frames, made once the resources are read.
+    private var probeScript: WKUserScript?
 
     /// - Parameters:
     ///   - store: the sites where the user turned it off (private tabs layer their own on top).
@@ -142,9 +150,7 @@ public final class CookieBanners {
                 self.isPrepared = true
                 if loaded == nil { self.logger.error("cookie banner resources missing") }
                 self.resources = loaded
-                self.mainScript = loaded.map {
-                    WKUserScript(source: $0.engine, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: Self.world)
-                }
+                self.probeScript = loaded.map { _ in Self.probe }
                 for controller in self.waiting.allObjects { self.install(in: controller) }
                 self.waiting.removeAllObjects()
             }
@@ -156,14 +162,101 @@ public final class CookieBanners {
     /// made before `prepare()` finished gets them when it does.
     public func install(in controller: WKUserContentController) {
         guard !installed.contains(controller) else { return }
-        guard let mainScript else {
+        guard let probeScript else {
             if !isPrepared { waiting.add(controller) }
             return
         }
         installed.add(controller)
         controller.addScriptMessageHandler(handler, contentWorld: Self.world, name: Self.handlerName)
-        controller.addUserScript(mainScript)
+        controller.addUserScript(probeScript)
         controller.addUserScript(Self.frameScript)
+    }
+
+    /// Consent managers' script and frame hosts (a page's resource from one of these, or a
+    /// subdomain, means a banner is likely). The common ones by reach: OneTrust and CookiePro,
+    /// Cookiebot, Didomi, Usercentrics, TrustArc, Quantcast and the IAB's consensu.org, Sourcepoint,
+    /// consentmanager, Google's Funding Choices, iubenda, Termly, Osano, CookieYes, Axeptio, Civic,
+    /// CookieFirst, Sirdata, Commanders Act, Ketch, Crownpeak, LiveRamp, Cookie Information,
+    /// CookieHub, Cookie-Script, Clym.
+    static let consentHosts = [
+        "cookielaw.org", "onetrust.com", "cookiepro.com", "cookiebot.com", "privacy-center.org",
+        "usercentrics.eu", "trustarc.com", "truste.com", "consensu.org", "quantcast.com",
+        "privacy-mgmt.com", "sp-prod.net", "consentmanager.net", "fundingchoicesmessages.google.com",
+        "iubenda.com", "termly.io", "osano.com", "cookieyes.com", "cdn-cookieyes.com", "axept.io",
+        "civiccomputing.com", "cookiefirst.com", "consentframework.com", "commander1.com",
+        "ketchcdn.com", "ketchjs.com", "evidon.com", "privacymanager.io", "cookieinformation.com",
+        "cookiehub.net", "cookie-script.com", "clym-widget.net", "clym-sdk.net",
+    ]
+
+    /// Banner containers the probe looks for: the hosted managers above when a site serves them
+    /// itself, the common self-hosted plugins (Complianz, Borlabs, CookieYes, Cookie Notice, GDPR
+    /// Cookie Compliance, Cookie Law Info, Klaro, Shopify), and a few generic names. Ids and
+    /// classes only, so the check stays well under a millisecond on a long page.
+    static let bannerSelectors = [
+        "#onetrust-consent-sdk", "#onetrust-banner-sdk", "#CybotCookiebotDialog", "#didomi-host",
+        "#usercentrics-root", "#usercentrics-cmp-ui", "#truste-consent-track", "#consent_blackbar",
+        ".qc-cmp2-container", "[id^='sp_message_container']", "#cmpbox", "#cmpwrapper", ".fc-consent-root",
+        "#iubenda-cs-banner", "#termly-code-snippet-support", ".osano-cm-window", ".cky-consent-container",
+        "#axeptio_overlay", "#ccc", "#cookiefirst-root", "#cookiescript_injected", "#ch2",
+        "#cookie-law-info-bar", "#cookie-notice", "#cmplz-cookiebanner-container", ".cmplz-cookiebanner",
+        "#BorlabsCookieBox", "#moove_gdpr_cookie_info_bar", "#klaro", "#shopify-pc__banner",
+        "#cookie-banner", "#cookieBanner", "#cookie-consent", "#cookieConsent", "#cookiebanner",
+        ".cookie-banner", ".cookie-consent", ".cookieconsent", ".cc-window", "#gdpr-cookie-message",
+    ]
+
+    /// The main frame's probe: reports the page (a site rule starts the engine at once), then
+    /// watches for a consent manager and asks for the engine when it sees one.
+    static let probe = WKUserScript(
+        source: """
+            (() => {
+              if (window !== window.top || !/^https?:$/.test(location.protocol)) return;
+              const h = globalThis.webkit && webkit.messageHandlers && webkit.messageHandlers.\(handlerName);
+              if (!h || globalThis.__plainCookieProbe) return;
+              globalThis.__plainCookieProbe = true;
+              const hosts = \(jsArray(consentHosts));
+              const selector = \(jsString(bannerSelectors.joined(separator: ",")));
+              let done = false, observer = null;
+              const stop = () => { done = true; if (observer) observer.disconnect(); };
+              const fire = (reason) => {
+                if (done) return;
+                stop();
+                h.postMessage({ type: 'probe', url: location.href, reason }).catch(() => {});
+              };
+              const known = (name) => {
+                let host;
+                try { host = new URL(name).hostname; } catch (e) { return false; }
+                return hosts.some((s) => host === s || host.endsWith('.' + s));
+              };
+              const look = () => { if (!done && document.querySelector(selector)) fire('page'); };
+              h.postMessage({ type: 'page', url: location.href }).then((reply) => {
+                if (reply && reply.stop) stop();
+              }, () => {});
+              try {
+                observer = new PerformanceObserver((list) => {
+                  if (list.getEntries().some((entry) => known(entry.name))) fire('host');
+                });
+                observer.observe({ type: 'resource', buffered: true });
+              } catch (e) {}
+              document.addEventListener('DOMContentLoaded', look, { once: true });
+              addEventListener('load', () => {
+                look();
+                setTimeout(look, \(FixedChoices.cookieBannerWatchMilliseconds / 3));
+                setTimeout(() => { look(); stop(); }, \(FixedChoices.cookieBannerWatchMilliseconds));
+              }, { once: true });
+            })();
+            """,
+        injectionTime: .atDocumentStart, forMainFrameOnly: true, in: world
+    )
+
+    private static func jsString(_ string: String) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: [string])
+        let array = data.flatMap { String(data: $0, encoding: .utf8) } ?? "[\"\"]"
+        return String(array.dropFirst().dropLast())
+    }
+
+    private static func jsArray(_ strings: [String]) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: strings)
+        return data.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
     }
 
     /// Reports a subframe's address, so the engine goes only into frames a rule targets.
@@ -249,6 +342,27 @@ public final class CookieBanners {
         let frame = message.frameInfo
         onMessage?(type, body)
         switch type {
+        case "page":
+            // The probe's first word: a site turned off stops it, a site with its own rule gets
+            // the engine now (near document start, so its banner is hidden before it shows).
+            guard frame.isMainFrame else { return nil }
+            let page = (body["url"] as? String).flatMap(URL.init(string:)) ?? webView.url
+            let isPrivate = !webView.configuration.websiteDataStore.isPersistent
+            let site = SiteKey.site(forHost: page?.host())
+            let loop = site.map { loops.object(forKey: webView)?.looping.contains($0) ?? false } ?? false
+            if isOff(for: page, isPrivate: isPrivate) || loop { return ["stop": true] }
+            let address = page?.absoluteString ?? ""
+            let rules = resources.rules
+            let hasSiteRule = await Task.detached(priority: .userInitiated) {
+                !rules.specificRules(for: address, mainFrame: true).isEmpty
+            }.value
+            guard hasSiteRule else { return nil }
+            startEngine(in: webView, frame: frame, reason: "site rule")
+            return ["stop": true]
+        case "probe":
+            guard frame.isMainFrame else { return nil }
+            startEngine(in: webView, frame: frame, reason: (body["reason"] as? String) ?? "page")
+            return nil
         case "init":
             let isMain = frame.isMainFrame
             // The page's site decides. A main frame reports its own address (`location.href`,
@@ -297,6 +411,14 @@ public final class CookieBanners {
         default:
             return nil
         }
+    }
+
+    /// Puts the engine into the page's main frame, once the probe has seen a reason.
+    private func startEngine(in webView: WKWebView, frame: WKFrameInfo, reason: String) {
+        guard let resources else { return }
+        Signposts.signposter.emitEvent(Signposts.cookieBannerEngine, "\(reason, privacy: .public)")
+        onMessage?("engine", ["reason": reason])
+        webView.evaluateJavaScript(resources.engine, in: frame, in: Self.world) { _ in }
     }
 
     /// Runs `source` in one frame and returns its Boolean result (nil for anything else or an error).

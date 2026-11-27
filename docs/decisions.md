@@ -949,7 +949,8 @@ Research and sources: docs/research/cookie-banners.md.
   approach, which Plain already has from the EasyList Cookie List: a hidden banner never says no,
   and scroll locks stay).
 - **Wiring (DuckDuckGo iOS's pattern, an idea, no code taken):** one reply handler in Plain's own
-  content world. Main frames get the engine at document start; its `init` is answered with the
+  content world. Main frames get the engine only when the page shows a sign of a consent manager
+  (see "Cookie banners: the engine only where a banner is", below); its `init` is answered with the
   generic rules plus only the site rules whose address pattern matches (matched off the main
   thread, 0.4 ms per page on a Mac). Subframes get a one-line script that reports the frame's
   address; only a frame a rule targets (Sourcepoint's dialog, about 20 hosts) gets the engine, so
@@ -962,8 +963,9 @@ Research and sources: docs/research/cookie-banners.md.
   (for consent that means "no"). Turning cookie banner blocking off for a site stops the
   answering; the hiding follows "Turn Off Blocking on This Site". Moving the cookie list into its
   own switchable list needs a regeneration of the blocking lists (polish backlog).
-- **Perf cost:** a long article without a banner loads in 65–104 ms with the engine against
-  38–48 ms without, on the iPhone 17 simulator (parsing the 129 KB script at document start); a
+- **Perf cost (before the probe below):** a long article without a banner loads in 65–104 ms
+  with the engine against 38–48 ms without, on the iPhone 17 simulator (parsing the 129 KB script
+  at document start); a
   OneTrust banner is rejected about 0.8 s after the page starts (0.5 s of it is the engine's own
   wait for the banner's script). The rules are read off the main thread once after launch.
 
@@ -1107,3 +1109,30 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   scrolling, on the Duo outer screen and the iPhone 17.
 - **Not covered:** with a download this session as well, Downloads adds a row and the last row
   needs a short scroll on the outer screen (polish backlog).
+
+## Cookie banners: the engine only where a banner is (2026-11-27)
+
+- **Problem:** every main frame parsed the 129 KB autoconsent engine at document start, and its
+  detection ran on every page: +20 ms per load on a long article loaded back to back, and the
+  page's own first script 3–4 ms later in a fresh web view, on pages that never had a banner.
+- **Chosen:** a probe of about 3 KB goes into main frames at document start instead. It posts the
+  page's address once; a site turned off stops it, and a site with a rule of its own (about 900
+  address patterns, matched off the main thread) gets the engine at once, so its banner is still
+  hidden before it shows. Otherwise it watches for a consent manager: a resource from one of 33
+  consent manager hosts (OneTrust, Cookiebot, Didomi, Usercentrics, TrustArc, Quantcast,
+  Sourcepoint, consentmanager, Funding Choices and others; a `PerformanceObserver` on resource
+  entries, buffered, so scripts and frames loaded before it count), or one of 40 banner
+  containers (ids and classes only) at DOMContentLoaded, at load, and 1.7 s and 5 s after load
+  (`FixedChoices.cookieBannerWatchMilliseconds`). The first sign puts the engine into that frame
+  (`evaluateJavaScript` in Plain's world) and the probe stops. Subframes are unchanged.
+- **Fallback:** the EasyList Cookie List stays on and hides the long tail the probe doesn't know
+  (autoconsent's 700 generic rules are mostly one site's own banner). A banner from a known
+  consent manager loses the engine's prehide (it may show for a moment before it is rejected);
+  site rules keep it.
+- **Measured** (`CookieBannerPageTests.costPerPage`, iPhone Duo simulator, 3 runs each): long
+  article back to back (median of 5 loads), without cookie banner handling 29.0–29.7 ms, with the
+  engine 48.9–50.4 ms; with the probe 30.7–31.5 ms against 29.8–30.3 ms without. In a fresh web
+  view the page's first script ran at 4–5 ms with the engine, 1 ms without, and 1 ms with the
+  probe. A OneTrust banner is still rejected: 1.24–1.31 s after the load started before, 1.26–1.32
+  s after (the page found at DOMContentLoaded; the engine's own wait for the banner dominates). A
+  banner a script adds after load, and a site rule's page, are covered by tests.

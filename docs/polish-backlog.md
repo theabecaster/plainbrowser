@@ -300,9 +300,6 @@ Newest feature last.
   in tools/blocklists so one switch shows a site's banner as the site made it.
 - **Cookie banners: rules updates.** autoconsent ships rule fixes almost daily; bump
   `tools/autoconsent` each release (no remote config).
-- **Cookie banners: engine cost per page.** Parsing the 129 KB engine at document start adds
-  about 30–50 ms to a long page's load on the simulator; check on the Duo, and consider the
-  document-end injection for pages without a known consent manager's prehide selectors.
 - **Cookie switch wording.** Design review suggests "Cookie Banner Blocking" with a checkmark
   instead of "Turn Off / On …"; it follows the blocking switch's wording today. Change both
   together if at all.

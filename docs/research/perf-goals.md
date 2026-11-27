@@ -89,7 +89,7 @@ lead's first device run fills them in. Simulator numbers are trends only.
 | `hitchMsPerS`: scroll an ordinary page | 0 | n/a | 0 | 5 | Plain already drops nothing; fail at Apple's 2020 "good" ceiling (stricter than today's doc) | WWDC20 10077, Tech Talk 10855 |
 | `heavyHitchMsPerS`: scroll a 6,300-element page darkened | — | n/a | 0 | 10 | Scrolling is composited off the main thread; dark pages must add no hitch. Fail at Apple's current "good" ceiling until device rows exist | Understanding hitches; dark-mode.md |
 | `galleryMs`: tabs button to gallery at rest | 680 | 554 | 610 | 750 | The 0.42 s critically damped spring is within 0.5 pt at ~0.60 s; +1 frame | Spring math above; plan motion table |
-| `galleryTabMs`: card tap to page at rest | — | GALLERY_TAB_SIM | 610 | 750 | The same spring in reverse | same |
+| `galleryTabMs`: card tap to page at rest | — | 1,524 | 610 | 750 | The same spring in reverse. The simulator reads ~1.5 s against ~0.6 s for the open: `gallery.openTab` seems to end at Core Animation's completion, not the visual settle (to check in `TabGalleryTransition`) | same |
 | `swipeMs`: finger lift to page at rest | 526 | 310 | 320 | 600 | The 0.35 s spring rests in ~0.30 s from the test's release, + the hand-off (~10 ms) | budgets.json; plan motion table |
 | `focusMs`: pill tap to keyboard at rest | — | 507 | 510 | 600 | Ends at `keyboardDidShow`, so the system's 0.5 s keyboard rise is inside; best = rise starting on the tap's frame (+1 frame); fail = rise + the 100 ms delay threshold | Nielsen; Apple responsiveness |
 | `newTabMs`: New Tab to keyboard at rest | — | 534 | 510 | 600 | Same as focus | same |
@@ -98,8 +98,10 @@ lead's first device run fills them in. Simulator numbers are trends only.
 | `memoryMB`: app footprint, 10 tabs | — | 72 | 60 | 150 | A lean UIKit shell ~40 MB + ten 2x thumbnails ~1.3 MB each; fail at twice the sim reading until device rows exist | XCTMemoryMetric docs |
 
 Simulator numbers came from a machine at load average 200–900 (other lanes' builds and
-simulators): trends only. The keyboard's 0.5 s rise shows as the simulator's floor (its fastest
-focus runs end 1 ms after it).
+simulators): trends only, with RSDs up to 90% for the interaction metrics. Link paint read 108 ms
+at the lighter end and 355 ms in the full gate run at load ~650. The keyboard's 0.5 s rise shows
+as the simulator's floor (its fastest focus runs end 1 ms after it). Memory is the steadiest
+(RSD under 1%).
 
 ## The ratchet
 

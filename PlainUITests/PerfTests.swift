@@ -315,18 +315,18 @@ final class PerfTests: XCTestCase {
             let card = gallery.descendants(matching: .any).matching(identifier: "tabCard")
                 .matching(NSPredicate(format: "label BEGINSWITH %@", target.card)).firstMatch
             XCTAssertTrue(card.waitForExistence(timeout: 3))
-            // The outer screen's cascade centers the current tab's card over the others, which
-            // peek out beside it, so a tap on a covered card's middle opens the current one. Tap
-            // the part that shows. A grid shows every card whole: tap its middle.
+            // The cascade (compact width, TabGalleryMetrics) focuses the current tab's card and
+            // stacks the others over and under it, so the other card's middle is covered. Scroll
+            // it into focus (with two tabs a swipe can only land on it), then tap the focused
+            // card's middle, left of where the next card to the right covers it. A grid shows
+            // every card whole: tap the card itself.
             let frame = Self.restingFrame(of: card)
             let current = gallery.descendants(matching: .any).matching(identifier: "tabCard")
                 .matching(NSPredicate(format: "NOT (label BEGINSWITH %@)", target.card)).firstMatch.frame
             if frame.intersects(current) {
-                let shown = frame.midX < current.midX
-                    ? CGRect(x: max(frame.minX, 0), y: frame.minY, width: current.minX - max(frame.minX, 0), height: frame.height)
-                    : CGRect(x: current.maxX, y: frame.minY, width: frame.maxX - current.maxX, height: frame.height)
-                XCTAssertGreaterThan(shown.width, 2, "the card does not show")
-                app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: shown.midX, dy: shown.midY)).tap()
+                if frame.midX < current.midX { gallery.swipeRight() } else { gallery.swipeLeft() }
+                _ = XCTWaiter.wait(for: [XCTestExpectation(description: "scroll settles")], timeout: Self.galleryZoomWait)
+                gallery.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5)).tap()
             } else {
                 card.tap()
             }

@@ -24,7 +24,7 @@ code_matching() { grep -nE "$1" $tests | grep -vE '^[^:]+:[0-9]+: *//' || true; 
 
 while IFS= read -r line; do
   [[ -n $line ]] && problems+="bare XCUIApplication (use XCUIApplication.isolated()): $line"
-done < <(code_matching 'XCUIApplication\(' | grep -v 'bundleIdentifier: "com.apple.springboard"' || true)
+done < <(code_matching 'XCUIApplication\(' | grep -v -e 'bundleIdentifier: "com.apple.springboard"' -e 'bundleIdentifier: "com.apple.Preferences").activate()' || true)
 
 while IFS= read -r line; do
   [[ -n $line ]] && problems+="launchArguments overwritten or edited (append with +=): $line"

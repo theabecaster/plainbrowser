@@ -84,8 +84,14 @@ extension XCUIApplication {
     /// Sends Plain to the background by bringing Settings forward: the app resigns active and
     /// leaves the foreground, which saves its tabs and its launch picture. The Home button does not
     /// do this on the iPhone Duo simulator (Plain stays active there).
+    /// On a real phone (the owner's own) it presses Home instead, which does background the app there,
+    /// so no other app is opened on it.
     static func leaveForAnotherApp() {
+        #if targetEnvironment(simulator)
         XCUIApplication(bundleIdentifier: "com.apple.Preferences").activate()
+        #else
+        XCUIDevice.shared.press(.home)
+        #endif
     }
 
     /// Launch is done: the search field is up (search first) or the pill rests over the last tab.

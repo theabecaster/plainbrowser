@@ -63,6 +63,7 @@ final class IsolatedApplication: XCUIApplication {
     static let inMemoryArgument = "-PlainInMemoryStore"
     static let testStoreArgument = "-PlainTestStore"
     static let markerIdentifier = "plainTestIsolation"
+    static let storeReadyValue = "store:ready"
 
     override func launch() {
         guard launchArguments.contains(Self.inMemoryArgument) || launchArguments.contains(Self.testStoreArgument) else {
@@ -92,6 +93,17 @@ extension XCUIApplication {
         #else
         XCUIDevice.shared.press(.home)
         #endif
+    }
+
+    /// Waits until the app reports its database open, migrated and attached: the isolation
+    /// marker's value gains `store:ready`. Reads the marker only and drives no UI, so it holds in
+    /// every layout.
+    func waitForStoreReady(timeout: TimeInterval = 10) -> Bool {
+        let ready = NSPredicate(
+            format: "identifier == %@ AND value CONTAINS %@",
+            IsolatedApplication.markerIdentifier, IsolatedApplication.storeReadyValue
+        )
+        return descendants(matching: .any).matching(ready).firstMatch.waitForExistence(timeout: timeout)
     }
 
     /// Launch is done: the search field is up (search first) or the pill rests over the last tab.

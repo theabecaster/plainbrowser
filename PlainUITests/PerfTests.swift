@@ -87,25 +87,10 @@ final class PerfTests: XCTestCase {
         let app = XCUIApplication.introSeen()
         app.launchArguments += ["-PlainTestStore", "-PlainResetStore"]
         app.launch()
-        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 10))
-        // The search field shows before the database opens. Settings' Appearance row enables once
-        // the saved settings are read, so the store is created and migrated before the terminate.
-        // More's Settings item is disabled until the database is attached, and the menu keeps the
-        // state it opened with: reopen it until Settings is enabled.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
-        XCTAssertTrue(app.buttons["more"].waitForExistence(timeout: 3))
-        let settings = app.buttons["menu.settings"]
-        for _ in 0..<10 {
-            app.buttons["more"].tap()
-            XCTAssertTrue(settings.waitForExistence(timeout: 3))
-            if settings.isEnabled { break }
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
-            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "database opens")], timeout: 0.5)
-        }
-        settings.tap()
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Appearance'")).firstMatch
-        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: row)
-        XCTAssertEqual(XCTWaiter().wait(for: [enabled], timeout: 10), .completed, "the test store did not open")
+        // The search field shows before the database opens. The isolation marker reports the
+        // store once it is created, migrated and attached; no UI is driven, so any layout works
+        // (the Duo's outer bottom bar or inner top bar, any keyboard).
+        XCTAssertTrue(app.waitForStoreReady(), "the test store did not open")
         app.terminate()
     }
 
@@ -127,8 +112,8 @@ final class PerfTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText(server.address("/a") + "\n")
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
-        // One page tab: the slot is New Tab ("+"). Its menu's New Tab, by identifier: a label match
-        // could also find the slot itself, whose label is "New Tab" now.
+        // The tabs slot's long-press menu (in every layout: the outer bottom bar, the inner top
+        // bar), then its New Tab by identifier: a label match could find another "New Tab".
         app.buttons["tabs"].press(forDuration: 1)
         let newTab = app.buttons["menu.newTab"]
         XCTAssertTrue(newTab.waitForExistence(timeout: 3))

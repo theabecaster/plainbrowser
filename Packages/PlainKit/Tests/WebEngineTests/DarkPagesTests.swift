@@ -137,6 +137,16 @@ struct DarkPagesTests {
             return .data(Data(".private{background:#fafafa;color:#444;border:1px solid #ddd;padding:8px}".utf8), type: "text/css")
         case "/dynamic":
             return .html(page(style: base + " .card{background:#f5f5f7;color:#1d1d1f;padding:8px}", body: "<p id=text>Dynamic</p>"))
+        case "/svg-and-variables":
+            // SVG paints set by style sheets, and a gradient held in a variable used by a shorthand.
+            return .html(page(style: base + """
+                 :root{--panel:linear-gradient(#ffffff,#eeeeee)}
+                .css-logo path{fill:#e33} .css-icon path{fill:#333} .panel{background:var(--panel);height:40px}
+                """, body: """
+                <svg class=css-logo width=20 height=20><path id=css-logo d="M0 0h20v20H0z"/></svg>
+                <svg class=css-icon width=20 height=20><path id=css-icon d="M0 0h20v20H0z"/></svg>
+                <div id=panel class=panel>Panel</div>
+                """))
         default: return Pages.route(request)
         }
     }
@@ -386,6 +396,23 @@ struct DarkPagesTests {
         }
         #expect(values.allSatisfy { $0 < 0.05 }, "\(values)")
         #expect(try await luminance("color", of: "#inline-added", in: tab, harness: harness) > 0.5)
+    }
+
+    @Test func svgPaintsAndGradientVariablesFromStyleSheets() async throws {
+        let harness = try await makeHarness(style: .dark)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/svg-and-variables", in: tab)
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        try await settle(tab, harness: harness)
+        // A colored fill from a style sheet is a logo: kept. A grey one is an icon: flipped.
+        #expect(try await style("fill", of: "#css-logo", in: tab, harness: harness) == "rgb(238, 51, 51)")
+        #expect(try await luminance("fill", of: "#css-icon", in: tab, harness: harness) > 0.4)
+        // A light gradient in a variable, used through the background shorthand: darkened.
+        let panel = try await style("backgroundImage", of: "#panel", in: tab, harness: harness)
+        let stops = panel.matches(of: /rgb\((\d+), (\d+), (\d+)\)/).map { (Int($0.1)! + Int($0.2)! + Int($0.3)!) / 3 }
+        #expect(!stops.isEmpty && stops.allSatisfy { $0 < 80 }, "\(panel)")
     }
 
     @Test(arguments: [

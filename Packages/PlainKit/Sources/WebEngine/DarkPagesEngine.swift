@@ -172,8 +172,13 @@ extension DarkPages {
       f: (L) => L < FG_T ? FG_L - L * (FG_L - FG_T) / FG_T : L,
       d: (L) => L > BD_T ? BD_T - (L - BD_T) * (BD_T - BD_L) / (1 - BD_T) : L,
     };
+    // g: SVG fill and stroke. Greys are icons drawn like text and flip with it; colored paints
+    // are logos and illustrations and keep their colors (Safari changes SVG colors only where an
+    // icon would lose contrast).
+    const chroma = (c) => Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2]);
     const mapRGBA = (role, c) => {
       if (c[3] === 0) return c;
+      if (role === 'g') { if (chroma(c) >= SVG_CHROMA) return c; role = 'f'; }
       const lab = toLab(c);
       const L = curve[role](lab[0]);
       if (Math.abs(L - lab[0]) < 0.004) return c;
@@ -298,6 +303,9 @@ extension DarkPages {
       const fallback = comma < 0 ? null : scan(inner.slice(comma + 1), role, ctx);
       const original = 'var(' + name + (fallback === null ? '' : ',' + fallback) + ')';
       if (!name.startsWith('--')) return original;
+      // SVG paints through variables keep the site's value: a logo's colors must not move, and a
+      // grey icon that would vanish is caught by the element pass.
+      if (role === 'g') return original;
       if (kinds.has(name)) { if (ctx) ctx.found = true; return 'var(' + roleVar(role, name) + ', ' + original + ')'; }
       if (ctx && ctx.unknown) ctx.unknown.add(name);
       return original;
@@ -326,7 +334,7 @@ extension DarkPages {
       if (parseColor(t)) return 1;
       const probe = { found: false };
       scan(t, 'b', probe);
-      return probe.found ? 1 : 0;
+      return probe.found ? 3 : 0;
     };
     const learn = (name, v, ctx) => {
       if (kinds.has(name)) return;
@@ -341,7 +349,7 @@ extension DarkPages {
     const ROLES = new Map([
       ['color', 'f'], ['-webkit-text-fill-color', 'f'], ['-webkit-text-stroke-color', 'f'], ['caret-color', 'f'],
       ['text-decoration-color', 'f'], ['text-emphasis-color', 'f'], ['-webkit-text-emphasis-color', 'f'],
-      ['fill', 'f'], ['stroke', 'f'],
+      ['fill', 'g'], ['stroke', 'g'],
       ['background-color', 'b'], ['background-image', 'b'], ['box-shadow', 'b'], ['text-shadow', 'b'],
       ['outline-color', 'd'], ['column-rule-color', 'd'],
     ]);
@@ -473,7 +481,14 @@ extension DarkPages {
         }
         if (!any) {
           const color = firstColor(v);
-          if (color) for (const longhand of longhands) if (longhand !== 'background-image') write(longhand, color, important, role);
+          if (color) {
+            for (const longhand of longhands) if (longhand !== 'background-image') write(longhand, color, important, role);
+            continue;
+          }
+          // One variable holding more than a color (a gradient, a whole border): a background
+          // gets it as its picture; any other shorthand is repeated whole, its only part.
+          const only = /^var\(\s*(--[\w-]+)\s*(?:,[^]*)?\)$/.exec(v.trim());
+          if (only && kinds.get(only[1]) === 3) write(p === 'background' ? 'background-image' : p, v, important, role);
         }
       }
       return { out, emit, changed };
@@ -516,7 +531,7 @@ extension DarkPages {
           case 7: out += keyframes(r, ctx); continue;
           default: {
             const kind = kindOfRule(r);
-            if (kind === 'CSSLayerBlockRule') head = r.name ? '@layer ' + r.name : '';
+            if (kind === 'CSSLayerBlockRule') head = '@layer' + (r.name ? ' ' + r.name : '');
             else if (kind === 'CSSContainerRule') head = '@container ' + (r.containerName ? r.containerName + ' ' : '') + (r.containerQuery || r.conditionText);
             else if (kind === 'CSSScopeRule') head = '@scope' + (r.start ? ' (' + r.start + ')' : '') + (r.end ? ' to (' + r.end + ')' : '');
             else if (kind === 'CSSStartingStyleRule') head = '@starting-style';
@@ -582,9 +597,14 @@ extension DarkPages {
         .then((r) => r.ok ? r.text() : Promise.reject(new Error('status')))
         .then((text) => { const s = new CSSStyleSheet(); return s.replace(text).then(() => s); })
         .then((s) => { fetched.set(href, { state: 'done', sheet: s }); stats.fetched++; later(); },
-              () => { fetched.set(href, { state: 'failed' }); stats.unreadable++; });
+              () => {
+                fetched.set(href, { state: 'failed' });
+                // From now on the element pass also reads borders and pseudo-elements, which
+                // that sheet may color: the page gets another walk.
+                if (!stats.unreadable++ && built) rewalk();
+              });
     };
-    const signature = (s, rules) => rules.length + '|' + (s.media ? s.media.mediaText : '');
+    const signature = (s, rules) => rules.length + '|' + (s.media ? s.media.mediaText : '') + '|' + (s.ownerNode && s.ownerNode.localName === 'style' ? s.ownerNode.textContent.length : '');
     const pageSheets = () => {
       const list = [];
       for (const s of document.styleSheets) if (!s.disabled) list.push(s);
@@ -609,7 +629,10 @@ extension DarkPages {
     // Brings every twin in line with the page's sheets: new and changed sheets are rewritten,
     // removed ones dropped. Variables first seen in a later sheet send the sheets that used them
     // round again (twice at most: aliases of aliases).
-    const syncSheets = () => {
+    // `budget` (ms) bounds the work after the first frame: sheets past it wait for the next
+    // batch, one sheet at a time (a sheet is rewritten whole).
+    const syncSheets = (budget = Infinity) => {
+      const deadline = now() + budget;
       const list = pageSheets();
       const html = document.documentElement;
       if (html && html.style.length) declarations(html.style, { base: null, unknown: null }, true);
@@ -618,7 +641,10 @@ extension DarkPages {
         const rules = rulesOf(s);
         if (!rules) continue;
         let twin = twins.get(s);
-        if (!twin || twin.signature !== signature(s, rules)) twin = twinFor(s, rules);
+        if (!twin || twin.signature !== signature(s, rules)) {
+          if (now() > deadline) { sheetsDirty = true; later(); if (twin) live.push([s, twin, rules]); continue; }
+          twin = twinFor(s, rules);
+        }
         live.push([s, twin, rules]);
       }
       for (let round = 0; round < 2; round++) {
@@ -662,7 +688,9 @@ extension DarkPages {
       document.adoptedStyleSheets = [...list.filter((s) => !ours.has(s)), ...want];
       adopted = true;
     };
+    let rewalkNeeded = false;
     const setEnabled = (on) => {
+      if (!on && enabled && built) rewalkNeeded = true;
       enabled = on;
       base.disabled = !on;
       patch.disabled = !on;
@@ -673,15 +701,16 @@ extension DarkPages {
 
     const tokens = new Map();
     let tokenCount = 0;
-    const token = (decls) => {
-      let t = tokens.get(decls);
+    const token = (decls, pseudo = '') => {
+      const key = pseudo + decls;
+      let t = tokens.get(key);
       if (!t) {
         t = 'p' + (++tokenCount).toString(36);
-        tokens.set(decls, t);
+        tokens.set(key, t);
         // Two :not(#id) lift it over the page's own !important rules of usual specificity. Added
         // with the attributes at the end of a slice: a rule added mid-slice would make the next
         // style read restyle the whole page.
-        newRules.push(`[${ATTR}~="${t}"]:not(#_pd):not(#_pd){${decls}}`);
+        newRules.push(`[${ATTR}~="${t}"]:not(#_pd):not(#_pd)${pseudo}{${decls}}`);
       }
       return t;
     };
@@ -697,7 +726,11 @@ extension DarkPages {
     const write = () => {
       for (const rule of newRules) { try { patch.insertRule(rule, patch.cssRules.length); } catch (e) {} }
       newRules = [];
-      for (const [el, value] of writes) el.setAttribute(ATTR, value);
+      for (const [el, value] of writes) {
+        // A second walk reads colors with the earlier fixes in place: keep those, add the new.
+        const before = el.getAttribute(ATTR);
+        el.setAttribute(ATTR, before ? [...new Set((before + ' ' + value).split(' '))].join(' ') : value);
+      }
       stats.patched += writes.length;
       writes = [];
     };
@@ -802,7 +835,22 @@ extension DarkPages {
           stats.contrastFixed++;
         }
       }
-      if (decls.length) writes.push([el, decls.map(token).join(' ')]);
+      const marks = decls.map((d) => token(d));
+      // A sheet Plain couldn't read may also color ::before and ::after (fades, overlays,
+      // decorations); those are read only on such pages.
+      if (stats.unreadable) for (const pseudo of ['::before', '::after']) {
+        const ps = getComputedStyle(el, pseudo);
+        if (ps.content === 'none' || ps.content === 'normal' || ps.display === 'none') continue;
+        const pd = [];
+        const pbg = parseColor(ps.backgroundColor);
+        if (pbg && pbg[3] > 0) { const m = mapRGBA('b', pbg); if (m !== pbg) pd.push('background-color:' + css(m) + ' !important'); }
+        const pimage = ps.backgroundImage;
+        if (pimage && pimage.includes('gradient(')) { const v = scan(pimage, 'b', null); if (v !== pimage) pd.push('background-image:' + v + ' !important'); }
+        const pc = parseColor(ps.color);
+        if (pc && ps.color !== cs.color) { const m = mapRGBA('f', pc); if (m !== pc) pd.push('color:' + css(m) + ' !important'); }
+        for (const d of pd) marks.push(token(d, pseudo));
+      }
+      if (marks.length) writes.push([el, marks.join(' ')]);
       return { bg, image, owner };
     };
     const pictureText = new WeakSet();
@@ -816,7 +864,10 @@ extension DarkPages {
       if (pictures && now() - picturesAt < 500) return pictures;
       picturesAt = now();
       pictures = [];
-      for (const m of document.querySelectorAll('img, video, canvas')) {
+      const all = document.querySelectorAll('img, video, canvas');
+      // The first few hundred: a page with more is a gallery, not text over pictures.
+      for (let i = 0; i < all.length && i < 300; i++) {
+        const m = all[i];
         const r = m.getBoundingClientRect();
         if (r.width >= 120 && r.height >= 80) pictures.push([m, r.left + scrollX, r.top + scrollY, r.right + scrollX, r.bottom + scrollY]);
       }
@@ -1008,14 +1059,17 @@ extension DarkPages {
       stats.flushes++;
       if (sheetsDirty || start - lastSheetCheck > SHEET_CHECK) {
         lastSheetCheck = start;
-        if (sheetsDirty || sheetsChanged()) timed(syncSheets, 'rewriteMs');
+        const dirty = sheetsDirty;
         sheetsDirty = false;
+        if (dirty || sheetsChanged()) timed(() => syncSheets(2 * SLICE_MS), 'rewriteMs');
       }
       for (const el of changedElements) {
         if (!el.isConnected) continue;
         if (el.hasAttribute(ATTR)) el.removeAttribute(ATTR);
         seen.delete(el);
         info.delete(el);
+        // Fixes below it were made against its old colors: they get another look too.
+        for (const d of el.querySelectorAll('[' + ATTR + ']')) { d.removeAttribute(ATTR); seen.delete(d); info.delete(d); }
         queue.unshift(el);
         stats.rechecked++;
       }
@@ -1028,6 +1082,8 @@ extension DarkPages {
     const watch = () => {
       if (observer) return;
       observer = new MutationObserver((records) => {
+        // While off nothing is kept: turning back on walks the whole page again.
+        if (!enabled) return;
         for (const r of records) {
           if (r.type === 'childList') {
             if (r.target.localName === 'style') sheetsDirty = true;
@@ -1052,9 +1108,10 @@ extension DarkPages {
               const key = inlineColors(t);
               if (key !== (inlineSeen.get(t) || '')) { inlineSeen.set(t, key); changedElements.add(t); }
             } else if (r.attributeName !== 'class') changedElements.add(t);
-            else if (stats.unreadable || t.hasAttribute(ATTR)) {
-              const n = classRechecks.get(t) || 0;
-              if (n < 4) { classRechecks.set(t, n + 1); changedElements.add(t); }
+            else if (stats.unreadable || t.hasAttribute(ATTR) || t.querySelector('[' + ATTR + ']')) {
+              // At most once a second per element: some pages toggle classes every frame.
+              const last = classRechecks.get(t) || -1e9;
+              if (now() - last > 1000) { classRechecks.set(t, now()); changedElements.add(t); }
             }
           }
         }
@@ -1100,7 +1157,7 @@ extension DarkPages {
           return;
         }
         last = Date.now();
-        timed(() => { adopt(); if (sheetsChanged()) syncSheets(); }, 'rewriteMs');
+        timed(() => { adopt(); if (sheetsChanged()) syncSheets(2 * SLICE_MS); }, 'rewriteMs');
       };
       addEventListener('scroll', check, { passive: true, capture: true });
       addEventListener('pointerdown', check, { passive: true, capture: true });
@@ -1190,6 +1247,15 @@ extension DarkPages {
     // Darkens the page now: the top of the document in this frame, the rest in idle time, and
     // whatever the page adds later.
     let built = false;
+    // Every element looked at again (fixes kept until each is checked, so nothing flashes).
+    const rewalk = () => {
+      seen = new WeakSet();
+      walk = null;
+      queue = [document.documentElement];
+      sheetsDirty = true;
+      later();
+      pump();
+    };
     const build = () => {
       const t0 = now();
       if (!queue.length && !walk && document.documentElement && !seen.has(document.documentElement)) queue.push(document.documentElement);
@@ -1214,7 +1280,7 @@ extension DarkPages {
           const text = BASE + (noBackground ? `html { background-color: ${PAGE_BG_CSS}; }` : '');
           if (base.cssRules.length !== (noBackground ? 2 : 1)) base.replaceSync(text);
           setEnabled(true);
-          if (!built) { built = true; build(); } else { sheetsDirty = true; later(); }
+          if (!built) { built = true; build(); } else if (rewalkNeeded) { rewalkNeeded = false; rewalk(); }
           if (stats.firstDark < 0) stats.firstDark = now();
         } else if (enabled) setEnabled(false);
       }

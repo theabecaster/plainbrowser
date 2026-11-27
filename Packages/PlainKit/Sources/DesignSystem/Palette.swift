@@ -105,8 +105,8 @@ public enum Palette {
     public static let inkSecondary = UIColor { traits in
         let high = traits.accessibilityContrast == .high
         return traits.userInterfaceStyle == .dark
-            ? UIColor(rgb: 0xFFF6E6, alpha: high ? 0.82 : 0.66)
-            : UIColor(rgb: 0x0A2133, alpha: high ? 0.82 : 0.68)
+            ? UIColor(rgb: 0xFFF6E6, alpha: high ? 0.9 : 0.76)
+            : UIColor(rgb: 0x0A2133, alpha: high ? 0.88 : 0.72)
     }
 
     /// A card of rows on the Paper ground: a hair lighter by day, a hair lifted by night. Flat

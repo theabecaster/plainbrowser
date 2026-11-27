@@ -82,6 +82,41 @@ struct DarkPagesTests {
         return html.replacingOccurrences(of: "</head>", with: "<style>\(rules)</style></head>")
     }()
 
+    /// A black wordmark on a transparent ground, as a PNG (the kind Safari inverts).
+    nonisolated static let wordmarkPNG: Data = picture(size: CGSize(width: 200, height: 50), opaque: false) { _ in
+        let text = NSAttributedString(string: "Plain", attributes: [
+            .font: UIFont.systemFont(ofSize: 40, weight: .heavy), .foregroundColor: UIColor(white: 0.07, alpha: 1),
+        ])
+        text.draw(at: CGPoint(x: 10, y: 0))
+    }
+
+    /// A grey photograph-like picture: opaque, no transparent ground, many greys.
+    nonisolated static let greyPhotoPNG: Data = picture(size: CGSize(width: 200, height: 50), opaque: true) { context in
+        for x in 0..<200 {
+            UIColor(white: CGFloat(x) / 200, alpha: 1).setFill()
+            context.fill(CGRect(x: x, y: 0, width: 1, height: 50))
+        }
+    }
+
+    /// A red mark on a transparent ground: a colored logo, kept.
+    nonisolated static let redMarkPNG: Data = picture(size: CGSize(width: 200, height: 50), opaque: false) { context in
+        UIColor(red: 0.85, green: 0.1, blue: 0.15, alpha: 1).setFill()
+        context.fill(CGRect(x: 10, y: 10, width: 180, height: 30))
+    }
+
+    nonisolated static func picture(size: CGSize, opaque: Bool, draw: (UIGraphicsImageRendererContext) -> Void) -> Data {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = opaque
+        return UIGraphicsImageRenderer(size: size, format: format).pngData(actions: draw)
+    }
+
+    /// A black-and-white SVG wordmark, served (same origin, or another with CORS).
+    nonisolated static let wordmarkSVG = Data("""
+        <svg xmlns="http://www.w3.org/2000/svg" width="200" height="50" viewBox="0 0 200 50">
+        <path d="M10 10h30v30h-30z M50 10h10v30h-10z M70 10h40v8h-40z M70 32h40v8h-40z" fill="#111"/></svg>
+        """.utf8)
+
     @Sendable nonisolated static func route(_ request: TestServer.Request) -> TestServer.Response {
         let base = "body{background:#fff;color:#111} .hero{background-image:url(\"\(svg)\");height:20px}"
         let path = request.path.split(separator: "?").first.map(String.init) ?? request.path
@@ -147,6 +182,76 @@ struct DarkPagesTests {
                 <svg class=css-icon width=20 height=20><path id=css-icon d="M0 0h20v20H0z"/></svg>
                 <div id=panel class=panel>Panel</div>
                 """))
+        case "/wordmark.png": return .data(wordmarkPNG, type: "image/png")
+        case "/grey-photo.png": return .data(greyPhotoPNG, type: "image/png")
+        case "/red-mark.png": return .data(redMarkPNG, type: "image/png")
+        case "/wordmark.svg": return .data(wordmarkSVG, type: "image/svg+xml")
+        case "/wordmark-cors.svg":
+            return .data(wordmarkSVG, type: "image/svg+xml", headers: ["Access-Control-Allow-Origin": "*"])
+        case "/logos":
+            // Black-and-white marks on a transparent ground (inverted), and pictures that keep
+            // their colors: a colored mark, a grey photo, a mark too large to be a logo, one from
+            // another origin that won't share it, and one on the site's own dark band.
+            return .html(page(style: base + """
+                 img{display:block;margin:8px 0} .bg-logo{display:block;width:200px;height:50px;background:url('/wordmark.svg') no-repeat;
+                text-indent:-9999px;overflow:hidden} .band{background:#000;padding:8px}
+                """, body: """
+                <p id=text>Logos</p>
+                <img id=png src="/wordmark.png" width=200 height=50>
+                <img id=svg src="/wordmark.svg" width=200 height=50>
+                <img id=cors src="http://\(other)/wordmark-cors.svg" width=200 height=50>
+                <img id=private src="http://\(other)/wordmark.svg" width=200 height=50>
+                <a id=bg-logo class=bg-logo href="/">Plain</a>
+                <img id=red src="/red-mark.png" width=200 height=50>
+                <img id=photo src="/grey-photo.png" width=200 height=50>
+                <img id=big src="/wordmark.png" width=800 height=200>
+                <div class=band><img id=on-dark src="/wordmark.png" width=200 height=50></div>
+                """))
+        case "/shadow":
+            // Web components: an open shadow root with its own <style>, one with an adopted sheet
+            // shared by two instances, and one defined after the page loaded.
+            return .html(page(style: base, body: """
+                <p id=text>Components</p>
+                <x-card id=card><span id=slotted>Slotted text</span></x-card>
+                <x-panel id=panel1></x-panel><x-panel id=panel2></x-panel>
+                <x-late id=late></x-late>
+                <script>
+                class XCard extends HTMLElement { constructor() { super(); const r = this.attachShadow({ mode: 'open' });
+                  r.innerHTML = '<style>.card{background:#fff;color:#222;padding:8px;border:1px solid #ddd}</style>'
+                    + '<div class=card id=inner>Shadow text <span id=sub style="background:#f4f4f4;color:#333">inline</span></div><slot></slot>'; } }
+                customElements.define('x-card', XCard);
+                const shared = new CSSStyleSheet(); shared.replaceSync('.panel{background:#f5f5f7;color:#1d1d1f;padding:8px}');
+                class XPanel extends HTMLElement { constructor() { super(); const r = this.attachShadow({ mode: 'open' });
+                  r.adoptedStyleSheets = [shared]; r.innerHTML = '<div class=panel id=inner>Panel</div>'; } }
+                customElements.define('x-panel', XPanel);
+                addEventListener('load', () => setTimeout(() => {
+                  class XLate extends HTMLElement { constructor() { super(); const r = this.attachShadow({ mode: 'open' });
+                    r.innerHTML = '<style>div{background:#fafafa;color:#111}</style><div id=inner>Late</div>'; } }
+                  customElements.define('x-late', XLate);
+                }, 300));
+                </script>
+                """))
+        case "/frames":
+            // A same-origin frame (darkened with the page), another origin's frame (kept), and a
+            // same-origin frame added after the page turned dark.
+            return .html(page(style: base, body: """
+                <p id=text>Frames</p>
+                <iframe id=same src="/frame-light" width=300 height=120></iframe>
+                <iframe id=other src="http://\(other)/frame-light?report" width=300 height=120></iframe>
+                <script>
+                addEventListener('message', (e) => { if (e.data && e.data.bg) window.__otherBg = e.data.bg; });
+                addEventListener('load', () => setTimeout(() => {
+                  const f = document.createElement('iframe'); f.id = 'added'; f.src = '/frame-light?added';
+                  f.width = 300; f.height = 120; document.body.append(f);
+                }, 300));
+                </script>
+                """))
+        case "/frame-light":
+            let report = request.path.contains("report")
+                ? "<script>addEventListener('load', () => setTimeout(() => parent.postMessage({ bg: getComputedStyle(document.body).backgroundColor }, '*'), 1200))</script>"
+                : ""
+            return .html(page(style: "body{background:#fff;color:#222} .box{background:#f0f0f0;color:#333}",
+                              body: "<p id=text>Frame</p><div id=box class=box>Box</div>\(report)"))
         default: return Pages.route(request)
         }
     }
@@ -423,6 +528,150 @@ struct DarkPagesTests {
         #expect(!stops.isEmpty && stops.allSatisfy { $0 < 80 }, "\(panel)")
     }
 
+    /// A picture of the tab's page for review, when `PLAIN_CAPTURE_DIR` is set
+    /// (`TEST_RUNNER_PLAIN_CAPTURE_DIR` through xcodebuild).
+    private func capture(_ name: String, _ tab: Tab, harness: Harness) async {
+        guard let directory = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_DIR"],
+              let webView = harness.pool.existingWebView(for: tab) else { return }
+        try? await Task.sleep(for: .milliseconds(300))
+        let image = try? await webView.takeSnapshot(configuration: nil)
+        try? image?.pngData()?.write(to: URL(fileURLWithPath: directory).appending(path: "\(name).png"))
+    }
+
+    /// Waits until `condition` (a script in the page's world) is true, or 5 s.
+    private func waitFor(_ condition: String, in tab: Tab, harness: Harness) async throws -> Bool {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            let check = "(() => { try { return !!(\(condition)); } catch (e) { return false; } })()"
+            if try await harness.evaluate(check, in: tab) as? Bool == true { return true }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        return false
+    }
+
+    /// Black-and-white logos (a dark mark on a transparent ground) are inverted, as Safari does:
+    /// PNG and SVG, the page's own and another origin's that allows it, and a CSS background
+    /// logo. Colored marks, photos, large pictures, unreadable pictures and marks on the site's
+    /// own dark band keep their colors.
+    @Test func blackAndWhiteLogosAreInverted() async throws {
+        let harness = try await makeHarness(style: .dark)
+        defer { harness.cleanUp() }
+        let other = try await TestServer(route: Self.route)
+        defer { other.stop() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/logos?port=\(other.port)", in: tab)
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        try await settle(tab, harness: harness)
+        let inverted = ["#png", "#svg", "#cors", "#bg-logo"]
+        let all = inverted.map { "getComputedStyle(document.querySelector('\($0)')).filter.includes('invert')" }
+        let done = try await waitFor(all.joined(separator: " && "), in: tab, harness: harness)
+        let stats = try await engine("globalThis.__plainDarkPages.stats", in: tab, harness: harness) as? [String: Any]
+        await capture("dark-logos-darkened", tab, harness: harness)
+        report("logos: stats logos \(stats?["logos"] ?? "?"), read \(stats?["logosRead"] ?? "?"), \(stats?["logoMs"] ?? "?") ms, max \(stats?["logoMax"] ?? "?") ms")
+        #expect(done)
+        for id in inverted {
+            #expect(try await style("filter", of: id, in: tab, harness: harness).contains("invert(0.92)"), "\(id)")
+        }
+        for id in ["#red", "#photo", "#big", "#private", "#on-dark"] {
+            #expect(try await style("filter", of: id, in: tab, harness: harness) == "none", "\(id) keeps its colors")
+        }
+        // Off for the site: the pictures are as made again.
+        tab.setDarkPagesOff(true)
+        try await waitUntil("off") { tab.darkPages == .offForSite }
+        await capture("dark-logos-off", tab, harness: harness)
+        #expect(try await style("filter", of: "#png", in: tab, harness: harness) == "none")
+    }
+
+    /// Web components: light boxes in open shadow roots are darkened (their own sheets, a sheet
+    /// shared by several roots, inline styles inside, a component defined after load), and text in
+    /// them stays readable.
+    @Test func openShadowRootsAreDarkened() async throws {
+        let harness = try await makeHarness(style: .dark)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/shadow", in: tab)
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        try await settle(tab, harness: harness)
+        func inner(_ host: String, _ id: String, _ property: String) -> String {
+            "getComputedStyle(document.querySelector('\(host)').shadowRoot.querySelector('\(id)')).\(property)"
+        }
+        let lum = """
+            ((s) => { const n = s.match(/[\\d.]+/g).map(Number);
+              const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+              return 0.2126 * lin(n[0]) + 0.7152 * lin(n[1]) + 0.0722 * lin(n[2]); })
+            """
+        let dark = ["#card": "#inner", "#panel1": "#inner", "#panel2": "#inner", "#late": "#inner"]
+        let condition = dark.map { "\(lum)(\(inner($0.key, $0.value, "backgroundColor"))) < 0.03" }
+            + ["\(lum)(\(inner("#card", "#sub", "backgroundColor"))) < 0.03"]
+        let done = try await waitFor(condition.joined(separator: " && "), in: tab, harness: harness)
+        let values = try await harness.evaluate("[" + (dark.map { inner($0.key, $0.value, "backgroundColor") }
+            + [inner("#card", "#sub", "backgroundColor"), inner("#card", "#inner", "color"), inner("#late", "#inner", "color")])
+            .joined(separator: ",") + "]", in: tab)
+        report("shadow roots: \(values ?? "nil")")
+        #expect(done, "\(values ?? "nil")")
+        for (host, id) in [("#card", "#inner"), ("#card", "#sub"), ("#panel1", "#inner"), ("#late", "#inner")] {
+            let color = try await harness.evaluate("\(lum)(\(inner(host, id, "color")))", in: tab) as? Double ?? 0
+            #expect(color > 0.5, "\(host) \(id) text is light: \(color)")
+        }
+        #expect(try await luminance("color", of: "#slotted", in: tab, harness: harness) > 0.5)
+        let stats = try await engine("globalThis.__plainDarkPages.stats", in: tab, harness: harness) as? [String: Any]
+        #expect((stats?["shadowRoots"] as? Int ?? 0) >= 4)
+        await capture("dark-shadow-darkened", tab, harness: harness)
+        // Off and on again: the components are as made, then darkened again.
+        tab.setDarkPagesOff(true)
+        try await waitUntil("off") { tab.darkPages == .offForSite }
+        #expect(try await harness.evaluate(inner("#card", "#inner", "backgroundColor"), in: tab) as? String == "rgb(255, 255, 255)")
+        #expect(try await harness.evaluate(inner("#card", "#sub", "backgroundColor"), in: tab) as? String == "rgb(244, 244, 244)")
+        tab.setDarkPagesOff(false)
+        try await waitUntil("on") { tab.darkPages == .darkened }
+        #expect(try await waitFor(condition.joined(separator: " && "), in: tab, harness: harness))
+    }
+
+    /// Same-origin frames are darkened with the page (one there from the start, one added later,
+    /// and one there before the app turned dark); another origin's frame is left as made.
+    @Test func sameOriginFramesAreDarkened() async throws {
+        let harness = try await makeHarness(style: .dark)
+        defer { harness.cleanUp() }
+        let other = try await TestServer(route: Self.route)
+        defer { other.stop() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/frames?port=\(other.port)", in: tab)
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        func frame(_ id: String, _ selector: String, _ property: String) -> String {
+            "getComputedStyle(document.getElementById('\(id)').contentDocument.querySelector('\(selector)')).\(property)"
+        }
+        let dark = { (id: String) in
+            "\(frame(id, "body", "backgroundColor")) === 'rgb(24, 24, 24)' && \(frame(id, "#box", "backgroundColor")) !== 'rgb(240, 240, 240)'"
+        }
+        #expect(try await waitFor("document.getElementById('added') && document.getElementById('added').contentDocument.body && " + dark("same") + " && " + dark("added"), in: tab, harness: harness))
+        let text = try await harness.evaluate(frame("same", "#text", "color"), in: tab) as? String ?? ""
+        report("frames: same text \(text), box \(try await harness.evaluate(frame("same", "#box", "backgroundColor"), in: tab) ?? "")")
+        #expect(text != "rgb(34, 34, 34)", "the frame's text turned light: \(text)")
+        await capture("dark-frames-darkened", tab, harness: harness)
+        // The other origin's frame reports its own background: white, as made.
+        #expect(try await waitFor("window.__otherBg", in: tab, harness: harness))
+        #expect(try await harness.evaluate("window.__otherBg", in: tab) as? String == "rgb(255, 255, 255)")
+        // Off for the site: the frames follow the page.
+        tab.setDarkPagesOff(true)
+        try await waitUntil("off") { tab.darkPages == .offForSite }
+        #expect(try await waitFor("\(frame("same", "body", "backgroundColor")) === 'rgb(255, 255, 255)'", in: tab, harness: harness))
+
+        // A frame that was there while the app was light is darkened when the app turns dark.
+        tab.setDarkPagesOff(false)
+        harness.window.overrideUserInterfaceStyle = .light
+        harness.pool.interfaceStyle = .light
+        try await harness.load("/frames?port=\(other.port)&light", in: tab)
+        try await waitUntil("light") { tab.darkPages == .inactive }
+        #expect(try await waitFor("document.getElementById('same').contentDocument.body", in: tab, harness: harness))
+        harness.window.overrideUserInterfaceStyle = .dark
+        harness.pool.interfaceStyle = .dark
+        try await waitUntil("darkened live") { tab.darkPages == .darkened }
+        #expect(try await waitFor(dark("same"), in: tab, harness: harness))
+    }
+
     @Test(arguments: [
         "/dark-media", "/dark-meta", "/dark-property", "/only-light", "/already-dark", "/dark-sheet", "/late-dark",
         "/oklch-dark", "/p3-dark", "/adopted-dark", "/imported-dark", "/own-dark",
@@ -441,6 +690,26 @@ struct DarkPagesTests {
             #expect(try await style("backgroundColor", of: "body", in: tab, harness: harness) == "rgb(27, 20, 48)")
             #expect(try await style("color", of: "#title", in: tab, harness: harness) == "rgb(200, 182, 255)")
         }
+    }
+
+    /// A link preview shows a light-only page dark in a dark app, as the page will open.
+    @Test func linkPreviewsAreDarkenedToo() async throws {
+        let harness = try await makeHarness(style: .dark)
+        defer { harness.cleanUp() }
+        let (webView, _) = harness.pool.makePreviewWebView()
+        webView.frame = CGRect(x: 0, y: 0, width: 300, height: 400)
+        harness.window.addSubview(webView)
+        defer { webView.removeFromSuperview() }
+        webView.load(URLRequest(url: harness.server.url("/light")))
+        try await waitUntil("preview loaded") { !webView.isLoading && webView.url != nil }
+        let deadline = ContinuousClock.now + .seconds(5)
+        var background = ""
+        while ContinuousClock.now < deadline {
+            background = try await webView.evaluateJavaScript("getComputedStyle(document.body).backgroundColor") as? String ?? ""
+            if background != "rgb(255, 255, 255)" { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(background == "rgb(24, 24, 24)", "preview background \(background)")
     }
 
     @Test func lightAppLeavesPagesAloneAndDarkensLiveWithoutReload() async throws {

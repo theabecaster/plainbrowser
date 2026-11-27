@@ -62,15 +62,17 @@ final class LayeredDarkPagesStore: SiteDarkPagesStore {
 /// Safari does. The research and the choice of technique are in docs/research/dark-mode.md.
 ///
 /// One user script per page, main frame only, at document start, in the engine's content world
-/// (the page can't see or undo it). It never touches a site that has a dark design: it looks for
+/// (the page can't see or undo it); same-origin frames get it on request (`frameScript`) and
+/// follow the page. It never touches a site that has a dark design: it looks for
 /// a `color-scheme` that includes dark (or `only light`, a site's way of saying "never darken
 /// me"), for `prefers-color-scheme: dark` rules in the style sheets it can read, and for a light
 /// background with the page's own colors. Only a page that fails all three is darkened.
 ///
 /// Darkening goes color by color, by role (`DarkPagesEngine.swift`): light backgrounds turn dark,
 /// dark text turns light, and what is already dark (a black hero, a dark card) or already light
-/// (white text on it) stays exactly as made. Pictures, video, canvases, frames, emoji and colored
-/// logos are never changed.
+/// (white text on it) stays exactly as made. Pictures, video, canvases, other origins' frames,
+/// emoji and colored logos are never changed; only black-and-white logo pictures are inverted, as
+/// Safari does.
 ///
 /// While the app is dark and the page has not been judged yet, a guard keeps the page's
 /// background dark, so a page never flashes white before it is darkened; it goes as soon as the
@@ -108,16 +110,59 @@ enum DarkPages {
     static func source(offSites: Set<String>) -> String {
         let sites = offSites.sorted().map(jsString).joined(separator: ",")
         guard FixedChoices.darkPagesOn else { return marker }
+        // In a frame (put there by `frameScript`'s request) the engine runs only when the top
+        // page's engine is reachable: a frame of the same origin, in the same world. It follows
+        // the top page's choice (TOP).
         return """
             \(marker)
             (() => {
-              if (window !== window.top || !/^https?:$/.test(location.protocol)) return;
+              if (!/^https?:$/.test(location.protocol) || globalThis.__plainDarkPages) return;
+              let TOP = null;
+              if (window !== window.top) {
+                try { TOP = window.top.__plainDarkPages || null; } catch (e) {}
+                if (!TOP) return;
+              }
               const OFF_SITES = new Set([\(sites)]);
               \(engineConstants)
               \(engineBody)
             })();
             """
     }
+
+    /// Same-origin frames (an article's embedded page, a comment thread, a widget) are darkened
+    /// with the page. Every frame gets this one-line check at document start, not the engine: a
+    /// frame of another origin can't reach the top page and stops at once, so ad and video frames
+    /// cost nothing. A frame that can asks the app for the engine (`frameRequest`), and holds its
+    /// background dark meanwhile while the top page is dark or still being judged. The top page
+    /// asks again for frames that were there before it turned dark.
+    static let frameScript = WKUserScript(
+        source: """
+            // Plain dark frames
+            (() => {
+              if (window === window.top || !/^https?:$/.test(location.protocol)) return;
+              let top = null;
+              try { top = window.top.__plainDarkPages || null; } catch (e) {}
+              if (!top) return;
+              let asked = false;
+              const ask = () => {
+                if (asked || globalThis.__plainDarkPages) return;
+                asked = true;
+                try { webkit.messageHandlers.\(handlerName).postMessage({ \(frameRequest): true }); } catch (e) {}
+              };
+              globalThis.__plainDarkFrame = ask;
+              if (!top.framesWanted) return;
+              const guard = new CSSStyleSheet();
+              guard.replaceSync('html, body { background-color: rgb(24, 24, 24) !important; }');
+              document.adoptedStyleSheets = [...document.adoptedStyleSheets, guard];
+              globalThis.__plainDarkFrameGuard = guard;
+              ask();
+            })();
+            """,
+        injectionTime: .atDocumentStart, forMainFrameOnly: false, in: UserScripts.world
+    )
+
+    /// The key of a frame's request for the engine.
+    static let frameRequest = "frame"
 
     private static func jsString(_ text: String) -> String {
         let escaped = text.unicodeScalars.map { scalar -> String in

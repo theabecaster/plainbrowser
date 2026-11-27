@@ -161,6 +161,29 @@ public enum FixedChoices {
     public static let darkPagesColoredSVGChroma = 0.25
     /// Shapes read per inline SVG for that check: a logo shows its colors in its first few shapes.
     public static let darkPagesSVGShapesChecked = 24
+    /// A black-and-white logo picture (a dark mark on a transparent ground) is inverted on a
+    /// darkened page, as Safari does, when it is at most this big on the page (CSS pixels): a
+    /// wordmark or an icon, never a photo or an illustration.
+    public static let darkPagesLogoMaxWidth = 640
+    public static let darkPagesLogoMaxHeight = 240
+    /// Pictures read per page for that check, each from a copy this many pixels across: a page
+    /// has a few logos, and 64 pixels show whether a mark is grey on clear in well under 1 ms.
+    public static let darkPagesLogosRead = 16
+    public static let darkPagesLogoSample = 64
+    /// How far the mark is inverted: black lands near the darkened text's light grey, not on
+    /// pure white, which would glare next to it.
+    public static let darkPagesLogoInvert = 0.92
+    /// What counts as such a mark: at least this share of the picture see-through, of the rest
+    /// at most these shares colored or white (a two-tone or colored picture is a design, not a
+    /// wordmark), and showing under this contrast against what is behind it (it would vanish).
+    public static let darkPagesLogoClearShare = 0.15
+    public static let darkPagesLogoColoredShare = 0.04
+    public static let darkPagesLogoWhiteShare = 0.15
+    public static let darkPagesLogoVanishingContrast = 3.0
+    /// Custom elements defined after the page's walk met them attach their shadow roots late;
+    /// they are looked for again this many milliseconds after load (and on every batch and
+    /// scroll), covering components that load with the page and the slow ones after.
+    public static let darkPagesLateComponentChecks = [300, 1_500, 4_000]
     /// Content and style sheets a page adds after load are darkened in batches at most this many
     /// milliseconds apart, so an infinite-scroll page costs one pass per burst, not one per node.
     /// While the page is still loading, batches run every frame instead.

@@ -188,24 +188,46 @@ public final class CookieBanners {
         "cookiehub.net", "cookie-script.com", "clym-widget.net", "clym-sdk.net",
     ]
 
-    /// Banner containers the probe looks for: the hosted managers above when a site serves them
-    /// itself, the common self-hosted plugins (Complianz, Borlabs, CookieYes, Cookie Notice, GDPR
-    /// Cookie Compliance, Cookie Law Info, Klaro, Shopify), and a few generic names. Ids and
-    /// classes only, so the check stays well under a millisecond on a long page.
-    static let bannerSelectors = [
+    /// Banner containers of consent managers the engine has rules for: the hosted managers above
+    /// when a site serves them itself, and the common self-hosted plugins (Complianz, Borlabs,
+    /// CookieYes, Cookie Notice, GDPR Cookie Compliance, Cookie Law Info, Klaro, Shopify). The
+    /// probe hides these from the first frame until the engine has answered (`prehideCSS`).
+    static let managerSelectors = [
         "#onetrust-consent-sdk", "#onetrust-banner-sdk", "#CybotCookiebotDialog", "#didomi-host",
         "#usercentrics-root", "#usercentrics-cmp-ui", "#truste-consent-track", "#consent_blackbar",
         ".qc-cmp2-container", "[id^='sp_message_container']", "#cmpbox", "#cmpwrapper", ".fc-consent-root",
         "#iubenda-cs-banner", "#termly-code-snippet-support", ".osano-cm-window", ".cky-consent-container",
-        "#axeptio_overlay", "#ccc", "#cookiefirst-root", "#cookiescript_injected", "#ch2",
+        "#axeptio_overlay", "#cookiefirst-root", "#cookiescript_injected",
         "#cookie-law-info-bar", "#cookie-notice", "#cmplz-cookiebanner-container", ".cmplz-cookiebanner",
         "#BorlabsCookieBox", "#moove_gdpr_cookie_info_bar", "#klaro", "#shopify-pc__banner",
-        "#cookie-banner", "#cookieBanner", "#cookie-consent", "#cookieConsent", "#cookiebanner",
+    ]
+
+    /// Banner containers the probe looks for: the consent managers above, Civic's and CookieHub's
+    /// short ids (too plain to hide ahead), and a few generic names (never hidden ahead: the
+    /// engine may have no rule for them). Ids and classes only, so the
+    /// check stays well under a millisecond on a long page.
+    static let bannerSelectors = managerSelectors + [
+        "#ccc", "#ch2", "#cookie-banner", "#cookieBanner", "#cookie-consent", "#cookieConsent", "#cookiebanner",
         ".cookie-banner", ".cookie-consent", ".cookieconsent", ".cc-window", "#gdpr-cookie-message",
     ]
 
+    /// How the probe hides a known consent manager's banner until the engine has answered it:
+    /// the engine's own prehide style (transparent, behind the page, no touches), so the engine
+    /// still finds the banner and clicks through it.
+    static let prehideCSS = managerSelectors.joined(separator: ",")
+        + " { opacity: 0 !important; z-index: -1 !important; pointer-events: none !important; }"
+
     /// The main frame's probe: reports the page (a site rule starts the engine at once), then
     /// watches for a consent manager and asks for the engine when it sees one.
+    ///
+    /// From document start it also hides the banners of the consent managers the engine knows
+    /// (`prehideCSS`, one constructed style sheet, never a DOM node). The engine comes only after
+    /// the probe has seen a sign (DOMContentLoaded at the earliest) and has its own prehide only
+    /// from then on, so without this a known banner showed for up to a second before it was
+    /// rejected. The sheet goes when the engine has answered (the app calls
+    /// `__plainCookieUnhide`), `FixedChoices.cookieBannerPrehideTimeout` after the engine started
+    /// (as the engine's own prehide does), at once on a site turned off, and when the watch ends
+    /// without a sign.
     static let probe = WKUserScript(
         source: """
             (() => {
@@ -215,6 +237,20 @@ public final class CookieBanners {
               globalThis.__plainCookieProbe = true;
               const hosts = \(jsArray(consentHosts));
               const selector = \(jsString(bannerSelectors.joined(separator: ",")));
+              const hide = new CSSStyleSheet();
+              hide.replaceSync(\(jsString(prehideCSS)));
+              document.adoptedStyleSheets = [...document.adoptedStyleSheets, hide];
+              let hideTimer = 0;
+              const unhide = () => {
+                clearTimeout(hideTimer);
+                const list = document.adoptedStyleSheets;
+                if (list.includes(hide)) document.adoptedStyleSheets = list.filter((s) => s !== hide);
+              };
+              globalThis.__plainCookieUnhide = unhide;
+              const started = () => { clearTimeout(hideTimer); hideTimer = setTimeout(unhide, \(FixedChoices.cookieBannerPrehideTimeout)); };
+              // A deadline from the start: a page whose load never ends (a hanging request) is
+              // never probed after DOMContentLoaded, and nothing may stay hidden for good.
+              hideTimer = setTimeout(unhide, \(FixedChoices.cookieBannerWatchMilliseconds));
               // `answered`: the app replied to the page message, so the engine was not started
               // for a site rule; a sign seen before that waits for the reply (one start a page).
               let done = false, answered = false, seen = null, observer = null;
@@ -223,6 +259,7 @@ public final class CookieBanners {
                 if (done) return;
                 if (!answered) { seen = seen || reason; return; }
                 stop();
+                started();
                 h.postMessage({ type: 'probe', url: location.href, reason }).catch(() => {});
               };
               const known = (name) => {
@@ -232,7 +269,10 @@ public final class CookieBanners {
               };
               const look = () => { if (!done && document.querySelector(selector)) fire('page'); };
               h.postMessage({ type: 'page', url: location.href }).then((reply) => {
-                if (reply && reply.stop) return stop();
+                if (reply && reply.stop) {
+                  if (reply.engine) started(); else unhide();
+                  return stop();
+                }
                 answered = true;
                 if (seen) fire(seen);
               }, () => { answered = true; if (seen) fire(seen); });
@@ -246,7 +286,7 @@ public final class CookieBanners {
               addEventListener('load', () => {
                 look();
                 setTimeout(look, \(FixedChoices.cookieBannerWatchMilliseconds / 3));
-                setTimeout(() => { look(); stop(); }, \(FixedChoices.cookieBannerWatchMilliseconds));
+                setTimeout(() => { look(); if (!done) { stop(); unhide(); } }, \(FixedChoices.cookieBannerWatchMilliseconds));
               }, { once: true });
             })();
             """,
@@ -363,7 +403,7 @@ public final class CookieBanners {
             }.value
             guard hasSiteRule else { return nil }
             startEngine(in: webView, frame: frame, reason: "site rule")
-            return ["stop": true]
+            return ["stop": true, "engine": true]
         case "probe":
             guard frame.isMainFrame else { return nil }
             startEngine(in: webView, frame: frame, reason: (body["reason"] as? String) ?? "page")
@@ -404,18 +444,33 @@ public final class CookieBanners {
             let result = await Self.evaluate(wrapped, in: webView, frame: frame, world: .page)
             return ["type": "evalResp", "id": id, "result": result ?? false]
         case "optOutResult":
+            unhide(in: webView, frame: frame)
             let succeeded = body["result"] as? Bool ?? false
             Signposts.signposter.emitEvent(Signposts.cookieBannerAnswered, "\(succeeded ? "rejected" : "failed")")
             if succeeded { noteAnswer(on: webView.url, in: webView) }
             onAnswered?(webView, succeeded)
             return nil
-        case "autoconsentDone":
+        case "autoconsentDone", "autoconsentError":
+            unhide(in: webView, frame: frame)
+            guard type == "autoconsentDone" else { return nil }
             // A cosmetic rule only hid the banner; an opt-out already reported through optOutResult.
             if body["isCosmetic"] as? Bool == true { onAnswered?(webView, true) }
+            return nil
+        case "report":
+            // The engine found no consent manager after all: its banner, if any, shows as made.
+            if (body["state"] as? [String: Any])?["lifecycle"] as? String == "nothingDetected" {
+                unhide(in: webView, frame: frame)
+            }
             return nil
         default:
             return nil
         }
+    }
+
+    /// Takes the probe's early hiding off a main frame once the engine has answered there.
+    private func unhide(in webView: WKWebView, frame: WKFrameInfo) {
+        guard frame.isMainFrame else { return }
+        webView.evaluateJavaScript("globalThis.__plainCookieUnhide && globalThis.__plainCookieUnhide(); 0", in: frame, in: Self.world) { _ in }
     }
 
     /// Puts the engine into the page's main frame, once the probe has seen a reason.

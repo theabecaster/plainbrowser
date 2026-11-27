@@ -271,8 +271,27 @@ classification and Safari's stated rules, and Dark Reader's style-sheet rewritin
    does: the twins carry it in `--plain-o-color`, and a lazy picture that loads later rechecks
    the text around it. **Contrast**: any other text under 4.5:1 against the composited color
    behind it is moved in lightness until it passes.
-6. **Never touched:** `img`, `picture`, `video`, `canvas`, frames, plugins, CSS background
-   pictures, emoji (no filter anywhere), colored SVG logos.
+6. **Never touched:** `img`, `picture`, `video`, `canvas`, frames of another origin, plugins,
+   CSS background pictures, emoji, colored SVG logos. The one exception is Safari's: a
+   **black-and-white logo** (a picture at most 640x240 on the page, at least 15% transparent, the
+   rest greys under 4% colored and under 15% white, that would show under 3:1 on the darkened
+   page) gets `invert(0.92)`. A raster picture is read off a 64 px copy in idle time, once per
+   address, at most 16 per page: the page's own picture, or another origin's read again with
+   CORS. An SVG is judged from its source instead (every paint a grey without white, no embedded
+   picture), never rasterized: drawing an SVG on the main thread cost 14-30 ms in the simulator.
+   CSS background logos (an empty box with one unrepeated picture, its name hidden by
+   `text-indent`) are judged the same way. Values in `FixedChoices`.
+6a. **Open shadow roots** are their own scopes: each gets twins of its sheets (`<style>` and
+   adopted; a sheet shared by every instance of a component is rewritten once) and Plain's patch
+   sheet, its changes are watched, and the walk goes through the shadow tree before the host's own
+   children. A custom element defined after the walk met it is looked at again on the next batch,
+   scroll, and 0.3, 1.5 and 4 s after load.
+6b. **Same-origin frames** follow the top page. Every frame gets a one-line script that stops
+   unless it can reach the top page's engine (same origin, same world); one that can asks the
+   app for the engine, which runs in that frame alone and holds its background dark meanwhile. It
+   judges its own document, is off when the top page is off or has a design of its own, and the
+   top page asks again for frames that were there before it turned dark. Link previews get the
+   script too.
 7. **Watching.** A throttled `MutationObserver` (every frame while loading, 100 ms after): new
    or changed sheets are rewritten, new content queued for idle time; an inline-style change
    counts only when its colors changed (pages animate transforms every frame); a class change

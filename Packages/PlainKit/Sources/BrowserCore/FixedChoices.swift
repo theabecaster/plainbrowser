@@ -114,6 +114,10 @@ public enum FixedChoices {
     /// After load, content a page adds is checked for background pictures in batches this many
     /// milliseconds apart, so an infinite-scroll page costs one pass per burst, not one per node.
     public static let darkPagesWatchDelay = 250
+    /// A page that drops Plain's style sheets without touching its DOM gets them back on the next
+    /// scroll or touch, checked at most this many milliseconds apart (and once more after a
+    /// burst): a few microseconds of work twice a second at most, back before a line is read.
+    public static let darkPagesSheetCheckInterval = 500
 
     // MARK: Address bar
 

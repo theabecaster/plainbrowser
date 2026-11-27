@@ -278,10 +278,11 @@ enum DarkPages {
         // greys is an icon drawn like text, and flips with it so it stays visible.
         // A paint is colorful when it is a colored color, or a gradient or pattern (`url(#id)`)
         // with a colored stop.
-        const colorful = (paint) => {
+        const colorful = (paint, depth = 0) => {
           const c = measure(paint);
           if (c) return c.alpha >= 0.5 && c.chroma >= \(FixedChoices.darkPagesColoredSVGChroma);
-          const ref = /url\\(["']?#([^"')]+)/.exec(paint || '');
+          // Computed paints name the gradient by its full address; the fragment is the id.
+          const ref = /url\\(["']?[^"')#]*#([^"')]+)/.exec(paint || '');
           const target = ref && document.getElementById(ref[1]);
           if (!target) return false;
           for (const stop of target.querySelectorAll('stop')) {
@@ -289,13 +290,13 @@ enum DarkPages {
             if (s && s.alpha >= 0.5 && s.chroma >= \(FixedChoices.darkPagesColoredSVGChroma)) return true;
           }
           // A pattern: colorful when anything drawn in it is.
-          return target.localName === 'pattern' && coloredSVG(target);
+          return depth < 2 && target.localName === 'pattern' && coloredSVG(target, depth + 1);
         };
-        const coloredSVG = (svg) => {
+        const coloredSVG = (svg, depth = 0) => {
           const shapes = svg.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line, text, use');
           for (let i = 0; i < shapes.length && i < \(FixedChoices.darkPagesSVGShapesChecked); i++) {
             const style = getComputedStyle(shapes[i]);
-            for (const paint of [style.fill, style.stroke]) if (colorful(paint)) return true;
+            for (const paint of [style.fill, style.stroke]) if (colorful(paint, depth)) return true;
           }
           return false;
         };
@@ -334,17 +335,23 @@ enum DarkPages {
         };
 
         // A page that replaces its adopted style sheets without touching the DOM drops Plain's
-        // too. There is no event for that, so the next scroll or touch puts them back (at most
-        // twice a second; the listeners are passive and never delay scrolling).
+        // too. There is no event for that, so the next scroll or touch puts them back (throttled,
+        // with one last check after a burst; the listeners are passive and never delay scrolling).
         let keeping = false;
         let lastKept = 0;
         const keep = () => {
           if (keeping) return;
           keeping = true;
+          let trailing = 0;
           const check = () => {
-            const now = Date.now();
-            if (now - lastKept < 500 || theme.disabled) return;
-            lastKept = now;
+            if (theme.disabled) return;
+            const wait = \(FixedChoices.darkPagesSheetCheckInterval) - (Date.now() - lastKept);
+            if (wait > 0) {
+              // Too soon: check once more when the interval is up, so the last event counts.
+              if (!trailing) trailing = setTimeout(() => { trailing = 0; check(); }, wait);
+              return;
+            }
+            lastKept = Date.now();
             adopt();
           };
           addEventListener('scroll', check, { passive: true, capture: true });

@@ -32,6 +32,8 @@ struct DarkPagesTests {
         <div id=bg class=hero>hero</div><div id=inline style="background-image: url('\(svg)')">inline</div>
         <canvas id=cv width=10 height=10></canvas><svg id=icon width=10 height=10><rect width=10 height=10/></svg>
         <svg id=logo width=10 height=10><circle cx=5 cy=5 r=5 fill="#e33"/></svg>
+        <svg id=gradlogo width=10 height=10><defs><linearGradient id=g1><stop offset=0 stop-color="#ff7a00"/>
+        <stop offset=1 stop-color="#2060ff"/></linearGradient></defs><rect width=10 height=10 fill="url(#g1)"/></svg>
         """
 
     /// A large light-only page: 3,000 paragraphs, 4,000 style rules and 300 background pictures.
@@ -116,6 +118,7 @@ struct DarkPagesTests {
         // logo and keeps its colors.
         #expect(try await style("filter", of: "#icon", in: tab, harness: harness) == "none")
         #expect(try await style("filter", of: "#logo", in: tab, harness: harness).contains("invert"))
+        #expect(try await style("filter", of: "#gradlogo", in: tab, harness: harness).contains("invert"))
         // Before the first paint the page was already dark: the guard, or the darkening itself.
         let early = try #require(try await harness.evaluate("window.__early", in: tab) as? [String: String])
         report("dark pages early root: \(early)")
@@ -201,9 +204,12 @@ struct DarkPagesTests {
         try await waitUntil("darkened") { tab.darkPages == .darkened }
         try await Task.sleep(for: .milliseconds(100))
         _ = try await harness.evaluate(
-            "document.adoptedStyleSheets = []; document.body.appendChild(document.createElement('p')); 1", in: tab
+            "document.adoptedStyleSheets = []; 1", in: tab
         )
         #expect(try await style("filter", of: "html", in: tab, harness: harness) == "none")
+        // No DOM change: the next scroll puts the sheets back, even within the throttle.
+        _ = try await harness.evaluate("window.dispatchEvent(new Event('scroll')); 1", in: tab)
+        _ = try await harness.evaluate("document.adoptedStyleSheets = []; window.dispatchEvent(new Event('scroll')); 1", in: tab)
         let deadline = ContinuousClock.now + .seconds(3)
         var filter = ""
         while ContinuousClock.now < deadline {

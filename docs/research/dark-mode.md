@@ -170,6 +170,23 @@ The filter wins on everything Plain can measure in the simulator and on robustne
 rewrite wins on quality and is the known-good answer for scrolling. Plain ships the filter and
 treats the device perf gate's `hitchMsPerS` on a darkened page as the deciding number.
 
-## 8. Measurements
+## 8. Measurements (simulator, 2026-11-26)
 
-See the final section of this file, filled from the run that landed it.
+The Mac was heavily loaded during every run (1-minute load average 170–725), so timings carry
+wide noise; read differences, not absolutes.
+
+- **Page load, large light-only page** (6,600 elements, 4,000 style rules, 300 background
+  pictures; `DarkPagesTests.largePageCost`, iPhone 17 simulator, navigation start to main-frame
+  finish, median of 7, after a warm-up round, two interleaved rounds): darkened 13.1 / 13.3 ms,
+  dark pages off for the site 13.1 / 11.6 ms, light app 13.2 / 7.9 ms. No consistent difference.
+- **Script cost on that page:** the judgement plus a full background-picture scan 0.05 ms per run
+  (averaged over 20 runs; 0.25 ms in one loaded run); the script's whole time per page rounds to
+  1 ms on the page's 1 ms clock (0 ms when off or light).
+- **Scroll proxy** (`AppearanceTests.testScrollFramesWithAndWithoutDarkPages`, iPhone 17
+  simulator, the light-only test site, 20 fast swipes, page frames over 25 ms while scrolling):
+  darkened 31 of 3,081, off 26 of 3,054, darkened again 4 of 3,112. No measurable increase; the
+  spread is the machine's load. The simulator draws with the Mac's GPU and reports no hitch
+  metric, so the device number (`testScrollHitchesDarkened` against
+  `testScrollHitchesDarkPagesOff`, XCTHitchMetric) is still to be taken.
+- **No white flash:** an inline script at the top of a light-only page's body (before any paint)
+  reads the root's background as the guard's `rgb(0, 0, 0)`.

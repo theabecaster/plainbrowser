@@ -518,6 +518,82 @@ final class CaptureTests: XCTestCase {
         }
     }
 
+    /// The polish lane's states: the page menu and its Site Settings, Find on Page with the bar
+    /// out of the way, a failed page's pill, the switcher with two cards, and the start screen
+    /// with Tabs and More beside the pill.
+    func testCapturePolish() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication()
+        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/a") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
+        app.buttons["addressPill"].tap()
+        field.typeText(server.address("/long") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Long Read"].waitForExistence(timeout: 10))
+        pause(2)
+
+        app.buttons["more"].tap()
+        pause(1)
+        shot("p1-page-menu")
+        let site = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Site Settings'")).firstMatch
+        if site.exists {
+            site.tap()
+            pause(1)
+            shot("p2-site-settings")
+        }
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        pause(1)
+
+        app.buttons["more"].tap()
+        pause(0.8)
+        app.buttons["Find on Page"].tap()
+        pause(1.5)
+        app.typeText("Paragraph")
+        pause(1)
+        shot("p3-find")
+        app.typeText("\n")
+        pause(1.5)
+        shot("p4-find-keyboard-down")
+        let close = app.buttons.matching(NSPredicate(format: "label IN {'Done', 'Close'}")).firstMatch
+        if close.exists { close.tap() }
+        pause(1.5)
+        shot("p5-find-closed")
+
+        // A load that fails: the pill shows the address that was tried.
+        app.buttons["addressPill"].tap()
+        field.typeText("127.0.0.1:9/nothing-here\n")
+        pause(4)
+        shot("p6-failed")
+
+        // Two cards in the switcher.
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        pause(0.8)
+        field.typeText(server.address("/b") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 10))
+        pause(2)
+        let pill = app.buttons["addressPill"]
+        pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+            forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)),
+            withVelocity: .slow, thenHoldForDuration: 1.5
+        )
+        pause(1.5)
+        shot("p7-switcher")
+
+        // A new tab with others open: Tabs and More beside the pill.
+        app.buttons["galleryNewTab"].tap()
+        pause(1)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+        pause(1.5)
+        shot("p8-start-with-tabs")
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

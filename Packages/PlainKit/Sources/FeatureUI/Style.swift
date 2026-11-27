@@ -15,6 +15,14 @@ enum Style {
     static let hairline = Color(uiColor: Palette.paperHairline)
 }
 
+/// Copy Link from a row's menu: the link on the pasteboard and the success haptic, as the page
+/// menu's Copy Link does (it leaves nothing else on screen).
+@MainActor
+func copyLink(_ url: URL) {
+    UIPasteboard.plain.url = url
+    Haptic.success.play()
+}
+
 extension View {
     /// A sheet's list on Plain's paper: the textured ground behind it and ink text. Supporting
     /// text (footers, values, a row's address) asks for `.secondary`, which here is the ink's

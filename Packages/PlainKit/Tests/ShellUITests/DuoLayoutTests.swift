@@ -335,10 +335,10 @@ struct TopChromeGeometryTests {
         let strip = Self.device(strip: Self.strip)
         #expect(strip.stripTop == 72.5)
         #expect(strip.expandedInset == 72.5 + Self.strip + 4)
-        // While reading the page gets everything under the status row.
-        #expect(bar.obscuredInset(rest: .pill) == 68.5)
-        #expect(bar.obscuredInset(rest: .hidden) == 68.5)
-        #expect(strip.obscuredInset(rest: .hidden) == 68.5)
+        // While reading the page gets everything under the status row (the corner's bottom, 69).
+        #expect(bar.obscuredInset(rest: .pill) == 69)
+        #expect(bar.obscuredInset(rest: .hidden) == 69)
+        #expect(strip.obscuredInset(rest: .hidden) == 69)
         #expect(bar.hiddenInset < bar.expandedInset, "WebKit wants the largest viewport inset strictly larger")
         // 10.8% of the screen at rest (Safari 12.6%), 16.5% with the strip.
         #expect(bar.chromeShare(of: Self.landscape, collapsed: false) < 0.11)
@@ -360,14 +360,23 @@ struct TopChromeGeometryTests {
 
     @Test func cornerFromTheScreensTopStillBeatsSafari() throws {
         // If the guide's corner runs from the top edge to the safe area (0–81), the row centers on
-        // that band instead: page at 66.5 pt.
+        // that band (18.5–62.5), and the page never starts above the corner's bottom: 82 pt.
         let corner = try #require(StatusCorner.rect(
             width: 951, safeTop: 81, safeLeft: 0, safeRight: 0, adaptedTop: 0, adaptedLeft: 0, adaptedRight: 135
         ))
         let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: 0)
         #expect(bar.rowTop == 18.5)
-        #expect(bar.expandedInset == 66.5)
+        #expect(bar.hiddenInset == 81)
+        #expect(bar.expandedInset == 82)
+        #expect(bar.expandedInset <= 84)
         #expect(951 - bar.rowClearance.trailing == 816 - TopChromeGeometry.cornerGap)
+        // The strip starts beside that corner (66.5 < 81), so it keeps clear of it like the row.
+        let strip = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: Self.strip)
+        #expect(strip.stripTop == 66.5)
+        #expect(strip.stripClearance.trailing == strip.rowClearance.trailing)
+        #expect(strip.expandedInset == 66.5 + Self.strip + 4)
+        // Under the measured status items (69) the strip (72.5) spans the lane.
+        #expect(Self.device(strip: Self.strip).stripClearance.trailing == 0)
     }
 
     @Test func rowNeverStartsAboveTheCorner() {

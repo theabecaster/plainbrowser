@@ -35,6 +35,9 @@ final class TopBarLayout {
     /// The panes start at the root view's top under a top bar (the page runs under the status zone
     /// and the floating bar), and under the status bar otherwise (`DuoUIState.panesTop`).
     var panesTopEdge: NSLayoutConstraint!
+    /// The strip's distance from the leading and trailing edges, past the status corner where it
+    /// starts beside it (`TopChromeGeometry.stripClearance`); empty without a strip.
+    var stripClearance: [NSLayoutConstraint] = []
     var isPillOnTop = false
     var isBarOnTop = false
 }
@@ -186,6 +189,11 @@ extension BrowserViewController {
         let clearance = geometry.rowClearance
         for constraint in top.leadingClearance { Self.set(constraint, clearance.leading) }
         for constraint in top.trailingClearance { Self.set(constraint, -clearance.trailing) }
+        if top.stripClearance.count == 2 {
+            let strip = geometry.stripClearance
+            Self.set(top.stripClearance[0], strip.leading)
+            Self.set(top.stripClearance[1], -strip.trailing)
+        }
     }
 
     private static func set(_ constraint: NSLayoutConstraint?, _ constant: CGFloat) {
@@ -296,13 +304,13 @@ extension BrowserViewController {
     /// The page's top inset follows the bar's resting state; the viewport insets span collapsed to
     /// expanded, so CSS `svh`/`lvh` stay put while the bar moves.
     func applyTopBarInsets(_ geometry: TopChromeGeometry, rest: ChromeRest) {
-        let obscured = UIEdgeInsets(top: geometry.obscuredInset(rest: rest), left: 0, bottom: 0, right: 0)
-        let minimum = UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: 0, right: 0)
-        let maximum = UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: 0, right: 0)
+        let obscured = UIEdgeInsets(top: geometry.obscuredInset(rest: rest), left: 0, bottom: pageBottomInset, right: 0)
+        let minimum = UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: pageBottomInset, right: 0)
+        let maximum = UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0)
         if let tab = currentTab {
             session.pool.setInsets(for: tab, obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
             setPageTopStart(geometry.expandedInset, for: session.pool.scrollView(for: tab))
-            // Nothing rests at the bottom under a top bar.
+            // Nothing of Plain's rests at the bottom; the page and its fixed footers stop above the home indicator.
             session.pool.scrollView(for: tab)?.followObscuredBottom(pageBottomInset)
         }
         engineUI.reader.setInsets(obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
@@ -322,9 +330,9 @@ extension BrowserViewController {
     func applyOtherPaneTopInsets(to tab: Tab, geometry: TopChromeGeometry) {
         session.pool.setInsets(
             for: tab,
-            obscured: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: 0, right: 0),
-            minimumViewport: UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: 0, right: 0),
-            maximumViewport: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: 0, right: 0)
+            obscured: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0),
+            minimumViewport: UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: pageBottomInset, right: 0),
+            maximumViewport: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0)
         )
         setPageTopStart(geometry.expandedInset, for: session.pool.scrollView(for: tab))
         session.pool.scrollView(for: tab)?.followObscuredBottom(pageBottomInset)

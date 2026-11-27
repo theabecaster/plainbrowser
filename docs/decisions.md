@@ -1252,20 +1252,23 @@ simulator's 24 pt status bar had hidden this.
 - **Layout math (`TopChromeGeometry`, root view coordinates, panes start at the top edge):**
   - In the zone: row center = corner.midY; rowTop = max(center − 22, corner.minY); the row ends
     12 pt before the corner. Strip top = row bottom + 4. At rest the page's top inset = the row's
-    bottom + 4 (+ strip 34 + 4). Pill and hidden: the row's bottom (the page gets everything under
-    the status row; fixed headers stay clear of the clock).
+    bottom + 4 (+ strip 34 + 4), and never above the corner's bottom. Pill and hidden: the row's
+    bottom or the corner's, whichever is lower (the page gets everything under the status row;
+    fixed headers stay clear of the clock).
   - Device numbers, status items as measured (828–928 x 24–69, safe top 81): row 24.5–68.5, page
-    top at rest 72.5 pt (was 132), 110.5 pt with the strip (was 170), 68.5 pt while reading (was
+    top at rest 72.5 pt (was 132), 110.5 pt with the strip (was 170), 69 pt while reading (was
     81). Safari: 84 pt at rest.
   - From the camera (source 2): row 25.8–69.8 around the camera's 47.8, the row's end at 808.7
     (the clock starts at 828), page at 73.8 pt.
-  - From a guide corner spanning the zone (0–81): row 18.5–62.5, page at 66.5 pt.
+  - From a guide corner spanning the zone (0–81): row 18.5–62.5, page at 82 pt (the corner's
+    bottom), 104.5 pt with the strip, which then keeps clear of the corner like the row.
   - No corner (fallback): the row sits 2 pt under the safe area's top, as before, but floats over
     the page, which runs under the status bar: page top = safe top + 50 (+ 38 strip).
 - **The scroll view leaves the safe area out under a top bar**
   (`contentInsetAdjustmentBehavior = .never`, `setPageTopStart`): with the pages at the top edge,
   UIKit would add the 81 pt safe area to the page's own top inset and push the page under the
-  whole zone. The bottom keeps the home indicator's inset by hand (`pageBottomInset`).
+  whole zone. The bottom keeps the home indicator's inset by hand (`pageBottomInset`), for the
+  scroll range and for WebKit's obscured and viewport insets, so fixed footers rest above it.
 - **The address takes the room between the capsules first, then centers** (fill priority over
   centering): beside the corner the row is lopsided, and a centered pill shrank to a stub in the
   669 pt portrait window. Where nothing is in the way it is still capped at 560 pt and centered.
@@ -1277,7 +1280,8 @@ simulator's 24 pt status bar had hidden this.
   row keeps to the focused pane's side of the fold and to the corner.
 - **Rail (Left, Right):** stays under the safe area's top. The root view's paper shows above it,
   the same paper as the rail, so the column reads as one from the top edge.
-- **The strip** spans the lane under the row; it starts below the status items (72.5 > 69).
+- **The strip** spans the lane under the row where it starts below the corner (72.5 > 69 on the
+  device); where it would start beside it, it stops where the row does (`stripClearance`).
 - **Diagnostics:** the safe area, both corner-adaptive guides, the margins guide and the
   occlusion regions are logged when the bounds or guides change (`duo` category, debug level), so
   the device's numbers can be read back. `-PlainStatusCorner x,y,w,h` (Debug) forces a corner on

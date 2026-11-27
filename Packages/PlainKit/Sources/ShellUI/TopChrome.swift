@@ -129,6 +129,13 @@ struct TopChromeGeometry: Equatable {
     /// The strip's top, under the row.
     var stripTop: CGFloat { rowBottom + Self.gap }
 
+    /// How far the strip keeps from each edge: the row's clearance where the strip starts beside
+    /// the status corner (a corner reaching below the row), else nothing.
+    var stripClearance: (leading: CGFloat, trailing: CGFloat) {
+        guard let corner, stripTop < corner.maxY else { return (0, 0) }
+        return rowClearance
+    }
+
     /// The bottom of the expanded chrome: the row, or the strip under it.
     var expandedBottom: CGFloat {
         (stripHeight > 0 ? stripTop + stripHeight : rowBottom) + Self.gap
@@ -168,9 +175,13 @@ struct TopChromeGeometry: Equatable {
     }
 
     /// The hidden bar's height over the page: the smallest top inset the page sees. In the status
-    /// zone the status row's bottom, so the page gets everything under the clock's row and a fixed
-    /// header never sits under it; under a full-width status bar, that bar.
-    var hiddenInset: CGFloat { isInStatusZone ? rowBottom : safeTop }
+    /// zone the status row's bottom, or the corner's if it reaches lower, so the page gets
+    /// everything under the clock's row and a fixed header never sits under it; under a
+    /// full-width status bar, that bar.
+    var hiddenInset: CGFloat {
+        guard let corner else { return safeTop }
+        return max(rowBottom, corner.maxY)
+    }
 
     /// The collapsed chrome's height over the page. In the status zone the shrunken address stays
     /// on the status row, so the page sees the same as hidden.

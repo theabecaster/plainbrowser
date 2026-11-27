@@ -40,6 +40,13 @@ public final class ThumbnailService {
             value: FixedChoices.thumbnailWidth * EngineChoices.thumbnailPixelsPerPoint / scale
         )
         configuration.afterScreenUpdates = false
+        // The page as it shows below a top bar that floats over it (the Duo's inner screen): the
+        // strip under the bar is the page's empty top at rest, a white band on every card (UX
+        // audit, 2026-11-27).
+        let top = min(max(0, webView.obscuredContentInsets.top), webView.bounds.height / 2)
+        if top > 0 {
+            configuration.rect = CGRect(x: 0, y: top, width: webView.bounds.width, height: webView.bounds.height - top)
+        }
         let id = tab.id
         let isPrivate = tab.isPrivate
         let generation = generations[id, default: 0] + 1

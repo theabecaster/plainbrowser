@@ -33,6 +33,9 @@ public final class TabGalleryTransition {
     private let container: UIView
     private let snapshot: UIView
     private let pageFrame: CGRect
+    /// How much of the page's top a floating bar covers: the card's thumbnail leaves it out, so
+    /// the moving page slides it up and out of the card over the way.
+    private let contentTop: CGFloat
     private var cardFrame: CGRect
     private let wrapper = UIView()
     private let completion: (End) -> Void
@@ -59,9 +62,10 @@ public final class TabGalleryTransition {
     ///   - start: where it starts; it heads to the other end.
     public init(
         tabID: UUID, gallery: TabGalleryViewController, container: UIView, snapshot: UIView,
-        pageFrame: CGRect, from start: End, interval: OSSignpostIntervalState? = nil,
+        pageFrame: CGRect, contentTop: CGFloat = 0, from start: End, interval: OSSignpostIntervalState? = nil,
         completion: @escaping (End) -> Void
     ) {
+        self.contentTop = max(0, contentTop)
         self.tabID = tabID
         self.gallery = gallery
         self.container = container
@@ -258,7 +262,7 @@ public final class TabGalleryTransition {
     private func apply(progress: CGFloat, crossfade: Bool, setsRing: Bool = true) {
         let content = gallery.transitionContent
         if crossfade {
-            setFrame(pageFrame)
+            setFrame(pageFrame, progress: 0)
             wrapper.layer.cornerRadius = 0
             wrapper.layer.borderWidth = 0
             wrapper.alpha = progress
@@ -274,7 +278,7 @@ public final class TabGalleryTransition {
             width: max(1, lerp(pageFrame.width, cardFrame.width, progress)),
             height: max(1, lerp(pageFrame.height, cardFrame.height, progress))
         )
-        setFrame(frame)
+        setFrame(frame, progress: progress)
         let t = min(max(progress, 0), 1)
         wrapper.layer.cornerRadius = lerp(0, Radius.large, t)
         // The tab being opened or left is the selected one: its card's ring grows in with the
@@ -357,12 +361,14 @@ public final class TabGalleryTransition {
     }
 
     /// The snapshot keeps the page's shape, scaled to the wrapper's width and pinned to its top:
-    /// a card shows the top of its page.
-    private func setFrame(_ frame: CGRect) {
+    /// a card shows the top of its page. The strip a floating bar covers slides out of the top
+    /// with the progress, so the page lands on its card showing what the thumbnail shows.
+    private func setFrame(_ frame: CGRect, progress: CGFloat) {
         wrapper.frame = frame
         let scale = pageFrame.width > 0 ? frame.width / pageFrame.width : 1
         snapshot.transform = CGAffineTransform(scaleX: scale, y: scale)
-        snapshot.center = CGPoint(x: frame.width / 2, y: 0)
+        let t = min(max(progress, 0), 1)
+        snapshot.center = CGPoint(x: frame.width / 2, y: -contentTop * scale * t)
     }
 
     private func complete(at end: End) {

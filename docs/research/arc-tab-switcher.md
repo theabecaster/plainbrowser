@@ -81,8 +81,9 @@ They agree with the Arc measurements. Apple has not published its own numbers. *
 
 **Regular width (the Duo's inner screen): pages of an even grid**
 - Arc Search has no large-screen layout. The cascade shows four cards on 951 pt; the iPad app
-  switcher, Apple's answer for big screens, is a grid that scrolls sideways. Plain uses that: 4
-  columns × 2 rows in landscape (217 pt cards), 2 × 2 in portrait, one page per flick. Columns
+  switcher, Apple's answer for big screens, is a grid that scrolls sideways. Plain uses that: 2
+  columns × 2 rows in landscape (about 334 pt cards; was 4 × 2 at 217 pt until the 2026-11-27 UX
+  audit found them too small), 2 × 2 in portrait, one page per flick. Columns
   stay even and centered, so the middle gap sits on the fold at rest. Same swipe up to close.
 
 **Close: swipe a card up**

@@ -120,9 +120,11 @@ struct TabGalleryMetricsTests {
 
     @Test func regularWidthIsPagesOfAnEvenGrid() {
         #expect(innerLandscape.style == .grid)
-        #expect(innerLandscape.columns == 4)
+        // Four columns would make 217 pt cards in landscape and 147 pt in portrait: two instead,
+        // as wide as two rows allow.
+        #expect(innerLandscape.columns == 2)
         #expect(innerLandscape.rows == 2)
-        // Four columns would make 147 pt cards in portrait: two instead.
+        #expect(innerLandscape.cardWidth >= TabGalleryChoices.minGridCardWidth)
         #expect(innerPortrait.columns == 2)
         #expect(innerPortrait.rows == 2)
         #expect(innerPortrait.cardWidth >= TabGalleryChoices.minGridCardWidth)
@@ -188,8 +190,9 @@ struct TabGalleryMetricsTests {
     @Test func gridPagesMoveOneAtATime() {
         let page = innerLandscape.pageWidth
         #expect(innerLandscape.snappedOffset(projected: page * 4, current: 0, velocity: 6, count: 100) == page)
-        #expect(innerLandscape.stopCount(for: 17) == 3)
-        #expect(innerLandscape.maxOffset(for: 17) == page * 2)
+        // Four cards a page (two columns, two rows): 9 tabs take three pages.
+        #expect(innerLandscape.stopCount(for: 9) == 3)
+        #expect(innerLandscape.maxOffset(for: 9) == page * 2)
     }
 
     @Test func onlyCardsNearTheFocusAreCandidates() {

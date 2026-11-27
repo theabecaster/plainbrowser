@@ -119,7 +119,8 @@ extension BrowserViewController: GalleryHost {
         let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: tab.id, gallery: gallery, container: view, snapshot: snapshot,
-            pageFrame: pageClip.convert(pageClip.bounds, to: view), from: .page, interval: showInterval
+            pageFrame: pageClip.convert(pageClip.bounds, to: view), contentTop: session.pool.obscuredTop(for: tab),
+            from: .page, interval: showInterval
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }
@@ -280,9 +281,11 @@ extension BrowserViewController: GalleryHost {
         show(tab)
         setChromeHiddenForGallery(false, animated: true)
         let generation = tabsUI.galleryGeneration
+        // After `show`: the tab's web view is attached and carries the page's insets.
+        let top = session.pool.obscuredTop(for: tab)
         let transition = TabGalleryTransition(
-            tabID: id, gallery: gallery, container: view, snapshot: cardPicture(for: id),
-            pageFrame: pageClip.convert(pageClip.bounds, to: view), from: .gallery
+            tabID: id, gallery: gallery, container: view, snapshot: cardPicture(for: id, top: top),
+            pageFrame: pageClip.convert(pageClip.bounds, to: view), contentTop: top, from: .gallery
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }
@@ -294,14 +297,19 @@ extension BrowserViewController: GalleryHost {
 
     /// The page as its card shows it, sized like the page and pinned to its top: the transition's
     /// stand-in until the live page is uncovered.
-    private func cardPicture(for id: TabID) -> UIView {
+    /// The thumbnail leaves out the strip a floating bar covers (`top`): it sits that far down,
+    /// where the live page shows the same content.
+    private func cardPicture(for id: TabID, top: CGFloat) -> UIView {
         let size = webContainer.bounds.size
         let view = UIView(frame: CGRect(origin: .zero, size: size))
         view.backgroundColor = Palette.surface
         view.clipsToBounds = true
-        if let image = session.pool.thumbnails.cachedThumbnail(for: id) ?? tabsUI.previews[id], image.size.width > 0 {
+        let thumbnail = session.pool.thumbnails.cachedThumbnail(for: id)
+        if let image = thumbnail ?? tabsUI.previews[id], image.size.width > 0 {
             let imageView = UIImageView(image: image)
-            imageView.frame = CGRect(x: 0, y: 0, width: size.width, height: size.width * image.size.height / image.size.width)
+            // A neighbour's full-screen picture includes the strip; a thumbnail does not.
+            let y = thumbnail != nil ? top : 0
+            imageView.frame = CGRect(x: 0, y: y, width: size.width, height: size.width * image.size.height / image.size.width)
             view.addSubview(imageView)
         }
         return view

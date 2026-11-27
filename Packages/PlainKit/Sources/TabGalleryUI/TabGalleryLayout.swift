@@ -147,8 +147,15 @@ struct TabGalleryMetrics: Equatable {
             let byHeight = (contentHeight - headerHeight) / thumbnailAspect
             return max(1, min(byWidth, byHeight).rounded(.down))
         case .grid:
-            return gridCardWidth(columns: columns)
+            return min(gridCardWidth(columns: columns), gridWidthForTwoRows)
         }
+    }
+
+    /// The widest grid card that still leaves room for two rows above the bar, so a page of the
+    /// grid always shows at least four tabs.
+    private var gridWidthForTwoRows: CGFloat {
+        let thumbnail = (contentHeight - Self.spacing) / 2 - headerHeight
+        return max(1, (thumbnail / thumbnailAspect).rounded(.down))
     }
 
     var thumbnailHeight: CGFloat {
@@ -473,9 +480,11 @@ enum TabGalleryChoices {
     /// Decoded previews kept in memory. 100 phone-size previews at 3x are about 60 MB; the cache
     /// evicts under pressure, and the rest decode again in about a frame each.
     static let thumbnailCacheCost = 64 * 1024 * 1024
-    /// A grid card is never narrower than this: below it a title shows only a word or two. The Duo's
-    /// inner screen gets four columns in landscape (217 pt cards) and two in portrait.
-    static let minGridCardWidth: CGFloat = 180
+    /// A grid card is never narrower than this: smaller, a page is hard to recognise and a title
+    /// shows only a word or two (UX audit, 2026-11-27: four 217 pt columns on the Duo's inner
+    /// screen read as a quarter of it each). The inner screen gets two columns either way: in
+    /// landscape two rows of about 334 pt cards, one each side of the fold.
+    static let minGridCardWidth: CGFloat = 300
 }
 
 extension Comparable {

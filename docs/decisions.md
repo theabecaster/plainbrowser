@@ -502,7 +502,8 @@ Each entry: what was chosen, and why. Newest last.
   per moving value, stepped on one update link), so a scroll or a second close joins a running
   reflow without a jump; a diffable data source would animate each change on its own.
 - **Regular width keeps a grid, now paged sideways.** Arc has no big-screen layout; the iPad app
-  switcher is a sideways grid. Four columns by two rows in landscape (two by two in portrait), one
+  switcher is a sideways grid. Four columns by two rows in landscape (two by two since the
+  2026-11-27 UX audit, for bigger cards; two by two in portrait), one
   page per flick, columns even so the middle gap sits on the fold. The same swipe up closes.
 - **The open zoom scales the cards with the page.** At the page end the cards are scaled about the
   tapped card until it covers the page, so its neighbors slide past the screen edges as it grows,
@@ -1723,3 +1724,25 @@ bar above every page. Research: docs/research/inset-fill.md.
   the zoom could start) and neighbouring cards' pictures arrived a few frames late. Cost: the
   gallery's views and its decoded thumbnails (cache-limited) stay in memory; a memory warning drops
   them. Not built with side tabs (the sidebar is the switcher).
+
+## Tab switcher UX audit fixes (2026-11-27)
+
+From docs/research/ux-audit.md, items 6, 10, 11, 12 (gallery part) and 25.
+- **The gallery bar re-centres** when More, Done or "+" leaves (one card; the regular list while
+  a private tab shows). Lead's call over hide-in-place: the empty slot read as a misaligned bar.
+  The change waits for a bar at rest (no scroll, lift or reorder under a finger): the leaving
+  control fades (`Motion.quick`), then the rest glide to the centred row (`Motion.barGlide`,
+  0.3 s, no bounce). Mid-gesture it lands without motion.
+- **The Private toggle shows its state:** on, a filled hand on a light disc (the selected look
+  of a glass bar button); off, the outline hand like its neighbours.
+- **Large text:** the gallery (titles and bar) stops growing at the pill's cap
+  (`maximumContentSizeCategory = .extraExtraExtraLarge`); "Done" truncates past 120 pt; a long
+  press on the bar shows the Large Content Viewer.
+- **Cards run to the screen's edge** except on the side of the system's vertical bar (the Duo's
+  outer screen), found from `traitCollection.verticalBarEdge`. In iPhone landscape the cascade
+  now scrolls past the Dynamic Island's inset like the app switcher.
+- **Duo inner: bigger cards, no white strip.** The grid is two columns there (one each side of the
+  fold) as wide as two rows allow: about 334 pt in landscape, was four 217 pt columns
+  (`TabGalleryChoices.minGridCardWidth` 180 → 300). Thumbnails leave out the strip a floating top
+  bar covers (`WKSnapshotConfiguration.rect` from `obscuredContentInsets.top`), and the page↔card
+  zoom slides that strip out of the card over the way so the landing matches the thumbnail.

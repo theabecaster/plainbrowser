@@ -72,8 +72,8 @@ final class SystemAccessTests: XCTestCase {
 
     /// Everything on (or never asked): the page's own answer, nothing of Plain's.
     func testNothingWhileNotSwitchedOff() throws {
-        let app = try launch(["-PlainSystemAccess", "camera=allowed,microphone=allowed,location=allowed"])
-        go(app, to: "/camera", heading: "Camera denied")
+        // Location only: the simulator's stand-in cameras would reach Plain's own question.
+        let app = try launch(["-PlainSystemAccess", "location=allowed"])
         go(app, to: "/location", heading: "Location denied")
         XCTAssertFalse(app.otherElements["toast"].waitForExistence(timeout: 2))
     }

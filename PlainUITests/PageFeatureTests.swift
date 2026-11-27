@@ -116,7 +116,7 @@ final class PageFeatureTests: XCTestCase {
         XCTAssertTrue(save.waitForExistence(timeout: 5))
         save.tap()
         // The share sheet with the PDF: Save to Files is one of its actions.
-        let files = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Save to Files'")).firstMatch
+        let files = app.cells.matching(NSPredicate(format: "label CONTAINS 'Save to Files'")).firstMatch
         XCTAssertTrue(files.waitForExistence(timeout: 10), "the share sheet offers the PDF")
         Thread.sleep(forTimeInterval: 1)
         shot("p3-pdf-share")
@@ -164,7 +164,7 @@ final class PageFeatureTests: XCTestCase {
 
     /// A share sheet action, by its title.
     private func shareActivity(_ app: XCUIApplication, _ title: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
+        app.cells.matching(NSPredicate(format: "label == %@", title)).firstMatch
     }
 
     func testCookieBannerIsAnsweredAndTheSiteCanTurnItOff() throws {

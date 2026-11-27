@@ -119,6 +119,41 @@ final class TestServer: @unchecked Sendable {
             let footer = "<div style=\"position:fixed;left:0;right:0;bottom:0;padding:14px 20px;"
                 + "background:#2973FF;color:#fff;font-weight:600\">Fixed Footer</div>"
             return ("200 OK", html("Plain Footer", "<h1>Footer Page</h1>" + paragraphs.joined() + "<p>End of page.</p>" + footer))
+        case "/light-site", "/light-site-2":
+            // A site designed only in light: white page, a colored header, a grey card, pictures,
+            // an emoji. Dark pages darkens it while Plain is dark.
+            let photo = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='120'>"
+                + "<defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='%23ff9a3c'/>"
+                + "<stop offset='1' stop-color='%233c7dff'/></linearGradient></defs><rect width='300' height='120' fill='url(%23g)'/>"
+                + "<circle cx='240' cy='40' r='22' fill='%23fff3b0'/></svg>"
+            let paragraphs = (1...60).map {
+                "<p>Paragraph \($0). This site was only ever designed in light colors, like most of the web.</p>"
+            }
+            let body = "<header style=\"background:#2973FF;color:#fff;padding:12px 16px;font-weight:700\">Light Site</header>"
+                + "<main style=\"padding:0 16px\"><h1>Light Only</h1>"
+                + "<img src=\"\(photo)\" alt=\"Sunset\" style=\"width:100%;border-radius:8px\">"
+                + "<div style=\"background:#f2f2f2;border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0\">"
+                + "A grey card with a <a href=\"/a\">blue link</a> and an emoji 🌅.</div>"
+                + paragraphs.joined() + "</main>"
+                // The scroll proxy for the dark pages perf test: frames drawn while scrolling,
+                // and how many took longer than 25 ms.
+                + "<p id=\"stats\" style=\"padding:0 16px\">Frames: 0, long: 0, worst: 0</p><script>"
+                + "let last = 0, frames = 0, long = 0, worst = 0, scrolled = 0, shown = '';"
+                + "addEventListener('scroll', () => { scrolled = performance.now(); }, { passive: true });"
+                + "const tick = (t) => { if (last && t - scrolled < 150) { const d = t - last; frames++;"
+                + " if (d > 25) long++; worst = Math.max(worst, d); } last = t; requestAnimationFrame(tick); };"
+                + "requestAnimationFrame(tick);"
+                + "setInterval(() => { const text = `Frames: ${frames}, long: ${long}, worst: ${Math.round(worst)}`;"
+                + " if (text !== shown) { shown = text; document.getElementById('stats').textContent = text; } }, 500);"
+                + "</script>"
+            return ("200 OK", styled("Plain Light Site", "body{background:#fff;color:#222;margin:0}", body))
+        case "/dark-site":
+            // A site with its own dark design: Plain leaves it alone.
+            let paragraphs = (1...30).map { "<p>Paragraph \($0). This site has its own dark design.</p>" }
+            let css = "body{background:#fff;color:#222;margin:0;padding:0 16px}"
+                + "@media (prefers-color-scheme: dark){body{background:#1b1430;color:#e9e3ff}h1{color:#c8b6ff}}"
+            return ("200 OK", styled("Plain Dark Site", css, "<h1>Own Dark Design</h1>" + paragraphs.joined(),
+                                     head: "<meta name=\"color-scheme\" content=\"light dark\">"))
         case "/ua":
             let desktop = !userAgent.contains("Mobile")
             return ("200 OK", html("Plain UA", "<h1>\(desktop ? "Desktop" : "Mobile") UA</h1>"))
@@ -184,6 +219,15 @@ final class TestServer: @unchecked Sendable {
         default:
             return ("404 Not Found", html("Not Found", "<h1>Not Found</h1>"))
         }
+    }
+
+    private func styled(_ title: String, _ css: String, _ body: String, head: String = "") -> String {
+        """
+        <!doctype html><html><head><meta charset="utf-8">\
+        <meta name="viewport" content="width=device-width, initial-scale=1">\(head)\
+        <title>\(title)</title><style>body{font:17px -apple-system;line-height:1.5}\(css)</style>\
+        </head><body>\(body)</body></html>
+        """
     }
 
     private func html(_ title: String, _ body: String) -> String {

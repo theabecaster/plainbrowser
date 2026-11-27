@@ -93,6 +93,13 @@ enum DarkPages {
         )
     }
 
+    /// The first line of every dark-pages script, so the pool can tell it from the others.
+    private static let marker = "// Plain dark pages"
+
+    static func isDarkPagesScript(_ script: WKUserScript) -> Bool {
+        script.source.hasPrefix(marker)
+    }
+
     /// Asks the page's script to turn off (true) or back on (false) for this page now.
     static func setOffSource(_ off: Bool) -> String {
         "globalThis.__plainDarkPages && globalThis.__plainDarkPages.setOff(\(off));"
@@ -100,8 +107,9 @@ enum DarkPages {
 
     static func source(offSites: Set<String>) -> String {
         let sites = offSites.sorted().map(jsString).joined(separator: ",")
-        guard FixedChoices.darkPagesOn else { return "" }
+        guard FixedChoices.darkPagesOn else { return marker }
         return """
+            \(marker)
             (() => {
               if (window !== window.top || !/^https?:$/.test(location.protocol)) return;
               const OFF_SITES = new Set([\(sites)]);

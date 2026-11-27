@@ -251,9 +251,13 @@ public final class WebViewPool {
         darkPagesScripts = [:]
         var controllers: [(WKUserContentController, Bool)] = slots.values.map { ($0.controller, $0.tab?.isPrivate ?? false) }
         if let warm { controllers.append((warm.controller, false)) }
+        // WebKit removes user scripts only all at once: keep every other script (the shell's
+        // page scripts registered message handlers that must not be added twice) and swap ours.
         for (controller, isPrivate) in controllers {
+            let others = controller.userScripts.filter { !DarkPages.isDarkPagesScript($0) }
             controller.removeAllUserScripts()
-            installScripts(in: controller, isPrivate: isPrivate)
+            others.forEach(controller.addUserScript)
+            controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
         }
     }
 

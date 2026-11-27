@@ -70,7 +70,7 @@ struct DarkPagesTests {
     private func makeHarness(style: UIUserInterfaceStyle, darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore())
         async throws -> Harness
     {
-        let harness = try await Harness(darkPages: darkPages, route: Self.route)
+        let harness = try await Harness(darkPages: darkPages, pageScripts: HandlerPageScripts(), route: Self.route)
         harness.window.overrideUserInterfaceStyle = style
         harness.pool.interfaceStyle = style
         return harness
@@ -266,6 +266,19 @@ struct DarkPagesTests {
         harness.window.overrideUserInterfaceStyle = .light
         harness.pool.interfaceStyle = .light
         try await measure("light app", expect: .inactive)
+    }
+}
+
+/// Page scripts like the reader's: a script and a message handler, which WebKit refuses to have
+/// added twice, so a list change must not install them again.
+private final class HandlerPageScripts: PageScripts {
+    private final class Handler: NSObject, WKScriptMessageHandler {
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {}
+    }
+
+    func install(in controller: WKUserContentController) {
+        controller.addUserScript(WKUserScript(source: "1", injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        controller.add(Handler(), name: "plainTestHandler")
     }
 }
 

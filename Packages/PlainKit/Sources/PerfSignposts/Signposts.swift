@@ -58,6 +58,10 @@ public enum Signposts {
     /// Interval from a keystroke in the address bar to its local suggestions (history and
     /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
     public static let suggestionsShown: StaticString = "search.suggestions"
+    /// Interval: the search sheet putting one suggestion list on screen (matching rows to
+    /// suggestions, laying them out, starting their animation). Main-thread work per update; a
+    /// keystroke makes one or more updates (local pages, then the engine's suggestions).
+    public static let suggestionsApply: StaticString = "search.suggestionsApply"
     /// Interval from the toolbar starting to collapse or expand to it settling.
     public static let toolbarCollapse: StaticString = "toolbar.collapse"
     /// Interval: one toolbar snap, from the finger lifting (or a tap or load expanding the bar) to

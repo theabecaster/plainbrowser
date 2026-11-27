@@ -69,7 +69,7 @@ Simulator builds sign without a team, and the group works there too. Tests:
   index and the widget timeline run with `swift test`; on a simulator they also render the widget
   faces to PNGs:
   `TEST_RUNNER_PLAIN_WIDGET_SHOTS=$PWD/build/widgetshots xcodebuild test -scheme PlainKit-Package -destination id=<udid> -only-testing:SystemIntegrationTests`.
-- `PlainUITests/SystemCaptureTests`: the widgets on the Home Screen, Spotlight and Shortcuts,
+- `PlainUITests/SystemCaptureTests`: the widgets on the Home Screen and a favorite in Spotlight,
   screenshots only, with `TEST_RUNNER_PLAIN_CAPTURE=1` (like `CaptureTests`).
 
 ## Perf gate

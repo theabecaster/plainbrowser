@@ -1,7 +1,7 @@
 import XCTest
 
-/// Screenshots of Plain outside Plain, for design review: the search widget on the Home Screen,
-/// Plain's App Shortcuts in Spotlight and in the Shortcuts app. Drives SpringBoard and Shortcuts,
+/// Screenshots of Plain outside Plain, for design review: the search widget on the Home Screen
+/// and a favorite in Spotlight. Drives SpringBoard and Spotlight,
 /// so it is best effort and skips itself unless `PLAIN_CAPTURE=1` reaches the runner (like
 /// CaptureTests). Export the attachments with `xcrun xcresulttool export attachments`.
 @MainActor
@@ -33,38 +33,27 @@ final class SystemCaptureTests: XCTestCase {
         shot("widgets-home")
     }
 
-    func testCaptureSpotlightAndShortcuts() {
+    func testCaptureSpotlight() {
         launchPlainWithFavorites()
-        // Spotlight: swipe down on the Home Screen, then search for Plain.
-        springboard.swipeDown(velocity: .slow)
-        pause(1)
-        springboard.typeText("Plain")
+        // The Home Screen's Search pill, or a swipe down where there is none.
+        let pill = springboard.descendants(matching: .any).matching(NSPredicate(format: "label == 'Search'")).firstMatch
+        if pill.waitForExistence(timeout: 2) { pill.tap() } else { springboard.swipeDown(velocity: .slow) }
+        pause(1.5)
+        // Spotlight is its own process, with the keyboard up on its field.
+        let spotlight = XCUIApplication(bundleIdentifier: "com.apple.Spotlight")
+        spotlight.typeText("Plain")
         pause(3)
         shot("spotlight-plain")
-        springboard.typeText(XCUIKeyboardKey.delete.rawValue + XCUIKeyboardKey.delete.rawValue + XCUIKeyboardKey.delete.rawValue
-            + XCUIKeyboardKey.delete.rawValue + XCUIKeyboardKey.delete.rawValue + "Wikipedia")
+        let clear = spotlight.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'clear'")).firstMatch
+        if clear.exists { clear.tap() }
+        spotlight.typeText("Wikipedia")
         pause(3)
         shot("spotlight-favorite")
         XCUIDevice.shared.press(.home)
-
-        let shortcuts = XCUIApplication(bundleIdentifier: "com.apple.shortcuts")
-        shortcuts.launch()
-        pause(3)
-        for label in ["Continue", "Not Now", "OK"] where shortcuts.buttons[label].exists {
-            shortcuts.buttons[label].tap()
-            pause(1)
-        }
-        shot("shortcuts-home")
-        let plain = shortcuts.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Plain'")).firstMatch
-        if plain.waitForExistence(timeout: 5) {
-            plain.tap()
-            pause(2)
-            shot("shortcuts-plain")
-        }
     }
 
     /// Edit mode, the widget gallery, Plain's search widget at the size `sizeSwipes` pages in
-    /// (0 small, 1 medium), Add Widget, Done.
+    /// (0 small, 1 medium), Add Widget, out of edit mode.
     private func addWidget(sizeSwipes: Int) {
         springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)).press(forDuration: 1.5)
         pause(1)
@@ -84,8 +73,9 @@ final class SystemCaptureTests: XCTestCase {
             search.typeText("Plain")
             pause(2)
         }
-        let plain = springboard.descendants(matching: .any).matching(NSPredicate(format: "label == 'Plain'")).element(boundBy: 0)
-        if plain.waitForExistence(timeout: 3) { plain.tap() }
+        // The gallery's result, not the Home Screen's Plain icon or widget under the sheet.
+        let results = springboard.descendants(matching: .any).matching(NSPredicate(format: "label == 'Plain'"))
+        if results.firstMatch.waitForExistence(timeout: 3) { results.allElementsBoundByIndex.last?.tap() }
         pause(2)
         for _ in 0 ..< sizeSwipes {
             springboard.swipeLeft()
@@ -95,7 +85,8 @@ final class SystemCaptureTests: XCTestCase {
         let addWidget = springboard.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Add Widget'")).firstMatch
         if addWidget.waitForExistence(timeout: 3) { addWidget.tap() }
         pause(2)
-        if springboard.buttons["Done"].waitForExistence(timeout: 2) { springboard.buttons["Done"].tap() }
+        // Leaves edit mode.
+        XCUIDevice.shared.press(.home)
         pause(1)
     }
 

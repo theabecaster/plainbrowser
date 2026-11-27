@@ -145,8 +145,9 @@ public nonisolated enum PaperTexture {
             var x = (Double(index % grid) + random.unit()) * cell
             var y = (Double(index / grid) + random.unit()) * cell
             var angle = random.unit() * 2 * .pi
-            // Mostly short strands, a few long ones: 12 to 64 pixels, weighted toward short.
-            let length = 12 + 52 * pow(random.unit(), 2)
+            // Mostly short strands, a few long ones: 10 to 44 pixels (3 to 15 pt), weighted toward
+            // short: long ones read as scratches.
+            let length = 10 + 34 * pow(random.unit(), 2)
             let range = recipe.fibreStrength
             var strength = range.lowerBound + random.unit() * (range.upperBound - range.lowerBound)
             if random.unit() < recipe.fibreContrary { strength *= -0.6 }

@@ -4,8 +4,6 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
-- **Dark pages wash out text on mixed light/dark sites like apple.com — make it Safari-quality:** "There is text that looks kind of white — if that's us switching the page's color theme, it's doing a terrible job." (Dark pages lane.)
-
 - **Launch with tabs feels empty:** open to the last tab (or a search with the last tab behind it), like Arc but smoother. (Launch lane.)
 
 
@@ -13,6 +11,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 
 ## Done
+
+- **Dark pages wash out text on mixed light/dark sites like apple.com — make it Safari-quality:** dark pages now works like Safari's Adaptive Dark Mode, color by color instead of inverting the whole page: light backgrounds turn dark and dark text turns light, keeping their hue, while black heroes, dark cards and the white text on them stay exactly as the site made them. Pictures, video, emoji, brand colors and colored logos are never changed; text over a photo keeps the site's color; every text on apple.com, AP News and Hacker News measures at least 4.5:1. (dev, dark pages lane.)
 
 - **URL bar should get out of the way while reading:** keep reading past the pill and the bar sinks away, leaving the whole page; a move up, a tap on the bottom edge or the status bar, the page's end, a new page, Find or a page's keyboard brings it back whole. Never hidden while a page loads, on error pages or with VoiceOver. On the Duo's inner screen the top bar's tucked address rises away the same way. (dev, scroll chrome lane.)
 

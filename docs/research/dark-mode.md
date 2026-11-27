@@ -297,7 +297,7 @@ page dark until then; there is never a light frame).
 |---|---|---|---|---|---|
 | Large light page (`/big`) | 6,308 | 4,000 | 43–44 ms median (filter: ~1 ms) | 15 / 12 / 5 ms | — |
 | apple.com-like at store size (`/apple-big`) | 1,580 | ~4,100 | 36–37 ms | 19 / 7 / 5 ms | 0 of 45 (fixture) |
-| apple.com (real) | ~1,400 | 6,702 | 50 ms | 20 / 6 / 2 ms | 0 of 126 (min 4.7) |
+| apple.com (real) | ~1,400 | 6,702 | 42–50 ms | 20 / 6 / 2 ms | 0 of 126 (min 4.7) |
 | apnews.com (real) | ~3,800 | 20,675 | 209 ms over a 5 s load | 4 / 34 / 4 ms | 0 of 490 (min 4.88) |
 | news.ycombinator.com (real) | 774 | 110 | 11 ms | 4 / 2 / 4 ms | 0 of 291 (min 4.54) |
 | wikipedia.org | — | — | judged native (own dark mode) | — | — |

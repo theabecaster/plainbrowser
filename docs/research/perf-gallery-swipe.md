@@ -100,11 +100,26 @@ Not done: the page snapshot is already the cheap path (`snapshotView(afterScreen
 
 ## 4. After
 
-See section 5 of the lane's report in `docs/perf-log.md` notes and the table below.
+Simulator perf gate (`scripts/perf-gate.sh --sim`, `PLAIN_SIM_PREFIX=plain-speed`, Release, iPhone
+Duo outer screen). Rows not kept in docs/perf-log.md (the lead logs the gate on merge).
 
-| | Before | After |
+| | Before (432dad1, load 40–166) | After (load 370–1000) |
 |---|---|---|
-| Gallery, simulator gate median (outer) | 555 ms | (filled below) |
-| Swipe, simulator gate median (outer) | 312 ms | (filled below) |
-| Gallery, predicted on the Duo (inner) | 680 ms measured | ~520–550 ms |
-| Swipe, predicted on the Duo (inner) | 526 ms measured | ~330–345 ms |
+| Gallery open, median (`gallery.show`) | 555.1 ms | 482.7 ms, now including the set-up from the tap |
+| Bar swipe settle, median (`tab.swipeSettle`) | 311.5 ms | 293.1 ms |
+| Gallery, per run | 587, 554, 571, 555, 554 | 499, 482, 483, 483, 566 |
+| Swipe, per run | 308, 311, 311, 312, 312 | 293, 309, 293, 293, 292 |
+
+The launch rows moved with the load (launch 810 → 1081 ms, last tab 642 → 901 ms on a machine at
+load 370–1000; the before run already failed the search-field row at load 166). The spare gallery
+is built only after the launch has finished, a second after the tab list changes, so it is not in
+those intervals. Some gallery runs failed their page-load waits under that load (setup, not the
+measured step), as the before run did.
+
+Predicted on the Duo (inner screen, from the spring model and the device's before numbers; the
+lead's device gate decides):
+
+| | Before (device) | After (predicted) |
+|---|---|---|
+| Gallery open | 680 ms | ~520–550 ms (spring ~470–500 ms to rest, plus set-up now counted) |
+| Bar swipe settle | 526 ms | ~330–345 ms (spring ~317–325 ms plus the ~15 ms hand-off) |

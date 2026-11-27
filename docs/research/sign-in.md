@@ -106,9 +106,10 @@ From [Preparing your app to be the default web browser](https://developer.apple.
 
 ## When Apple grants it
 
-1. In `project.yml`, under the `Plain` target's `settings.base`, add
-   `CODE_SIGN_ENTITLEMENTS: Plain/Plain-WebBrowser.entitlements`, then `xcodegen generate`.
-   Automatic signing picks the entitlement up from the App ID once Apple has added it.
+1. Copy the `com.apple.developer.web-browser` key from `Plain/Plain-WebBrowser.entitlements`
+   into `Plain/Plain.entitlements` (the app's entitlements since v0.2, which hold the App Group),
+   then `xcodegen generate`. Automatic signing picks the entitlement up from the App ID once
+   Apple has added it.
 2. Set `FixedChoices.passkeysEnabled` and `FixedChoices.defaultBrowserPromptsEnabled` to true.
 3. In `PlainUITests/SignInTests.testLoginFieldBringsUpTheKeyboard`, turn the skip into a failure.
 4. Run the device checks below, then move the `docs/feedback.md` entry to Done.

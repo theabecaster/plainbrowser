@@ -7,17 +7,24 @@ higher one, so an upward import does not compile.
 ## Module map
 
 ```
-Plain (app target: main.swift, AppDelegate, SceneDelegate)
+Plain (app target: main.swift, AppDelegate, SceneDelegate, Intents/)
   └─ ShellUI ─────────┐   TabGalleryUI   FeatureUI        UI layer, MainActor by default
        │              │        │             │
-  WebEngine  ContentBlocking  Reader         │            engine layer
+  WebEngine  ContentBlocking  Reader  SystemSync          engine layer
        │              │        │             │
        └──────────── Storage ────────────────┘            persistence (GRDB), nonisolated
                          │
                     BrowserCore                           pure rules and models, nonisolated
 
-  Leaves, usable from any layer above BrowserCore: DesignSystem (UI), PerfSignposts (os only)
+  Leaves, usable from any layer above BrowserCore: DesignSystem (UI), PerfSignposts (os only),
+  PlainShared (Foundation only)
+
+PlainWidgets (widget extension: the bundle and the controls)
+  └─ WidgetUI ── PlainShared, DesignSystem
 ```
+
+The widget extension never links Storage, WebEngine or GRDB: it reads the favorites file the app
+writes to the App Group (`SharedFavoritesFile`).
 
 | Target | Isolation | Imports | Holds today (M0) |
 |---|---|---|---|
@@ -31,6 +38,9 @@ Plain (app target: main.swift, AppDelegate, SceneDelegate)
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `SpringDriver` (frame-by-frame spring at 80–120 Hz), `Haptic`, `Glass` (the one Liquid Glass helper and its container), `Paper` (the textured Paper background: `apply(to:)`, `PaperBackground`) and `PaperTexture` (the tile, CoreGraphics only) |
 | `PerfSignposts` | nonisolated | os | signpost subsystem, category and names |
+| `PlainShared` | nonisolated (`CommandInbox` MainActor) | Foundation, BrowserCore (TestIsolation) | `PlainCommand` (what the system asks for), `PlainLink` (`plainbrowser:` links both ways), `CommandInbox` (App Intents to the scene), `AppGroup`, `SharedFavorite`/`SharedFavoritesFile` (the App Group file), `SearchWidgetContent` |
+| `SystemSync` | actor | Storage, PlainShared, BrowserCore, CoreSpotlight, WidgetKit | `SystemSync` (follows `AppDatabase.favoritesChanges()`: Spotlight, the App Group file, widget timelines; Clear History empties Spotlight), `SpotlightIndexing` seam + `CoreSpotlightIndex`, `WidgetReloading` seam, `SystemActivity` (Handoff and Spotlight activities to commands) |
+| `WidgetUI` | views MainActor | SwiftUI, WidgetKit, PlainShared, DesignSystem | `SearchWidget` (small, medium, Lock Screen), `SearchProvider` (one entry, `.never`), `SearchWidgetView` and its parts (`DawnWindow`, `SearchField`, `FavoriteDisc`) |
 
 `BrowserCore` and `Storage` never import UIKit or WebKit, so `swift test` runs their tests on macOS.
 `swift test` builds every target, so files that import UIKit are wrapped in `#if canImport(UIKit)`
@@ -151,11 +161,42 @@ and compile to nothing on macOS.
   the new engine. Tab layout and archive interval are stored and held there for the tab features.
 - **Clear History and Data.** `LiveBrowsingDataClearer`: history through the recorder, favicons,
   then `WKWebsiteDataStore.default().removeData` for every type (the pool's configuration uses
-  the default store).
+  the default store), then the app's hook (Spotlight, see System integration).
 - **History writes.** `AppDatabase.historyRecorder` is the one writer. Visits are recorded when a
   load ends on a new back-forward item (a failed or stopped load is not recorded twice); title
   changes only once that item is recorded, so a title never renames an earlier visit. History
   reads and deletes first write what the shell has queued (`ShellHistoryStore`). A private tab records nothing (`recordsHistory(for:)`).
+
+### System integration (v0.2)
+
+docs/research/system-integration.md has the API facts and choices.
+
+1. **One way in.** Everything the system asks for is a `PlainCommand`: App Intents (Shortcuts,
+   Siri, Spotlight action tiles, the controls) send one to `CommandInbox`; widget taps are
+   `plainbrowser:` links (`PlainLink`); Spotlight results and Handoff pages are activities
+   (`SystemActivity`). `SceneDelegate` queues them until the browser is up (a search also waits
+   for the saved engine), skips the intro for them, then calls `BrowserViewController.perform`,
+   which ends where a tap would: a new tab with the field, a page, or the gallery.
+2. **Intents** live in the app target (`Plain/Intents`), so their metadata is extracted there.
+   `OpenPlainIntent`, the controls' action, is compiled into the app and the widget extension and
+   runs only in the app (`allowedExecutionTargets`). Open Favorite's entity query reads the App
+   Group file, never the database.
+3. **Favorites leave the app one way.** `SystemSync` follows the favorites table through a GRDB
+   `ValueObservation` (`AppDatabase.favoritesChanges`), so no writer calls it. Each change writes
+   the App Group file, replaces Plain's Spotlight domain, reloads widget timelines and updates the
+   App Shortcuts' parameters. Operations run one at a time, to the end, in order. What Spotlight
+   took is remembered apart (`spotlight.json`, written only on success), so a failed index is
+   retried. An unchanged list on launch costs two small file reads. It starts
+   `FixedChoices.systemSyncLaunchDelay` after the database opens, at background priority.
+   The app makes it with `SystemSync.live`: in an isolated test run the App Group is the run's own
+   folder and Spotlight, widget reloads and App Shortcuts are stand-ins (Handoff is skipped too).
+4. **Clear History and Data** ends with `FeatureSheets.didClearBrowsingData`: Spotlight is
+   emptied (and iOS's saved activities), then the favorites, which the clear keeps, go back.
+5. **Handoff.** `tabChanged` and `clearPage` call `updateHandoff`: the responder's
+   `userActivity` is a browsing-web activity for the page on screen, or nil for a private tab,
+   the start screen, a failed load or the reader. Never eligible for search or prediction.
+6. **Widgets** (`PlainWidgets` target, views in `WidgetUI`) read the App Group file in their
+   timeline provider; the app reloads them on change, so the timeline never refreshes itself.
 
 ### Reader
 
@@ -214,6 +255,7 @@ exactly what the app emits.
 | `tab.snapshot` | interval | thumbnail `takeSnapshot` → image returned |
 | `tab.crash` | event | a tab's WebContent process terminated |
 | `tab.open` / `tab.close` / `tab.select` | interval | shell, around the `TabStore` call → page on screen |
+| `system.command` | event | a shortcut, Siri, widget, control or Spotlight result asked for a command (named in the message) |
 | `tab.archive` | interval | shell, around `archiveIdleTabs` (launch, foreground) |
 | `tab.unarchive` / `tab.reopen` / `tab.closeAll` | event | archive restore / Reopen Closed Tab / Close All Tabs |
 | `tab.sessionLoad` / `tab.save` | interval | Storage: launch read / one batched write, off main |

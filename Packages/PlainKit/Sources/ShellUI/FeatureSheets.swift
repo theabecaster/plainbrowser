@@ -33,6 +33,14 @@ public final class FeatureSheets {
         self.database = database
     }
 
+    /// Runs after Clear History and Data has cleared Plain's own data: the app empties what the
+    /// system holds for it (Spotlight). Set once, when the system sync starts.
+    public var didClearBrowsingData: @Sendable () async -> Void = {}
+
+    private func runClearHook() async {
+        await didClearBrowsingData()
+    }
+
     var isReady: Bool { database != nil }
 
     /// Writes every visit the shell has queued; history reads and deletes wait for it, so a
@@ -45,7 +53,10 @@ public final class FeatureSheets {
         if let settingsModel { return settingsModel }
         guard let database else { return nil }
         let store = LiveSettingsStore(database: database) { [addressBar] in addressBar.apply($0) }
-        let clearer = LiveBrowsingDataClearer(database: database, settle: settleHistory)
+        // Read when the clear runs: the model is kept, and the hook may be set after it was made.
+        let clearer = LiveBrowsingDataClearer(database: database, settle: settleHistory) { [weak self] in
+            await self?.runClearHook()
+        }
         let model = SettingsModel(store: store, clearer: clearer)
         settingsModel = model
         return model
@@ -149,10 +160,12 @@ nonisolated struct ShellHistoryStore: HistoryStoring {
 
 /// Settings > Clear History and Data: history (after the visits the shell has queued, through
 /// the one history writer), cached site icons, then every cookie, cache and storage entry in the
-/// website data store the web views share. Open tabs and favorites stay.
+/// website data store the web views share, then what the system holds for Plain (`cleared`).
+/// Open tabs and favorites stay.
 nonisolated struct LiveBrowsingDataClearer: BrowsingDataClearing {
     let database: AppDatabase
     let settle: @MainActor @Sendable () async -> Void
+    var cleared: @Sendable () async -> Void = {}
 
     func clearHistoryAndData() async throws {
         await settle()
@@ -161,6 +174,7 @@ nonisolated struct LiveBrowsingDataClearer: BrowsingDataClearing {
         #if os(iOS)
         await Self.removeWebsiteData()
         #endif
+        await cleared()
     }
 
     #if os(iOS)

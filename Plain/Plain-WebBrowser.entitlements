@@ -5,8 +5,8 @@
   signing with a managed entitlement the team does not have fails provisioning.
 
   To turn it on (docs/research/sign-in.md, "When Apple grants it"):
-  1. In project.yml, under the Plain target's settings.base, add
-       CODE_SIGN_ENTITLEMENTS: Plain/Plain-WebBrowser.entitlements
+  1. Copy the key below into Plain/Plain.entitlements (the app's entitlements, which already hold
+     the App Group), next to com.apple.security.application-groups.
   2. Set FixedChoices.passkeysEnabled and FixedChoices.defaultBrowserPromptsEnabled to true.
   3. xcodegen generate, build for the device, and run the device checks in sign-in.md.
 

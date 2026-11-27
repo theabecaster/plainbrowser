@@ -17,6 +17,16 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     TARGETED_DEVICE_FAMILY: "1"
+    # Local device installs pass PLAIN_BUNDLE_SUFFIX=.dev and PLAIN_DISPLAY_SUFFIX=" Dev"
+    # (scripts/install-duo.sh, perf-gate.sh --device), so "Plain Dev" sits beside the TestFlight
+    # app instead of replacing it and never touches its data. TestFlight and Xcode Cloud leave both
+    # empty. The app, its widget extension and their App Group all follow the suffix, so Plain Dev
+    # and the TestFlight app never share a group. Project level: the command line sets it for
+    # every target at once.
+    PLAIN_BUNDLE_SUFFIX: ""
+    PLAIN_DISPLAY_SUFFIX: ""
+    # Read by both entitlements files and both Info.plists (PlainAppGroup, PlainShared.AppGroup).
+    PLAIN_APP_GROUP: group.dev.abrahamgonzalez.plainbrowser$(PLAIN_BUNDLE_SUFFIX)
 packages:
   PlainKit:
     path: Packages/PlainKit
@@ -35,7 +45,11 @@ targets:
       - path: Brand/AppIcon-Night.icon
       - path: Brand/AppIcon-Coral.icon
       - path: Brand/AppIcon-Paper.icon
+      # The controls' intent: App Intents opens the app only when the intent is in both targets.
+      - path: PlainWidgets/OpenPlainIntent.swift
     dependencies:
+      # The widget extension, embedded in PlugIns.
+      - target: PlainWidgets
       - package: PlainKit
         product: ShellUI
       # The first-run intro (shown once, before the browser).
@@ -45,14 +59,17 @@ targets:
         product: Storage
       - package: PlainKit
         product: PerfSignposts
+      # App Intents, widget links and Handoff: the commands, the App Group file, the Spotlight sync.
+      - package: PlainKit
+        product: PlainShared
+      - package: PlainKit
+        product: SystemSync
     settings:
       base:
-        # Local device installs pass PLAIN_BUNDLE_SUFFIX=.dev and PLAIN_DISPLAY_SUFFIX=" Dev"
-        # (scripts/install-duo.sh, perf-gate.sh --device), so they sit beside the TestFlight app
-        # instead of replacing it and never touch its data. TestFlight and Xcode Cloud leave both empty.
-        PLAIN_BUNDLE_SUFFIX: ""
-        PLAIN_DISPLAY_SUFFIX: ""
+        # PLAIN_BUNDLE_SUFFIX and PLAIN_DISPLAY_SUFFIX: project settings above.
         PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser$(PLAIN_BUNDLE_SUFFIX)
+        # The App Group shared with the widget extension (docs/development.md, "Widgets and App Group").
+        CODE_SIGN_ENTITLEMENTS: Plain/Plain.entitlements
         PRODUCT_NAME: Plain
         # The name under the icon.
         APP_DISPLAY_NAME: Plain$(PLAIN_DISPLAY_SUFFIX)
@@ -65,6 +82,53 @@ targets:
         # UI code: MainActor by default, like the package's UI targets. (Not on the UI tests:
         # XCTestCase's overrides are nonisolated, so those classes say @MainActor themselves.)
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  # The search widget (Home Screen, StandBy, Lock Screen) and the Control Center controls. A thin
+  # wrapper: the views and timeline are PlainKit's WidgetUI. Nothing in it runs at app launch.
+  PlainWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PlainWidgets
+        excludes:
+          - "*.entitlements"
+          - Info.plist
+    dependencies:
+      - package: PlainKit
+        product: WidgetUI
+      - package: PlainKit
+        product: PlainShared
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        # Under the app's id, so Plain Dev's extension is .dev.widgets.
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser$(PLAIN_BUNDLE_SUFFIX).widgets
+        PRODUCT_NAME: PlainWidgets
+        APP_DISPLAY_NAME: Plain$(PLAIN_DISPLAY_SUFFIX)
+        INFOPLIST_FILE: PlainWidgets/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: PlainWidgets/PlainWidgets.entitlements
+        SKIP_INSTALL: YES
+        # The intent's perform runs on the main actor in both targets.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  # Hosted unit tests: App Intents performed inside the app. No package products of its own: it
+  # uses the app's copies (a second copy would be a second CommandInbox).
+  PlainTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PlainTests
+    dependencies:
+      - target: Plain
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser.tests
+        GENERATE_INFOPLIST_FILE: YES
+      configs:
+        # @testable needs a Debug app. The perf gate builds the scheme's tests in Release, where
+        # this bundle compiles empty (the Smoke plan runs it in Debug).
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: "*"
   # UI smoke tests and the launch/hitch perf tests the perf gate runs on the device.
   PlainUITests:
     type: bundle.ui-testing
@@ -73,6 +137,7 @@ targets:
       - path: PlainUITests
         excludes:
           - "*.xctestplan"
+          - Info.plist
     dependencies:
       - target: Plain
       # Signpost names, shared with the app so the metrics measure exactly what the app emits.
@@ -82,6 +147,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser.uitests
         GENERATE_INFOPLIST_FILE: YES
+        # Merged into the generated one: the app's link scheme (PlainLinkScheme), for SystemTests.
+        INFOPLIST_FILE: PlainUITests/Info.plist
         TEST_TARGET_NAME: Plain
 schemes:
   Plain:
@@ -89,6 +156,7 @@ schemes:
       targets:
         Plain: all
         PlainUITests: [test]
+        PlainTests: [test]
     run:
       config: Debug
     test:

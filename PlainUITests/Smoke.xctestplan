@@ -9,6 +9,11 @@
     }
   ],
   "defaultOptions" : {
+    "commandLineArgumentEntries" : [
+      {
+        "argument" : "-PlainInMemoryStore"
+      }
+    ],
     "targetForVariableExpansion" : {
       "containerPath" : "container:Plain.xcodeproj",
       "identifier" : "4B32C1CDDD0A4D2F137F5F2A",
@@ -24,6 +29,13 @@
         "containerPath" : "container:Plain.xcodeproj",
         "identifier" : "7E2C5837224225F691EC81FA",
         "name" : "PlainUITests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:Plain.xcodeproj",
+        "identifier" : "7B51DDAF25B0FF598C63FE8E",
+        "name" : "PlainTests"
       }
     }
   ],

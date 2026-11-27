@@ -1291,3 +1291,52 @@ simulator's 24 pt status bar had hidden this.
 - **Not verified on the device:** the simulator draws no status bar in its resizable window and
   reports the safe area differently. Captures use the window's real camera region (portrait) and
   the forced device corner (landscape).
+## System integration: intents, Spotlight, widgets, controls, Handoff (v0.2, 2026-11-27)
+
+- **One command type.** App Intents, widget links, Spotlight results and Handoff all become a
+  `PlainCommand`, and the browser does each the way a tap would (`BrowserViewController.perform`).
+  One path to test, and no intent reaches into the shell.
+- **Intents in the app target, not a package.** App Intents extracts metadata from the target
+  that declares the types; packages need an `AppIntentsPackage` on both sides. The one intent the
+  controls need (`OpenPlainIntent`) is compiled into both targets, as WidgetKit requires, and
+  pinned to the app (`allowedExecutionTargets = [.main]`). Intents reach the scene through
+  `CommandInbox`, a per-process singleton, because the system creates intents with no reference
+  to pass in.
+- **Search uses the Settings engine.** No engine parameter: one choice, made once
+  (`FixedChoices.intentsUseSettingsEngine`). It adopts `.system.searchInApp` (iOS 27), the one
+  schema that fits without new entities. The `.browser` schema domain is Shortcuts-only and wants
+  tab and window entities; snippets add nothing when every action ends in the app.
+- **Spotlight: favorites only.** History stays out (`FixedChoices.spotlightIndexesHistory`):
+  nobody expects everything they read in system search, Safari keeps it out, and it would need
+  chasing on every clear. Private tabs reach nothing. Classic `CSSearchableItem`s behind a
+  `SpotlightIndexing` seam, not `IndexedEntity`: same result for a short list, testable on macOS.
+  Clear History and Data empties Plain's index and puts the favorites back (the clear keeps them).
+- **Favorites leave through one observer.** `SystemSync` follows the table with GRDB's
+  `ValueObservation`, so the page menu, the editor and any later writer need no call. The App
+  Group file is the only thing the widget extension and the entity query read; the extension
+  never links GRDB.
+- **Widgets.** One Search widget in five families instead of several widgets: small (dawn window
+  over the field), medium (field plus four favorites as monogram discs, as above the keyboard),
+  and the Lock Screen. Paper and the dawn sky from Brand/identity.md; outlines in the tint for
+  tinted and clear Home Screens. Every tap is a `plainbrowser:` link; the timeline never
+  refreshes itself.
+- **Controls** use `OpenIntent` (custom URL schemes do not open apps from controls).
+- **Handoff:** the page on screen only, never a private tab (`FixedChoices.handoffInPrivateTabs`),
+  never eligible for search or prediction. Receiving waits for the web-browser entitlement: iOS
+  sends web pages only to the default browser.
+- **Plain Dev gets its own of everything** (landing, 2026-11-27): the widget extension's id, the
+  App Group and the link scheme follow `PLAIN_BUNDLE_SUFFIX`, read at run time from the Info.plist
+  (`PlainAppGroup`, `PlainLinkScheme`). A shared group would let the device build overwrite the
+  TestFlight app's favorites file, and a shared scheme would let one app's widget open the other.
+- **Isolated test runs keep the system out** (landing, 2026-11-27): the App Group is a folder under
+  `TestIsolation.directory`, and Spotlight, widget reloads, Handoff and App Shortcuts' parameters
+  are stand-ins or skipped (`SystemSync.live`, plus a `TestIsolation.isActive` check in each type
+  that reaches the system). PlainShared depends on BrowserCore for this; both are Foundation only,
+  so the extension still links no GRDB, UIKit or WebKit. The isolation check fails on any direct
+  use elsewhere.
+- **Perf cost:** nothing new runs before the first frame except setting the inbox's handler. The
+  sync starts 5 s after the database opens, at background priority; an unchanged list costs two
+  small file reads. The extension adds about 2.5 MB (Debug) to the app bundle. Measured on the
+  Duo simulator, Release, five launches each, `dev` then this branch back to back (machine load
+  about 860, so noisy): `launch.firstFrame` median 937 → 908 ms, `launch` (main to field) 592 →
+  634 ms (fastest runs 562 and 575 ms). Within noise; confirm with the device perf gate.

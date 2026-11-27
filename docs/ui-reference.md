@@ -75,3 +75,9 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - Short and plain, with Title Case for labels and sentence case for footers and messages.
 - Error messages are written by Plain from known error cases, never raw WebKit or server text.
+
+## Outside the app
+
+- Widgets, controls and shortcuts use the app's own words and actions: "Search in Plain", "New Tab", "New Private Tab", "Open Favorite", "Show Tabs", "Open URL". Each ends on the screen a tap in Plain would reach; none adds a mode of its own.
+- The search widget is paper and the brand's dawn window, with the field drawn like the resting pill and favorites as the monogram discs from above the keyboard. Tinted and clear Home Screens get the same shapes as outlines in the tint.
+- Only favorites appear in Spotlight. Nothing from a private tab leaves the app (no Spotlight, no Handoff).

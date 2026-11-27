@@ -66,11 +66,28 @@ final class IsolatedApplication: XCUIApplication {
     static let storeReadyValue = "store:ready"
 
     override func launch() {
+        guard isolationRequested else { return }
+        super.launch()
+        checkIsolated()
+    }
+
+    /// A launch from a link (a widget or Spotlight result launching Plain cold): the same checks,
+    /// before and after.
+    override func open(_ url: URL) {
+        guard isolationRequested else { return }
+        super.open(url)
+        checkIsolated()
+    }
+
+    private var isolationRequested: Bool {
         guard launchArguments.contains(Self.inMemoryArgument) || launchArguments.contains(Self.testStoreArgument) else {
             XCTFail("refusing to launch Plain without an isolation argument: \(launchArguments)")
-            return
+            return false
         }
-        super.launch()
+        return true
+    }
+
+    private func checkIsolated() {
         let marker = descendants(matching: .any).matching(identifier: Self.markerIdentifier).firstMatch
         guard marker.waitForExistence(timeout: 10) else {
             terminate()

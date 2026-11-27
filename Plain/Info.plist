@@ -26,7 +26,32 @@
 				<string>https</string>
 			</array>
 		</dict>
+		<!-- Plain's own links: the widgets open search, a favorite or a tab with them
+		     (PlainShared.PlainLink). Each does only what a tap in Plain does. Plain Dev's scheme is
+		     plainbrowser.dev, so its widgets never open the TestFlight app (or the reverse). -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>Plain link</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>plainbrowser$(PLAIN_BUNDLE_SUFFIX)</string>
+			</array>
+		</dict>
 	</array>
+	<!-- Handoff: web pages continued from another device. iOS sends them to the default browser,
+	     so they reach Plain once it can be the default (docs/research/system-integration.md). -->
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>NSUserActivityTypeBrowsingWeb</string>
+	</array>
+	<!-- The App Group and the link scheme, from project.yml (they follow the bundle suffix):
+	     PlainShared.AppGroup and PlainLink read them. -->
+	<key>PlainAppGroup</key>
+	<string>$(PLAIN_APP_GROUP)</string>
+	<key>PlainLinkScheme</key>
+	<string>plainbrowser$(PLAIN_BUNDLE_SUFFIX)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>

@@ -17,7 +17,15 @@ Package tests alone: `cd Packages/PlainKit && swift test`.
 ## Test isolation
 
 Tests on the owner's device are isolated. Every UI, perf and capture launch goes through `XCUIApplication.isolated()`, which adds `-PlainInMemoryStore` (or a test adds `-PlainTestStore`), and the app honors these in Debug and Release (`TestIsolation` in BrowserCore). An isolated run uses a temporary database, tab state, thumbnails, downloads and TipKit store, a separate defaults suite, its own website data store (never the default one, so the owner's cookies and logins are never read or changed) and a private pasteboard. It never changes the Home Screen icon or adds to Photos. Only WebKit's compiled blocking lists stay shared: a cache built from the bundled lists, with no user data.
-`IsolatedApplication` refuses to launch without the argument and terminates the app if no `plainTestIsolation` marker shows. Once the database is open, migrated and attached, the marker's value gains `store:ready` (`waitForStoreReady()`): tests wait for the store with it instead of driving the UI, so it works in every layout. `scripts/test.sh` and `scripts/perf-gate.sh` run `scripts/lib/check-isolation.zsh` first and stop when any test could launch Plain another way, or when app code reaches owner state (standard defaults, general pasteboard, default website data, icon, Documents, scene state, Photos) outside the files that route it through `TestIsolation`.
+`IsolatedApplication` refuses to launch without the argument and terminates the app if no `plainTestIsolation` marker shows. Once the database is open, migrated and attached, the marker's value gains `store:ready` (`waitForStoreReady()`): tests wait for the store with it instead of driving the UI, so it works in every layout.
+The system hooks are isolated too: an isolated run's App Group is a folder of its own
+(`AppGroup.containerURL`), and it never indexes into or clears Spotlight, reloads widgets, offers
+Handoff or updates the App Shortcuts' parameters (`SystemSync.live` gives it stand-ins, and
+`CoreSpotlightIndex`, `WidgetCenterReloader` and Handoff check `TestIsolation.isActive` again).
+The hosted unit tests (`PlainTests`) get `-PlainInMemoryStore` for their host app from
+`Smoke.xctestplan`, and stop if the host is not isolated. `SystemCaptureTests` runs on simulators
+only: it adds widgets to the Home Screen.
+`scripts/test.sh` and `scripts/perf-gate.sh` run `scripts/lib/check-isolation.zsh` first and stop when any test could launch Plain another way, or when app code reaches owner state (standard defaults, general pasteboard, default website data, icon, Documents, scene state, Photos, Spotlight, widgets, App Group container and defaults, Handoff, App Shortcuts and donations) outside the files that route it through `TestIsolation`, or when a plan runs `PlainTests` without isolating the host.
 
 WebKit tests (`WebEngineTests`, `ContentBlockingTests`) need an iOS simulator; on macOS only their
 pure parts run. Run them on one of your own `plain-*` simulators:
@@ -49,6 +57,50 @@ cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig   # then 
 Simulator builds work without it. The device scripts pass `-allowProvisioningUpdates
 -allowProvisioningDeviceRegistration`. For perf runs keep the phone awake and unlocked
 (Settings > Display & Brightness > Auto-Lock > Never).
+
+## Widgets and App Group
+
+The app embeds one extension, `PlainWidgets`: the search widget and the Control Center controls.
+`xcodegen generate` builds and embeds it; every script builds it with the app, nothing extra to run.
+
+Everything that names the app follows `PLAIN_BUNDLE_SUFFIX` (project.yml), so Plain Dev and the
+TestFlight app never share a group, a widget or a link:
+
+| | TestFlight / Xcode Cloud | Plain Dev (`PLAIN_BUNDLE_SUFFIX=.dev`) |
+|---|---|---|
+| App | `dev.abrahamgonzalez.plainbrowser` | `dev.abrahamgonzalez.plainbrowser.dev` |
+| Widget extension | `dev.abrahamgonzalez.plainbrowser.widgets` | `dev.abrahamgonzalez.plainbrowser.dev.widgets` |
+| App Group (`PLAIN_APP_GROUP`) | `group.dev.abrahamgonzalez.plainbrowser` | `group.dev.abrahamgonzalez.plainbrowser.dev` |
+| Link scheme | `plainbrowser:` | `plainbrowser.dev:` |
+
+Both entitlements files (`Plain/Plain.entitlements`, `PlainWidgets/PlainWidgets.entitlements`) take
+the group from `$(PLAIN_APP_GROUP)`; both Info.plists carry it as `PlainAppGroup`, and the scheme as
+`PlainLinkScheme`, which `PlainShared.AppGroup` and `PlainLink` read at run time.
+
+**Signing.** The App Groups need explicit App IDs (the team's wildcard profile can't hold a group),
+and the App Store Connect API key can't register a group. Xcode registered all four IDs and both
+groups on 2026-11-27, from a device build with `-allowProvisioningUpdates` while signed in with the
+team's Apple ID (Xcode > Settings > Accounts); the App Store profiles were made by an archive and
+export with the API key, as `scripts/testflight.sh` does. Nothing more to do unless an ID is
+deleted. If a new variant ever stops with "doesn't include the App Groups capability", sign in to
+Xcode with the team's Apple ID and build it once for the device with `-allowProvisioningUpdates`.
+Xcode Cloud's managed signing uses the registered IDs.
+
+Simulator builds sign without a team, and the group works there too. Tests:
+
+- `PlainTests` (hosted in the app, in the Smoke plan): performs every App Intent and checks the
+  command it sends.
+- `PlainUITests/SystemTests` (Smoke): the `plainbrowser:` links end to end, with the scheme of the
+  app under test (`PlainLinkScheme` in `PlainUITests/Info.plist`), so a Plain Dev run never sends a
+  link to the TestFlight app.
+- `SystemIntegrationTests` (PlainKit): links, the shared file, the Spotlight sync against a fake
+  index and the widget timeline run with `swift test`; on a simulator they also render the widget
+  faces to PNGs:
+  `TEST_RUNNER_PLAIN_WIDGET_SHOTS=$PWD/build/widgetshots xcodebuild test -scheme PlainKit-Package -destination id=<udid> -only-testing:SystemIntegrationTests`.
+- `PlainUITests/SystemCaptureTests`: the widgets on the Home Screen and Plain's actions in
+  Spotlight, screenshots only, with `TEST_RUNNER_PLAIN_CAPTURE=1` (like `CaptureTests`). Simulators
+  only. The app runs isolated, so the Home Screen widget shows its empty face; the faces with
+  favorites come from `SystemIntegrationTests`.
 
 ## Perf gate
 

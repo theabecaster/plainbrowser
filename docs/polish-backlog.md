@@ -360,3 +360,27 @@ Newest feature last.
 - **Footer step at a reveal.** A fixed page footer now moves up in the frame the bar starts back
   (one motion with the bar, not after it), but in one step: WebKit doesn't animate an inset change,
   and changing it per frame would relayout the page during the spring (engine rule 4).
+
+## System integration (v0.2b, 2026-11-27)
+
+- **Small widget hierarchy.** The dawn window still outweighs the Search field; try a shorter
+  window (about 55% of the height) once seen on the device and in StandBy. (Design review, round 2.)
+- **Tinted, clear and StandBy.** The `.accented` outline drawing and StandBy (background removed)
+  are built but not captured; check them on the device. Lock Screen accessories were rendered
+  without the system's accessory background; check spacing there. (Design review, round 2.)
+- **Shortcuts app capture.** iOS 27's new-shortcut screen opens on "describe a shortcut", which
+  the capture test can't drive, so Plain's actions in the Shortcuts editor are unverified by
+  screenshot (the App Intents metadata lists all seven intents and six App Shortcuts, and
+  PlainTests performs each). Check once by hand.
+- **Spotlight App Shortcut tiles.** Spotlight on the simulator showed the favorite but not Plain's
+  App Shortcut tiles; check on the device after a day of use.
+- **Cold-launch command sequences.** Show Tabs then another command during restore is handled
+  (the later one cancels the wait) but has no UI test; add one if it ever regresses.
+- **Site icons in the widget.** Favorites are monograms in the widget and above the keyboard; if
+  favorites ever get site icons, do both together. (Design review, round 1.)
+- **Isolation check limits** (landing review, round 2). The guard check ignores `//` lines but not
+  `/* … */` comments, and an App Shortcuts update counts as inside `SystemSync.live`'s closure by
+  being within three lines of it, not by parsing. Both are safe today; tighten if the files grow.
+- **Widget captures on a device.** The widget extension is started by the system without the
+  app's isolation arguments, so it reads the installed app's real App Group. That is why
+  `SystemCaptureTests` runs on simulators only; a device capture would need a throwaway install.

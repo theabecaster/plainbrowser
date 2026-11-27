@@ -76,6 +76,28 @@ extension AppDatabase {
         }
     }
 
+    /// Favorites in display order now and after every change, from any writer (the page menu, the
+    /// favorites editor, a sync). For the system copies (Spotlight, widgets) that follow the list
+    /// without each writer having to tell them. GRDB reads off the main thread; a burst of writes
+    /// can arrive as one value. Ends when the consuming task is cancelled.
+    public func favoritesChanges() -> AsyncStream<[Favorite]> {
+        let observation = ValueObservation
+            .tracking { db in try Favorite.order(Column("position")).fetchAll(db) }
+            .removeDuplicates()
+        let writer = writer
+        return AsyncStream { continuation in
+            let task = Task {
+                do {
+                    for try await favorites in observation.values(in: writer) {
+                        continuation.yield(favorites)
+                    }
+                } catch {}
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     /// Case- and diacritic-insensitive form, so "cafe" matches "Café" as in history search.
     private static func fold(_ text: String) -> String {
         text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)

@@ -52,13 +52,26 @@ search widget and the Control Center controls. `xcodegen generate` builds and em
 script builds it with the app, nothing extra to run.
 
 Both targets carry the App Group `group.dev.abrahamgonzalez.plainbrowser`
-(`Plain/Plain.entitlements`, `PlainWidgets/PlainWidgets.entitlements`). Automatic signing with
-`-allowProvisioningUpdates` (the device scripts, `scripts/testflight.sh`) registers the
-extension's App ID and the group and adds them to the profiles. If a build ever stops on the
-group ("No profiles ... application-groups" or "App Group ... not registered"), do the one manual
-step: in Xcode, open the Plain target > Signing & Capabilities, add the group under App Groups
-once (and the same for PlainWidgets), then build again. Xcode Cloud manages signing itself and
-needs nothing.
+(`Plain/Plain.entitlements`, `PlainWidgets/PlainWidgets.entitlements`).
+
+**One manual step, once, before the first device build with the extension.** Until v0.2 the app
+signed with the team's wildcard profile, which cannot hold an App Group, and the App Store
+Connect API key cannot register a group (Xcode answers "Authentication failed" for it, and the
+API has no App Group endpoint). A device or archive build stops with "Provisioning profile ...
+doesn't include the App Groups capability" until this is done:
+
+1. In Xcode, signed in with the team's Apple ID (Settings > Accounts), open `Plain.xcodeproj`.
+2. Plain target > Signing & Capabilities > App Groups: the group shows from the entitlements
+   file; click the refresh arrow (or tick the group) so Xcode registers it and the App ID.
+3. Same for the PlainWidgets target (it registers `dev.abrahamgonzalez.plainbrowser.widgets`).
+4. Build once for the device from Xcode. The explicit profiles now exist; the scripts and
+   `scripts/testflight.sh` sign with them from then on.
+
+The same in the portal (developer.apple.com > Certificates, Identifiers & Profiles): add the App
+Group `group.dev.abrahamgonzalez.plainbrowser`; enable App Groups on the App ID
+`dev.abrahamgonzalez.plainbrowser` and tick the group; register the App ID
+`dev.abrahamgonzalez.plainbrowser.widgets` with App Groups and the same group. Xcode Cloud then
+needs nothing more: its managed signing uses the registered IDs.
 
 Simulator builds sign without a team, and the group works there too. Tests:
 

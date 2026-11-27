@@ -268,11 +268,19 @@ public struct SummaryView: View {
                 Button("Try Again") { model.onRetry() }
                     .buttonStyle(.borderedProminent)
                     .tint(Style.accent)
+                    // The sheet's ink would otherwise color the label: white on the accent, as
+                    // every prominent button, and a full 44 pt target.
+                    .foregroundStyle(.white)
+                    .controlSize(.large)
                     .accessibilityIdentifier("summaryTryAgain")
             } else if case .search(let query) = progress.subject, let searchInstead = model.onSearchInstead {
                 Button("Search Instead") { searchInstead(query) }
                     .buttonStyle(.borderedProminent)
                     .tint(Style.accent)
+                    // The sheet's ink would otherwise color the label: white on the accent, as
+                    // every prominent button, and a full 44 pt target.
+                    .foregroundStyle(.white)
+                    .controlSize(.large)
                     .accessibilityIdentifier("summarySearchInstead")
             }
         }

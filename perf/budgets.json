@@ -46,7 +46,7 @@
       "target": 610,
       "fail": 750,
       "slack": 8.3,
-      "why": "Ends when the page is within 0.5 pt of its card (TabGalleryTransition), not at Core Animation's settle (~0.98 s). The 0.42 s critically damped spring alone needs ~0.60 s to come within 0.5 pt of a ~400 pt move, so the best possible is that plus a frame: 610. Fail 750, ~10% over today's 680."
+      "why": "Ends when the page is within 0.5 pt of its card (TabGalleryTransition), not at Core Animation's settle, and starts at the tap (getting the gallery ready counts, since 2026-11-27). The 0.42 s spring with bounce 0.06 (2026-11-27, docs/research/perf-gallery-swipe.md) comes within 0.5 pt in ~0.47-0.50 s; was critically damped (~0.60 s). Target 610, fail 750."
     },
     "swipeMs": {
       "label": "Bar swipe: finger lift to page settled (ms)",
@@ -57,7 +57,7 @@
       "target": 320,
       "fail": 600,
       "slack": 8.3,
-      "why": "From the finger lifting (tab.swipeSettle), so the test's scripted drag is left out. The 0.35 s spring comes to rest within 0.5 pt in ~0.3 s from the test's release (40% across at 1200 pt/s), plus the hand-off (tab.swipeHandoff, ~10 ms): target 320. Today 526 holds ~200 ms that is not the spring. Fail 600, ~14% over today."
+      "why": "From the finger lifting (tab.swipeSettle), so the test's scripted drag is left out. Ends when the page is within 0.5 pt of the neighbour and moving less than 0.5 pt a frame, plus the hand-off (tab.swipeHandoff, ~10-15 ms). The 0.28 s / bounce 0.08 spring (2026-11-27) rests in ~0.26-0.30 s on any width, the Duo's inner page included; the old 0.35 s / 0.12 spring overshot 2-3 pt there and crept back (the ~200 ms in today's 526). Target 320, fail 600."
     },
     "lastTabMs": {
       "label": "main() to first frame with the last tab (ms)",

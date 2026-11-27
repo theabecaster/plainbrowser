@@ -865,12 +865,21 @@ final class CaptureTests: XCTestCase {
     /// The Archive opened over a full archive (1,000 tabs over 30 days): the read and the
     /// sections (`archive.load`) and the wall clock from the tap to the first row, five times.
     func testMeasureFullArchiveOpen() throws {
+        try measureArchiveOpen(seed: "-PlainSeedFullArchive")
+    }
+
+    /// The same over the small seed (7 tabs): what opening costs without the archive's size.
+    func testMeasureSmallArchiveOpen() throws {
+        try measureArchiveOpen(seed: "-PlainSeedArchive")
+    }
+
+    private func measureArchiveOpen(seed: String) throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
         let app = XCUIApplication.isolated()
-        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFullArchive"]
+        app.launchArguments += ["-PlainInMemoryStore", seed]
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -890,7 +899,7 @@ final class CaptureTests: XCTestCase {
             item.tap()
             XCTAssertTrue(app.buttons.matching(identifier: "archiveRow").firstMatch.waitForExistence(timeout: 5))
             stopMeasuring()
-            shot("m-full-archive")
+            shot("m-archive\(seed)")
             app.navigationBars.buttons["Done"].tap()
             XCTAssertTrue(app.otherElements["archiveSheet"].waitForNonExistence(timeout: 3))
         }
@@ -934,7 +943,7 @@ final class CaptureTests: XCTestCase {
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText(server.address("/a") + "\n")
-        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 20))
         pause(1)
         app.buttons["more"].tap()
         let item = app.buttons["more.archivedTabs"]

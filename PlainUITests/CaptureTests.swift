@@ -310,8 +310,7 @@ final class CaptureTests: XCTestCase {
     }
 
     /// One page tab into the switcher: a slow swipe up held mid-way (for the recording's frames),
-    /// the lone card with its New Tab card, the New Tab card scrolled into focus, then Show All
-    /// Tabs and the New Tab card's tap.
+    /// the lone card, then Show All Tabs and the bar's + (New Tab).
     func testCaptureOneTab() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
         let server = try TestServer()
@@ -343,19 +342,13 @@ final class CaptureTests: XCTestCase {
             }
         }
         shot("o2-switcher")
-        let gallery = app.scrollViews["tabGallery"]
-        gallery.swipeLeft(velocity: .slow)
-        pause(1.2)
-        shot("o3-newtab-focused")
-        gallery.swipeRight(velocity: .slow)
-        pause(1.2)
         app.buttons["galleryDone"].tap()
         pause(1.5)
 
         app.buttons["tabs"].press(forDuration: 1)
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Show All Tabs'")).firstMatch.tap()
         pause(1.5)
-        app.descendants(matching: .any)["galleryNewTabCard"].tap()
+        app.buttons["galleryNewTab"].tap()
         pause(1.5)
         shot("o4-newtab-search")
     }

@@ -239,13 +239,7 @@ Newest feature last.
 
 ## One-tab switcher (2026-11-26)
 
-- **New Tab card entrance.** It grows in after the page has landed on its card, which reads as a
-  second animation. Starting it as the zoom settles would feel like one motion, but while the page
-  still moves above the gallery the card's overlap would pop at the end; solve both together.
-  (Design review, round 2.)
-- **New Tab card fade reversal.** Back to one card within the 0.15 s fade-out (a reopen then a
-  close), the card restarts its grow-in from nothing instead of from where the fade had it.
-  (Code review, round 2.)
+- The New Tab card's entrance and fade items were dropped with the card (removed 2026-11-27).
 
 ## Paper texture (2026-11-26)
 

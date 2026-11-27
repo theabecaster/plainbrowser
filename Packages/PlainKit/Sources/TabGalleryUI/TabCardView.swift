@@ -1,7 +1,5 @@
 #if canImport(UIKit)
 import DesignSystem
-import os
-import PerfSignposts
 import UIKit
 
 /// One tab's card: the site icon and title on top, the page preview under them. Swipe it up to
@@ -10,7 +8,7 @@ import UIKit
 /// The gallery places the card with `center` and `transform` only, every frame of a scroll. Its
 /// subviews are laid out once per size (`setSize`), so moving a card never runs a layout pass, and
 /// images arrive already decoded.
-final class TabCardView: UIView, UIGestureRecognizerDelegate {
+final class TabCardView: UIView {
     /// The tab this card shows; image loads check it before assigning.
     private(set) var tabID: UUID?
     /// The image requests this card shows; a load that finishes for an older key is dropped.
@@ -36,7 +34,8 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
     private let faviconView = UIImageView()
     private let privateIcon = UIImageView(image: UIImage(systemName: "eye.slash.fill"))
     private let titleLabel = UILabel()
-    private let swipe = UIPanGestureRecognizer()
+    /// The lift: swipe up to close (`CardDrag`).
+    private lazy var drag = CardDrag(body: body) { [unowned self] in size.height - headerHeight }
     private let tap = UITapGestureRecognizer()
 
     private(set) var size: CGSize = .zero
@@ -48,10 +47,8 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
     private let blankMark = MarkView()
     private var titleAlpha: CGFloat = 1
     private var visibleWidth: CGFloat = 0
-    /// The card's offset when the finger went down (non-zero when it grabs a card mid-spring).
-    private var swipeStart: CGFloat = 0
-    /// Whether a finger is moving this card now.
-    var isSwiping: Bool { swipe.state == .began || swipe.state == .changed }
+    /// Whether a finger is moving this card, or it is still springing back from one.
+    var isSwiping: Bool { drag.isActive }
     /// Set while the card flies off; it no longer belongs to a tab.
     private(set) var isLeaving = false
 
@@ -102,9 +99,7 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         titleLabel.lineBreakMode = .byTruncatingTail
         header.addSubview(titleLabel)
 
-        swipe.delegate = self
-        swipe.addTarget(self, action: #selector(handleSwipe(_:)))
-        body.addGestureRecognizer(swipe)
+        drag.onClose = { [weak self] in self?.onSwipeAway?() }
         tap.addTarget(self, action: #selector(handleTap))
         body.addGestureRecognizer(tap)
 
@@ -345,54 +340,18 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         onOpen = nil
         onSwipeAway = nil
         onClose = nil
-        swipeStart = 0
+        drag.reset()
     }
 
     // MARK: Swipe up to close
-
-    override func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
-        guard gesture === swipe else { return super.gestureRecognizerShouldBegin(gesture) }
-        // Only a mostly vertical move: a sideways one scrolls the gallery.
-        let velocity = swipe.velocity(in: body)
-        return abs(velocity.y) > abs(velocity.x)
-    }
 
     @objc private func handleTap() {
         onOpen?()
     }
 
-    @objc private func handleSwipe(_ gesture: UIPanGestureRecognizer) {
-        let height = size.height - headerHeight
-        switch gesture.state {
-        case .began:
-            // Grab the card where it is on screen, even mid-spring.
-            swipeStart = body.layer.presentation()?.affineTransform().ty ?? body.transform.ty
-            Haptic.close.prepare()
-        case .changed:
-            let y = CardSwipe.offset(translation: swipeStart + gesture.translation(in: self).y, cardHeight: height)
-            UIView.animate(Motion.tracking) {
-                self.body.transform = CGAffineTransform(translationX: 0, y: y)
-            }
-        case .ended, .cancelled, .failed:
-            let y = CardSwipe.offset(translation: swipeStart + gesture.translation(in: self).y, cardHeight: height)
-            let velocity = gesture.state == .ended ? gesture.velocity(in: self).y : 0
-            if gesture.state == .ended, CardSwipe.shouldClose(translation: y, velocity: velocity, cardHeight: height) {
-                onSwipeAway?()
-            } else {
-                Signposts.signposter.emitEvent(Signposts.galleryCardKept)
-                Motion.animate(Motion.cardReturn) {
-                    self.body.transform = .identity
-                }
-            }
-        default:
-            break
-        }
-    }
-
-    /// Sends the card up and off the screen, then calls `completion`. After a swipe the spring
-    /// carries on from the finger's tracking animation, so the card keeps the release velocity
-    /// with no hand-off (WWDC24, "Enhance your UI animations and transitions"). From a button or
-    /// menu the card is at rest and simply rises away.
+    /// Sends the card up and off the screen, then calls `completion`. After a swipe it flies on
+    /// with the release velocity, frame by frame (`CardDrag.fly`), so there is no hand-off. From a
+    /// button or menu the card is at rest and simply rises away.
     func throwAway(completion: @escaping () -> Void) {
         isLeaving = true
         isUserInteractionEnabled = false
@@ -402,15 +361,9 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         }
         // Far enough that the card's bottom edge clears the top of the screen.
         let bottomOnScreen = superview.map { convert(CGPoint(x: 0, y: bounds.maxY), to: $0).y - $0.bounds.minY } ?? frame.maxY
-        UIView.animate(Motion.cardThrow, changes: {
-            self.body.transform = CGAffineTransform(translationX: 0, y: -(bottomOnScreen + Spacing.xl))
-        }, completion: completion)
-    }
-
-    func gestureRecognizer(
-        _ gesture: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
-    ) -> Bool {
-        false
+        // In the card's own units (it may be scaled), so the body clears the top on screen.
+        let scale = max(transform.a, 0.01)
+        drag.fly(to: -(bottomOnScreen + Spacing.xl) / scale, spring: Motion.cardThrowSpring, completion: completion)
     }
 
     // MARK: Accessibility

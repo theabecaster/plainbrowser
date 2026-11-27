@@ -204,14 +204,14 @@ public struct ControlRules: Sendable, Equatable {
     public var more: ControlVisibility { .shown }
 
     /// Tabs whenever the switcher has a card, the swipe up's predicate: with one page tab the tap
-    /// opens its card beside a New Tab card, as dragging the bar up does (owner, 2026-11-27). With
+    /// opens its card, as dragging the bar up does (owner, 2026-11-27). With
     /// side tabs the slot shows and hides the sidebar, which is always there to toggle (M3).
     public var tabsSlot: TabsSlotFace {
         state.sideTabs || galleryHasCards ? .tabs : .hidden
     }
 
     /// The gallery has a card to show: another tab, or the page on screen (one page tab shows its
-    /// card beside a New Tab card). An empty tab alone has nothing to show.
+    /// card alone, with New Tab in the bar under it). An empty tab alone has nothing to show.
     public var galleryHasCards: Bool { state.others >= 1 || state.hasPage }
 
     /// The swipe up from the bar opens the gallery whenever it has a card, so the gesture always
@@ -435,10 +435,6 @@ public struct GalleryRules: Sendable, Equatable {
 
     /// In an empty list, the empty state's button is the one New Tab (principle 8).
     public var newTabButton: Bool { state.listCount > 0 }
-
-    /// One card in the list: a paper New Tab card sits beside it, so the switcher never looks
-    /// half empty and the next step is in plain sight (owner, 2026-11-26).
-    public var newTabCard: Bool { state.listCount == 1 }
 
     /// Done returns to the tab on screen, so it shows only when that tab is in the list.
     public var done: Bool { state.selectionInList }

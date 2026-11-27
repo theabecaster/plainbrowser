@@ -76,9 +76,6 @@ public final class TabGalleryTransition {
         cardFrame = gallery.thumbnailFrame(for: tabID, in: container)
             ?? CGRect(x: pageFrame.midX - 1, y: pageFrame.midY - 1, width: 2, height: 2)
         gallery.setThumbnailHidden(for: tabID)
-        // The New Tab card beside a lone card would cover the moving page's edge; it waits and
-        // grows in once the page has landed. A crossfade moves nothing, so it stays.
-        if !Motion.prefersCrossfade { gallery.setNewTabCardHeld(true, fades: start == .gallery) }
 
         wrapper.clipsToBounds = true
         wrapper.layer.cornerCurve = .continuous
@@ -223,6 +220,8 @@ public final class TabGalleryTransition {
         lastShown = nil
         guard !signpostEnded, settleWatch == nil else { return }
         let link = CADisplayLink(target: SettleWatchTarget(self), selector: #selector(SettleWatchTarget.tick))
+        // Sampled at the rate the zoom runs at: a 60 Hz sample would see the rest up to a frame late.
+        link.preferredFrameRateRange = SpringDriver.frameRateRange
         link.add(to: .main, forMode: .common)
         settleWatch = link
     }
@@ -372,7 +371,6 @@ public final class TabGalleryTransition {
         }
         gallery.setThumbnailHidden(for: nil)
         gallery.setHeaderFade(1)
-        gallery.setNewTabCardHeld(false, grows: end == .gallery)
         endSignpost()
         completion(end)
     }

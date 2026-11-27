@@ -3,6 +3,31 @@ import Foundation
 import Testing
 @testable import TabGalleryUI
 
+/// The card lift's rules (docs/research/tab-drag-feel.md).
+@MainActor
+struct CardLiftTests {
+    @Test func aThumbArcingUpLiftsTheCardAndASidewaysMoveScrolls() {
+        #expect(CardSwipe.isLift(velocity: CGPoint(x: 0, y: -100)))
+        // 45° and 55° from horizontal, up: a thumb's arc still lifts.
+        #expect(CardSwipe.isLift(velocity: CGPoint(x: 100, y: -100)))
+        #expect(CardSwipe.isLift(velocity: CGPoint(x: -70, y: -100)))
+        // Flatter than 30°: the gallery scrolls.
+        #expect(!CardSwipe.isLift(velocity: CGPoint(x: 100, y: -50)))
+        #expect(!CardSwipe.isLift(velocity: CGPoint(x: -100, y: 0)))
+        // Down keeps the even split (it only rubber-bands).
+        #expect(CardSwipe.isLift(velocity: CGPoint(x: 50, y: 100)))
+        #expect(!CardSwipe.isLift(velocity: CGPoint(x: 100, y: 70)))
+    }
+
+    @Test func aLightFlickClosesAndAHeldDragDoesNot() {
+        let height: CGFloat = 576
+        #expect(CardSwipe.shouldClose(translation: -20, velocity: -600, cardHeight: height), "a light flick")
+        #expect(!CardSwipe.shouldClose(translation: -90, velocity: 0, cardHeight: height), "held, short of 40%")
+        #expect(CardSwipe.shouldClose(translation: -240, velocity: 0, cardHeight: height), "past 40%")
+        #expect(!CardSwipe.shouldClose(translation: -240, velocity: 400, cardHeight: height), "moving down keeps it")
+    }
+}
+
 @MainActor
 struct CascadeCurveTests {
     @Test func matchesTheArcMeasurements() {
@@ -119,21 +144,19 @@ struct TabGalleryMetricsTests {
         }
     }
 
-    @Test func aLoneCardAndItsNewTabCardCenterOnTheFold() {
+    @Test func aLoneCardSitsCentered() {
         for var metrics in [innerLandscape, innerPortrait] {
-            metrics.centeredRow = 2
-            let card = metrics.gridPoint(0), newTab = metrics.gridPoint(1)
-            // Side by side in one row, meeting on the fold, in the middle of the space top to bottom.
-            #expect(card.y == newTab.y)
-            let gapCenter = (card.x + metrics.cardWidth / 2 + newTab.x - metrics.cardWidth / 2) / 2
-            #expect(abs(gapCenter - metrics.width / 2) <= 1)
+            metrics.centeredRow = 1
+            let card = metrics.gridPoint(0)
+            // In the middle of the screen, side to side and top to bottom.
+            #expect(abs(card.x - metrics.width / 2) <= 1)
             let middle = metrics.contentMinY + metrics.contentHeight / 2
             let blockCenter = card.y - metrics.thumbnailHeight / 2 - metrics.headerHeight + metrics.cardSize.height / 2
             #expect(abs(blockCenter - middle) <= 1)
         }
         // The cascade ignores it: the lone card rests in the focus.
         var phone = phone
-        phone.centeredRow = 2
+        phone.centeredRow = 1
         #expect(phone.placement(slot: 0, offset: 0).center == phone.focusPoint)
     }
 

@@ -108,6 +108,34 @@ final class TabsTests: XCTestCase {
         XCTAssertEqual(app.buttons["addressPill"].value as? String, address("/a"))
     }
 
+    /// Drags `element` up by `distance` points from its middle at `speed` pt/s, then holds for
+    /// `hold` seconds before lifting (0: a flick that lifts while moving).
+    private func dragUp(_ element: XCUIElement, by distance: CGFloat, speed: CGFloat, hold: TimeInterval) {
+        let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+        let end = start.withOffset(CGVector(dx: 0, dy: -distance))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: XCUIGestureVelocity(speed), thenHoldForDuration: hold)
+    }
+
+    /// A card follows a short drag and, let go without a flick, comes back: the tab stays. A short
+    /// quick flick closes it (the release is projected, as in the app switcher).
+    func testGalleryCardDragReturnsAndAShortFlickCloses() throws {
+        let app = try launch()
+        openTabs(app, [("/a", "Page A"), ("/b", "Page B")])
+        let gallery = openGallery(app)
+        XCTAssertTrue(waitForTabCount(gallery, 2))
+        let cardB = card(gallery, "Plain Test B")
+        XCTAssertTrue(cardB.waitForExistence(timeout: 2))
+        let resting = cardB.frame
+
+        dragUp(cardB, by: 90, speed: 400, hold: 0.4)
+        Thread.sleep(forTimeInterval: 0.8)
+        XCTAssertTrue(waitForTabCount(gallery, 2), "a held, short drag keeps the tab")
+        XCTAssertEqual(cardB.frame.minY, resting.minY, accuracy: 1, "the card springs back to its place")
+
+        dragUp(cardB, by: 70, speed: 2500, hold: 0)
+        XCTAssertTrue(waitForTabCount(gallery, 1), "a short, quick flick up closes the tab")
+    }
+
     func testSwipingTheAddressBarSwitchesTabs() throws {
         let app = try launch()
         openTabs(app, [("/a", "Page A"), ("/b", "Page B")])

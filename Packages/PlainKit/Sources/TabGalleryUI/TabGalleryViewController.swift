@@ -69,15 +69,6 @@ public final class TabGalleryViewController: UIViewController {
     private var departing: [ObjectIdentifier: (card: TabCardView, screenX: CGFloat)] = [:]
 
     private let bottomBar = GalleryBottomBar()
-    /// The paper New Tab card beside a lone card (docs/state-rules.md §6), in the slot after it.
-    private let newTabCard = NewTabCardView()
-    private(set) var showsNewTabCard = false
-    /// A page ↔ card zoom is running: the New Tab card waits, then grows in once the page has
-    /// landed on its card (it would cover the moving page's edge otherwise).
-    private var holdsNewTabCard = false
-    private var newTabCardLeaving = false
-    /// The New Tab card's key in `CardMotion`, for its grow-in.
-    private static let newTabCardID = UUID()
     private let toast = ReopenToast()
     private let emptyView = GalleryEmptyView()
     /// The profile switcher over the cards, with a second profile.
@@ -142,10 +133,6 @@ public final class TabGalleryViewController: UIViewController {
 
         motion.onFrame = { [weak self] in self?.layoutCards() }
 
-        newTabCard.isHidden = true
-        newTabCard.onTap = { [weak self] in self?.newTab() }
-        scroll.addSubview(newTabCard)
-
         emptyView.button.addAction(UIAction { [weak self] _ in self?.newTab() }, for: .primaryActionTriggered)
         root.addSubview(emptyView)
 
@@ -182,6 +169,29 @@ public final class TabGalleryViewController: UIViewController {
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         didFocusSelection = false
+    }
+
+    /// Gets a kept gallery ready to show again (or a new one ready ahead of time): the current
+    /// tabs, no leftover toast, drag or motion, the selected tab in focus, laid out. The shell
+    /// keeps one gallery for the app's life and shows it again, so its cards and decoded
+    /// pictures are there on the first frame (docs/research/perf-gallery-swipe.md).
+    public func prepareToShow() {
+        loadViewIfNeeded()
+        if reorder != nil { cancelReorder() }
+        toast.hide(animated: false)
+        isLeavingEmpty = false
+        motion.reset()
+        view.alpha = 1
+        for content in transitionContent {
+            content.transform = .identity
+            content.alpha = 1
+        }
+        setThumbnailHidden(for: nil)
+        setHeaderFade(1)
+        didFocusSelection = false
+        reloadTabs(animated: false)
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
     }
 
     override public func viewDidLayoutSubviews() {
@@ -231,7 +241,7 @@ public final class TabGalleryViewController: UIViewController {
             // With a second profile the switcher's room stays reserved, private list or not, so
             // the cards never jump when it hides.
             topChrome: dataSource.profileCount > 1 ? GalleryProfileButton.reserve : 0,
-            centeredRow: showsNewTabCard ? slotCount : 0
+            centeredRow: order.count == 1 ? 1 : 0
         )
         if next != metrics { apply(next) }
         if !didFocusSelection, bounds.width > 0 {
@@ -257,8 +267,8 @@ public final class TabGalleryViewController: UIViewController {
         }
     }
 
-    /// Resting places: every card, and the New Tab card when it shows.
-    private var slotCount: Int { order.count + (showsNewTabCard ? 1 : 0) }
+    /// Resting places: one per card.
+    private var slotCount: Int { order.count }
 
     private func updateContentSize() {
         let size = CGSize(width: metrics.contentWidth(for: slotCount), height: max(1, metrics.height))
@@ -348,61 +358,7 @@ public final class TabGalleryViewController: UIViewController {
             let x = contentX + leaving.screenX
             if leaving.card.center.x != x { leaving.card.center.x = x }
         }
-        placeNewTabCard(offset: offset, contentX: contentX)
         if let range { warm(around: range) }
-    }
-
-    /// The New Tab card in the slot after the last card, placed like a card. When it stops
-    /// applying (a second card arrived, the last one closed) it fades rather than vanishing.
-    private func placeNewTabCard(offset: CGFloat, contentX: CGFloat) {
-        guard showsNewTabCard else {
-            if !newTabCard.isHidden, !newTabCardLeaving {
-                newTabCardLeaving = true
-                newTabCard.isUserInteractionEnabled = false
-                Motion.animate(Motion.quick, changes: { self.newTabCard.alpha = 0 }) { [weak self] in
-                    guard let self else { return }
-                    newTabCardLeaving = false
-                    if !showsNewTabCard { newTabCard.isHidden = true }
-                }
-            }
-            return
-        }
-        if newTabCardLeaving {
-            // Back to one card while it was fading out: it stays, from where the fade had it.
-            newTabCardLeaving = false
-            if let fading = newTabCard.layer.presentation() { newTabCard.alpha = CGFloat(fading.opacity) }
-            newTabCard.layer.removeAllAnimations()
-        }
-        let slot = CGFloat(order.count)
-        let placement = metrics.placement(slot: slot, offset: offset)
-        let appear = holdsNewTabCard ? 0 : motion.appearance(Self.newTabCardID)
-        let scale = placement.scale * (0.92 + 0.08 * appear)
-        newTabCard.setSize(metrics.cardSize, headerHeight: metrics.headerHeight)
-        newTabCard.isHidden = false
-        let center = CGPoint(x: (placement.center.x + contentX).rounded(toScale: 3), y: placement.center.y)
-        if newTabCard.center != center { newTabCard.center = center }
-        let transform = scale == 1 ? CGAffineTransform.identity : CGAffineTransform(scaleX: scale, y: scale)
-        if newTabCard.transform != transform { newTabCard.transform = transform }
-        if newTabCard.alpha != appear { newTabCard.alpha = appear }
-        if newTabCard.layer.zPosition != slot { newTabCard.layer.zPosition = slot }
-        newTabCard.isUserInteractionEnabled = appear > 0.5
-    }
-
-    /// Holds the New Tab card back while a page ↔ card zoom runs, and grows it in when the page
-    /// has landed in the gallery (`grows`). Leaving for a page (`fades`), it fades as the zoom starts.
-    public func setNewTabCardHeld(_ held: Bool, grows: Bool = false, fades: Bool = false) {
-        guard held != holdsNewTabCard else { return }
-        holdsNewTabCard = held
-        if held {
-            guard fades, showsNewTabCard, !newTabCard.isHidden else { return layoutCards() }
-            Motion.animate(Motion.quick) { self.layoutCards() }
-            return
-        }
-        if grows, showsNewTabCard {
-            motion.grow(Self.newTabCardID)
-            motion.run(in: view)
-        }
-        layoutCards()
     }
 
     private func dequeueCard(for id: UUID) -> TabCardView {
@@ -485,11 +441,10 @@ public final class TabGalleryViewController: UIViewController {
         items = nextItems
         slots = nextSlots
         selectedID = dataSource.selectedTabID
-        let showedNewTabCard = showsNewTabCard
-        showsNewTabCard = GalleryRules(galleryState).newTabCard
-        let centeredRow = showsNewTabCard ? slotCount : 0
-        // The grid's lone pair sits centered: going to or from it moves every card at once, so
-        // the change crossfades instead of sliding from slot to slot.
+        // A lone card sits centered (the New Tab button is under it, in the bar): in the grid,
+        // going to or from it moves every card at once, so the change crossfades instead of
+        // sliding from slot to slot.
+        let centeredRow = order.count == 1 ? 1 : 0
         let regrids = animated && metrics.style == .grid && metrics.centeredRow != centeredRow
         metrics.centeredRow = centeredRow
 
@@ -518,8 +473,6 @@ public final class TabGalleryViewController: UIViewController {
                     motion.grow(id)
                 }
             }
-            // Down to one card: the New Tab card grows in beside it.
-            if showsNewTabCard, !showedNewTabCard { motion.grow(Self.newTabCardID) }
             if oldOffset > maxOffset {
                 // The content got shorter under the scroll position: the cards stay where they
                 // are and ease into the new resting place.
@@ -583,7 +536,6 @@ public final class TabGalleryViewController: UIViewController {
             backdrop.contentView.backgroundColor = dim
             bottomBar.setPrivate(isPrivate)
             emptyView.setPrivate(isPrivate)
-            newTabCard.setPrivate(isPrivate)
         }
         let isEmpty = items.isEmpty
         // VoiceOver hears how many tabs there are, cards off screen included.
@@ -941,10 +893,9 @@ public final class TabGalleryViewController: UIViewController {
 
     // MARK: VoiceOver
 
-    /// Cards on screen in tab order, then the New Tab card, for VoiceOver.
+    /// Cards on screen in tab order, for VoiceOver.
     func accessibilityCards() -> [UIView] {
-        let tabs: [UIView] = cards.compactMap { id, card in slots[id].map { ($0, card) } }.sorted { $0.0 < $1.0 }.map(\.1)
-        return showsNewTabCard && !holdsNewTabCard ? tabs + [newTabCard] : tabs
+        cards.compactMap { id, card in slots[id].map { ($0, card) } }.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
     /// A three-finger swipe moves a screenful of cards.
@@ -977,7 +928,7 @@ extension TabGalleryViewController: UIGestureRecognizerDelegate {
     public func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
         guard gesture === backgroundSwipe, let pan = gesture as? UIPanGestureRecognizer else { return true }
         let velocity = pan.velocity(in: view)
-        return velocity.y < 0 && abs(velocity.y) > abs(velocity.x)
+        return velocity.y < 0 && CardSwipe.isLift(velocity: velocity)
     }
 
     @objc func backgroundTapped() {
@@ -1134,8 +1085,9 @@ final class GalleryScrollView: UIScrollView {
     override func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
         if gesture === panGestureRecognizer {
             let velocity = panGestureRecognizer.velocity(in: self)
-            // A mostly vertical move belongs to the card under the finger (swipe up to close).
-            if abs(velocity.y) > abs(velocity.x) { return false }
+            // A lift belongs to the card under the finger (swipe up to close), the same split the
+            // card's own pan makes, so exactly one of them takes the move.
+            if CardSwipe.isLift(velocity: velocity) { return false }
         }
         return super.gestureRecognizerShouldBegin(gesture)
     }
@@ -1145,7 +1097,7 @@ final class GalleryScrollView: UIScrollView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard isUserInteractionEnabled, !isHidden, alpha > 0.01, self.point(inside: point, with: event) else { return nil }
         var best: (z: CGFloat, view: UIView)?
-        for card in subviews where (card is TabCardView || card is NewTabCardView) && !card.isHidden && card.isUserInteractionEnabled {
+        for card in subviews where card is TabCardView && !card.isHidden && card.isUserInteractionEnabled {
             let local = card.convert(point, from: self)
             guard let hit = card.hitTest(local, with: event) else { continue }
             if best == nil || card.layer.zPosition > best!.z { best = (card.layer.zPosition, hit) }

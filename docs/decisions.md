@@ -1146,9 +1146,16 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   (`FixedChoices.cookieBannerWatchMilliseconds`). The first sign puts the engine into that frame
   (`evaluateJavaScript` in Plain's world) and the probe stops. Subframes are unchanged.
 - **Fallback:** the EasyList Cookie List stays on and hides the long tail the probe doesn't know
-  (autoconsent's 700 generic rules are mostly one site's own banner). A banner from a known
-  consent manager loses the engine's prehide (it may show for a moment before it is rejected);
-  site rules keep it.
+  (autoconsent's 700 generic rules are mostly one site's own banner). A known consent manager's
+  banner is hidden by the probe itself from document start (below), so it doesn't show before
+  the engine arrives.
+- **Early hiding (2026-11-27):** the probe adopts one constructed sheet at document start that
+  hides the containers of the 30 consent managers the engine has rules for, in the engine's own
+  prehide style (transparent, behind the page, no touches, so the engine still finds and clicks
+  the banner). It goes when the engine has answered (`optOutResult`, `autoconsentDone`,
+  `autoconsentError`, or nothing detected), `FixedChoices.cookieBannerPrehideTimeout` after the
+  engine started, at once on a site turned off, and at the end of the watch if no sign came.
+  Generic names (`.cookie-banner`) are never hidden ahead: the engine may have no rule for them.
 - **Measured** (`CookieBannerPageTests.costPerPage`, iPhone Duo simulator, 3 runs each): long
   article back to back (median of 5 loads), without cookie banner handling 29.0–29.7 ms, with the
   engine 48.9–50.4 ms; with the probe 30.7–31.5 ms against 29.8–30.3 ms without. In a fresh web

@@ -62,15 +62,17 @@ final class LayeredDarkPagesStore: SiteDarkPagesStore {
 /// Safari does. The research and the choice of technique are in docs/research/dark-mode.md.
 ///
 /// One user script per page, main frame only, at document start, in the engine's content world
-/// (the page can't see or undo it). It never touches a site that has a dark design: it looks for
+/// (the page can't see or undo it); same-origin frames get it on request (`frameScript`) and
+/// follow the page. It never touches a site that has a dark design: it looks for
 /// a `color-scheme` that includes dark (or `only light`, a site's way of saying "never darken
 /// me"), for `prefers-color-scheme: dark` rules in the style sheets it can read, and for a light
 /// background with the page's own colors. Only a page that fails all three is darkened.
 ///
 /// Darkening goes color by color, by role (`DarkPagesEngine.swift`): light backgrounds turn dark,
 /// dark text turns light, and what is already dark (a black hero, a dark card) or already light
-/// (white text on it) stays exactly as made. Pictures, video, canvases, frames, emoji and colored
-/// logos are never changed.
+/// (white text on it) stays exactly as made. Pictures, video, canvases, other origins' frames,
+/// emoji and colored logos are never changed; only black-and-white logo pictures are inverted, as
+/// Safari does.
 ///
 /// While the app is dark and the page has not been judged yet, a guard keeps the page's
 /// background dark, so a page never flashes white before it is darkened; it goes as soon as the

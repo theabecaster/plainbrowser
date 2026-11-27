@@ -528,6 +528,16 @@ struct DarkPagesTests {
         #expect(!stops.isEmpty && stops.allSatisfy { $0 < 80 }, "\(panel)")
     }
 
+    /// A picture of the tab's page for review, when `PLAIN_CAPTURE_DIR` is set
+    /// (`TEST_RUNNER_PLAIN_CAPTURE_DIR` through xcodebuild).
+    private func capture(_ name: String, _ tab: Tab, harness: Harness) async {
+        guard let directory = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_DIR"],
+              let webView = harness.pool.existingWebView(for: tab) else { return }
+        try? await Task.sleep(for: .milliseconds(300))
+        let image = try? await webView.takeSnapshot(configuration: nil)
+        try? image?.pngData()?.write(to: URL(fileURLWithPath: directory).appending(path: "\(name).png"))
+    }
+
     /// Waits until `condition` (a script in the page's world) is true, or 5 s.
     private func waitFor(_ condition: String, in tab: Tab, harness: Harness) async throws -> Bool {
         let deadline = ContinuousClock.now + .seconds(5)
@@ -557,6 +567,7 @@ struct DarkPagesTests {
         let all = inverted.map { "getComputedStyle(document.querySelector('\($0)')).filter.includes('invert')" }
         let done = try await waitFor(all.joined(separator: " && "), in: tab, harness: harness)
         let stats = try await engine("globalThis.__plainDarkPages.stats", in: tab, harness: harness) as? [String: Any]
+        await capture("dark-logos-darkened", tab, harness: harness)
         report("logos: stats logos \(stats?["logos"] ?? "?"), read \(stats?["logosRead"] ?? "?"), \(stats?["logoMs"] ?? "?") ms, max \(stats?["logoMax"] ?? "?") ms")
         #expect(done)
         for id in inverted {
@@ -568,6 +579,7 @@ struct DarkPagesTests {
         // Off for the site: the pictures are as made again.
         tab.setDarkPagesOff(true)
         try await waitUntil("off") { tab.darkPages == .offForSite }
+        await capture("dark-logos-off", tab, harness: harness)
         #expect(try await style("filter", of: "#png", in: tab, harness: harness) == "none")
     }
 
@@ -606,6 +618,7 @@ struct DarkPagesTests {
         #expect(try await luminance("color", of: "#slotted", in: tab, harness: harness) > 0.5)
         let stats = try await engine("globalThis.__plainDarkPages.stats", in: tab, harness: harness) as? [String: Any]
         #expect((stats?["shadowRoots"] as? Int ?? 0) >= 4)
+        await capture("dark-shadow-darkened", tab, harness: harness)
     }
 
     /// Same-origin frames are darkened with the page (one there from the start, one added later,
@@ -629,6 +642,7 @@ struct DarkPagesTests {
         let text = try await harness.evaluate(frame("same", "#text", "color"), in: tab) as? String ?? ""
         report("frames: same text \(text), box \(try await harness.evaluate(frame("same", "#box", "backgroundColor"), in: tab) ?? "")")
         #expect(text != "rgb(34, 34, 34)", "the frame's text turned light: \(text)")
+        await capture("dark-frames-darkened", tab, harness: harness)
         // The other origin's frame reports its own background: white, as made.
         #expect(try await waitFor("window.__otherBg", in: tab, harness: harness))
         #expect(try await harness.evaluate("window.__otherBg", in: tab) as? String == "rgb(255, 255, 255)")

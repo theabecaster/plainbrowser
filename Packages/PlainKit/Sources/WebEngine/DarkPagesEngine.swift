@@ -21,8 +21,10 @@ import BrowserCore
 ///   sheets another origin won't share, inline SVG icons drawn in black, text left under 4.5:1
 ///   contrast) is fixed per element with a token attribute and a rule, checked top of the
 ///   document first in the first frame and the rest in idle slices.
-/// - **Never touched:** pictures, video, canvases, frames, CSS background pictures, emoji, colored
-///   SVG logos, and every page with a dark design of its own.
+/// - **Never touched:** pictures (but black-and-white logos, inverted after a histogram check, as
+///   Safari does), video, canvases, other origins' frames, CSS background pictures, emoji,
+///   colored SVG logos, and every page with a dark design of its own. Open shadow roots get twins
+///   and fixes of their own; same-origin frames run the engine and follow the page.
 ///
 /// All of it lives in constructed style sheets (`adoptedStyleSheets`) and one data attribute, in
 /// the engine's content world, so pages never see a changed `<style>` and their scripts read the

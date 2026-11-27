@@ -29,8 +29,9 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launchFirstFrame)
         )
+        prepareLaunchStore()
         measure(metrics: [metric], options: options) {
-            XCUIApplication.introSeen().launch()
+            Self.launchOnDiskStore().launch()
         }
     }
 
@@ -39,9 +40,26 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launch)
         )
+        prepareLaunchStore()
         measure(metrics: [metric], options: options) {
-            XCUIApplication.introSeen().launch()
+            Self.launchOnDiskStore().launch()
         }
+    }
+
+    /// The launch tests open a database on disk like a real launch, not the in-memory one: the
+    /// isolated test store, emptied and migrated once here, then reopened by every measured launch.
+    private func prepareLaunchStore() {
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestStore", "-PlainResetStore"]
+        app.launch()
+        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 10))
+        app.terminate()
+    }
+
+    private static func launchOnDiskStore() -> XCUIApplication {
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestStore"]
+        return app
     }
 
     /// Two local pages in two tabs, side by side and both live, with the search sheet closed: the

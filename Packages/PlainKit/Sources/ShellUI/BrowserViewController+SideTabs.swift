@@ -209,7 +209,8 @@ extension BrowserViewController {
     func restoreSidebarStateIfNeeded() {
         guard !duo.didRestoreSidebar, let scene = view.window?.windowScene else { return }
         duo.didRestoreSidebar = true
-        if let raw = scene.session.userInfo?[Self.sidebarStateKey] as? String, let state = SidebarState(rawValue: raw) {
+        if let raw = SceneState.string(forKey: Self.sidebarStateKey, in: scene.session),
+           let state = SidebarState(rawValue: raw) {
             duo.sidebarRequest = state
             if state != .hidden { duo.lastShownSidebar = state }
         }
@@ -217,9 +218,7 @@ extension BrowserViewController {
 
     private func saveSidebarState() {
         guard let scene = view.window?.windowScene else { return }
-        var info = scene.session.userInfo ?? [:]
-        info[Self.sidebarStateKey] = duo.sidebarRequest.rawValue
-        scene.session.userInfo = info
+        SceneState.set(duo.sidebarRequest.rawValue, forKey: Self.sidebarStateKey, in: scene.session)
     }
 
     private static let sidebarStateKey = "plain.sidebarState"

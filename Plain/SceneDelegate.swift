@@ -174,31 +174,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneWillResignActive(_ scene: UIScene) {
         // Final once the saved tabs are in; written each time so the next launch finds it.
         guard let session else { return }
-        Self.saveWindowID(session.windowID, of: scene.session)
+        SceneState.set(session.windowID.uuidString, forKey: Self.windowIDKey, in: scene.session)
     }
 
-    /// The scene's window id lives in its `UISceneSession`, which the system keeps for the owner's
-    /// next launch. An isolated test run keeps it in the test defaults instead, so it never points
-    /// the owner's scene at a test window.
+    /// The scene's window id (`SceneState`: never the owner's scene state in an isolated run).
     private static func savedWindowID(of sceneSession: UISceneSession) -> UUID? {
-        let value = TestIsolation.isActive
-            ? TestIsolation.defaults.string(forKey: isolatedWindowIDKey(sceneSession))
-            : sceneSession.userInfo?[windowIDKey] as? String
-        return value.flatMap(UUID.init(uuidString:))
-    }
-
-    private static func saveWindowID(_ id: UUID, of sceneSession: UISceneSession) {
-        if TestIsolation.isActive {
-            TestIsolation.defaults.set(id.uuidString, forKey: isolatedWindowIDKey(sceneSession))
-            return
-        }
-        var info = sceneSession.userInfo ?? [:]
-        info[windowIDKey] = id.uuidString
-        sceneSession.userInfo = info
-    }
-
-    private static func isolatedWindowIDKey(_ sceneSession: UISceneSession) -> String {
-        "\(windowIDKey).\(sceneSession.persistentIdentifier)"
+        SceneState.string(forKey: windowIDKey, in: sceneSession).flatMap(UUID.init(uuidString:))
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {

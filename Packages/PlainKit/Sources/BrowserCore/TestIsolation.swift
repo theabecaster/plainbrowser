@@ -78,7 +78,11 @@ public nonisolated enum TestIsolation {
     /// carries over from an earlier test; the test store keeps it across relaunches.
     /// `nonisolated(unsafe)`: `UserDefaults` is documented thread-safe but not marked `Sendable`.
     nonisolated(unsafe) public static let defaults: UserDefaults = {
-        guard mode != .off, let suite = UserDefaults(suiteName: defaultsSuiteName) else { return .standard }
+        guard mode != .off else { return .standard }
+        // Fails closed: an isolated run never falls back to the owner's defaults.
+        guard let suite = UserDefaults(suiteName: defaultsSuiteName) else {
+            fatalError("isolated test run without its defaults suite \(defaultsSuiteName)")
+        }
         if mode == .inMemory || resetRequested {
             suite.removePersistentDomain(forName: defaultsSuiteName)
         }

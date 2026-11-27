@@ -53,10 +53,10 @@ reads the metrics with `xcrun xcresulttool get test-results metrics`, and append
 
 | Metric | Test | Budget (device) |
 |---|---|---|
-| `launchMs` | `testLaunch`: the `launch.firstFrame` interval, `main` to the first frame committed with the main thread free. Not `XCTApplicationLaunchMetric`: on iOS 27 it records nothing for Plain on the device and only in some simulator runs. Pre-`main` time is not in it. | target 300, fail ≥ 400 |
+| `launchMs` | `testLaunch`: the `launch.firstFrame` interval, `main` to the first display-link callback after the first window is visible (its first frame committed, the main thread running again). Not `XCTApplicationLaunchMetric`: on iOS 27 it records nothing for Plain on the device and only in some simulator runs. Pre-`main` time is not in it. | target 300, fail ≥ 400 |
 | `searchFieldMs` | `testLaunchToSearchFieldReady`: the `launch` signpost interval | target 300, fail ≥ 400 |
 | `hitchMsPerS` | `testPageScrollHitches`: `XCTHitchMetric` while scrolling a Wikipedia article (needs network). Device only: the simulator reports no hitch data. | target 5, fail ≥ 10 |
-| `galleryMs` | `testGalleryOpen`: the `gallery.show` interval, ending when the page is within 0.5 pt of its card (not at Core Animation's settle of the spring's tail) | target 650, fail ≥ 800 |
+| `galleryMs` | `testGalleryOpen`: the `gallery.show` interval, ending when the page is within 0.5 pt of its card and moving less than 0.5 pt a frame (not at Core Animation's settle of the spring's tail) | target 650, fail ≥ 800 |
 | `swipeMs` | `testBarSwipe`: the `tab.swipe` interval, the finger starting to move until the page settles. Each iteration waits out the settle before it ends: the metric drops an interval that ends after the measure block. | target 650, fail ≥ 900 |
 
 - **Simulator (default):** runs on the `plain-perf-duo` simulator (iPhone Duo; `PLAIN_SIM_PREFIX`

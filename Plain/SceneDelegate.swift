@@ -203,9 +203,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 }
 
-/// Ends the `launch.firstFrame` interval at the first display refresh after the first window became
-/// visible: by then that window's first frame is committed and the main thread is free to take
-/// input. Once per process; later windows and scenes do nothing.
+/// Ends the `launch.firstFrame` interval at the first display-link callback after the first window
+/// became visible: the run loop turn that showed it (and committed its first frame) is done and
+/// the main thread is running again. Once per process; later windows and scenes do nothing.
 @MainActor
 private enum LaunchFirstFrame {
     private static var pending = true

@@ -17,8 +17,8 @@ final class PerfTests: XCTestCase {
         return options
     }
 
-    /// Cold launch: from `main` to the first frame committed with the main thread free (the
-    /// `launch.firstFrame` interval). Not XCTApplicationLaunchMetric: on iOS 27 it records nothing
+    /// Cold launch: from `main` to the first display-link callback after the window is visible
+    /// (the `launch.firstFrame` interval). Not XCTApplicationLaunchMetric: on iOS 27 it records nothing
     /// for Plain on the device and only in some runs on a simulator.
     func testLaunch() {
         let metric = XCTOSSignpostMetric(

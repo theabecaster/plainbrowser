@@ -40,9 +40,13 @@ public final class TabGalleryTransition {
     private let signpostName: StaticString
     private let signpostState: OSSignpostIntervalState
     private var signpostEnded = false
+    /// `gallery.show` ends when the page visibly rests on its card, not at the spring's settle.
+    private let endsAtVisualSettle: Bool
     /// Samples the moving page each frame while a spring runs, to end the signpost interval when
     /// the motion has visibly settled (`visualSettle`) rather than at the spring's long tail.
     private var settleWatch: CADisplayLink?
+    /// The page's frame on screen at the last settle sample.
+    private var lastShown: CGRect?
     /// Where a finger has moved the page off its path (`track(translation:)`); springs back to
     /// zero when the transition runs to an end.
     private var offset: CGPoint = .zero
@@ -65,6 +69,7 @@ public final class TabGalleryTransition {
         self.completion = completion
         destination = start == .page ? .gallery : .page
         signpostName = start == .page ? Signposts.galleryShow : Signposts.galleryOpenTab
+        endsAtVisualSettle = start == .page
         signpostState = Signposts.signposter.beginInterval(signpostName)
 
         gallery.prepareForTransition(to: tabID, revealFully: start == .page)
@@ -196,18 +201,19 @@ public final class TabGalleryTransition {
                 self.offset = .zero
                 self.apply(progress: self.progress(of: end), crossfade: false, setsRing: false)
             }, completion: finish)
-            watchSettle()
+            // Only the page zooming into its card (the perf gate's `gallery.show`); a card
+            // opening into its page keeps ending at the spring's settle.
+            if endsAtVisualSettle { watchSettle() }
         }
     }
 
     // MARK: Signpost
 
-    /// The page is within this distance of where it lands, in points, on every edge: the eye sees
-    /// it at rest. The critically damped spring creeps over this last half point for several
-    /// hundred milliseconds more before Core Animation calls it finished.
-    private static let visualSettle: CGFloat = 0.5
-
+    /// Watches the page each frame until it is visibly at rest (`Signposts.visualSettle`). The
+    /// critically damped spring creeps over that last half point for several hundred
+    /// milliseconds more before Core Animation calls it finished.
     private func watchSettle() {
+        lastShown = nil
         guard !signpostEnded, settleWatch == nil else { return }
         let link = CADisplayLink(target: SettleWatchTarget(self), selector: #selector(SettleWatchTarget.tick))
         link.add(to: .main, forMode: .common)
@@ -217,12 +223,17 @@ public final class TabGalleryTransition {
     /// One frame of the running spring: ends the interval once the page on screen is at rest.
     fileprivate func settleTick() {
         guard let shown = wrapper.layer.presentation()?.frame else { return }
-        let target = wrapper.frame
-        let distance = max(
-            abs(shown.minX - target.minX), abs(shown.minY - target.minY),
-            abs(shown.maxX - target.maxX), abs(shown.maxY - target.maxY)
-        )
-        if distance <= Self.visualSettle { endSignpost() }
+        defer { lastShown = shown }
+        guard let last = lastShown else { return }
+        let settle = CGFloat(Signposts.visualSettle)
+        if Self.distance(shown, wrapper.frame) <= settle, Self.distance(shown, last) <= settle {
+            endSignpost()
+        }
+    }
+
+    /// The largest gap between two frames' matching edges.
+    private static func distance(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        max(abs(a.minX - b.minX), abs(a.minY - b.minY), abs(a.maxX - b.maxX), abs(a.maxY - b.maxY))
     }
 
     private func endSignpost() {

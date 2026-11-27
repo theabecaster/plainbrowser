@@ -302,9 +302,10 @@ public struct ControlRules: Sendable, Equatable {
         return state.condition == .loaded && state.isForeignLanguage ? .translate : .hidden
     }
 
-    /// Print and Save as PDF act on what finished loading: the page, a PDF, or the reader's
-    /// article (which prints instead of the page under it). Not on Start, while loading (half a
-    /// page), or on an error or crashed page (Plain's own message, nothing of the site's).
+    /// Print and Save as PDF, Plain's actions in the share sheet, act on what finished loading: the
+    /// page, a PDF, or the reader's article (which prints instead of the page under it). Not on
+    /// Start, while loading (half a page), or on an error or crashed page (Plain's own message,
+    /// nothing of the site's).
     public var print: Bool {
         if state.isReaderOpen { return state.hasPage }
         return state.hasPage && state.condition == .loaded && (state.isWebPage || state.isPDF)

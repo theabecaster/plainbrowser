@@ -86,14 +86,21 @@ final class PageFeatureTests: XCTestCase {
         XCTAssertTrue(app.webViews.staticTexts["The Saturday market"].waitForExistence(timeout: 10))
     }
 
+    /// Print and Save as PDF are in the share sheet (Safari's and Chrome's place), not the page menu.
     func testPrintAndSaveAsPDF() throws {
         let app = try launch()
         go(app, to: "/article", heading: "The Quiet Page")
         openPageMenu(app)
-        let print = app.buttons["menu.print"]
-        XCTAssertTrue(print.waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["menu.saveAsPDF"].exists)
-        shot("p1-menu-export")
+        XCTAssertFalse(app.buttons["menu.print"].exists, "Print is in the share sheet")
+        XCTAssertFalse(app.buttons["menu.saveAsPDF"].exists, "Save as PDF is in the share sheet")
+        XCTAssertTrue(app.buttons["menu.find"].exists)
+        closeMenu(app)
+
+        openShareSheet(app)
+        let print = shareActivity(app, "Print")
+        XCTAssertTrue(print.waitForExistence(timeout: 5), "the share sheet offers Print")
+        XCTAssertTrue(shareActivity(app, "Save as PDF").exists, "the share sheet offers Save as PDF")
+        shot("p1-share-export")
         print.tap()
         // The system print sheet: a preview with its Print button.
         let printButton = app.buttons.matching(NSPredicate(format: "label == 'Print'")).firstMatch
@@ -104,15 +111,60 @@ final class PageFeatureTests: XCTestCase {
         if cancel.exists { cancel.tap() } else { app.swipeDown(velocity: .fast) }
         Thread.sleep(forTimeInterval: 1)
 
-        openPageMenu(app)
-        app.buttons["menu.saveAsPDF"].tap()
+        openShareSheet(app)
+        let save = shareActivity(app, "Save as PDF")
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
         // The share sheet with the PDF: Save to Files is one of its actions.
         let files = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Save to Files'")).firstMatch
-        let sheet = app.otherElements["ActivityListView"]
-        let shown = files.waitForExistence(timeout: 10) || sheet.waitForExistence(timeout: 2)
-        XCTAssertTrue(shown, "the share sheet offers the PDF")
+        XCTAssertTrue(files.waitForExistence(timeout: 10), "the share sheet offers the PDF")
         Thread.sleep(forTimeInterval: 1)
         shot("p3-pdf-share")
+    }
+
+    /// The page menu fits the screen without scrolling on its tallest page: a readerable article
+    /// in a language the user doesn't read, with a closed tab to reopen (the tabs items as a row).
+    func testPageMenuFitsTheScreen() throws {
+        let app = try launch()
+        go(app, to: "/a", heading: "Page A")
+        let tabs = app.buttons["tabs"]
+        XCTAssertTrue(tabs.waitForExistence(timeout: 2))
+        tabs.press(forDuration: 1.0)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        go(app, to: "/b", heading: "Page B")
+        tabs.press(forDuration: 1.0)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Close Tab'")).firstMatch.tap()
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 5))
+        go(app, to: "/french-article", heading: "La page tranquille")
+        // Show Reader waits for the article check, Translate Page for the language check.
+        Thread.sleep(forTimeInterval: 2)
+        openPageMenu(app)
+        for id in ["more.newPrivateTab", "more.reopenClosedTab", "menu.reload", "menu.find", "menu.reader",
+                   "menu.translate", "menu.zoomIn", "menu.favorite", "menu.history", "menu.settings"] {
+            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 3), "\(id) is in the menu")
+        }
+        shot("m1-menu-tallest")
+        // The menu's own scroll view: an item outside its frame is only reachable by scrolling.
+        let menu = app.collectionViews.containing(.button, identifier: "menu.history").firstMatch
+        XCTAssertTrue(menu.exists)
+        let visible = menu.frame.intersection(app.windows.firstMatch.frame)
+        for id in ["more.newPrivateTab", "menu.history", "menu.settings"] {
+            let item = app.buttons[id]
+            XCTAssertTrue(item.isHittable, "\(id) shows without scrolling")
+            XCTAssertTrue(visible.insetBy(dx: -1, dy: -1).contains(item.frame), "\(id) is inside the menu: \(item.frame) in \(visible)")
+        }
+    }
+
+    private func openShareSheet(_ app: XCUIApplication) {
+        openPageMenu(app)
+        let share = app.buttons["menu.share"]
+        XCTAssertTrue(share.waitForExistence(timeout: 2))
+        share.tap()
+    }
+
+    /// A share sheet action, by its title.
+    private func shareActivity(_ app: XCUIApplication, _ title: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label == %@", title)).firstMatch
     }
 
     func testCookieBannerIsAnsweredAndTheSiteCanTurnItOff() throws {

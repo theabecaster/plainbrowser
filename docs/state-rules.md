@@ -168,10 +168,12 @@ page's top inset drops to 0 (only the status bar). Same triggers and the same ne
 
 ## 4. The page menu (More, and a long press on the pill)
 
-Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: Reload
-(or Stop), Share and Copy Link are one row of three; Find on Page, Print… and Save as PDF are one
-row of three while the page can be printed, captioned "Find", "Print…" and "Save PDF" (Find on
-Page alone otherwise); Desktop Site, blocking, cookie
+Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: the tabs
+items (New Private Tab, Reopen Closed Tab, Archived Tabs) are one captioned row when two or more
+apply; Reload (or Stop), Share and Copy Link are one row of three; Find on Page, Show Reader and
+Translate Page are one captioned row when two or more apply ("Find", "Reader", "Translate" or
+"Original"; each alone keeps its full name and subtitle); Print and Save as PDF are not in the
+menu but in the share sheet (Share), as in Safari and Chrome; Desktop Site, blocking, cookie
 banners and Dark Pages fold into a "Site Settings" submenu when two or more apply; History, Edit
 Favorites and Settings are one row of three, so the whole menu fits the Duo's outer screen.
 
@@ -182,7 +184,7 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Show / Hide Reader | — | — | when readerable | — | — | Hide Reader | Safari: "Show Reader (if available)". |
 | Save PDF to Files | — | — | on a PDF | — | — | — | |
 | Translate Page / Show Original | — | Show Original while translated | Translate Page when the page's language is one the user doesn't read and the device can translate it; Show Original while translated | — | — | — | Subtitled with the pair ("French to English"), "Translating…" while the first text is on its way. The tab keeps translating its next pages in that language until Show Original. Under the reader it would act out of sight. One toast the first time ever a foreign page shows, then only the menu. |
-| Print…, Save as PDF | — | — | shown (http(s) or a PDF; Save as PDF not on a PDF, which has Save PDF to Files) | — | — | shown (prints the article) | Nothing finished to print while loading; an error page is Plain's message, not the site's. |
+| Print, Save as PDF (share sheet) | — | — | shown (http(s) or a PDF; Save as PDF not on a PDF, which has Save PDF to Files) | — | — | shown (prints the article) | In the share sheet as Plain's own actions, wherever Share opens it (page menu, the inner screen's Share button). Nothing finished to print while loading; an error page is Plain's message, not the site's. |
 | Share, Copy Link | — | shown | shown | shown (the address tried) | shown | shown (the page's address) | |
 | Zoom row (− % +) | — | shown | shown; − / + dim at the ends, % dim at 100 % | — | — | — | Zoom acts on the page, which is hidden under the reader. |
 | Desktop Site | — | http(s) | http(s) | http(s) | — | — | A remembered Desktop Site choice can be why a page fails, so the switch back stays (it retries the load). Under the reader it would act out of sight. |

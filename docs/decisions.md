@@ -909,9 +909,12 @@ Research and sources: docs/research/print-pdf.md.
 - **The reader prints the article**, not the page under it. Not on Start, while loading, or on an
   error or crashed page (state rules §4). A PDF tab prints, and keeps "Save PDF to Files" for the
   original file instead of Save as PDF.
-- **In the page menu, in Find on Page's row** ("Find", "Print…", "Save PDF"), so the two rare
-  actions take no section of their own. A row of icons without captions was tried and rejected in
-  design review (Find and Save PDF were not told apart).
+- **In the share sheet** (since the follow-ups of 2026-11-27): Print and Save as PDF are Plain's
+  own share sheet actions (`PageActivity`), where Safari and Chrome keep them, so the page menu
+  fits the Duo's outer screen. They were first in Find on Page's row of the page menu ("Find",
+  "Print…", "Save PDF"); with Show Reader and Translate Page on a foreign article the menu ran past
+  the outer screen. A row of icons without captions was rejected in design review (Find and Save
+  PDF were not told apart).
 - **The same document:** an export marks the document with a token in the engine's world and checks
   it, the tab and the web view before the sheet shows, so a reload or a tab switch meanwhile drops
   the export instead of showing the wrong page.
@@ -1084,3 +1087,23 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   same frame the bar starts to rise (before: about 0.5 s later, after the pill had covered it),
   so no first-frame deferral was needed. The footer moves in one step (WebKit has no animated
   inset change); the bar then slides in under it.
+
+## Page menu fits the Duo's outer screen (2026-11-27)
+
+- **Problem:** on a readerable page in another language the page menu ran past the Duo's outer
+  screen (466x678): the History, Favorites and Settings row was cut off. The menu opens from the
+  vertical bar's More with about 473 pt of height.
+- **Chosen:** Print and Save as PDF moved to the share sheet (decision above). That alone was not
+  enough (measured: the last row still cut on the simulator), so the rows that apply together
+  became captioned rows of up to three, like Reload, Share and Copy Link: Find on Page, Show
+  Reader and Translate Page ("Find", "Reader", "Translate" / "Original") and the tabs items (New
+  Private Tab, Reopen Closed Tab, Archived Tabs: "Private Tab", "Reopen Tab", "Archive"), each only
+  when two or more apply. VoiceOver reads the full names and Translate Page's language pair. A
+  single item keeps its full name and subtitle.
+- **Trade-off:** in the row, Translate Page loses its visible "French to English" subtitle; the
+  first-time toast names the language, and VoiceOver reads the pair.
+- **Verified:** `PageFeatureTests.testPageMenuFitsTheScreen` opens the menu on a French article with
+  a closed tab to reopen and checks that the first and last rows lie inside the menu without
+  scrolling, on the Duo outer screen and the iPhone 17.
+- **Not covered:** with a download this session as well, Downloads adds a row and the last row
+  needs a short scroll on the outer screen (polish backlog).

@@ -45,6 +45,33 @@ Simulator builds work without it. The device scripts pass `-allowProvisioningUpd
 -allowProvisioningDeviceRegistration`. For perf runs keep the phone awake and unlocked
 (Settings > Display & Brightness > Auto-Lock > Never).
 
+## Widgets and App Group
+
+The app embeds one extension, `PlainWidgets` (`dev.abrahamgonzalez.plainbrowser.widgets`): the
+search widget and the Control Center controls. `xcodegen generate` builds and embeds it; every
+script builds it with the app, nothing extra to run.
+
+Both targets carry the App Group `group.dev.abrahamgonzalez.plainbrowser`
+(`Plain/Plain.entitlements`, `PlainWidgets/PlainWidgets.entitlements`). Automatic signing with
+`-allowProvisioningUpdates` (the device scripts, `scripts/testflight.sh`) registers the
+extension's App ID and the group and adds them to the profiles. If a build ever stops on the
+group ("No profiles ... application-groups" or "App Group ... not registered"), do the one manual
+step: in Xcode, open the Plain target > Signing & Capabilities, add the group under App Groups
+once (and the same for PlainWidgets), then build again. Xcode Cloud manages signing itself and
+needs nothing.
+
+Simulator builds sign without a team, and the group works there too. Tests:
+
+- `PlainTests` (hosted in the app, in the Smoke plan): performs every App Intent and checks the
+  command it sends.
+- `PlainUITests/SystemTests` (Smoke): the `plainbrowser:` links end to end.
+- `SystemIntegrationTests` (PlainKit): links, the shared file, the Spotlight sync against a fake
+  index and the widget timeline run with `swift test`; on a simulator they also render the widget
+  faces to PNGs:
+  `TEST_RUNNER_PLAIN_WIDGET_SHOTS=$PWD/build/widgetshots xcodebuild test -scheme PlainKit-Package -destination id=<udid> -only-testing:SystemIntegrationTests`.
+- `PlainUITests/SystemCaptureTests`: the widgets on the Home Screen, Spotlight and Shortcuts,
+  screenshots only, with `TEST_RUNNER_PLAIN_CAPTURE=1` (like `CaptureTests`).
+
 ## Perf gate
 
 `scripts/perf-gate.sh` runs `PlainUITests/PerfTests` through `Perf.xctestplan` in a Release build,

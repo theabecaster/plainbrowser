@@ -849,3 +849,40 @@ Research and sources: docs/research/dark-mode.md.
   sentence and Try Again in place of the list when a read fails, never the empty state and never
   stale rows. History's Clear dims only when history itself is empty: a search that finds nothing
   reads one visit to know.
+
+## System integration: intents, Spotlight, widgets, controls, Handoff (v0.2, 2026-11-27)
+
+- **One command type.** App Intents, widget links, Spotlight results and Handoff all become a
+  `PlainCommand`, and the browser does each the way a tap would (`BrowserViewController.perform`).
+  One path to test, and no intent reaches into the shell.
+- **Intents in the app target, not a package.** App Intents extracts metadata from the target
+  that declares the types; packages need an `AppIntentsPackage` on both sides. The one intent the
+  controls need (`OpenPlainIntent`) is compiled into both targets, as WidgetKit requires, and
+  pinned to the app (`allowedExecutionTargets = [.main]`). Intents reach the scene through
+  `CommandInbox`, a per-process singleton, because the system creates intents with no reference
+  to pass in.
+- **Search uses the Settings engine.** No engine parameter: one choice, made once
+  (`FixedChoices.intentsUseSettingsEngine`). It adopts `.system.searchInApp` (iOS 27), the one
+  schema that fits without new entities. The `.browser` schema domain is Shortcuts-only and wants
+  tab and window entities; snippets add nothing when every action ends in the app.
+- **Spotlight: favorites only.** History stays out (`FixedChoices.spotlightIndexesHistory`):
+  nobody expects everything they read in system search, Safari keeps it out, and it would need
+  chasing on every clear. Private tabs reach nothing. Classic `CSSearchableItem`s behind a
+  `SpotlightIndexing` seam, not `IndexedEntity`: same result for a short list, testable on macOS.
+  Clear History and Data empties Plain's index and puts the favorites back (the clear keeps them).
+- **Favorites leave through one observer.** `SystemSync` follows the table with GRDB's
+  `ValueObservation`, so the page menu, the editor and any later writer need no call. The App
+  Group file is the only thing the widget extension and the entity query read; the extension
+  never links GRDB.
+- **Widgets.** One Search widget in five families instead of several widgets: small (dawn window
+  over the field), medium (field plus four favorites as monogram discs, as above the keyboard),
+  and the Lock Screen. Paper and the dawn sky from Brand/identity.md; outlines in the tint for
+  tinted and clear Home Screens. Every tap is a `plainbrowser:` link; the timeline never
+  refreshes itself.
+- **Controls** use `OpenIntent` (custom URL schemes do not open apps from controls).
+- **Handoff:** the page on screen only, never a private tab (`FixedChoices.handoffInPrivateTabs`),
+  never eligible for search or prediction. Receiving waits for the web-browser entitlement: iOS
+  sends web pages only to the default browser.
+- **Perf cost:** nothing new runs before the first frame except setting the inbox's handler. The
+  sync starts 5 s after the database opens, at background priority; an unchanged list costs one
+  small file read. The extension adds about 2.5 MB (Debug) to the app bundle.

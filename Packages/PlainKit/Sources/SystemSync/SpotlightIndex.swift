@@ -76,7 +76,7 @@ public struct CoreSpotlightIndex: SpotlightIndexing {
         let searchable = CSSearchableItem(
             uniqueIdentifier: item.identifier, domainIdentifier: item.domain, attributeSet: attributes
         )
-        // Items expire after 30 days by default; a favorite lasts until it is removed.
+        // Undated items expire after a while (about 30 days); a favorite lasts until it is removed.
         searchable.expirationDate = .distantFuture
         return searchable
     }

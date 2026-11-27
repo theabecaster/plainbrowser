@@ -93,7 +93,7 @@ struct SearchField: View {
                 .widgetAccentable()
             Text(label)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(mode == .fullColor ? AnyShapeStyle(Color(Palette.textSecondary)) : AnyShapeStyle(.secondary))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
@@ -133,7 +133,7 @@ struct FavoriteDisc: View {
                 .background(Circle().fill(mode == .fullColor ? AnyShapeStyle(Color(Palette.surface)) : AnyShapeStyle(.primary.opacity(0.14))))
             Text(favorite.title)
                 .font(.caption2)
-                .foregroundStyle(.primary)
+                .foregroundStyle(mode == .fullColor ? AnyShapeStyle(Color(Palette.textPrimary)) : AnyShapeStyle(.primary))
                 .lineLimit(1)
         }
         .accessibilityElement(children: .ignore)
@@ -152,7 +152,9 @@ struct DawnWindow: View {
         GeometryReader { geometry in
             let size = geometry.size
             let horizon = size.height * 0.8
-            let planet = CGSize(width: size.width * 2.4, height: size.width * 1.1)
+            // The rim drops about an eighth of the window's height at the edges, whatever its
+            // width, so a wide window never shows sky under the planet's corners.
+            let planet = CGSize(width: size.width * 2.4, height: size.height * 2.64)
             let sun = min(size.width, size.height) * 0.5
             ZStack {
                 if mode == .fullColor {

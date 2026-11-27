@@ -24,12 +24,10 @@ public enum ControlVisibility: Sendable, Equatable {
     }
 }
 
-/// The bar's third slot: one slot, three faces (§3). Its long press is always the tabs menu.
+/// The bar's third slot (§3). Its long press is always the tabs menu.
 public enum TabsSlotFace: Sendable, Equatable {
-    /// Another tab to switch to: a tap opens the gallery.
+    /// The switcher has a card to show: a tap opens the gallery, as the swipe up does.
     case tabs
-    /// One page tab and nothing else: a tap opens a second tab.
-    case newTab
     /// On the start screen with nothing else open: you are already in a new tab.
     case hidden
 }
@@ -161,12 +159,11 @@ public struct ControlRules: Sendable, Equatable {
     /// History, Settings and Edit Favorites apply everywhere.
     public var more: ControlVisibility { .shown }
 
-    /// The tap: Tabs with another tab to switch to; with one page tab, "+" (a second tab is the one
-    /// useful tap, as Arc keeps its "+" beside the switcher). With side tabs the slot shows and
-    /// hides the sidebar, which is always there to toggle (M3).
+    /// Tabs whenever the switcher has a card, the swipe up's predicate: with one page tab the tap
+    /// opens its card beside a New Tab card, as dragging the bar up does (owner, 2026-11-27). With
+    /// side tabs the slot shows and hides the sidebar, which is always there to toggle (M3).
     public var tabsSlot: TabsSlotFace {
-        if state.sideTabs || state.others >= 1 { return .tabs }
-        return state.hasPage ? .newTab : .hidden
+        state.sideTabs || galleryHasCards ? .tabs : .hidden
     }
 
     /// The gallery has a card to show: another tab, or the page on screen (one page tab shows its

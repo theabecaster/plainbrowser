@@ -14,6 +14,10 @@ public enum FixedChoices {
     public static let defaultTabLayout = TabLayout.left
     /// A day keeps today's tabs at hand and clears yesterday's clutter without asking.
     public static let defaultArchiveAfter = ArchiveAfter.oneDay
+    /// Follow iOS: people set light or dark once for every app, often on a schedule, and Safari,
+    /// Chrome and Firefox all start there. Light and Dark are for someone who wants the browser
+    /// different from the rest of the phone.
+    public static let defaultAppearance = Appearance.system
 
     // MARK: Decided for the user, no setting
 
@@ -36,8 +40,6 @@ public enum FixedChoices {
     public static let hapticsFollowSystem = true
     /// Text size follows Dynamic Type, which people already set once for every app.
     public static let textFollowsDynamicType = true
-    /// Dark mode follows the system appearance.
-    public static let appearanceFollowsSystem = true
     /// Reduce Motion swaps zooms and slides for a short crossfade.
     public static let motionFollowsReduceMotion = true
     /// Page zoom and desktop/mobile site are remembered per site, automatically.
@@ -81,6 +83,28 @@ public enum FixedChoices {
     /// 150% where they only want "much larger". Every zoom lands on one of these, so a site's
     /// remembered zoom always matches a step.
     public static let pageZoomSteps: [Double] = [0.5, 0.75, 0.85, 1.0, 1.15, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
+
+    // MARK: Dark pages (docs/research/dark-mode.md)
+
+    /// While Plain is dark, pages without a dark design of their own are darkened, as Safari
+    /// does: a white page in a dark app is the brightest thing on screen at night. No setting:
+    /// Light and Dark in Settings > Appearance already say what the user wants, and a page that
+    /// looks wrong darkened gets "Turn Off Dark Pages for This Site" in its page menu, remembered
+    /// for that site.
+    public static let darkPagesOn = true
+    /// A page counts as light, and is darkened, when its background's relative luminance (0 for
+    /// black, 1 for white) is at least this: about #BCBCBC. Mid greys and every dark or colored
+    /// background a site chose stay as they are; a page with no background of its own shows on
+    /// the browser's white canvas and counts as white.
+    public static let darkPagesLightBackground = 0.5
+    /// Style rules read per page when looking for `prefers-color-scheme: dark`. Large sites have
+    /// 10–30 thousand; a dark design's rules sit in any of them, but reading more than this costs
+    /// more than a frame on a slow phone, and the background check catches the rest.
+    public static let darkPagesMaxRulesRead = 20_000
+    /// Elements checked for a background picture set by a style sheet (so it keeps its colors).
+    /// About a long article's worth; past it, background pictures may show inverted, which is the
+    /// cost of never spending more than a few milliseconds per page.
+    public static let darkPagesMaxElementsScanned = 4_000
 
     // MARK: Address bar
 

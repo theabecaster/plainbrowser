@@ -189,6 +189,7 @@ final class Harness {
         tabStates: Bool = false,
         pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
         passkeysEnabled: Bool = false,
+        darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore(),
         route: @escaping @Sendable (TestServer.Request) -> TestServer.Response = Pages.route
     ) async throws {
         server = try await TestServer(route: route)
@@ -201,7 +202,8 @@ final class Harness {
             thumbnailDirectory: directory.appending(path: "Thumbnails"),
             downloadDirectory: directory.appending(path: "Downloads"),
             pageZooms: pageZooms,
-            passkeysEnabled: passkeysEnabled
+            passkeysEnabled: passkeysEnabled,
+            darkPages: darkPages
         )
         pool.host = host
         host.pool = pool

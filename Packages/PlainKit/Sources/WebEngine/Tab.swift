@@ -80,6 +80,9 @@ public final class Tab: Identifiable {
     public internal(set) var isFullscreen = false
     /// The page is using the camera or microphone.
     public internal(set) var isCapturingMedia = false
+    /// What dark pages does on the page now: nothing (light colors, or not a web page), the
+    /// site's own dark design, Plain's darkening, or off for this site by the user's choice.
+    public internal(set) var darkPages = DarkPagesState.inactive
 
     /// Playing, in picture in picture, fullscreen, capturing or downloading. The pool never
     /// discards such a tab, and the shell must not archive or close it automatically.
@@ -160,6 +163,12 @@ public final class Tab: Identifiable {
     /// players the page never put in its document count too.
     public func refreshMediaState() async {
         await pool?.slot(for: self)?.refreshMediaPlayback()
+    }
+
+    /// The page menu's "Turn Off / Turn On Dark Pages for This Site": remembered for the site,
+    /// applied to this page at once without a reload.
+    public func setDarkPagesOff(_ off: Bool) {
+        pool?.setDarkPagesOff(off, for: self)
     }
 
     /// One step larger (`FixedChoices.pageZoomSteps`), remembered for the site.

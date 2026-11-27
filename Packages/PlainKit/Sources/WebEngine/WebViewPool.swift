@@ -35,6 +35,31 @@ public final class WebViewPool {
     /// a navigation starts, never on resize (a switch would force a reload).
     public var defaultPaneSize = CGSize(width: 390, height: 844)
 
+    /// The app's light or dark colors as the window shows them (Settings > Appearance, or iOS
+    /// with System). Every web view gets it, so `prefers-color-scheme` is right for pages that
+    /// load off screen (a background tab, the warm web view) and the first frame of a tab coming
+    /// on screen. Pages on screen follow their window anyway; this keeps the hidden ones with them.
+    /// `.unspecified` leaves every web view to its window.
+    public var interfaceStyle: UIUserInterfaceStyle = .unspecified {
+        didSet {
+            guard interfaceStyle != oldValue else { return }
+            for slot in slots.values { applyInterfaceStyle(to: slot.webView) }
+            if let warm { applyInterfaceStyle(to: warm.webView) }
+        }
+    }
+
+    /// A trait override, not `overrideUserInterfaceStyle`: a web view outside a window resolves
+    /// only overrides set this way (measured: a detached web view with
+    /// `overrideUserInterfaceStyle = .dark` still matched `prefers-color-scheme: light`).
+    private func applyInterfaceStyle(to webView: WKWebView) {
+        if interfaceStyle == .unspecified {
+            webView.traitOverrides.remove(UITraitUserInterfaceStyle.self)
+        } else {
+            webView.traitOverrides.userInterfaceStyle = interfaceStyle
+        }
+        webView.updateTraitsIfNeeded()
+    }
+
     public let downloads: DownloadCoordinator
     public let thumbnails: ThumbnailService
 
@@ -43,6 +68,7 @@ public final class WebViewPool {
     private let permissionStore: any SitePermissionStore
     private let contentModes: any SiteContentModeStore
     private let pageZooms: any SitePageZoomStore
+    private let darkPages: any SiteDarkPagesStore
     let contentRules: (any UserContentRules)?
     private let pageScripts: (any PageScripts)?
     /// False until Apple grants the web-browser entitlement: pages then get `SignInScripts`'
@@ -67,6 +93,8 @@ public final class WebViewPool {
     private var privateDataStore: WKWebsiteDataStore?
     /// What private tabs answer and choose per site, kept in memory for the private session only.
     private var privateSiteChoices: SiteChoices?
+    /// Private tabs' dark pages choices, for the private session only.
+    private var privateDarkPagesStore: LayeredDarkPagesStore?
     private var warm: (webView: WKWebView, controller: WKUserContentController)?
     private var useClock: UInt64 = 0
     private var popupLimiter = RateLimiter(limit: EngineChoices.popupLimit, window: EngineChoices.popupWindow)
@@ -97,6 +125,7 @@ public final class WebViewPool {
     ///   - pageZooms: remembered page zoom per site.
     ///   - passkeysEnabled: whether the app has the web-browser entitlement, so WebKit can use
     ///     passkeys. Tests pass both.
+    ///   - darkPages: the sites where the user turned dark pages off.
     public init(
         dataStore: WKWebsiteDataStore = .default(),
         tabStates: TabStateStore? = nil,
@@ -107,7 +136,8 @@ public final class WebViewPool {
         thumbnailDirectory: URL? = nil,
         downloadDirectory: URL? = nil,
         pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
-        passkeysEnabled: Bool = FixedChoices.passkeysEnabled
+        passkeysEnabled: Bool = FixedChoices.passkeysEnabled,
+        darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore()
     ) {
         self.passkeysEnabled = passkeysEnabled
         signInScripts = passkeysEnabled ? nil : SignInScripts()
@@ -117,6 +147,7 @@ public final class WebViewPool {
         self.permissionStore = permissionStore
         self.contentModes = contentModes
         self.pageZooms = pageZooms
+        self.darkPages = darkPages
         self.contentRules = contentRules
         self.pageScripts = pageScripts
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -175,24 +206,55 @@ public final class WebViewPool {
     private func makeConfiguration(isPrivate: Bool = false) -> (WKWebViewConfiguration, WKUserContentController) {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
         if isPrivate { configuration.websiteDataStore = privateStore() }
-        let controller = makeController()
+        let controller = makeController(isPrivate: isPrivate)
         configuration.userContentController = controller
         return (configuration, controller)
     }
 
-    private func makeController() -> WKUserContentController {
+    private func makeController(isPrivate: Bool) -> WKUserContentController {
         let controller = WKUserContentController()
+        installScripts(in: controller, isPrivate: isPrivate)
+        return controller
+    }
+
+    /// The engine's scripts, the shell's page scripts, and dark pages with the current list of
+    /// sites where it is off.
+    private func installScripts(in controller: WKUserContentController, isPrivate: Bool) {
         controller.addUserScript(UserScripts.preconnect)
         controller.addUserScript(UserScripts.pressedElement)
         controller.addUserScript(UserScripts.subframePress)
-        // Its message handler is added by the tab's `Slot`, which receives the reports.
+        // Its message handler is added by the tab's `Slot`, which receives the reports, like dark pages'.
         controller.addUserScript(UserScripts.media)
         if let signInScripts {
             controller.addUserScript(signInScripts.passkeyFallback)
             controller.addUserScript(signInScripts.passkeyRelay)
         }
         pageScripts?.install(in: controller)
-        return controller
+        controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
+    }
+
+    /// Dark pages for the tabs of one kind, built from its sites list once per change of the list.
+    private func darkPagesScript(isPrivate: Bool) -> WKUserScript {
+        let store = isPrivate ? privateDarkPages() : darkPages
+        if let cached = darkPagesScripts[isPrivate], cached.sites == store.offSites { return cached.script }
+        let script = DarkPages.userScript(offSites: store.offSites)
+        darkPagesScripts[isPrivate] = (store.offSites, script)
+        return script
+    }
+
+    /// The dark-pages script per kind of tab (regular, private), with the list it was built from.
+    private var darkPagesScripts: [Bool: (sites: Set<String>, script: WKUserScript)] = [:]
+
+    /// The list of sites where dark pages are off changed (the shell's stored list arrived after
+    /// launch): every web view gets the new list from its next page on.
+    public func darkPagesSitesDidChange() {
+        darkPagesScripts = [:]
+        var controllers: [(WKUserContentController, Bool)] = slots.values.map { ($0.controller, $0.tab?.isPrivate ?? false) }
+        if let warm { controllers.append((warm.controller, false)) }
+        for (controller, isPrivate) in controllers {
+            controller.removeAllUserScripts()
+            installScripts(in: controller, isPrivate: isPrivate)
+        }
     }
 
     private func makeWebView(configuration: WKWebViewConfiguration, controller: WKUserContentController) -> WKWebView {
@@ -200,6 +262,7 @@ public final class WebViewPool {
         #if DEBUG
         webView.isInspectable = true
         #endif
+        applyInterfaceStyle(to: webView)
         webView.allowsBackForwardNavigationGestures = true
         // The system find bar for "Find on Page" (`Tab.beginFind()`).
         webView.isFindInteractionEnabled = true
@@ -381,6 +444,8 @@ public final class WebViewPool {
         privateDataStore = nil
         privateSiteChoices = nil
         privatePasskeyNoticeSites = []
+        privateDarkPagesStore = nil
+        darkPagesScripts[true] = nil
         Task { await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) }
     }
 
@@ -541,6 +606,21 @@ public final class WebViewPool {
 
     func isAttached(_ tab: Tab) -> Bool {
         slots[tab.id]?.container != nil
+    }
+
+    /// Turns dark pages off (or back on) for the tab's site, remembered like the other per-site
+    /// choices, and applies it to the page on screen at once, without a reload. Other tabs get it
+    /// from their next page on.
+    func setDarkPagesOff(_ off: Bool, for tab: Tab) {
+        guard tab.pool === self, let site = NavigationRules.siteKey(for: tab.url) else { return }
+        let store = tab.isPrivate ? privateDarkPages() : darkPages
+        store.setDarkPagesOff(off, forSite: site)
+        Signposts.signposter.emitEvent(Signposts.darkPagesToggle, "\(off ? "off" : "on")")
+        if let webView = slots[tab.id]?.webView {
+            webView.evaluateJavaScript(DarkPages.setOffSource(off), in: nil, in: UserScripts.world) { _ in }
+        }
+        // Private tabs read the regular list too, so a regular change reaches them as well.
+        darkPagesSitesDidChange()
     }
 
     func setContentModeOverride(_ mode: ContentMode?, for tab: Tab) {
@@ -849,6 +929,15 @@ public final class WebViewPool {
         return choices
     }
 
+    /// Dark pages choices in private tabs: they read the regular list and keep their own changes
+    /// for the private session.
+    private func privateDarkPages() -> any SiteDarkPagesStore {
+        if let privateDarkPagesStore { return privateDarkPagesStore }
+        let store = LayeredDarkPagesStore(base: darkPages)
+        privateDarkPagesStore = store
+        return store
+    }
+
     private func privateStore() -> WKWebsiteDataStore {
         if let privateDataStore { return privateDataStore }
         let store = WKWebsiteDataStore.nonPersistent()
@@ -882,7 +971,7 @@ public final class WebViewPool {
     /// the configuration WebKit passes in, or `window.opener` breaks. It gets its own controller.
     func openChild(configuration: WKWebViewConfiguration, from opener: Tab) -> WKWebView? {
         guard let host, popupLimiter.allow(opener.id) else { return nil }
-        let controller = makeController()
+        let controller = makeController(isPrivate: opener.isPrivate)
         configuration.userContentController = controller
         let webView = makeWebView(configuration: configuration, controller: controller)
         // WebKit's configuration carries the opener's data store: a private opener's child is private.
@@ -1059,6 +1148,7 @@ extension WebViewPool {
             controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.mediaHandlerName)
             controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.subframePressHandlerName)
             controller.add(messages, contentWorld: UserScripts.world, name: SignInScripts.passkeyHandlerName)
+            controller.add(messages, contentWorld: UserScripts.world, name: DarkPages.handlerName)
             observe()
         }
 
@@ -1083,6 +1173,19 @@ extension WebViewPool {
             // play or pause.
             Task { [weak self] in await self?.refreshMediaPlayback() }
         }
+
+        /// The page's dark-pages script reported. A darkened page's own background is light, so the
+        /// area past its edges (overscroll) takes the darkened color instead of the page's.
+        func receiveDarkPagesState(_ state: DarkPagesState) {
+            tab?.set(\.darkPages, state)
+            let darkens = state == .darkened
+            guard darkens != darkensOverscroll else { return }
+            darkensOverscroll = darkens
+            webView.underPageBackgroundColor = darkens ? DarkPages.overscrollColor : nil
+        }
+
+        /// The overscroll area shows the darkened color (`receiveDarkPagesState`).
+        private var darkensOverscroll = false
 
         /// A new main-frame document committed (the old frames are gone) or the process died.
         func clearMediaReports() {
@@ -1245,6 +1348,12 @@ extension WebViewPool {
             }
             if message.name == SignInScripts.passkeyHandlerName {
                 if let tab = slot?.tab { tab.pool?.passkeyRequestFailed(in: tab) }
+                return
+            }
+            if message.name == DarkPages.handlerName {
+                guard message.frameInfo.isMainFrame, let raw = message.body as? String,
+                      let state = DarkPagesState(rawValue: raw) else { return }
+                slot?.receiveDarkPagesState(state)
                 return
             }
             guard let body = message.body as? [String: Any], let id = body["id"] as? String else { return }

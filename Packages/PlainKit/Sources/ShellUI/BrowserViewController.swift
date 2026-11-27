@@ -978,7 +978,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIPasteboard.general.url = url
             Haptic.success.play()
         }
-        var siteItems = siteMenuItems(for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle)
+        var siteItems = siteMenuItems(
+            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
+        )
             + paneMenuItems(for: tab, rules: rules)
         if rules.favorite, let isFavorite {
             let title = tab.title

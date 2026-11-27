@@ -52,6 +52,9 @@ extension BrowserViewController {
             state.isRecordable = LiveAddressBarData.isRecordable(url)
         }
         state.isPDF = tab.isPDF
+        // Both only while Plain is dark: the page reports `.inactive` otherwise.
+        state.isDarkened = tab.darkPages == .darkened
+        state.isDarkPagesOff = tab.darkPages == .offForSite
         if let page = session.pool.webView(for: tab) {
             state.isReaderAvailable = session.reader.isAvailable(in: page) == true
         }

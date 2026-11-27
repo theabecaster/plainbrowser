@@ -332,9 +332,12 @@ extension BrowserViewController {
 
     // MARK: Page menu items
 
-    /// Desktop Site and blocking for this site, both remembered per site and applied by reloading.
-    /// `desktop` and `blocking` are the state rules' answer for the page (§4).
-    func siteMenuItems(for tab: Tab, url: URL, desktop showsDesktop: Bool, blocking showsBlocking: Bool) -> [UIMenuElement] {
+    /// Desktop Site, blocking and dark pages for this site, all remembered per site. Desktop Site
+    /// and blocking apply by reloading; dark pages applies at once. `desktop`, `blocking` and
+    /// `darkPages` are the state rules' answer for the page (§4).
+    func siteMenuItems(
+        for tab: Tab, url: URL, desktop showsDesktop: Bool, blocking showsBlocking: Bool, darkPages: DarkPagesItem
+    ) -> [UIMenuElement] {
         guard showsDesktop, let host = url.host() else { return [] }
         let isDesktop = tab.contentMode == .desktop
         let desktop = UIAction(
@@ -347,7 +350,7 @@ extension BrowserViewController {
         // The blocking allow-list is saved to disk: a private tab must not add its site to it
         // (the rules leave the toggle out there). Private tabs follow the regular choice instead
         // (polish backlog: a private-only toggle).
-        guard showsBlocking else { return [desktop] }
+        guard showsBlocking else { return [desktop] + darkPagesMenuItems(for: tab, item: darkPages) }
 
         let blocking = session.isBlockingEnabled(for: url)
         let toggle = UIAction(
@@ -358,7 +361,7 @@ extension BrowserViewController {
             tab?.reload()
         }
         toggle.accessibilityIdentifier = "menu.blocking"
-        return [desktop, toggle]
+        return [desktop, toggle] + darkPagesMenuItems(for: tab, item: darkPages)
     }
 
     /// Show Reader only when the page's readerable check said yes; Hide Reader while it shows.

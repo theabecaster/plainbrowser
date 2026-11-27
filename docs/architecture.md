@@ -38,8 +38,8 @@ writes to the App Group (`SharedFavoritesFile`).
 | `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `SpringDriver` (frame-by-frame spring at 80–120 Hz), `Haptic`, `Glass` (the one Liquid Glass helper and its container), `Paper` (the textured Paper background: `apply(to:)`, `PaperBackground`) and `PaperTexture` (the tile, CoreGraphics only) |
 | `PerfSignposts` | nonisolated | os | signpost subsystem, category and names |
-| `PlainShared` | nonisolated (`CommandInbox` MainActor) | Foundation | `PlainCommand` (what the system asks for), `PlainLink` (`plainbrowser:` links both ways), `CommandInbox` (App Intents to the scene), `AppGroup`, `SharedFavorite`/`SharedFavoritesFile` (the App Group file), `SearchWidgetContent` |
-| `SystemSync` | actor | Storage, PlainShared, CoreSpotlight, WidgetKit | `SystemSync` (follows `AppDatabase.favoritesChanges()`: Spotlight, the App Group file, widget timelines; Clear History empties Spotlight), `SpotlightIndexing` seam + `CoreSpotlightIndex`, `WidgetReloading` seam, `SystemActivity` (Handoff and Spotlight activities to commands) |
+| `PlainShared` | nonisolated (`CommandInbox` MainActor) | Foundation, BrowserCore (TestIsolation) | `PlainCommand` (what the system asks for), `PlainLink` (`plainbrowser:` links both ways), `CommandInbox` (App Intents to the scene), `AppGroup`, `SharedFavorite`/`SharedFavoritesFile` (the App Group file), `SearchWidgetContent` |
+| `SystemSync` | actor | Storage, PlainShared, BrowserCore, CoreSpotlight, WidgetKit | `SystemSync` (follows `AppDatabase.favoritesChanges()`: Spotlight, the App Group file, widget timelines; Clear History empties Spotlight), `SpotlightIndexing` seam + `CoreSpotlightIndex`, `WidgetReloading` seam, `SystemActivity` (Handoff and Spotlight activities to commands) |
 | `WidgetUI` | views MainActor | SwiftUI, WidgetKit, PlainShared, DesignSystem | `SearchWidget` (small, medium, Lock Screen), `SearchProvider` (one entry, `.never`), `SearchWidgetView` and its parts (`DawnWindow`, `SearchField`, `FavoriteDisc`) |
 
 `BrowserCore` and `Storage` never import UIKit or WebKit, so `swift test` runs their tests on macOS.
@@ -188,6 +188,8 @@ docs/research/system-integration.md has the API facts and choices.
    took is remembered apart (`spotlight.json`, written only on success), so a failed index is
    retried. An unchanged list on launch costs two small file reads. It starts
    `FixedChoices.systemSyncLaunchDelay` after the database opens, at background priority.
+   The app makes it with `SystemSync.live`: in an isolated test run the App Group is the run's own
+   folder and Spotlight, widget reloads and App Shortcuts are stand-ins (Handoff is skipped too).
 4. **Clear History and Data** ends with `FeatureSheets.didClearBrowsingData`: Spotlight is
    emptied (and iOS's saved activities), then the favorites, which the clear keeps, go back.
 5. **Handoff.** `tabChanged` and `clearPage` call `updateHandoff`: the responder's

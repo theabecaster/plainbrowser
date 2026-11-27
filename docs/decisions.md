@@ -1252,6 +1252,16 @@ empty." Research in docs/research/launch.md; rules in docs/state-rules.md, "Laun
 - **Handoff:** the page on screen only, never a private tab (`FixedChoices.handoffInPrivateTabs`),
   never eligible for search or prediction. Receiving waits for the web-browser entitlement: iOS
   sends web pages only to the default browser.
+- **Plain Dev gets its own of everything** (landing, 2026-11-27): the widget extension's id, the
+  App Group and the link scheme follow `PLAIN_BUNDLE_SUFFIX`, read at run time from the Info.plist
+  (`PlainAppGroup`, `PlainLinkScheme`). A shared group would let the device build overwrite the
+  TestFlight app's favorites file, and a shared scheme would let one app's widget open the other.
+- **Isolated test runs keep the system out** (landing, 2026-11-27): the App Group is a folder under
+  `TestIsolation.directory`, and Spotlight, widget reloads, Handoff and App Shortcuts' parameters
+  are stand-ins or skipped (`SystemSync.live`, plus a `TestIsolation.isActive` check in each type
+  that reaches the system). PlainShared depends on BrowserCore for this; both are Foundation only,
+  so the extension still links no GRDB, UIKit or WebKit. The isolation check fails on any direct
+  use elsewhere.
 - **Perf cost:** nothing new runs before the first frame except setting the inbox's handler. The
   sync starts 5 s after the database opens, at background priority; an unchanged list costs two
   small file reads. The extension adds about 2.5 MB (Debug) to the app bundle. Measured on the

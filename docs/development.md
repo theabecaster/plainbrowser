@@ -59,43 +59,46 @@ Simulator builds work without it. The device scripts pass `-allowProvisioningUpd
 
 ## Widgets and App Group
 
-The app embeds one extension, `PlainWidgets` (`dev.abrahamgonzalez.plainbrowser.widgets`): the
-search widget and the Control Center controls. `xcodegen generate` builds and embeds it; every
-script builds it with the app, nothing extra to run.
+The app embeds one extension, `PlainWidgets`: the search widget and the Control Center controls.
+`xcodegen generate` builds and embeds it; every script builds it with the app, nothing extra to run.
 
-Both targets carry the App Group `group.dev.abrahamgonzalez.plainbrowser`
-(`Plain/Plain.entitlements`, `PlainWidgets/PlainWidgets.entitlements`).
+Everything that names the app follows `PLAIN_BUNDLE_SUFFIX` (project.yml), so Plain Dev and the
+TestFlight app never share a group, a widget or a link:
 
-**One manual step, once, before the first device build with the extension.** Until v0.2 the app
-signed with the team's wildcard profile, which cannot hold an App Group, and the App Store
-Connect API key cannot register a group (Xcode answers "Authentication failed" for it, and the
-API has no App Group endpoint). A device or archive build stops with "Provisioning profile ...
-doesn't include the App Groups capability" until this is done:
+| | TestFlight / Xcode Cloud | Plain Dev (`PLAIN_BUNDLE_SUFFIX=.dev`) |
+|---|---|---|
+| App | `dev.abrahamgonzalez.plainbrowser` | `dev.abrahamgonzalez.plainbrowser.dev` |
+| Widget extension | `dev.abrahamgonzalez.plainbrowser.widgets` | `dev.abrahamgonzalez.plainbrowser.dev.widgets` |
+| App Group (`PLAIN_APP_GROUP`) | `group.dev.abrahamgonzalez.plainbrowser` | `group.dev.abrahamgonzalez.plainbrowser.dev` |
+| Link scheme | `plainbrowser:` | `plainbrowser.dev:` |
 
-1. In Xcode, signed in with the team's Apple ID (Settings > Accounts), open `Plain.xcodeproj`.
-2. Plain target > Signing & Capabilities > App Groups: the group shows from the entitlements
-   file; click the refresh arrow (or tick the group) so Xcode registers it and the App ID.
-3. Same for the PlainWidgets target (it registers `dev.abrahamgonzalez.plainbrowser.widgets`).
-4. Build once for the device from Xcode. The explicit profiles now exist; the scripts and
-   `scripts/testflight.sh` sign with them from then on.
+Both entitlements files (`Plain/Plain.entitlements`, `PlainWidgets/PlainWidgets.entitlements`) take
+the group from `$(PLAIN_APP_GROUP)`; both Info.plists carry it as `PlainAppGroup`, and the scheme as
+`PlainLinkScheme`, which `PlainShared.AppGroup` and `PlainLink` read at run time.
 
-The same in the portal (developer.apple.com > Certificates, Identifiers & Profiles): add the App
-Group `group.dev.abrahamgonzalez.plainbrowser`; enable App Groups on the App ID
-`dev.abrahamgonzalez.plainbrowser` and tick the group; register the App ID
-`dev.abrahamgonzalez.plainbrowser.widgets` with App Groups and the same group. Xcode Cloud then
-needs nothing more: its managed signing uses the registered IDs.
+**Signing.** The App Groups need explicit App IDs (the team's wildcard profile can't hold a group),
+and the App Store Connect API key can't register a group. Xcode registered all four IDs and both
+groups on 2026-11-27, from a device build with `-allowProvisioningUpdates` while signed in with the
+team's Apple ID (Xcode > Settings > Accounts); the App Store profiles were made by an archive and
+export with the API key, as `scripts/testflight.sh` does. Nothing more to do unless an ID is
+deleted. If a new variant ever stops with "doesn't include the App Groups capability", sign in to
+Xcode with the team's Apple ID and build it once for the device with `-allowProvisioningUpdates`.
+Xcode Cloud's managed signing uses the registered IDs.
 
 Simulator builds sign without a team, and the group works there too. Tests:
 
 - `PlainTests` (hosted in the app, in the Smoke plan): performs every App Intent and checks the
   command it sends.
-- `PlainUITests/SystemTests` (Smoke): the `plainbrowser:` links end to end.
+- `PlainUITests/SystemTests` (Smoke): the `plainbrowser:` links end to end (simulator builds have
+  no suffix).
 - `SystemIntegrationTests` (PlainKit): links, the shared file, the Spotlight sync against a fake
   index and the widget timeline run with `swift test`; on a simulator they also render the widget
   faces to PNGs:
   `TEST_RUNNER_PLAIN_WIDGET_SHOTS=$PWD/build/widgetshots xcodebuild test -scheme PlainKit-Package -destination id=<udid> -only-testing:SystemIntegrationTests`.
-- `PlainUITests/SystemCaptureTests`: the widgets on the Home Screen and a favorite in Spotlight,
-  screenshots only, with `TEST_RUNNER_PLAIN_CAPTURE=1` (like `CaptureTests`).
+- `PlainUITests/SystemCaptureTests`: the widgets on the Home Screen and Plain's actions in
+  Spotlight, screenshots only, with `TEST_RUNNER_PLAIN_CAPTURE=1` (like `CaptureTests`). Simulators
+  only. The app runs isolated, so the Home Screen widget shows its empty face; the faces with
+  favorites come from `SystemIntegrationTests`.
 
 ## Perf gate
 

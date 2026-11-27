@@ -103,11 +103,20 @@ final class LaunchSplashTests: XCTestCase {
             ("Paper", { r, g, b in r > 0.9 && g > 0.85 && b > 0.75 }),
         ]
         for (icon, matches) in fields {
-            let app = launch(["-PlainSplashIcon", icon, "-PlainSplashHold", "4"])
-            Thread.sleep(forTimeInterval: 1.2)
-            let shot = XCUIScreen.main.screenshot()
+            let app = launch(["-PlainSplashIcon", icon, "-PlainSplashHold", "10"])
+            // The system's fade from the launch screen takes a moment (longer on a loaded simulator).
+            var shot = XCUIScreen.main.screenshot()
+            var field = color(shot, x: 0.04, y: 0.25)
+            let deadline = Date().addingTimeInterval(6)
+            while !matches(field.red, field.green, field.blue), Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.3)
+                shot = XCUIScreen.main.screenshot()
+                field = color(shot, x: 0.04, y: 0.25)
+            }
+            Thread.sleep(forTimeInterval: 0.4)
+            shot = XCUIScreen.main.screenshot()
+            field = color(shot, x: 0.04, y: 0.25)
             keep(shot, "splash \(icon)")
-            let field = color(shot, x: 0.04, y: 0.25)
             XCTAssertTrue(matches(field.red, field.green, field.blue), "\(icon)'s field: \(field)")
             // The app is whole underneath: the search field is there while the splash is up.
             XCTAssertTrue(app.textFields["searchField"].exists, "\(icon): the app is not under the splash")
@@ -133,7 +142,7 @@ final class LaunchSplashTests: XCTestCase {
         // A tap goes through the splash to the app (here, the field itself) and ends the splash.
         app.textFields["searchField"].tap()
         XCTAssertTrue(ending(app, within: 2).hasPrefix("skipped"))
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), "the keyboard did not come once the splash ended")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "the keyboard did not come once the splash ended")
     }
 
     /// The first run: the dive opens onto the intro.

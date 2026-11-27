@@ -464,7 +464,9 @@ public final class LaunchSplash {
         choosing = false
         wantsRenderer.clear()
         content()?.layer.removeAnimation(forKey: Self.zoomKey)
-        opening()
+        // After this turn: `end` runs inside the touch's hit test, and the keyboard's return is
+        // not something to start from in there.
+        DispatchQueue.main.async { [weak self] in self?.opening() }
         view.fadeOut(duration: FixedChoices.splashSkipFade) { [weak self] in self?.remove(.skipped) }
     }
 

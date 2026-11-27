@@ -190,15 +190,18 @@ change to make. Captures: `clarity/<config>/<shot>.jpg` in the session scratchpa
 
 13. **Fixed. The summary sheet's Done was ink; every other sheet's is the accent.**
     [before: i17-light/summary-05-done; after: i17-fix/summary-05-done]
-14. **"Remove" under the crossed glasses.** Next to "Unfavorite" it does not say what it removes.
-    **Lead's call:** "Unsave", or the filled glasses with "Saved" in the accent, as the on tiles
-    now do. [i17-light/sheet-03-favorited-saved]
+14. **Fixed. "Remove" under crossed glasses, next to "Unfavorite".** It did not say what it
+    removes, and the pair read as two new commands, not as the two things just kept. Now the kept
+    state shows like the on tiles: the filled star and "Favorite", the glasses and "Saved", both
+    in the accent; a tap removes it. VoiceOver keeps "Remove from Favorites" and "Remove from
+    Reading List", selected. [before: i17-light/sheet-03-favorited-saved; after:
+    i17-xl/sheet-03-favorited-saved]
 15. **Site Settings' items word the same thing three ways:** "Desktop Site", "Turn Off Blocking
     on This Site", "Turn Off Cookie Banner Blocking", "Turn Off Dark Pages for This Site". Under a
     menu titled Site Settings the tail is noise, and Desktop Site shows no on or off. **Lead's
     call** (UI tests name these labels). [i17-light/sheet-05-site-settings, misc-11-dark-site-settings]
-16. **The zoom row has no name:** "− 100% +", the percent dimmed at 100. Read correctly by
-    everyone asked to guess, so left. [i17-light/sheet-02-article-sheet]
+16. **The zoom row has no name:** "− 100% +", the percent dimmed at 100. The pair of minus and plus around a percent reads as zoom, so it was left.
+    [i17-light/sheet-02-article-sheet]
 17. **Downloads' Show in Files is a bare folder** at the title's leading end (named for
     VoiceOver). Left: the row's menu has the words. [i17-light/sheets-03-downloads]
 18. **Settings footers wrap at two widths:** Archive Tabs' and Appearance's break early, under

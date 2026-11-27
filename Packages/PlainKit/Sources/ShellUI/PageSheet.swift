@@ -317,9 +317,12 @@ final class PageSheetController: UIViewController {
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
         configuration.imagePlacement = .top
         configuration.imagePadding = Spacing.xs
-        configuration.baseForegroundColor = Palette.ink
+        // Kept (a favorite, saved for later): in the accent, as the tiles show a mode that is on.
+        let isOn = (element as? UIAction)?.state == .on
+        configuration.baseForegroundColor = isOn ? Palette.accentOnPaper : Palette.ink
         configuration.attributedTitle = AttributedString(Self.caption(element.title), attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .footnote), .foregroundColor: Palette.inkSecondary,
+            .font: UIFont.preferredFont(forTextStyle: .footnote),
+            .foregroundColor: isOn ? Palette.accentOnPaper : Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.contentInsets = NSDirectionalEdgeInsets(top: Spacing.s, leading: Spacing.xxs, bottom: Spacing.s, trailing: Spacing.xxs)
@@ -333,6 +336,7 @@ final class PageSheetController: UIViewController {
         } else if let action = element as? UIAction {
             button.addAction(perform(action, dismisses: true), for: .primaryActionTriggered)
             Self.identify(button, as: action)
+            if isOn { button.accessibilityTraits.insert(.selected) }
             button.isEnabled = !action.attributes.contains(.disabled)
         }
         return button
@@ -408,8 +412,8 @@ final class PageSheetController: UIViewController {
             "Hide Reader": String(localized: "Reader"),
             "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
             "Archived Tabs": String(localized: "Archive"), "Add to Favorites": String(localized: "Favorite"),
-            "Remove from Favorites": String(localized: "Unfavorite"), "Edit Favorites": String(localized: "Favorites"),
-            "Remove from Reading List": String(localized: "Remove"), "Summarize Page": String(localized: "Summarize"),
+            "Remove from Favorites": String(localized: "Favorite"), "Edit Favorites": String(localized: "Favorites"),
+            "Remove from Reading List": String(localized: "Saved"), "Summarize Page": String(localized: "Summarize"),
         ]
         return captions[title] ?? title
     }

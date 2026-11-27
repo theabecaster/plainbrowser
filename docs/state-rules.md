@@ -34,7 +34,10 @@ the state of the app."
    the mode changes. Inside a mode the bar keeps its shape: a control that is out of reach for a
    moment either dims (Back) or hides **in place**, keeping its slot so nothing moves under the
    thumb (Forward). The Duo's system vertical bar packs its items itself, so there nothing hides
-   inside a mode; it dims.
+   inside a mode; it dims. The gallery's bar is the exception (lead, 2026-11-27, UX audit item
+   10): a control it leaves out (More, Done, "+") is taken out of the row and the rest re-centre,
+   since an empty slot left the row visibly off-centre. The change waits until no finger is on
+   the gallery: the leaving control fades, then the others glide with a short spring.
 6. **Menus hide what does not apply and dim what is at a limit.** An item that never applies to
    this kind of page (Show Reader on a page with no article, Save PDF on HTML) is left out, as
    Apple asks of context menus. An item that applies but cannot go further right now (Zoom In at

@@ -43,6 +43,9 @@ public enum Motion {
     public static let galleryZoom = Animation.spring(duration: 0.42, bounce: 0.06)
     /// A thrown card closing (M2).
     public static let throwClose = Animation.spring(duration: 0.3, bounce: 0.15)
+    /// The gallery bar's controls gliding to a re-centred row after one leaves or arrives (UX
+    /// audit, 2026-11-27): short, no bounce, after the leaving control has faded.
+    public static let barGlide = Animation.spring(duration: 0.3, bounce: 0)
     /// Cards reflowing after a close (M2).
     public static let reflow = Animation.snappy(duration: 0.3)
     /// Tab gallery cards closing a gap or making room, run frame by frame so a scroll or another

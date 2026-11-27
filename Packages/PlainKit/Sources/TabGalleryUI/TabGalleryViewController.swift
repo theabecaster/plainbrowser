@@ -56,9 +56,11 @@ public final class TabGalleryViewController: UIViewController {
     private var liftedID: UUID?
     /// The blurred, dimmed page behind the cards.
     private let backdrop = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
-    /// Clips the cards to the safe area's sides: on the Duo's outer screen the next card in the
-    /// cascade would otherwise run under the system's vertical bar and its status icons. The
-    /// page itself never goes there either, so the zoom between page and card loses nothing.
+    /// Clips the cards on the side of the system's vertical bar (the Duo's outer screen), where
+    /// the next card in the cascade would otherwise run under the bar and its status icons; the
+    /// page never goes there either, so the zoom between page and card loses nothing. Every
+    /// other side runs to the screen's edge, as the app switcher's cards do past the Dynamic
+    /// Island in landscape (UX audit, 2026-11-27).
     private let cardClip = UIView()
     private var isShowingPrivate = false
     /// The last tab just closed and the shell is taking the gallery away: no empty state meanwhile.
@@ -93,6 +95,8 @@ public final class TabGalleryViewController: UIViewController {
         // and the bar read the same in either appearance.
         root.backgroundColor = .clear
         root.overrideUserInterfaceStyle = .dark
+        // Titles and the bar stop growing at the pill's cap; past it they would crowd the cards.
+        root.maximumContentSizeCategory = .extraExtraExtraLarge
         backdrop.frame = root.bounds
         backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         backdrop.contentView.backgroundColor = Palette.galleryDim
@@ -198,7 +202,13 @@ public final class TabGalleryViewController: UIViewController {
         super.viewDidLayoutSubviews()
         let bounds = view.bounds
         let safe = view.safeAreaInsets
-        let clip = CGRect(x: safe.left, y: 0, width: max(0, bounds.width - safe.left - safe.right), height: bounds.height)
+        let barEdge = traitCollection.verticalBarEdge
+        let rightToLeft = view.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let barOnLeft = (barEdge == .leading && !rightToLeft) || (barEdge == .trailing && rightToLeft)
+        let barOnRight = (barEdge == .trailing && !rightToLeft) || (barEdge == .leading && rightToLeft)
+        let clipLeft = barOnLeft ? safe.left : 0
+        let clipRight = barOnRight ? safe.right : 0
+        let clip = CGRect(x: clipLeft, y: 0, width: max(0, bounds.width - clipLeft - clipRight), height: bounds.height)
         if cardClip.frame != clip { cardClip.frame = clip }
         // Size and center, not the frame: the open and close transitions zoom the scroll view
         // with a transform, and a layout pass mid-zoom must not undo it. It keeps the root's
@@ -236,7 +246,7 @@ public final class TabGalleryViewController: UIViewController {
             width: bounds.width, height: bounds.height,
             safeTop: safe.top, safeLeft: safe.left, safeBottom: safe.bottom, safeRight: safe.right,
             isCompactWidth: traitCollection.horizontalSizeClass != .regular,
-            titleLineHeight: TabCardView.titleFont(for: traitCollection).lineHeight,
+            titleLineHeight: TabCardView.titleFont(for: view.traitCollection).lineHeight,
             bottomChrome: max(0, bounds.height - safe.bottom - bottomBar.frame.minY),
             // With a second profile the switcher's room stays reserved, private list or not, so
             // the cards never jump when it hides.
@@ -544,11 +554,18 @@ public final class TabGalleryViewController: UIViewController {
         emptyView.isHidden = !isEmpty || isLeavingEmpty
         // With the private toggle, the bar stays: it is the way between regular and private tabs.
         bottomBar.isHidden = isEmpty && !dataSource.supportsPrivateTabs
-        // Each control by docs/state-rules.md §6, hidden in place (the bar keeps its shape).
+        // Each control by docs/state-rules.md §6. A control that leaves is taken out of the row
+        // and the rest re-centre (UX audit, 2026-11-27); while a finger is on the gallery the
+        // change waits for no one and lands without motion, so nothing moves under the thumb.
         let rules = GalleryRules(galleryState)
-        bottomBar.newTabButton.isHidden = !rules.newTabButton
-        bottomBar.doneButton.isHidden = !rules.done
-        bottomBar.menuButton.isHidden = !rules.more
+        if bottomBar.setShown(menu: rules.more, newTab: rules.newTabButton, done: rules.done) {
+            let atRest = !isTouching && view.window != nil && !view.isHidden
+            bottomBar.animateRowChange(animated: atRest) { [weak self] in
+                guard let self else { return }
+                view.setNeedsLayout()
+                view.layoutIfNeeded()
+            }
+        }
         profileButton.isHidden = !rules.profileSwitcher
         if rules.profileSwitcher, profileButton.title != dataSource.profileTitle {
             profileButton.title = dataSource.profileTitle
@@ -557,6 +574,11 @@ public final class TabGalleryViewController: UIViewController {
         if !isPrivate, emptyView.setText(dataSource.emptyListText) { view.setNeedsLayout() }
         if (dataSource.profileCount > 1 ? GalleryProfileButton.reserve : 0) != metrics.topChrome { view.setNeedsLayout() }
         if isEmpty { toast.hide(animated: false) }
+    }
+
+    /// A finger is on the gallery: scrolling, lifting a card or dragging one to a new place.
+    private var isTouching: Bool {
+        scrollView.isTracking || scrollView.isDecelerating || reorder != nil || cards.values.contains { $0.isSwiping }
     }
 
     /// The shown list in the terms of the state rules.

@@ -258,6 +258,7 @@ extension BrowserViewController {
                 if let tab = currentTab { engineUI.typedVisitTabs.remove(tab.id) }
             }
         }
+        if old != nil, old?.canTranslate == false, new.canTranslate { offerTranslationOnce() }
         updateButtons()
         updatePageState()
     }
@@ -401,7 +402,8 @@ extension BrowserViewController {
         // The blocking allow-list is saved to disk: a private tab must not add its site to it
         // (the rules leave the toggle out there). Private tabs follow the regular choice instead
         // (polish backlog: a private-only toggle).
-        guard showsBlocking else { return [desktop] + darkPagesMenuItems(for: tab, item: darkPages) }
+        let cookies = cookieBannerMenuItems(for: tab, url: url)
+        guard showsBlocking else { return [desktop] + cookies + darkPagesMenuItems(for: tab, item: darkPages) }
 
         let blocking = session.isBlockingEnabled(for: url)
         let toggle = UIAction(
@@ -412,7 +414,25 @@ extension BrowserViewController {
             tab?.reload()
         }
         toggle.accessibilityIdentifier = "menu.blocking"
-        return [desktop, toggle] + darkPagesMenuItems(for: tab, item: darkPages)
+        return [desktop, toggle] + cookies + darkPagesMenuItems(for: tab, item: darkPages)
+    }
+
+    /// Turn Off / Turn On Cookie Banner Blocking for the site (state rules §4, `cookieBanners`).
+    /// Applies by reloading, like the blocking switch; a private tab keeps it for its session.
+    private func cookieBannerMenuItems(for tab: Tab, url: URL) -> [UIMenuElement] {
+        let item = currentRules().cookieBanners
+        guard item != .hidden else { return [] }
+        let isOff = item == .turnOn
+        let action = UIAction(
+            title: isOff ? "Turn On Cookie Banner Blocking" : "Turn Off Cookie Banner Blocking",
+            image: UIImage(systemName: isOff ? "checkmark.bubble" : "bubble.left.and.exclamationmark.bubble.right")
+        ) { [weak self, weak tab] _ in
+            guard let self, let tab else { return }
+            self.session.cookieBanners.setOff(!isOff, for: url, isPrivate: tab.isPrivate)
+            tab.reload()
+        }
+        action.accessibilityIdentifier = "menu.cookieBanners"
+        return [action]
     }
 
     /// Show Reader only when the page's readerable check said yes; Hide Reader while it shows.
@@ -491,6 +511,8 @@ struct TabSnapshot: Equatable {
     var security: SecurityState
     var loadError: LoadError?
     var isAwaitingResubmit: Bool
+    /// The page is in a language the user doesn't read (Translate Page applies).
+    var canTranslate: Bool
 
     init(_ tab: Tab) {
         url = tab.url
@@ -501,6 +523,7 @@ struct TabSnapshot: Equatable {
         security = tab.security
         loadError = tab.loadError
         isAwaitingResubmit = tab.isAwaitingResubmit
+        canTranslate = tab.translationTarget != nil && tab.translation == .original
     }
 
     /// The load failed and nothing newer is loading.

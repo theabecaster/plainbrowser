@@ -83,6 +83,23 @@ public enum Signposts {
     public static let desktopSite: StaticString = "page.desktopSite"
     /// Event: Turn Off / Turn On Dark Pages for This Site in the page menu.
     public static let darkPagesToggle: StaticString = "page.darkPages"
+    /// Event: the user turned cookie banner handling off ("off") or back on ("on") for a site.
+    public static let cookieBannersToggle: StaticString = "page.cookieBanners"
+    /// Event: the cookie banner engine answered a banner ("rejected") or gave up ("failed").
+    public static let cookieBannerAnswered: StaticString = "cookieBanners.answered"
+    /// Interval: reading the cookie banner engine and rules off the main thread after launch.
+    public static let cookieBannersPrepare: StaticString = "cookieBanners.prepare"
+    /// Interval: Translate Page, from the menu tap until the first translated text is on screen
+    /// ("translated"), or until it failed or was cancelled.
+    public static let translatePage: StaticString = "page.translate"
+    /// Event: Show Original put the page back as the site wrote it.
+    public static let showOriginal: StaticString = "page.showOriginal"
+    /// Event: a page's language was detected (the name says whether it differs from the user's).
+    public static let pageLanguage: StaticString = "page.language"
+    /// Event: the page menu's Print opened the print sheet.
+    public static let printPage: StaticString = "page.print"
+    /// Interval: Save as PDF, from the menu tap until the share sheet has the file.
+    public static let exportPDF: StaticString = "page.exportPDF"
     /// Event: Add to Favorites or Remove from Favorites in the page menu.
     public static let favoriteToggle: StaticString = "page.favorite"
 

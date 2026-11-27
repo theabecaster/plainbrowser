@@ -1,0 +1,7 @@
+autoconsent.js and rules.json contain DuckDuckGo autoconsent 18.12.0, unmodified,
+Copyright (c) DuckDuckGo, Inc., licensed under the Mozilla Public License 2.0 (MPL-2.0.txt).
+Source code of this exact version: https://github.com/duckduckgo/autoconsent/tree/v18.12.0
+and the npm package @duckduckgo/autoconsent@18.12.0.
+Plain's bridge (tools/autoconsent/entry.js) and the build (tools/autoconsent/build.mjs) are
+AGPL-3.0-only, part of Plain; MPL-2.0 section 3.3 allows the combination (AGPL-3.0 is a
+Secondary License).

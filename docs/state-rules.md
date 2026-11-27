@@ -133,9 +133,11 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 ## 4. The page menu (More, and a long press on the pill)
 
 Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: Reload
-(or Stop), Share and Copy Link are one row of three; Desktop Site, blocking and Dark Pages fold
-into a "Site Settings" submenu when two or more apply; History, Edit Favorites and Settings are
-one row of three, so the whole menu fits the Duo's outer screen.
+(or Stop), Share and Copy Link are one row of three; Find on Page, Print… and Save as PDF are one
+row of three while the page can be printed, captioned "Find", "Print…" and "Save PDF" (Find on
+Page alone otherwise); Desktop Site, blocking, cookie
+banners and Dark Pages fold into a "Site Settings" submenu when two or more apply; History, Edit
+Favorites and Settings are one row of three, so the whole menu fits the Duo's outer screen.
 
 | Item | Start | Loading | Loaded | Failed / offline | Crashed | Reader open | Notes |
 |---|---|---|---|---|---|---|---|
@@ -143,10 +145,13 @@ one row of three, so the whole menu fits the Duo's outer screen.
 | Find on Page | — | shown | shown | — | — | shown (finds in the article) | Nothing to find on an error. |
 | Show / Hide Reader | — | — | when readerable | — | — | Hide Reader | Safari: "Show Reader (if available)". |
 | Save PDF to Files | — | — | on a PDF | — | — | — | |
+| Translate Page / Show Original | — | Show Original while translated | Translate Page when the page's language is one the user doesn't read and the device can translate it; Show Original while translated | — | — | — | Subtitled with the pair ("French to English"), "Translating…" while the first text is on its way. The tab keeps translating its next pages in that language until Show Original. Under the reader it would act out of sight. One toast the first time ever a foreign page shows, then only the menu. |
+| Print…, Save as PDF | — | — | shown (http(s) or a PDF; Save as PDF not on a PDF, which has Save PDF to Files) | — | — | shown (prints the article) | Nothing finished to print while loading; an error page is Plain's message, not the site's. |
 | Share, Copy Link | — | shown | shown | shown (the address tried) | shown | shown (the page's address) | |
 | Zoom row (− % +) | — | shown | shown; − / + dim at the ends, % dim at 100 % | — | — | — | Zoom acts on the page, which is hidden under the reader. |
 | Desktop Site | — | http(s) | http(s) | http(s) | — | — | A remembered Desktop Site choice can be why a page fails, so the switch back stays (it retries the load). Under the reader it would act out of sight. |
 | Turn Off / On Blocking on This Site | — | http(s), regular tabs | http(s), regular tabs | http(s), regular tabs (blocking can cause the failure) | — | — | Private tabs: hidden (the allow-list is saved to disk). |
+| Turn Off / On Cookie Banner Blocking | — | http(s) | http(s) | — | — | — | In Site Settings. Applies by reloading. Private tabs: shown, kept for the private session only. Off for a site stops answering its banner; the cookie list's hiding follows the blocking switch. |
 | Turn Off / On Dark Pages for This Site | — | as Loaded | Only while Plain is dark: Turn Off while Plain darkens the page, Turn On while the user has it off for this site | — | — | — | Hidden in a light app (it would change nothing), on pages with their own dark design (nothing to turn off), on error pages and under the reader. Applies at once, no reload. Private tabs: shown, kept for the private session only. |
 | Add to / Remove from Favorites | — | — | recordable page | — | — | shown (the page's address) | A page that never loaded is not a favorite. |
 | Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). |

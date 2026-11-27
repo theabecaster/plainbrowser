@@ -121,6 +121,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         self.onSearchFieldReady = onSearchFieldReady
         super.init(nibName: nil, bundle: nil)
         session.pool.host = self
+        (session.translator as? AppleTranslator)?.presenter = self
     }
 
     @available(*, unavailable)
@@ -178,6 +179,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        session.pool.onTranslationFailed = { [weak self] tab in
+            guard let self, tab === self.currentTab else { return }
+            Haptic.nothingThere.play()
+            self.showToastWhenFree { [weak self] in self?.tabsUI.toast.show("This page couldn't be translated") }
+        }
         session.pool.onMemoryWarning = { [weak self] in
             self?.tabsUI.previews = [:]
             self?.tabsUI.fullPreviews = []
@@ -1020,7 +1026,21 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             find.accessibilityIdentifier = "menu.find"
             pageItems.append(find)
         }
+        // Find on Page, Print and Save as PDF share one row of three when the page can be printed,
+        // with one-line captions ("Find", "Print…", "Save PDF"), so the two rare actions take no
+        // section of their own.
+        let export = exportMenuItems(rules)
+        if !export.isEmpty {
+            for case let find as UIAction in pageItems {
+                find.title = "Find"
+                find.accessibilityLabel = "Find on Page"
+            }
+            let row = UIMenu(options: .displayInline, children: pageItems + export)
+            row.preferredElementSize = .medium
+            pageItems = [row]
+        }
         pageItems += readerMenuItems(rules.reader)
+        pageItems += translateMenuItems(for: tab, item: rules.translate)
         if rules.savePDF { pageItems += pdfMenuItems(for: tab) }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
             guard let self else { return }

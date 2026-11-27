@@ -71,6 +71,10 @@ public final class WebViewPool {
     private let darkPages: any SiteDarkPagesStore
     let contentRules: (any UserContentRules)?
     private let pageScripts: (any PageScripts)?
+    /// Translate Page's engine, from the shell. Without one, pages are never offered translation.
+    let translator: (any PageTranslator)?
+    /// A translation failed after it started (the page is back to its own text): the shell says so.
+    public var onTranslationFailed: ((Tab) -> Void)?
     /// False until Apple grants the web-browser entitlement: pages then get `SignInScripts`'
     /// passkey fallback (`FixedChoices.passkeysEnabled`).
     let passkeysEnabled: Bool
@@ -126,6 +130,7 @@ public final class WebViewPool {
     ///   - passkeysEnabled: whether the app has the web-browser entitlement, so WebKit can use
     ///     passkeys. Tests pass both.
     ///   - darkPages: the sites where the user turned dark pages off.
+    ///   - translator: Translate Page's engine (Apple's Translation framework, from the shell).
     public init(
         dataStore: WKWebsiteDataStore = .default(),
         tabStates: TabStateStore? = nil,
@@ -137,8 +142,10 @@ public final class WebViewPool {
         downloadDirectory: URL? = nil,
         pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
         passkeysEnabled: Bool = FixedChoices.passkeysEnabled,
-        darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore()
+        darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore(),
+        translator: (any PageTranslator)? = nil
     ) {
+        self.translator = translator
         self.passkeysEnabled = passkeysEnabled
         signInScripts = passkeysEnabled ? nil : SignInScripts()
         baseConfiguration = Self.makeBaseConfiguration(dataStore: dataStore)
@@ -231,6 +238,7 @@ public final class WebViewPool {
         }
         pageScripts?.install(in: controller)
         controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
+        if translator != nil { controller.addUserScript(PageTranslation.languageScript) }
     }
 
     /// Dark pages for the tabs of one kind, built from its sites list once per change of the list.
@@ -1143,6 +1151,8 @@ extension WebViewPool {
         var pendingNavigationIsFormSubmission = false
         /// Set from the main-frame response: the page being loaded is a PDF.
         var pendingNavigationIsPDF = false
+        /// Translate Page on the current document.
+        var translation = SlotTranslation()
         /// What each frame's media script last reported, by the frame's own id.
         private var frameMedia: [String: (playing: Bool, pictureInPicture: Bool)] = [:]
         private var afterRestore: [(WKWebView) -> Void] = []
@@ -1162,6 +1172,9 @@ extension WebViewPool {
             controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.subframePressHandlerName)
             controller.add(messages, contentWorld: UserScripts.world, name: SignInScripts.passkeyHandlerName)
             controller.add(messages, contentWorld: UserScripts.world, name: DarkPages.handlerName)
+            controller.addScriptMessageHandler(
+                TranslationMessageHandler(slot: self), contentWorld: PageTranslation.world, name: PageTranslation.handlerName
+            )
             observe()
         }
 

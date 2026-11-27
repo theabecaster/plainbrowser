@@ -119,6 +119,78 @@ public enum FixedChoices {
     /// burst): a few microseconds of work twice a second at most, back before a line is read.
     public static let darkPagesSheetCheckInterval = 500
 
+    // MARK: Translate Page (docs/research/translate.md)
+
+    /// Pages are translated on the device with Apple's Translation framework, never on a server:
+    /// the page's text stays on the phone, and it works offline once a language is downloaded.
+    public static let translationOnDevice = true
+    /// "Translate Page" shows in the page menu only on a page in a language the user doesn't read
+    /// (their preferred languages in iOS Settings); there is no setting for "always translate".
+    /// Once a tab is translated, its next pages in the same language translate by themselves,
+    /// until Show Original: someone reading a site in another language wants all of it.
+    public static let translationFollowsTab = true
+    /// A foreign page gets one quiet hint, once ever: a toast naming the page's language with a
+    /// Translate button. After that, the page menu is the only way (no banners, ui-reference).
+    public static let translateHintShownOnce = true
+    /// Characters of the page's text the language check reads: enough for the recognizer to be
+    /// sure (it is reliable from a few hundred), small enough to cost nothing per page.
+    public static let translateSampleLength = 2_000
+    /// The recognizer's answer is used at this confidence or more; below it the page's own
+    /// `<html lang>` decides, and with neither the page isn't offered for translation.
+    public static let translateDetectionConfidence = 0.6
+    /// One request to the translator holds at most this many characters and text pieces: a
+    /// screenful of text comes back in one or two answers, and the first lands quickly.
+    public static let translateBatchCharacters = 1_500
+    public static let translateBatchCount = 40
+    /// Requests waiting on the translator at once: enough to keep it busy, few enough that text
+    /// near the screen is never stuck behind text far below it.
+    public static let translateBatchesInFlight = 2
+    /// Text a translated page adds (infinite scroll, a chat, a live score) is translated in
+    /// batches at most this many milliseconds apart, not once per change.
+    public static let translateMutationDelay = 250
+    /// Text is translated once it is within this distance of the screen (a CSS margin): one and a
+    /// half screens ahead, so scrolling at reading speed never shows the original.
+    public static let translateLookahead = "150%"
+
+    // MARK: Print and Save as PDF (docs/research/print-pdf.md)
+
+    /// Regions whose standard paper is US Letter (ISO 3166 codes); everywhere else gets A4. A
+    /// saved PDF should print on the paper in the drawer, and nobody wants to pick a size.
+    public static let letterPaperRegions: Set<String> = ["US", "CA", "MX", "PH", "CL", "CO", "VE", "GT", "CR", "PR"]
+    /// Half an inch: what Safari and most printers leave, enough that no printer clips text.
+    public static let exportMargin: Double = 36
+    /// How long Print and Save as PDF wait for lazily loaded pictures before going ahead without
+    /// the stragglers: long enough for a page's pictures on a normal connection, short enough
+    /// that the sheet still feels immediate.
+    public static let exportImageWait = Duration.milliseconds(800)
+    /// A saved PDF's name is the page title cut to this many characters: long titles stay
+    /// recognizable in Files without becoming a paragraph.
+    public static let exportFileNameLength = 100
+    /// A PDF longer than this many pages says "Saving as PDF…" while it is made: the first page
+    /// waits for the page's process to lay out the whole document (about 0.4 s for 120 pages on
+    /// the simulator), and a short document is done before a message could be read.
+    public static let exportProgressPages = 20
+
+    // MARK: Cookie banners (docs/research/cookie-banners.md)
+
+    /// Cookie consent banners are answered automatically, rejecting wherever the banner offers it,
+    /// as DuckDuckGo and Brave do: nobody reads them, "reject" is what a privacy-first browser
+    /// should say, and a banner covering the page is the opposite of "the page gets the screen". A
+    /// site that breaks gets "Turn Off Cookie Banner Blocking" in Site Settings, remembered for it.
+    public static let cookieBannersHandled = true
+    /// How many times the engine looks for a banner on a page (autoconsent's default): banners
+    /// that load late are still found, and a page without one stops costing anything after it.
+    public static let cookieBannerDetectRetries = 20
+    /// Known banners are hidden from the first frame while they are judged, so they never flash;
+    /// after this many milliseconds a banner the engine could not answer shows again.
+    public static let cookieBannerPrehideTimeout = 2_000
+    /// A banner answered this many times on one site within `cookieBannerLoopWindow` (a page that
+    /// reloads itself after each answer) means the answer doesn't stick: the site is left alone
+    /// for the rest of the launch instead of reloading forever.
+    public static let cookieBannerLoopLimit = 3
+    public static let cookieBannerLoopWindow = Duration.seconds(60)
+
+    // MARK: Address bar
     // MARK: Address bar
 
     /// Suggestions older than this are useless while typing; give up and show what we have.

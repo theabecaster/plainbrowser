@@ -138,4 +138,28 @@ extension AppDatabase {
             }
         }
     }
+
+    // MARK: Cookie banners off per site
+
+    /// The sites where the user turned cookie banner handling off. Read once at launch: every
+    /// page's first message is answered from memory.
+    public func cookieBannersOffSites() async throws -> Set<String> {
+        try await writer.read { db in
+            try Set(String.fetchAll(db, sql: "SELECT site FROM \(Schema.cookieBannersOff)"))
+        }
+    }
+
+    /// Turns cookie banner handling off for `site` (true) or back on (false).
+    public func setCookieBannersOff(_ off: Bool, forSite site: String) async throws {
+        try await writer.write { db in
+            if off {
+                try db.execute(
+                    sql: "INSERT INTO \(Schema.cookieBannersOff) (site) VALUES (?) ON CONFLICT(site) DO NOTHING",
+                    arguments: [site]
+                )
+            } else {
+                try db.execute(sql: "DELETE FROM \(Schema.cookieBannersOff) WHERE site = ?", arguments: [site])
+            }
+        }
+    }
 }

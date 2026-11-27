@@ -126,6 +126,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
             // dark pages state.
             slot.clearMediaReports()
             slot.receiveDarkPagesState(.inactive)
+            pool.translationPageDidCommit(slot)
             pool.applyRememberedZoom(to: webView, in: tab)
         }
         updateSecurity(of: webView)

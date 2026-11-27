@@ -52,6 +52,20 @@ public enum DarkPagesItem: Sendable, Equatable {
     case turnOff, turnOn, hidden
 }
 
+/// The translate item in the page menu (§4).
+public enum TranslateItem: Sendable, Equatable {
+    case translate, showOriginal, hidden
+}
+
+/// The cookie banner item in Site Settings (§4).
+public enum CookieBannersItem: Sendable, Equatable {
+    /// Plain answers the site's cookie banner (rejecting where it can): offer to stop.
+    case turnOff
+    /// The user stopped it for this site: offer to start again.
+    case turnOn
+    case hidden
+}
+
 /// The state of the browser screen, in the terms of docs/state-rules.md §2.
 public struct ChromeState: Sendable, Equatable {
     /// A tab is on screen. An empty tab counts; no tab at all (first run) does not.
@@ -92,6 +106,13 @@ public struct ChromeState: Sendable, Equatable {
     public var isDarkened = false
     /// The user turned dark pages off for this site, and the app is dark.
     public var isDarkPagesOff = false
+    /// The page's language is known, can be translated on the device, and is not one the user
+    /// reads (their preferred languages).
+    public var isForeignLanguage = false
+    /// The page shows translated text, or a translation is on its way.
+    public var isTranslated = false
+    /// The user turned cookie banner handling off for this site.
+    public var isCookieBannersOff = false
     /// The page can be a favorite (history-recordable address).
     public var isRecordable = false
     /// A Duo split can show (width and height both regular).
@@ -257,6 +278,34 @@ public struct ControlRules: Sendable, Equatable {
         if state.isDarkened { return .turnOff }
         if state.isDarkPagesOff { return .turnOn }
         return .hidden
+    }
+
+    /// Translate Page on a loaded page in a language the user doesn't read; Show Original while it
+    /// is translated (also while loading: a translated page keeps translating what it adds).
+    /// Never under the reader (it would act out of sight) or on an error page.
+    public var translate: TranslateItem {
+        guard isPageShowing, state.isWebPage, !state.isReaderOpen else { return .hidden }
+        if state.isTranslated { return .showOriginal }
+        return state.condition == .loaded && state.isForeignLanguage ? .translate : .hidden
+    }
+
+    /// Print and Save as PDF act on what finished loading: the page, a PDF, or the reader's
+    /// article (which prints instead of the page under it). Not on Start, while loading (half a
+    /// page), or on an error or crashed page (Plain's own message, nothing of the site's).
+    public var print: Bool {
+        if state.isReaderOpen { return state.hasPage }
+        return state.hasPage && state.condition == .loaded && (state.isWebPage || state.isPDF)
+    }
+
+    /// As Print, except on a PDF, which is already one: "Save PDF to Files" keeps the original.
+    public var saveAsPDF: Bool { print && (state.isReaderOpen || !state.isPDF) }
+
+    /// Cookie banners are answered on every web page (`FixedChoices.cookieBannersHandled`); the
+    /// switch for the site sits with the other per-site choices, on the page itself only.
+    /// Private tabs: shown, kept for the private session only.
+    public var cookieBanners: CookieBannersItem {
+        guard isPageShowing, state.isWebPage, !state.isReaderOpen else { return .hidden }
+        return state.isCookieBannersOff ? .turnOn : .turnOff
     }
 
     /// A page that never loaded is not a favorite; the reader's page is.

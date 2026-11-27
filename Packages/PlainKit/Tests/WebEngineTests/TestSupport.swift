@@ -191,6 +191,7 @@ final class Harness {
         passkeysEnabled: Bool = false,
         darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore(),
         pageScripts: (any PageScripts)? = nil,
+        translator: (any PageTranslator)? = nil,
         route: @escaping @Sendable (TestServer.Request) -> TestServer.Response = Pages.route
     ) async throws {
         server = try await TestServer(route: route)
@@ -205,7 +206,8 @@ final class Harness {
             downloadDirectory: directory.appending(path: "Downloads"),
             pageZooms: pageZooms,
             passkeysEnabled: passkeysEnabled,
-            darkPages: darkPages
+            darkPages: darkPages,
+            translator: translator
         )
         pool.host = host
         host.pool = pool

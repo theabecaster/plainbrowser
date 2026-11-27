@@ -283,6 +283,67 @@ import Testing
         #expect(!ControlRules(state).savePDF)
     }
 
+    @Test func translateOnlyOnAForeignPageThatShows() {
+        var state = Self.page()
+        #expect(ControlRules(state).translate == .hidden, "a page in a language the user reads")
+        state.isForeignLanguage = true
+        #expect(ControlRules(state).translate == .translate)
+        state.condition = .loading
+        #expect(ControlRules(state).translate == .hidden, "wait for the page before offering")
+        state.isTranslated = true
+        #expect(ControlRules(state).translate == .showOriginal, "a translated page loading more keeps the way back")
+        state.condition = .loaded
+        #expect(ControlRules(state).translate == .showOriginal)
+        for condition in [PageCondition.failed, .crashed, .awaitingResubmit] {
+            state.condition = condition
+            #expect(ControlRules(state).translate == .hidden, "\(condition)")
+        }
+        state.condition = .loaded
+        state.isReaderOpen = true
+        #expect(ControlRules(state).translate == .hidden, "under the reader it acts out of sight")
+        state.isReaderOpen = false
+        state.isWebPage = false
+        #expect(ControlRules(state).translate == .hidden)
+    }
+
+    @Test func printAndPDFOnlyOnWhatFinishedLoading() {
+        var state = Self.page()
+        #expect(ControlRules(state).print)
+        #expect(ControlRules(state).saveAsPDF)
+        for condition in [PageCondition.loading, .failed, .crashed, .awaitingResubmit] {
+            state.condition = condition
+            #expect(!ControlRules(state).print, "\(condition)")
+            #expect(!ControlRules(state).saveAsPDF, "\(condition)")
+        }
+        state.condition = .loaded
+        state.isPDF = true
+        state.isWebPage = false
+        #expect(ControlRules(state).print, "a PDF prints")
+        #expect(!ControlRules(state).saveAsPDF, "a PDF is saved with Save PDF to Files")
+        state = Self.page(condition: .loading)
+        state.isReaderOpen = true
+        #expect(ControlRules(state).print, "the reader prints its article")
+        #expect(ControlRules(state).saveAsPDF)
+        #expect(!ControlRules(Self.emptyTab()).print)
+    }
+
+    @Test func cookieBannerSwitchOnThePageItself() {
+        var state = Self.page()
+        #expect(ControlRules(state).cookieBanners == .turnOff)
+        state.isCookieBannersOff = true
+        #expect(ControlRules(state).cookieBanners == .turnOn)
+        state.isPrivate = true
+        #expect(ControlRules(state).cookieBanners == .turnOn, "private tabs keep it for the session")
+        for condition in [PageCondition.failed, .crashed, .awaitingResubmit] {
+            state.condition = condition
+            #expect(ControlRules(state).cookieBanners == .hidden, "\(condition)")
+        }
+        state.condition = .loaded
+        state.isReaderOpen = true
+        #expect(ControlRules(state).cookieBanners == .hidden)
+        #expect(ControlRules(Self.emptyTab()).cookieBanners == .hidden)
+    }
+
     @Test func editingHidesTheBarAndItsGestures() {
         var state = Self.page(others: 2)
         state.isEditing = true

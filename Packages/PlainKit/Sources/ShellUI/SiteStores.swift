@@ -156,6 +156,63 @@ final class StorageSiteDarkPagesStore: SiteDarkPagesStore {
     }
 }
 
+/// The sites where cookie banner handling is off. Every page's first message is answered from
+/// memory, loaded once from Storage after launch; changes go to memory at once and to Storage
+/// behind it, in order. Private tabs never reach it (`CookieBanners` keeps theirs in memory).
+final class StorageSiteCookieBannersStore: SiteCookieBannersStore {
+    private(set) var offSites: Set<String> = []
+    /// Choices made before the stored list arrived, applied on top of it.
+    private var editsBeforeLoad: [String: Bool] = [:]
+    private var isLoaded = false
+    private var lastWrite: Task<Void, Never>?
+    private let database: DatabaseProvider
+
+    init(database: @escaping DatabaseProvider) {
+        self.database = database
+    }
+
+    /// Reads the stored list off the main thread. Call once, after the first frame.
+    func load() async {
+        guard !isLoaded, let database = await database() else { return }
+        let stored = (try? await database.cookieBannersOffSites()) ?? []
+        guard !isLoaded else { return }
+        var sites = stored
+        for (site, off) in editsBeforeLoad {
+            if off { sites.insert(site) } else { sites.remove(site) }
+        }
+        editsBeforeLoad = [:]
+        isLoaded = true
+        offSites = sites
+    }
+
+    func setCookieBannersOff(_ off: Bool, forSite site: String) {
+        if off { offSites.insert(site) } else { offSites.remove(site) }
+        if !isLoaded { editsBeforeLoad[site] = off }
+        let previous = lastWrite
+        let database = database
+        lastWrite = Task {
+            await previous?.value
+            try? await database()?.setCookieBannersOff(off, forSite: site)
+        }
+    }
+}
+
+/// `CookieBanners` already has `PageScripts`' one method.
+extension CookieBanners: PageScripts {}
+
+/// The shell's page scripts, in order: Reader's check, then cookie banners.
+final class ShellPageScripts: PageScripts {
+    let parts: [any PageScripts]
+
+    init(_ parts: [any PageScripts]) {
+        self.parts = parts
+    }
+
+    func install(in controller: WKUserContentController) {
+        for part in parts { part.install(in: controller) }
+    }
+}
+
 /// The sites where blocking is off, in Storage.
 nonisolated struct StorageSiteAllowListStore: SiteAllowListStore {
     let database: DatabaseProvider

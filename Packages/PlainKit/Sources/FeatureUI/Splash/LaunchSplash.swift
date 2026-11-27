@@ -95,11 +95,24 @@ nonisolated final class SplashFuture<Value: Sendable>: @unchecked Sendable {
     }
 }
 
-/// A flag one thread clears and others read. Starts set.
+/// A flag one thread clears and others act on. Starts set. `whileSet` runs its body only while
+/// the flag is set and holds off `clear` until the body is done, so once `clear` has returned
+/// nothing guarded by the flag is running or will run.
 nonisolated final class SplashFlag: Sendable {
-    private let flag = Atomic(true)
-    var isSet: Bool { flag.load(ordering: .relaxed) }
-    func clear() { flag.store(false, ordering: .relaxed) }
+    private let flag = Mutex(true)
+
+    var isSet: Bool { flag.withLock { $0 } }
+
+    func clear() { flag.withLock { $0 = false } }
+
+    /// False when the flag was already cleared, and the body did not run.
+    @discardableResult
+    func whileSet(_ body: () -> Void) -> Bool {
+        flag.withLock { set in
+            if set { body() }
+            return set
+        }
+    }
 }
 
 #if canImport(UIKit)
@@ -244,12 +257,12 @@ public final class LaunchSplash {
         // Only if the pictures are drawn by now (they are started as the scene connects and take a
         // few milliseconds; the browser's build since then takes many times that). The first
         // frame never waits for them: a launch that outran them goes on with no splash.
+        self.content = content
         guard let art = art.take() else {
             Self.log.error("splash pictures not ready for the first frame: no splash")
             Signposts.signposter.emitEvent(Signposts.launchSplash, "missed")
             return finish(.missed)
         }
-        self.content = content
         let controller = SplashViewController(art: art)
         let window = SplashWindow(windowScene: scene)
         window.windowLevel = Self.windowLevel
@@ -345,12 +358,11 @@ public final class LaunchSplash {
         let finished: @Sendable (SplashStats) -> Void = { [weak self] stats in
             Task { @MainActor in self?.rendererFinished(stats) }
         }
-        let wanted: @Sendable () -> Bool = { [wantsRenderer] in wantsRenderer.isSet }
+        let wanted = wantsRenderer
         kit.whenReady { [weak self] kit in
-            guard let kit else {
-                Task { @MainActor in self?.choose(nil, why: "no renderer") }
-                return
-            }
+            // No renderer (Metal failed, or the iris was asked for): Core Animation plays the dive,
+            // chosen at the deadline below, by when its own pictures are drawn.
+            guard let kit else { return }
             let note = String(format: "kit %.1f ms (shaders %.1f)", kit.buildTime * 1000, kit.compileTime * 1000)
             Task { @MainActor in self?.kitNote = note }
             DispatchQueue.global(qos: .userInteractive).async {
@@ -368,7 +380,8 @@ public final class LaunchSplash {
         }
         let wait = max(start - FixedChoices.splashRendererLead - CACurrentMediaTime(), 0)
         DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
-            self?.choose(nil, why: "renderer not ready in time")
+            guard let self else { return }
+            self.choose(nil, why: self.kit.isDone && self.kit.take() == nil ? "no renderer" : "renderer not ready in time")
         }
     }
 

@@ -180,6 +180,9 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
     private var leads: [CFTimeInterval] = []
     private var firstDrawable: CAMetalDrawable?
     private let cancelled = Atomic(false)
+    /// Held while a frame is handed to the GPU and while `cancel` marks the renderer stopped
+    /// (true): once `cancel` has returned, no frame is committed.
+    private let stopped = Mutex(false)
     /// The render thread's run loop while it runs, so `cancel` can wake it.
     private let loop = Mutex<CFRunLoop?>(nil)
     private let stats = Mutex(SplashStats())
@@ -213,11 +216,11 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
     /// the main thread: the first GPU submission waits several milliseconds.
     ///
     /// `wanted` says whether the splash still wants a renderer (it has not ended, and has not
-    /// chosen Core Animation): it is asked before anything is made and again before the frame
-    /// goes to the GPU, so nothing is drawn for a splash that is gone or an app in the background.
-    static func make(kit: SplashKit, layout: SplashLayout, t0: CFTimeInterval, slow: Double, wanted: @Sendable () -> Bool,
+    /// chosen Core Animation): it is read before anything is made, and the frame goes to the GPU
+    /// under it, so nothing is drawn for a splash that is gone or an app in the background.
+    static func make(kit: SplashKit, layout: SplashLayout, t0: CFTimeInterval, slow: Double, wanted: SplashFlag,
                      onFinish: @escaping @Sendable (SplashStats) -> Void) throws -> SplashRenderer {
-        guard wanted() else { throw SplashError(description: "not wanted any more") }
+        guard wanted.isSet else { throw SplashError(description: "not wanted any more") }
         // The pictures must be at the screen's scale, or the swap would show.
         guard abs(kit.art.scale - layout.scale) < 0.01 else { throw SplashError(description: "pictures are not at the screen's scale") }
         let vertices = SplashMesh.vertices(window: Float(layout.holeRadius), far: Float(hypot(layout.size.width, layout.size.height)))
@@ -236,8 +239,8 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
         guard let drawable = r.layer.nextDrawable(), let cb = r.encode(t: -1, into: drawable.texture) else {
             throw SplashError(description: "no first frame")
         }
-        guard wanted() else { throw SplashError(description: "not wanted any more") }
-        cb.commit()
+        // Committed only while still wanted, and the splash's end waits for this to finish.
+        guard wanted.whileSet({ cb.commit() }) else { throw SplashError(description: "not wanted any more") }
         cb.waitUntilScheduled()
         r.firstDrawable = drawable
         let spent = CACurrentMediaTime() - begin
@@ -271,6 +274,7 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
     /// calls again. A renderer that never started is simply freed.
     func cancel() {
         cancelled.store(true, ordering: .relaxed)
+        stopped.withLock { $0 = true }
         loop.withLock { loop in
             guard let loop else { return }
             CFRunLoopPerformBlock(loop, CFRunLoopMode.defaultMode.rawValue) { [self] in self.finish() }
@@ -327,8 +331,14 @@ nonisolated final class SplashRenderer: NSObject, CAMetalDisplayLinkDelegate, @u
                 if late { $0.late += 1 }
             }
         }
-        cb.present(update.drawable)
-        cb.commit()
+        // Handed to the GPU unless `cancel` got in first; `cancel` waits for a hand-over under way.
+        let committed = stopped.withLock { stopped -> Bool in
+            guard !stopped else { return false }
+            cb.present(update.drawable)
+            cb.commit()
+            return true
+        }
+        guard committed else { return finish() }
         encodeTimes.append(CACurrentMediaTime() - begin)
         targets.append(due)
         if done { finish() }

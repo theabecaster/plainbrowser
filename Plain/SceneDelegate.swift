@@ -256,6 +256,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // The navigation controller gives the page buttons a place in the system's vertical bar
         // (iPhone Duo). Its navigation bar stays hidden; the browser shows its toolbar only where
         // that bar is vertical.
+        // Under the launch splash the field has focus but its keyboard waits for the dive. Before
+        // the window shows: the field takes focus as the view appears.
+        if let launchSplash {
+            browser.holdLaunchKeyboard()
+            launchSplash.onOpening = { [weak browser] in browser?.releaseLaunchKeyboard() }
+        }
         let navigation = UINavigationController(rootViewController: browser)
         navigation.setNavigationBarHidden(true, animated: false)
         window.rootViewController = navigation
@@ -263,11 +269,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         TestIsolationMarker.install(in: window)
         self.window = window
         self.browser = browser
-        // Under the launch splash the field has focus but its keyboard waits for the dive.
-        if let launchSplash {
-            browser.holdLaunchKeyboard()
-            launchSplash.onOpening = { [weak browser] in browser?.releaseLaunchKeyboard() }
-        }
         browser.onProfileDatabaseChange = { [services] database in services.followFavorites(of: database) }
         LaunchFirstFrame.endAtNextFrame()
         attachDatabase(to: browser)

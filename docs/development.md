@@ -172,7 +172,7 @@ times slower, for frame strips), `-PlainSplashHold <seconds>` (the still splash 
 and `-PlainSplashPath iris` (Core Animation's iris instead of the GPU dive). How it ended is in
 the `launch.splash` signpost's message and, in an isolated run, in the value of the
 `plainLaunchSplash` accessibility element in the app's window ("metal", "iris", "crossfade",
-"skipped", "left"), followed after a GPU dive by its frame timing. The same timing goes to the
+"skipped", "left", "missed"), followed after a GPU dive by its frame timing. The same timing goes to the
 log: `log stream --level debug --predicate 'subsystem == "dev.abrahamgonzalez.plainbrowser" AND
 category == "launch"'` (on a simulator: `xcrun simctl spawn <udid> log stream ...`).
 Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit`, `-PlainTabLayout above|left|right` and

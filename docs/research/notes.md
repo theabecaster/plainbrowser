@@ -28,6 +28,7 @@ These are the key facts from seven research reports, kept for builders. The plan
 - **Network:** `rel=preconnect` is on and `dns-prefetch` is on (Safari 26+). Speculation rules and `rel=prefetch` are not shipped.
 - **Back/forward cache:** on by default.
 - **Patching page APIs from a user script:** patch the prototype (`CredentialsContainer.prototype.get`), never the instance (`navigator.credentials.get`). A property set on a DOM wrapper object is lost when JavaScriptCore collects and remakes the wrapper: measured on the simulator, about half of fresh pages had lost it by the time a button was tapped.
+- **A system-denied camera, microphone or location never reaches `WKUIDelegate`:** WebKit checks the app's `AVCaptureDevice` and Core Location authorization first (`UserMediaPermissionRequestManagerProxy::requestSystemValidation`, `CoreLocationGeolocationProvider`). Not determined, it shows iOS's prompt itself, then asks the delegate; denied or restricted, it refuses the page (`NotAllowedError`, `PERMISSION_DENIED`) without a callback. Read in WebKit's source on 2026-11-27 (docs/research/permissions-states.md).
 - **iOS 27.2:** a device-only `WKWebView` safe-area regression is reported (forum 853762).
 - **SwiftUI `WebPage` lacks:** a `createWebViewWith` hook, a `WKDownload` delegate, a media permission callback, `interactionState`, `takeSnapshot` and scroll-view access. This is why we use `WKWebView`.
 

@@ -324,6 +324,11 @@ made joins the store with its own id (`TabStore.open(id:)`).
 (`StorageSitePermissionStore`), Desktop Site (`StorageSiteContentModeStore`, an in-memory map
 loaded after launch), content blocking (`ContentBlocker` as `UserContentRules`, its allow-list in
 `StorageSiteAllowListStore`) and Reader's check (`ReaderPageScripts`).
+The pool also owns `systemAccess` (`SystemAccessMonitor`: what iOS lets Plain use, read after the
+first frame and on each return) and, only while camera, microphone or location is off for Plain,
+the page-world `AccessRequestWatch`, which reports a page's request WebKit refused without asking
+(`SystemAccessPresenter`, in `BrowserViewController+SystemAccess.swift`; the rules are
+BrowserCore's `SystemAccess.swift`).
 
 1. **Show a tab:** `pool.attach(tab, to: paneView)`. A discarded tab restores sessionStorage, then
    `interactionState`. `pool.detach(tab)` stores a thumbnail and applies the tier limits.

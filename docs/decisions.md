@@ -942,7 +942,8 @@ Research: docs/research/browse-for-me.md.
   the reader. Without the model (ineligible phone, Apple Intelligence off, model not ready,
   unsupported language) both are left out with no explanation (the first-run intro shows
   Browse for Me once, with Turn On Apple Intelligence where it is off); the answer is read again each time
-  the app becomes active, so they appear by themselves once the model is ready. Rejected: a
+  the app becomes active (and every 30 s while the model is still getting ready, since
+  2026-11-27), so they appear by themselves once the model is ready. Rejected: a
   one-time explanation, which needs a dead button or an unasked-for banner to live on.
 - **A sheet, not a tab.** The summary is a paper sheet over the page (Sheet mode), like History.
   It never enters the tab list, history or the session, so nothing about it is saved. A source
@@ -2127,3 +2128,54 @@ other indicators."
   geometry.
 - **Not verified:** the region's margins and the portrait region (Device Hub could not be driven
   from the test Macs: no UI scripting there). The logs above settle both.
+
+## Switched-off features: one quiet line at the moment of need (2026-11-27)
+
+Research and the full matrix: docs/research/permissions-states.md. Owner: "handle properly when
+users have things turned off", "don't be too annoying", following credible sources.
+
+- **When Plain speaks.** Never at launch and never before iOS's own prompt (HIG Privacy,
+  Onboarding). Nothing right after the user says no in that prompt. When a switch of Plain's in
+  Settings blocks what a site or the user wanted, one line where it happened: a toast for a
+  site's request (once per site until the switch changes) and for Save Image (every time: the
+  user's own action), the error page for cellular data. Rejected: an alert (HIG Alerts: not for
+  information; the user's own action isn't what is blocked), a banner on the page, a screen
+  before the system prompt, a row in Settings.
+- **WebKit refuses first.** For camera, microphone and location, WebKit checks the app's
+  authorization before the UI delegate and, when it is denied or restricted, refuses the page
+  without calling Plain (`UserMediaPermissionRequestManagerProxy`,
+  `CoreLocationGeolocationProvider`). So Plain can't learn of the request from its delegate.
+  Chosen: `AccessRequestWatch`, a script in the page's own world that wraps `getUserMedia`,
+  `getCurrentPosition` and `watchPosition` and posts which features the call needed, installed
+  only while one of those features is off for Plain and wrapping only those. It breaks the rule
+  that engine scripts live in Plain's own world, on purpose: a call can only be seen there. With
+  everything on (most people) pages get nothing. A page posting on its own can only make Plain
+  say once what is already true: the shell checks the feature and the site first. Rejected:
+  always wrapping (a page-world footprint for everyone), saying nothing (a silent failure).
+- **`SystemAccessMonitor` in WebEngine**, one per pool: AVFoundation, Core Location, Photos,
+  Core Telephony and Network, all Apple's, so no new dependency. Read off the main thread after
+  the first frame and on each return to the app (a switch changes only in Settings, or in a
+  system prompt, which also makes the app inactive); cellular data and the network path report
+  their own changes. Only a changed answer updates anything, so returning never flickers.
+- **Once per site, in memory** (`SystemAccessNoticeMemory`): a site that asks on every page gets
+  one line, and Plain keeps no list of which sites asked. A new launch may tell a site once more.
+- **Screen Time gets no button:** Plain's page in Settings can't lift it. "isn't allowed on
+  this iPhone" names the phone, not the user.
+- **Cellular data is not "offline."** `CTCellularData.restrictedState` (Plain's own switch) and
+  `NWPath.unsatisfiedReason` (`cellularDenied`, `wifiDenied`) decide "Cellular data is off for
+  Plain." with Open Settings and, under it, Try Again for joining Wi-Fi (Firefox does the same
+  check). The one place a page state has two buttons. Turning cellular data back on for Plain
+  reloads the page by itself: it is what the user went to Settings for.
+- **Site Settings lists permissions** a site asked for (read with one query when a page commits,
+  so the menu builds at once): Allowed, Not Allowed, Off in Settings, Off on This iPhone. Before
+  this a Don't Allow could never be changed.
+- **Apple Intelligence** can't be turned off on iOS 27 (Apple's Foundation Models docs), so
+  Plain never asks anyone to turn it on. While the model downloads (`modelNotReady`) Plain looks
+  again every 30 s on screen (`FixedChoices.aiNotReadyRecheck`) besides each return. A summary
+  on its way when the model goes away ends with one line; a rate-limited model ("busy") offers
+  Try Again instead of "isn't available".
+- **Captures and UI tests:** Debug's `-PlainSystemAccess feature=state,…` stands in for what a
+  simulator can't reach (no camera, no cellular), `-PlainSeedSitePermissions` seeds remembered
+  answers (local pages can't reach WebKit's prompts), and `-PlainAIGoesAwayInBackground` makes
+  the scripted model unavailable while the app is away. Photos and location use the simulator's
+  own switches (`simctl privacy`).

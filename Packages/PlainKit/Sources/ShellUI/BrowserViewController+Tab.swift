@@ -633,10 +633,13 @@ extension UIScrollView {
     /// at the scroll range's start under the expanded bar (`setPageTopStart`), so a move to
     /// WebKit's top that no finger made goes on to there, in the same pass, before anything is
     /// drawn. Moves under the finger, a fling's coast and a bounce are the reader's own and are
-    /// left alone. Returns true when it moved the page.
-    func keepPageTopUnderBar(webKitTop: CGFloat) -> Bool {
+    /// left alone, and so is a page already there (`previousY`, the offset this scroll view had
+    /// at its last callback, nil for none): a horizontal scroll or a zoom's end at a top the
+    /// reader left is no move to the top. Returns true when it moved the page.
+    func keepPageTopUnderBar(webKitTop: CGFloat, previousY: CGFloat?) -> Bool {
         let start = -adjustedContentInset.top
         guard start < -webKitTop - 0.5, abs(contentOffset.y + webKitTop) < 0.01,
+              previousY.map({ abs($0 - contentOffset.y) >= 0.01 }) ?? true,
               !isTracking, !isDecelerating, !isZooming, !isZoomBouncing else { return false }
         contentOffset.y = start
         return true

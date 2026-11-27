@@ -102,6 +102,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var snapInterval: OSSignpostIntervalState?
     /// Which resting state the page's bottom inset follows, and a change waiting for a bounce.
     private var pageInset = PageInsetState()
+    /// Each page scroll view's vertical offset at its last scroll callback under the top bar, so
+    /// `keepPageTopUnderBar` acts only on a move to WebKit's top, not on a page left there. Weak
+    /// keys: a web view's scroll view leaves with it.
+    private let lastPageOffsetY = NSMapTable<UIScrollView, NSNumber>.weakToStrongObjects()
     /// A page started loading under the finger: the bar comes back when the finger lifts.
     private var expandOnRelease = false
     /// The bar came back at the page's end while the finger was down: the page's end (before the
@@ -1035,7 +1039,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         // Any page under the top bar, a split's other pane and the reader too: WebKit's own move
         // to a page's top goes on to under the bar (its move back calls this again).
-        if let top = duo.topGeometry, scrollView.keepPageTopUnderBar(webKitTop: top.obscuredInset) { return }
+        if let top = duo.topGeometry {
+            let previousY = lastPageOffsetY.object(forKey: scrollView)?.doubleValue
+            lastPageOffsetY.setObject(NSNumber(value: Double(scrollView.contentOffset.y)), forKey: scrollView)
+            if scrollView.keepPageTopUnderBar(webKitTop: top.obscuredInset, previousY: previousY.map { CGFloat($0) }) { return }
+        }
         guard scrollView === pageScrollView, !isEditingAddress else { return }
         let signposter = Signposts.signposter
         let step = signposter.isEnabled ? signposter.beginInterval(Signposts.scrollStep) : nil

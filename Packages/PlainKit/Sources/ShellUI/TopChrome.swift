@@ -183,8 +183,10 @@ struct TopChromeGeometry: Equatable {
 
     /// The page's obscured top inset (`obscuredContentInsets.top`), the same in every state of
     /// the bar: in the status zone nothing, under a full-width status bar that bar. The bar
-    /// floats over the page and leaves it no inset of its own, so a fixed or sticky header keeps
-    /// to the top edge (or under the status bar) at rest and while reading alike: WebKit, which
+    /// floats over the page and leaves it no inset of its own: a fixed or sticky header keeps to
+    /// the top edge (or under the status bar) whatever the bar does, except at the page's top,
+    /// where it rests under the expanded controls with the page and rides up with it (WebKit
+    /// keeps the layout viewport inside the document while the page sits above its origin). WebKit, which
     /// fills an obscured inset above such a header with the header's color (its fixed color
     /// extension, `WKWebView.h`: it "adjusts how fixed and sticky elements are rendered near
     /// edges with non-zero obscured insets"), paints no band behind the controls, and nothing

@@ -32,13 +32,16 @@ struct DuoLayoutInput: Equatable {
     var occlusions: [CGRect] = []
     /// The vertical band the floating pill and toast occupy, to test against occlusions.
     var chromeBand: ClosedRange<CGFloat> = 0...0
+    /// The user opened the side pane (Reader, Find, History next to the page) in this window.
+    var sidePaneOpen = false
 
     init(
         pageArea: CGRect, isRegularWidth: Bool, isRegularHeight: Bool, tabLayout: TabLayout = FixedChoices.defaultTabLayout,
         requestedSidebar: SidebarState = .rail, paneCount: Int = 1, tabCount: Int = 2, focusedPane: Int = 0,
         division: CGRect? = nil, isDivisionActive: Bool = false, occlusions: [CGRect] = [],
-        chromeBand: ClosedRange<CGFloat> = 0...0
+        chromeBand: ClosedRange<CGFloat> = 0...0, sidePaneOpen: Bool = false
     ) {
+        self.sidePaneOpen = sidePaneOpen
         self.pageArea = pageArea
         self.isRegularWidth = isRegularWidth
         self.isRegularHeight = isRegularHeight
@@ -99,6 +102,21 @@ struct DuoLayout: Equatable {
     /// The focused pane's frame.
     var focusedPaneFrame: CGRect
 
+    /// The side pane can open here: wherever the top bar is (both size classes regular, a page of
+    /// at least `FixedChoices.sideTabsMinimumPageWidth`). Elsewhere Reader, Find and History keep
+    /// their full-screen forms.
+    var sidePaneAvailable: Bool
+    /// The column the side pane takes, nil while it is closed or can't show. Beside the page at
+    /// the trailing end of the pages (`FixedChoices.sidePaneFraction`, at least
+    /// `sidePaneMinimumWidth`); in a split, the second pane's place; partly folded, the half after
+    /// the fold, so neither the page nor the pane crosses it.
+    var sidePaneColumn: CGRect?
+    /// How far the side pane pushes the pages' trailing edge in (0 when it covers a split's second
+    /// pane).
+    var sidePaneDockWidth: CGFloat
+    /// The side pane is over the split's second pane, which keeps its page but is out of sight.
+    var sidePaneCoversSecondPane: Bool
+
     init(_ input: DuoLayoutInput) {
         let area = input.pageArea
         let regular = input.isRegularWidth && input.isRegularHeight
@@ -128,7 +146,7 @@ struct DuoLayout: Equatable {
         splitShown = splitAvailable && input.paneCount > 1
 
         if showsSidebar {
-            widestSidebar = splitShown || input.isDivisionActive ? .rail : .expanded
+            widestSidebar = splitShown || input.isDivisionActive || (chromeOnTop && input.sidePaneOpen) ? .rail : .expanded
             sidebar = min(input.requestedSidebar, widestSidebar)
             let expandedLeavesRoom = area.width - SidebarState.expanded.width >= minimumPage
             sidebarFloats = sidebar == .expanded && !expandedLeavesRoom
@@ -140,11 +158,32 @@ struct DuoLayout: Equatable {
             sidebarDockWidth = 0
         }
 
-        // The strip floats with the top bar; only a docked sidebar moves the pages.
-        let panes = CGRect(
+        // The strip floats with the top bar; only a docked sidebar and the side pane move the pages.
+        let allPanes = CGRect(
             x: area.minX + (sidebarOnRight ? 0 : sidebarDockWidth), y: area.minY,
             width: max(0, area.width - sidebarDockWidth), height: area.height
         )
+        sidePaneAvailable = chromeOnTop
+        sidePaneCoversSecondPane = sidePaneAvailable && input.sidePaneOpen && splitShown
+        var panes = allPanes
+        if sidePaneAvailable, input.sidePaneOpen, !splitShown {
+            let minimum = CGFloat(FixedChoices.sidePaneMinimumWidth)
+            let width = max(minimum, (allPanes.width * CGFloat(FixedChoices.sidePaneFraction)).rounded())
+            var pageEnd = allPanes.maxX - width
+            var column = CGRect(x: pageEnd, y: allPanes.minY, width: width, height: allPanes.height)
+            // Partly folded, the page and the pane each take one side of the fold.
+            if input.isDivisionActive, let fold = vertical, fold.minX - allPanes.minX >= minimum,
+               allPanes.maxX - fold.maxX >= minimum {
+                pageEnd = fold.minX
+                column = CGRect(x: fold.maxX, y: allPanes.minY, width: allPanes.maxX - fold.maxX, height: allPanes.height)
+            }
+            panes.size.width = max(0, pageEnd - allPanes.minX)
+            sidePaneColumn = column
+            sidePaneDockWidth = allPanes.maxX - pageEnd
+        } else {
+            sidePaneColumn = nil
+            sidePaneDockWidth = 0
+        }
         if splitShown {
             // Flat: on the crease when it leaves both panes their minimum, else halves. Partly
             // folded: one pane each side of the fold (UIArrangementViewController places them so).
@@ -158,6 +197,11 @@ struct DuoLayout: Equatable {
             let second = CGRect(x: splitX + gap / 2, y: panes.minY, width: panes.maxX - splitX - gap / 2, height: panes.height)
             paneFrames = [first, second]
             focusedPaneFrame = input.focusedPane == 1 ? second : first
+            if sidePaneCoversSecondPane {
+                // The pane takes the second pane's place; the first one is the page it serves.
+                sidePaneColumn = second
+                focusedPaneFrame = first
+            }
         } else {
             paneFrames = [panes]
             focusedPaneFrame = panes
@@ -165,7 +209,7 @@ struct DuoLayout: Equatable {
 
         // A top bar spans the pages: a pane of a split is too narrow for a bar of its own. Partly
         // folded, the panes sit either side of the fold and the bar keeps to the focused one.
-        let spansPanes = chromeOnTop && !(splitShown && input.isDivisionActive)
+        let spansPanes = chromeOnTop && !(splitShown && input.isDivisionActive) && !sidePaneCoversSecondPane
         var lane = spansPanes ? panes.minX...panes.maxX : focusedPaneFrame.minX...focusedPaneFrame.maxX
         // Expanded floating over the page: the pill stays clear of it.
         if sidebarFloats {

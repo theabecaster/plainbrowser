@@ -42,6 +42,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let panes = PanesController()
     /// The Duo layout: panes, sidebar, the chrome's lane, folds (`+Panes`, `+SideTabs`).
     let duo = DuoUIState()
+    /// The side pane beside the page on a wide screen (`+SidePane`).
+    let sidePaneUI = SidePaneUIState()
     /// Where the focused pane's tab is attached. The chrome, the bar swipe, the gallery's zoom and
     /// the reader all act on the focused pane.
     var webContainer: UIView { panes.slots[session.tabs.focusedPane].container }
@@ -167,6 +169,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             chromeGlass.contentView.addSubview(subview)
         }
         installPanes()
+        installSidePane()
         prepareLaunch()
 
         revealEdge.isUserInteractionEnabled = false
@@ -1273,8 +1276,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             top.preferredElementSize = .medium
         }
         guard rules.shareAndCopy, let tab = currentTab, let url = pageAddress else {
-            // An empty pane of a split can still be swapped or closed.
-            let paneItems = paneMenuItems(for: nil, rules: rules)
+            // An empty pane of a split can still be swapped or closed, and the side pane opened.
+            let paneItems = paneMenuItems(for: nil, rules: rules) + sidePaneMenuItems(rules)
             return [top] + (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
         }
         var pageItems: [UIMenuElement] = []
@@ -1332,7 +1335,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let siteItems = siteMenuItems(
             for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
         )
-        let paneItems = paneMenuItems(for: tab, rules: rules)
+        let paneItems = paneMenuItems(for: tab, rules: rules) + sidePaneMenuItems(rules)
         var favoriteItem: UIAction?
         if rules.favorite, let isFavorite {
             let title = tab.title
@@ -1412,6 +1415,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     private func showHistory() {
+        // Beside the page where the side pane can show; a sheet elsewhere.
+        if currentRules().historyInSidePane { return openSidePane(.history) }
         let history = sheets.history(
             onOpen: { [weak self] url in
                 self?.closeSheet { self?.load(url) }

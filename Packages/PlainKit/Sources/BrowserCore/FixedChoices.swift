@@ -455,6 +455,24 @@ public enum FixedChoices {
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375
+    /// The side pane (Reader, Find, History next to the page) takes this share of the pages' width
+    /// (docs/plan.md, section 6: about 30%): 285 pt in the Duo's inner landscape leaves the page
+    /// 666 pt, still a desktop-width page.
+    public static let sidePaneFraction: Double = 0.3
+    /// The side pane's narrowest width: a history row's title and address, or a reader line of
+    /// about 30 characters, still read at the system's text size. In the Duo's inner portrait
+    /// (669 pt) 30% would be 200 pt, so it takes 250 and leaves the page 419, wider than the outer
+    /// screen's 382.
+    public static let sidePaneMinimumWidth: Double = 250
+    /// Find in the side pane lists at most this many matches (the count says how many there are):
+    /// past a few hundred a list stops helping, and each match keeps a DOM range in the page.
+    public static let findResultLimit = 300
+    /// Characters of context before a match in the side pane's Find (twice this after it): about
+    /// a line of the pane either side, enough to tell matches apart.
+    public static let findResultContext = 40
+    /// Find in the side pane waits this long after a keystroke before it searches, so typing a
+    /// word searches once, not per letter.
+    public static let findDebounce: Duration = .milliseconds(150)
 
     // MARK: Tab switching and toasts
 

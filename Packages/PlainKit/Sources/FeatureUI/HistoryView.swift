@@ -3,17 +3,20 @@ import SwiftUI
 
 /// The History sheet: visits grouped by day, searchable, swipe a row to delete it, tap to open it.
 ///
-/// `onOpen` gets the page to open; the presenter decides where and dismisses the sheet.
+/// `onOpen` gets the page to open; the presenter decides where and dismisses the sheet. In the
+/// side pane (`isInPane`) there is nothing to dismiss: no Done button, the pane has its own close.
 public struct HistoryView: View {
     @Bindable private var model: HistoryModel
     private let onOpen: (URL) -> Void
     private let onDone: (() -> Void)?
+    private let isInPane: Bool
     @State private var pendingClear: HistoryClearRange?
 
-    public init(model: HistoryModel, onOpen: @escaping (URL) -> Void, onDone: (() -> Void)? = nil) {
+    public init(model: HistoryModel, onOpen: @escaping (URL) -> Void, onDone: (() -> Void)? = nil, isInPane: Bool = false) {
         self.model = model
         self.onOpen = onOpen
         self.onDone = onDone
+        self.isInPane = isInPane
     }
 
     public var body: some View {
@@ -74,7 +77,7 @@ public struct HistoryView: View {
                     // Dims only when history itself is empty, not when a search finds nothing.
                     .disabled(model.isLoaded && !model.hasHistory)
                 }
-                DoneButton(onDone: onDone)
+                if !isInPane { DoneButton(onDone: onDone) }
             }
             .confirmationDialog(
                 pendingClear.map(Self.confirmTitle) ?? "",

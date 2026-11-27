@@ -94,7 +94,7 @@ extension BrowserViewController {
 
     /// What the layout is decided from: the root view's bounds and safe area, its size classes and
     /// the fold's reserved regions. Never the device, the screen or the orientation.
-    private func layoutInput() -> DuoLayoutInput {
+    func layoutInput() -> DuoLayoutInput {
         let bounds = view.bounds
         let safe = view.safeAreaInsets
         let pageArea = CGRect(
@@ -124,7 +124,8 @@ extension BrowserViewController {
             occlusions: occlusions,
             chromeBand: chromeOnTop
                 ? row.rowTop...row.rowBottom
-                : min(pillFrame.minY, bounds.maxY - ChromeGeometry.pillHeight * 2)...bounds.maxY
+                : min(pillFrame.minY, bounds.maxY - ChromeGeometry.pillHeight * 2)...bounds.maxY,
+            sidePaneOpen: sidePaneUI.isRequested
         )
     }
 
@@ -133,12 +134,14 @@ extension BrowserViewController {
     func updateDuoLayout() {
         guard view.bounds.width > 0 else { return }
         restoreSidebarStateIfNeeded()
+        restoreSidePaneIfNeeded()
         duo.statusCorner = readStatusCorner()
         let input = layoutInput()
         let layout = DuoLayout(input)
         let previous = duo.layout
         // The row's place follows the status zone even when nothing else in the layout changed.
         applyTopBarPlacement(layout.chromeOnTop ? makeTopGeometry(stripHeight: layout.stripHeight) : nil, layout: layout)
+        applySidePaneLayout(layout)
         let shown = layout.splitShown ? [0, 1] : [session.tabs.focusedPane]
         guard layout != previous || shown != panes.shown else { return }
         duo.layout = layout
@@ -148,7 +151,7 @@ extension BrowserViewController {
             panes \(String(describing: layout.paneFrames)) lane \(String(describing: layout.chromeLane))
             """)
         duo.panesLeading.constant = layout.sidebarOnRight ? 0 : layout.sidebarDockWidth
-        duo.panesTrailing.constant = layout.sidebarOnRight ? -layout.sidebarDockWidth : 0
+        duo.panesTrailing.constant = (layout.sidebarOnRight ? -layout.sidebarDockWidth : 0) - layout.sidePaneDockWidth
         if previous?.chromeOnTop != layout.chromeOnTop { topBarModeDidChange() }
         applyStripLayout(layout)
         duo.laneLeading.constant = layout.chromeLane.lowerBound
@@ -164,6 +167,8 @@ extension BrowserViewController {
         session.pool.defaultPaneSize = layout.focusedPaneFrame.size
         // A pane that just came on screen or left it (a fold, a split opening).
         if previous?.splitShown != layout.splitShown || previous == nil { syncPanes() }
+        // The side pane left the screen with the layout (a fold to the outer screen).
+        if previous?.sidePaneColumn != nil, layout.sidePaneColumn == nil { sidePaneUI.controller?.paneWillHide() }
     }
 
     /// The gutter and the focus ring: only while a split shows.

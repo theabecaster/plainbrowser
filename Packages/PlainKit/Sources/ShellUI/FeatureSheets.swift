@@ -116,6 +116,15 @@ public final class FeatureSheets {
         return Self.sheet(HistoryView(model: model, onOpen: onOpen, onDone: onDone), identifier: "historySheet")
     }
 
+    /// History for the side pane: the same screen without Done (the pane has its own close).
+    func historyPane(onOpen: @escaping (URL) -> Void) -> UIViewController? {
+        guard let store = makeHistoryStore() else { return nil }
+        let host = UIHostingController(rootView: HistoryView(model: HistoryModel(store: store), onOpen: onOpen, isInPane: true))
+        host.view.backgroundColor = .clear
+        host.view.accessibilityIdentifier = "sidePane.history"
+        return host
+    }
+
     /// The favorites editor.
     func favoritesEditor(onDone: @escaping () -> Void) -> UIViewController? {
         guard let database = activeDatabase else { return nil }

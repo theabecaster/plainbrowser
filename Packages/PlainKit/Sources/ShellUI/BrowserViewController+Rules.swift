@@ -18,6 +18,8 @@ extension BrowserViewController {
         state.sideTabs = duo.layout?.showsSidebar ?? false
         state.canSplit = canSplit
         state.isSplit = isSplit
+        state.canShowSidePane = duo.layout?.sidePaneAvailable ?? false
+        state.isSidePaneOpen = isSidePaneShown
         state.hasClosed = tabs.canReopenClosedTab
         state.hasArchived = tabs.hasArchivedTabs
         state.usesAssistiveTech = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning

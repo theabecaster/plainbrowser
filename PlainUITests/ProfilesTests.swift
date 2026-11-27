@@ -33,9 +33,11 @@ final class ProfilesTests: XCTestCase {
         field.typeText(server.address(path) + "\n")
     }
 
+    /// 25 s: a new profile's first page starts its own website data store (its own networking
+    /// session), which is slow on a loaded build machine.
     private func waitForPage(_ app: XCUIApplication, _ heading: String, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(
-            app.webViews.staticTexts[heading].waitForExistence(timeout: 10), "page \"\(heading)\" did not show",
+            app.webViews.staticTexts[heading].waitForExistence(timeout: 25), "page \"\(heading)\" did not show",
             file: file, line: line
         )
     }
@@ -68,9 +70,10 @@ final class ProfilesTests: XCTestCase {
                 field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
             }
         }
-        field.typeText(name)
-        // On the Duo's outer screen the keyboard can cover the buttons: Return is the preferred action.
-        if alert.buttons[button].isHittable { alert.buttons[button].tap() } else { field.typeText("\n") }
+        XCTAssertTrue(alert.buttons[button].exists, "the alert offers \(button)")
+        // Return is the alert's preferred action. XCUITest can't always tap a button beside the
+        // keyboard on the Duo's outer screen, and a failed tap lets its interruption monitor cancel.
+        field.typeText(name + "\n")
     }
 
     private func profileButton(_ app: XCUIApplication) -> XCUIElement {

@@ -109,6 +109,13 @@ final class SidePaneController: UIViewController {
         if headerTop.constant != top { headerTop.constant = top }
     }
 
+    /// The hairline at the leading edge shows only where the pane meets the page; across the
+    /// fold's gap (book pose) the paper runs on without a seam.
+    func setSeparatorHidden(_ hidden: Bool) {
+        loadViewIfNeeded()
+        if separator.isHidden != hidden { separator.isHidden = hidden }
+    }
+
     /// Shows `section`, building it the first time.
     func show(_ section: SidePaneSection) {
         loadViewIfNeeded()

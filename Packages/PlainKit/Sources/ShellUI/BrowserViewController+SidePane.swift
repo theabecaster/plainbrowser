@@ -145,6 +145,8 @@ extension BrowserViewController {
         setConstant(sidePaneUI.leading, column.minX)
         setConstant(sidePaneUI.width, column.width)
         controller.setHeaderTop(sidePaneHeaderTop(column: column))
+        // Partly folded, a gap (the fold) lies between the page and the pane.
+        controller.setSeparatorHidden(layout.sidePaneDockWidth > column.width + 0.5)
         // A covered second pane keeps its page, out of sight (no touches, no drawing).
         panes.slots[1].view.isHidden = sidePaneUI.isRequested && layout.sidePaneCoversSecondPane
     }

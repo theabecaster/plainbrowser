@@ -281,7 +281,9 @@ final class CaptureTests: XCTestCase {
         shot("t7-archive")
         app.navigationBars.buttons["Done"].tap()
         pause(1)
-        app.buttons["galleryDone"].tap()
+        // The regular list while a private tab is on screen has no Done (state rules §6): a
+        // card leads back to a page.
+        cards.firstMatch.tap()
         pause(1.5)
 
         // The page menu with the zoom row, after one step in.

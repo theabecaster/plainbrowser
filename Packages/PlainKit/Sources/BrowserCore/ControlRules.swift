@@ -47,6 +47,12 @@ public enum ReaderItem: Sendable, Equatable {
     case show, hide, hidden
 }
 
+/// The side pane item in the page menu (§4): Show Side Pane, Hide Side Pane, or nothing where the
+/// pane can't show (the Duo's outer screen, phones).
+public enum SidePaneItem: Sendable, Equatable {
+    case show, hide, hidden
+}
+
 /// The dark pages item in the page menu (§4).
 public enum DarkPagesItem: Sendable, Equatable {
     case turnOff, turnOn, hidden
@@ -119,6 +125,10 @@ public struct ChromeState: Sendable, Equatable {
     public var canSplit = false
     /// Two panes show; the rules describe the focused one.
     public var isSplit = false
+    /// The side pane can show here (the top bar's screens: the Duo's inner screen).
+    public var canShowSidePane = false
+    /// The side pane is open in this window.
+    public var isSidePaneOpen = false
     /// The sidebar (Tab Layout Left or Right) is in effect: it is the tab list.
     public var sideTabs = false
     /// VoiceOver or Switch Control runs: the bar stays reachable, never hidden.
@@ -332,10 +342,25 @@ public struct ControlRules: Sendable, Equatable {
     public var downloads: Bool { state.hasDownloads }
 
     /// Open in Other Pane: a page that shows, where a split can show and none does yet.
-    public var openInOtherPane: Bool { state.canSplit && !state.isSplit && isPageShowing && !state.isReaderOpen }
+    public var openInOtherPane: Bool {
+        state.canSplit && !state.isSplit && !state.isSidePaneOpen && isPageShowing && !state.isReaderOpen
+    }
 
-    /// Swap Panes and Close Pane while a split shows, whatever the focused pane holds.
-    public var paneItems: Bool { state.canSplit && state.isSplit }
+    /// Swap Panes and Close Pane while a split shows, whatever the focused pane holds. The side
+    /// pane takes the second pane's place while it is open, so neither applies then.
+    public var paneItems: Bool { state.canSplit && state.isSplit && !state.isSidePaneOpen }
+
+    /// Show or Hide Side Pane wherever the pane can show, page or start screen: History is useful on
+    /// either, and the item is how the pane closes from the bar.
+    public var sidePane: SidePaneItem {
+        guard state.canShowSidePane, !state.isEditing else { return .hidden }
+        return state.isSidePaneOpen ? .hide : .show
+    }
+
+    /// History and Find on Page open in the side pane where it can show (next to the page), and
+    /// as a sheet and the find bar elsewhere.
+    public var historyInSidePane: Bool { state.canShowSidePane }
+    public var findInSidePane: Bool { state.canShowSidePane && !state.isReaderOpen }
 
     // The tabs menu's other items sit in More's top section in every state where they apply, one
     // visible tap away; the long press on the tabs slot is a shortcut, never the only way (owner,

@@ -343,6 +343,19 @@ public enum Signposts {
     public static let splitSwap: StaticString = "split.swap"
     /// Event: the focused pane changed (a touch on the other pane, or a tab chosen in it).
     public static let paneFocus: StaticString = "pane.focus"
+    /// Interval: the side pane opening (More, the edge swipe, History, Find on Page), from the
+    /// request until its spring settles. The message says what it shows.
+    public static let sidePaneOpen: StaticString = "sidePane.open"
+    /// Interval: the side pane closing, until the page has its width back.
+    public static let sidePaneClose: StaticString = "sidePane.close"
+    /// Event: the side pane switched what it shows (Reader, Find, History).
+    public static let sidePaneSection: StaticString = "sidePane.section"
+    /// Interval: Find in the side pane, from a query to its list of matches.
+    public static let sidePaneFind: StaticString = "sidePane.find"
+    /// Event: a new window was asked for (Open in New Window, New Window).
+    public static let windowOpen: StaticString = "window.open"
+    /// Event: another window was brought forward from the tabs menu.
+    public static let windowSwitch: StaticString = "window.switch"
     /// Interval: a size change of the window (fold, unfold, rotation), from
     /// `viewWillTransition(to:with:)` to its completion, when the page insets apply. The message is
     /// the target size.

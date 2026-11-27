@@ -420,6 +420,35 @@ import Testing
         #expect(ControlRules(empty).paneItems, "an empty pane can still be swapped or closed")
     }
 
+    @Test func sidePaneShowsWhereItFitsAndTakesHistoryAndFind() {
+        var state = Self.page()
+        #expect(ControlRules(state).sidePane == .hidden, "phones and the outer screen have no side pane")
+        #expect(!ControlRules(state).historyInSidePane)
+        #expect(!ControlRules(state).findInSidePane)
+        state.canShowSidePane = true
+        #expect(ControlRules(state).sidePane == .show)
+        #expect(ControlRules(state).historyInSidePane)
+        #expect(ControlRules(state).findInSidePane)
+        state.isSidePaneOpen = true
+        #expect(ControlRules(state).sidePane == .hide)
+        state.isReaderOpen = true
+        #expect(!ControlRules(state).findInSidePane, "the reader on the page keeps the find bar")
+        var start = Self.emptyTab()
+        start.canShowSidePane = true
+        #expect(ControlRules(start).sidePane == .show, "History is useful on the start screen too")
+    }
+
+    @Test func aSidePaneOverASplitHidesThePaneItems() {
+        var state = Self.page(others: 1)
+        state.canSplit = true
+        state.isSplit = true
+        state.canShowSidePane = true
+        state.isSidePaneOpen = true
+        #expect(!ControlRules(state).paneItems, "the side pane has the second pane's place")
+        state.isSplit = false
+        #expect(!ControlRules(state).openInOtherPane, "a split would have nowhere to show")
+    }
+
     @Test func sideTabsMakeTheSidebarTheSwitcher() {
         var state = Self.page()
         state.sideTabs = true

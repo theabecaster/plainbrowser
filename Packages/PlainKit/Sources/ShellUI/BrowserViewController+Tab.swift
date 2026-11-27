@@ -271,6 +271,8 @@ extension BrowserViewController {
         updateButtons()
         updatePageState()
         updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
+        // A new tab on screen, a new address or a finished load: the side pane follows the page.
+        if old == nil || old?.url != new.url || old?.isLoading != new.isLoading { sidePanePageDidChange() }
     }
 
     // MARK: Page state (crash, error, form waiting)
@@ -348,6 +350,8 @@ extension BrowserViewController {
     /// Find on Page: in the reader while it shows, else on the page (`Tab.beginFind`, which emits
     /// the signpost itself).
     func findOnPage() {
+        // A list of matches beside the page where the side pane can show.
+        if currentRules().findInSidePane { return openSidePane(.find, focus: true) }
         if let reader = engineUI.reader.webView {
             Signposts.signposter.emitEvent(Signposts.findOnPage)
             reader.findInteraction?.presentFindNavigator(showingReplace: false)

@@ -234,9 +234,9 @@ Duo features, ranked:
 1. Adaptive shell across all states (table above).
 2. Fold-safe: same `WKWebView` objects stay in the same parents, only frames change. Each web view's final frame is set once, from the target size in `viewWillTransition(to:with:)`; `obscuredContentInsets` and the viewport insets are applied once in its completion. No snapshot cover for a fold: WebKit scales its tiles, then reflows. (Verify on the Duo that a fold calls `viewWillTransition`.)
 3. Split tabs across the crease: "Open in other pane" from the link menu, drag a tab to the other pane, swap panes, long-press to move. A tab moves by re-parenting its web view under a snapshot cover, no reload. In a split, one pane is focused (the one touched last, marked on its pill); shared bar buttons act on it.
-4. Supporting pane (~30%, 250 pt min): reader, find results, history or (later) summary next to the page.
+4. Supporting pane (~30%, 250 pt min): reader, find results, history or (later) summary next to the page. Built 2026-11-27 as the side pane (docs/decisions.md).
 5. Desktop pages by default on the inner screen (content mode chosen at navigation start from pane width; never switched on fold, which would force a reload).
-6. Per-window browser state (app-wide stores, per-scene tabs and restoration), so "Open in New Window" can ship later without a rewrite.
+6. Per-window browser state (app-wide stores, per-scene tabs and restoration), so "Open in New Window" can ship later without a rewrite. Shipped 2026-11-27 with Open in New Window (docs/decisions.md).
 
 Dropped: outer-screen "peek" (no API), hinge gestures (gimmick), tabletop video (WebKit's fullscreen player already splits around the fold; check once on the device).
 

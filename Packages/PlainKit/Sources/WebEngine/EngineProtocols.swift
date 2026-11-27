@@ -197,6 +197,8 @@ public enum LinkOpenPlacement: Sendable, Equatable {
     case backgroundTab
     /// The other pane of a split (iPhone Duo). Offered only when `canOpenInOtherPane` is true.
     case otherPane
+    /// A new window (a new scene) of its own. Offered only when `canOpenInNewWindow` is true.
+    case newWindow
 }
 
 /// The link context menu's actions that need the shell: new tabs and panes, and the share sheet.
@@ -208,6 +210,9 @@ public protocol LinkMenuPresenter: AnyObject {
     /// Whether "Open in Other Pane" applies to links in `tab`: a second pane is on screen.
     /// Default: false.
     func canOpenInOtherPane(from tab: Tab) -> Bool
+    /// Whether "Open in New Window" applies to links in `tab`: the system takes another window
+    /// here. Default: false.
+    func canOpenInNewWindow(from tab: Tab) -> Bool
     /// Open in New Tab, Open in Background, Open in Other Pane. Default: loads `url` in `tab`.
     func tab(_ tab: Tab, open url: URL, placement: LinkOpenPlacement)
     /// Share for a link. Default: the system share sheet from the view controller that holds
@@ -220,6 +225,8 @@ public protocol LinkMenuPresenter: AnyObject {
 
 extension LinkMenuPresenter {
     public func canOpenInOtherPane(from tab: Tab) -> Bool { false }
+
+    public func canOpenInNewWindow(from tab: Tab) -> Bool { false }
 
     public func tab(_ tab: Tab, open url: URL, placement: LinkOpenPlacement) {
         tab.load(url)

@@ -1,99 +1,141 @@
 #if os(iOS)
+import DesignSystem
 import SwiftUI
 
 /// The History sheet: visits grouped by day, searchable, swipe a row to delete it, tap to open it.
 ///
-/// `onOpen` gets the page to open; the presenter decides where and dismisses the sheet.
+/// `onOpen` gets the page to open; the presenter decides where and dismisses the sheet. In the
+/// side pane (`isInPane`) there is nothing to dismiss: no Done button, the pane has its own close.
 public struct HistoryView: View {
     @Bindable private var model: HistoryModel
     private let onOpen: (URL) -> Void
     private let onDone: (() -> Void)?
+    private let isInPane: Bool
     @State private var pendingClear: HistoryClearRange?
 
-    public init(model: HistoryModel, onOpen: @escaping (URL) -> Void, onDone: (() -> Void)? = nil) {
+    public init(model: HistoryModel, onOpen: @escaping (URL) -> Void, onDone: (() -> Void)? = nil, isInPane: Bool = false) {
         self.model = model
         self.onOpen = onOpen
         self.onDone = onDone
+        self.isInPane = isInPane
     }
 
     public var body: some View {
-        NavigationStack {
-            List {
-                ForEach(model.days) { day in
-                    Section(day.title) {
-                        ForEach(day.rows) { row in
-                            HistoryRowView(row: row) { open(row) }
-                                .swipeActions {
-                                    Button("Delete", role: .destructive) {
-                                        Task { await model.delete(row) }
-                                    }
-                                }
-                                .contextMenu {
-                                    Button("Open", systemImage: "arrow.up.forward.app") { open(row) }
-                                    Button("Copy Link", systemImage: "link") { copyLink(row.url) }
-                                    Section {
-                                        Button("Delete", systemImage: "trash", role: .destructive) {
-                                            Task { await model.delete(row) }
-                                        }
-                                    }
-                                }
-                                .onAppear { model.rowAppeared(row) }
-                        }
-                        .paperRows()
-                    }
-                }
+        Group {
+            if isInPane { paneBody } else { sheetBody }
+        }
+        .confirmationDialog(
+            pendingClear.map(Self.confirmTitle) ?? "",
+            isPresented: Binding(get: { pendingClear != nil }, set: { if !$0 { pendingClear = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingClear
+        ) { range in
+            Button(Self.confirmButton(range), role: .destructive) {
+                Task { await model.clear(range) }
             }
-            .paperSheet()
-            .overlay {
-                if model.loadFailed {
-                    ReadFailedView(message: Wording.historyReadFailed, systemImage: "clock") { await model.load() }
-                } else if model.isLoaded, model.isEmpty {
-                    if model.query.isEmpty {
-                        ContentUnavailableView("Pages you visit show up here.", systemImage: "clock")
-                    } else {
-                        ContentUnavailableView.search(text: model.query)
-                    }
-                }
-            }
-            // Search sits under the title and scrolls away with the rows, as in Safari's history:
-            // the bottom field's glass, and a field kept on screen (`.always`, which floats once the
-            // bar hides on scroll), showed a ghost of the row behind it on paper.
-            .searchable(
-                text: $model.query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search History"
-            )
-            // Rows scrolled under the field fade out at a hard edge instead of showing through it.
-            .scrollEdgeEffectStyle(.hard, for: .top)
-            .sheetTitle("History")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Menu("Clear…") {
-                        Button("Last Hour") { pendingClear = .lastHour }
-                        Button("Today") { pendingClear = .today }
-                        Button("All History", role: .destructive) { pendingClear = .all }
-                    }
-                    // Dims only when history itself is empty, not when a search finds nothing.
-                    .disabled(model.isLoaded && !model.hasHistory)
-                }
-                DoneButton(onDone: onDone)
-            }
-            .confirmationDialog(
-                pendingClear.map(Self.confirmTitle) ?? "",
-                isPresented: Binding(get: { pendingClear != nil }, set: { if !$0 { pendingClear = nil } }),
-                titleVisibility: .visible,
-                presenting: pendingClear
-            ) { range in
-                Button(Self.confirmButton(range), role: .destructive) {
-                    Task { await model.clear(range) }
-                }
-            }
-            .alert(model.errorMessage ?? "", isPresented: Binding(
-                get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) {}
-            }
+        }
+        .alert(model.errorMessage ?? "", isPresented: Binding(
+            get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
         }
         .tint(Style.accent)
         .task { await model.load() }
+    }
+
+    /// The sheet: a bar with Clear, the title and Done, and the search field under it.
+    private var sheetBody: some View {
+        NavigationStack {
+            list
+                // Search sits under the title and scrolls away with the rows, as in Safari's
+                // history: the bottom field's glass, and a field kept on screen (`.always`, which
+                // floats once the bar hides on scroll), showed a ghost of the row behind it on paper.
+                .searchable(
+                    text: $model.query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search History"
+                )
+                // Rows scrolled under the field fade out at a hard edge instead of showing through it.
+                .scrollEdgeEffectStyle(.hard, for: .top)
+                .sheetTitle("History")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { clearMenu }
+                    DoneButton(onDone: onDone)
+                }
+        }
+    }
+
+    /// The side pane: no bar (the pane's picker says where you are, its x closes it), one compact
+    /// row with the search field and Clear on the same paper as the rows.
+    private var paneBody: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search History", text: $model.query)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.search)
+                }
+                .padding(.horizontal, 10)
+                .frame(minHeight: 36)
+                .background(Style.card, in: Capsule())
+                clearMenu
+                    .font(.subheadline)
+            }
+            .padding(.horizontal, 12)
+            list
+        }
+        .background { PaperBackground().ignoresSafeArea() }
+    }
+
+    /// Clear the last hour, today or everything, each confirmed.
+    private var clearMenu: some View {
+        Menu("Clear…") {
+            Button("Last Hour") { pendingClear = .lastHour }
+            Button("Today") { pendingClear = .today }
+            Button("All History", role: .destructive) { pendingClear = .all }
+        }
+        // Dims only when history itself is empty, not when a search finds nothing.
+        .disabled(model.isLoaded && !model.hasHistory)
+    }
+
+    private var list: some View {
+        List {
+            ForEach(model.days) { day in
+                Section(day.title) {
+                    ForEach(day.rows) { row in
+                        HistoryRowView(row: row) { open(row) }
+                            .swipeActions {
+                                Button("Delete", role: .destructive) {
+                                    Task { await model.delete(row) }
+                                }
+                            }
+                            .contextMenu {
+                                Button("Open", systemImage: "arrow.up.forward.app") { open(row) }
+                                Button("Copy Link", systemImage: "link") { copyLink(row.url) }
+                                Section {
+                                    Button("Delete", systemImage: "trash", role: .destructive) {
+                                        Task { await model.delete(row) }
+                                    }
+                                }
+                            }
+                            .onAppear { model.rowAppeared(row) }
+                    }
+                    .paperRows()
+                }
+            }
+        }
+        .paperSheet()
+        .overlay {
+            if model.loadFailed {
+                ReadFailedView(message: Wording.historyReadFailed, systemImage: "clock") { await model.load() }
+            } else if model.isLoaded, model.isEmpty {
+                if model.query.isEmpty {
+                    ContentUnavailableView("Pages you visit show up here.", systemImage: "clock")
+                } else {
+                    ContentUnavailableView.search(text: model.query)
+                }
+            }
+        }
     }
 
     private func open(_ row: HistoryRow) {

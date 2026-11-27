@@ -19,6 +19,11 @@ import Testing
             for: LinkElement(linkURL: web, imageURL: nil), canOpenInOtherPane: true, canSaveImages: true
         )
         #expect(sections.first == [.openInNewTab, .openInBackground, .openInOtherPane])
+        let windowed = LinkMenuRules.sections(
+            for: LinkElement(linkURL: web, imageURL: nil), canOpenInOtherPane: true, canOpenInNewWindow: true,
+            canSaveImages: true
+        )
+        #expect(windowed.first == [.openInNewTab, .openInBackground, .openInOtherPane, .openInNewWindow])
     }
 
     @Test func linkedImageAddsImageSectionLast() {
@@ -57,7 +62,7 @@ import Testing
 
     @Test func menuWordingIsTitleCase() {
         #expect(LinkMenuItem.allCases.map(\.title) == [
-            "Open in New Tab", "Open in Background", "Open in Other Pane", "Copy Link", "Share",
+            "Open in New Tab", "Open in Background", "Open in Other Pane", "Open in New Window", "Copy Link", "Share",
             "Download Linked File", "Save Image", "Copy Image",
         ])
     }

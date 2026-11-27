@@ -152,7 +152,7 @@ private struct PromiseStep: View {
 private struct InsideStep: View {
     private let rows: [(symbol: String, title: String, detail: String)] = [
         ("shield.lefthalf.filled", "Blocking Everywhere", "Ads, trackers and cookie banners stay off every site."),
-        ("archivebox.fill", "Tabs Tidy Themselves", "Tabs you leave for a day move to a searchable archive."),
+        ("archivebox.fill", "Tabs Tidy Themselves", "Tabs you leave for a week move to a searchable archive."),
         ("eye.slash.fill", "Private Tabs", "No history, and their site data goes when you close them."),
         ("rectangle.split.2x1.fill", "Made for iPhone Duo", "Unfold for two pages side by side."),
     ]

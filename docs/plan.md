@@ -138,7 +138,7 @@ Plain is a fast, opinionated browser. It makes the decisions so users don't have
 **The Settings screen holds these items and nothing else:**
 - Search engine. Google by default, plus the popular engines and a custom one.
 - Tab layout: Regular or Side tabs. Only shown where side tabs are possible.
-- Archive tabs after: 12 hours, 1 day (default), 1 week, or never.
+- Archive tabs after: 12 hours, 1 day, 1 week (default), or never.
 - Clear history and website data.
 
 **Decided for the user, with no setting:**

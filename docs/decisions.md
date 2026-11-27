@@ -1733,7 +1733,7 @@ Research: docs/research/groups-profiles.md.
 - **Profiles only.** A profile is its own open tabs, archive, recently closed tabs, history,
   favorites, typed-input learning, and its own website data store (cookies, logins, caches, site
   storage). Settings, per-site choices (zoom, Desktop Site, blocking, permissions), downloads and
-  private tabs belong to the app. **No tab groups:** tabs archive themselves after a day, so the
+  private tabs belong to the app. **No tab groups:** tabs archive themselves after a week by default, so the
   list stays short, and groups are where Safari's iPhone confusion and "lost tabs" come from. Two
   logins to one site is the need people state, and only a separate store meets it.
 - **Personal is the first profile and keeps everything Plain had** (`Profile.defaultID`, fixed):
@@ -1943,3 +1943,7 @@ From docs/research/ux-audit.md, items 6, 10, 11, 12 (gallery part) and 25.
   the cropped thumbnail fills its card at the same scale the zoom draws it (Codex review).
 - **The selected card's ring is Lagoon** (`Palette.accent`), not coral: coral is kept for the one
   thing that matters on screen, the progress bar's tip (profiles lane design review).
+
+## Archive after a week by default (2026-11-27)
+
+The owner asked for a week instead of a day. A day archived tabs people still meant to come back to within the week; a week keeps those and still clears the clutter. People who already picked a value in Settings keep it; only the default changes (`FixedChoices.defaultArchiveAfter`).

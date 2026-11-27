@@ -13,8 +13,9 @@ public enum FixedChoices {
     /// It looks the same in landscape and portrait (a sidebar does not fit beside a portrait
     /// page), and it hides with the bar while reading.
     public static let defaultTabLayout = TabLayout.above
-    /// A day keeps today's tabs at hand and clears yesterday's clutter without asking.
-    public static let defaultArchiveAfter = ArchiveAfter.oneDay
+    /// A week keeps the tabs you come back to across a few days at hand and still clears the
+    /// clutter without asking (owner's choice, 2026-11-27; a day archived tabs people still wanted).
+    public static let defaultArchiveAfter = ArchiveAfter.oneWeek
     /// Follow iOS: people set light or dark once for every app, often on a schedule, and Safari,
     /// Chrome and Firefox all start there. Light and Dark are for someone who wants the browser
     /// different from the rest of the phone.

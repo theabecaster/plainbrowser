@@ -129,7 +129,14 @@ public final class TabGalleryTransition {
         generation += 1
         // The bottom edge where the finger is; sideways 1:1.
         let bottom = lerp(pageFrame.maxY, cardFrame.maxY, progress)
-        let offset = CGPoint(x: translation.x, y: pageFrame.maxY + min(0, translation.y) - bottom)
+        var offset = CGPoint(x: translation.x, y: pageFrame.maxY + min(0, translation.y) - bottom)
+        // The page's top stays out of the status bar: past the page's own top edge it resists
+        // like a rubber band, so the page's heading never slides under the clock and the island.
+        let top = lerp(pageFrame.minY, cardFrame.minY, progress) + offset.y
+        if top < pageFrame.minY {
+            let overshoot = pageFrame.minY - top
+            offset.y += overshoot - Self.rubberBand(overshoot, limit: Self.topOvershoot)
+        }
         UIView.animate(Motion.tracking) {
             self.offset = offset
             self.apply(progress: progress, crossfade: false)
@@ -246,6 +253,14 @@ public final class TabGalleryTransition {
     }
 
     private static let ringKey = "selectionRing"
+    /// The most a held page's top goes above its resting top (into the status bar), in points.
+    private static let topOvershoot: CGFloat = 12
+
+    /// UIScrollView's rubber band: `distance` past an edge shows as at most `limit`.
+    static func rubberBand(_ distance: CGFloat, limit: CGFloat) -> CGFloat {
+        guard distance > 0, limit > 0 else { return 0 }
+        return limit * (1 - 1 / (distance * 0.55 / limit + 1))
+    }
     /// Lifted this far above its resting place, a card's title is gone.
     private static let liftFadeDistance: CGFloat = 60
 

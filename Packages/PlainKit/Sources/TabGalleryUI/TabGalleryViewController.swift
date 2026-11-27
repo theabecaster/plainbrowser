@@ -55,6 +55,10 @@ public final class TabGalleryViewController: UIViewController {
     private var liftedID: UUID?
     /// The blurred, dimmed page behind the cards.
     private let backdrop = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
+    /// Clips the cards to the safe area's sides: on the Duo's outer screen the next card in the
+    /// cascade would otherwise run under the system's vertical bar and its status icons. The
+    /// page itself never goes there either, so the zoom between page and card loses nothing.
+    private let cardClip = UIView()
     private var isShowingPrivate = false
     /// The last tab just closed and the shell is taking the gallery away: no empty state meanwhile.
     private var isLeavingEmpty = false
@@ -99,6 +103,11 @@ public final class TabGalleryViewController: UIViewController {
         backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         backdrop.contentView.backgroundColor = Palette.galleryDim
         root.addSubview(backdrop)
+        // Depth under the cards: the blur deepens toward the bottom, where the bar floats, so the
+        // backdrop is not one flat slate and the bar's glyphs stand out.
+        let shade = GalleryShade(frame: root.bounds)
+        shade.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        backdrop.contentView.addSubview(shade)
         view = root
 
         let scroll = GalleryScrollView()
@@ -113,7 +122,9 @@ public final class TabGalleryViewController: UIViewController {
         scroll.delaysContentTouches = false
         scroll.accessibilityIdentifier = "tabGallery"
         scroll.accessibilityProvider = self
-        root.addSubview(scroll)
+        cardClip.clipsToBounds = true
+        root.addSubview(cardClip)
+        cardClip.addSubview(scroll)
         scrollView = scroll
         root.addInteraction(UIDropInteraction(delegate: self))
         // Like the app switcher: a tap or a swipe up on the space around the cards goes back to
@@ -166,12 +177,15 @@ public final class TabGalleryViewController: UIViewController {
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let bounds = view.bounds
-        // Size and center, not the frame: the open and close transitions zoom the scroll view
-        // with a transform, and a layout pass mid-zoom must not undo it.
-        if scrollView.bounds.size != bounds.size { scrollView.bounds.size = bounds.size }
-        let center = CGPoint(x: bounds.midX, y: bounds.midY)
-        if scrollView.center != center { scrollView.center = center }
         let safe = view.safeAreaInsets
+        let clip = CGRect(x: safe.left, y: 0, width: max(0, bounds.width - safe.left - safe.right), height: bounds.height)
+        if cardClip.frame != clip { cardClip.frame = clip }
+        // Size and center, not the frame: the open and close transitions zoom the scroll view
+        // with a transform, and a layout pass mid-zoom must not undo it. It keeps the root's
+        // coordinates inside the clip.
+        if scrollView.bounds.size != bounds.size { scrollView.bounds.size = bounds.size }
+        let center = CGPoint(x: bounds.midX - clip.minX, y: bounds.midY)
+        if scrollView.center != center { scrollView.center = center }
 
         // Floating controls center on the safe area: on the Duo's outer screen the system's
         // vertical bar takes one side.
@@ -1116,5 +1130,24 @@ extension CGFloat {
     func rounded(toScale scale: CGFloat) -> CGFloat {
         (self * scale).rounded() / scale
     }
+}
+#endif
+
+#if canImport(UIKit)
+/// A vertical shade over the gallery's blur: clear at the top, darker at the bottom.
+private final class GalleryShade: UIView {
+    override class var layerClass: AnyClass { CAGradientLayer.self }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        let gradient = layer as! CAGradientLayer
+        let shadow = Palette.floatingShadow.resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark))
+        gradient.colors = [shadow.withAlphaComponent(0).cgColor, shadow.withAlphaComponent(0.45).cgColor]
+        gradient.locations = [0.35, 1]
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
 }
 #endif

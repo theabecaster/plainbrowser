@@ -200,6 +200,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        wireProfiles()
         session.pool.onTranslationFailed = { [weak self] tab in
             guard let self, tab === self.currentTab else { return }
             Haptic.nothingThere.play()
@@ -637,7 +638,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
     }
 
-    private func loadFavorites() {
+    func loadFavorites() {
         favoritesTask?.cancel()
         favoritesTask = Task { [weak self, data] in
             let favorites = await data.favorites()

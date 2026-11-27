@@ -53,10 +53,15 @@ extension BrowserViewController: GalleryHost {
         // Reachable only with a card to show (state rules §3): another tab, or the page on screen
         // beside a New Tab card. The swipe up and Show All Tabs share this one condition, and the
         // gallery never opens empty.
+        // The window's profile's list, or with none there (and no private tabs) the latest list of
+        // another profile: the switcher then says whose it is.
+        let profile = session.tabs.pageEntries(private: false).isEmpty && session.tabs.pageEntries(private: true).isEmpty
+            ? session.tabs.profileWithLatestTab ?? session.tabs.activeProfile
+            : session.tabs.activeProfile
         guard currentRules().galleryHasCards,
               let showsPrivate = GalleryRules.listToOpen(
                   screenTabIsPrivate: currentTab?.isPrivate,
-                  regularCount: session.tabs.pageEntries(private: false).count,
+                  regularCount: session.tabs.pageEntries(private: false, profile: profile).count,
                   privateCount: session.tabs.pageEntries(private: true).count
               )
         else { return nil }
@@ -68,6 +73,7 @@ extension BrowserViewController: GalleryHost {
             session.tabs.discard(tab.id, refillingPane: false)
         }
         let tabs = galleryTabs()
+        tabs.setShowingProfile(profile)
         tabs.setShowingPrivateTabs(showsPrivate)
         Signposts.signposter.emitEvent(Signposts.galleryOpen, "\(source)")
         if isEditingAddress { endAddressEditing() }
@@ -89,7 +95,8 @@ extension BrowserViewController: GalleryHost {
         updateButtons()
 
         // The page zooms into its card; an empty tab has no card, so the gallery fades in.
-        guard let tab = currentTab, tab.isPrivate == tabs.isShowingPrivateTabs, !session.tabs.isEmpty(tab.id),
+        guard let tab = currentTab, tab.isPrivate == tabs.isShowingPrivateTabs,
+              tab.isPrivate || tab.profileID == tabs.shownProfile, !session.tabs.isEmpty(tab.id),
               let snapshot = webContainer.snapshotView(afterScreenUpdates: false)
         else {
             gallery.view.alpha = 0
@@ -244,20 +251,22 @@ extension BrowserViewController: GalleryHost {
         if wasShown, let next = session.tabs.selected { show(next) }
     }
 
-    func galleryCloseAll(private isPrivate: Bool) {
-        let closesShown = currentTab?.isPrivate == isPrivate
+    func galleryCloseAll(private isPrivate: Bool, profile: ProfileID) {
+        let closesShown = currentTab.map { $0.isPrivate == isPrivate && (isPrivate || $0.profileID == profile) } ?? false
         if closesShown { clearPage() }
-        session.tabs.closeAll(private: isPrivate)
+        session.tabs.closeAll(private: isPrivate, profile: profile)
         if closesShown, let next = session.tabs.selected { show(next) }
     }
 
-    func galleryNewTab(private isPrivate: Bool) -> TabID {
-        // An empty tab of the same kind on screen is the new tab (state rules, principle 7).
+    func galleryNewTab(private isPrivate: Bool, profile: ProfileID) -> TabID {
+        // An empty tab of the same kind (and profile) on screen is the new tab (state rules,
+        // principle 7).
         let tab: Tab
-        if let current = currentTab, current.isPrivate == isPrivate, session.tabs.isEmpty(current.id) {
+        if let current = currentTab, current.isPrivate == isPrivate, isPrivate || current.profileID == profile,
+           session.tabs.isEmpty(current.id) {
             tab = current
         } else {
-            tab = session.tabs.newTab(isPrivate: isPrivate)
+            tab = session.tabs.newTab(isPrivate: isPrivate, profile: profile)
             show(tab)
         }
         // Straight to the search field: it rises over the fading gallery.
@@ -274,8 +283,8 @@ extension BrowserViewController: GalleryHost {
             Haptic.nothingThere.play()
             return nil
         }
-        tabsUI.galleryTabs?.setShowingPrivateTabs(false)
         if let selected = session.tabs.selected { show(selected) }
+        tabsUI.galleryTabs?.setShowingProfile(session.tabs.activeProfile)
         return ids.first
     }
 
@@ -305,6 +314,7 @@ extension BrowserViewController: GalleryHost {
         switch GalleryRules.afterLastCard(screenTabStillOpen: screenTabOpen, otherListCount: otherCount) {
         case .openScreenTab:
             if let current = currentTab, !session.tabs.isEmpty(current.id) {
+                if !current.isPrivate { tabs.setShowingProfile(current.profileID) }
                 tabs.setShowingPrivateTabs(current.isPrivate)
                 gallery.reloadTabs(animated: false)
                 galleryOpenTab(current.id)
@@ -313,6 +323,7 @@ extension BrowserViewController: GalleryHost {
             }
             if let batch { offerReopen(batch) }
         case .switchList:
+            if wasPrivate { tabs.setShowingProfile(session.tabs.activeProfile) }
             tabs.setShowingPrivateTabs(!wasPrivate)
             gallery.reloadTabs(animated: false)
             if let batch {
@@ -451,6 +462,8 @@ extension BrowserViewController: GalleryHost {
         // A tab closed or archived elsewhere may have left the other pane.
         syncPanes()
         updateStartScreen()
+        // A profile made, renamed or deleted: the start screen names the window's profile.
+        updateStartScreenMessage()
     }
 
     var galleryCanOpenInOtherPane: Bool { canSplit }

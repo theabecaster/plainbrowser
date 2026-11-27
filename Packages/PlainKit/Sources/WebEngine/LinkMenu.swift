@@ -92,7 +92,7 @@ extension WebViewPool {
         guard let menu = await linkMenu(for: linkURL, in: tab) else { return nil }
         let preview: UIContextMenuContentPreviewProvider?
         if menu.hasPreview, let url = menu.element.linkURL {
-            preview = { [weak self] in self?.makeLinkPreview(url, isPrivate: tab.isPrivate) }
+            preview = { [weak self] in self?.makeLinkPreview(url, isPrivate: tab.isPrivate, profile: tab.profileID) }
         } else {
             preview = nil
         }
@@ -131,10 +131,10 @@ extension WebViewPool {
 
     /// A preview web view: the shared configuration with its own controller and the content
     /// rules, but no delegates, so it can't open windows, show dialogs or download.
-    func makeLinkPreview(_ url: URL, isPrivate: Bool) -> UIViewController {
+    func makeLinkPreview(_ url: URL, isPrivate: Bool, profile: ProfileID = Profile.defaultID) -> UIViewController {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.linkPreview, id: signposter.makeSignpostID())
-        let (webView, controller) = makePreviewWebView(isPrivate: isPrivate)
+        let (webView, controller) = makePreviewWebView(isPrivate: isPrivate, profile: profile)
         contentRules?.apply(to: controller, forMainFrameURL: url)
         webView.load(URLRequest(url: url))
         signposter.endInterval(Signposts.linkPreview, interval)
@@ -180,7 +180,8 @@ extension WebViewPool {
             guard let image = element.imageURL else { return }
             Task { [weak self, weak tab] in
                 guard let self else { return }
-                let succeeded = await self.handleImage(image, item: item)
+                let store = tab.map(self.websiteDataStore(for:)) ?? self.dataStore
+                let succeeded = await self.handleImage(image, item: item, store: store)
                 if let tab { self.host?.tab(tab, didComplete: item, succeeded: succeeded) }
             }
         }
@@ -189,8 +190,8 @@ extension WebViewPool {
     /// Fetches the image with the page's cookies, off the main thread, then copies it or adds it
     /// to Photos. The bytes are never decoded: the pasteboard and Photos take the file as is, so a
     /// GIF stays animated.
-    private func handleImage(_ url: URL, item: LinkMenuItem) async -> Bool {
-        let cookies = url.scheme?.hasPrefix("http") == true ? await dataStore.httpCookieStore.cookies(for: url) : []
+    private func handleImage(_ url: URL, item: LinkMenuItem, store: WKWebsiteDataStore) async -> Bool {
+        let cookies = url.scheme?.hasPrefix("http") == true ? await store.httpCookieStore.cookies(for: url) : []
         guard let (data, type) = try? await Self.fetchImage(url, cookies: cookies) else { return false }
         switch item {
         case .copyImage:

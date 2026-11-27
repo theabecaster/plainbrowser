@@ -85,6 +85,8 @@ struct TabGalleryMetrics: Equatable {
     var titleLineHeight: CGFloat
     /// Room the floating bar takes at the bottom, from the bottom edge of the safe area.
     var bottomChrome: CGFloat = 0
+    /// Room a control over the cards takes at the top (the profile switcher), under the safe area.
+    var topChrome: CGFloat = 0
     /// In the grid, this many slots (a lone card and its New Tab card) sit in one row centered on
     /// the screen instead of filling the grid from its top left; 0 fills the grid as usual. With
     /// an even column count the pair meets on the fold.
@@ -110,7 +112,7 @@ struct TabGalleryMetrics: Equatable {
     /// The area cards may use: inside the safe area, above the floating bar.
     var contentMinX: CGFloat { safeLeft }
     var contentWidth: CGFloat { max(1, width - safeLeft - safeRight) }
-    var contentMinY: CGFloat { safeTop + Self.margin }
+    var contentMinY: CGFloat { safeTop + topChrome + Self.margin }
     var contentHeight: CGFloat { max(1, height - safeBottom - bottomChrome - Self.margin - contentMinY) }
 
     /// The row above a card with its icon and title.

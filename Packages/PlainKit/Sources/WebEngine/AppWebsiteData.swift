@@ -15,12 +15,107 @@ import WebKit
 /// at the next isolated launch; stores the app did not record are never touched.
 public enum AppWebsiteData {
     public static let store: WKWebsiteDataStore = {
-        guard TestIsolation.isActive else { return .default() }
+        guard let id = isolatedBase else { return .default() }
+        return WKWebsiteDataStore(forIdentifier: id)
+    }()
+
+    /// This isolated run's own store id (and the start of pruning older runs' stores); nil when
+    /// not isolated.
+    private static let isolatedBase: UUID? = {
+        guard TestIsolation.isActive else { return nil }
         let ledger = IsolatedStores()
         let id = ledger.storeForThisLaunch()
         Task(priority: .background) { await ledger.prune(keeping: id) }
-        return WKWebsiteDataStore(forIdentifier: id)
+        return id
     }()
+
+    /// Profiles' stores made this launch, so each profile has one store object.
+    @MainActor private static var profileStores: [ProfileID: WKWebsiteDataStore] = [:]
+
+    /// The website data store of a profile (docs/decisions.md, "Profiles, no tab groups"):
+    /// Personal's is `store`; every other profile has a store of its own, named by an identifier
+    /// (`WKWebsiteDataStore(forIdentifier:)`), so its cookies, logins, caches and site storage
+    /// never meet another profile's. Normally the identifier is the profile's id. An isolated run
+    /// maps each profile to a fresh identifier recorded with its own store, removed with it, so a
+    /// test's profiles never reach a store the owner's profiles use.
+    @MainActor
+    public static func store(forProfile id: ProfileID) -> WKWebsiteDataStore {
+        if id == Profile.defaultID { return store }
+        if let made = profileStores[id] { return made }
+        let made = WKWebsiteDataStore(forIdentifier: identifier(forProfile: id))
+        profileStores[id] = made
+        return made
+    }
+
+    private static func identifier(forProfile id: ProfileID) -> UUID {
+        guard let base = isolatedBase else { return id }
+        return IsolatedStores().profileStore(for: id, base: base)
+    }
+
+    /// Deletes a deleted profile's website data store with everything in it. Call it once no web
+    /// view uses the store. WebKit refuses while a web view is still letting go of it, so it is
+    /// tried again a moment later, and a store it still can't remove waits in a list for the next
+    /// launch (`removeLeftoverProfileData()`).
+    @MainActor
+    public static func removeProfileData(_ id: ProfileID) async {
+        guard id != Profile.defaultID else { return }
+        profileStores[id] = nil
+        let store = identifier(forProfile: id)
+        PendingRemovals.add(store)
+        for attempt in 0 ..< 3 {
+            if attempt > 0 { try? await Task.sleep(for: .seconds(2)) }
+            if await remove(store) { return }
+        }
+    }
+
+    /// Finishes the store removals an earlier launch could not. Run after launch settles.
+    @MainActor
+    public static func removeLeftoverProfileData() async {
+        for store in PendingRemovals.all { _ = await remove(store) }
+    }
+
+    /// Removes the store; true when it is gone (or never existed). Drops it from the list then.
+    @MainActor
+    private static func remove(_ store: UUID) async -> Bool {
+        do {
+            try await WKWebsiteDataStore.remove(forIdentifier: store)
+        } catch {
+            guard !(await WKWebsiteDataStore.allDataStoreIdentifiers).contains(store) else { return false }
+        }
+        PendingRemovals.remove(store)
+        IsolatedStores.forgetProfileStore(store)
+        return true
+    }
+
+    /// Clear History and Data: every cookie, cache and storage entry of Personal and of each of
+    /// `profiles`. An isolated run clears its own stores only.
+    @MainActor
+    public static func removeAllData(profiles: [ProfileID]) async {
+        let types = WKWebsiteDataStore.allWebsiteDataTypes()
+        for profile in Set(profiles + [Profile.defaultID]) {
+            await store(forProfile: profile).removeData(ofTypes: types, modifiedSince: .distantPast)
+        }
+    }
+}
+
+/// Stores of deleted profiles that WebKit has not removed yet, in the app's defaults (the
+/// isolated suite in a test run).
+private enum PendingRemovals {
+    private static let key = "plain.profileStoresToRemove"
+
+    static var all: [UUID] {
+        (TestIsolation.defaults.stringArray(forKey: key) ?? []).compactMap(UUID.init(uuidString:))
+    }
+
+    static func add(_ id: UUID) {
+        let ids = all.map(\.uuidString)
+        guard !ids.contains(id.uuidString) else { return }
+        TestIsolation.defaults.set(ids + [id.uuidString], forKey: key)
+    }
+
+    static func remove(_ id: UUID) {
+        TestIsolation.defaults.set(all.filter { $0 != id }.map(\.uuidString), forKey: key)
+    }
 }
 
 /// The record of website data stores isolated runs made, in a defaults suite of its own that no
@@ -29,6 +124,9 @@ private struct IsolatedStores {
     private static let suiteName = "plain.isolated-tests.website-data"
     private static let madeKey = "made"
     private static let testStoreKey = "testStore"
+    /// Profile stores, "<run's store>|<profile>" to the store's identifier: kept while that run's
+    /// store is kept (the test store keeps its profiles across relaunches), removed with it.
+    private static let profileStoresKey = "profileStores"
 
     private var defaults: UserDefaults {
         guard let suite = UserDefaults(suiteName: Self.suiteName) else {
@@ -38,6 +136,30 @@ private struct IsolatedStores {
     }
 
     private var made: [String] { defaults.stringArray(forKey: Self.madeKey) ?? [] }
+
+    private var profileStores: [String: String] {
+        defaults.dictionary(forKey: Self.profileStoresKey) as? [String: String] ?? [:]
+    }
+
+    /// The identifier of `profile`'s store in the run whose own store is `base`; made and
+    /// recorded on first use.
+    func profileStore(for profile: UUID, base: UUID) -> UUID {
+        let key = "\(base.uuidString)|\(profile.uuidString)"
+        var stores = profileStores
+        if let saved = stores[key].flatMap(UUID.init(uuidString:)) { return saved }
+        let id = UUID()
+        stores[key] = id.uuidString
+        defaults.set(stores, forKey: Self.profileStoresKey)
+        return id
+    }
+
+    /// A profile store was removed (its profile deleted in a test): no run needs it any more.
+    static func forgetProfileStore(_ store: UUID) {
+        guard TestIsolation.isActive else { return }
+        let ledger = IsolatedStores()
+        let stores = ledger.profileStores.filter { $0.value != store.uuidString }
+        ledger.defaults.set(stores, forKey: profileStoresKey)
+    }
 
     /// The test store's own store until a reset; a new one for an in-memory run or after a reset.
     func storeForThisLaunch() -> UUID {
@@ -66,6 +188,19 @@ private struct IsolatedStores {
                 if existing.contains(id) { continue }
             }
             defaults.set(made.filter { $0 != value }, forKey: Self.madeKey)
+        }
+        // Profile stores of runs whose own store is gone go with it.
+        for (key, value) in profileStores {
+            guard let base = key.split(separator: "|").first, !keep.contains(String(base)),
+                  let id = UUID(uuidString: value) else { continue }
+            do {
+                try await WKWebsiteDataStore.remove(forIdentifier: id)
+            } catch {
+                if await WKWebsiteDataStore.allDataStoreIdentifiers.contains(id) { continue }
+            }
+            var stores = profileStores
+            stores[key] = nil
+            defaults.set(stores, forKey: Self.profileStoresKey)
         }
     }
 }

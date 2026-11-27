@@ -114,7 +114,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             tabStates: TabStateStore(directory: self.options.tabStateDirectory),
             // A scene the system made new shows the window whose page the first frame shows.
             windowID: savedWindow ?? launch.hint?.windowID,
-            thumbnailDirectory: self.options.thumbnailDirectory
+            thumbnailDirectory: self.options.thumbnailDirectory,
+            profileData: self.options.profileData
         )
         let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets, launch: launch) {
             [weak self] in
@@ -259,12 +260,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let data = addressBarData
         let sheets = sheets
         let opening = database
+        let profiles = session?.profileData
         Task(priority: .userInitiated) { [weak self] in
             guard let database = await opening.value else {
                 self?.addressBarIsReady()
                 return
             }
-            await data.attach(database)
+            await data.attach(database) { await profiles?.database(for: $0) }
             sheets.attach(database)
             browser.addressBarDataDidChange()
             TestIsolationMarker.storeIsReady()
@@ -373,6 +375,10 @@ private nonisolated struct LaunchOptions: Sendable {
     /// Where tabs' history, scroll and sessionStorage are saved for relaunch, next to the database.
     /// A path only: nothing touches the disk until the first save.
     var tabStateDirectory: URL { directory.appending(path: "TabState", directoryHint: .isDirectory) }
+
+    /// Where profiles other than Personal keep their history and favorites: beside the database,
+    /// in memory for an in-memory run (the test folder for the test store). A path only.
+    var profileData: ProfileDataLocation { ProfileDataLocation(directory: inMemory ? nil : directory) }
 
     /// The time the launch and return rules use (`-PlainAwayOffset` moves it ahead).
     var now: Date { Date().addingTimeInterval(awayOffset) }

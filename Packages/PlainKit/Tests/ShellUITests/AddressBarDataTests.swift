@@ -46,6 +46,7 @@ struct AddressBarDataTests {
     private static let answers: [String: [String]] = [
         "swift": ["swift docs", "swift ownership"],
         "swift d": ["swift docs", "swift data"],
+        "swiftx": ["swiftx one", "swiftx two"],
         "kotlin": ["kotlin docs", "kotlin coroutines"],
     ]
 
@@ -70,21 +71,32 @@ struct AddressBarDataTests {
         await data.suggestions(for: "swift") { _ in }
 
         var updates: [[AddressBarSuggestion]] = []
-        // Nothing cached fits "kotlin": the "swift" rows hold until its answer replaces them.
-        await data.suggestions(for: "kotlin") { updates.append($0) }
-        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], ["kotlin docs", "kotlin coroutines"]])
+        // Nothing cached fits "swiftx": the "swift" rows hold until its answer replaces them.
+        await data.suggestions(for: "swiftx") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], ["swiftx one", "swiftx two"]])
     }
 
     @Test func heldEngineRowsGoWhenTheAnswerIsLate() async throws {
         let data = LiveAddressBarData {
-            SuggestionClient(http: ByQueryEngine(answers: Self.answers, delays: ["kotlin": .milliseconds(400)]))
+            SuggestionClient(http: ByQueryEngine(answers: Self.answers, delays: ["swiftx": .milliseconds(400)]))
         }
         await data.attach(try AppDatabase.inMemory())
         await data.suggestions(for: "swift") { _ in }
 
         var updates: [[AddressBarSuggestion]] = []
+        await data.suggestions(for: "swiftx") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], [], ["swiftx one", "swiftx two"]])
+    }
+
+    @Test func rowsForOtherTextAreNeverHeld() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        // Not typing on from "swift" (the field was cleared and new text typed): nothing held.
         await data.suggestions(for: "kotlin") { updates.append($0) }
-        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], [], ["kotlin docs", "kotlin coroutines"]])
+        #expect(updates.map(Self.searches) == [[], ["kotlin docs", "kotlin coroutines"]])
     }
 
     @Test func addressesNeverHoldEngineRows() async throws {

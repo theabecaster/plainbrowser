@@ -109,6 +109,11 @@ public final class LiveAddressBarData: AddressBarData {
     /// The engine rows in the last list delivered, held in place for the next keystroke when no
     /// cached answer fits it (`suggestions(for:update:)`).
     private var shownSearches: [String] = []
+    /// The text `shownSearches` were delivered for, and when they were first held past it: rows
+    /// are held only for the next keystroke's text (one typed or deleted after it), and for one
+    /// `suggestionHoldWindow` in all, however many keystrokes come before an answer.
+    private var shownQuery = ""
+    private var heldSince: ContinuousClock.Instant?
 
     /// - Parameter makeClient: builds the engine suggestion client on first use (tests pass one
     ///   with a fake loader).
@@ -164,19 +169,27 @@ public final class LiveAddressBarData: AddressBarData {
         guard !Task.isCancelled else { return }
 
         let remote = SuggestionClient.allowsRemote(query, isPrivate: isPrivate)
-        let held = cached.isEmpty && remote ? shownSearches : []
+        // Hold the previous rows only while typing on from (or back over) the text they were for,
+        // and never longer than the hold window in all: they never come back after the field
+        // was cleared, and never linger over several fast keystrokes on a slow network.
+        let now = ContinuousClock.now
+        let typingOn = !shownQuery.isEmpty && (query.hasPrefix(shownQuery) || shownQuery.hasPrefix(query))
+        let holdLeft = FixedChoices.suggestionHoldWindow - (heldSince.map { now - $0 } ?? .zero)
+        let held = cached.isEmpty && remote && typingOn && holdLeft > .zero ? shownSearches : []
         var shown = cached.isEmpty ? held : cached
-        func deliver(_ searches: [String]) {
+        func deliver(_ searches: [String], holding: Bool = false) {
             shown = searches
             shownSearches = searches
+            shownQuery = query
+            if !holding { heldSince = nil } else if heldSince == nil { heldSince = now }
             update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: searches))
         }
-        deliver(shown)
+        deliver(shown, holding: !held.isEmpty)
         guard remote else { return }
 
         let request = Task { try? await client.suggestions(for: query, engine: engine, isPrivate: isPrivate) }
         let answer: [String]? = await withTaskCancellationHandler {
-            if !held.isEmpty, case .some(let early) = await Self.value(of: request, within: FixedChoices.suggestionHoldWindow) {
+            if !held.isEmpty, case .some(let early) = await Self.value(of: request, within: holdLeft) {
                 return early
             }
             if !held.isEmpty, !Task.isCancelled {
@@ -247,6 +260,8 @@ public final class LiveAddressBarData: AddressBarData {
 
     public func cancelSuggestions() {
         shownSearches = []
+        shownQuery = ""
+        heldSince = nil
         Task { [client] in await client.cancel() }
     }
 

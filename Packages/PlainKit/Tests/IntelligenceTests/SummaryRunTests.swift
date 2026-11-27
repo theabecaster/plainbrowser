@@ -121,6 +121,38 @@ import Testing
         #expect(blockedRecorder.reports.last?.stage == .failed(.noResults))
     }
 
+    /// The model went away on the way (switched-off features): the run stops at once and its last
+    /// report is one line in place of the half-written text.
+    @Test func endingARunShowsOneLine() async throws {
+        let model = ScriptedSummaryModel(pace: .milliseconds(30))
+        let (run, recorder) = browse(model: model)
+        run.start()
+        while recorder.reports.last?.draft.isEmpty ?? true { try await Task.sleep(for: .milliseconds(5)) }
+        run.end(with: .unavailable)
+        #expect(!run.isRunning)
+        let count = recorder.reports.count
+        let last = try #require(recorder.reports.last)
+        #expect(last.stage == .failed(.unavailable))
+        #expect(last.draft.isEmpty)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(recorder.reports.count == count, "nothing more after the line")
+        // A finished run is left alone.
+        run.end(with: .unavailable)
+        #expect(recorder.reports.count == count)
+    }
+
+    /// Held back by the system (rate limited): a second try can work.
+    @Test func aBusyModelOffersTryAgain() async throws {
+        let model = ScriptedSummaryModel(pace: .milliseconds(1), failure: .busy)
+        let (run, recorder) = browse(model: model)
+        run.start()
+        await run.finished()
+        let last = try #require(recorder.reports.last)
+        #expect(last.stage == .failed(.busy))
+        #expect(SummaryFailure.busy.canRetry)
+        #expect(!SummaryFailure.unavailable.canRetry)
+    }
+
     @Test func aDeclinedTopicShowsNoText() async throws {
         let model = ScriptedSummaryModel(pace: .milliseconds(1), failure: .declined)
         let (run, recorder) = browse(model: model)

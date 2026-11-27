@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import Foundation
 import PerfSignposts
 import UIKit
@@ -71,6 +72,18 @@ nonisolated public protocol SitePermissionStore: Sendable {
     /// The stored answer, or nil when the user was never asked.
     func isAllowed(_ permission: SitePermission, forSite site: String) async -> Bool?
     func setAllowed(_ allowed: Bool, _ permission: SitePermission, forSite site: String) async
+    /// Every remembered answer for `site` (Site Settings' rows). Default: one read per permission.
+    func answers(forSite site: String) async -> [SitePermission: Bool]
+}
+
+extension SitePermissionStore {
+    public func answers(forSite site: String) async -> [SitePermission: Bool] {
+        var answers: [SitePermission: Bool] = [:]
+        for permission in SitePermission.allCases {
+            if let allowed = await isAllowed(permission, forSite: site) { answers[permission] = allowed }
+        }
+        return answers
+    }
 }
 
 /// The desktop or mobile choice the page menu made for a site, remembered automatically.
@@ -182,6 +195,22 @@ public protocol PermissionPresenter: AnyObject {
     func tab(_ tab: Tab, allow permissions: [SitePermission], forSite site: String) async -> Bool
 }
 
+/// Features iOS has switched off for Plain (docs/research/permissions-states.md). Every
+/// requirement has a default, so a host without it keeps compiling.
+public protocol SystemAccessPresenter: AnyObject {
+    /// A page asked for `features` (camera, microphone, location) while iOS has them off for Plain,
+    /// so WebKit denied it without asking; or Save Image found Photos off (`[.photos]`). Default:
+    /// nothing.
+    func tab(_ tab: Tab, wasDenied features: [SystemFeature], forSite site: String)
+    /// What iOS allows for `features` changed (`WebViewPool.systemAccess`). Default: nothing.
+    func pool(_ pool: WebViewPool, systemAccessDidChange features: Set<SystemFeature>)
+}
+
+extension SystemAccessPresenter {
+    public func tab(_ tab: Tab, wasDenied features: [SystemFeature], forSite site: String) {}
+    public func pool(_ pool: WebViewPool, systemAccessDidChange features: Set<SystemFeature>) {}
+}
+
 /// Download progress for the shell's downloads list.
 public protocol DownloadPresenter: AnyObject {
     func downloadDidStart(_ download: Download)
@@ -247,9 +276,9 @@ extension LinkMenuPresenter {
     public func tab(_ tab: Tab, didComplete action: LinkMenuItem, succeeded: Bool) {}
 }
 
-/// Everything the shell implements for the engine. `LinkMenuPresenter` and `SignInPresenter` have
-/// defaults for every requirement.
+/// Everything the shell implements for the engine. `LinkMenuPresenter`, `SignInPresenter` and
+/// `SystemAccessPresenter` have defaults for every requirement.
 public typealias EngineHost = TabPresenter & JavaScriptDialogPresenter & AuthenticationPresenter
     & ExternalAppPresenter & PermissionPresenter & DownloadPresenter & LinkMenuPresenter
-    & SignInPresenter
+    & SignInPresenter & SystemAccessPresenter
 #endif

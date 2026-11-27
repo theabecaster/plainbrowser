@@ -16,6 +16,17 @@ import Testing
         #expect(try await database.sitePermission("camera", forSite: "https://a.example") == false)
     }
 
+    /// Site Settings reads every answer of one site in one query.
+    @Test func everyAnswerOfASite() async throws {
+        let database = try AppDatabase.inMemory()
+        #expect(try await database.sitePermissions(forSite: "https://a.example").isEmpty)
+        try await database.setSitePermission(true, "camera", forSite: "https://a.example")
+        try await database.setSitePermission(false, "location", forSite: "https://a.example")
+        try await database.setSitePermission(true, "microphone", forSite: "https://b.example")
+        #expect(try await database.sitePermissions(forSite: "https://a.example") == ["camera": true, "location": false])
+        #expect(try await database.sitePermissions(forSite: "https://b.example") == ["microphone": true])
+    }
+
     @Test func contentModesSetReplaceAndForget() async throws {
         let database = try AppDatabase.inMemory()
         #expect(try await database.siteContentModes().isEmpty)

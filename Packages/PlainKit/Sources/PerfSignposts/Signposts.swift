@@ -295,6 +295,14 @@ public enum Signposts {
     public static let profileDataOpen: StaticString = "profile.dataOpen"
     /// Event: a short toast over the chrome (Reopen Tab after a close, a finished download).
     public static let toast: StaticString = "toast.show"
+    /// Event: a line saying a feature is off for Plain (a site's camera, microphone or location
+    /// request, Save Image, cellular data). The message says which.
+    public static let systemAccessNotice: StaticString = "systemAccess.notice"
+    /// Event: Settings from such a line, or a Site Settings row that is off in Settings: Plain's page
+    /// in the Settings app opens.
+    public static let openSettings: StaticString = "systemAccess.openSettings"
+    /// Event: Site Settings changed a site's camera, microphone, location or motion answer.
+    public static let sitePermissionChange: StaticString = "site.permission"
 
     // MARK: Tab gallery (TabGalleryUI emits these)
 

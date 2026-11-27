@@ -203,6 +203,15 @@ extension WebViewPool {
             guard let image = element.imageURL else { return }
             Task { [weak self, weak tab] in
                 guard let self else { return }
+                // Photos off for Plain: say so and offer Settings instead of failing silently.
+                if item == .saveImage {
+                    let photos = await Self.photosAccessOffMain()
+                    self.systemAccess.record(.photos, photos)
+                    if photos.isBlocked {
+                        if let tab { self.host?.tab(tab, wasDenied: [.photos], forSite: "") }
+                        return
+                    }
+                }
                 let store = tab.map(self.websiteDataStore(for:)) ?? self.dataStore
                 let succeeded = await self.handleImage(image, item: item, store: store)
                 if let tab { self.host?.tab(tab, didComplete: item, succeeded: succeeded) }
@@ -249,6 +258,23 @@ extension WebViewPool {
         configuration.httpCookieAcceptPolicy = .never
         return URLSession(configuration: configuration)
     }()
+
+    /// Whether Plain may add to Photos (Save Image). Reading the answer changes nothing, so an
+    /// isolated run reads the simulator's or phone's own.
+    nonisolated static func photosAccess() -> SystemAccess {
+        switch PHPhotoLibrary.authorizationStatus(for: .addOnly) {
+        case .authorized, .limited: .allowed
+        case .denied: .denied
+        case .restricted: .restricted
+        case .notDetermined: .notDetermined
+        @unknown default: .notDetermined
+        }
+    }
+
+    @concurrent
+    nonisolated static func photosAccessOffMain() async -> SystemAccess {
+        photosAccess()
+    }
 
     @concurrent
     nonisolated static func addToPhotos(_ data: Data) async -> Bool {

@@ -26,6 +26,14 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - The page gets the screen. Controls show only while they apply, for example the progress bar while loading or a "Reopen tab" toast after a close.
 - No badges, banners or standing overlays.
+- **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
+  Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, Share and
+  More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
+  Layout Above adds a 34 pt strip under the bar from the second tab. While reading, the bar shrinks
+  to the address under the status bar and the buttons and strip fade. The page starts under the
+  bar and slides under it. To type an address, the pill still rises above the keyboard with the
+  search sheet, as on every screen. Chrome at rest: about 11% of the landscape inner screen with
+  one tab, 17% with the strip; about 9% while reading.
 - Plus buttons act at once when there is one obvious action, and become a menu only when there is a real choice.
 
 ## State rules

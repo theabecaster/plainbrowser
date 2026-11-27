@@ -178,8 +178,8 @@ Facts that shape it:
 |---|---|
 | Outer portrait (466×678, ~382 pt content) | System vertical side bar: Back, Forward, Tabs, Share, More (`.verticalPreferred`). Custom bottom URL pill that shrinks on scroll. One pane. |
 | Outer landscape (678×466) | Same; primary pane only. |
-| Inner landscape, flat (951×669) | System vertical bar stays on, as on the outer screen (HIG; confirm Safari on the device). Tab sidebar on the leading edge. Each pane has its own top URL pill. Split tabs on demand. |
-| Inner portrait (669×951) | System horizontal bars, one pane; stacked second pane off by default. |
+| Inner landscape, flat (951×669) | Safari's model (docs/research/safari-duo.md): the system vertical bar is off and one top bar sits under the status bar (Back, Forward; the address; Tabs, Share, More), the page at full width under it. Tab Layout Above (default): a 34 pt strip under the bar from the second tab; Left/Right: a 52 pt rail. The bar shrinks to the address while reading. Split tabs on demand, one bar for both panes. |
+| Inner portrait (669×951) | The same top bar and strip, one pane (no bottom bar). |
 | Book pose (vertical fold, partially open) | Split panes snap to the two halves. Pills and toasts shift off the fold region (`reservedRegions(kind: .division)`) and avoid the inner camera (`.occlusion`); the page never moves. |
 | Tabletop / laptop pose (horizontal fold) | No custom layout; the page keeps spanning the screen. Only floating controls avoid the fold. |
 | Regular iPhones (375 / 402 / 440 pt) and resizable windows | Same code. Second pane only when width and height are both regular. |
@@ -195,7 +195,7 @@ Facts that shape it:
 - **Why not screen size:** Apple's Duo guidance says never use `UIScreen.main`, the device type or orientation for layout. `UIScreen` is ambiguous with two screens, and iOS 27 windows can be resized. Size classes on the window scene's traits are the supported signal.
 - **Mechanics:** read the root view controller's `traitCollection`, and use `registerForTraitChanges([UITraitHorizontalSizeClass.self, UITraitVerticalSizeClass.self])` to switch the layout. The switch rides the system's fold/unfold bounds animation, with no custom animation and no web view reload. A minimum-width guard of about 640 pt protects against future odd sizes. It applies to the width left for pages after the sidebar, measured in layout, not to the window.
 - **Side tabs design (inner screen):**
-  - Leading sidebar with three states: Hidden, Rail (~64 pt, favicons only) and Expanded (~260 pt, pinned favorites on top and a tab list below, favicon + title).
+  - Leading sidebar with three states: Hidden, Rail (52 pt, site tiles only) and Expanded (~260 pt, pinned favorites on top and a tab list below, favicon + title).
   - Rail is forced while a split is showing. A fold (active vertical division) forces Rail or Hidden; Expanded then floats over the page. A 260 pt sidebar beside a split would leave ~345 pt per pane, narrower than the outer screen.
   - Collapse with a swipe or button. It also collapses on its own in inner portrait when the page needs the width.
   - Drag tabs to reorder, or drop one on the other pane to split.

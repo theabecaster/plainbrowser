@@ -583,6 +583,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         wantsHorizontalBars ? .disabled : .automatic
     }
 
+    /// Light over the private start screen, which is always drawn dark; otherwise the system's.
+    override public var preferredStatusBarStyle: UIStatusBarStyle {
+        tabsUI.prefersLightStatusBar ? .lightContent : .default
+    }
+
     override public func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
         windowWillResize(to: size, with: coordinator)

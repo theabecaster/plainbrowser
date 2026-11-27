@@ -14,6 +14,24 @@ public final class EmptyTabView: UIView {
         set { label.text = newValue }
     }
 
+    /// An empty private tab: the screen is drawn dark on the private dusk, and "Private" with the
+    /// private mark heads the sentence (docs/decisions.md, "Private mode you can't miss"). One
+    /// background and one label's visibility change; nothing is laid out anew besides the title.
+    public private(set) var isPrivate = false
+
+    public func setPrivate(_ isPrivate: Bool) {
+        guard isPrivate != self.isPrivate else { return }
+        self.isPrivate = isPrivate
+        overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
+        if isPrivate {
+            backgroundColor = Palette.privateBackground
+        } else {
+            Paper.apply(to: self)
+        }
+        privateTitle.isHidden = !isPrivate
+        applyGlow()
+    }
+
     /// The main button's title; nil hides it.
     public var buttonTitle: String? {
         didSet { applyButton() }
@@ -61,6 +79,8 @@ public final class EmptyTabView: UIView {
     }
 
     public let mark = MarkView()
+    /// "Private" with the private mark, over the sentence of an empty private tab.
+    private let privateTitle = UILabel()
     private let label = UILabel()
     private let button = UIButton(type: .system)
     /// The shortcuts, side by side; like the main button, only while the keyboard is down.
@@ -118,8 +138,27 @@ public final class EmptyTabView: UIView {
         shortcutRow.distribution = .fillEqually
         shortcutRow.spacing = Spacing.s
         shortcutRow.accessibilityIdentifier = "startShortcuts"
-        for view in [mark, label, button, shortcutRow] { stack.addArrangedSubview(view) }
+        let title = NSMutableAttributedString()
+        let headline = UIFont.preferredFont(forTextStyle: .title3).withWeight(.semibold)
+        if let symbol = UIImage(systemName: "hand.raised.fill", withConfiguration: UIImage.SymbolConfiguration(font: headline, scale: .medium))?
+            .withTintColor(Palette.privateAccent, renderingMode: .alwaysOriginal) {
+            let attachment = NSTextAttachment(image: symbol)
+            attachment.bounds = CGRect(
+                x: 0, y: ((headline.capHeight - symbol.size.height) / 2).rounded(), width: symbol.size.width, height: symbol.size.height
+            )
+            title.append(NSAttributedString(attachment: attachment))
+            title.append(NSAttributedString(string: " "))
+        }
+        title.append(NSAttributedString(string: String(localized: "Private"), attributes: [.font: headline, .foregroundColor: Palette.textPrimary]))
+        privateTitle.attributedText = title
+        privateTitle.textAlignment = .center
+        privateTitle.accessibilityLabel = String(localized: "Private")
+        privateTitle.accessibilityTraits = .header
+        privateTitle.accessibilityIdentifier = "start.privateTitle"
+        privateTitle.isHidden = true
+        for view in [mark, privateTitle, label, button, shortcutRow] { stack.addArrangedSubview(view) }
         stack.setCustomSpacing(Spacing.xl, after: mark)
+        stack.setCustomSpacing(Spacing.s, after: privateTitle)
         addSubview(stack)
         addLayoutGuide(region)
 
@@ -236,7 +275,9 @@ public final class EmptyTabView: UIView {
     }
 
     private func applyGlow() {
-        glow.colors = [UIColor.clear.cgColor, Palette.startGlow.resolvedColor(with: traitCollection).cgColor]
+        // Private: the screen is drawn dark, so the glow is the night's violet.
+        let traits = isPrivate ? traitCollection.modifyingTraits { $0.userInterfaceStyle = .dark } : traitCollection
+        glow.colors = [UIColor.clear.cgColor, Palette.startGlow.resolvedColor(with: traits).cgColor]
     }
 
     @objc private func keyboardWillShow() {

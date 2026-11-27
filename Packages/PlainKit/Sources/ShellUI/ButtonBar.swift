@@ -269,13 +269,15 @@ final class ButtonBar: UIView {
         button(kind).accessibilityValue = value
     }
 
-    /// The glass tint: Paper, or the quiet private tint while a private tab is on screen.
+    /// The glass tint: Paper, or the private violet while a private tab is on screen, drawn dark
+    /// so the glyphs stay light on it (as the pill).
     func setPrivate(_ isPrivate: Bool) {
         let effect = UIGlassEffect(style: .regular)
         effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
         glass.effect = effect
         trailingGlass.effect = effect
         scrim.isPrivate = isPrivate
+        overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
     }
 
     override func layoutSubviews() {

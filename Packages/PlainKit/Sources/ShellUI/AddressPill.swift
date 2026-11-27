@@ -224,9 +224,11 @@ final class AddressPill: UIView {
         self.url = url
         self.notSecure = notSecure
         hostLabel.attributedText = Self.hostText(
-            for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: "Search or enter address"
+            for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: "Search or enter address",
+            isPrivate: isPrivateTint
         )
-        accessibilityValue = url?.absoluteString ?? hostLabel.text
+        // Without the private mark's attachment character: the label already says Private.
+        accessibilityValue = url?.absoluteString ?? hostLabel.text?.replacingOccurrences(of: "\u{FFFC} ", with: "")
     }
 
     /// The query a page searches for when it is the search engine's results page (the shell
@@ -235,7 +237,31 @@ final class AddressPill: UIView {
 
     /// What the resting pill says for `url`: the search on the engine's results page, otherwise
     /// its host without `www.`, after "Not Secure —" when the page is not secure; the placeholder
-    /// without a page.
+    /// without a page. Private, the private mark leads, whatever follows.
+    private static func hostText(
+        for url: URL?, query: String? = nil, notSecure: Bool, placeholder: String, isPrivate: Bool
+    ) -> NSAttributedString {
+        let text = hostText(for: url, query: query, notSecure: notSecure, placeholder: placeholder)
+        guard isPrivate else { return text }
+        let marked = NSMutableAttributedString(attachment: privateMark())
+        marked.append(NSAttributedString(string: " "))
+        marked.append(text)
+        return marked
+    }
+
+    /// The private mark at the pill's text size, in the private accent, centered on the capitals.
+    private static func privateMark() -> NSTextAttachment {
+        let font = UIFont.preferredFont(forTextStyle: .body)
+        let configuration = UIImage.SymbolConfiguration(font: font, scale: .small)
+        guard let symbol = UIImage(systemName: "hand.raised.fill", withConfiguration: configuration)?
+            .withTintColor(Palette.privateAccent, renderingMode: .alwaysOriginal) else { return NSTextAttachment() }
+        let attachment = NSTextAttachment(image: symbol)
+        attachment.bounds = CGRect(
+            x: 0, y: ((font.capHeight - symbol.size.height) / 2).rounded(), width: symbol.size.width, height: symbol.size.height
+        )
+        return attachment
+    }
+
     private static func hostText(for url: URL?, query: String? = nil, notSecure: Bool, placeholder: String) -> NSAttributedString {
         if let query, !notSecure {
             return NSAttributedString(string: query, attributes: [.foregroundColor: Palette.textPrimary])
@@ -254,14 +280,39 @@ final class AddressPill: UIView {
         return NSAttributedString(string: placeholder, attributes: [.foregroundColor: Palette.textSecondary])
     }
 
-    /// The glass tint: Paper, or the quiet private tint while a private tab is on screen.
+    /// Paper glass, or the private look while a private tab is on screen: deep violet glass drawn
+    /// dark (light text), the private mark before the host and in the field, and a dark keyboard
+    /// that predicts and rewrites nothing (docs/decisions.md, "Private mode you can't miss").
     func setPrivate(_ isPrivate: Bool) {
         let effect = UIGlassEffect(style: .regular)
         effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
         effect.isInteractive = true
         glass.effect = effect
         scrim.isPrivate = isPrivate
+        overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
+        display(url: url, notSecure: notSecure)
+        if isPrivate, textField.leftView == nil { textField.leftView = makeFieldMark() }
+        textField.leftViewMode = isPrivate ? .always : .never
+        // iOS has no "don't learn" flag for the keyboard (docs/research/private-mode.md). The field
+        // already corrects and spell-checks nothing; private, it also predicts, rewrites and
+        // grammar-checks nothing, and the keyboard is dark like the bar.
+        textField.keyboardAppearance = isPrivate ? .dark : .default
+        textField.inlinePredictionType = isPrivate ? .no : .default
+        textField.writingToolsBehavior = isPrivate ? .none : .default
+        textField.grammarCheckingType = isPrivate ? .no : .default
+        if textField.isFirstResponder { textField.reloadInputViews() }
+    }
+
+    /// The private mark at the field's leading edge while it edits in a private tab.
+    private func makeFieldMark() -> UIView {
+        let mark = UIImageView(image: UIImage(systemName: "hand.raised.fill"))
+        mark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body, scale: .small)
+        mark.tintColor = Palette.privateAccent
+        mark.contentMode = .left
+        mark.isAccessibilityElement = false
+        mark.frame = CGRect(x: 0, y: 0, width: mark.intrinsicContentSize.width + Spacing.s, height: Metrics.tapTarget)
+        return mark
     }
 
     // MARK: Bar swipe
@@ -280,7 +331,9 @@ final class AddressPill: UIView {
         label.maximumContentSizeCategory = hostLabel.maximumContentSizeCategory
         label.textAlignment = .center
         label.lineBreakMode = .byTruncatingHead
-        label.attributedText = Self.hostText(for: url, query: url.flatMap(searchQuery), notSecure: false, placeholder: "New Tab")
+        label.attributedText = Self.hostText(
+            for: url, query: url.flatMap(searchQuery), notSecure: false, placeholder: "New Tab", isPrivate: isPrivateTint
+        )
         label.alpha = 0
         label.isAccessibilityElement = false
         let height = max(hostLabel.bounds.height, label.font.lineHeight)

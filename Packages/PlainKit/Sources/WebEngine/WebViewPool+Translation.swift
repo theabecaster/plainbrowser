@@ -11,6 +11,8 @@ struct SlotTranslation {
     var page = 0
     /// The pair the page is being translated with.
     var pair: (source: Locale.Language, target: Locale.Language)?
+    /// Bumped by every Translate Page, so an older attempt's download answer can't start it.
+    var attempt = 0
     var interval: OSSignpostIntervalState?
 }
 
@@ -61,6 +63,8 @@ extension WebViewPool {
               let target = tab.translationTarget, tab.translation == .original
         else { return }
         let page = slot.translation.page
+        slot.translation.attempt += 1
+        let attempt = slot.translation.attempt
         tab.set(\.translation, .translating)
         tab.followsTranslation = (source, target)
         slot.translation.pair = (source, target)
@@ -68,7 +72,9 @@ extension WebViewPool {
         slot.translation.interval = Signposts.signposter.beginInterval(Signposts.translatePage)
         Task { [weak self, weak slot, weak tab] in
             let ready = await translator.prepare(from: source, to: target)
-            guard let self, let slot, let tab, slot.translation.page == page, tab.translation == .translating else { return }
+            guard let self, let slot, let tab, slot.translation.page == page, slot.translation.attempt == attempt,
+                  tab.translation == .translating
+            else { return }
             guard ready else {
                 tab.set(\.translation, .original)
                 tab.followsTranslation = nil

@@ -123,15 +123,16 @@ final class CookiePage: NSObject, WKNavigationDelegate {
         var answered: Bool?
         page.banners?.onAnswered = { _, result in answered = result }
         let start = ContinuousClock.now
-        page.banners?.onMessage = { type, body in
-            print("[plain-measure] cookie banner message \(type) \(body["cmp"] ?? "") at \(ContinuousClock.now - start)")
+        var detected: Duration?
+        page.banners?.onMessage = { type, _ in
+            if type == "init", detected == nil { detected = ContinuousClock.now - start }
         }
         await page.load(CookiePage.oneTrust)
         let deadline = ContinuousClock.now + .seconds(15)
         while await page.value("document.body.dataset.consent") == "none", ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(50))
         }
-        print("[plain-measure] cookie banner rejected after \(ContinuousClock.now - start)")
+        print("[plain-measure] cookie banner: engine started after \(detected ?? .zero), rejected after \(ContinuousClock.now - start)")
         #expect(await page.value("document.body.dataset.consent") == "rejected")
         #expect(await page.value("getComputedStyle(document.getElementById('onetrust-banner-sdk')).display") == "none")
         try await Task.sleep(for: .milliseconds(200))

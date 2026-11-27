@@ -1026,13 +1026,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             find.accessibilityIdentifier = "menu.find"
             pageItems.append(find)
         }
-        // Find on Page, Print and Save as PDF share one row of three when the page can be printed,
-        // so the two rare actions cost the menu no height of their own (it fits the Duo's outer
-        // screen).
+        // Find on Page, Print and Save as PDF share one compact row (icons, like the zoom row)
+        // when the page can be printed, so the two rare actions cost the menu no height of their
+        // own: it still fits the Duo's outer screen.
         let export = exportMenuItems(rules)
         if !export.isEmpty {
             let row = UIMenu(options: .displayInline, children: pageItems + export)
-            row.preferredElementSize = .medium
+            row.preferredElementSize = .small
             pageItems = [row]
         }
         pageItems += readerMenuItems(rules.reader)

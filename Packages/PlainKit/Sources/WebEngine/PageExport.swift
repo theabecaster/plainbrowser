@@ -50,7 +50,12 @@ public enum PageExport {
     /// hundred-page document never holds the main thread for more than one page at a time and
     /// touches, scrolling and the spinner keep going (measured in `PageExportTests`). Call it from
     /// a menu action, never from a gesture or scroll path.
-    public static func pdf(of webView: WKWebView, title: String?, paperSize: CGSize = paperSize()) async -> Data {
+    /// - Parameter isLong: called before drawing a document of more than
+    ///   `FixedChoices.exportProgressPages` pages, so the caller can show that it is working; the
+    ///   main run loop turns once before the first page waits on the page's process.
+    public static func pdf(
+        of webView: WKWebView, title: String?, paperSize: CGSize = paperSize(), isLong: (() -> Void)? = nil
+    ) async -> Data {
         let clock = ContinuousClock()
         let layoutStart = clock.now
         let renderer = UIPrintPageRenderer()
@@ -63,6 +68,10 @@ public enum PageExport {
         let pages = renderer.numberOfPages
         renderer.prepare(forDrawingPages: NSRange(location: 0, length: pages))
         let layout = clock.now - layoutStart
+        if pages > FixedChoices.exportProgressPages, let isLong {
+            isLong()
+            await nextRunLoopTurn()
+        }
 
         let data = NSMutableData()
         var info: [CFString: Any] = [kCGPDFContextCreator: "Plain"]
@@ -85,7 +94,8 @@ public enum PageExport {
             UIGraphicsPopContext()
             context.endPDFPage()
             longest = max(longest, clock.now - pageStart)
-            await Task.yield()
+            // A turn of the main run loop, so touches and drawing go on between pages.
+            await nextRunLoopTurn()
         }
         context.closePDF()
         lastTimings = (layout, longest, pages)
@@ -93,16 +103,28 @@ public enum PageExport {
     }
 
     /// Writes a saved PDF where the share sheet can hand it on: a folder of its own under the
-    /// temporary directory, named for the page. Folders left from earlier exports are removed
-    /// first. Disk work: call it off the main thread.
+    /// temporary directory, named for the page. Each export removes its folder when its sheet
+    /// closes; folders older than an hour (an export cut short) are swept here. Disk work: call it
+    /// off the main thread.
     nonisolated public static func writeTemporaryFile(_ data: Data, named name: String) throws -> URL {
-        let root = FileManager.default.temporaryDirectory.appending(path: "PlainPDF", directoryHint: .isDirectory)
-        try? FileManager.default.removeItem(at: root)
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appending(path: "PlainPDF", directoryHint: .isDirectory)
+        let stale = Date().addingTimeInterval(-3_600)
+        for old in (try? manager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.creationDateKey])) ?? [] {
+            let created = (try? old.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            if created < stale { try? manager.removeItem(at: old) }
+        }
         let folder = root.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = folder.appending(path: name)
         try data.write(to: file, options: .atomic)
         return file
+    }
+
+    private static func nextRunLoopTurn() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
     }
 
     /// A file name for the page: its title, else its site, else "Page", without characters Files

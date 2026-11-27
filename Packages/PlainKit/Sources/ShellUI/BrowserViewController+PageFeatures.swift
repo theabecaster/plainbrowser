@@ -122,9 +122,12 @@ extension BrowserViewController {
         guard FixedChoices.translateHintShownOnce, !UserDefaults.standard.bool(forKey: key),
               let tab = currentTab, let language = tab.pageLanguage.flatMap(Self.languageName)
         else { return }
-        UserDefaults.standard.set(true, forKey: key)
+        let page = tab.url
         showToastWhenFree { [weak self, weak tab] in
-            guard let self, let tab, tab === self.currentTab, tab.translation == .original else { return }
+            guard let self, let tab, tab === self.currentTab, tab.url == page, tab.translationTarget != nil,
+                  tab.translation == .original, !UserDefaults.standard.bool(forKey: key)
+            else { return }
+            UserDefaults.standard.set(true, forKey: key)
             self.tabsUI.toast.show(String(localized: "This page is in \(language)"), button: "Translate") { [weak tab] in
                 tab?.translate()
             }
@@ -161,13 +164,22 @@ extension BrowserViewController {
         return (tab, webView)
     }
 
+    /// The export still acts on what the user chose: the same tab, web view and document.
+    private func isStillExporting(_ tab: Tab, _ webView: WKWebView, document: URL?) -> Bool {
+        guard currentTab === tab, presentedViewController == nil, webView.url == document, !webView.isLoading,
+              let current = exportTarget()
+        else { return false }
+        return current.webView === webView
+    }
+
     /// The system print sheet with the page's print formatter: paper, copies, range and printer
     /// are the system's, and the page's `@media print` styles apply.
     func printPage() {
         guard let (tab, webView) = exportTarget() else { return Haptic.nothingThere.play() }
+        let document = webView.url
         Task { [weak self] in
             await PageExport.loadLazyImages(in: webView)
-            guard let self, self.currentTab === tab, self.presentedViewController == nil else { return }
+            guard let self, self.isStillExporting(tab, webView, document: document) else { return }
             Signposts.signposter.emitEvent(Signposts.printPage)
             let info = UIPrintInfo(dictionary: nil)
             info.outputType = .general
@@ -184,16 +196,25 @@ extension BrowserViewController {
     func saveAsPDF() {
         guard let (tab, webView) = exportTarget() else { return Haptic.nothingThere.play() }
         let interval = Signposts.signposter.beginInterval(Signposts.exportPDF)
+        let document = webView.url
         Task { [weak self] in
             await PageExport.loadLazyImages(in: webView)
+            guard let self, self.isStillExporting(tab, webView, document: document) else {
+                return Signposts.signposter.endInterval(Signposts.exportPDF, interval, "cancelled")
+            }
             let title = tab.title
-            let data = await PageExport.pdf(of: webView, title: title)
+            let data = await PageExport.pdf(of: webView, title: title) { [weak self] in
+                self?.tabsUI.toast.show(String(localized: "Saving as PDF…"))
+            }
             let name = PageExport.fileName(title: title, url: tab.url)
             let file = await Task.detached(priority: .userInitiated) {
                 try? PageExport.writeTemporaryFile(data, named: name)
             }.value
             Signposts.signposter.endInterval(Signposts.exportPDF, interval)
-            guard let self, self.currentTab === tab, self.presentedViewController == nil else { return }
+            guard self.isStillExporting(tab, webView, document: document) else {
+                if let file { Task.detached { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) } }
+                return
+            }
             guard let file, !data.isEmpty else {
                 Haptic.nothingThere.play()
                 return self.tabsUI.toast.show("This page couldn't be saved as a PDF")

@@ -166,6 +166,10 @@ public enum FixedChoices {
     /// A saved PDF's name is the page title cut to this many characters: long titles stay
     /// recognizable in Files without becoming a paragraph.
     public static let exportFileNameLength = 100
+    /// A PDF longer than this many pages says "Saving as PDF…" while it is made: the first page
+    /// waits for the page's process to lay out the whole document (about 0.4 s for 120 pages on
+    /// the simulator), and a short document is done before a message could be read.
+    public static let exportProgressPages = 20
 
     // MARK: Cookie banners (docs/research/cookie-banners.md)
 

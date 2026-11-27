@@ -124,6 +124,8 @@ struct TranslationTests {
             const p = document.createElement('p'); p.id = 'late'; p.textContent = 'Un nouveau paragraphe arrive';
             document.body.prepend(p);
             document.getElementById('intro').firstChild.nodeValue = 'Le texte a changé. ';
+            const keep = document.createElement('span'); keep.id = 'keep'; keep.textContent = 'Toujours en français';
+            document.getElementById('skip').append(keep);
             """, in: tab)
         try await waitUntil("late text translated", timeout: .seconds(5)) {
             translator.requests.joined().contains("Un nouveau paragraphe arrive")
@@ -133,6 +135,8 @@ struct TranslationTests {
         try await waitUntil("changed text translated", timeout: .seconds(5)) {
             translator.requests.joined().contains("Le texte a changé.")
         }
+        #expect(try await text("keep", in: harness, tab: tab) == "Toujours en français", "added inside translate=no stays")
+        #expect(!translator.requests.joined().contains("Toujours en français"))
     }
 
     @Test func aFailureBringsThePageBack() async throws {

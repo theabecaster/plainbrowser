@@ -107,6 +107,8 @@ enum PageTranslation {
           // Translate after Show Original costs nothing.
           const cache = new Map();
           let active = false, reported = false, failed = false;
+          // Each start is a new run; answers from an earlier run are dropped.
+          let run = 0;
           let originals = new Map();   // text node -> its text before Plain touched it
           let written = new Map();     // text node -> the text Plain wrote (to tell our writes apart)
           let waiting = new Map();     // element on watch -> its text nodes, until it nears the screen
@@ -118,10 +120,17 @@ enum PageTranslation {
           const skipElement = (el) => SKIP.has(el.tagName) || el.isContentEditable ||
             el.getAttribute('translate') === 'no' || (el.classList && el.classList.contains('notranslate'));
 
+          // Inside code, a form field, translate="no" or an editor: never translated.
+          const excluded = (node) => {
+            for (let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement; el; el = el.parentElement) {
+              if (skipElement(el)) return true;
+            }
+            return false;
+          };
+
           const collect = (root) => {
-            if (root.nodeType === Node.TEXT_NODE) return consider(root);
-            if (root.nodeType !== Node.ELEMENT_NODE) return;
-            for (let el = root; el; el = el.parentElement) if (skipElement(el)) return;
+            if (root.nodeType === Node.TEXT_NODE) return excluded(root) ? undefined : consider(root);
+            if (root.nodeType !== Node.ELEMENT_NODE || excluded(root)) return;
             const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, { acceptNode: (n) =>
               n.nodeType === Node.ELEMENT_NODE && skipElement(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
             for (let n = walker.currentNode; n; n = walker.nextNode()) {
@@ -184,22 +193,27 @@ enum PageTranslation {
               }
               if (batch.length === 0) { if (!reported && originals.size > 0) { reported = true; report('translated'); } continue; }
               inFlight++;
+              const mine = run;
               h.postMessage({ type: 'translate', texts }).then((translations) => {
-                if (!active) return;
-                if (!Array.isArray(translations) || translations.length !== batch.length) return fail();
+                if (!active || mine !== run) return;
+                if (!Array.isArray(translations) || translations.length !== batch.length) return fail(mine);
                 batch.forEach(([node, original, key], i) => {
                   cache.set(key, translations[i]);
                   apply(node, original, translations[i]);
                 });
                 if (!reported) { reported = true; report('translated'); }
-              }, fail).finally(() => { inFlight--; scheduleFlush(); });
+              }, () => fail(mine)).finally(() => {
+                if (mine !== run) return;
+                inFlight--;
+                scheduleFlush();
+              });
             }
           };
 
           // A batch that can't be translated puts the whole page back: half a translation is
           // worse than none.
-          const fail = () => {
-            if (!active || failed) return;
+          const fail = (mine) => {
+            if (!active || failed || mine !== run) return;
             failed = true;
             restore();
             report('failed');
@@ -211,23 +225,30 @@ enum PageTranslation {
             mutationTimer = setTimeout(() => {
               mutationTimer = 0;
               const pending = records; records = [];
+              let removed = false;
               for (const record of pending) {
                 if (record.type === 'characterData') {
                   const node = record.target;
                   if (written.get(node) === node.nodeValue) continue;
                   // The page changed text Plain had translated: its new text is the original now.
                   originals.delete(node); written.delete(node);
-                  consider(node);
+                  if (node.isConnected && !excluded(node)) consider(node);
                 } else {
                   for (const node of record.addedNodes) collect(node);
+                  if (record.removedNodes.length > 0) removed = true;
                 }
+              }
+              // Text the page took away is let go, so an endless page doesn't keep it alive.
+              if (removed) {
+                for (const node of originals.keys()) if (!node.isConnected) { originals.delete(node); written.delete(node); }
+                for (const el of waiting.keys()) if (!el.isConnected) { waiting.delete(el); visible.unobserve(el); }
               }
             }, MUTATION_DELAY);
           };
 
           const start = () => {
             if (active) return;
-            active = true; reported = false; failed = false;
+            active = true; reported = false; failed = false; run++; inFlight = 0;
             visible = new IntersectionObserver(nearScreen, { rootMargin: '\(FixedChoices.translateLookahead) 0px' });
             mutations = new MutationObserver(onMutations);
             mutations.observe(document.body || document.documentElement, { childList: true, characterData: true, subtree: true });

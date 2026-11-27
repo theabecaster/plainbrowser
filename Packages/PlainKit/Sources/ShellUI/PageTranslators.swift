@@ -25,6 +25,9 @@ final class AppleTranslator: PageTranslator {
     private var targets: [String: Locale.Language?] = [:]
     /// One session per pair, reused for every batch.
     private var sessions: [String: SessionBox] = [:]
+    /// The last batch asked of each session: batches run one after another, never two at once on
+    /// one session (the framework's session is not `Sendable`).
+    private var lastBatch: [String: Task<Void, Never>] = [:]
 
     func target(for language: Locale.Language) async -> Locale.Language? {
         let key = language.maximalIdentifier
@@ -58,8 +61,14 @@ final class AppleTranslator: PageTranslator {
         let key = "\(source.maximalIdentifier)>\(target.maximalIdentifier)"
         let box = sessions[key] ?? SessionBox(source: source, target: target)
         sessions[key] = box
+        let previous = lastBatch[key]
+        let batch = Task { () -> Result<[String], any Error> in
+            await previous?.value
+            do { return .success(try await box.translate(texts)) } catch { return .failure(error) }
+        }
+        lastBatch[key] = Task { _ = await batch.value }
         do {
-            return try await box.translate(texts)
+            return try await batch.value.get()
         } catch {
             // A language deleted in Settings since the page was checked: ask again, once.
             logger.notice("translation failed: \(String(describing: error), privacy: .public)")
@@ -111,8 +120,8 @@ final class AppleTranslator: PageTranslator {
     }
 }
 
-/// A session and its pair. The framework's session is not `Sendable`; it is only ever used from
-/// `translate`, one batch at a time per page, and the framework does the work off the main thread.
+/// A session and its pair. The framework's session is not `Sendable`: `AppleTranslator` chains the
+/// batches so one session never runs two at once, and the framework works off the main thread.
 private nonisolated final class SessionBox: @unchecked Sendable {
     let session: TranslationSession
 

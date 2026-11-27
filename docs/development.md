@@ -175,7 +175,9 @@ recordVideo --display=<id>` (the 2007x2853 one) while the capture runs. Device H
 window stands in for the inner screen: launch the app, run `xcrun devicectl device appResize start
 --device <sim> --preferred-size 951x669` (or `669x951`) and capture `simctl io <sim> screenshot
 --display=Resizable`; add `-PlainIgnoreOcclusions`, since that window still reports the outer
-screen's sensor regions. Limits in `docs/research/notes.md`.
+screen's sensor regions, and `-PlainStatusRegion 807,0,144,82` (landscape; `525,0,144,82` in
+portrait) to stand in for the status items' region the unfolded Duo reports, so the status row
+reads it as the device does. Limits in `docs/research/notes.md`.
 
 ## TestFlight
 

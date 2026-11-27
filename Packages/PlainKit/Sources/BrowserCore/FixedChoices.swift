@@ -494,11 +494,40 @@ public enum FixedChoices {
     /// The room Plain leaves for the status bar's time beside a camera the status items wrap, used
     /// only where the system reports the camera (an occlusion region inside the top safe area) but
     /// no corner-adaptive guide says how far the items reach. It is an allowance for the time's
-    /// text (the widest, "12:59", in the status bar's font), not a screen measurement: the
-    /// camera's place still comes from the system. Checked against the Duo's inner screen, where
-    /// the time starts 57 pt before the camera. The top bar's row stops this far (plus its gap)
-    /// before the camera.
-    public static let statusItemsReach: Double = 64
+    /// text, not a screen measurement: the camera's place still comes from the system. Calibrated
+    /// on the owner's screenshot of the Duo's inner screen (landscape, 3x): the time "11:08"
+    /// starts at x 831.7 pt, 53 pt before the camera (884.7), the battery ring wraps the camera
+    /// (883–924) and the indicators above the time start further right (845.7). Plus 4 pt for a
+    /// wider time ("10:58", "12:00": the 1s are the narrow digits). The top bar's trailing capsule
+    /// then ends `statusItemsGap` (8 pt) before that: 12 pt before "11:08", at least
+    /// 8 before any 12-hour time. Was 64 (with a 12 pt gap: 23 pt short of the clock, which the
+    /// owner saw as the buttons stopping too far from the status items).
+    public static let statusItemsReach: Double = 57
+    /// How far inside the status items' own occlusion region their left edge is taken to be,
+    /// where the region's margins don't say more. The region pads the items for interactive
+    /// content: on the Duo's inner screen it starts at x 807 and the time at 831 (Device Hub's
+    /// simulator, landscape, matching the owner's device screenshot). 24 less 4 pt for a wider
+    /// time. Taking the region's edge itself left Tabs, Share and More 32 pt from the clock;
+    /// treating the region as a camera (and reaching 64 pt past it, the build the owner tried)
+    /// left them about 100 pt away, with the strip cut there too.
+    public static let statusRegionPadding: Double = 20
+    /// How far above the bottom of the status items' own region the top bar's row ends, where
+    /// the region's margins don't place the items: they sit low in it (Duo inner screen: region
+    /// 0–82, items 27–69), so a 44 pt row ending 12 pt above the bottom (26–70) is centered on
+    /// them. Centered on the region instead, the row sat 7 pt above the clock (design review).
+    public static let statusRegionBottomPadding: Double = 12
+    /// How far past the safe area's top a status-zone region may end and still count as inside
+    /// it: rounding, since the Duo's inner screen reports a safe area of 81 or 82 pt against a
+    /// region ending at 82. Used where the corner is read and where the lanes skip its regions,
+    /// so both agree.
+    public static let statusZoneRounding: Double = 2
+    /// Between the top bar's end (Tabs, Share and More) and the status items' left edge (the
+    /// clock) on the Duo's inner screen: the glass sits snug beside them without touching, at the
+    /// bar's own spacing (its capsules sit 6 pt from the address). Was 12 on top of a 64 pt
+    /// reach past the status region, which left the capsule about 100 pt short of the clock on
+    /// the device (owner: "spaced properly next to the status bar Wi-Fi and all the other
+    /// indicators").
+    public static let statusItemsGap: Double = 8
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375

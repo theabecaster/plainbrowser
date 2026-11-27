@@ -32,9 +32,9 @@ final class TopBarLayout {
     /// The row keeps clear of the status items' corner: its distance from each edge.
     var leadingClearance: [NSLayoutConstraint] = []
     var trailingClearance: [NSLayoutConstraint] = []
-    /// The strip's distance from the leading and trailing edges, past the status corner where it
-    /// starts beside it (`TopChromeGeometry.stripClearance`); empty without a strip.
-    var stripClearance: [NSLayoutConstraint] = []
+    /// The strip's leading and trailing edges from the root view's (`placeStrip`); empty without
+    /// a strip.
+    var stripEnds: [NSLayoutConstraint] = []
     var isPillOnTop = false
     var isBarOnTop = false
 }
@@ -63,7 +63,7 @@ extension BrowserViewController {
         let top = duo.top
         let safe = view.safeAreaLayoutGuide
         let lane = duo.chromeLane
-        let margin = Spacing.m
+        let margin = TopChromeGeometry.edgeMargin
         let gap = ChromeGeometry.gap
         top.pillHeight = pill.heightAnchor.constraint(equalToConstant: ChromeGeometry.pillHeight)
         top.toastOverPill = tabsUI.toast.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s)
@@ -127,32 +127,39 @@ extension BrowserViewController {
 
     // MARK: The status zone
 
-    /// The corner the status items keep to, from the safe area and its corner-adaptive guide, or
-    /// else the camera they wrap (`StatusCorner`); nil under a full-width status bar. Read before
+    /// The corner the status items keep to, from the safe area and its corner-adaptive guide and
+    /// the camera they wrap (`StatusCorner.read`); nil under a full-width status bar. Read before
     /// each layout pass where a top bar may show; never from the device or the screen.
     func readStatusCorner() -> CGRect? {
         guard wantsHorizontalBars else { return nil }
         #if DEBUG
         // Captures on the simulator, whose status bar spans the width: the device's corner.
-        if let forced = Self.debugStatusCorner { return forced }
+        if let forced = Self.debugStatusCorner {
+            duo.statusCornerSource = "forced"
+            return forced
+        }
         #endif
         let safe = view.safeAreaInsets
         let adapted = view.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))
-        // The corner-adaptive guide first; else the camera the status items wrap, where the safe
-        // area's top is there to clear it.
-        let corner = StatusCorner.rect(
+        let regions = view.reservedRegions(kind: .occlusion, options: .includeInactive)
+        var corners = regions.map { StatusCorner.Region(frame: $0.frame, reserved: $0.frame.inset(by: $0.margins)) }
+        #if DEBUG
+        if let region = Self.debugStatusRegion { corners = [StatusCorner.Region(frame: region)] }
+        #endif
+        let found = StatusCorner.read(
             width: view.bounds.width, safeTop: safe.top, safeLeft: safe.left, safeRight: safe.right,
-            adaptedTop: adapted.top, adaptedLeft: adapted.left, adaptedRight: adapted.right
-        ) ?? StatusCorner.rect(
-            aroundOcclusions: view.reservedRegions(kind: .occlusion, options: .includeInactive).map(\.frame),
-            width: view.bounds.width, safeTop: safe.top
+            adaptedTop: adapted.top, adaptedLeft: adapted.left, adaptedRight: adapted.right,
+            occlusions: corners
         )
-        let reading = StatusZoneReading(size: view.bounds.size, safe: safe, adapted: adapted)
+        duo.statusCornerSource = found?.source.rawValue ?? "none"
+        // The regions arrive after the first layout pass (and change with a fold), so they are
+        // part of what is compared.
+        let reading = StatusZoneReading(size: view.bounds.size, safe: safe, adapted: adapted, occlusions: regions)
         if reading != duo.lastStatusReading {
             duo.lastStatusReading = reading
-            logStatusZone(safe: safe, adapted: adapted, corner: corner)
+            logStatusZone(safe: safe, adapted: adapted, regions: regions, corner: found)
         }
-        return corner
+        return found?.rect
     }
 
     /// The top bar's geometry for the current bounds, safe area and status corner.
@@ -175,11 +182,6 @@ extension BrowserViewController {
         let clearance = geometry.rowClearance
         for constraint in top.leadingClearance { Self.set(constraint, clearance.leading) }
         for constraint in top.trailingClearance { Self.set(constraint, -clearance.trailing) }
-        if top.stripClearance.count == 2 {
-            let strip = geometry.stripClearance
-            Self.set(top.stripClearance[0], strip.leading)
-            Self.set(top.stripClearance[1], -strip.trailing)
-        }
     }
 
     /// The rail's first row sits on the top bar's row where the status zone beside it is empty
@@ -202,27 +204,71 @@ extension BrowserViewController {
     #if DEBUG
     /// `-PlainStatusCorner x,y,width,height` (Debug builds): a status corner for the simulator,
     /// whose status bar spans the width.
-    static let debugStatusCorner: CGRect? = {
+    static let debugStatusCorner: CGRect? = debugRect("-PlainStatusCorner")
+
+    /// `-PlainStatusRegion x,y,width,height` (Debug builds): the status items' occlusion region,
+    /// as Device Hub's unfolded Duo reports it (landscape `807,0,144,82`), in place of the
+    /// regions the simulator's resizable window reports (the outer screen's), so captures there
+    /// run the same reading and lanes as the device.
+    static let debugStatusRegion: CGRect? = debugRect("-PlainStatusRegion")
+
+    private static func debugRect(_ flag: String) -> CGRect? {
         let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: "-PlainStatusCorner"), index + 1 < arguments.count else { return nil }
+        guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
         let values = arguments[index + 1].split(separator: ",").compactMap { Double($0) }
         guard values.count == 4 else { return nil }
         return CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
-    }()
+    }
     #endif
 
     /// Logs the safe area, both corner-adaptive guides and the occlusion regions (none of them
-    /// private) when the bounds or the guides change, so the device's numbers can be read back
-    /// from the console (`duo` category). Not per layout pass.
-    private func logStatusZone(safe: UIEdgeInsets, adapted: UIEdgeInsets, corner: CGRect?) {
+    /// private, each with whether it is active) when the bounds, the guides or the regions
+    /// change, so the device's numbers can be read back from the console (`duo` category, notice
+    /// level, so it is kept on the device). Not per layout pass.
+    private func logStatusZone(
+        safe: UIEdgeInsets, adapted: UIEdgeInsets, regions: [UIView.ReservedRegion],
+        corner: (rect: CGRect, source: StatusCorner.Source)?
+    ) {
         let vertical = view.edgeInsets(for: .safeArea(cornerAdaptation: .vertical))
         let margins = view.edgeInsets(for: .margins(cornerAdaptation: .horizontal))
-        let occlusions = view.reservedRegions(kind: .occlusion, options: .includeInactive).map(\.frame)
-        DuoUIState.logger.debug("""
+        let occlusions = regions.map { "\($0.frame) margins \($0.margins)\($0.isActive ? " active" : "")" }
+            .joined(separator: ", ")
+        let found = corner.map { "\($0.rect) from \($0.source.rawValue)" } ?? "none"
+        DuoUIState.logger.notice("""
             status zone: bounds \(String(describing: self.view.bounds.size), privacy: .public) \
             safe \(String(describing: safe), privacy: .public) horizontal \(String(describing: adapted), privacy: .public) \
             vertical \(String(describing: vertical), privacy: .public) margins \(String(describing: margins), privacy: .public) \
-            occlusions \(String(describing: occlusions), privacy: .public) corner \(String(describing: corner), privacy: .public)
+            occlusions [\(occlusions, privacy: .public)] corner \(found, privacy: .public)
+            """)
+    }
+
+    /// Logs where the top bar's pieces ended up (`duo` category, notice level, so it is kept on the
+    /// device): the status corner and what it was read from, the row, and the laid-out frames of
+    /// the Back/Forward and Tabs/Share/More capsules (their glass, the button bar's ends), the
+    /// address pill and the strip, untransformed, with how far the trailing capsule ends before
+    /// the corner. Called after a layout pass that changed the geometry (a rotation, a fold, the
+    /// strip coming or going), never per frame.
+    func logTopChrome(_ geometry: TopChromeGeometry) {
+        func frame(_ view: UIView?) -> String {
+            guard let view, view.superview != nil else { return "none" }
+            let rect = CGRect(
+                x: view.center.x - view.bounds.width / 2, y: view.center.y - view.bounds.height / 2,
+                width: view.bounds.width, height: view.bounds.height
+            )
+            return String(format: "%.1f,%.1f %.1fx%.1f", rect.minX, rect.minY, rect.width, rect.height)
+        }
+        let bar = frame(buttonBar)
+        let leading = buttonBar.center.x - buttonBar.bounds.width / 2
+        let trailing = leading + buttonBar.bounds.width
+        let toCorner = geometry.corner.map { String(format: "%.1f", $0.minX - trailing) } ?? "-"
+        DuoUIState.logger.notice("""
+            top chrome: width \(geometry.width, format: .fixed(precision: 1)) safeTop \(geometry.safeTop, format: .fixed(precision: 1)) \
+            corner \(String(describing: geometry.corner), privacy: .public) from \(self.duo.statusCornerSource, privacy: .public) \
+            row \(geometry.rowTop, format: .fixed(precision: 1))-\(geometry.rowBottom, format: .fixed(precision: 1)) \
+            buttons \(bar, privacy: .public) (capsules \(leading, format: .fixed(precision: 1))…\(trailing, format: .fixed(precision: 1)), \
+            \(toCorner, privacy: .public) pt before the corner) pill \(frame(self.pill), privacy: .public) \
+            strip \(frame(self.duo.strip?.view), privacy: .public) stripTop \(geometry.stripTop, format: .fixed(precision: 1)) \
+            pageTop \(geometry.expandedInset, format: .fixed(precision: 1))
             """)
     }
 
@@ -383,5 +429,7 @@ struct StatusZoneReading: Equatable {
     var size: CGSize
     var safe: UIEdgeInsets
     var adapted: UIEdgeInsets
+    /// Frames, margins and whether each is active: a change to any can move the corner.
+    var occlusions: [UIView.ReservedRegion]
 }
 #endif

@@ -41,7 +41,7 @@ extension BrowserViewController {
                 strip.removeFromParent()
                 duo.strip = nil
                 duo.top.stripTop = nil
-                duo.top.stripClearance = []
+                duo.top.stripEnds = []
             }
             return
         }
@@ -57,31 +57,32 @@ extension BrowserViewController {
         // Under the row, from the root view's top (`applyTopBarPlacement` keeps it there).
         let geometry = makeTopGeometry(stripHeight: layout.stripHeight)
         let top = strip.view.topAnchor.constraint(equalTo: view.topAnchor, constant: geometry.stripTop)
-        // Across the lane, unless it starts beside the status corner (`stripClearance`).
-        let lane = duo.chromeLane
-        let leading = strip.view.leadingAnchor.constraint(equalTo: lane.leadingAnchor, constant: Spacing.m)
-        leading.priority = .defaultHigh
-        let trailing = strip.view.trailingAnchor.constraint(equalTo: lane.trailingAnchor, constant: -Spacing.m)
-        trailing.priority = .defaultHigh
-        let clearance = geometry.stripClearance
-        let clearLeading = strip.view.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: clearance.leading)
-        let clearTrailing = strip.view.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -clearance.trailing)
-        NSLayoutConstraint.activate([
+        // Across its whole lane, under the status items too (`TopChromeGeometry.stripTop` starts
+        // it below them): the screen's margin at each end, never stopping at the status corner
+        // or the camera beside the row (`DuoLayout.stripLane`). Constants set by `placeStrip`.
+        let ends = [
+            strip.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            strip.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ]
+        NSLayoutConstraint.activate(ends + [
             top,
-            leading,
-            trailing,
-            strip.view.leadingAnchor.constraint(greaterThanOrEqualTo: lane.leadingAnchor, constant: Spacing.m),
-            strip.view.trailingAnchor.constraint(lessThanOrEqualTo: lane.trailingAnchor, constant: -Spacing.m),
-            clearLeading,
-            clearTrailing,
             strip.view.heightAnchor.constraint(equalToConstant: layout.stripHeight),
         ])
-        duo.top.stripClearance = [clearLeading, clearTrailing]
+        duo.top.stripEnds = ends
         strip.didMove(toParent: self)
         duo.strip = strip
         duo.top.stripTop = top
+        placeStrip(layout)
         // It comes in at the bar's state: hidden while the bar is collapsed.
         if let geometry = duo.topGeometry { applyTopBarCollapse(collapseProgress, geometry: geometry) }
+    }
+
+    /// The strip's ends: `TopChromeGeometry.edgeMargin` inside its lane, from the root view's edges.
+    func placeStrip(_ layout: DuoLayout) {
+        guard duo.top.stripEnds.count == 2 else { return }
+        let margin = TopChromeGeometry.edgeMargin
+        duo.top.stripEnds[0].constant = layout.stripLane.lowerBound + margin
+        duo.top.stripEnds[1].constant = layout.stripLane.upperBound - view.bounds.width - margin
     }
 
     /// The topmost of the page area's views (panes, strip, sidebar): the gallery goes above it.

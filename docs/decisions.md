@@ -1300,6 +1300,9 @@ simulator's 24 pt status bar had hidden this.
   address and Tabs/Share/More are centered on the corner's vertical middle, and the row's trailing
   end stops 12 pt before the corner. Nothing above the row is Plain's: the page runs to the top
   edge under the zone and the floating glass (no band, the owner's rule for the bottom pill).
+  **Updated** by "Duo inner screen: the strip runs under the status items, the buttons sit beside
+  them" below: the status items' own region, an 8 pt gap, a 57 pt reach, and a strip that always
+  spans the lane.
 - **How the corner is found (no device geometry), in order:**
   1. `UIView.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))`, the iOS 26 guide for
      "bar-like content at the top of a scene" beside a corner element (iPadOS's window controls).
@@ -1994,3 +1997,48 @@ The shell and engine items left from docs/research/ux-audit.md.
   Plain is iPhone-only), never from the device model. An empty private tab's shortcut says
   "Regular Tab", since it leaves private browsing.
 - **Sheets' empty states** are `PaperEmptyState`: symbol and sentence in ink secondary, body text.
+## Duo inner screen: the strip runs under the status items, the buttons sit beside them (2026-11-27)
+
+Owner, on the device, inner screen, both orientations: "the tabs are getting cut. The tabs should
+go all the way to under the status bar icons. The tabs, share and options buttons can go all the
+way to the right as much as they can, spaced properly next to the status bar Wi-Fi and all the
+other indicators."
+
+- **Cause.** The system reports the status items as an active occlusion region of their own
+  (Device Hub's iPhone Duo simulator, unfolded, landscape: x 807–951, y 0–82, the safe area's
+  height; the items drawn at 831–924 x 27–69, as in the owner's device screenshot). Plain read that
+  region as the camera and reached 64 pt past it for the clock: the corner started at 743 and the
+  row ended 12 pt before it, at 731, about 100 pt short of the time. The strip started at 67,
+  beside that 0–82 corner, so it stopped where the row did (`stripClearance`): the cut. And the
+  chrome lane avoided the region's frame (its margins included), so nothing could pass 795.
+- **Chosen:** read the status region as what it is (`StatusCorner.statusRegion`): a corner region
+  that reaches the screen's side edge. Its frame pads the items for interactive content; their
+  left edge is taken `FixedChoices.statusRegionPadding` (20 pt) inside it, or where the region's
+  margins say, whichever is further in (24 pt measured, less 4 for a wider time). A region clear
+  of the edge is still a camera, with `statusItemsReach` recalibrated to 57 pt (the time starts 53
+  pt before the camera; was 64). Tabs, Share and More end `cornerGap` (8 pt, was 12) before the
+  items' edge. The regions inside the status corner no longer cut the lane
+  (`DuoLayoutInput.statusCorner`): the bar keeps clear of the corner itself.
+- **The strip always spans the lane, under the status items** (`TopChromeGeometry.stripTop` =
+  the lower of the row's bottom and the corner's, + 4), to the screen's 12 pt margin at both ends;
+  it never stops beside the corner (`stripClearance` is gone). It has its own lane
+  (`DuoLayout.stripLane`), cut only by regions in its own band. On its way out it still rises only
+  to the corner's bottom.
+- **Numbers, landscape** (951 wide, region 807–951 x 0–82, margins read as zero): the corner
+  starts at 827; the row 26–70, centered on the items (12 pt above the region's bottom,
+  `statusRegionBottomPadding`; centered on the region, 19–63, it sat 7 pt above the clock: design
+  review); the trailing capsule 687–819, 12 pt before the time (was 731); the address 560 pt at
+  121–681; the strip 12–939 at 74; the page's first line at 112 with the strip, 74 without. If
+  the region's margins hug the items: capsule to 823 (8 pt), the rest the same. **Portrait**
+  (669 wide, the region assumed at the same distance from the trailing edge): capsule 405–537,
+  the address filling 106–399, the strip 12–657.
+- **Phones and the outer screen are unchanged:** no top bar, no corner, `stripLane` equals the
+  chrome lane, and the bottom pill's numbers are pinned (`PhonesAndOuterScreenUnchangedTests`).
+- **Diagnostics for the device** (`duo` category, notice level, kept on the device): `status
+  zone:` logs the safe area, the guides and every occlusion region with its margins and whether
+  it is active, whenever any of them changes; `top chrome:` logs the corner and its source, the
+  row, the button bar's frame with how far the trailing capsule ends before the corner, the
+  pill's and the strip's frames and the page's top, after each layout pass that changes the
+  geometry.
+- **Not verified:** the region's margins and the portrait region (Device Hub could not be driven
+  from the test Macs: no UI scripting there). The logs above settle both.

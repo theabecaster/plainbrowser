@@ -549,6 +549,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         guard next != geometry || top != duo.topGeometry else { return }
         geometry = next
         duo.topGeometry = top
+        if let top { logTopChrome(top) }
         applyCollapse(collapse.progress)
         // During a fold or rotation the insets wait for the transition's completion.
         if !duo.isResizing { updatePageInsets() }

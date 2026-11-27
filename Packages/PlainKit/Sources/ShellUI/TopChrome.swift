@@ -44,28 +44,152 @@ enum StatusCorner {
         return nil
     }
 
-    /// The corner around a camera the status items wrap, where the guide reports none: an
-    /// occlusion region (`reservedRegions(kind: .occlusion, options: .includeInactive)`) inside the
-    /// top safe area, in the outer quarter of the width at either side. The Duo's inner screen
-    /// reports its camera so (37 pt at x 885–922, y 29–66 in landscape), its safe area's top
-    /// (81 pt) clears it, and the clock and battery ring sit around it. The corner reaches
-    /// `FixedChoices.statusItemsReach` past the camera toward the middle (the clock) and is
-    /// centered on the camera's row, at least a row high. Nil for anything else: a full-width
-    /// band (the outer screen's Dynamic Island) or a region below the safe area's top.
-    static func rect(aroundOcclusions regions: [CGRect], width: CGFloat, safeTop: CGFloat) -> CGRect? {
-        let reach = CGFloat(FixedChoices.statusItemsReach)
-        for region in regions where region.height > 0 && region.minY < safeTop && region.maxY <= safeTop + 0.5 {
-            let half = max(region.height, TopChromeGeometry.rowHeight) / 2
-            let top = max(0, region.midY - half)
-            let height = region.midY + half - top
-            if region.minX >= width * 0.75 {
-                return CGRect(x: region.minX - reach, y: top, width: width - region.minX + reach, height: height)
+    /// An occlusion region as UIKit reports it (`UIView.ReservedRegion`): its frame, which
+    /// includes the margins it keeps around the element for interactive content, and the
+    /// element's own rect inside them (the frame less `margins`).
+    struct Region: Equatable, Sendable {
+        var frame: CGRect
+        var reserved: CGRect
+
+        init(frame: CGRect, reserved: CGRect? = nil) {
+            self.frame = frame
+            self.reserved = reserved ?? frame
+        }
+    }
+
+    /// What the corner was read from, for the `duo` log.
+    enum Source: String, Sendable {
+        /// The status items' own occlusion region (the Duo's inner screen, Device Hub's simulator).
+        case statusRegion
+        /// The corner-adaptive guide alone.
+        case guide
+        /// The camera the status items wrap, plus `FixedChoices.statusItemsReach`.
+        case camera
+        /// The guide's reach across, the camera's row up and down.
+        case guideAndCamera
+    }
+
+    /// The corner from everything the system reports, in order:
+    /// 1. The status items' own occlusion region (`statusRegion(in:...)`): the most direct word.
+    /// 2. The guide (`rect(width:safeTop:...)`), which says how far across the status items reach;
+    ///    with a camera they wrap on the same side (`camera(in:...)`), the camera's row up and down:
+    ///    the battery ring is drawn around it, the clock beside it (the device: items at y 27–69,
+    ///    the camera's middle at 47.8), where a guide band from the screen's top to the safe
+    ///    area's (0–81) would put the row above the items.
+    /// 3. The camera alone.
+    static func read(
+        width: CGFloat, safeTop: CGFloat, safeLeft: CGFloat, safeRight: CGFloat,
+        adaptedTop: CGFloat, adaptedLeft: CGFloat, adaptedRight: CGFloat, occlusions: [Region]
+    ) -> (rect: CGRect, source: Source)? {
+        if let region = statusRegion(in: occlusions, width: width, safeTop: safeTop) {
+            return (region, .statusRegion)
+        }
+        let guide = rect(
+            width: width, safeTop: safeTop, safeLeft: safeLeft, safeRight: safeRight,
+            adaptedTop: adaptedTop, adaptedLeft: adaptedLeft, adaptedRight: adaptedRight
+        )
+        let camera = camera(in: occlusions, width: width, safeTop: safeTop)
+        switch (guide, camera) {
+        case let (guide?, camera?) where (guide.midX > width / 2) == (camera.midX > width / 2):
+            return (CGRect(x: guide.minX, y: camera.minY, width: guide.width, height: camera.height), .guideAndCamera)
+        case let (guide?, _):
+            return (guide, .guide)
+        case let (nil, camera?):
+            return (camera, .camera)
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    /// `read` with plain frames (no margins), for tests.
+    static func read(
+        width: CGFloat, safeTop: CGFloat, safeLeft: CGFloat, safeRight: CGFloat,
+        adaptedTop: CGFloat, adaptedLeft: CGFloat, adaptedRight: CGFloat, occlusions: [CGRect]
+    ) -> (rect: CGRect, source: Source)? {
+        read(
+            width: width, safeTop: safeTop, safeLeft: safeLeft, safeRight: safeRight, adaptedTop: adaptedTop,
+            adaptedLeft: adaptedLeft, adaptedRight: adaptedRight, occlusions: occlusions.map { Region(frame: $0) }
+        )
+    }
+
+    /// A region that can hold the status items: inside the top safe area, in the outer quarter
+    /// of the width at either side (true for the trailing side), nil for anything else: a
+    /// full-width band (the outer screen's Dynamic Island) or a region below the safe area's top.
+    private static func cornerSide(_ region: Region, width: CGFloat, safeTop: CGFloat) -> Bool? {
+        let frame = region.frame
+        // A point or two past the safe area's top is rounding (`FixedChoices.statusZoneRounding`).
+        let rounding = CGFloat(FixedChoices.statusZoneRounding)
+        guard frame.height > 0, frame.minY < safeTop, frame.maxY <= safeTop + rounding else { return nil }
+        if frame.minX >= width * 0.75 { return true }
+        if frame.maxX <= width * 0.25 { return false }
+        return nil
+    }
+
+    /// The row a corner element sits on: centered on it, at least a row high, never above the top.
+    private static func band(around rect: CGRect) -> (top: CGFloat, height: CGFloat) {
+        let half = max(rect.height, TopChromeGeometry.rowHeight) / 2
+        let top = max(0, rect.midY - half)
+        return (top, rect.midY + half - top)
+    }
+
+    /// The status items' own region: a corner region that reaches the screen's side edge. The
+    /// Duo's inner screen reports one (Device Hub's simulator, landscape: 807–951 x 0–82, the
+    /// safe area's height, active) around the time, the indicators and the battery ring, which
+    /// are drawn at 831–924 x 27–69, as on the device. The frame includes margins kept for
+    /// interactive content; the items start `FixedChoices.statusRegionPadding` inside it, or where
+    /// the region's own margins say, whichever is further in. The row is centered on the items:
+    /// on the region's reserved rect where its margins make that shorter than the frame, else a
+    /// row high, `FixedChoices.statusRegionBottomPadding` above the region's bottom (the items'
+    /// middle at 48 in 0–82; the frame's own middle, 41, put the row 7 pt above them).
+    static func statusRegion(in regions: [Region], width: CGFloat, safeTop: CGFloat) -> CGRect? {
+        let padding = CGFloat(FixedChoices.statusRegionPadding)
+        for region in regions {
+            guard let trailing = cornerSide(region, width: width, safeTop: safeTop) else { continue }
+            let frame = region.frame
+            let reserved = region.reserved
+            let rowHeight = TopChromeGeometry.rowHeight
+            let items = reserved.height < frame.height - 0.5 ? reserved : CGRect(
+                x: reserved.minX, y: frame.maxY - CGFloat(FixedChoices.statusRegionBottomPadding) - rowHeight,
+                width: reserved.width, height: rowHeight
+            )
+            let band = band(around: items)
+            if trailing, frame.maxX >= width - 0.5 {
+                let left = min(max(region.reserved.minX, frame.minX + padding), width)
+                return CGRect(x: left, y: band.top, width: width - left, height: band.height)
             }
-            if region.maxX <= width * 0.25 {
-                return CGRect(x: 0, y: top, width: region.maxX + reach, height: height)
+            if !trailing, frame.minX <= 0.5 {
+                let right = max(min(region.reserved.maxX, frame.maxX - padding), 0)
+                return CGRect(x: 0, y: band.top, width: right, height: band.height)
             }
         }
         return nil
+    }
+
+    /// The corner around a camera the status items wrap: a corner region clear of the side
+    /// edge. The simulator's resizable window reports the Duo's inner camera so (37 pt at
+    /// x 885–922, y 29–66 in landscape), its safe area's top (81 pt) clears it, and the clock and
+    /// battery ring sit around it. The corner reaches `FixedChoices.statusItemsReach` past the
+    /// camera toward the middle (the clock's left edge) and is centered on the camera's row, at
+    /// least a row high.
+    static func camera(in regions: [Region], width: CGFloat, safeTop: CGFloat) -> CGRect? {
+        let reach = CGFloat(FixedChoices.statusItemsReach)
+        for region in regions {
+            guard let trailing = cornerSide(region, width: width, safeTop: safeTop) else { continue }
+            let camera = region.reserved
+            let band = band(around: camera)
+            if trailing {
+                return CGRect(x: camera.minX - reach, y: band.top, width: width - camera.minX + reach, height: band.height)
+            }
+            return CGRect(x: 0, y: band.top, width: camera.maxX + reach, height: band.height)
+        }
+        return nil
+    }
+
+    /// The corner from occlusion frames alone (no guide): the status items' region, else a
+    /// camera. For tests.
+    static func rect(aroundOcclusions frames: [CGRect], width: CGFloat, safeTop: CGFloat) -> CGRect? {
+        let regions = frames.map { Region(frame: $0) }
+        return statusRegion(in: regions, width: width, safeTop: safeTop) ?? camera(in: regions, width: width, safeTop: safeTop)
     }
 }
 
@@ -100,8 +224,11 @@ struct TopChromeGeometry: Equatable {
     static let topGap: CGFloat = 2
     /// Between the row and the strip, and under the lowest of them.
     static let gap: CGFloat = 4
-    /// Between the row's end and the status items' corner: the glass never touches the clock.
-    static let cornerGap: CGFloat = 12
+    /// Between the screen's (the lane's) edges and the capsules, the pill and the strip:
+    /// `Spacing.m`.
+    static let edgeMargin: CGFloat = 12
+    /// Between the row's end and the status items' left edge (`FixedChoices.statusItemsGap`).
+    static var cornerGap: CGFloat { CGFloat(FixedChoices.statusItemsGap) }
     /// The collapsed pill's size relative to the expanded one.
     static var compactScale: CGFloat { CGFloat(FixedChoices.topBarCollapsedScale) }
 
@@ -127,15 +254,48 @@ struct TopChromeGeometry: Equatable {
         return onTrailing ? (0, clearance) : (clearance, 0)
     }
 
-    /// The strip's top, under the row.
-    var stripTop: CGFloat { rowBottom + Self.gap }
-
-    /// How far the strip keeps from each edge: the row's clearance where the strip starts beside
-    /// the status corner (a corner reaching below the row), else nothing.
-    var stripClearance: (leading: CGFloat, trailing: CGFloat) {
-        guard let corner, stripTop < corner.maxY else { return (0, 0) }
-        return rowClearance
+    /// Where the row's pieces land in `lane` (the chrome lane's x range), as the top bar's
+    /// constraints place them (`makeTopBarConstraints`): the button bar from the lane's margin to
+    /// the status corner's clearance, its two capsules (`leadingCapsule` and `trailingCapsule`
+    /// wide) at its ends; the address pill as wide as the room between them allows, up to
+    /// `FixedChoices.topBarPillMaxWidth`, then as near the lane's center as that leaves it. For
+    /// tests: the device's numbers in both orientations.
+    func rowFrames(
+        lane: ClosedRange<CGFloat>, leadingCapsule: CGFloat, trailingCapsule: CGFloat
+    ) -> (leadingCapsule: CGRect, pill: CGRect, trailingCapsule: CGRect) {
+        let clearance = rowClearance
+        let margin = Self.edgeMargin
+        let gap = ChromeGeometry.gap
+        let barStart = max(lane.lowerBound + margin, clearance.leading)
+        let barEnd = min(lane.upperBound - margin, width - clearance.trailing)
+        let pillStart = max(barStart, barStart + leadingCapsule + gap)
+        let pillEnd = min(barEnd, barEnd - trailingCapsule - gap)
+        let pillWidth = max(0, min(CGFloat(FixedChoices.topBarPillMaxWidth), pillEnd - pillStart))
+        let centered = (lane.lowerBound + lane.upperBound) / 2 - pillWidth / 2
+        let pillX = min(max(centered, pillStart), pillEnd - pillWidth)
+        let height = Self.rowHeight
+        return (
+            CGRect(x: barStart, y: rowTop, width: leadingCapsule, height: height),
+            CGRect(x: pillX, y: rowTop, width: pillWidth, height: height),
+            CGRect(x: barEnd - trailingCapsule, y: rowTop, width: trailingCapsule, height: height)
+        )
     }
+
+    /// The strip's frame in `lane` (`DuoLayout.stripLane`): the lane's full width less its
+    /// margins, under the row (`placeStrip`).
+    func stripFrame(lane: ClosedRange<CGFloat>) -> CGRect {
+        CGRect(
+            x: lane.lowerBound + Self.edgeMargin, y: stripTop,
+            width: lane.upperBound - lane.lowerBound - 2 * Self.edgeMargin, height: stripHeight
+        )
+    }
+
+    /// The strip's top: under the row, and in the status zone under the status items too, so the
+    /// strip always spans the lane's full width, right under the clock and battery (owner, on the
+    /// device: "The tabs should go all the way to under the status bar icons"). It never stops
+    /// short beside the corner: a strip cut where the status items begin read as broken. On the
+    /// device the corner is the row's height around the camera, so this is the row's bottom + 4.
+    var stripTop: CGFloat { max(rowBottom, corner?.maxY ?? 0) + Self.gap }
 
     /// The bottom of the expanded chrome: the row, or the strip under it.
     var expandedBottom: CGFloat {
@@ -170,14 +330,12 @@ struct TopChromeGeometry: Equatable {
         -Self.rowHeight / 2 * min(max(progress, 0), 1)
     }
 
-    /// The strip's rise at `progress`: up under the row, while it fades. A strip spanning under the
-    /// status corner rises only as far as the corner's bottom, so it never passes over the clock
-    /// on its way out (it is faded by then anyway).
+    /// The strip's rise at `progress`: up under the row, while it fades. It spans under the status
+    /// corner, so in the status zone it rises only as far as the corner's bottom: it never passes
+    /// over the clock on its way out (it is faded by then anyway).
     func stripTranslation(progress: CGFloat) -> CGFloat {
         var rise = Self.rowHeight + Self.gap
-        if let corner, stripClearance.leading == 0, stripClearance.trailing == 0 {
-            rise = min(rise, max(0, stripTop - corner.maxY))
-        }
+        if let corner { rise = min(rise, max(0, stripTop - corner.maxY)) }
         return -rise * min(max(progress, 0), 1)
     }
 

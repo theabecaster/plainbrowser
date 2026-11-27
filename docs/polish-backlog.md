@@ -362,7 +362,9 @@ Newest feature last.
   "The page's top inset never follows the bar").
 - **Portrait strip, three tabs.** The selected tab ends tight against the strip's "+" and its
   close button looks clipped where the strip stops beside the status corner (design review,
-  round 1). Not changed by this lane.
+  round 1). Done: the strip no longer stops beside the corner; it runs under the status items to
+  the screen's margin (docs/decisions.md, "Duo inner screen: the strip runs under the status
+  items, the buttons sit beside them").
 - **Integration coverage.** Unit tests cover the inset values only; add UI checks for the hidden
   edge effects and the split's other pane insets (code review, round 1).
 

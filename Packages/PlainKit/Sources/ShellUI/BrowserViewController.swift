@@ -1288,6 +1288,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 sheet.prefersScrollingExpandsWhenScrolledToEdge = false
             }
         }
+        controller.onDismissed = { [weak self] in self?.sheetDidClose() }
         pageSheet = controller
         present(controller, animated: true)
     }
@@ -1505,7 +1506,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         showPendingToast()
         tabsUI.tip.showIfPossible(in: self)
         session.tabs.refreshArchiveState()
-        // History may have been cleared, favorites edited.
+        // History may have been cleared, favorites edited: read them again, nothing kept aside.
+        focusUI.pendingVisits.removeAll()
         refreshFocusContent()
     }
 

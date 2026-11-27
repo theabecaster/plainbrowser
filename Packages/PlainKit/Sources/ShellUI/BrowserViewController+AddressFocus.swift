@@ -17,6 +17,9 @@ final class AddressFocusState {
     /// Copy button while it still shows that address. Otherwise a search over a page opens a new
     /// tab (`LaunchUIState.isFreshSearch`).
     var isEditingPage = false
+    /// Visits noted in memory, newest first, kept a little longer than the history writer's
+    /// batch takes, so a read from disk that lands first doesn't drop them.
+    var pendingVisits: [(page: FavoritePage, at: ContinuousClock.Instant)] = []
 }
 
 // MARK: - The focused field's content
@@ -73,9 +76,12 @@ extension BrowserViewController {
         focusUI.loadTask = Task { [weak self, data] in
             let signposter = Signposts.signposter
             let interval = signposter.beginInterval(Signposts.focusContentLoad)
-            let content = await data.focusContent()
+            var content = await data.focusContent()
             signposter.endInterval(Signposts.focusContentLoad, interval)
-            guard let self, !Task.isCancelled, content != self.focusUI.content else { return }
+            guard let self, !Task.isCancelled else { return }
+            // Visits the history writer may not have written yet stay in front.
+            content.recent = self.withPendingVisits(content)
+            guard content != self.focusUI.content else { return }
             self.focusUI.content = content
             self.sheet.setFavorites(content.favorites)
             self.refreshFocusRowsIfShown()
@@ -102,9 +108,28 @@ extension BrowserViewController {
         let known = content.recent.first { AddressBarSuggestions.addressKey($0.url) == key }
         content.recent.removeAll { AddressBarSuggestions.addressKey($0.url) == key }
         let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? known?.title
-        content.recent.insert(FavoritePage(url: url, title: name), at: 0)
+        let page = FavoritePage(url: url, title: name)
+        content.recent.insert(page, at: 0)
         content.recent = Array(content.recent.prefix(FixedChoices.focusRecentPages + 1))
         focusUI.content = content
+        focusUI.pendingVisits.removeAll { AddressBarSuggestions.addressKey($0.page.url) == key }
+        focusUI.pendingVisits.insert((page, .now), at: 0)
+    }
+
+    /// `content`'s recent pages with the visits noted in memory lately in front: a read can land
+    /// before the history writer's batch does.
+    private func withPendingVisits(_ content: FocusContent) -> [FavoritePage] {
+        let recentEnough = ContinuousClock.now - FixedChoices.historyFlushInterval * 5
+        focusUI.pendingVisits.removeAll { $0.at < recentEnough }
+        let favorites = Set(content.favorites.map { AddressBarSuggestions.addressKey($0.url) })
+        var seen = Set<String>()
+        var merged: [FavoritePage] = []
+        for page in focusUI.pendingVisits.map(\.page) + content.recent {
+            let key = AddressBarSuggestions.addressKey(page.url)
+            guard !favorites.contains(key), seen.insert(key).inserted else { continue }
+            merged.append(page)
+        }
+        return Array(merged.prefix(FixedChoices.focusRecentPages + 1))
     }
 
     /// The pasteboard may hold a new link: check it (no paste alert) and update an open field.
@@ -127,9 +152,12 @@ extension BrowserViewController {
             copyPageAddress()
             sheet.confirmCopied()
         case .copiedLink(let known):
+            // The Paste button answers later: the field it was for must still be open.
+            guard isEditingAddress else { return true }
             signposter.emitEvent(Signposts.focusAction, "copied")
-            let url = known ?? UIPasteboard.plain.url ?? UIPasteboard.plain.string.flatMap {
-                AddressBarInput($0)?.destination(searchingWith: data.searchEngine)
+            var url = known ?? UIPasteboard.plain.url
+            if url == nil, let text = UIPasteboard.plain.string, case .url(let address)? = AddressBarInput(text) {
+                url = address
             }
             guard let url else {
                 Haptic.nothingThere.play()
@@ -225,7 +253,8 @@ final class CopiedLinkWatcher {
             return
         }
         guard board.hasURLs || board.hasStrings else { return onChange() }
-        board.detectPatterns(for: [\UIPasteboard.DetectedValues.probableWebURL]) { [weak self] result in
+        // The answer comes on a background queue: the closure must not assume the main actor.
+        board.detectPatterns(for: [\UIPasteboard.DetectedValues.probableWebURL]) { @Sendable [weak self] result in
             let found = (try? result.get())?.contains(\UIPasteboard.DetectedValues.probableWebURL) == true
             Task { @MainActor in
                 guard let self, self.checkedCount == count else { return }

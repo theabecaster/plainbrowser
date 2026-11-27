@@ -43,6 +43,9 @@ final class PageSheetController: UIViewController {
     private let build: () -> PageSheetModel
     /// The host was tapped: the field takes the page's address.
     var onEditAddress: () -> Void = {}
+    /// The sheet is gone, by a choice or a swipe (the shell's sheet lifecycle: a waiting toast
+    /// shows then).
+    var onDismissed: () -> Void = {}
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private var copyToken = 0
@@ -55,6 +58,30 @@ final class PageSheetController: UIViewController {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed || presentingViewController == nil { onDismissed() }
+    }
+
+    /// `menu` with every choice closing the sheet first: a toggle's title was captured when the
+    /// sheet opened, so choosing it twice from one open sheet would repeat it.
+    private func dismissing(_ menu: UIMenu) -> UIMenu {
+        menu.replacingChildren(menu.children.map { element in
+            if let submenu = element as? UIMenu { return dismissing(submenu) }
+            guard let action = element as? UIAction else { return element }
+            let wrapped = UIAction(
+                title: action.title, subtitle: action.subtitle, image: action.image,
+                attributes: action.attributes, state: action.state
+            ) { [weak self] _ in
+                guard let self else { return action.performWithSender(nil, target: nil) }
+                self.dismiss(animated: true) { action.performWithSender(nil, target: nil) }
+            }
+            wrapped.accessibilityIdentifier = action.accessibilityIdentifier
+            wrapped.accessibilityLabel = action.accessibilityLabel
+            return wrapped
+        })
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -198,7 +225,8 @@ final class PageSheetController: UIViewController {
             return button
         case .menu(let menu):
             let button = rowButton(title: menu.title, subtitle: menu.subtitle, image: menu.image, chevron: true)
-            button.menu = menu
+            // A choice closes the sheet: the next opening reads the new value (a toggle never repeats).
+            button.menu = dismissing(menu)
             button.showsMenuAsPrimaryAction = true
             button.accessibilityIdentifier = menu.accessibilityIdentifier
             button.accessibilityLabel = [menu.title, menu.subtitle].compactMap { $0 }.joined(separator: ", ")

@@ -871,7 +871,9 @@ final class SuggestionRow: UIControl {
             _ = provider.loadObject(ofClass: URL.self) { url, _ in deliver(url) }
         } else if let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: String.self) }) {
             _ = provider.loadObject(ofClass: String.self) { text, _ in
-                deliver(text.flatMap { URL(string: $0.trimmingCharacters(in: .whitespacesAndNewlines)) })
+                // Text that is one web address ("www.example.com"), as the address bar reads it.
+                guard let text, case .url(let url)? = AddressBarInput(text) else { return deliver(nil) }
+                deliver(url)
             }
         }
     }

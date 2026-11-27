@@ -197,16 +197,17 @@ public final class CookieBanners {
         "#usercentrics-root", "#usercentrics-cmp-ui", "#truste-consent-track", "#consent_blackbar",
         ".qc-cmp2-container", "[id^='sp_message_container']", "#cmpbox", "#cmpwrapper", ".fc-consent-root",
         "#iubenda-cs-banner", "#termly-code-snippet-support", ".osano-cm-window", ".cky-consent-container",
-        "#axeptio_overlay", "#ccc", "#cookiefirst-root", "#cookiescript_injected", "#ch2",
+        "#axeptio_overlay", "#cookiefirst-root", "#cookiescript_injected",
         "#cookie-law-info-bar", "#cookie-notice", "#cmplz-cookiebanner-container", ".cmplz-cookiebanner",
         "#BorlabsCookieBox", "#moove_gdpr_cookie_info_bar", "#klaro", "#shopify-pc__banner",
     ]
 
-    /// Banner containers the probe looks for: the consent managers above, and a few generic names
-    /// (never hidden ahead: the engine may have no rule for them). Ids and classes only, so the
+    /// Banner containers the probe looks for: the consent managers above, Civic's and CookieHub's
+    /// short ids (too plain to hide ahead), and a few generic names (never hidden ahead: the
+    /// engine may have no rule for them). Ids and classes only, so the
     /// check stays well under a millisecond on a long page.
     static let bannerSelectors = managerSelectors + [
-        "#cookie-banner", "#cookieBanner", "#cookie-consent", "#cookieConsent", "#cookiebanner",
+        "#ccc", "#ch2", "#cookie-banner", "#cookieBanner", "#cookie-consent", "#cookieConsent", "#cookiebanner",
         ".cookie-banner", ".cookie-consent", ".cookieconsent", ".cc-window", "#gdpr-cookie-message",
     ]
 
@@ -246,7 +247,10 @@ public final class CookieBanners {
                 if (list.includes(hide)) document.adoptedStyleSheets = list.filter((s) => s !== hide);
               };
               globalThis.__plainCookieUnhide = unhide;
-              const started = () => { hideTimer = setTimeout(unhide, \(FixedChoices.cookieBannerPrehideTimeout)); };
+              const started = () => { clearTimeout(hideTimer); hideTimer = setTimeout(unhide, \(FixedChoices.cookieBannerPrehideTimeout)); };
+              // A deadline from the start: a page whose load never ends (a hanging request) is
+              // never probed after DOMContentLoaded, and nothing may stay hidden for good.
+              hideTimer = setTimeout(unhide, \(FixedChoices.cookieBannerWatchMilliseconds));
               // `answered`: the app replied to the page message, so the engine was not started
               // for a site rule; a sign seen before that waits for the reply (one start a page).
               let done = false, answered = false, seen = null, observer = null;

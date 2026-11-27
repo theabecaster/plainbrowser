@@ -173,6 +173,17 @@ public enum FixedChoices {
     /// How far the mark is inverted: black lands near the darkened text's light grey, not on
     /// pure white, which would glare next to it.
     public static let darkPagesLogoInvert = 0.92
+    /// What counts as such a mark: at least this share of the picture see-through, of the rest
+    /// at most these shares colored or white (a two-tone or colored picture is a design, not a
+    /// wordmark), and showing under this contrast against what is behind it (it would vanish).
+    public static let darkPagesLogoClearShare = 0.15
+    public static let darkPagesLogoColoredShare = 0.04
+    public static let darkPagesLogoWhiteShare = 0.15
+    public static let darkPagesLogoVanishingContrast = 3.0
+    /// Custom elements defined after the page's walk met them attach their shadow roots late;
+    /// they are looked for again this many milliseconds after load (and on every batch and
+    /// scroll), covering components that load with the page and the slow ones after.
+    public static let darkPagesLateComponentChecks = [300, 1_500, 4_000]
     /// Content and style sheets a page adds after load are darkened in batches at most this many
     /// milliseconds apart, so an infinite-scroll page costs one pass per burst, not one per node.
     /// While the page is still loading, batches run every frame instead.

@@ -619,6 +619,14 @@ struct DarkPagesTests {
         let stats = try await engine("globalThis.__plainDarkPages.stats", in: tab, harness: harness) as? [String: Any]
         #expect((stats?["shadowRoots"] as? Int ?? 0) >= 4)
         await capture("dark-shadow-darkened", tab, harness: harness)
+        // Off and on again: the components are as made, then darkened again.
+        tab.setDarkPagesOff(true)
+        try await waitUntil("off") { tab.darkPages == .offForSite }
+        #expect(try await harness.evaluate(inner("#card", "#inner", "backgroundColor"), in: tab) as? String == "rgb(255, 255, 255)")
+        #expect(try await harness.evaluate(inner("#card", "#sub", "backgroundColor"), in: tab) as? String == "rgb(244, 244, 244)")
+        tab.setDarkPagesOff(false)
+        try await waitUntil("on") { tab.darkPages == .darkened }
+        #expect(try await waitFor(condition.joined(separator: " && "), in: tab, harness: harness))
     }
 
     /// Same-origin frames are darkened with the page (one there from the start, one added later,

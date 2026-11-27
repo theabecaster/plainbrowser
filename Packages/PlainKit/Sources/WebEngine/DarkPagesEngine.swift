@@ -44,7 +44,9 @@ extension DarkPages {
         const SVG_CHROMA = \(FixedChoices.darkPagesColoredSVGChroma), SVG_SHAPES = \(FixedChoices.darkPagesSVGShapesChecked);
         const LOGO_MAX_W = \(FixedChoices.darkPagesLogoMaxWidth), LOGO_MAX_H = \(FixedChoices.darkPagesLogoMaxHeight);
         const LOGO_READS = \(FixedChoices.darkPagesLogosRead), LOGO_SAMPLE = \(FixedChoices.darkPagesLogoSample);
-        const LOGO_INVERT = \(FixedChoices.darkPagesLogoInvert);
+        const LOGO_INVERT = \(FixedChoices.darkPagesLogoInvert), LOGO_VANISH = \(FixedChoices.darkPagesLogoVanishingContrast);
+        const LOGO_CLEAR = \(FixedChoices.darkPagesLogoClearShare), LOGO_COLORED = \(FixedChoices.darkPagesLogoColoredShare), LOGO_WHITE = \(FixedChoices.darkPagesLogoWhiteShare);
+        const LATE_HOST_CHECKS = [\(FixedChoices.darkPagesLateComponentChecks.map(String.init).joined(separator: ","))];
         const WATCH_DELAY = \(FixedChoices.darkPagesWatchDelay), SHEET_CHECK = \(FixedChoices.darkPagesSheetCheckInterval);
         """
     }
@@ -743,12 +745,28 @@ extension DarkPages {
       adopted = true;
     };
     // A shadow root met on the walk: its sheets get twins now, before its elements are read,
-    // and its changes are watched like the document's.
-    const addRoot = (root) => {
+    // within what is left of the walk's budget (at least 1 ms; sheets past it wait for the next
+    // batch, and their elements are fixed one by one meanwhile), and its changes are watched
+    // like the document's.
+    const addRoot = (root, deadline) => {
       shadowRoots.set(root, []);
-      timed(() => syncSheets(Infinity, root), 'rewriteMs');
+      timed(() => syncSheets(Math.max(1, deadline - now()), root), 'rewriteMs');
       if (observer) observer.observe(root, OBSERVED);
       stats.shadowRoots++;
+    };
+    // Every element fix off, in the document and in each shadow root.
+    const clearMarks = () => {
+      for (const scope of scopes()) for (const el of scope.querySelectorAll('[' + ATTR + ']')) el.removeAttribute(ATTR);
+    };
+    // An element's descendants, through the open shadow roots below it.
+    const below = (el) => {
+      const out = [...el.getElementsByTagName('*')];
+      for (let i = 0; i < out.length && out.length < 5000; i++) {
+        const shadow = out[i].shadowRoot;
+        if (shadow && shadowRoots.has(shadow)) out.push(...shadow.querySelectorAll('*'));
+      }
+      if (el.shadowRoot && shadowRoots.has(el.shadowRoot)) out.push(...el.shadowRoot.querySelectorAll('*'));
+      return out;
     };
     // Custom elements whose shadow root may come later (defined after they were walked).
     const pendingHosts = new Set();
@@ -759,7 +777,7 @@ extension DarkPages {
         if (!root) continue;
         pendingHosts.delete(host);
         if (shadowRoots.has(root) || !info.has(host)) continue;
-        addRoot(root);
+        addRoot(root, now() + SLICE_MS);
         queue.push(root);
       }
       if (queue.length) pump();
@@ -767,6 +785,7 @@ extension DarkPages {
     let rewalkNeeded = false;
     const setEnabled = (on) => {
       if (!on && enabled && built) rewalkNeeded = true;
+      if (!on) logoGeneration++;
       enabled = on;
       base.disabled = !on;
       patch.disabled = !on;
@@ -1059,26 +1078,29 @@ extension DarkPages {
     const logoWaiting = new WeakSet();
     const logoQueue = [];
     let logoRunning = false;
+    // A read in flight belongs to one walk: switching off or walking again starts a new
+    // generation, and an older read's verdict is never applied.
+    let logoGeneration = 0;
     const logo = (el, bg, address) => {
-      logoQueue.push([el, bg, address]);
+      logoQueue.push([el, bg, address, logoGeneration]);
       if (!logoRunning) runLogos();
     };
     const runLogos = async () => {
       logoRunning = true;
       while (logoQueue.length) {
-        const [el, bg, address] = logoQueue.shift();
-        if (!enabled || !el.isConnected) continue;
-        try { await judgeLogo(el, bg, address); } catch (e) {}
+        const [el, bg, address, generation] = logoQueue.shift();
+        if (!enabled || !el.isConnected || generation !== logoGeneration) continue;
+        try { await judgeLogo(el, bg, address, generation); } catch (e) {}
       }
       logoRunning = false;
     };
-    const judgeLogo = async (el, bg, address) => {
+    const judgeLogo = async (el, bg, address, generation) => {
       const img = address ? null : el;
       if (img && (!img.complete || !img.naturalWidth)) {
         // Not loaded yet (lazy, or still on its way): looked at once it is.
         if (!logoWaiting.has(img)) {
           logoWaiting.add(img);
-          img.addEventListener('load', () => { logoWaiting.delete(img); if (enabled && img.isConnected) logo(img, bg, null); }, { once: true });
+          img.addEventListener('load', () => { logoWaiting.delete(img); if (enabled && img.isConnected && generation === logoGeneration) logo(img, bg, null); }, { once: true });
         }
         return;
       }
@@ -1094,7 +1116,9 @@ extension DarkPages {
         ink = await readLogo(img, src, r);
         logoVerdicts.set(src, ink);
       }
-      if (!ink || !enabled || !el.isConnected || contrast(ink, bg) >= 3) return;
+      // Still the same walk and the same picture (a page may swap a picture while it is read).
+      if (!ink || !enabled || !el.isConnected || generation !== logoGeneration || contrast(ink, bg) >= LOGO_VANISH) return;
+      if (!address && (img.currentSrc || img.src) !== src) return;
       writes.push([el, token('filter:invert(' + LOGO_INVERT + ') !important')]);
       timed(write);
       stats.logos++;
@@ -1152,7 +1176,7 @@ extension DarkPages {
         const k = a / 255;
         r += R * k; g += G * k; b += B * k; w += k;
       }
-      if (clear < total * 0.15 || solid < total * 0.02 || colored > solid * 0.04 || light > solid * 0.15) return false;
+      if (clear < total * LOGO_CLEAR || solid < total * 0.02 || colored > solid * LOGO_COLORED || light > solid * LOGO_WHITE) return false;
       return [r / w / 255, g / w / 255, b / w / 255, 1];
     };
 
@@ -1163,8 +1187,9 @@ extension DarkPages {
     let queue = [];
     let walk = null; // { root, el }
     const rootInfo = { bg: PAGE_BG, image: false, owner: null, darkened: true };
-    // The parent in the composed tree: a shadow tree's top elements sit on their host.
-    const parentOf = (el) => el.parentElement || (el.parentNode && el.parentNode.host) || null;
+    // The parent in the composed tree: a host's own children sit on the slot that shows them,
+    // a shadow tree's top elements on their host.
+    const parentOf = (el) => el.assignedSlot || el.parentElement || (el.parentNode && el.parentNode.host) || null;
     const infoAbove = (el) => {
       const parent = parentOf(el);
       if (!parent) return rootInfo;
@@ -1247,7 +1272,7 @@ extension DarkPages {
             if (mine) {
               info.set(el, mine);
               const shadow = el.shadowRoot;
-              if (shadow) { if (!shadowRoots.has(shadow)) addRoot(shadow); }
+              if (shadow) { if (!shadowRoots.has(shadow)) addRoot(shadow, deadline); }
               else if (el.localName.includes('-') && pendingHosts.size < 2000) pendingHosts.add(el);
             } else descend = false;
           } else if (!info.has(el)) descend = false;
@@ -1322,13 +1347,13 @@ extension DarkPages {
         // In a small subtree (a component) the fixes come off first, so the new styles are
         // read as the site wrote them; on a large one (a theme class on the body) they stay
         // until replaced, so nothing flashes, and the new look adds to them.
-        const below = el.getElementsByTagName('*');
-        const fresh = below.length < 300;
+        const inside = below(el);
+        const fresh = inside.length < 300;
         if (el.hasAttribute(ATTR)) el.removeAttribute(ATTR);
         seen.delete(el);
         info.delete(el);
         above.delete(el);
-        for (const d of below) {
+        for (const d of inside) {
           if (fresh && d.hasAttribute(ATTR)) d.removeAttribute(ATTR);
           seen.delete(d);
           info.delete(d);
@@ -1526,7 +1551,8 @@ extension DarkPages {
     // `clean`: the fixes come off first (back on after being off, when the page may have
     // changed under them); the top of the page is redone at once so nothing shows undone.
     const rewalk = (clean) => {
-      if (clean) for (const el of document.querySelectorAll('[' + ATTR + ']')) el.removeAttribute(ATTR);
+      if (clean) clearMarks();
+      logoGeneration++;
       seen = new WeakSet();
       walk = null;
       queue = [document.documentElement];
@@ -1543,7 +1569,7 @@ extension DarkPages {
       watch();
       keep();
       // Custom elements defined late attach their shadow roots after the walk met them.
-      const hostChecks = () => { for (const t of [300, 1500, 4000]) setTimeout(() => { if (enabled && pendingHosts.size) timed(checkHosts); }, t); };
+      const hostChecks = () => { for (const t of LATE_HOST_CHECKS) setTimeout(() => { if (enabled && pendingHosts.size) timed(checkHosts); }, t); };
       if (document.readyState === 'complete') hostChecks(); else addEventListener('load', hostChecks, { once: true });
     };
 
@@ -1573,7 +1599,7 @@ extension DarkPages {
         } else if (enabled) {
           setEnabled(false);
           // A design of its own after all (it arrived late): nothing of Plain's stays on it.
-          if (verdict === 'native') for (const el of document.querySelectorAll('[' + ATTR + ']')) el.removeAttribute(ATTR);
+          if (verdict === 'native') clearMarks();
         }
       }
       if (TOP) return;
@@ -1667,6 +1693,7 @@ extension DarkPages {
       get state() { return !dark.matches || off ? 'off' : verdict; },
       get framesWanted() { return dark.matches && !off && verdict !== 'native'; },
       follow(doc, fn) { followers.set(doc, fn); },
+      unfollow(doc) { followers.delete(doc); },
       get cost() { return cost; },
       get stats() { return Object.assign({ cost, tokens: tokenCount, twins: order.length, enabled }, stats); },
       // The engine's perf test: the judgement, every sheet rewritten and every element checked
@@ -1726,6 +1753,7 @@ extension DarkPages {
       const early = globalThis.__plainDarkFrameGuard;
       if (early) { document.adoptedStyleSheets = document.adoptedStyleSheets.filter((s) => s !== early); globalThis.__plainDarkFrameGuard = null; }
       TOP.follow(document, () => { if (TOP.off !== off) { off = TOP.off; refresh(); } else render(); });
+      addEventListener('pagehide', () => { try { TOP.unfollow(document); } catch (e) {} });
     }
     document.addEventListener('DOMContentLoaded', () => { stats.dcl = now(); decide(document.readyState === 'complete'); });
     addEventListener('load', () => { settled = false; decide(true); });

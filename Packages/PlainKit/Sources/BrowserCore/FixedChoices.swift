@@ -119,6 +119,39 @@ public enum FixedChoices {
     /// burst): a few microseconds of work twice a second at most, back before a line is read.
     public static let darkPagesSheetCheckInterval = 500
 
+    // MARK: Translate Page (docs/research/translate.md)
+
+    /// Pages are translated on the device with Apple's Translation framework, never on a server:
+    /// the page's text stays on the phone, and it works offline once a language is downloaded.
+    public static let translationOnDevice = true
+    /// "Translate Page" shows in the page menu only on a page in a language the user doesn't read
+    /// (their preferred languages in iOS Settings); there is no setting for "always translate".
+    /// Once a tab is translated, its next pages in the same language translate by themselves,
+    /// until Show Original: someone reading a site in another language wants all of it.
+    public static let translationFollowsTab = true
+    /// A foreign page gets one quiet hint, once ever: a toast naming the page's language with a
+    /// Translate button. After that, the page menu is the only way (no banners, ui-reference).
+    public static let translateHintShownOnce = true
+    /// Characters of the page's text the language check reads: enough for the recognizer to be
+    /// sure (it is reliable from a few hundred), small enough to cost nothing per page.
+    public static let translateSampleLength = 2_000
+    /// The recognizer's answer is used at this confidence or more; below it the page's own
+    /// `<html lang>` decides, and with neither the page isn't offered for translation.
+    public static let translateDetectionConfidence = 0.6
+    /// One request to the translator holds at most this many characters and text pieces: a
+    /// screenful of text comes back in one or two answers, and the first lands quickly.
+    public static let translateBatchCharacters = 1_500
+    public static let translateBatchCount = 40
+    /// Requests waiting on the translator at once: enough to keep it busy, few enough that text
+    /// near the screen is never stuck behind text far below it.
+    public static let translateBatchesInFlight = 2
+    /// Text a translated page adds (infinite scroll, a chat, a live score) is translated in
+    /// batches at most this many milliseconds apart, not once per change.
+    public static let translateMutationDelay = 250
+    /// Text is translated once it is within this distance of the screen (a CSS margin): one and a
+    /// half screens ahead, so scrolling at reading speed never shows the original.
+    public static let translateLookahead = "150%"
+
     // MARK: Print and Save as PDF (docs/research/print-pdf.md)
 
     /// Regions whose standard paper is US Letter (ISO 3166 codes); everywhere else gets A4. A

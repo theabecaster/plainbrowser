@@ -83,6 +83,14 @@ public final class Tab: Identifiable {
     /// What dark pages does on the page now: nothing (light colors, or not a web page), the
     /// site's own dark design, Plain's darkening, or off for this site by the user's choice.
     public internal(set) var darkPages = DarkPagesState.inactive
+    /// The page's language once recognized (`PageTranslation`); nil until then, or when it can't
+    /// be told.
+    public internal(set) var pageLanguage: Locale.Language?
+    /// What Translate Page would translate into: set only when the page is in a language the user
+    /// doesn't read and the device can translate it. Nil leaves the page menu item out.
+    public internal(set) var translationTarget: Locale.Language?
+    /// Whether the page shows its own text, a translation on its way, or a translation.
+    public internal(set) var translation = TranslationState.original
 
     /// Playing, in picture in picture, fullscreen, capturing or downloading. The pool never
     /// discards such a tab, and the shell must not archive or close it automatically.
@@ -115,6 +123,9 @@ public final class Tab: Identifiable {
     /// `restoration` holds only the address: the full state (history, scroll, sessionStorage) is
     /// in the tab's saved file, read off the main thread when the tab first gets a web view.
     @ObservationIgnored var readsSavedState = false
+    /// The pair this tab keeps translating with, page after page, until Show Original
+    /// (`FixedChoices.translationFollowsTab`).
+    @ObservationIgnored var followsTranslation: (source: Locale.Language, target: Locale.Language)?
 
     init(id: UUID, openerID: UUID?, isPrivate: Bool = false, pool: WebViewPool, restoring state: TabRestorationState?) {
         self.id = id
@@ -169,6 +180,18 @@ public final class Tab: Identifiable {
     /// applied to this page at once without a reload.
     public func setDarkPagesOff(_ off: Bool) {
         pool?.setDarkPagesOff(off, for: self)
+    }
+
+    /// The page menu's "Translate Page": into `translationTarget`, on the device. The system may
+    /// first ask to download the languages. Later pages of this tab in the same language are
+    /// translated too, until `showOriginal()`.
+    public func translate() {
+        pool?.translate(self)
+    }
+
+    /// The page menu's "Show Original": the page's own text back at once, without a reload.
+    public func showOriginal() {
+        pool?.showOriginal(self)
     }
 
     /// One step larger (`FixedChoices.pageZoomSteps`), remembered for the site.

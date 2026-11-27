@@ -453,7 +453,7 @@ final class CaptureTests: XCTestCase {
         shot("s8b-start-with-closed")
     }
 
-    /// The Paper surfaces: the start screen, the reader view, Settings, and the gallery with a
+    /// The Paper surfaces: the intro, the start screen, the reader view, Settings, and the gallery with a
     /// new tab's card. Set the simulator's appearance first (`xcrun simctl ui <udid> appearance
     /// dark`); `PLAIN_CAPTURE_TAG` names the shots (light, dark).
     func testCapturePaper() throws {
@@ -463,6 +463,13 @@ final class CaptureTests: XCTestCase {
         defer { server.stop() }
         do {
             let name = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_TAG"] ?? "light"
+            let intro = XCUIApplication()
+            intro.launchArguments = ["-PlainInMemoryStore", "-PlainShowIntro"]
+            intro.launch()
+            pause(3)
+            shot("p0-intro-\(name)")
+            intro.terminate()
+
             let app = XCUIApplication()
             app.launchArguments = ["-PlainInMemoryStore"]
             app.launch()

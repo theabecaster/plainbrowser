@@ -51,13 +51,18 @@ private struct StepView: View {
             StepRings(count: model.steps.count, current: model.steps.firstIndex(of: step) ?? 0)
                 .padding(.leading, 30)
             Spacer()
-            Button("Skip") { model.skip() }
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(minWidth: 44, minHeight: 44)
-                .padding(.trailing, 20)
-                .accessibilityIdentifier("introSkip")
-                .accessibilityHint("Ends the introduction")
+            // The frame is inside the label, so the whole 44 pt square takes the tap (outside the
+            // button it only spaced a 35 x 20 pt target).
+            Button { model.skip() } label: {
+                Text("Skip")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(.rect)
+            }
+            .padding(.trailing, 20)
+            .accessibilityIdentifier("introSkip")
+            .accessibilityHint("Ends the introduction")
         }
         .frame(height: IntroLayout.topRow)
     }
@@ -146,7 +151,7 @@ private struct PromiseStep: View {
 
 private struct InsideStep: View {
     private let rows: [(symbol: String, title: String, detail: String)] = [
-        ("shield.lefthalf.filled", "Blocking Everywhere", "Ads, trackers and cookie walls stay off every site."),
+        ("shield.lefthalf.filled", "Blocking Everywhere", "Ads, trackers and cookie banners stay off every site."),
         ("archivebox.fill", "Tabs Tidy Themselves", "Tabs you leave for a day move to a searchable archive."),
         ("eye.slash.fill", "Private Tabs", "No history, and their site data goes when you close them."),
         ("rectangle.split.2x1.fill", "Made for iPhone Duo", "Unfold for two pages side by side."),

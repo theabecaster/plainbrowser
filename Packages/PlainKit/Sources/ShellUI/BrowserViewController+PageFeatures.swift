@@ -2,6 +2,7 @@
 import BrowserCore
 import DesignSystem
 import FeatureUI
+import LinkPresentation
 import PerfSignposts
 import UIKit
 import WebEngine
@@ -285,6 +286,37 @@ extension BrowserViewController {
         case .inProgress, .cancelled:
             break
         }
+    }
+}
+
+/// The page's address for the share sheet, with its title for the sheet's header and a mail's
+/// subject. A bare URL shows only the host and a blank icon there.
+nonisolated final class PageShareItem: NSObject, UIActivityItemSource {
+    let url: URL
+    let title: String?
+
+    init(url: URL, title: String?) {
+        self.url = url
+        self.title = title
+        super.init()
+    }
+
+    func activityViewControllerPlaceholderItem(_ controller: UIActivityViewController) -> Any { url }
+
+    func activityViewController(_ controller: UIActivityViewController, itemForActivityType type: UIActivity.ActivityType?) -> Any? {
+        url
+    }
+
+    func activityViewController(_ controller: UIActivityViewController, subjectForActivityType type: UIActivity.ActivityType?) -> String {
+        title ?? ""
+    }
+
+    func activityViewControllerLinkMetadata(_ controller: UIActivityViewController) -> LPLinkMetadata? {
+        let metadata = LPLinkMetadata()
+        metadata.originalURL = url
+        metadata.url = url
+        metadata.title = title
+        return metadata
     }
 }
 

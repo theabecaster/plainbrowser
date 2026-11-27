@@ -743,6 +743,15 @@ Research and sources: docs/research/dark-mode.md.
   text left under 4.5:1 is fixed. Style sheets get rewritten twins in the same cascade order;
   what they can't reach is fixed per element in idle time. Details and numbers:
   docs/research/dark-mode.md, section 9.
+- **Logos, web components and frames (2026-11-27).** Black-and-white logo pictures are inverted
+  after a check of their pixels (raster) or paints (SVG), as Safari does; open shadow roots and
+  same-origin frames are darkened with the page; link previews get the script. Frames of another
+  origin, closed shadow roots and pictures another origin won't share stay as made. Measured
+  against the previous engine, interleaved on the same simulator (Mac load average 200-900, so
+  medians are wide): engine work from scratch unchanged (`/big` elements 14.6-16.4 ms against
+  11.8-25 ms, `/apple-big` 5.6-8.4 against 5-9.6); script per load `/big` 55-60 ms against 52-70,
+  `/apple-big` 46-52 against 42-52; text contrast on apple.com, AP News and Hacker News unchanged
+  (0 under 4.5:1; minimums 4.7, 4.88, 4.54). Details: docs/research/dark-mode.md, section 9.
 - **A focused engine of Plain's own, not Dark Reader.** Dark Reader (MIT, compatible with
   AGPL) is the proven rewrite, but it maps every color (dark backgrounds get darker, light text
   dimmer) where Safari leaves them, inserts `<style>` elements into the page's DOM (Plain keeps
@@ -1146,9 +1155,21 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   (`FixedChoices.cookieBannerWatchMilliseconds`). The first sign puts the engine into that frame
   (`evaluateJavaScript` in Plain's world) and the probe stops. Subframes are unchanged.
 - **Fallback:** the EasyList Cookie List stays on and hides the long tail the probe doesn't know
-  (autoconsent's 700 generic rules are mostly one site's own banner). A banner from a known
-  consent manager loses the engine's prehide (it may show for a moment before it is rejected);
-  site rules keep it.
+  (autoconsent's 700 generic rules are mostly one site's own banner). A known consent manager's
+  banner is hidden by the probe itself from document start (below), so it doesn't show before
+  the engine arrives.
+- **Early hiding (2026-11-27):** the probe adopts one constructed sheet at document start that
+  hides the containers of the 30 consent managers the engine has rules for, in the engine's own
+  prehide style (transparent, behind the page, no touches, so the engine still finds and clicks
+  the banner). It goes when the engine has answered (`optOutResult`, `autoconsentDone`,
+  `autoconsentError`, or nothing detected), `FixedChoices.cookieBannerPrehideTimeout` after the
+  engine started, at once on a site turned off, and at the end of the watch if no sign came.
+  Generic names (`.cookie-banner`) are never hidden ahead: the engine may have no rule for them.
+  Measured (`CookieBannerPageTests`, iPhone 17 simulator): a OneTrust banner found by the probe
+  showed in 33 of 33 frames before it was rejected; now in 0 of 33-34. A long article without a
+  banner, back to back (5 runs): 38.1-46.7 ms with handling against 37.2-45.7 ms without, plus one
+  run at 71 against 50 during a load spike (before, 3 runs: 37.5-43.2 against 36.7-51.2); the
+  page's first script still runs at 2 ms in a fresh web view (1 ms without).
 - **Measured** (`CookieBannerPageTests.costPerPage`, iPhone Duo simulator, 3 runs each): long
   article back to back (median of 5 loads), without cookie banner handling 29.0–29.7 ms, with the
   engine 48.9–50.4 ms; with the probe 30.7–31.5 ms against 29.8–30.3 ms without. In a fresh web
@@ -1328,6 +1349,7 @@ simulator's 24 pt status bar had hidden this.
 - **Not verified on the device:** the simulator draws no status bar in its resizable window and
   reports the safe area differently. Captures use the window's real camera region (portrait) and
   the forced device corner (landscape).
+
 ## System integration: intents, Spotlight, widgets, controls, Handoff (v0.2, 2026-11-27)
 
 - **One command type.** App Intents, widget links, Spotlight results and Handoff all become a
@@ -1377,3 +1399,23 @@ simulator's 24 pt status bar had hidden this.
   Duo simulator, Release, five launches each, `dev` then this branch back to back (machine load
   about 860, so noisy): `launch.firstFrame` median 937 → 908 ms, `launch` (main to field) 592 →
   634 ms (fastest runs 562 and 575 ms). Within noise; confirm with the device perf gate.
+
+## UX audit fixes (2026-11-27)
+
+The UX lane's walk (docs/research/ux-audit.md) fixed the small, contained items; the rest are
+routed to the lanes that own them.
+
+- **The reader gets its own `WKWebpagePreferences`.** `WKWebViewConfiguration.copy()` shares
+  `defaultWebpagePreferences`, so the reader's `allowsContentJavaScript = false` turned JavaScript
+  off for every page loaded after the first reader visit (Google showed its no-JavaScript page).
+  Any helper that changes a copied configuration's preferences assigns a new object instead.
+- **The share sheet gets an item source with the page's title** (`PageShareItem`,
+  LinkPresentation metadata): Safari heads the sheet with the title, and a bare URL showed only
+  the host. The title also becomes a mail's subject. A failed page shares the address tried, with
+  no title.
+- **The pill's text stops at the largest non-accessibility size**
+  (`maximumContentSizeCategory = .extraExtraExtraLarge`): the capsule keeps its 48 pt height, as
+  Safari's field does, and the larger sizes overflowed it.
+- **Start screen shortcuts use the page menu's captions** ("Reopen Tab", "Archive") in equal
+  columns, full names for VoiceOver; an empty private tab's sentence says it is private ("A private
+  tab: Plain keeps no history of it."), with no badge.

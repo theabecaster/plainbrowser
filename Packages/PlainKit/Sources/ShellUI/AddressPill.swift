@@ -38,6 +38,10 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         super.init(frame: frame)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
+        // The capsule keeps its height, so its text stops growing at the largest non-accessibility
+        // size, as Safari's address field does: past it the text overflowed the capsule and the
+        // head truncation left "…Secure — host".
+        maximumContentSizeCategory = .extraExtraExtraLarge
 
         hostLabel.font = .preferredFont(forTextStyle: .body)
         hostLabel.adjustsFontForContentSizeCategory = true

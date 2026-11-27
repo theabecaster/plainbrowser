@@ -244,6 +244,7 @@ public final class WebViewPool {
         }
         pageScripts?.install(in: controller)
         controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
+        controller.addUserScript(DarkPages.frameScript)
         if translator != nil { controller.addUserScript(PageTranslation.languageScript) }
     }
 
@@ -254,6 +255,11 @@ public final class WebViewPool {
         let script = DarkPages.userScript(offSites: store.offSites)
         darkPagesScripts[isPrivate] = (store.offSites, script)
         return script
+    }
+
+    /// The engine for a same-origin frame that asked for it (`DarkPages.frameScript`).
+    func darkPagesSource(isPrivate: Bool) -> String {
+        darkPagesScript(isPrivate: isPrivate).source
     }
 
     /// The dark-pages script per kind of tab (regular, private), with the list it was built from.
@@ -288,14 +294,17 @@ public final class WebViewPool {
         return webView
     }
 
-    /// A web view for a link preview: no engine scripts, no delegates. The caller applies and
+    /// A web view for a link preview: no engine scripts but dark pages (a light-only page
+    /// previews dark in a dark app, as it will open), no delegates. The caller applies and
     /// releases the content rules on the returned controller.
     func makePreviewWebView(isPrivate: Bool = false) -> (WKWebView, WKUserContentController) {
         let configuration = baseConfiguration.copy() as! WKWebViewConfiguration
         if isPrivate { configuration.websiteDataStore = privateStore() }
         let controller = WKUserContentController()
+        controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
         configuration.userContentController = controller
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        applyInterfaceStyle(to: webView)
         return (webView, controller)
     }
 
@@ -1387,6 +1396,15 @@ extension WebViewPool {
                 return
             }
             if message.name == DarkPages.handlerName {
+                if !message.frameInfo.isMainFrame {
+                    // A same-origin frame asks for the engine; it runs in that frame alone.
+                    guard let body = message.body as? [String: Any], body[DarkPages.frameRequest] as? Bool == true,
+                          let tab = slot?.tab, let pool = tab.pool, let webView = message.webView else { return }
+                    webView.evaluateJavaScript(
+                        pool.darkPagesSource(isPrivate: tab.isPrivate), in: message.frameInfo, in: UserScripts.world
+                    ) { _ in }
+                    return
+                }
                 guard message.frameInfo.isMainFrame, let body = message.body as? [String: Any],
                       let raw = body["state"] as? String, let state = DarkPagesState(rawValue: raw) else { return }
                 slot?.receiveDarkPagesState(state)

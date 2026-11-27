@@ -1,5 +1,6 @@
 #if os(iOS)
 import DesignSystem
+import PerfSignposts
 import SwiftUI
 
 /// The few style values the FeatureUI screens share. Colors come from `DesignSystem`.
@@ -13,6 +14,15 @@ enum Style {
     /// A card of rows, and the hairline between them.
     static let card = Color(uiColor: Palette.paperCard)
     static let hairline = Color(uiColor: Palette.paperHairline)
+}
+
+/// Copy Link from a row's menu: the link on the pasteboard and the success haptic, as the page
+/// menu's Copy Link does (it leaves nothing else on screen).
+@MainActor
+func copyLink(_ url: URL) {
+    Signposts.signposter.emitEvent(Signposts.copyLink, "sheet")
+    UIPasteboard.plain.url = url
+    Haptic.success.play()
 }
 
 extension View {

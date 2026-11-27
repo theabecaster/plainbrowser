@@ -223,15 +223,6 @@ Newest feature last.
   the simulator (docs/research/dark-mode.md, section 9). Take `DarkPagesTests/largePageCost` and
   the scroll hitch tests on the Duo; if the first frame on `/apple-big` passes ~33 ms there,
   move the sheet rewrite of sheets below the fold behind the first paint.
-- **Dark cards on light sections lose their edge.** A #1d1d1f card on a #f5f5f7 section stays
-  #1d1d1f while the section becomes #202022, so the card reads only by its shadow. Safari's
-  stated rules do the same (dark backgrounds unchanged). A later pass could lift a dark box
-  whose parent was darkened by a few lightness steps.
-- **Black-and-white pictures.** Safari inverts simple black-and-white logos in `<img>` after a
-  histogram check; Plain leaves every `<img>` as made, so a black wordmark image on a light page
-  shows black on dark. Needs a same-origin canvas read; other-origin pictures can't be read.
-- **Shadow DOM and frames.** Open shadow roots (web components) and same-site iframes are not
-  darkened; their light boxes stay light.
 - **Engine limits accepted in review (code review, rounds 1–2):** rules in an anonymous `@layer`
   get a twin in a new anonymous layer, after the page's named layers (unlayered rules still win
   as before); a rule's declarations edited in place through the CSSOM, with no change in rule
@@ -241,10 +232,6 @@ Newest feature last.
   CSS `fill` gets a light outline; a theme class on a large subtree (over 300 elements) keeps its
   old element fixes until each is replaced. Page scripts can read the darkened computed colors
   and the `data-plain-dark` attribute (Safari hides its changes; an app cannot).
-- **Link previews.** The link menu's preview web view has no dark pages script, so a light-only
-  page previews white in a dark app.
-- **Frames.** Iframes are kept as made (an embed in a darkened page stays light), by design; a
-  same-site iframe of an article could be darkened with the page.
 - **Crossfade duration** (0.3 s) lives in `AppAppearance`; move it to `Motion` when the
   DesignSystem lane is free. (Code review, polish.)
 - **Settings polish seen in captures, not this lane's:** the dark sheet's Done capsule reads low
@@ -339,19 +326,11 @@ Newest feature last.
 
 ## Follow-ups: reveal inset, page menu, cookie probe, History search (2026-11-27)
 
-- **Page menu with a download this session.** On the Duo's outer screen the menu fits a
-  readerable foreign page with a closed tab to reopen, but a Downloads row on top of that (only
-  after a download this launch) puts the History/Favorites/Settings row about 45 pt past the
-  menu's edge, so it scrolls. Options: Downloads in the tabs row, or zoom into Site Settings.
 - **Translate Page in the captioned row** loses its visible "French to English" subtitle (VoiceOver
   reads it); "Translating…" no longer shows in the row either.
 - **Top bar reveal on the inner screen.** Same `PageInsetState` path as the bottom bar, unit-tested,
   but not frame-checked: the fold can't be set from the command line and XCUITest can't drive the
   simulator's resizable window. Check a fixed page header against the top bar on the Duo.
-- **Cookie banners: prehide for known consent managers.** A consent manager found by the probe
-  (not by a site rule) gets the engine after DOMContentLoaded, so its banner can show for a moment
-  before it is rejected. If it shows on real sites, inject only the prehide CSS of the generic rules
-  for the hosts the probe saw, before the engine.
 - **Sheet bar hides on the Duo's outer screen.** Scrolled far down, History's title, Clear and Done
   leave the screen there (iOS 27; the same with the old bottom search field, before this change).
   `.toolbarVisibility(.visible, for: .navigationBar)` doesn't keep it. Swipe down still closes the
@@ -395,3 +374,19 @@ Newest feature last.
   round 1). Not changed by this lane.
 - **Integration coverage.** Unit tests cover the inset values only; add UI checks for the hidden
   edge effects and the split's other pane insets (code review, round 1).
+
+## Polish lane 2: dark pages, page menu, cookie banners (2026-11-27)
+
+- **Dark pages limits.** Closed shadow roots, `about:srcdoc` and `about:blank` frames (no user
+  script reaches them) and pictures from another origin that doesn't allow CORS stay as made. A
+  logo whose picture changes `src` after it was judged keeps the first verdict.
+- **Logo reads on the device.** Each picture read is one idle-time draw of a 64 px copy;
+  simulator numbers were taken with the Mac's load average at 200-900. Check `logoMs` in
+  `DarkPagesTests/blackAndWhiteLogosAreInverted` on the Duo.
+- **Page menu with a download this session.** Still open, left to the address-focus lane's
+  Arc-style menu redesign (lead's call, 2026-11-27): on the Duo's outer screen a Downloads row on
+  top of a readerable foreign page with a closed tab puts the last row about 45 pt past the
+  menu's edge. Tried and measured here, then reverted: Downloads as a third tile in the tabs row
+  ("Private Tab", "Reopen Tab", "Downloads") fits with no scroll.
+- **Zoom row's 100%** still reads as disabled: a `UIAction` title can't be drawn in secondary
+  text, and an enabled 100% would be a button that does nothing.

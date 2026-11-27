@@ -30,9 +30,7 @@ public struct HistoryView: View {
                                 }
                                 .contextMenu {
                                     Button("Open", systemImage: "arrow.up.forward.app") { open(row) }
-                                    Button("Copy Link", systemImage: "doc.on.doc") {
-                                        UIPasteboard.plain.url = row.url
-                                    }
+                                    Button("Copy Link", systemImage: "link") { copyLink(row.url) }
                                     Section {
                                         Button("Delete", systemImage: "trash", role: .destructive) {
                                             Task { await model.delete(row) }

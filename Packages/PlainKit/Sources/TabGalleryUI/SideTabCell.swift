@@ -19,7 +19,7 @@ final class SideTabCell: UICollectionViewCell {
     private let closeButton = UIButton(type: .system)
 
     static let height: CGFloat = 48
-    static let tileSize: CGFloat = 36
+    static let tileSize: CGFloat = 32
 
     override init(frame: CGRect) {
         super.init(frame: frame)

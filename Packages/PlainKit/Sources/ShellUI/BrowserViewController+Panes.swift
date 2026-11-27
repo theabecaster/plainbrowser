@@ -15,7 +15,7 @@ final class DuoUIState {
     let chromeLane = UILayoutGuide()
     var laneLeading: NSLayoutConstraint!
     var laneWidth: NSLayoutConstraint!
-    /// The panes' edges: beside the sidebar's docked width (left or right), under the tab strip.
+    /// The panes' edges: beside the sidebar's docked width (left or right). The strip floats.
     var panesLeading: NSLayoutConstraint!
     var panesTrailing: NSLayoutConstraint!
     var panesTop: NSLayoutConstraint!
@@ -46,6 +46,11 @@ final class DuoUIState {
     var tabLayout: TabLayout = FixedChoices.defaultTabLayout
     /// The sidebar state has been read from the scene once.
     var didRestoreSidebar = false
+    /// The top bar on a wide screen (`+TopBar`): its constraints, and its geometry while it shows.
+    let top = TopBarLayout()
+    var topGeometry: TopChromeGeometry?
+    /// Page tabs in the window, kept as tabs change: the strip shows from the second.
+    var pageTabCount = 0
 
     static let logger = Logger(subsystem: Signposts.subsystem, category: "duo")
 }
@@ -94,7 +99,12 @@ extension BrowserViewController {
             width: max(0, bounds.width - safe.left - safe.right), height: max(0, bounds.height - safe.top)
         )
         let division = view.reservedRegions(kind: .division, options: .includeInactive).first
-        let occlusions = view.reservedRegions(kind: .occlusion).map(\.frame)
+        var occlusions = view.reservedRegions(kind: .occlusion).map(\.frame)
+        #if DEBUG
+        // The simulator's resizable window (`devicectl device appResize`, the stand-in for the
+        // inner screen while Device Hub can't be driven) reports the outer screen's sensor regions.
+        if ProcessInfo.processInfo.arguments.contains("-PlainIgnoreOcclusions") { occlusions = [] }
+        #endif
         let pillFrame = pill.frame
         return DuoLayoutInput(
             pageArea: pageArea,
@@ -103,11 +113,14 @@ extension BrowserViewController {
             tabLayout: duo.tabLayout,
             requestedSidebar: duo.sidebarRequest,
             paneCount: session.tabs.panes.count,
+            tabCount: duo.pageTabCount,
             focusedPane: session.tabs.focusedPane,
             division: division?.frame,
             isDivisionActive: division?.isActive ?? false,
             occlusions: occlusions,
-            chromeBand: min(pillFrame.minY, bounds.maxY - ChromeGeometry.pillHeight * 2)...bounds.maxY
+            chromeBand: chromeOnTop
+                ? safe.top...(safe.top + TopChromeGeometry.topGap + TopChromeGeometry.rowHeight)
+                : min(pillFrame.minY, bounds.maxY - ChromeGeometry.pillHeight * 2)...bounds.maxY
         )
     }
 
@@ -124,12 +137,12 @@ extension BrowserViewController {
         duo.layout = layout
         DuoUIState.logger.debug("""
             layout: area \(String(describing: input.pageArea)) fold \(String(describing: input.division)) \
-            active \(input.isDivisionActive) split \(layout.splitShown) sidebar \(layout.sidebar.rawValue) \
+            active \(input.isDivisionActive) occlusions \(String(describing: input.occlusions)) band \(String(describing: input.chromeBand)) split \(layout.splitShown) sidebar \(layout.sidebar.rawValue) \
             panes \(String(describing: layout.paneFrames)) lane \(String(describing: layout.chromeLane))
             """)
         duo.panesLeading.constant = layout.sidebarOnRight ? 0 : layout.sidebarDockWidth
         duo.panesTrailing.constant = layout.sidebarOnRight ? -layout.sidebarDockWidth : 0
-        duo.panesTop.constant = layout.stripHeight
+        if previous?.chromeOnTop != layout.chromeOnTop { topBarModeDidChange() }
         applyStripLayout(layout)
         duo.laneLeading.constant = layout.chromeLane.lowerBound
         duo.laneWidth.constant = layout.chromeLane.upperBound - layout.chromeLane.lowerBound
@@ -210,6 +223,11 @@ extension BrowserViewController {
     func applyOtherPaneInsets(to tab: Tab) {
         // During a fold the transition's completion applies them.
         guard view.bounds.height > 0, !duo.isResizing else { return }
+        if let top = duo.topGeometry {
+            applyOtherPaneTopInsets(to: tab, geometry: top)
+            return
+        }
+        setPageTopStart(0, for: session.pool.scrollView(for: tab))
         let bottom = panes.view.frame.maxY
         let geometry = ChromeGeometry(
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar

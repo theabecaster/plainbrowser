@@ -30,7 +30,8 @@ extension BrowserViewController {
         sidebar.view.isHidden = layout.sidebar == .hidden
     }
 
-    /// The strip follows the layout: across the top of the page area where Above is in effect.
+    /// The strip follows the layout: under the top bar, across the pages, where Above is in effect
+    /// and there are two or more tabs. It floats over the pages and hides with the bar.
     func applyStripLayout(_ layout: DuoLayout) {
         guard layout.showsStrip else {
             if let strip = duo.strip {
@@ -38,6 +39,7 @@ extension BrowserViewController {
                 strip.view.removeFromSuperview()
                 strip.removeFromParent()
                 duo.strip = nil
+                duo.top.stripTop = nil
             }
             return
         }
@@ -48,21 +50,30 @@ extension BrowserViewController {
         let strip = TabStripViewController(dataSource: source)
         addChild(strip)
         strip.view.translatesAutoresizingMaskIntoConstraints = false
-        view.insertSubview(strip.view, aboveSubview: panes.view)
+        // Over the pages and the sidebar, under the chrome and the search sheet.
+        view.insertSubview(strip.view, aboveSubview: duo.sidebar?.view ?? panes.view)
         let safe = view.safeAreaLayoutGuide
+        let geometry = TopChromeGeometry(pageTop: 0, stripHeight: layout.stripHeight)
+        let top = strip.view.topAnchor.constraint(equalTo: safe.topAnchor, constant: geometry.stripTop)
         NSLayoutConstraint.activate([
-            strip.view.topAnchor.constraint(equalTo: safe.topAnchor),
-            strip.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
-            strip.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
-            strip.view.heightAnchor.constraint(equalToConstant: CGFloat(FixedChoices.tabStripHeight)),
+            top,
+            strip.view.leadingAnchor.constraint(equalTo: duo.chromeLane.leadingAnchor, constant: Spacing.m),
+            strip.view.trailingAnchor.constraint(equalTo: duo.chromeLane.trailingAnchor, constant: -Spacing.m),
+            strip.view.heightAnchor.constraint(equalToConstant: layout.stripHeight),
         ])
+        let edgeEffect = UIScrollEdgeElementContainerInteraction()
+        edgeEffect.edge = .top
+        strip.view.addInteraction(edgeEffect)
         strip.didMove(toParent: self)
         duo.strip = strip
+        duo.top.stripTop = top
+        // It comes in at the bar's state: hidden while the bar is collapsed.
+        if let geometry = duo.topGeometry { applyTopBarCollapse(collapseProgress, geometry: geometry) }
     }
 
     /// The topmost of the page area's views (panes, strip, sidebar): the gallery goes above it.
     var pageAreaTopView: UIView {
-        [panes.view, duo.strip?.view, duo.sidebar?.view].compactMap { $0 }.last ?? panes.view
+        [panes.view, duo.sidebar?.view, duo.strip?.view].compactMap { $0 }.last ?? panes.view
     }
 
     @discardableResult
@@ -76,8 +87,8 @@ extension BrowserViewController {
         }
         addChild(sidebar)
         sidebar.view.translatesAutoresizingMaskIntoConstraints = false
-        // Over the page (Expanded may float over it), under the chrome and the search sheet.
-        view.insertSubview(sidebar.view, aboveSubview: duo.strip?.view ?? panes.view)
+        // Over the page (Expanded may float over it), under the strip, the chrome and the search sheet.
+        view.insertSubview(sidebar.view, aboveSubview: panes.view)
         let safe = view.safeAreaLayoutGuide
         let width = sidebar.view.widthAnchor.constraint(equalToConstant: 0)
         // Right sits inside the system's vertical bar, which is on the trailing edge too.
@@ -254,7 +265,13 @@ extension BrowserViewController {
                 show(tab)
                 tab.load(page)
             }
-            if split, let current = currentTab { openInOtherPane(current) }
+            guard split else { return }
+            // A window made wide after launch (a resizable window standing in for the inner
+            // screen) splits once it can.
+            for _ in 0..<300 where !canSplit {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            if let current = currentTab { openInOtherPane(current) }
         }
     }
     #endif

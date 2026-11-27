@@ -426,6 +426,7 @@ extension BrowserViewController: GalleryHost {
     func tabsDidChange() {
         // The rules first: the sidebar's New Tab reads them.
         updateButtons()
+        updatePageTabCount()
         tabsUI.gallery?.reloadTabs(animated: false)
         duo.sidebar?.reloadTabs()
         duo.strip?.reloadTabs()

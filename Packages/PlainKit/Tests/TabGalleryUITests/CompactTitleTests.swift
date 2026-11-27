@@ -20,5 +20,9 @@ struct CompactTitleTests {
         #expect(item("A - B", "https://example.com").compactTitle == "A - B")
         #expect(item("", "https://example.com/x").compactTitle == "example.com")
         #expect(item("Wikipedia", "https://wikipedia.org").compactTitle == "Wikipedia")
+        // The site is "bbc", not the country suffix's "co"; only the whole name counts.
+        #expect(item("News - Economy", "https://www.bbc.co.uk/news").compactTitle == "News - Economy")
+        #expect(item("Economy - BBC", "https://www.bbc.co.uk/news").compactTitle == "Economy")
+        #expect(item("Notes - B", "https://b.example.com").compactTitle == "Notes - B")
     }
 }

@@ -33,8 +33,12 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     private var needsFocusScroll = true
 
     private static let regularSection = 0
-    /// A tab's height: Safari's compact tab. The cell's touch area is the strip's full height.
+    /// A tab's visible height: Safari's compact tab.
     static let tabHeight: CGFloat = 30
+    /// The tabs' touch height: their cells are a full 44 pt target, reaching 5 pt past the
+    /// strip's 34 pt glass above and below (`StripView`).
+    static var touchHeight: CGFloat { Metrics.tapTarget }
+    static var touchOutset: CGFloat { max(0, (touchHeight - CGFloat(FixedChoices.tabStripHeight)) / 2) }
     private static let privateSection = 1
 
     public init(dataSource: any SideTabsDataSource) {
@@ -69,7 +73,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         layout.minimumLineSpacing = Spacing.xs
         layout.minimumInteritemSpacing = Spacing.xs
         layout.sectionInset = UIEdgeInsets(top: 0, left: Spacing.xxs, bottom: 0, right: Spacing.xs)
-        layout.itemSize = CGSize(width: CGFloat(FixedChoices.tabStripItemWidth.minimum), height: Self.tabHeight)
+        layout.itemSize = CGSize(width: CGFloat(FixedChoices.tabStripItemWidth.minimum), height: Self.touchHeight)
         flow = layout
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .clear
@@ -108,8 +112,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         NSLayoutConstraint.activate([
             fade.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             fade.trailingAnchor.constraint(equalTo: newTabButton.leadingAnchor),
-            fade.topAnchor.constraint(equalTo: view.topAnchor),
-            fade.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            fade.topAnchor.constraint(equalTo: view.topAnchor, constant: -Self.touchOutset),
+            fade.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: Self.touchOutset),
             collectionView.leadingAnchor.constraint(equalTo: fade.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: fade.trailingAnchor),
             collectionView.topAnchor.constraint(equalTo: fade.topAnchor),
@@ -196,7 +200,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         let share = (available - CGFloat(count) * Spacing.xs) / CGFloat(count)
         let limits = FixedChoices.tabStripItemWidth
         let width = floor(min(max(share, CGFloat(limits.minimum)), CGFloat(limits.maximum)))
-        let size = CGSize(width: width, height: Self.tabHeight)
+        let size = CGSize(width: width, height: Self.touchHeight)
         guard flow.itemSize != size else { return }
         flow.itemSize = size
     }
@@ -298,16 +302,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
 /// The strip's view: 34 pt high, it takes touches 5 pt above and below too, so each tab and New
 /// Tab is a 44 pt target. A touch there goes to what is at the same x inside the strip.
 private final class StripView: UIView {
-    private static let outset = max(0, (Metrics.tapTarget - CGFloat(FixedChoices.tabStripHeight)) / 2)
-
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        bounds.insetBy(dx: 0, dy: -Self.outset).contains(point)
-    }
-
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, self.point(inside: point, with: event) else { return nil }
-        let clamped = CGPoint(x: point.x, y: min(max(point.y, bounds.minY + 1), bounds.maxY - 1))
-        return super.hitTest(clamped, with: event)
+        bounds.insetBy(dx: 0, dy: -TabStripViewController.touchOutset).contains(point)
     }
 }
 
@@ -397,12 +393,14 @@ final class TabStripCell: UICollectionViewCell {
     override func layoutSubviews() {
         super.layoutSubviews()
         let bounds = contentView.bounds
-        highlight.frame = bounds
+        // The cell is the 44 pt touch target; the tab shows 30 pt high in its middle.
+        let visible = bounds.insetBy(dx: 0, dy: max(0, (bounds.height - TabStripViewController.tabHeight) / 2))
+        highlight.frame = visible
         let size = Self.tileSize
         tile.frame = CGRect(x: Spacing.s, y: (bounds.height - size) / 2, width: size, height: size)
         letter.frame = tile.bounds
         symbol.frame = tile.bounds
-        let closeWidth: CGFloat = closeButton.isHidden ? 0 : 32
+        let closeWidth: CGFloat = closeButton.isHidden ? 0 : Metrics.tapTarget
         closeButton.frame = CGRect(x: bounds.width - closeWidth, y: 0, width: closeWidth, height: bounds.height)
         let titleX = tile.frame.maxX + Spacing.s
         titleLabel.frame = CGRect(

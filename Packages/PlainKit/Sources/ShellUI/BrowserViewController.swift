@@ -485,7 +485,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             return
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
-        pill.textField.text = currentTab?.url?.absoluteString ?? ""
+        pill.textField.text = pageAddress?.absoluteString ?? ""
         // The layout switches before the keyboard starts, so the keyboard's own animation carries
         // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.
         applyEditingLayout(true, animated: true)
@@ -531,7 +531,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         suggestionTask?.cancel()
         // The current page's address, untouched, is not a query: show favorites, as for an
         // empty field, until the user types.
-        let isCurrentAddress = !query.isEmpty && query == currentTab?.url?.absoluteString
+        let isCurrentAddress = !query.isEmpty && query == pageAddress?.absoluteString
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
         updateStartForTyping(query: query)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -571,7 +571,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // What the user typed, unless the field still shows the page's own address.
             let input = pill.textField.text ?? ""
             // A private tab teaches the address bar nothing.
-            if input != currentTab?.url?.absoluteString, currentTab?.isPrivate != true {
+            if input != pageAddress?.absoluteString, currentTab?.isPrivate != true {
                 data.suggestionPicked(input: input, url: page)
             }
         case .search(let query): url = data.searchEngine.resultsURL(for: query)
@@ -596,7 +596,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
-        pill.textField.text = currentTab?.url?.absoluteString ?? ""
+        pill.textField.text = pageAddress?.absoluteString ?? ""
         applyEditingLayout(true, animated: true)
         if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
     }

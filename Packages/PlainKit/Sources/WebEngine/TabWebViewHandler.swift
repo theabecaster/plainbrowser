@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import Foundation
 import PerfSignposts
 import UIKit
@@ -65,6 +66,11 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
             return
         }
 
+        // A local or custom-port http:// address loads as asked: the HTTPS try can't succeed
+        // there and only left a blank page until it timed out (`keepsHTTPAsRequested`).
+        if NavigationRules.keepsHTTPAsRequested(url) {
+            preferences.preferredHTTPSNavigationPolicy = .keepAsRequested
+        }
         // Desktop or mobile, decided now and kept for this page (never switched on resize).
         pool.slot(for: tab)?.pendingNavigationIsFormSubmission =
             action.request.httpMethod == "POST" || action.navigationType == .formResubmitted
@@ -348,9 +354,11 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
 
 extension LoadError {
     init(_ error: NSError) {
+        let underlying = (error.userInfo[NSUnderlyingErrorKey] as? NSError).map { (domain: $0.domain, code: $0.code) }
         self.init(
             url: error.userInfo[NSURLErrorFailingURLErrorKey] as? URL, code: error.code, domain: error.domain,
-            message: error.localizedDescription
+            message: error.localizedDescription,
+            failure: LoadFailure(domain: error.domain, code: error.code, underlying: underlying)
         )
     }
 }

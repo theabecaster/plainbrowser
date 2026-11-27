@@ -363,9 +363,11 @@ public struct ControlRules: Sendable, Equatable {
 
     /// Summarize Page: an article (the reader's own, or a loaded page Reader can read), where the
     /// on-device model can run. A page Reader can't read has no article to summarize; without
-    /// the model the item is left out, never dimmed (§4).
+    /// the model the item is left out, never dimmed (§4). Not on a page in a language the user
+    /// doesn't read: the summary is written in the page's language, so Translate Page is the
+    /// item that helps there (and the menu keeps fitting the Duo's outer screen).
     public var summarizePage: Bool {
-        guard state.isAIAvailable, state.hasPage else { return false }
+        guard state.isAIAvailable, state.hasPage, !state.isForeignLanguage else { return false }
         return state.isReaderOpen || (state.condition == .loaded && state.isReaderAvailable && !state.isPDF)
     }
 

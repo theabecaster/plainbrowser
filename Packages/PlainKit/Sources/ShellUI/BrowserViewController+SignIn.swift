@@ -12,7 +12,10 @@ extension BrowserViewController {
     /// Only a page on screen says it: a background tab's request is not something the user just
     /// tried. The engine asks again on the site's next request until this returns true.
     public func tab(_ tab: Tab, couldNotUsePasskeysOn site: String) -> Bool {
-        guard !isShowingGallery, tab === currentTab || isShownInOtherPane(tab.id) else { return false }
+        // Not under a sheet or an alert either: the toast would be hidden behind it.
+        let root = navigationController ?? self
+        guard !isShowingGallery, root.presentedViewController == nil,
+              tab === currentTab || isShownInOtherPane(tab.id) else { return false }
         tabsUI.toast.show(Self.passkeysUnavailableMessage)
         return true
     }
@@ -32,12 +35,11 @@ extension BrowserViewController {
     public func open(externalURL url: URL) {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
         Signposts.signposter.emitEvent(Signposts.linkFromOtherApp)
-        // Sheets (Settings, History...) close so the page is what shows. An alert stays: it is a
-        // page's question waiting for its answer.
+        // Sheets (Settings, History...) and the previous page's questions close so the new page
+        // is what shows. A question closed unanswered gets its safe answer (cancel, deny): its
+        // alert is released, and `PromptAnswer` answers with the fallback.
         let root = navigationController ?? self
-        if let presented = root.presentedViewController, !(presented is UIAlertController) {
-            root.dismiss(animated: true)
-        }
+        if root.presentedViewController != nil { root.dismiss(animated: true) }
         if isShowingGallery { dismissGalleryFading() }
         endAddressEditing()
         let tab = openNewTab()

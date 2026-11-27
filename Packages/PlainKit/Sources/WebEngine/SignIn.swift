@@ -36,8 +36,9 @@ struct SignInScripts {
     let passkeyRelay: WKUserScript
 
     /// - Parameter token: makes the DOM event's name unguessable (one per pool), so a page can't
-    ///   fire it to show Plain's toast. The fallback keeps its own references to
-    ///   `dispatchEvent` and `CustomEvent` from before any page script ran.
+    ///   fire it to show Plain's toast. The fallback keeps its own references to `Reflect.apply`,
+    ///   `dispatchEvent`, `CustomEvent` and `DOMException` from before any page script ran, so a
+    ///   page can't intercept the name either.
     init(token: String = UUID().uuidString) {
         let event = "plain-passkey-\(token)"
         passkeyFallback = WKUserScript(
@@ -57,6 +58,7 @@ struct SignInScripts {
         (() => {
           const PKC = window.PublicKeyCredential;
           if (!PKC) return;
+          const apply = Reflect.apply;
           const dispatch = EventTarget.prototype.dispatchEvent;
           const Custom = CustomEvent;
           const Refusal = DOMException;
@@ -75,7 +77,7 @@ struct SignInScripts {
           const off = ['passkeyPlatformAuthenticator', 'userVerifyingPlatformAuthenticator',
             'hybridTransport', 'conditionalGet', 'conditionalCreate', 'conditionalMediation'];
           replace(PKC, 'getClientCapabilities', (target, self, args) =>
-            Reflect.apply(target, self, args).then((capabilities) => {
+            apply(target, self, args).then((capabilities) => {
               for (const key of off) if (key in capabilities) capabilities[key] = false;
               return capabilities;
             }));
@@ -88,9 +90,9 @@ struct SignInScripts {
             const options = args[0];
             if (!options || !options.publicKey || options.mediation === 'conditional'
               || (options.signal && options.signal.aborted)) {
-              return Reflect.apply(target, self, args);
+              return apply(target, self, args);
             }
-            Reflect.apply(dispatch, document, [new Custom('\(event)')]);
+            apply(dispatch, document, [new Custom('\(event)')]);
             return Promise.reject(new Refusal('Passkeys are not available in this browser yet.', 'NotAllowedError'));
           };
           replace(credentials, 'get', refuse);

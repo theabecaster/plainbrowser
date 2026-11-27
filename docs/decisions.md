@@ -693,7 +693,9 @@ Research and sources: `docs/research/sign-in.md`.
   the picked account into the page. It would work today with every password manager, but it is
   a second sign-in UI that the entitlement makes redundant, it moves passwords through Plain's
   own code, and it needs a design pass. Revisit only if Apple refuses or delays the entitlement.
-- **Links from other apps** open in a new tab (`BrowserViewController.open(externalURL:)`). At
+- **Links from other apps** open in a new tab (`BrowserViewController.open(externalURL:)`), in
+  place of a sheet, the gallery or the previous page's open question (which gets its safe answer:
+  cancel, deny). At
   launch they wait for the launch focus, so the search field never comes up over the page. While
   the first-run intro is up, the intro gives way unseen and shows again next launch: Apple
   requires the requested page, not an interstitial.

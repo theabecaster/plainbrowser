@@ -31,7 +31,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
   Layout Above adds a 34 pt strip under the bar from the second tab. Where the status items keep
   to a corner (the inner screen) the bar sits on their row, and nothing of Plain's is behind it:
-  no band, backing, blur or reserved strip at the top in any state, only the floating glass. While
+  no band, backing or blur at the top in any state, only the floating glass. While
   reading, the address shrinks in place and then lifts away, the buttons and strip fade, and the
   page runs to the top edge under the status items. The page's first line starts under the bar
   and slides under it. To type an address, the pill still rises above the keyboard with the search

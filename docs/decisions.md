@@ -1252,9 +1252,8 @@ simulator's 24 pt status bar had hidden this.
 - **Layout math (`TopChromeGeometry`, root view coordinates, panes start at the top edge):**
   - In the zone: row center = corner.midY; rowTop = max(center − 22, corner.minY); the row ends
     12 pt before the corner. Strip top = row bottom + 4. At rest the page's top inset = the row's
-    bottom + 4 (+ strip 34 + 4), and never above the corner's bottom: the scroll range's start.
-    The obscured inset WebKit sees is 0 in every state (see "No band at the top" below; was this
-    value at rest and the row's or the corner's bottom, 69 pt, while reading).
+    bottom + 4 (+ strip 34 + 4), and never above the corner's bottom. Pill and hidden: 0 (see "No
+    band at the top" below; was the row's or the corner's bottom, 69 pt).
   - Device numbers, status items as measured (828–928 x 24–69, safe top 81): row 24.5–68.5, page
     top at rest 72.5 pt (was 132), 110.5 pt with the strip (was 170), 0 while reading (was 81,
     then 69). Safari: 84 pt at rest.
@@ -1278,26 +1277,29 @@ simulator's 24 pt status bar had hidden this.
 - **No band at the top in any state (2026-11-27, follow-up).** Owner, on the device with this build: "when
   I scroll, the text field and buttons hide properly but the bar stays … I don't like that bar
   that stays there. Do we even need it at all? When the text field and buttons are showing I
-  think it might look fine without that bar, so let's get rid of it all." The band was the page's
-  own top inset: Pill and
+  think it might look fine without that bar, so let's get rid of it all." The band while reading
+  was the page's own top inset: Pill and
   Hidden kept `obscuredContentInsets.top` at the status row's bottom (69 pt), and WebKit, which
   "adjusts how fixed and sticky elements are rendered near edges with non-zero obscured insets"
   (WKWebView.h), placed a fixed header at 69 pt and filled the 69 pt above it with the header's
   color; on pages without one, the iOS 26 top scroll edge effect blurred and dimmed the same
   strip. Nothing of Plain's served the reader there: the controls had gone.
-  - **Chosen: in the status zone the page's obscured top inset is 0 in every state**
-    (`TopChromeGeometry.obscuredInset(rest:)`). Reading (Pill, Hidden), the page and its fixed
-    header run to the top edge under the status items, as Safari's full-screen reading does; the
-    shrunken address floats alone over it. The status items' own legibility is the system's. At
-    rest only the floating glass is over the page: the first line still starts under the row
-    because the scroll range starts there (`contentInset.top` = `expandedInset`, 72.5 pt, never
-    above the corner's bottom), not because of an obscured inset. A first version kept 72.5 pt at
-    rest; WebKit then filled the area above a sticky header with its color, a full-width band
-    behind the controls (Codex design review, round 1: blocking). **Cost, accepted:** revealed
-    over a page read part way down, the controls float over a fixed header (and an in-page
-    anchor lands under the row), as the glass floats over the page everywhere else. Under a
-    full-width status bar (no corner) the inset follows the rest as before. A split's other pane
-    gets the same (it kept the expanded inset, and so the band; Codex code review).
+  - **Chosen: while reading, the page's obscured top inset is 0 in the status zone**
+    (`TopChromeGeometry` `collapsedInset`, `hiddenInset`). The page and its fixed header run to
+    the top edge under the status items, as Safari's full-screen reading does; the shrunken
+    address floats alone over it. The status items' own legibility is the system's. Under a
+    full-width status bar (no corner) the reading inset stays the status bar's height. A split's
+    other pane follows the same rest (it kept the expanded inset, and so the band; Codex code
+    review): the one bar spans both panes, so a focus switch still relayouts neither.
+  - **At rest the inset stays at the controls' bottom** (72.5 pt, never above the corner's
+    bottom), so the page's first line starts under the row. Nothing of Plain's is behind the
+    controls, but on a site with a fixed or sticky header WebKit paints that header's color into
+    the inset above it, which can read as a band behind the glass (Codex design review, round 1).
+    Tried: an obscured inset of 0 at rest too, with the scroll range alone keeping the first
+    line clear. WebKit then loads each page scrolled to its obscured top, the first line and the
+    header under the row (capture, round 2), so it was reverted. Removing that fill would need a
+    scroll correction after every load and history restore (a visible jump) or WebKit SPI; left
+    for the owner to judge on the device. Safari paints the same fill.
   - **No scroll edge effect on the page or the reader, top or bottom**
     (`UIScrollView.hideChromeEdgeEffects`), on every attached page, the split's other pane and the
     reader. The bottom one was already off (the page runs under the pill); the chrome's

@@ -166,10 +166,9 @@ keep to a corner (the Duo's inner screen) the row sits on their row, clear of th
 page runs to the top edge: Expanded is the row (Back/Forward, the pill, Tabs/Share/More) and the
 strip, page inset = their bottom; Pill shrinks the address in place on the row, buttons and strip
 faded; Hidden lifts it off the top edge. Pill and Hidden give the page the whole screen: the page
-and any fixed header run to the top edge under the status items. In every state the page's
-obscured top inset is 0 and no band, backing or scroll edge effect sits at the top, only the
-floating glass (owner, 2026-11-27: "I don't like that bar that stays there"); at rest the page's
-first line still starts under the row (its scroll range). Under a full-width status bar the row sits under it, Pill tucks the address
+and any fixed header run to the top edge under the status items (top inset 0). In no state does
+a band, backing or scroll edge effect of Plain's sit at the top, only the floating glass (owner,
+2026-11-27: "I don't like that bar that stays there"). Under a full-width status bar the row sits under it, Pill tucks the address
 under the status bar, and Hidden leaves only the status bar. Same triggers and the same
 never-hidden list.
 

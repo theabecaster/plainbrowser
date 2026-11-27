@@ -378,3 +378,9 @@ Newest feature last.
   (the later one cancels the wait) but has no UI test; add one if it ever regresses.
 - **Site icons in the widget.** Favorites are monograms in the widget and above the keyboard; if
   favorites ever get site icons, do both together. (Design review, round 1.)
+- **Isolation check limits** (landing review, round 2). The guard check ignores `//` lines but not
+  `/* … */` comments, and an App Shortcuts update counts as inside `SystemSync.live`'s closure by
+  being within three lines of it, not by parsing. Both are safe today; tighten if the files grow.
+- **Widget captures on a device.** The widget extension is started by the system without the
+  app's isolation arguments, so it reads the installed app's real App Group. That is why
+  `SystemCaptureTests` runs on simulators only; a device capture would need a throwaway install.

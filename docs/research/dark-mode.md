@@ -13,21 +13,21 @@ that have no dark design, like Safari's new Adaptive Dark Mode). Done 2026-11-26
 - **Web content follows** through the web view's traits. The pool also gives every web view the
   window's resolved style as a trait override, so pages loading off screen match.
 - **Dark pages** is one user script (main frame, document start, the engine's content world)
-  that darkens a page with a CSS filter on the root, `invert(1) hue-rotate(180deg)`, and gives the
-  same filter again to pictures, video, canvases, frames, plugins and background pictures so
-  they show as made. It touches only pages that declare no dark `color-scheme`, have no
-  `prefers-color-scheme: dark` rules Plain can read, and have a light background. A guard keeps
-  the root dark while the page is judged. Per-site off from the page menu, remembered like
-  blocking.
-- **Why the filter and not a style rewrite (Dark Reader's dynamic mode):** see "Choosing the
-  technique" below. In short: it is the same operation Safari's Adaptive Dark Mode does (invert
-  lightness, keep hue), it costs O(1) script work per page and nothing per element or per
-  mutation, it leaves computed styles alone (so the judgement can run again at any time and
-  sites cannot detect it, as in Safari), it has no gaps on cross-origin style sheets, and it
-  switches live. Its known costs are quality (dark parts of a light page turn light, emoji and
-  CSS gradients flip) and possible GPU or raster cost while scrolling, which only the device's
-  hitch metric can measure. If the device perf gate shows a hitch increase, the fallback is Dark
-  Reader's dynamic mode (MIT, what Firefox, Brave and DuckDuckGo ship on iOS).
+  that darkens a page **per color, by role**, the way Chrome's Auto Dark Mode and Safari's
+  Adaptive Dark Mode do inside the engine: light backgrounds turn dark, dark text turns light,
+  and what is already dark (a black hero, a dark card) or already light (white text on it) stays
+  exactly as made. Pictures, video, canvases, frames, emoji and colored logos are never changed.
+  It touches only pages that declare no dark `color-scheme`, have no `prefers-color-scheme: dark`
+  rules Plain can read, and have a light background. A guard keeps the root dark while the page
+  is judged. Per-site off from the page menu, remembered like blocking. How it works and what it
+  costs: section 9.
+- **2026-11-27: the root filter was replaced.** The owner, on apple.com: "There is text that looks
+  kind of white … it needs to be perfected and refined until it works like Safari does." A
+  filter flips every color, so on pages that mix dark and light sections the dark parts turned
+  light and their white text turned near white on light (washed out), emoji and gradients
+  flipped. Per-role darkening fixes the class of bug, not the one page. The filter's reasons
+  (sections 4 and 7) were cost and robustness; the measurements in section 9 show the rewrite
+  fits the budget.
 
 ## 1. App theme on iOS
 
@@ -135,17 +135,21 @@ that have no dark design, like Safari's new Adaptive Dark Mode). Done 2026-11-26
   renders a dark background, so a background check catches dark designs in sheets Plain cannot
   read.
 
-Plain's judgement, in order, all cheap: `<meta name="color-scheme">` or the root's computed
-`color-scheme` includes `dark` or `only` → leave alone; any `prefers-color-scheme: dark` rule in
-a readable sheet (up to `FixedChoices.darkPagesMaxRulesRead` rules) → leave alone; the root's,
-else the body's, background luminance at least `FixedChoices.darkPagesLightBackground` (no
-background counts as white) → darken; otherwise leave alone.
+Plain's judgement, in order, all cheap: `<meta name="color-scheme">`, a readable rule for the
+root or body, or the root's inline style has a `color-scheme` with `dark` or `only` → leave
+alone; any `prefers-color-scheme: dark` rule in a readable sheet (up to
+`FixedChoices.darkPagesMaxRulesRead` rules) → leave alone; the root's, else the body's, own
+background luminance at least `FixedChoices.darkPagesLightBackground` (no background counts as
+white) → darken; otherwise leave alone. Since 2026-11-27 the background is read with Plain's
+rewritten sheets on (each carries the site's value in `--plain-o-bg`), so judging costs no extra
+style pass (section 9).
 
 ## 6. No flash of white
 
 - WebKit paints nothing until the head's style sheets have loaded, and keeps the previous page
   (or the web view's dark background) on screen until then.
-- The script adds a guard at document start while the app is dark: `html, body` black. The
+- The script adds a guard at document start while the app is dark: `html, body` in the page dark
+  (#181818 since 2026-11-27; black with the filter). The
   judgement runs in a `requestAnimationFrame` callback as soon as the body exists and the head's
   sheets have loaded, which is inside the rendering update of the first paint, and again at
   `DOMContentLoaded` and `load`. The guard goes either way once judged.
@@ -170,7 +174,7 @@ The filter wins on everything Plain can measure in the simulator and on robustne
 rewrite wins on quality and is the known-good answer for scrolling. Plain ships the filter and
 treats the device perf gate's `hitchMsPerS` on a darkened page as the deciding number.
 
-## 8. Measurements (simulator, 2026-11-26)
+## 8. Measurements of the root filter (simulator, 2026-11-26)
 
 The Mac was heavily loaded during every run (1-minute load average 170–725), so timings carry
 wide noise; read differences, not absolutes.
@@ -190,3 +194,128 @@ wide noise; read differences, not absolutes.
   `testScrollHitchesDarkPagesOff`, XCTHitchMetric) is still to be taken.
 - **No white flash:** an inline script at the top of a light-only page's body (before any paint)
   reads the root's background as the guard's `rgb(0, 0, 0)`.
+
+## 9. Per-element darkening (2026-11-27)
+
+### How the others do it
+
+- **Safari 27.3 Adaptive Dark Mode** [V] ([WebKit blog](https://webkit.org/blog/18541/introducing-adaptive-dark-mode/)):
+  a color matrix that inverts luminosity and keeps hue, "used to darken light backgrounds and
+  lighten dark text"; it "determines when to invert colors so elements remain visible or when
+  to leave colors unchanged"; text aims for WCAG 4.5:1; light CSS gradients turn dark; buttons
+  keep contrast with their backgrounds; "text is kept visible over images"; most images are
+  unchanged, simple black-and-white logos inverted after a histogram check; SVG colors change
+  only where icons would lose contrast; canvas untouched; `mask` and `mix-blend-mode` sometimes
+  dropped on transformed elements; scripts read the authored colors. The post is page-level about
+  detection and says nothing explicit about dark sections on a light page; inverting only light
+  backgrounds and only dark text (its own wording) leaves them as they are.
+- **Chrome Auto Dark Mode** [V] ([dark_mode_filter.cc](https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/platform/graphics/dark_mode_filter.cc),
+  dark_mode_color_classifier.cc): every painted color has a role. Foreground, border, SVG and
+  list markers use the foreground classifier: inverted only when darker than brightness 150/255.
+  Backgrounds and selections use the background classifier: inverted only when brighter than
+  205/255. Inversion is CIELAB lightness (`LABColorFilter`), hue kept. Borders are then adjusted
+  for readable contrast against the background they sit on. Elements whose `color-scheme`
+  includes dark are skipped.
+- **Dark Reader dynamic theme** [V] (MIT; [modify-colors.ts](https://github.com/darkreader/darkreader/blob/main/src/inject/dynamic-theme/modify-colors.ts),
+  `modify-css.ts`, `inline-style.ts`, `variables.ts`): rewrites each style sheet into an override
+  sheet. Roles by property: anything with `background` is a background (but a foreground when the
+  rule also has a `mask-image`, since the background paints an icon), `border`/`outline` are
+  borders, `color`, `fill`, `stroke`, `stop-color` are text. Mapping in HSL: backgrounds
+  `l < 0.5` scale into 0–0.4 (kept dark), lighter ones map down to the dark pole (#181a1b);
+  text `l > 0.5` scales into 0.55–pole (kept light), darker text maps up to the light pole
+  (#e8e6e3); neutral colors take the poles' hue; borders map all lightness into 0.5–0.2. CSS
+  variables get typed twins (`--darkreader-bg--x`, `--darkreader-text--x`, `--darkreader-border--x`)
+  from how they are used, including raw RGB channels used as `rgb(var(--x))`. Inline styles and
+  `bgcolor`/`fill`/`stroke` attributes become `data-darkreader-inline-*` attributes plus CSS
+  variables; SVG fills count as text in small SVGs (icons) and background in large ones.
+  Cross-origin sheets are fetched by the extension's background page. Background pictures are
+  drawn on a canvas and classified (dark, light, transparent, large); light large ones get a
+  dimming filter. A `MutationObserver` watches style elements, and a polling loop catches
+  `insertRule` (CSS-in-JS) that changes no DOM.
+
+### What Plain does (`WebEngine/DarkPagesEngine.swift`)
+
+A focused engine of Plain's own (~1,300 lines of script, no dependency), taking Chrome's role
+classification and Safari's stated rules, and Dark Reader's style-sheet rewriting technique
+(ideas only; no code copied, so no license to carry):
+
+1. **Colors by role, in OKLab.** Background: OKLab L above 0.62 maps down so white lands on 0.21
+   (#181818); darker stays as made (Apple's blue button, 0.57, keeps its color). Text: L under
+   0.66 maps up so black lands on 0.94; lighter stays. Borders: above 0.55 map down so white is
+   0.30. Hue is kept and chroma kept as far as sRGB allows at the new lightness. Each curve is
+   continuous and leaves its own side alone, so applying it twice changes nothing; that makes
+   every later check safe to repeat. Values in `FixedChoices`.
+2. **Twins of the page's style sheets.** For each sheet (`<style>`, `<link>`, `@import`, adopted)
+   a constructed sheet with only the rules that set colors, in the same order and under the same
+   `@media`, `@supports`, `@layer`, `@container`, `@scope` and nesting; `@keyframes` with colors
+   are copied whole. Every color declaration is repeated, changed or not, so twins compete
+   exactly as the originals do: a `.tile-dark` rule after `.tile` still wins. Shorthands are
+   never repeated (they would reset widths, styles and pictures a later rule sets): only their
+   color longhands. Declarations are read from `cssText` in one call per rule. Twins come after
+   the page's sheets in `adoptedStyleSheets`, so they win only where the original rule would.
+3. **CSS variables.** A custom property holding a color (or colors, or RGB channels) gets three
+   twins in the same rule (`--plain-b-x`, `--plain-f-x`, `--plain-d-x`); color properties that use
+   `var(--x)` become `var(--plain-<role>-x, var(--x))`, so an unknown or inline-only variable
+   falls back to the site's value. Variables first seen in a later sheet send earlier sheets
+   round again.
+4. **Other origins.** `cssRules` is null for another origin's sheet in WebKit (no exception).
+   The page's own `fetch` (CORS mode, no credentials) reads it again from the HTTP cache and a
+   constructed sheet parses it. Without CORS the element pass covers it.
+5. **Element pass.** In document order (the top of the page first), 4 ms in the first frame,
+   then idle slices of 5 ms: inline styles (rewritten like rules, applied with a token attribute
+   `data-plain-dark` and a rule in Plain's patch sheet, `!important`), legacy `bgcolor` and
+   `<font color>`, colors that escaped (another origin without CORS), CSS gradients, grey inline
+   SVG icons that would vanish on the dark page (colored ones are logos and keep their colors),
+   text over pictures, and contrast. **Text over a picture** (one that overlaps it with no box of
+   its own color in between, or a CSS background picture) keeps the site's color, as Safari
+   does: the twins carry it in `--plain-o-color`, and a lazy picture that loads later rechecks
+   the text around it. **Contrast**: any other text under 4.5:1 against the composited color
+   behind it is moved in lightness until it passes.
+6. **Never touched:** `img`, `picture`, `video`, `canvas`, frames, plugins, CSS background
+   pictures, emoji (no filter anywhere), colored SVG logos.
+7. **Watching.** A throttled `MutationObserver` (every frame while loading, 100 ms after): new
+   or changed sheets are rewritten, new content queued for idle time; an inline-style change
+   counts only when its colors changed (pages animate transforms every frame); a class change
+   needs a look only when the element carries a fix. `insertRule` and replaced adopted sheets
+   are caught on the next scroll or touch and every few batches.
+8. **Judging costs no extra style pass.** The twins are built first (style sheets only), then
+   the page is read with them on; each twin's background carries the site's value in
+   `--plain-o-bg`. With the filter, judging needed a style pass with Plain's sheets off, thrown
+   away right after.
+9. **Engine pitfalls found by measuring** (each was a multiple of the total): a rule inserted into
+   a sheet mid-slice makes the next `getComputedStyle` restyle the whole page (AP News: 2.2 s of
+   script, now 0.2 s), so patch rules go in at the end of a slice; element work right after a
+   mutation forces WebKit's pending restyle early, so it waits for idle time.
+
+### Measurements (iPhone 17 simulator on this Mac, 2026-11-27)
+
+Script time is everything the engine spends on the main thread for a page (`stats.cost`). The
+first frame is what runs before the first paint, which is already darkened (the guard holds the
+page dark until then; there is never a light frame).
+
+| Page | Elements | Rules read | Script, whole load | First frame: rewrite / judge style pass / visible elements | Texts under 4.5:1 |
+|---|---|---|---|---|---|
+| Large light page (`/big`) | 6,308 | 4,000 | 43–44 ms median (filter: ~1 ms) | 15 / 12 / 5 ms | — |
+| apple.com-like at store size (`/apple-big`) | 1,580 | ~4,100 | 36–37 ms | 19 / 7 / 5 ms | 0 of 45 (fixture) |
+| apple.com (real) | ~1,400 | 6,702 | 42–50 ms | 20 / 6 / 2 ms | 0 of 126 (min 4.7) |
+| apnews.com (real) | ~3,800 | 20,675 | 209 ms over a 5 s load | 4 / 34 / 4 ms | 0 of 490 (min 4.88) |
+| news.ycombinator.com (real) | 774 | 110 | 11 ms | 4 / 2 / 4 ms | 0 of 291 (min 4.54) |
+| wikipedia.org | — | — | judged native (own dark mode) | — | — |
+
+- Load to main-frame finish on `/big`: darkened 65–73 ms vs dark pages off 40–48 ms (the filter
+  showed no difference). On `/apple-big`: 52–59 ms vs 25–28 ms. The difference is the first
+  frame's work above plus the restyle with twins.
+- Every element checked by DCL+58–80 ms (`/big`), DCL+52–58 ms (`/apple-big`).
+- The "judge style pass" is WebKit's restyle with the twins, read by the judgement: the same pass
+  the darkened first frame needs anyway.
+- Scroll proxy: see the table after this list.
+
+| Scroll proxy (`AppearanceTests/testScrollFramesWithAndWithoutDarkPages`, light-only test site, frames over 25 ms while scrolling) | Darkened | Off for the site | Darkened again |
+|---|---|---|---|
+| Root filter (before) | 17 of 3,090 | 26 of 3,167 | 9 of 3,205 |
+| Per-role darkening (after) | 15 of 3,187 | 7 of 3,160 | 20 of 3,123 |
+
+No measurable change: the spread between runs of the same mode is larger than between modes (the
+Mac's load average reached 224 during the second run). A darkened page now scrolls with no
+filter at all, only ordinary colors, so the device's hitch metric should match a page with dark
+pages off; `testScrollHitchesDarkened` on the Duo confirms it.

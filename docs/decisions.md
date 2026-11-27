@@ -733,14 +733,30 @@ Research and sources: docs/research/dark-mode.md.
   `only light`, has a readable `prefers-color-scheme: dark` rule, or already has a dark
   background. "Turn Off Dark Pages for This Site" is remembered per site (`darkPagesOff` table,
   in memory for private tabs) and applies without a reload.
-- **One root filter, not a style rewrite.** `invert(1) hue-rotate(180deg)` on `html`, the same
-  again on pictures, video, canvases, frames and background pictures. Chosen over Dark Reader's
-  dynamic mode for O(1) script cost, no cross-origin gaps, no mutation watching, live switching,
-  and computed styles left as the site wrote them (as in Safari's Adaptive Dark Mode, which is
-  private API on iOS 27). The trade is quality (dark parts of a light page turn light, emoji
-  flip) and a possible scroll cost only the device gate can see; Dark Reader (MIT) is the
-  fallback if it shows one.
-- **No flash.** A guard keeps the root black from document start while the page is judged; the
+- **Per-role darkening, not one root filter (changed 2026-11-27).** The first version put
+  `invert(1) hue-rotate(180deg)` on `html`. On pages that mix dark and light sections (the owner
+  on apple.com) it turned black heroes light and their white text near white on light, and
+  flipped emoji and gradients. Now each color is changed by its role, as Chrome's and Safari's
+  engines do: light backgrounds dark, dark text light, light borders grey, in OKLab with hue
+  kept; dark backgrounds and light text stay exactly as made; pictures, video, canvases, frames,
+  emoji and colored logos are never touched; text over a picture keeps the site's color; any
+  text left under 4.5:1 is fixed. Style sheets get rewritten twins in the same cascade order;
+  what they can't reach is fixed per element in idle time. Details and numbers:
+  docs/research/dark-mode.md, section 9.
+- **A focused engine of Plain's own, not Dark Reader.** Dark Reader (MIT, compatible with
+  AGPL) is the proven rewrite, but it maps every color (dark backgrounds get darker, light text
+  dimmer) where Safari leaves them, inserts `<style>` elements into the page's DOM (Plain keeps
+  all styling in adopted sheets so hydrating frameworks never see it), needs its own fetch path
+  for other origins, and is ~300 KB per page. Plain's engine (~1,300 lines in
+  `DarkPagesEngine.swift`) takes its techniques (twin sheets, typed variable twins, mask
+  backgrounds as foreground, inline-style handling), Chrome's role thresholds and Safari's
+  stated rules. No code is copied, so nothing to bundle or credit in a license file.
+- **Cost accepted for quality.** Script per page went from ~1 ms (filter) to 10–50 ms on real
+  sites and 37–44 ms on the largest test pages, ~200 ms over a whole AP News load, measured in
+  the simulator; the first paint waits for the sheet rewrite and one restyle (15–25 ms on the
+  largest pages). The filter's GPU cost while scrolling is gone. The device perf gate is the
+  check that this holds on the phone.
+- **No flash.** A guard keeps the root dark (#181818) from document start while the page is judged; the
   judgement runs in the first rendering update after the head's sheets load. The guard and the
   darkening are constructed style sheets (`adoptedStyleSheets`), never DOM nodes, so hydrating
   frameworks never see them. A darkened page's overscroll area is set dark

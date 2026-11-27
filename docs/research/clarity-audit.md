@@ -24,8 +24,8 @@ or by a test), `[ ]` not covered. Shot prefixes are in brackets.
 ### Intro [intro-]
 - [x] Splash (the mark assembling)
 - [x] Each step in order, with Skip, to the dissolve into search
-- [c] Browse for Me step per availability (available, off, not ready): intro lane's captures
-- [c] Default browser step (behind `FixedChoices.defaultBrowserPromptsEnabled`)
+- [ ] Browse for Me step per availability: the intro lane walks it
+- [ ] Default browser step (behind `FixedChoices.defaultBrowserPromptsEnabled`): the intro lane walks it
 
 ### Start screen [start-]
 - [x] First run: field focused over the mark, the one-sentence hint
@@ -43,18 +43,19 @@ or by a test), `[ ]` not covered. Shot prefixes are in brackets.
 - [x] Zoomed, and the sheet's zoom row
 - [x] Failed: not answering, host not found, site gone under a page; the failed page's sheet
 - [c] Offline, timed out, certificate error ("Visit Anyway"), crashed, resend form: wording read in `PageStateView`
-- [c] PDF (Save PDF to Files): no local PDF in the test server
+- [ ] PDF (Save PDF to Files): no local PDF in the test server, not walked
 - [x] Dark pages on and off for a site; the app's Appearance set to Dark [misc-08…12]
 
 ### Page sheet [sheet-]
 - [x] Article: address row, tiles (Find, Reader, Summarize, Share), keep row, rows, chips
 - [x] After Favorite and Read Later (Unfavorite, Remove)
-- [x] Copy Link answered in place
+- [x] Copy Link (the check mark had gone by the capture)
 - [x] Site Settings menu
 - [x] Editing the address from the host
 - [x] Reader, and the sheet over the reader
 - [x] Share sheet, with Print and Save as PDF
-- [x] Foreign page: the one-time hint, Translate tile, translated, Original
+- [x] Foreign page: Translate tile, translated, Translated tile
+- [c] The one-time "This page is in French" toast: gone before the capture; wording read in code
 - [x] Private tab's sheet [tabs-12]; failed page's sheet [page-14]; loading [page-04]; start [start-03]
 - [x] Without Apple Intelligence [summary-11]
 
@@ -72,7 +73,7 @@ or by a test), `[ ]` not covered. Shot prefixes are in brackets.
 - [x] Tabs menu (long press) with one tab and with several
 - [x] After a bar swipe
 - [x] Private: empty list, a private page, its sheet, its switcher, the regular list from it
-- [c] Bar swipe mid-gesture, New Tab card past the last tab, card drag: stills can't hold a gesture; the motion lanes' recordings cover them
+- [ ] Bar swipe mid-gesture, New Tab card past the last tab, card drag, and every transition's motion: stills can't hold a gesture, so jank between states was not judged here; the motion lanes' recordings cover them
 
 ### Profiles [profiles-]
 - [x] New Profile in the switcher's More menu; the name alert
@@ -82,7 +83,7 @@ or by a test), `[ ]` not covered. Shot prefixes are in brackets.
 ### Sheets [sheets-, settings-]
 - [x] History, Reading List, Favorites: empty
 - [x] History, Reading List, Favorites, Archived Tabs: with rows; swipe actions; History search with no results; Clear
-- [x] Downloads: toast, sheet row in the page sheet, the sheet, a row's menu
+- [x] Downloads: toast, the row in the page sheet, the sheet (a finished row opens Quick Look)
 - [x] Settings: root, Search Engine, Tab Layout, Archive Tabs, Appearance, App Icon, About, Clear confirmation
 
 ### Summaries [summary-]
@@ -101,12 +102,27 @@ or by a test), `[ ]` not covered. Shot prefixes are in brackets.
 - [x] Cookie banner answered; a form's keyboard; passkey toast
 - [x] Location prompt and denied; camera prompt (preview argument)
 
-### Duo inner screen [inner-]
-- [x] Top bar with one tab; the strip with three; page sheet (popover)
-- [x] Side pane: Reader, Find, History
-- [x] Split, and its sheet (Swap Panes, Close Pane); tabs menu (New Window)
-- [x] Tab Layout Left and Right
-- [c] A second window: one scene at a time shows in the stand-in window
+### Duo inner screen [inner-, still-]
+Device Hub could not be driven on the test Mac, so the inner screen is the resizable window that
+stands in for it (951x669 and 669x951). XCUITest's taps do not land in that window: only what a
+launch reaches was captured there.
+- [x] Start screen, focused field, top bar with one tab (landscape)
+- [x] By launch arguments (stills): the strip with three tabs, a split, Tab Layout Left (expanded
+  and rail) and Right, the side pane's Reader, Find and History (landscape and portrait)
+- [ ] Page sheet as a popover, the tabs menu (New Window), the split's sheet (Swap Panes, Close
+  Pane), a second window: not captured; judged from the phone's sheet, which is the same view
+
+### Devices
+| Config | Device | What was walked |
+|---|---|---|
+| `i17-light` | iPhone 17, light | Everything above (125 states) |
+| `i17-fix`, `i17-final`, `i17-final2` | iPhone 17, light | The changed screens again, after the fixes |
+| `small-light` | iPhone 13 mini (375 pt, the narrowest iOS 27 runs on) | Intro, start, page, page sheet, address bar, tabs, sheets, summaries (91) |
+| `duo-outer` | iPhone Duo, outer screen | Start, page, page sheet, tabs, sheets (62) |
+| `i17-dark` | iPhone 17, dark | Start, page sheet, tabs, sheets, summaries (61) |
+| `i17-xl`, `i17-xl-fix` | iPhone 17, Accessibility XL text | Start, page sheet, tabs, sheets, Settings (43), then the fix |
+| `inner-land`, `inner-land-stills` | Duo inner, landscape (stand-in window) | See above |
+| `inner-port`, `inner-port-stills` | Duo inner, portrait (stand-in window) | See above |
 
 ## 2. Findings, ranked by what a first-time user meets
 
@@ -154,60 +170,83 @@ change to make. Captures: `clarity/<config>/<shot>.jpg` in the session scratchpa
    "Private" on a page; over a white page the tint is faint. **Priv lane:** the pill's quiet lead
    word, as for "Not Secure —". [i17-fix/tabs-11-private-page against i17-light/page-01-loaded]
 
+6. **Fixed. At the accessibility text sizes the page sheet's captions were cut to "Rea…", "Su…",
+   "Sha…", "Hist…", "Fav…", "Setti…", Copy Link and Reload ran into each other, the zoom percent
+   wrapped ("100 / %"), and the start screen's shortcut read "Pri-vate Tab".** Three or four cells
+   share the width, so the text cannot grow without end. The sheet's fixed grids (address row,
+   tiles, keep row, chips, zoom row) and the start screen's shortcut captions now stop at the
+   largest standard size, as the pill and the switcher's bar already do; the rows under them
+   ("New Private Tab", Site Settings) keep growing. [before: i17-xl/sheet-02-article-sheet,
+   sheet-03-favorited-saved, sheet-08-reader-sheet, start-02-empty; after:
+   i17-xl-fix, same names]
+
 ### Medium
 
-6. **Fixed (wording). The page sheet's "Favorites" opens an editor, not the favorites.** A tap on
+7. **Fixed (wording). The page sheet's "Favorites" opens an editor, not the favorites.** A tap on
    a row renames it; nothing opens. The footer now says so: "Tap a favorite to rename it. To open
    one, tap the address bar." **Lead's call:** caption the chip "Edit Favorites" (its VoiceOver
    name) or make a tap open the page. [i17-light/sheets-1-favorites, sheets-2-favorites-swipe]
-7. **Stop is an X at the end of the sheet's address row.** While a page loads the row is Back,
+8. **Stop is an X at the end of the sheet's address row.** While a page loads the row is Back,
    host, Copy Link, X. An X in the top corner of a sheet reads as "close the sheet". Reload's
    place is right (state rules §4). **Lead's call (page sheet):** `xmark` is Safari's Stop in the
    address field, where nothing else can close; here `stop.circle`, or the X inside the circular
    arrow's slot with the progress line under the host, would not be mistaken.
    [i17-light/page-04-loading-sheet]
-8. **Browse for Me's row sits on the veiled page's text when there are no suggestions.** With a
+9. **Browse for Me's row sits on the veiled page's text when there are no suggestions.** With a
    query that has no rows the row's symbol and title are drawn straight over the page's words
    ("read." shows through beside the sparkles). **Arcbar lane:** the row needs the card's paper
    under it whenever it shows. [i17-light/address-03-query-browse-for-me]
-9. **"Tab closed · Reopen" covers the recently closed rows above the field.** After the last tab
+10. **"Tab closed · Reopen" covers the recently closed rows above the field.** After the last tab
    closes, the search opens with the closed tabs as rows (a return arrow each) and the toast on
    top of the second row's title. Two offers of the same thing, one over the other. **Arcbar
    lane:** no toast while the closed tab is a row on screen, or the toast above the rows.
    [i17-light/launch-05-all-closed]
-10. **"Passkeys will work once Apple approves Plain"** is about Plain's paperwork, not about what
+11. **"Passkeys will work once Apple approves Plain"** is about Plain's paperwork, not about what
     the user can do. **Sign-in lane:** "Passkeys aren't available in Plain yet. Use your
     password." [i17-light/misc-05-passkey-toast]
-11. **After "Don't Allow" nothing says how to change it.** The page says "Location denied" and
+12. **After "Don't Allow" nothing says how to change it.** The page says "Location denied" and
     Plain shows nothing; Site Settings has no row for it. **Perm lane.**
     [i17-light/misc-06-location-prompt, misc-07-location-denied]
-12. **Known, still there (shell lane): the pill and bar over text** (the collapsed pill worst),
+13. **Known, still there (shell lane): the pill and bar over text** (the collapsed pill worst),
     **the link preview pushing its menu off the screen**, and **"Plain couldn't open this page."
     for a refused connection.** [i17-light/page-06-collapsed-pill, misc-01-link-menu,
     page-13-error-refused]
 
+14. **At the accessibility text sizes the archive's rows keep the age beside the title**, so
+    titles read "The Verg…", "Liquid g…" (History has the same row). **Sheets (lead to route):**
+    put the age under the title from the first accessibility size. [i17-xl/tabs-06b-archive]
+15. **At the accessibility text sizes the focused field's page row runs its Copy button off the
+    card's edge.** **Arcbar lane.** [i17-xl/tabs-13-private-focus]
+16. **Duo inner screen, start screen: the trailing glass capsule keeps its full width with only
+    More in it**, an empty stretch of glass beside the button (state rules §3: "a capsule with
+    nothing to show leaves no empty glass"). **Strip lane.** [inner-land/start-02-empty]
+17. **Duo inner screen, Tab Layout Left as a rail: a tab is one letter in a box** ("L"), the
+    same for every page of a site, with no title until the rail is expanded. **Strip lane:** the
+    site's icon when there is one, and the title in the large content viewer.
+    [inner-land/inner-09-tabs-left, inner-land-stills/still-tabs-left-rail]
+
 ### Low
 
-13. **Fixed. The summary sheet's Done was ink; every other sheet's is the accent.**
+18. **Fixed. The summary sheet's Done was ink; every other sheet's is the accent.**
     [before: i17-light/summary-05-done; after: i17-fix/summary-05-done]
-14. **Fixed. "Remove" under crossed glasses, next to "Unfavorite".** It did not say what it
+19. **Fixed. "Remove" under crossed glasses, next to "Unfavorite".** It did not say what it
     removes, and the pair read as two new commands, not as the two things just kept. Now the kept
     state shows like the on tiles: the filled star and "Favorite", the glasses and "Saved", both
     in the accent; a tap removes it. VoiceOver keeps "Remove from Favorites" and "Remove from
     Reading List", selected. [before: i17-light/sheet-03-favorited-saved; after:
     i17-final/sheet-03-favorited-saved]
-15. **Site Settings' items word the same thing three ways:** "Desktop Site", "Turn Off Blocking
+20. **Site Settings' items word the same thing three ways:** "Desktop Site", "Turn Off Blocking
     on This Site", "Turn Off Cookie Banner Blocking", "Turn Off Dark Pages for This Site". Under a
     menu titled Site Settings the tail is noise, and Desktop Site shows no on or off. **Lead's
     call** (UI tests name these labels). [i17-light/sheet-05-site-settings, misc-11-dark-site-settings]
-16. **The zoom row has no name:** "− 100% +", the percent dimmed at 100. The pair of minus and plus around a percent reads as zoom, so it was left.
+21. **The zoom row has no name:** "− 100% +", the percent dimmed at 100. The pair of minus and plus around a percent reads as zoom, so it was left.
     [i17-light/sheet-02-article-sheet]
-17. **Downloads' Show in Files is a bare folder** at the title's leading end (named for
+22. **Downloads' Show in Files is a bare folder** at the title's leading end (named for
     VoiceOver). Left: the row's menu has the words. [i17-light/sheets-03-downloads]
-18. **Settings footers wrap at two widths:** Archive Tabs' and Appearance's break early, under
+23. **Settings footers wrap at two widths:** Archive Tabs' and Appearance's break early, under
     the picker's value. **Sheets (polish backlog).** [i17-light/settings-01-root]
-19. **An empty History still shows its search field and a dim "Clear…".** [i17-fix/sheets-empty-history]
-20. **Intro, "Made for iPhone Duo — Unfold for two pages side by side" on a phone that cannot
+24. **An empty History still shows its search field and a dim "Clear…".** [i17-fix/sheets-empty-history]
+25. **Intro, "Made for iPhone Duo — Unfold for two pages side by side" on a phone that cannot
     unfold** (item 16 of the last audit). **Intro lane.** [i17-light/intro-02, small-light/intro-02]
 
 ### Checked and clear

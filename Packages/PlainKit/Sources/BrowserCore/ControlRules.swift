@@ -154,16 +154,22 @@ public struct ControlRules: Sendable, Equatable {
     /// History, Settings and Edit Favorites apply everywhere.
     public var more: ControlVisibility { .shown }
 
-    /// One predicate, `others ≥ 1`, for the tap, the swipe up and Show All Tabs.
-    /// With side tabs the slot shows and hides the sidebar, which is always there to toggle (M3).
+    /// The tap: Tabs with another tab to switch to; with one page tab, "+" (a second tab is the one
+    /// useful tap, as Arc keeps its "+" beside the switcher). With side tabs the slot shows and
+    /// hides the sidebar, which is always there to toggle (M3).
     public var tabsSlot: TabsSlotFace {
         if state.sideTabs || state.others >= 1 { return .tabs }
         return state.hasPage ? .newTab : .hidden
     }
 
-    /// The swipe up from the bar opens the gallery; otherwise it bumps ("nothing there"). Off with
-    /// side tabs: the sidebar is the switcher.
-    public var swipeUpOpensGallery: Bool { !state.sideTabs && state.others >= 1 }
+    /// The gallery has a card to show: another tab, or the page on screen (one page tab shows its
+    /// card beside a New Tab card). An empty tab alone has nothing to show.
+    public var galleryHasCards: Bool { state.others >= 1 || state.hasPage }
+
+    /// The swipe up from the bar opens the gallery whenever it has a card, so the gesture always
+    /// means the switcher; otherwise it bumps ("nothing there"). Off with side tabs: the sidebar
+    /// is the switcher.
+    public var swipeUpOpensGallery: Bool { !state.sideTabs && galleryHasCards }
 
     /// The bar's gestures run; Find on Page owns the bottom while it is open (§7).
     public var acceptsBarGestures: Bool { !state.isFindOpen && barShown }
@@ -196,8 +202,9 @@ public struct ControlRules: Sendable, Equatable {
         return state.hasNext ? .shown : .dimmed
     }
 
-    /// The gallery from the menu: with side tabs too, as the button there toggles the sidebar.
-    public var menuShowAllTabs: Bool { state.others >= 1 }
+    /// The gallery from the menu, with the swipe up's predicate. With side tabs too, as the button
+    /// there toggles the sidebar; there the sidebar already lists a lone tab, so it needs another.
+    public var menuShowAllTabs: Bool { state.sideTabs ? state.others >= 1 : galleryHasCards }
     public var menuReopenClosedTab: Bool { state.hasClosed }
     public var menuArchivedTabs: Bool { state.hasArchived }
     /// Closing an empty tab does nothing useful; it goes away by itself.
@@ -334,6 +341,10 @@ public struct GalleryRules: Sendable, Equatable {
 
     /// In an empty list, the empty state's button is the one New Tab (principle 8).
     public var newTabButton: Bool { state.listCount > 0 }
+
+    /// One card in the list: a paper New Tab card sits beside it, so the switcher never looks
+    /// half empty and the next step is in plain sight (owner, 2026-11-26).
+    public var newTabCard: Bool { state.listCount == 1 }
 
     /// Done returns to the tab on screen, so it shows only when that tab is in the list.
     public var done: Bool { state.selectionInList }

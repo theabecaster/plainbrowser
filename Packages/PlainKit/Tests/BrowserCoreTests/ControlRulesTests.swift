@@ -104,7 +104,9 @@ import Testing
     @Test func emptyTabAloneHasNoSwitcherAndNoNewTab() {
         let rules = ControlRules(Self.emptyTab())
         #expect(rules.tabsSlot == .hidden)
-        #expect(!rules.swipeUpOpensGallery)
+        #expect(!rules.galleryHasCards)
+        #expect(!rules.swipeUpOpensGallery, "nothing to show: the swipe bumps")
+        #expect(!rules.menuShowAllTabs)
         #expect(rules.barSwipeSwitchesTabs)
         #expect(!rules.offersNewTabCard)
         #expect(rules.menuPreviousTab == .hidden)
@@ -119,11 +121,12 @@ import Testing
         #expect(!rules.menuNewPrivateTab)
     }
 
-    @Test func onePageNoOthersTurnsTheSlotIntoNewTab() {
+    @Test func onePageNoOthersTapsNewTabAndSwipesToTheSwitcher() {
         let rules = ControlRules(Self.page())
-        #expect(rules.tabsSlot == .newTab)
-        #expect(!rules.swipeUpOpensGallery)
-        #expect(!rules.menuShowAllTabs)
+        #expect(rules.tabsSlot == .newTab, "the tap stays the quick new tab")
+        #expect(rules.galleryHasCards)
+        #expect(rules.swipeUpOpensGallery, "one card and a New Tab card")
+        #expect(rules.menuShowAllTabs, "same predicate as the swipe up")
         #expect(rules.back == .dimmed)
         #expect(rules.forward == .hidden)
         #expect(rules.share == .shown)
@@ -170,7 +173,8 @@ import Testing
     @Test func privateOnlyIsLikeOnePage() {
         let rules = ControlRules(Self.page(isPrivate: true))
         #expect(rules.tabsSlot == .newTab)
-        #expect(!rules.swipeUpOpensGallery)
+        #expect(rules.swipeUpOpensGallery)
+        #expect(rules.menuShowAllTabs)
         #expect(!rules.blockingToggle, "the allow-list is saved to disk")
         #expect(rules.desktopSite)
     }
@@ -371,6 +375,14 @@ import Testing
         #expect(!rules.done)
         #expect(!rules.more)
         #expect(GalleryRules(Self.gallery(count: 1)).newTabButton)
+    }
+
+    @Test func galleryOneCardGetsANewTabCardBesideIt() {
+        #expect(!GalleryRules(Self.gallery(count: 0)).newTabCard, "the empty state has its own button")
+        #expect(GalleryRules(Self.gallery(count: 1)).newTabCard)
+        #expect(GalleryRules(Self.gallery(count: 1, isPrivate: true)).newTabCard)
+        #expect(GalleryRules(Self.gallery(count: 1, selection: false)).newTabCard, "the other list's lone card too")
+        #expect(!GalleryRules(Self.gallery(count: 2)).newTabCard)
     }
 
     @Test func galleryDoneOnlyWithTheScreenTabInTheList() {

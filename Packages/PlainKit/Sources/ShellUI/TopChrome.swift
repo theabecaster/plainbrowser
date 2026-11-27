@@ -181,23 +181,26 @@ struct TopChromeGeometry: Equatable {
     }
 
     /// The hidden bar's height over the page: the smallest top inset the page sees. In the status
-    /// zone the status row's bottom, or the corner's if it reaches lower, so the page gets
-    /// everything under the clock's row and a fixed header never sits under it; under a
+    /// zone nothing: the page runs to the top edge under the status items, as Safari's full-screen
+    /// reading does, and nothing of Plain's (no band, backing or edge effect) stays behind. A
+    /// fixed header then sits at the top edge, and WebKit extends no color above it. Under a
     /// full-width status bar, that bar.
     var hiddenInset: CGFloat {
-        guard let corner else { return safeTop }
-        return max(rowBottom, corner.maxY)
+        isInStatusZone ? 0 : safeTop
     }
 
-    /// The collapsed chrome's height over the page. In the status zone the shrunken address stays
-    /// on the status row, so the page sees the same as hidden.
+    /// The collapsed chrome's height over the page. In the status zone the shrunken address
+    /// floats alone on the status row over the page, which runs to the top edge as when hidden:
+    /// an inset there would leave a band of the page's header color behind the address.
     var collapsedInset: CGFloat {
         isInStatusZone ? hiddenInset : collapsedBottom + Self.gap
     }
 
     /// The expanded chrome's height over the page: the largest top inset the page sees, never equal
-    /// to the collapsed one (WebKit wants the maximum viewport inset strictly larger).
-    var expandedInset: CGFloat { max(expandedBottom, collapsedInset + 1) }
+    /// to the collapsed one (WebKit wants the maximum viewport inset strictly larger). In the status
+    /// zone never above the corner's bottom, so the page's first line at rest starts clear of the
+    /// clock.
+    var expandedInset: CGFloat { max(expandedBottom, corner?.maxY ?? 0, collapsedInset + 1) }
 
     /// The page's obscured top inset for the bar resting collapsed or expanded.
     func obscuredInset(collapsed: Bool) -> CGFloat {

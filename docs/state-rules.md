@@ -114,7 +114,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Control | Start | Page | Hide or dim | Why |
 |---|---|---|---|---|
 | Back | — | shown; dim when there is nothing to go back to | Dim inside Page | The most used button, leftmost; its place is muscle memory. Safari and Arc both keep Back in reach. On Start there is no page and no history. |
-| Forward | — | hidden in place until there is somewhere forward | Hide (slot kept) | Rarely available. Safari 26 shows Forward only after Back is used (MacRumors). The slot is kept, so Tabs, Share and More never move. On the Duo's vertical bar and the inner screen's top bar: dim. |
+| Forward | — | hidden in place until there is somewhere forward | Hide (slot kept) | Rarely available. Safari 26 shows Forward only after Back is used (MacRumors). The slot is kept, so Tabs, Share and More never move. On the Duo's vertical bar: dim. In the inner screen's top bar Back and Forward have their own capsule, which holds only what shows and grows away from Back, so nothing else moves. |
 | Back in special pages | | Reader: closes the reader. A child tab's first page: closes the tab and returns to its opener. | | One Back for "go to what I was looking at". |
 | Share | — | shown when the tab has an address | Hide on Start | Nothing to share on Start. On a failed page it shares the address that was tried. |
 | More (page menu) | shown | shown | Never hidden | History, Settings and Edit Favorites apply everywhere. |

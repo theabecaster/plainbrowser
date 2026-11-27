@@ -1002,7 +1002,14 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   in place at the top; revisit if the owner prefers that.
 - **No swipe up from a top bar** (it would pull away from the page); Tabs, the strip and the
   sidebar are at hand. A sideways swipe on the pill still switches tabs.
-- **Forward dims in the top bar**, as in the vertical bar: both have fixed slots.
+- **Back and Forward show only what applies.** Their capsule holds the buttons that show (Forward
+  hides until there is somewhere forward, as on a phone) and grows away from Back, so Back never
+  moves; on Start, with neither, it leaves no empty glass. Tabs, Share and More keep their slots.
+  The design review called two dead arrows wasted width (round 1).
+- **Narrow tabs drop the site's name** from the end of a title ("Web browser - Wikipedia" reads
+  "Web browser" in the strip and the sidebar; `TabGalleryItem.compactTitle`): the tile already
+  shows the site, and the words that tell tabs apart come first. The strip's edges fade where tabs
+  continue. In a split the focus ring starts under the bar, which belongs to both panes.
 - **Page area** (inner landscape 951x669, status bar 24 pt; % of the screen the page shows):
 
   | State | Before (M3) | After at rest | After while reading | Safari 27.1 |

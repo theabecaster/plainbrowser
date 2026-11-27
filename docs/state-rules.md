@@ -172,16 +172,18 @@ a band, backing or scroll edge effect of Plain's sit at the top, only the floati
 under the status bar, and Hidden leaves only the status bar. Same triggers and the same
 never-hidden list.
 
-## 4. The page menu (More, and a long press on the pill)
+## 4. The page sheet (More, and a long press on the pill)
 
-Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: the tabs
-items (New Private Tab, Reopen Closed Tab, Archived Tabs) are one captioned row when two or more
-apply; Reload (or Stop), Share and Copy Link are one row of three; Find on Page, Show Reader and
-Translate Page are one captioned row when two or more apply ("Find", "Reader", "Translate" or
-"Original"; each alone keeps its full name and subtitle); Print and Save as PDF are not in the
-menu but in the share sheet (Share), as in Safari and Chrome; Desktop Site, blocking, cookie
-banners and Dark Pages fold into a "Site Settings" submenu when two or more apply; History, Edit
-Favorites and Settings are one row of three, so the whole menu fits the Duo's outer screen.
+Order is fixed (docs/ui-reference.md, "Page sheet"). Columns are states of the tab on screen.
+Layout: the address row first (Back and Forward, dimmed at a limit; the host, a tap edits the
+address; Copy Link; Reload or Stop); then at most four captioned tiles: Find on Page, Show Reader,
+Translate Page (or Show Original), Add to Favorites when a slot is free, and Share last; then
+rows: Add to Favorites when no tile was free, Zoom (− % +), Save PDF to Files, Site Settings (a
+menu when two or more of Desktop Site, blocking, cookie banners and Dark Pages apply), the pane
+items, Downloads; then the tabs items (New Private Tab, Reopen Closed Tab, Archived Tabs) as
+captioned chips when two or more apply, and History, Favorites and Settings as chips. Print and
+Save as PDF are in the share sheet (Share), as in Safari and Chrome. The whole sheet fits the
+Duo's outer screen. Without a page (the start screen) it holds the rows from the pane items on.
 
 | Item | Start | Loading | Loaded | Failed / offline | Crashed | Reader open | Notes |
 |---|---|---|---|---|---|---|---|
@@ -223,10 +225,15 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 |---|---|---|
 | Button bar | Hidden (faded out) | The keyboard and the field take the bottom. |
 | Bar gestures | Off | The field owns the touches. |
-| Favorites above the keyboard | Field empty, or still showing the page's own address, and at least one favorite | With none, the strip takes no space and says nothing; Edit Favorites is in the page menu. |
-| Suggestions | While typing | |
-| Start screen behind | Shown on Start while the field is empty (the sheet is clear) | The mark keeps the empty field company. |
-| Start screen while typing | With a query, the mark, sentence and shortcuts recede (fade, shrink to 94 %, drift up, with the snappy 0.3 spring; Reduce Motion: a crossfade) and the sheet takes the paper; cleared, or the field closed, they come back | Suggestion rows never draw over the mark (owner, 2026-11-26). The rows sit on the paper token themselves, so they read even mid-transition, in light and dark. |
+| Favorites above the keyboard | Field empty, or still showing the page's own address, and at least one favorite | With none, the strip takes no space and says nothing; Favorites is in the page sheet. |
+| Rows before typing (nearest the field first) | Open Copied Link (a web address on the pasteboard, offered once, within 10 minutes, never the page on screen); the page's own row (search over a page: title and host, Copy, a tap edits the address); up to 4 recently visited pages (regular tabs; never the page on screen, a favorite or a closed tab's page); up to 2 recently closed tabs (regular tabs); one sentence when none of these and no favorites apply (not on the start screen, which has its own) | Never an empty field (owner, 2026-11-27: "it just looks empty"). Everything is already in memory, so it shows in the frame the keyboard starts. Private tabs show no history: only the page, a copied link, favorites and a sentence that says Plain keeps none. |
+| The card | The rows, the favorites and the field sit on one paper card over the veiled page, from the top row to the keyboard | Arc's sheet; the page stays readable as context. |
+| Suggestions | While typing; a recent row that is also a suggestion keeps its row | |
+| Start screen behind | Shown on Start while the field is empty and has no rows of its own (the sheet is clear) | The mark keeps the empty field company (first run). |
+| Start screen while typing | With a query, or rows of the field's own, the mark, sentence and shortcuts recede (fade, shrink to 94 %, drift up, with the snappy 0.3 spring; Reduce Motion: a crossfade) and the sheet takes the paper; cleared, or the field closed, they come back | Suggestion rows never draw over the mark (owner, 2026-11-26). The rows sit on the paper token themselves, so they read even mid-transition, in light and dark. |
+| Search over a page (a tap on the pill) | The field opens empty over the veiled page; a submitted search or address opens a new tab whose opener is the page (Back on its first page closes it and shows the page); dismissing creates nothing. On the start screen it loads in place. | Arc's "go somewhere new": the page being read is never replaced by a stray search (owner, 2026-11-27). |
+| Edit the page's address (the page sheet's host, or the page's row) | The field shows the address, selected, with Copy inside it while untouched; Return loads in the same tab | The second door, for changing this page. |
+| On the search engine's results page | The pill shows the query; a tap brings it back selected and a new query replaces the results in the same tab | Safari: refining a search is not going somewhere new. |
 | Remote suggestions | Off in private tabs | FixedChoices. |
 | Tap outside the field, or swipe down on the sheet | Closes the field. On a fresh launch with no tab this shows the start screen, never a blank page; over a last tab it shows the tab. | Arc Search's swipe down back to the tab. |
 | Fresh search over a page | The sheet is clear and the page shows through a paper veil (70% paper, no blur); the field starts empty with favorites; a submitted search opens a new tab, so the page stays as it was. Lasts until the field closes. | The tab is visibly still there, one swipe away (owner, 2026-11-27). |

@@ -1488,3 +1488,34 @@ interrupted from where it is on screen, and nothing animates without a reason.
 | More to the page sheet | Page actions over the page | system sheet / popover | system | Content and favorite state built before presenting |
 | Host to edit field | Hand over to the one field | sheet dismisses while the keyboard rises | system + `urlFocus` | The field is focused in the dismissal's first frame |
 | Field closes | Back to the page | `urlFocus` | the reverse of focus | |
+| Card grows or shrinks with the rows | The paper follows what it holds | grows at once under rows fading in; shrinks with the leaving rows' 0.12 s fade | the card's mask frame | The mask is laid out whenever the content is (the keyboard moves the content without the sheet laying out), inside the same animation |
+
+**How it is built.**
+
+- **Content before the frame.** `AddressBarData.focusContent()` reads favorites and the newest
+  distinct pages (`AppDatabase.recentPages`, a bounded scan of the `visitedAt` index) off the main
+  thread at launch, after a sheet closes and after a favorite changes; each recorded visit
+  updates the copy in memory at once (`noteVisit`), so the history writer's batching never shows.
+  Focusing reads none of it: `focusItems()` builds rows from memory (signpost
+  `urlBar.focusContent`).
+- **Copied link without the paste alert.** `CopiedLinkWatcher` compares `changeCount` on return to
+  the foreground and after the first frame, then asks `detectPatterns(for: .probableWebURL)`, which
+  shows no alert. Plain never reads another app's link before the tap. The row then carries the
+  system Paste button (`UIPasteControl`: a tap there pastes with no alert); a tap elsewhere on the
+  row reads the pasteboard, which the system may confirm. A link Plain copied itself is known and
+  shown. Offered once per copy, within `FixedChoices.copiedLinkFreshness` (Chrome's 10 minutes).
+- **One rows machinery.** The focused field's rows are `SheetItem`s in the suggestion rows, so the
+  crossfade, the one-update-per-frame flush and whole-rows-only all hold; the page's row has a
+  Copy button beside it, as a second accessibility element.
+- **The page sheet** is built from the same `UIAction`s the page menu had (rules, titles,
+  identifiers), so ControlRules still decides every item; the long press on the pill opens it
+  too, so there is one page menu.
+- **Not built: inline completion in the field.** Setting the field's text while the keyboard
+  types desynchronised UIKit's input under fast typing (letters went missing in a UI test). The
+  top hit already sits nearest the field; revisit with `UITextInput` marked-text APIs.
+- **Not built: a blocked-trackers card.** WebKit has no public count of what a content rule list
+  blocked (`_WKContentRuleListAction` is private); a page-script matcher would run on every page
+  and count loads it saw, not loads blocked (docs/research/address-focus.md).
+- **Results pages show the query.** `SearchEngine.query(inResults:)` reads the query back from the
+  engine's own results URL (same host and path as its template), so the pill reads what was
+  searched; a tap brings it back selected and refines in the same tab.

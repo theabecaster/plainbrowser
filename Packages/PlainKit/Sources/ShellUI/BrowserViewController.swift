@@ -174,6 +174,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
         pill.onCopy = { [weak self] in self?.copyPageAddress() }
+        pill.searchQuery = { [weak self] url in self?.data.searchEngine.query(inResults: url) }
         pill.onLongPress = { [weak self] in
             guard let self else { return }
             self.showPageSheet(from: self.pill)
@@ -586,11 +587,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
         // Editing the page's address is its own door: the page's row, or the page sheet.
         let overPage = currentTab.map { !session.tabs.isEmpty($0.id) } ?? false
-        focusUI.isEditingPage = false
         pill.setCopyShown(false)
-        launchUI.isFreshSearch = overPage
-        if overPage { Signposts.signposter.emitEvent(Signposts.freshSearch, "pill") }
-        pill.textField.text = ""
+        if overPage, let address = pageAddress, let query = data.searchEngine.query(inResults: address) {
+            // On the engine's results page the search comes back, selected, to refine in place
+            // (Safari): a new query replaces the results rather than stacking tabs of them.
+            focusUI.isEditingPage = true
+            launchUI.isFreshSearch = false
+            pill.textField.text = query
+        } else {
+            focusUI.isEditingPage = false
+            launchUI.isFreshSearch = overPage
+            if overPage { Signposts.signposter.emitEvent(Signposts.freshSearch, "pill") }
+            pill.textField.text = ""
+        }
         updateStartScreen()
         // The layout switches before the keyboard starts, so the keyboard's own animation carries
         // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.

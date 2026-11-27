@@ -54,10 +54,11 @@ final class AddressPill: UIView {
         super.init(frame: frame)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
-        // The capsule keeps its height, so its text stops growing at the largest non-accessibility
-        // size, as Safari's address field does: past it the text overflowed the capsule and the
-        // head truncation left "…Secure — host".
-        maximumContentSizeCategory = .extraExtraExtraLarge
+        // The resting capsule keeps its height, so its host stops growing at the largest
+        // non-accessibility size, as Safari's address field does: past it the text overflowed the
+        // capsule and the head truncation left "…Secure — host". The field being typed in is not
+        // capped: what the user types keeps their text size, and the field scrolls sideways.
+        hostLabel.maximumContentSizeCategory = .extraExtraExtraLarge
 
         hostLabel.font = .preferredFont(forTextStyle: .body)
         hostLabel.adjustsFontForContentSizeCategory = true
@@ -168,13 +169,23 @@ final class AddressPill: UIView {
     func display(url: URL?, notSecure: Bool = false) {
         self.url = url
         self.notSecure = notSecure
-        hostLabel.attributedText = Self.hostText(for: url, notSecure: notSecure, placeholder: textField.placeholder ?? "")
+        hostLabel.attributedText = Self.hostText(
+            for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: textField.placeholder ?? ""
+        )
         accessibilityValue = url?.absoluteString ?? hostLabel.text
     }
 
-    /// What the resting pill says for `url`: its host without `www.`, after "Not Secure —" when
-    /// the page is not secure; the placeholder without a page.
-    private static func hostText(for url: URL?, notSecure: Bool, placeholder: String) -> NSAttributedString {
+    /// The query a page searches for when it is the search engine's results page (the shell
+    /// answers from Settings' engine), so the pill reads what was searched, as Safari's does.
+    var searchQuery: (URL) -> String? = { _ in nil }
+
+    /// What the resting pill says for `url`: the search on the engine's results page, otherwise
+    /// its host without `www.`, after "Not Secure —" when the page is not secure; the placeholder
+    /// without a page.
+    private static func hostText(for url: URL?, query: String? = nil, notSecure: Bool, placeholder: String) -> NSAttributedString {
+        if let query, !notSecure {
+            return NSAttributedString(string: query, attributes: [.foregroundColor: Palette.textPrimary])
+        }
         if let url, let host = url.host(), !host.isEmpty {
             let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
             guard notSecure else {
@@ -211,9 +222,10 @@ final class AddressPill: UIView {
         let label = UILabel()
         label.font = hostLabel.font
         label.adjustsFontForContentSizeCategory = true
+        label.maximumContentSizeCategory = hostLabel.maximumContentSizeCategory
         label.textAlignment = .center
         label.lineBreakMode = .byTruncatingHead
-        label.attributedText = Self.hostText(for: url, notSecure: false, placeholder: "New Tab")
+        label.attributedText = Self.hostText(for: url, query: url.flatMap(searchQuery), notSecure: false, placeholder: "New Tab")
         label.alpha = 0
         label.isAccessibilityElement = false
         let height = max(hostLabel.bounds.height, label.font.lineHeight)

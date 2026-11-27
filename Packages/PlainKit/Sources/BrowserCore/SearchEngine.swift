@@ -34,6 +34,29 @@ public struct SearchEngine: Hashable, Sendable, Codable, Identifiable {
         return URL(string: template.replacingOccurrences(of: Self.queryPlaceholder, with: encoded))
     }
 
+    /// The query `url` searches for, when it is this engine's results page: same host (`www.`
+    /// aside) and path as the template, with the query in the template's parameter. Nil for any
+    /// other page, so the pill shows the query on results pages only (as Safari does) and the
+    /// host everywhere else.
+    public func query(inResults url: URL) -> String? {
+        guard let page = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let form = URLComponents(string: template.replacingOccurrences(of: Self.queryPlaceholder, with: "QUERY")),
+              let name = form.queryItems?.first(where: { $0.value == "QUERY" })?.name,
+              Self.bareHost(page.host) == Self.bareHost(form.host), !Self.bareHost(page.host).isEmpty,
+              page.path == form.path || (page.path.isEmpty && form.path == "/") || (form.path.isEmpty && page.path == "/"),
+              let encoded = page.percentEncodedQueryItems?.first(where: { $0.name == name })?.value,
+              // A form's "+" is a space; an encoded plus (%2B) stays a plus.
+              let value = encoded.replacingOccurrences(of: "+", with: " ").removingPercentEncoding
+        else { return nil }
+        let query = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty ? nil : query
+    }
+
+    private static func bareHost(_ host: String?) -> String {
+        let host = (host ?? "").lowercased()
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
     /// RFC 3986 unreserved characters only.
     static let queryValueAllowed = CharacterSet(
         charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"

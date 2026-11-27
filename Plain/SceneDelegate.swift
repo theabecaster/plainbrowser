@@ -134,6 +134,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         TestIsolationMarker.install(in: window)
         self.window = window
         self.browser = browser
+        browser.onProfileDatabaseChange = { [weak self] database in self?.followFavorites(of: database) }
         LaunchFirstFrame.endAtNextFrame()
         attachDatabase(to: browser)
         #if DEBUG
@@ -296,8 +297,27 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         systemSync = sync
         sheets.didClearBrowsingData = { await sync.browsingDataCleared() }
+        followFavorites(of: profileFavorites ?? database, after: FixedChoices.systemSyncLaunchDelay)
+    }
+
+    /// The window's profile's history database, when the browser moved to a profile before the
+    /// sync started.
+    private var profileFavorites: AppDatabase?
+    private weak var followedFavorites: AppDatabase?
+
+    /// Spotlight, the widgets and Shortcuts offer the window's profile's favorites
+    /// (docs/decisions.md, "Profiles, no tab groups"): the sync follows that profile's database
+    /// from here on.
+    private func followFavorites(of database: AppDatabase, after delay: Duration = .zero) {
+        guard let sync = systemSync else {
+            profileFavorites = database
+            return
+        }
+        guard database !== followedFavorites else { return }
+        followedFavorites = database
+        systemSyncTask?.cancel()
         systemSyncTask = Task.detached(priority: .background) {
-            try? await Task.sleep(for: FixedChoices.systemSyncLaunchDelay)
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             await sync.follow(database)
         }

@@ -1476,8 +1476,12 @@ Research: docs/research/groups-profiles.md.
   with the run's own store and removed with it (`IsolatedStores`); profile databases live in the
   run's temporary folder or in memory. `check-isolation.zsh` allows the identifier APIs only in
   `AppWebsiteData` and checks the mapping.
-- **Widgets, Spotlight and Shortcuts** don't exist on dev yet. Links from other apps open in the
-  window's profile. When they come, they should open in the window's profile too.
+- **Widgets, Spotlight and Shortcuts follow the window's profile.** `SystemSync` follows the
+  favorites of the window's profile's database, switching when the window moves to another
+  profile, so the Search widget, Spotlight and "Open <favorite>" offer the favorites you see above
+  the keyboard. Their commands (search, open a link or a favorite) and links from other apps open
+  in the window's profile, as a typed address would. Handoff sends the page on screen, whichever
+  profile it is in; private tabs never.
 - **Perf:** nothing on the launch path for one profile. A second profile's database opens once
   per launch, off the main thread (`profile.dataOpen`); its store is made with its first web
   view. Rules cost one extra pass over the window's tabs only while two profiles exist.

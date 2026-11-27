@@ -89,7 +89,7 @@ public final class FeatureSheets {
             database: database, settle: settleHistory,
             otherProfiles: { [weak self] in await self?.otherProfileDatabases() ?? [] },
             cleared: { [weak self] in await self?.runClearHook() }
-        }
+        )
         let model = SettingsModel(store: store, clearer: clearer)
         settingsModel = model
         return model

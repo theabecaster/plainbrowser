@@ -30,6 +30,7 @@ extension BrowserViewController {
             let database = await session.profileData.database(for: profile)
             guard let self, session.tabs.activeProfile == profile else { return }
             sheets.useProfile(profile, database: database)
+            if let database { onProfileDatabaseChange?(database) }
             updateButtons()
             if isEditingAddress { loadFavorites() }
         }

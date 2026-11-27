@@ -739,3 +739,55 @@ Research and sources: docs/research/dark-mode.md.
 - **The site list is baked into the script.** A page must know at document start whether it is
   off, and a user script cannot ask the app synchronously. The pool builds the script with the
   list and swaps it in every controller when the list changes (rare), keeping the other scripts.
+
+## Paper texture (2026-11-26)
+
+- **Chosen:** the Paper surfaces carry a faint, fine paper texture, so "plain" reads as plain
+  paper. One seamless tile, generated in code (`DesignSystem/PaperTexture`), baked opaque onto the
+  Paper color and drawn by Core Animation as a pattern in the layer's background color. Surfaces
+  adopt it with one call: `Paper.apply(to:)` (UIKit), `PaperBackground()` (SwiftUI). The reader
+  page tiles the same pixels as a CSS `background-image`.
+- **Recipe:** a 256 px tile (about 85 pt at 3x), three layers on a torus so tiles meet without a
+  seam, added to the base in 8-bit levels: *formation* (value noise on 16 and 8 px lattices,
+  σ 0.7 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 1.0) and *fibres* (115 short,
+  tapered, nearly straight strands, peak 2–5 levels, mostly darker, 30 % lighter). Night paper on
+  Deep Lagoon is half as strong (σ 0.35 / 0.5) with mostly lighter strands. Day shadows move blue
+  most (warm); night highlights move blue most (a cool sheen). A ±1 level triangular dither hides
+  8-bit steps. The sheet averages to `Palette.background`, so it still matches the launch screen.
+  Tests hold it there: mean within 0.5 levels, 99.9 % of pixels within 9 (day) / 5 (night) levels,
+  no seam step larger than any step inside the tile.
+- **Why these numbers:** grain guides put "material, not dirt" at roughly 2.5–12 % noise opacity
+  and warn that more reads as dirt ([shadcn grain](https://www.shadcn.io/background/grain),
+  [Magic UI noise](https://magicui.design/docs/components/noise-texture)). iOS 7 Notes' visible
+  paper is the failure to avoid ([iDownloadBlog](https://www.idownloadblog.com/?p=269870)). The
+  same level step is a far larger relative contrast on navy, so night paper is weaker. Low
+  frequencies show a tile's repeat first, so the formation stays small; the fibres carry the
+  "paper" read.
+- **Why a pattern color, not a layer or a shader:** an opaque pattern in `backgroundColor` adds no
+  layer, no blending and no offscreen pass (those come from masks, shadows without a path and
+  blur: [Apple, render-phase hitches](https://developer.apple.com/videos/play/tech-talks/10857)),
+  and nothing runs per frame. A test checks the layer gets a `CGPattern` color with no contents,
+  mask, shadow or rasterizing. The tile is made at the display scale, which
+  `UIColor(patternImage:)` needs to stay sharp ([Stack Overflow 3217945](https://stackoverflow.com/questions/3217945)).
+- **Memory:** width × height × 4, so 256 KB per tile, 512 KB with both appearances. The reader's
+  PNG is made per request and not kept; WebKit holds one decoded 256 KB tile while the reader shows.
+  Worst case under 800 KB.
+- **Why generated, not bundled:** about 2 ms (optimized, on a Mac), off the main thread, once per
+  appearance, instead of a ~70 KB PNG per sheet in the app and the reader, and one source for both.
+  Until a tile is ready the surface is the flat color the tile averages to, so the swap can't be
+  seen.
+- **CSS:** a tiled PNG, not SVG `feTurbulence`, which re-runs the filter on repaint and pinned the
+  CPU while scrolling ([Mozilla 422371](https://bugzilla.mozilla.org/show_bug.cgi?id=422371),
+  [WebKit 287982](https://bugs.webkit.org/show_bug.cgi?id=287982)). The background scrolls with
+  the page (no `fixed` attachment, which repaints every scroll).
+- **Accessibility:** Increase Contrast (`accessibilityContrast == .high`, CSS
+  `prefers-contrast: more`) and Reduce Transparency drop the texture to the flat color. WebKit has
+  no `prefers-reduced-transparency` ([caniuse](https://caniuse.com/wf-prefers-reduced-transparency)),
+  so the reader follows Increase Contrast only (polish backlog).
+- **Not on:** web content, glass controls, the private-tab surfaces (their dusk violet stays flat),
+  the system-styled sheets (Settings, History, Favorites, Archive, Downloads keep the grouped list
+  look) or anything that moves on its own. The texture never animates.
+- **Perf cost (simulator, machine load 350–850, so noisy):** perf gate before → after: launch
+  4056 → 3648 ms, main → field 619 → 596 ms, gallery 1491 → 1484 ms. Gallery scroll of 100 tabs
+  with 25 new-tab cards, main-thread work p95: 1.7–3.7 ms flat, 1.9–2.6 ms on paper. Start-screen
+  footprint within noise (19.3–21.2 MB both).

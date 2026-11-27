@@ -242,6 +242,9 @@ final class PrivateModeTests: XCTestCase {
     }
 
     private func shot(_ name: String) {
+        // A hold before each shot lets a screen the runner can't see (the Duo's inner screen) be
+        // captured from outside (`simctl io screenshot`).
+        if let hold = Double(ProcessInfo.processInfo.environment["PLAIN_CAPTURE_HOLD"] ?? "") { pause(hold) }
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways

@@ -2453,3 +2453,47 @@ field in the simulator, so Escape is unverified there; Command-period closes.
 ## A close button on every tab card (2026-11-27)
 
 The owner asked for a close button besides the swipe. Each card gets a × in its title row's trailing corner: a 24 pt plate inside a 44 pt target, drawn without a glass view (one per card would cost every scroll frame). It calls the card's existing close hook, so the motion, haptic, signpost and Reopen toast are the swipe's own. It lives in the card's body, outside the masked title row, so the mask never clips it; it sits at the edge of the part of the card that shows, so the focused cascade card (the next card over its trailing 22%) keeps one, and a card covered by more than half hides it. The gallery's scroll view cancels touches on it, so a sideways drag that starts on the × still scrolls.
+
+## Private mode you can't miss (2026-11-27)
+
+Owner, on TestFlight: "It's a bit confusing how to turn off private mode, and it's also hard to
+tell when you are in it and when you're not." And: don't change the design drastically; Arc is
+confusing here too. Research: docs/research/private-mode.md (Safari, Chrome, Firefox, NN/g on
+modes: two visual cues, named modes, a labelled exit).
+
+- **Two cues on the pill, wherever it is** (bottom on phones and the Duo's outer screen, the top
+  bar on the inner screen): the glass turns a deep dusk violet in light and dark alike
+  (`Palette.privateGlassTint`, drawn with the dark style so text and glyphs are light; white text
+  above 10:1), and the private mark (`hand.raised.fill`, `Palette.privateAccent`) leads the host
+  and the field. The buttons' glass and the toast follow. Was a lilac tint that read as Paper in
+  light mode. Violet, not Safari's black: a dark page or the dark app never looks private. The
+  mark is the pill's content, like "Not Secure —", not a badge: nothing is added over the page.
+- **The keyboard** is dark in a private tab, and the field also predicts, rewrites and
+  grammar-checks nothing (it never corrected or spell-checked). iOS has no "don't learn" flag, so
+  Plain claims nothing about learning. Page fields are WebKit's: no public control.
+- **The start screen of an empty private tab** is drawn dark on the private dusk with the
+  night's violet glow, "Private" with the mark as its title over "Plain keeps no history of
+  private tabs." wording unchanged since the UX audit, and its shortcut back reads **"Leave
+  Private"** (`hand.raised.slash`; was "New Tab", UX audit item 26: it turns this tab regular).
+  More's top item reads the same there. The status bar is light over it.
+- **The switcher's control is "Private | Tabs"** (`GalleryModeSwitch`), in the bar where the hand
+  glyph was: two named sides, Private leading as in Safari, each with its count ("Private 2",
+  "Tabs 3"; no number at zero). The shown side sits on a filled capsule: violet for Private, warm
+  light for Tabs, so the mode reads at a glance and the way back is the other word, one tap.
+  Tapping the shown side does nothing. It drops the numbers before the bar would outgrow the
+  screen (Duo outer screen, large text), never the words; its text stops at Extra Large, with the
+  Large Content Viewer past it. Private cards carry the mark in every list.
+- **Close All Private Tabs** is in the switcher's More menu whenever the private list has a card
+  (the regular list keeps its two-card rule), and in the tabs menu on a private page with
+  another private page open. Its confirmation counts them; nothing comes back. Afterwards the
+  regular tab seen last shows, else the search field.
+- **The change of mode is one quick material change**, no new motion: the chrome's tint and
+  style change in `Motion.quick`; the switcher's cards, backdrop and switch cross-fade as the
+  private toggle did. Nothing is laid out again on a mode change besides the pill's text and,
+  when a count gains a digit, the switch's width.
+- **Profiles:** private is one mode for every profile, as before. "Tabs" counts the shown
+  profile's tabs; the profile switcher still hides over the private list.
+- **Relaunch:** private tabs are never kept, so the app always comes back out of private.
+- **Not now:** a Face ID lock for private tabs and closing them on leaving the app (Safari,
+  Firefox). Both add a setting or change behaviour the owner didn't ask for
+  (docs/polish-backlog.md).

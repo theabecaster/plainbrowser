@@ -468,3 +468,7 @@ Newest feature last.
   background the app, so Save Image and the summary-ends test skip there.
 - **Clear History and Data keeps site permissions** (docs/privacy.md says site settings are
   deleted with it); pre-existing, found while reading the code.
+
+- **Private tabs: lock and auto-close.** Safari and Chrome can lock private tabs behind Face ID;
+  Firefox closes them when you leave the app. Both would be a setting or a behaviour change;
+  revisit if the owner asks (docs/research/private-mode.md).

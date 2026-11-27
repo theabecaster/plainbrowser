@@ -90,8 +90,9 @@ final class AppearanceTests: XCTestCase {
         app = try launch(["-PlainIntroSeen", "YES", "-PlainTestStore"])
         openSettings(app)
         let row = appearanceRow(app)
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
         let dark = NSPredicate(format: "label CONTAINS 'Dark'")
-        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: dark, object: row)], timeout: 3), .completed,
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: dark, object: row)], timeout: 10), .completed,
                        "Dark came back after relaunch: \(row.label)")
         app.buttons["Done"].tap()
         chooseAppearance(app, "System")

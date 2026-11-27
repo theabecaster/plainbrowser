@@ -215,10 +215,13 @@ public final class CookieBanners {
               globalThis.__plainCookieProbe = true;
               const hosts = \(jsArray(consentHosts));
               const selector = \(jsString(bannerSelectors.joined(separator: ",")));
-              let done = false, observer = null;
+              // `answered`: the app replied to the page message, so the engine was not started
+              // for a site rule; a sign seen before that waits for the reply (one start a page).
+              let done = false, answered = false, seen = null, observer = null;
               const stop = () => { done = true; if (observer) observer.disconnect(); };
               const fire = (reason) => {
                 if (done) return;
+                if (!answered) { seen = seen || reason; return; }
                 stop();
                 h.postMessage({ type: 'probe', url: location.href, reason }).catch(() => {});
               };
@@ -229,8 +232,10 @@ public final class CookieBanners {
               };
               const look = () => { if (!done && document.querySelector(selector)) fire('page'); };
               h.postMessage({ type: 'page', url: location.href }).then((reply) => {
-                if (reply && reply.stop) stop();
-              }, () => {});
+                if (reply && reply.stop) return stop();
+                answered = true;
+                if (seen) fire(seen);
+              }, () => { answered = true; if (seen) fire(seen); });
               try {
                 observer = new PerformanceObserver((list) => {
                   if (list.getEntries().some((entry) => known(entry.name))) fire('host');

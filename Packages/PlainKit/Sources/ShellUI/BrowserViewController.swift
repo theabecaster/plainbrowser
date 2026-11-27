@@ -990,6 +990,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let runningTarget = snap.isRunning ? snap.target : crossfadeTarget
         if let runningTarget, runningTarget <= 1, collapse.progress <= 1 {
             cancelCrossfade()
+            // A reveal's inset still waiting for a bounce is the finger's call now.
+            pageInset.barMoved()
             collapse.settle(at: snap.stop())
             if let interval = snapInterval {
                 Signposts.signposter.endInterval(Signposts.toolbarSnap, interval, "grabbed")

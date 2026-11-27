@@ -207,9 +207,9 @@ extension ArchiveAfter {
     /// The section footer: one sentence on what the current choice does.
     public var footer: String {
         switch self {
-        case .twelveHours: "Tabs you haven't used in 12 hours move to the archive."
-        case .oneDay: "Tabs you haven't used in a day move to the archive."
-        case .oneWeek: "Tabs you haven't used in a week move to the archive."
+        case .twelveHours: "Tabs you haven't opened in 12 hours move to the archive."
+        case .oneDay: "Tabs you haven't opened in a day move to the archive."
+        case .oneWeek: "Tabs you haven't opened in a week move to the archive."
         case .never: "Tabs stay open until you close them."
         }
     }

@@ -262,12 +262,15 @@ final class SuggestionRow: UIControl {
 
 /// Favorites above the keyboard: a row of tiles that scrolls sideways when there are many. A long
 /// press anywhere on it offers "Edit Favorites".
-final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate {
+final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate, UIScrollViewDelegate {
     static let height: CGFloat = 88
     var onPick: (URL) -> Void = { _ in }
     var onEdit: () -> Void = {}
     private let scroll = UIScrollView()
     private let stack = UIStackView()
+    /// Fades the edge where more favorites wait, so a cut tile reads as "scrolls".
+    private let edgeFade = CAGradientLayer()
+    private static let fadeWidth: CGFloat = 28
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -275,7 +278,10 @@ final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate {
         scroll.showsHorizontalScrollIndicator = false
         scroll.alwaysBounceHorizontal = true
         scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.delegate = self
         addSubview(scroll)
+        edgeFade.startPoint = CGPoint(x: 0, y: 0.5)
+        edgeFade.endPoint = CGPoint(x: 1, y: 0.5)
         stack.axis = .horizontal
         stack.spacing = Spacing.s
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -311,6 +317,43 @@ final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate {
         }
     }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // The content size comes from the stack's layout inside the scroll view.
+        scroll.layoutIfNeeded()
+        updateEdgeFade()
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateEdgeFade()
+    }
+
+    /// Each edge fades only while there is more beyond it. Scrolling changes only the mask's
+    /// colors; nothing lays out.
+    private func updateEdgeFade() {
+        let width = bounds.width
+        let overflow = scroll.contentSize.width - width
+        guard width > 0, overflow > 1 else {
+            if layer.mask != nil { layer.mask = nil }
+            return
+        }
+        let offset = scroll.contentOffset.x
+        let leading = min(1, max(0, offset / Self.fadeWidth))
+        let trailing = min(1, max(0, (overflow - offset) / Self.fadeWidth))
+        let fade = Double(Self.fadeWidth / width)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if edgeFade.frame != bounds { edgeFade.frame = bounds }
+        let opaque = UIColor.black.cgColor
+        edgeFade.colors = [
+            UIColor.black.withAlphaComponent(1 - leading).cgColor, opaque, opaque,
+            UIColor.black.withAlphaComponent(1 - trailing).cgColor,
+        ]
+        edgeFade.locations = [0, NSNumber(value: fade), NSNumber(value: 1 - fade), 1]
+        if layer.mask !== edgeFade { layer.mask = edgeFade }
+        CATransaction.commit()
+    }
+
     func show(_ favorites: [FavoritePage]) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for (index, favorite) in favorites.enumerated() {
@@ -319,6 +362,7 @@ final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate {
             tile.addAction(UIAction { [weak self] _ in self?.onPick(favorite.url) }, for: .touchUpInside)
             stack.addArrangedSubview(tile)
         }
+        setNeedsLayout()
     }
 }
 

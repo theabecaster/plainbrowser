@@ -613,6 +613,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func textFieldDidBeginEditing(_ textField: UITextField) {
         // First, so a preconnect to the suggestion host overlaps the sheet opening.
         data.prepareForTyping()
+        sheet.session += 1
         applyEditingLayout(true, animated: didFocusAtLaunch)
         if !(textField.text ?? "").isEmpty {
             textField.selectAll(nil)
@@ -626,6 +627,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func textFieldDidEndEditing(_ textField: UITextField) {
         suggestionTask?.cancel()
         data.cancelSuggestions()
+        sheet.session += 1
         focusUI.isEditingPage = false
         pill.setCopyShown(false)
         updateStartForTyping(query: "")
@@ -1520,8 +1522,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         showPendingToast()
         tabsUI.tip.showIfPossible(in: self)
         session.tabs.refreshArchiveState()
-        // History may have been cleared, favorites edited: read them again, nothing kept aside.
-        focusUI.pendingVisits.removeAll()
+        // History may have been cleared, favorites edited: read them again.
         refreshFocusContent()
     }
 

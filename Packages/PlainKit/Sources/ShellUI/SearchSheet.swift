@@ -67,6 +67,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         didSet { favoritesStrip.onEdit = onEditFavorites }
     }
 
+    /// Bumped each time the field opens or closes (the shell), so an answer that arrives late
+    /// (the Paste button's) is only taken by the field it was for.
+    var session = 0
     private let rowsClip = PassThroughView()
     /// The paper behind the rows, so they read over the start screen's mark even while it
     /// recedes (docs/state-rules.md §6, start screen while typing). It covers the whole sheet, so
@@ -496,7 +499,11 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             self.onPick(pick)
         }, for: .touchUpInside)
         row.onAccessory = { [weak self] in self?.onPick(.copyAddress) }
-        row.onPaste = { [weak self] url in self?.onPick(.copiedLink(url)) }
+        row.onPaste = { [weak self] url, session in
+            guard let self, session == self.session else { return }
+            self.onPick(.copiedLink(url))
+        }
+        row.sessionProvider = { [weak self] in self?.session ?? 0 }
         return row
     }
 
@@ -620,7 +627,9 @@ final class SuggestionRow: UIControl {
     /// The row's identifier while a button sits beside it (the row itself then is a container).
     private(set) var mainIdentifier: String?
     /// A link the Paste button handed over.
-    var onPaste: (URL) -> Void = { _ in }
+    var onPaste: (URL, Int) -> Void = { _, _ in }
+    /// The open field's session (`SearchSheet.session`), read when Paste begins.
+    var sessionProvider: () -> Int = { 0 }
     /// The row's main part for VoiceOver and UI tests while the accessory shows: the row itself
     /// then can't be one element, or Copy would be out of reach.
     private lazy var mainElement = RowElement(row: self)
@@ -874,9 +883,11 @@ final class SuggestionRow: UIControl {
 
     /// The Paste button's link: a URL, or text that is one web address.
     override func paste(itemProviders: [NSItemProvider]) {
+        // The field this Paste was for: a result that comes back after it closed is dropped.
+        let session = sessionProvider()
         let deliver: @Sendable (URL?) -> Void = { [weak self] url in
             guard let url, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
-            Task { @MainActor in self?.onPaste(url) }
+            Task { @MainActor in self?.onPaste(url, session) }
         }
         if let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: URL.self) }) {
             _ = provider.loadObject(ofClass: URL.self) { url, _ in deliver(url) }

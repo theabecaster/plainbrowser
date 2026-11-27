@@ -334,6 +334,8 @@ public final class LiveAddressBarData: AddressBarData {
 
     public func focusContent() async -> FocusContent {
         guard let database else { return .empty }
+        // Visits still buffered for the history writer go to disk first, so they are in the read.
+        await flush()
         async let saved = database.favorites()
         async let visited = database.recentPages(limit: FixedChoices.focusRecentPages + FixedChoices.maxPageSuggestions)
         let favorites = ((try? await saved) ?? []).map { FavoritePage(url: $0.url, title: $0.title) }

@@ -79,6 +79,7 @@ final class AppearanceTests: XCTestCase {
 
     private func closeMenu(_ app: XCUIApplication) {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+        _ = app.buttons["menu.settings"].waitForNonExistence(timeout: 3)
     }
 
     func testAppearanceIsSystemByDefaultAndSurvivesRelaunch() throws {

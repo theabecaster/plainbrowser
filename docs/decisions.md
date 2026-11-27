@@ -1496,8 +1496,10 @@ interrupted from where it is on screen, and nothing animates without a reason.
 
 - **Content before the frame.** `AddressBarData.focusContent()` reads favorites and the newest
   distinct pages (`AppDatabase.recentPages`, a bounded scan of the `visitedAt` index) off the main
-  thread at launch, after a sheet closes and after a favorite changes; each recorded visit
-  updates the copy in memory at once (`noteVisit`), so the history writer's batching never shows.
+  thread at launch, after a sheet closes and after a favorite or the Reading List changes, first
+  writing what the history writer still buffers; each recorded visit updates the copy in memory
+  at once (`noteVisit`), and a read that started before a visit is read again, so the writer's
+  batching never shows.
   Focusing reads none of it: `focusItems()` builds rows from memory (signpost
   `urlBar.focusContent`).
 - **Copied link without the paste alert.** `CopiedLinkWatcher` compares `changeCount` on return to

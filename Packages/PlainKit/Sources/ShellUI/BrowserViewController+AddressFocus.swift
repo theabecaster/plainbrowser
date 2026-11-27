@@ -17,9 +17,8 @@ final class AddressFocusState {
     /// Copy button while it still shows that address. Otherwise a search over a page opens a new
     /// tab (`LaunchUIState.isFreshSearch`).
     var isEditingPage = false
-    /// Visits noted in memory, newest first, kept a little longer than the history writer's
-    /// batch takes, so a read from disk that lands first doesn't drop them.
-    var pendingVisits: [(page: FavoritePage, at: ContinuousClock.Instant)] = []
+    /// Bumped by every visit noted in memory, so a read that started before it never replaces it.
+    var visitGeneration = 0
 }
 
 // MARK: - The focused field's content
@@ -79,14 +78,17 @@ extension BrowserViewController {
     /// takes them in as they land.
     func refreshFocusContent() {
         focusUI.loadTask?.cancel()
+        let generation = focusUI.visitGeneration
         focusUI.loadTask = Task { [weak self, data] in
             let signposter = Signposts.signposter
             let interval = signposter.beginInterval(Signposts.focusContentLoad)
-            var content = await data.focusContent()
+            // `focusContent` first writes the history the writer still buffers, so the read
+            // includes every visit noted before it began.
+            let content = await data.focusContent()
             signposter.endInterval(Signposts.focusContentLoad, interval)
             guard let self, !Task.isCancelled else { return }
-            // Visits the history writer may not have written yet stay in front.
-            content.recent = self.withPendingVisits(content)
+            // A visit noted meanwhile may be missing from this read: read again.
+            guard generation == self.focusUI.visitGeneration else { return self.refreshFocusContent() }
             guard content != self.focusUI.content else { return }
             self.focusUI.content = content
             self.sheet.setFavorites(content.favorites)
@@ -114,28 +116,10 @@ extension BrowserViewController {
         let known = content.recent.first { AddressBarSuggestions.addressKey($0.url) == key }
         content.recent.removeAll { AddressBarSuggestions.addressKey($0.url) == key }
         let name = title.flatMap { $0.isEmpty ? nil : $0 } ?? known?.title
-        let page = FavoritePage(url: url, title: name)
-        content.recent.insert(page, at: 0)
+        content.recent.insert(FavoritePage(url: url, title: name), at: 0)
         content.recent = Array(content.recent.prefix(FixedChoices.focusRecentPages + 1))
         focusUI.content = content
-        focusUI.pendingVisits.removeAll { AddressBarSuggestions.addressKey($0.page.url) == key }
-        focusUI.pendingVisits.insert((page, .now), at: 0)
-    }
-
-    /// `content`'s recent pages with the visits noted in memory lately in front: a read can land
-    /// before the history writer's batch does.
-    private func withPendingVisits(_ content: FocusContent) -> [FavoritePage] {
-        let recentEnough = ContinuousClock.now - FixedChoices.historyFlushInterval * 5
-        focusUI.pendingVisits.removeAll { $0.at < recentEnough }
-        let favorites = Set(content.favorites.map { AddressBarSuggestions.addressKey($0.url) })
-        var seen = Set<String>()
-        var merged: [FavoritePage] = []
-        for page in focusUI.pendingVisits.map(\.page) + content.recent {
-            let key = AddressBarSuggestions.addressKey(page.url)
-            guard !favorites.contains(key), seen.insert(key).inserted else { continue }
-            merged.append(page)
-        }
-        return Array(merged.prefix(FixedChoices.focusRecentPages + 1))
+        focusUI.visitGeneration += 1
     }
 
     /// The pasteboard may hold a new link: check it (no paste alert) and update an open field.

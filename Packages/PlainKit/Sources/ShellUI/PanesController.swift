@@ -11,8 +11,9 @@ final class PaneSlot: UIViewController {
     let container = UIView()
     /// The focused pane's ring in a split (docs/research/design-audit.md: one focused pane).
     private let ring = UIView()
-    /// A touch went down in the pane: it becomes the focused one.
-    var onTouch: (@MainActor @Sendable () -> Void)?
+    /// A touch went down in the pane: it becomes the focused one. `onControl`: it landed on
+    /// something that handles it itself (a button, the spinnable mark).
+    var onTouch: (@MainActor @Sendable (_ onControl: Bool) -> Void)?
 
     /// Splits draw panes as rounded cards with a gutter; a single pane fills its area.
     private var isSplit = false
@@ -20,7 +21,7 @@ final class PaneSlot: UIViewController {
 
     override func loadView() {
         let root = TouchReportingView()
-        root.onTouchDown = { [weak self] in self?.onTouch?() }
+        root.onTouchDown = { [weak self] onControl in self?.onTouch?(onControl) }
         root.backgroundColor = .clear
         view = root
     }
@@ -90,16 +91,29 @@ enum PaneMetrics {
 /// A view that reports each touch that lands in it (or in its subviews) before the touch is
 /// delivered, without taking part in gesture recognition: the page keeps every gesture.
 final class TouchReportingView: UIView {
-    var onTouchDown: (@MainActor @Sendable () -> Void)?
+    /// `onControl`: the touch landed on a control or a view with its own gestures (the start
+    /// screen's buttons, the spinnable mark), which handles it.
+    var onTouchDown: (@MainActor @Sendable (_ onControl: Bool) -> Void)?
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
-        if hit != nil, event?.type == .touches, let onTouchDown {
+        if let hit, event?.type == .touches, let onTouchDown {
+            let onControl = Self.handlesTouches(hit, below: self)
             // Hit testing may run more than once per touch, and must not change the hierarchy:
             // report after it.
-            DispatchQueue.main.async(execute: onTouchDown)
+            DispatchQueue.main.async { onTouchDown(onControl) }
         }
         return hit
+    }
+
+    /// Whether `view`, or a view between it and `root`, is a control or has gestures of its own.
+    private static func handlesTouches(_ view: UIView, below root: UIView) -> Bool {
+        var current: UIView? = view
+        while let candidate = current, candidate !== root {
+            if candidate is UIControl || candidate.gestureRecognizers?.contains(where: \.isEnabled) == true { return true }
+            current = candidate.superview
+        }
+        return false
     }
 }
 

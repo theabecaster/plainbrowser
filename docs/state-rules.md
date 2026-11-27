@@ -383,3 +383,8 @@ the ones the state lane closed (2026-11-26); line numbers are from the audit, be
     closes.
 25. **Fixed.** `ShellUI/BrowserViewController+PageFeatures.swift:95-97` — a download start plays a haptic
     and nothing else until it ends → Downloads item says "1 in progress" while one runs.
+26. **Fixed (one-tab lane).** `ShellUI/BrowserViewController+Panes.swift:231` — a touch on an empty pane
+    opened the search field at touch-down, even on the start screen's own controls, so with no tab
+    open (first run, iPhone) the search sheet took the tap from Private Tab, Reopen Closed Tab and
+    Archived Tabs, and private tabs could not be reached from the start screen → a touch on a
+    control (or the spinnable mark) is the control's; only the start screen's paper opens search.

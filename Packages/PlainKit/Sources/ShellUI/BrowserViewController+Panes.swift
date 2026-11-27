@@ -58,7 +58,7 @@ extension BrowserViewController {
         for (index, slot) in panes.slots.enumerated() {
             slot.loadViewIfNeeded()
             slot.view.backgroundColor = .clear
-            slot.onTouch = { [weak self] in self?.paneTouched(index) }
+            slot.onTouch = { [weak self] onControl in self?.paneTouched(index, onControl: onControl) }
         }
         panes.show([0], primaryWidth: nil)
     }
@@ -226,13 +226,15 @@ extension BrowserViewController {
 
     // MARK: Focus
 
-    /// A touch went down in pane `index`: it becomes the focused one. An empty pane (the start
-    /// page) opens the search field.
-    func paneTouched(_ index: Int) {
+    /// A touch went down in pane `index`: it becomes the focused one. A touch on an empty pane's
+    /// paper (the start page) opens the search field; one on its own controls (the Search button,
+    /// the shortcuts such as Private Tab, the spinnable mark) is theirs, or the field would open
+    /// under the finger and take the tap from them.
+    func paneTouched(_ index: Int, onControl: Bool = false) {
         guard !isShowingGallery, presentedViewController == nil, shownPanes.contains(index) else { return }
         collapseFloatingSidebar()
         if index != session.tabs.focusedPane { focusPane(index) }
-        if session.tabs.panes.indices.contains(index), session.tabs.panes[index] == nil, !isEditingAddress {
+        if !onControl, session.tabs.panes.indices.contains(index), session.tabs.panes[index] == nil, !isEditingAddress {
             beginAddressEditing()
         }
     }

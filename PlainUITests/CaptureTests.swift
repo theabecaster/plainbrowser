@@ -453,9 +453,9 @@ final class CaptureTests: XCTestCase {
         shot("s8b-start-with-closed")
     }
 
-    /// The Paper surfaces: the intro, the start screen, the reader view, Settings, and the gallery with a
-    /// new tab's card. Set the simulator's appearance first (`xcrun simctl ui <udid> appearance
-    /// dark`); `PLAIN_CAPTURE_TAG` names the shots (light, dark).
+    /// The Paper surfaces: the intro, the start screen (keyboard up and down), the reader view,
+    /// Settings and the gallery. Set the simulator's appearance first (`xcrun simctl ui <udid>
+    /// appearance dark`); `PLAIN_CAPTURE_TAG` names the shots (light, dark).
     func testCapturePaper() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
         let server = try TestServer()
@@ -499,8 +499,8 @@ final class CaptureTests: XCTestCase {
             app.navigationBars.buttons["Done"].tap()
             pause(1)
 
-            // A new tab beside the page, so the gallery shows a new tab's paper card. The
-            // keyboard goes down first: the tabs button sits in the bar under it.
+            // A new tab beside the page: its start screen with the keyboard down, then the gallery
+            // (an empty tab leaves it, docs/state-rules.md). The tabs button sits under the keyboard.
             app.buttons["tabs"].press(forDuration: 1)
             app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
             pause(1)

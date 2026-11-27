@@ -30,11 +30,11 @@ Run both from the feature's worktree, with output to files under `build/reviews/
 ## The loop
 
 1. **Brief.** The lead writes acceptance criteria: what the user does, what they see, the motion spec rows involved, and the budgets that apply.
-2. **Implement.** The implementer builds the feature with tests and signposts. It runs `swift test` and the simulator UI tests before handing back.
-3. **Verify.** The lead runs the build and tests, installs on the Duo when it's reachable, runs `scripts/perf-gate.sh` (simulator mode: fails on a >20% regression against the last simulator row; device mode: fails on the absolute budgets), and captures screenshots (`scripts/shot.sh`) and a short screen recording of each new interaction (`xcrun devicectl device capture screen-record`, frames extracted with `ffmpeg`). Any failure goes straight back to the implementer, without a review round.
+2. **Implement.** The implementer builds the feature with tests and signposts. It runs `swift test`, the simulator UI tests and, for a UI change, `scripts/matrix.sh --quick` for the screens it touches (`--rows` and `-only-testing:` narrow it) before handing back, with the contact sheets' folder.
+3. **Verify.** The lead runs the build and tests, installs on the Duo when it's reachable, runs `scripts/perf-gate.sh` (simulator mode: fails on a >20% regression against the last simulator row; device mode: fails on the absolute budgets), and captures screenshots (`scripts/shot.sh`) and a short screen recording of each new interaction (`xcrun devicectl device capture screen-record`, frames extracted with `ffmpeg`). The lead reads the matrix's contact sheets (`<out>/sheets/`): a screen that is wrong on any row is a failure. Any failure goes straight back to the implementer, without a review round.
 4. **Review.** The two Codex reviews run in parallel. Each finding is tagged **blocking** (wrong behavior, a budget miss, a rule break, or something that visibly looks or feels off) or **polish**.
 5. **Iterate.** The implementer fixes all blocking findings, plus polish items that are cheap. Then go back to step 3. Each later round reviews only what changed.
-6. **Land.** Merge into `dev` and push. Append the perf numbers to `docs/perf-log.md`. Leave the build installed on the Duo, and ship it to TestFlight with `scripts/testflight.sh` (one or two lines of notes on what changed). Remove the worktree, the branch, and any simulators and captures the loop created.
+6. **Land.** Merge into `dev` and push. Before a TestFlight release, run `scripts/matrix.sh --full` when the machine allows and read its sheets. Append the perf numbers to `docs/perf-log.md`. Leave the build installed on the Duo, and ship it to TestFlight with `scripts/testflight.sh` (one or two lines of notes on what changed). Remove the worktree, the branch, and any simulators and captures the loop created.
 
 ## Keeping it lean
 

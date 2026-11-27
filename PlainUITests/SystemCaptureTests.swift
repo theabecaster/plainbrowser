@@ -17,7 +17,7 @@ final class SystemCaptureTests: XCTestCase {
     /// after launch) and iOS knows its widgets and shortcuts.
     private func launchPlainWithFavorites() {
         let app = XCUIApplication.introSeen()
-        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        app.launchArguments += ["-PlainSeedFavorites"]
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
         pause(8)

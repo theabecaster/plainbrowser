@@ -19,7 +19,6 @@ final class SystemTests: XCTestCase {
 
     private func launch() -> XCUIApplication {
         let app = XCUIApplication.introSeen()
-        app.launchArguments += ["-PlainInMemoryStore"]
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
         return app
@@ -49,7 +48,6 @@ final class SystemTests: XCTestCase {
 
     func testAColdLaunchFromALinkOpensThePage() {
         let app = XCUIApplication.introSeen()
-        app.launchArguments += ["-PlainInMemoryStore"]
         open(app, link("open", ["url": "http://" + server.address("/b")]), cold: true)
         XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 15))
     }

@@ -45,6 +45,15 @@ remote_run() {
   ssh $host "cd ~/plain-lanes/$lane && for s in 1 2; do /usr/bin/lockf -s -t 0 -k /tmp/plain-sim-\$s.lock zsh -lc $q; r=\$?; [ \$r -ne 75 ] && exit \$r; done; /usr/bin/lockf -k /tmp/plain-sim-1.lock zsh -lc $q"
 }
 
+# Runs <command> on this Mac (the owner's) in the checkout, in its one slot shared by every lane
+# (/tmp/plain-local.lock), nice'd. `wait` waits for the slot; `try` returns 75 at once when it is
+# taken. Clean up after the job: its simulators and build output.
+local_slot_run() {
+  local mode=$1 cmd=$2 wait=()
+  [[ $mode == try ]] && wait=(-s -t 0)
+  (cd $ROOT && /usr/bin/lockf $wait -k /tmp/plain-local.lock /usr/bin/nice -n 10 zsh -lc $cmd)
+}
+
 # Copies <path> from the lane to <dest> here; extra arguments go to rsync.
 remote_pull() {
   local host=$1 lane=$2 src=$3 dest=$4

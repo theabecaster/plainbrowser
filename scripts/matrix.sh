@@ -13,7 +13,9 @@
 #   --out        where the shots, sheets and logs go (default build/matrix; relative paths are
 #                from the repo root). Emptied first.
 #   --host       run on this test Mac (scripts/lib/remote.zsh) and bring the results back to
-#                --out. Default: PLAIN_TEST_HOST, from the environment or scripts/local.env.
+#                --out. `local`: this Mac's shared slot (waits for it). `auto:<name>`: this
+#                Mac's slot when it is free, else <name>. Default: PLAIN_TEST_HOST, from the
+#                environment or scripts/local.env.
 #   --local      run on this Mac even when PLAIN_TEST_HOST is set.
 #   --no-build   reuse the last scripts/build.sh output (build/sim).
 #   --resizable  skip Device Hub: the Duo's inner rows use the resizable window stand-in.
@@ -72,7 +74,7 @@ while (( $# )); do
     --no-build) build=0; forward+=$1 ;;
     --resizable) resizable=1; forward+=$1 ;;
     -only-testing:*) tests+=$1; forward+=$1 ;;
-    -h|--help) sed -n '2,34p' $0; exit 0 ;;
+    -h|--help) sed -n '2,36p' $0; exit 0 ;;
     *) print -u2 "unknown argument: $1 (see --help)"; exit 1 ;;
   esac
   shift
@@ -171,12 +173,30 @@ if (( sheets_only )); then
   exit 0
 fi
 
-# On a test Mac: sync this checkout there, run the same matrix under the host's simulator lock,
-# bring the shots, sheets, logs and summary back (not the result bundles), and make the sheets
-# here if the host could not.
+# --host local, or auto:<name> while this Mac's one shared slot is free: the same matrix here,
+# nice'd, in that slot (scripts/lib/remote.zsh), then the build output removed. Otherwise, on a
+# test Mac: sync this checkout there, run the same matrix in one of its job slots, bring the
+# shots, sheets, logs and summary back (not the result bundles), and make the sheets here if the
+# host could not.
 if [[ ${PLAIN_MATRIX_ON_HOST:-0} != 1 ]] && (( ! local_run )); then
   source scripts/lib/remote.zsh
   [[ -n $host ]] || host=$(remote_default_host)
+  if [[ $host == local || $host == auto:* ]]; then
+    here="PLAIN_MATRIX_ON_HOST=1 ${PLAIN_SIM_PREFIX:+PLAIN_SIM_PREFIX=${(q)PLAIN_SIM_PREFIX}} scripts/matrix.sh ${(j: :)${(q)forward}} --out ${(q)out}; r=\$?; rm -rf build/sim build/build.log; exit \$r"
+    rc=0
+    if [[ $host == local ]]; then
+      print "== matrix on this Mac (local slot)"
+      local_slot_run wait $here || rc=$?
+      exit $rc
+    fi
+    local_slot_run try $here || rc=$?
+    if (( rc != 75 )); then
+      print "results: $out (this Mac's local slot)"
+      exit $rc
+    fi
+    host=${host#auto:}
+    print "matrix: this Mac's slot is taken; running on $host"
+  fi
   if [[ -n $host ]]; then
     lane=$(remote_lane)
     remote_out=build/matrix-out

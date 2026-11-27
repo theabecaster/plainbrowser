@@ -48,10 +48,17 @@ machine name) or the environment. `scripts/matrix.sh` then runs there and brings
 ```sh
 scripts/matrix.sh --quick --out build/matrix        # on PLAIN_TEST_HOST when set
 scripts/matrix.sh --quick --host <name>             # this run only
-scripts/matrix.sh --quick --local                   # on this Mac anyway
+scripts/matrix.sh --quick --host auto:<name>        # this Mac's shared slot if free, else <name>
+scripts/matrix.sh --quick --host local              # wait for this Mac's shared slot
+scripts/matrix.sh --quick --local                   # on this Mac, outside the slot (avoid)
 ```
 
 `scripts/lib/remote.zsh` does the work:
+
+- This Mac (`local`, or `auto:<name>` while it is free) has one job slot shared by every lane:
+  `/usr/bin/lockf /tmp/plain-local.lock`, run with `nice -n 10`, in the checkout itself. After the
+  job the matrix removes its build output (`build/sim`, `build/build.log`) and its simulators.
+  `auto:` falls back to the test Mac at once when the slot is taken.
 
 - It copies the checkout to `<host>:~/plain-lanes/<lane>` with rsync (no `.git`, no build output,
   no `local.env`), adds the gitignored signing config from the main checkout, and commits a

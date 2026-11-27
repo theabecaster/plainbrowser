@@ -1053,3 +1053,12 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   expanded and the pill; a hide or reveal finishes, and the drag can still turn it around.
 - **Never hidden** while loading, on error pages, editing, finding, under VoiceOver or Switch
   Control (`ControlRules.chromeMayHide`), or on a page shorter than two screens.
+- **Performance** (iPhone 17 simulator, Release, 25 scripted swipes on the long test page; the
+  simulator has no hitch data, so two proxies). The shell's work per scroll callback
+  (`toolbar.scrollStep` signpost, ~3,500 callbacks): before mean 6.7–8.0 µs, p95 5.8–9.1 µs, max
+  0.4–4.7 ms; after mean 7.1–7.9 µs, p95 11.4–11.9 µs, max 0.5–0.7 ms. Main-thread CPU per scroll
+  frame (Time Profiler, 1/60 s buckets that hold a scroll callback; XCUITest's own queries are in
+  it): before mean 5.5 ms, 554 frames over 16.7 ms; after mean 4.2 ms, 368 over 16.7 ms. No layout
+  during motion: the edge strip toggles `isUserInteractionEnabled`, the pill moves by transform and
+  alpha, and insets change once per rest. The device perf gate (`testPageScrollHitches`) is the
+  check for 120 Hz.

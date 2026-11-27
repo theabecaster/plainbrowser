@@ -245,6 +245,9 @@ public enum Signposts {
     /// Event: another app opened a web link in Plain (as the default browser); its tab's open is
     /// the `tab.open` interval that follows.
     public static let linkFromOtherApp: StaticString = "link.fromOtherApp"
+    /// Event: Shortcuts, Siri, a widget, a control or a Spotlight result asked for a command
+    /// (search, a tab, the tab switcher); the message names it. Its tab or gallery interval follows.
+    public static let systemCommand: StaticString = "system.command"
 
     // MARK: First-run intro (FeatureUI emits these)
 

@@ -2,8 +2,10 @@ import BrowserCore
 import FeatureUI
 import Foundation
 import PerfSignposts
+import PlainShared
 import ShellUI
 import Storage
+import SystemSync
 import UIKit
 import WebEngine
 
@@ -35,8 +37,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// The browser was built (on launch, or when the intro finished).
     private var browserShown = false
     private weak var browser: BrowserViewController?
-    /// Web links other apps opened before the browser was built.
-    private var pendingLinks: [URL] = []
+    /// What the system asked for before the browser could do it: web links from other apps,
+    /// widget links, App Intents, Spotlight results and Handoff (docs/research/system-integration.md).
+    private var pendingCommands: [PlainCommand] = []
+    /// The address bar has the saved search engine, so a search goes to the right engine.
+    private var addressBarReady = false
+    /// Spotlight, the App Group file and widget timelines, following the favorites.
+    private var systemSync: SystemSync?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -51,10 +58,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         #endif
-        pendingLinks = Self.webLinks(options.urlContexts.map(\.url) + options.userActivities.compactMap(Self.webLink))
+        pendingCommands = Self.commands(urls: options.urlContexts.map(\.url), activities: Array(options.userActivities))
+        // App Intents run in this process; their commands come here (waiting ones arrive now).
+        CommandInbox.shared.handler = { [weak self, weak windowScene] command in
+            guard let self, let windowScene else { return }
+            self.receive([command], in: windowScene)
+        }
         // After the intro was seen this is one defaults read; no intro code runs. A link from
-        // another app opens its page at once: the intro waits for the next launch.
-        if pendingLinks.isEmpty, IntroGate.shouldShow(arguments: arguments) {
+        // another app (or a widget, a shortcut) opens at once: the intro waits for the next launch.
+        if pendingCommands.isEmpty, IntroGate.shouldShow(arguments: arguments) {
             showIntro(in: windowScene)
         } else {
             showBrowser(in: windowScene)
@@ -98,7 +110,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             Signposts.signposter.endInterval(Signposts.launch, launchInterval)
             // Links that launched the app open once the launch focus is done, so the search
             // field never comes up over their page.
-            self?.openPendingLinks()
+            self?.performPendingCommands()
         }
         // The navigation controller gives the page buttons a place in the system's vertical bar
         // (iPhone Duo). Its navigation bar stays hidden; the browser shows its toolbar only where
@@ -128,24 +140,26 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #endif
     }
 
-    // MARK: Links from other apps
+    // MARK: Links, intents, Spotlight and Handoff
 
-    /// Web links another app opens in Plain (as the default browser) while it runs.
+    /// Web links another app opens in Plain (as the default browser), and widget links, while it
+    /// runs.
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        open(Self.webLinks(URLContexts.map(\.url)), in: scene)
+        receive(Self.commands(urls: URLContexts.map(\.url), activities: []), in: scene)
     }
 
+    /// A Spotlight result, or a page continued from another device.
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        open(Self.webLinks([Self.webLink(userActivity)].compactMap { $0 }), in: scene)
+        receive(Self.commands(urls: [], activities: [userActivity]), in: scene)
     }
 
-    /// Opens `links` in the browser; while the intro is up it gives way, unseen, so the page shows
-    /// now and the intro comes back on the next launch.
-    private func open(_ links: [URL], in scene: UIScene) {
-        guard !links.isEmpty else { return }
-        pendingLinks += links
+    /// Does `commands` in the browser; while the intro is up it gives way, unseen, so the page
+    /// shows now and the intro comes back on the next launch.
+    private func receive(_ commands: [PlainCommand], in scene: UIScene) {
+        guard !commands.isEmpty else { return }
+        pendingCommands += commands
         if browser?.viewIfLoaded?.window != nil {
-            openPendingLinks()
+            performPendingCommands()
             return
         }
         guard let windowScene = scene as? UIWindowScene, introWindow != nil else { return }
@@ -154,19 +168,19 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         showBrowser(in: windowScene)
     }
 
-    private func openPendingLinks() {
-        guard let browser, !pendingLinks.isEmpty else { return }
-        let links = pendingLinks
-        pendingLinks = []
-        links.forEach(browser.open(externalURL:))
+    /// In order. A search waits (with what follows it) until the saved engine is in, so it never
+    /// goes to the default engine by mistake on a cold launch.
+    private func performPendingCommands() {
+        guard let browser else { return }
+        while let command = pendingCommands.first {
+            if case .search = command, !addressBarReady { return }
+            pendingCommands.removeFirst()
+            browser.perform(command)
+        }
     }
 
-    private static func webLink(_ activity: NSUserActivity) -> URL? {
-        activity.activityType == NSUserActivityTypeBrowsingWeb ? activity.webpageURL : nil
-    }
-
-    private static func webLinks(_ urls: [URL]) -> [URL] {
-        urls.filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
+    private static func commands(urls: [URL], activities: [NSUserActivity]) -> [PlainCommand] {
+        urls.compactMap(PlainLink.command(from:)) + activities.compactMap(SystemActivity.command(from:))
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
@@ -193,13 +207,43 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let data = addressBarData
         let sheets = sheets
         let opening = database
-        Task(priority: .userInitiated) {
-            guard let database = await opening.value else { return }
+        Task(priority: .userInitiated) { [weak self] in
+            guard let database = await opening.value else {
+                self?.addressBarIsReady()
+                return
+            }
             await data.attach(database)
             sheets.attach(database)
             browser.addressBarDataDidChange()
+            self?.addressBarIsReady()
             // Pruning and SQLite upkeep, at most daily, at background priority after launch settles.
             database.scheduleDailyMaintenance()
+            self?.startSystemSync(database)
+        }
+    }
+
+    /// Searches that waited for the saved engine go now, if the browser is up.
+    private func addressBarIsReady() {
+        addressBarReady = true
+        if browser?.viewIfLoaded?.window != nil { performPendingCommands() }
+    }
+
+    /// Spotlight, the widgets' favorites file and their timelines follow the favorites from here
+    /// on, at background priority once launch has settled (`FixedChoices.systemSyncLaunchDelay`).
+    /// Clear History and Data empties Spotlight through it.
+    private func startSystemSync(_ database: AppDatabase) {
+        guard systemSync == nil else { return }
+        let sync = SystemSync(
+            file: SharedFavoritesFile.shared, index: CoreSpotlightIndex(), widgets: WidgetCenterReloader()
+        ) {
+            // "Open <favorite> in Plain" learns the new names.
+            PlainShortcuts.updateAppShortcutParameters()
+        }
+        systemSync = sync
+        sheets.didClearBrowsingData = { await sync.browsingDataCleared() }
+        Task.detached(priority: .background) {
+            try? await Task.sleep(for: FixedChoices.systemSyncLaunchDelay)
+            await sync.follow(database)
         }
     }
 }

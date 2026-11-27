@@ -298,4 +298,8 @@ public enum FixedChoices {
     /// Search from Shortcuts, Siri and the widget uses the engine chosen in Settings, with no
     /// per-shortcut engine: one choice, made once.
     public static let intentsUseSettingsEngine = true
+    /// The Spotlight and widget sync starts this long after launch, at background priority, so it
+    /// never competes with the first frame or the first page load. Favorites rarely change; a
+    /// few seconds late costs nothing.
+    public static let systemSyncLaunchDelay = Duration.seconds(5)
 }

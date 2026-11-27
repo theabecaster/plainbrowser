@@ -182,6 +182,7 @@ extension BrowserViewController {
             }
         }
         currentTab = nil
+        updateHandoff(page: nil, title: "", isPrivate: false)
         pill.display(url: nil)
         pill.progressBar.finish()
         setPrivateChrome(false)
@@ -260,6 +261,7 @@ extension BrowserViewController {
         }
         updateButtons()
         updatePageState()
+        updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
     }
 
     // MARK: Page state (crash, error, form waiting)

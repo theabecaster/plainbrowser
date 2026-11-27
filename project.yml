@@ -35,7 +35,11 @@ targets:
       - path: Brand/AppIcon-Night.icon
       - path: Brand/AppIcon-Coral.icon
       - path: Brand/AppIcon-Paper.icon
+      # The controls' intent: App Intents opens the app only when the intent is in both targets.
+      - path: PlainWidgets/OpenPlainIntent.swift
     dependencies:
+      # The widget extension, embedded in PlugIns.
+      - target: PlainWidgets
       - package: PlainKit
         product: ShellUI
       # The first-run intro (shown once, before the browser).
@@ -45,9 +49,16 @@ targets:
         product: Storage
       - package: PlainKit
         product: PerfSignposts
+      # App Intents, widget links and Handoff: the commands, the App Group file, the Spotlight sync.
+      - package: PlainKit
+        product: PlainShared
+      - package: PlainKit
+        product: SystemSync
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser
+        # The App Group shared with the widget extension (docs/development.md, "Widgets and App Group").
+        CODE_SIGN_ENTITLEMENTS: Plain/Plain.entitlements
         PRODUCT_NAME: Plain
         # The name under the icon.
         APP_DISPLAY_NAME: Plain
@@ -60,6 +71,47 @@ targets:
         # UI code: MainActor by default, like the package's UI targets. (Not on the UI tests:
         # XCTestCase's overrides are nonisolated, so those classes say @MainActor themselves.)
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  # The search widget (Home Screen, StandBy, Lock Screen) and the Control Center controls. A thin
+  # wrapper: the views and timeline are PlainKit's WidgetUI. Nothing in it runs at app launch.
+  PlainWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PlainWidgets
+        excludes:
+          - "*.entitlements"
+          - Info.plist
+    dependencies:
+      - package: PlainKit
+        product: WidgetUI
+      - package: PlainKit
+        product: PlainShared
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser.widgets
+        PRODUCT_NAME: PlainWidgets
+        APP_DISPLAY_NAME: Plain
+        INFOPLIST_FILE: PlainWidgets/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: PlainWidgets/PlainWidgets.entitlements
+        SKIP_INSTALL: YES
+        # The intent's perform runs on the main actor in both targets.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+  # Hosted unit tests: App Intents performed inside the app. No package products of its own: it
+  # uses the app's copies (a second copy would be a second CommandInbox).
+  PlainTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: PlainTests
+    dependencies:
+      - target: Plain
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser.tests
+        GENERATE_INFOPLIST_FILE: YES
   # UI smoke tests and the launch/hitch perf tests the perf gate runs on the device.
   PlainUITests:
     type: bundle.ui-testing
@@ -84,6 +136,7 @@ schemes:
       targets:
         Plain: all
         PlainUITests: [test]
+        PlainTests: [test]
     run:
       config: Debug
     test:

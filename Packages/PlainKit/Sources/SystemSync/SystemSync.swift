@@ -28,7 +28,9 @@ public struct WidgetCenterReloader: WidgetReloading {
 /// and private tabs never reach any of this. Everything runs off the main thread, at background
 /// priority, after launch.
 public actor SystemSync {
-    private let file: SharedFavoritesFile?
+    private let makeFile: @Sendable () -> SharedFavoritesFile?
+    /// Found on first use, on the actor: looking up the App Group folder asks the system.
+    private lazy var file: SharedFavoritesFile? = makeFile()
     private let index: any SpotlightIndexing
     private let widgets: any WidgetReloading
     private let onChange: @Sendable () -> Void
@@ -40,10 +42,10 @@ public actor SystemSync {
     ///   - file: the App Group file; nil where the group is not available (then only Spotlight).
     ///   - onChange: after each change was written (the app updates its App Shortcuts' parameters).
     public init(
-        file: SharedFavoritesFile?, index: any SpotlightIndexing, widgets: any WidgetReloading,
-        onChange: @escaping @Sendable () -> Void = {}
+        file: @autoclosure @escaping @Sendable () -> SharedFavoritesFile?, index: any SpotlightIndexing,
+        widgets: any WidgetReloading, onChange: @escaping @Sendable () -> Void = {}
     ) {
-        self.file = file
+        makeFile = file
         self.index = index
         self.widgets = widgets
         self.onChange = onChange

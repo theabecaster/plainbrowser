@@ -99,6 +99,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var snapInterval: OSSignpostIntervalState?
     /// Which resting state the page's bottom inset follows, and a change waiting for a bounce.
     private var pageInset = PageInsetState()
+    /// The resting state the page's insets follow now (a split's other pane follows it too).
+    var pageInsetRest: ChromeRest { pageInset.rest }
     /// A page started loading under the finger: the bar comes back when the finger lifts.
     private var expandOnRelease = false
     /// The bar came back at the page's end while the finger was down: the page's end (before the

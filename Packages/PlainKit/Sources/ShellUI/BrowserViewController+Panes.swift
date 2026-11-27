@@ -227,12 +227,13 @@ extension BrowserViewController {
     }
 
     /// The other pane has no chrome over it, but it keeps the expanded bar's inset: switching focus
-    /// then never relayouts either page.
+    /// then never relayouts either page. Under a top bar, which spans both panes, it follows the
+    /// bar's resting state instead (`applyOtherPaneTopInsets`).
     func applyOtherPaneInsets(to tab: Tab) {
         // During a fold the transition's completion applies them.
         guard view.bounds.height > 0, !duo.isResizing else { return }
         if let top = duo.topGeometry {
-            applyOtherPaneTopInsets(to: tab, geometry: top)
+            applyOtherPaneTopInsets(to: tab, geometry: top, rest: pageInsetRest)
             return
         }
         setPageTopStart(0, for: session.pool.scrollView(for: tab))

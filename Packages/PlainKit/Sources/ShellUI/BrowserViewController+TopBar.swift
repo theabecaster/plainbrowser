@@ -318,16 +318,19 @@ extension BrowserViewController {
         // A split's other pane follows a change of the bar's height (the strip coming or going).
         let panes = session.tabs.panes
         for index in shownPanes where index != session.tabs.focusedPane {
-            if let id = panes[index], let tab = session.tabs.existingTab(id) { applyOtherPaneTopInsets(to: tab, geometry: geometry) }
+            if let id = panes[index], let tab = session.tabs.existingTab(id) {
+                applyOtherPaneTopInsets(to: tab, geometry: geometry, rest: rest)
+            }
         }
     }
 
-    /// The other pane of a split under the top bar: the expanded bar's inset, so a focus switch
-    /// never relayouts either page.
-    func applyOtherPaneTopInsets(to tab: Tab, geometry: TopChromeGeometry) {
+    /// The other pane of a split under the top bar: the one bar spans both panes, so it follows the
+    /// same resting state as the focused one (`rest`). While reading its top inset is then 0 too,
+    /// and no header-colored band stays above it; a focus switch still never relayouts either page.
+    func applyOtherPaneTopInsets(to tab: Tab, geometry: TopChromeGeometry, rest: ChromeRest) {
         session.pool.setInsets(
             for: tab,
-            obscured: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0),
+            obscured: UIEdgeInsets(top: geometry.obscuredInset(rest: rest), left: 0, bottom: pageBottomInset, right: 0),
             minimumViewport: UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: pageBottomInset, right: 0),
             maximumViewport: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0)
         )

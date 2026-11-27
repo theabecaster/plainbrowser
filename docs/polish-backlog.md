@@ -264,3 +264,14 @@ Newest feature last.
 - **Render-pass check on the device.** The simulator test checks the layer gets a pattern color
   with no contents, mask, shadow or rasterizing. Confirm no offscreen pass with Instruments' Core
   Animation instrument on the Duo during the device perf gate.
+
+## Polish lane (2026-11-26)
+
+- **Fixed values outside FixedChoices.** The find bar's close check (every 0.25 s,
+  `BrowserViewController+Tab.swift`), the favorites strip's edge fade (28 pt, `SearchSheet.swift`)
+  and the held page's top overshoot (12 pt, `TabGalleryTransition.swift`) live in their files;
+  move them to `FixedChoices` or `Motion` when those files are free of other lanes' edits. (Code
+  review, round 1.)
+- **Thumbnail memory on the device.** Thumbnails are now 3x at card width (about 5 MB decoded
+  each, 40 MB cache). Check memory with many tabs on the Duo and lower the cache if it pushes the
+  app toward a memory warning.

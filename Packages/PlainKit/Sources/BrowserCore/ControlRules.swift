@@ -125,8 +125,9 @@ public struct ControlRules: Sendable, Equatable {
     // MARK: The bar (§3)
 
     /// Editing hides the button bar (the keyboard and the field take the bottom), in the glass bar
-    /// and in the Duo's vertical bar alike (§6).
-    public var barShown: Bool { !state.isEditing }
+    /// and in the Duo's vertical bar alike (§6). So does Find on Page: the find bar replaces the
+    /// page's bar (§7).
+    public var barShown: Bool { !state.isEditing && !state.isFindOpen }
 
     /// Start mode with the field closed, in the glass bar: the bar holds at most Tabs and More, so
     /// it shrinks to a round glass button beside the pill (a capsule with both) instead of a

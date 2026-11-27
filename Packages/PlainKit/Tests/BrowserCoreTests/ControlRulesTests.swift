@@ -281,6 +281,9 @@ import Testing
         #expect(!rules.barShown)
         #expect(!rules.acceptsBarGestures)
         #expect(ControlRules(Self.firstRun).barShown)
+        var finding = Self.page()
+        finding.isFindOpen = true
+        #expect(!ControlRules(finding).barShown, "the find bar replaces the page's bar")
     }
 
     @Test func theStartBarSitsBesideThePill() {

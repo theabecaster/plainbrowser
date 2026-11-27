@@ -343,6 +343,8 @@ extension BrowserViewController {
     private func watchFindBar() {
         engineUI.findWatch?.cancel()
         setChromeHiddenForFind(true)
+        // The Duo's vertical bar empties too (`ControlRules.barShown`).
+        updateButtons()
         engineUI.findWatch = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))

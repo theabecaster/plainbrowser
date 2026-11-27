@@ -30,8 +30,9 @@ nonisolated public enum EngineChoices {
     // MARK: Thumbnails (docs/plan.md, "Engine rules" 3)
 
     /// Thumbnails are stored at this many pixels per point of `FixedChoices.thumbnailWidth`: a
-    /// 3x screen's pixels on a card (about 780 px wide), and still under a sixth of the pixels of
-    /// a full-screen snapshot. At 2x a card upscaled them and read blurry.
+    /// 3x screen's pixels on a card (about 780 px wide, 3.8 times the pixels of the old 400 px
+    /// capture, about 44% of a 3x full-screen snapshot). At 2x a card upscaled them and read
+    /// blurry.
     public static let thumbnailPixelsPerPoint: CGFloat = 3
     /// JPEG quality on disk: invisible loss at card size, a third of PNG's size and write time.
     public static let thumbnailJPEGQuality: CGFloat = 0.7

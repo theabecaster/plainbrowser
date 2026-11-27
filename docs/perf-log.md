@@ -15,6 +15,17 @@ picture and resting bar are on screen (`launch.firstFrame`, ms). Rows before the
 neither gallery nor swipe; rows before 2026-11-27 have no last tab. Since 2026-11-27 launch and field
 start from an empty test store (no tab), as a last tab now opens without the search field.
 
+Since the perf program (2026-11-27): focus = tap on the address pill until the keyboard rests
+under the focused field (`urlBar.ready`, ms), suggest = one keystroke until its local suggestions
+show (`search.suggestions`, ms), link paint = a link tap until the next local page's first
+contentful paint, measured by the pages (ms), gallery tab = a gallery card tapped until its page
+rests (`gallery.openTab`, ms), new tab = New Tab until the keyboard rests under its field
+(`tab.newReady`, ms), memory = the app's footprint with ten tabs, after the gallery showed them
+(MB; WebKit's processes not counted), heavy hitch = hitch ratio scrolling a large page darkened by
+dark pages (ms/s, device only). Older rows have the result where these columns begin. The gate
+reads columns by header name, and its ratchet compares device rows against the best of the last 5
+passing device rows (perf/budgets.json, docs/research/perf-goals.md).
+
 Note, M2 shell wiring rows (2026-11-26 15:12–15:23): machine load average 70–130 on 14 cores (other
 lanes building), so these are noise. Launch reported no measurement in two of three runs; the bar
 swipe (`tab.swipe`) recorded no XCTOSSignpostMetric value in any run (the swipe UI tests pass), to
@@ -25,8 +36,14 @@ the first run and 7 to 60 during the second (other lanes' simulators), so launch
 Simulator signposts in the after build: the last tab's picture finished decoding 25–33 ms after the
 scene connected, hundreds of ms before the first frame, so the first frame never waited for it.
 
-| Date | SHA | Target | Launch ms | Field ms | Hitch ms/s | Gallery ms | Swipe ms | Last tab ms | Result |
-|---|---|---|---|---|---|---|---|---|---|
+Note, perf program row (2026-11-27 14:11): the first with every new column, at load average
+800–970 (other lanes), so launch and last tab "regressed" within noise. The one failing test,
+`testNewTabToSearchField`, timed out waiting 10 s for its page under that load (the wait is 20 s
+since, and it passes alone). Gallery tab reads ~1.5 s against ~0.6 s for the gallery's open:
+`gallery.openTab` seems to end at Core Animation's completion rather than the visual settle.
+
+| Date | SHA | Target | Launch ms | Field ms | Hitch ms/s | Gallery ms | Swipe ms | Last tab ms | Focus ms | Suggest ms | Link paint ms | Gallery tab ms | New tab ms | Memory MB | Heavy hitch ms/s | Result |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 2026-11-26 05:23 | 9b9ba4e | sim | 3353.9 | 2064.4 | n/a | pass |
 | 2026-11-26 06:16 | 6ba5947 | sim | 3578.5 | 2035.5 | n/a | pass |
 | 2026-11-26 06:33 | 2c966cc | sim | 3529.1 | 1851.1 | n/a | pass |
@@ -45,3 +62,4 @@ scene connected, hundreds of ms before the first frame, so the first frame never
 | 2026-11-27 11:25 | d9da72b | device | — | — | 0 | 690.5 | 528.7 | 223.9 | FAIL |
 | 2026-11-27 11:52 | 5788977 | device | 225.4 | 198.1 | 0 | — | — | 214.3 | FAIL |
 | 2026-11-27 12:00 | 6c1231f | device | 225.4 | 198.1 | 0 | 680 | 526 | 214.3 | pass (gallery/swipe rerun alone after a notification interrupted them) |
+| 2026-11-27 14:11 | 5094071 | sim | 968.3 | 507.2 | n/a | 583.7 | 329.3 | 889.3 | 468.3 | 9.3 | 56 | 1489.9 | 531.3 | 72 | n/a | FAIL |

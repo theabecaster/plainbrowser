@@ -56,6 +56,10 @@ public enum Signposts {
     /// Interval from a tap on the URL pill to the field being first responder with the search
     /// sheet's layout applied (the first visual response).
     public static let urlBarFocus: StaticString = "urlBar.focus"
+    /// Interval from a tap on the URL pill to the keyboard at rest under the focused field
+    /// (`keyboardDidShow`; `OpenIntervals`). The perf gate's `focusMs`: the system keyboard's own
+    /// rise is inside it, so the app's part is what delays the rise's start.
+    public static let urlBarReady: StaticString = "urlBar.ready"
     /// Interval from a keystroke in the address bar to its local suggestions (history and
     /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
     public static let suggestionsShown: StaticString = "search.suggestions"
@@ -177,6 +181,10 @@ public enum Signposts {
     /// Interval: a new tab, from the open request (new-tab button, link, popup) to its pane
     /// showing it (or, in the background, to it being in the list).
     public static let tabOpen: StaticString = "tab.open"
+    /// Interval from New Tab (a menu, the gallery, a swipe past the last tab) to the keyboard at
+    /// rest under the new tab's focused search field (`keyboardDidShow`; `OpenIntervals`). The perf
+    /// gate's `newTabMs`.
+    public static let newTabReady: StaticString = "tab.newReady"
     /// Interval: closing a tab (button, flick in the gallery, `window.close()`), until the next
     /// tab is on screen.
     public static let tabClose: StaticString = "tab.close"

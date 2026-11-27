@@ -573,6 +573,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             return
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
+        OpenIntervals.begin(Signposts.urlBarReady, until: UIResponder.keyboardDidShowNotification)
         pill.textField.text = pageAddress?.absoluteString ?? ""
         // The layout switches before the keyboard starts, so the keyboard's own animation carries
         // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.

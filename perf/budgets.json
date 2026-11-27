@@ -1,39 +1,152 @@
 {
-  "comment": "Device budgets from docs/plan.md section 2. Absolute limits apply on the device only; on a simulator the gate fails on a regression larger than simRegressionTolerance against the previous sim row instead.",
+  "comment": "Device budgets (docs/plan.md section 2, reasons and sources in docs/research/perf-goals.md). Each metric: its test and the xcresult metric that measures it (filter, scale to the unit), its perf-log column, target (the best realistic number), fail (an absolute regression guard), slack (the ratchet's noise floor, in the metric's unit) and why. Device runs fail at `fail`, or past the ratchet: more than ratchet.tolerance (or slack, whichever is larger) worse than the metric's best in the last ratchet.window passing device rows. A metric whose iterations spread more than ratchet.rsdLimit (relative standard deviation) reruns its test once. On a simulator the gate fails on a regression larger than simRegressionTolerance against the previous sim row instead.",
   "simRegressionTolerance": 0.20,
+  "ratchet": { "tolerance": 0.10, "window": 5, "rsdLimit": 0.10 },
   "metrics": {
     "launchMs": {
       "label": "main() to first frame, responsive (ms)",
-      "target": 300,
-      "fail": 400
+      "column": "Launch ms",
+      "test": "PerfTests/testLaunch()",
+      "filter": ".identifier | endswith(\"OSSignpost-launch.firstFrame.duration\")",
+      "scale": 1000,
+      "target": 150,
+      "fail": 300,
+      "slack": 8.3,
+      "why": "Apple's launch goal is 400 ms from the icon tap to the first frame, about 100 ms of it the system's, which leaves 300 ms for the app (WWDC19 423): fail there. Pre-main time is not in this interval, so a lean UIKit app reaches its first frame in about half the app's share: target 150, under today's 225."
     },
     "searchFieldMs": {
       "label": "main() to search field focused (ms)",
-      "target": 300,
-      "fail": 400
+      "column": "Field ms",
+      "test": "PerfTests/testLaunchToSearchFieldReady()",
+      "filter": ".identifier | endswith(\"OSSignpost-launch.duration\")",
+      "scale": 1000,
+      "target": 150,
+      "fail": 300,
+      "slack": 8.3,
+      "why": "The field takes focus before the first frame, so it shares the launch budget: Apple's 300 ms app share fails, 150 is the lean-app target (today 198)."
     },
     "hitchMsPerS": {
       "label": "Page scroll hitch ratio (ms/s)",
-      "target": 5,
-      "fail": 10
+      "column": "Hitch ms/s",
+      "test": "PerfTests/testPageScrollHitches()",
+      "filter": ".displayName | test(\"hitch.*ratio\"; \"i\")",
+      "scale": 1,
+      "deviceOnly": true,
+      "target": 0,
+      "fail": 5,
+      "slack": 1,
+      "why": "A scroll of an ordinary page drops no frame in a perfect app, and Plain already measures 0. Apple's 2020 tiers call under 5 ms/s good and 10 critical (its current page: 10 good, 25 warning); fail at 5, the stricter line. Slack 1 ms/s: one 8 ms hitch per 8 s of scrolling."
     },
     "galleryMs": {
       "label": "Tabs button to gallery visibly settled (ms)",
-      "target": 650,
-      "fail": 800,
-      "reason": "Ends when the page is within 0.5 pt of its card (TabGalleryTransition), not at Core Animation's settle of the 0.42 s spring (~0.98 s on the Duo). The spring alone takes ~0.6 s to come within 0.5 pt, so 800 leaves ~200 ms for stalls."
+      "column": "Gallery ms",
+      "test": "PerfTests/testGalleryOpen()",
+      "filter": ".identifier | endswith(\"OSSignpost-gallery.show.duration\")",
+      "scale": 1000,
+      "target": 610,
+      "fail": 750,
+      "slack": 8.3,
+      "why": "Ends when the page is within 0.5 pt of its card (TabGalleryTransition), not at Core Animation's settle (~0.98 s). The 0.42 s critically damped spring alone needs ~0.60 s to come within 0.5 pt of a ~400 pt move, so the best possible is that plus a frame: 610. Fail 750, ~10% over today's 680."
     },
     "swipeMs": {
       "label": "Bar swipe: finger lift to page settled (ms)",
-      "target": 450,
-      "fail": 650,
-      "reason": "Measured from the finger lifting (tab.swipeSettle), so the scripted drag in the UI test is left out. Ends when the page is within 0.5 pt of the neighbour and moving less than 0.5 pt a frame, then the hand-off (tab.swipeHandoff, ~10 ms): the 0.35 s spring comes to rest in ~0.3 s from the test's release (40% across at 1200 pt/s), not at its 0.001 pt settle (~0.9 s)."
+      "column": "Swipe ms",
+      "test": "PerfTests/testBarSwipe()",
+      "filter": ".identifier | endswith(\"OSSignpost-tab.swipeSettle.duration\")",
+      "scale": 1000,
+      "target": 320,
+      "fail": 600,
+      "slack": 8.3,
+      "why": "From the finger lifting (tab.swipeSettle), so the test's scripted drag is left out. The 0.35 s spring comes to rest within 0.5 pt in ~0.3 s from the test's release (40% across at 1200 pt/s), plus the hand-off (tab.swipeHandoff, ~10 ms): target 320. Today 526 holds ~200 ms that is not the spring. Fail 600, ~14% over today."
     },
     "lastTabMs": {
       "label": "main() to first frame with the last tab (ms)",
-      "target": 300,
-      "fail": 400,
-      "reason": "The cold-launch budget, with the last tab's picture (decoded off the main thread) and the resting bar on the first frame."
+      "column": "Last tab ms",
+      "test": "PerfTests/testLaunchToLastTab()",
+      "filter": ".identifier | endswith(\"OSSignpost-launch.firstFrame.duration\")",
+      "scale": 1000,
+      "target": 150,
+      "fail": 300,
+      "slack": 8.3,
+      "why": "The cold-launch budget, with the last tab's picture (decoded off the main thread) and the resting bar on the first frame (today 214)."
+    },
+    "focusMs": {
+      "label": "Address pill tap to keyboard at rest (ms)",
+      "column": "Focus ms",
+      "test": "PerfTests/testAddressBarFocus()",
+      "filter": ".identifier | endswith(\"OSSignpost-urlBar.ready.duration\")",
+      "scale": 1000,
+      "target": 510,
+      "fail": 600,
+      "slack": 8.3,
+      "why": "Ends at keyboardDidShow, so the system keyboard's rise is inside: 0.5 s on iOS 27.2 (the simulator's fastest runs end 1 ms after it). The best possible is that rise starting on the tap's own frame: 500 plus one 120 Hz frame, 510. Fail 600: the rise plus the 100 ms that reads as a delay (Nielsen; Apple's hang threshold)."
+    },
+    "suggestionsMs": {
+      "label": "Keystroke to local suggestions shown (ms)",
+      "column": "Suggest ms",
+      "test": "PerfTests/testKeystrokeToSuggestions()",
+      "filter": ".identifier | endswith(\"OSSignpost-search.suggestions.duration\")",
+      "scale": 1000,
+      "target": 8.3,
+      "fail": 50,
+      "slack": 8.3,
+      "why": "A keystroke's local rows (a database read off the main thread, then one list update) should land on the next 120 Hz frame: target 8.3. RAIL keeps input handling within 50 ms so the visible response fits in 100 ms: fail 50."
+    },
+    "linkPaintMs": {
+      "label": "Link tap to next page's first paint (ms)",
+      "column": "Link paint ms",
+      "test": "PerfTests/testLinkTapToFirstPaint()",
+      "filter": ".identifier == \"dev.plain.linkPaint\"",
+      "scale": 1,
+      "target": 100,
+      "fail": 200,
+      "slack": 8.3,
+      "why": "A tap on a link to the next page's first contentful paint, for a small page served on the phone itself, so the network is left out and what remains is the app's navigation handling and WebKit's load, layout and paint. Target 100: the instant threshold (Nielsen; Apple's hang line). Fail 200: Core Web Vitals' 'good' interaction to next paint (INP)."
+    },
+    "galleryTabMs": {
+      "label": "Gallery card tap to page settled (ms)",
+      "column": "Gallery tab ms",
+      "test": "PerfTests/testGalleryTabOpen()",
+      "filter": ".identifier | endswith(\"OSSignpost-gallery.openTab.duration\")",
+      "scale": 1000,
+      "target": 610,
+      "fail": 750,
+      "slack": 8.3,
+      "why": "The gallery's open in reverse: the same 0.42 s critically damped spring, which visibly rests (within 0.5 pt) at ~0.60 s; plus a frame, 610. Fail 750, as the gallery's open."
+    },
+    "newTabMs": {
+      "label": "New Tab to keyboard at rest (ms)",
+      "column": "New tab ms",
+      "test": "PerfTests/testNewTabToSearchField()",
+      "filter": ".identifier | endswith(\"OSSignpost-tab.newReady.duration\")",
+      "scale": 1000,
+      "target": 510,
+      "fail": 600,
+      "slack": 8.3,
+      "why": "Like the address bar's focus: the new tab and its field are ready on the tap's frame and the system keyboard's 0.5 s rise is the rest. Target 510, fail 600."
+    },
+    "memoryMB": {
+      "label": "App memory with 10 tabs (MB)",
+      "column": "Memory MB",
+      "test": "PerfTests/testMemoryWithTenTabs()",
+      "filter": ".identifier | endswith(\".physical_absolute\")",
+      "scale": 0.0009765625,
+      "target": 60,
+      "fail": 150,
+      "slack": 2,
+      "why": "The app process's footprint (XCTMemoryMetric's absolute physical) with ten local pages in tabs, after the gallery showed all ten cards. WebKit's own processes hold the pages and are not counted. A lean UIKit shell is ~40 MB, and ten thumbnails at 2x card size ~1.3 MB each: target 60. Fail 150, twice the simulator's reading, until device rows exist; the ratchet then holds it near its best."
+    },
+    "heavyHitchMsPerS": {
+      "label": "Heavy darkened page scroll hitch ratio (ms/s)",
+      "column": "Heavy hitch ms/s",
+      "test": "PerfTests/testHeavyPageScrollHitches()",
+      "filter": ".displayName | test(\"hitch.*ratio\"; \"i\")",
+      "scale": 1,
+      "deviceOnly": true,
+      "target": 0,
+      "fail": 10,
+      "slack": 1,
+      "why": "A large light-only page (6,300 elements, 4,000 rules) darkened by dark pages: scrolling is composited off the main thread, so a perfect app drops nothing, target 0 (docs/research/dark-mode.md: dark pages must add no hitch). No device number yet: fail at 10, Apple's current 'good' ceiling, and the ratchet tightens it from the first passing device row."
     }
   }
 }

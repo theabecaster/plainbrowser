@@ -108,27 +108,46 @@ Simulator builds sign without a team, and the group works there too. Tests:
 reads the metrics with `xcrun xcresulttool get test-results metrics`, and appends one row to
 `docs/perf-log.md` with the date, the git SHA and the target.
 
-| Metric | Test | Budget (device) |
-|---|---|---|
-| `launchMs` | `testLaunch`: the `launch.firstFrame` interval, `main` to the first display-link callback after the first window is visible (the turn that showed it is done, the main thread running again). Not `XCTApplicationLaunchMetric`: on iOS 27 it records nothing for Plain on the device and only in some simulator runs. Pre-`main` time is not in it. | target 300, fail ≥ 400 |
-| `searchFieldMs` | `testLaunchToSearchFieldReady`: the `launch` signpost interval | target 300, fail ≥ 400 |
-| `hitchMsPerS` | `testPageScrollHitches`: `XCTHitchMetric` while scrolling a Wikipedia article (needs network). Device only: the simulator reports no hitch data. | target 5, fail ≥ 10 |
-| `galleryMs` | `testGalleryOpen`: the `gallery.show` interval, ending when the page is within 0.5 pt of its card and moving less than 0.5 pt a frame (not at Core Animation's settle of the spring's tail) | target 650, fail ≥ 800 |
-| `swipeMs` | `testBarSwipe`: the `tab.swipeSettle` interval, the finger lifting until the page is visibly at rest on the neighbour (within 0.5 pt, moving less than 0.5 pt a frame) and the new tab has taken the page (`tab.swipeHandoff`, also reported). The test's scripted drag is left out. Each iteration waits out the settle before it ends: the metric drops an interval that ends after the measure block. | target 450, fail ≥ 650 |
+Budgets (target, fail, ratchet slack) and the reason for each are in `perf/budgets.json`; the
+sources are in `docs/research/perf-goals.md`. The gate reads the metrics, their tests and their
+log columns from `perf/budgets.json`, in its order, and stops when `docs/perf-log.md`'s header
+does not match.
+
+| Metric | Test |
+|---|---|
+| `launchMs` | `testLaunch`: the `launch.firstFrame` interval, `main` to the first display-link callback after the first window is visible (the turn that showed it is done, the main thread running again). Not `XCTApplicationLaunchMetric`: on iOS 27 it records nothing for Plain on the device and only in some simulator runs. Pre-`main` time is not in it. |
+| `searchFieldMs` | `testLaunchToSearchFieldReady`: the `launch` signpost interval |
+| `hitchMsPerS` | `testPageScrollHitches`: `XCTHitchMetric` while scrolling a Wikipedia article (needs network). Device only: the simulator reports no hitch data. |
+| `galleryMs` | `testGalleryOpen`: the `gallery.show` interval, ending when the page is within 0.5 pt of its card and moving less than 0.5 pt a frame (not at Core Animation's settle of the spring's tail) |
+| `swipeMs` | `testBarSwipe`: the `tab.swipeSettle` interval, the finger lifting until the page is visibly at rest on the neighbour (within 0.5 pt, moving less than 0.5 pt a frame) and the new tab has taken the page (`tab.swipeHandoff`, also reported). The test's scripted drag is left out. Each iteration waits out the settle before it ends: the metric drops an interval that ends after the measure block. |
+| `lastTabMs` | `testLaunchToLastTab`: `launch.firstFrame` with a last tab, its picture and resting bar on the first frame |
+| `focusMs` | `testAddressBarFocus`: `urlBar.ready`, a tap on `addressPill` until `keyboardDidShow` (the system keyboard's rise is inside) |
+| `suggestionsMs` | `testKeystrokeToSuggestions`: `search.suggestions`, one keystroke (the "t" of "Plain Test") until its local rows are applied; measuring stops before the letter is deleted |
+| `linkPaintMs` | `testLinkTapToFirstPaint`: the pages measure it (TestServer `/paint-start`, `/paint-target`): the link's touchend until the next page's first contentful paint (Paint Timing), both on the page's clock, handed to XCTest by `PageReportedMetric` |
+| `galleryTabMs` | `testGalleryTabOpen`: `gallery.openTab`, a card tapped until its page rests (the tap lands on the part of the card that shows) |
+| `newTabMs` | `testNewTabToSearchField`: `tab.newReady`, the tabs menu's New Tab until `keyboardDidShow` |
+| `memoryMB` | `testMemoryWithTenTabs`: `XCTMemoryMetric`'s absolute physical footprint of the app process with ten local pages in tabs, after the gallery shows them. WebKit's processes are not counted. |
+| `heavyHitchMsPerS` | `testHeavyPageScrollHitches`: `XCTHitchMetric` while scrolling TestServer `/big` (6,300 elements, 4,000 rules) with Appearance set to Dark, so dark pages darken it. Device only. |
 
 - **Simulator (default):** runs on the `plain-perf-duo` simulator (iPhone Duo; `PLAIN_SIM_PREFIX`
   renames it), shut down afterwards and deleted when the run created it. Fails on a test failure or on a regression of more than 20%
   (`simRegressionTolerance` in `perf/budgets.json`) against the previous `sim` row for the same
   metric. Simulator numbers are not comparable to the device budgets.
-- **Device:** `scripts/perf-gate.sh --device` or `PLAIN_PERF_TARGET=device`. Applies the absolute
-  budgets in `perf/budgets.json`. A locked or unreachable phone exits 2 with a message instead of
-  hanging.
+- **Device:** `scripts/perf-gate.sh --device` or `PLAIN_PERF_TARGET=device`. Fails when a metric
+  reaches its `fail` budget, or on the ratchet: more than 10% (`ratchet.tolerance`) or its `slack`,
+  whichever is larger, worse than its best value in the last 5 passing device rows. Each value is
+  the median of 5 iterations; the gate prints each metric's relative standard deviation (RSD), and
+  a test whose metric spreads more than 10% (`ratchet.rsdLimit`) reruns once
+  (`test-without-building`), its numbers then counting. A locked or unreachable phone exits 2 with
+  a message instead of hanging.
 
 Every perf test runs isolated (see "Test isolation"). The tab tests (`testGalleryOpen`,
 `testBarSwipe`) add `-PlainTestStore -PlainResetStore`: an empty store on disk in the app's
 temporary folder, so each run starts from the same two tabs. Only the compiled blocking lists stay
 shared with the owner's app: a read-only cache built from the bundled lists, the same for every
-run, holding no user data (which sites have blocking off lives in the isolated database).
+run, holding no user data (which sites have blocking off lives in the isolated database). The
+interaction tests (focus, suggestions, link paint, new tab, memory, heavy page) use the in-memory
+store and local TestServer pages; the heavy page test sets Appearance to Dark in that store only.
 
 Exit codes: 0 pass, 1 budget breach, regression or test failure, 2 device not ready.
 

@@ -53,6 +53,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let buttonBar = ButtonBar()
     let sheet = SearchSheet()
     let pullIndicator = PullIndicator()
+    /// The bottom-edge strip a hidden bar leaves behind (the home-indicator zone over the focused
+    /// pane): a tap there brings the bar back. It takes touches only while the bar is hidden.
+    private let revealEdge = UIView()
     var barItems: [PageButton: UIBarButtonItem] = [:]
 
     /// The tab on screen (BrowserCore's `TabStore` owns the list; `EngineTabs` keeps it in step).
@@ -138,7 +141,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         defer { updateStartScreen() }
 
         panes.install(in: self)
-        for subview in [panes.view, pullIndicator, sheet, chromeGlass, tabsUI.toast] as [UIView] {
+        for subview in [panes.view, pullIndicator, revealEdge, sheet, chromeGlass, tabsUI.toast] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
@@ -152,6 +155,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             control.addInteraction(effect)
         }
 
+        revealEdge.isUserInteractionEnabled = false
+        revealEdge.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(revealEdgeTapped)))
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
@@ -194,6 +199,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         NotificationCenter.default.addObserver(
             self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil
         )
+        // A page's form taking the keyboard brings the whole bar back, so it is there when the
+        // keyboard leaves (state rules §7, item 8).
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil
+        )
+        // VoiceOver and Switch Control keep the bar in reach (`ControlRules.chromeMayHide`).
+        for name in [UIAccessibility.voiceOverStatusDidChangeNotification, UIAccessibility.switchControlStatusDidChangeNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(assistiveTechChanged), name: name, object: nil)
+        }
     }
 
     /// Back from the background: idle tabs move to the archive.
@@ -216,6 +230,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         restOverIndicator.priority = .defaultLow
         let restOverEdge = rest.topAnchor.constraint(equalTo: view.bottomAnchor, constant: -ChromeGeometry.edgeMargin)
         restOverEdge.priority = .defaultLow
+
+        let revealEdgeOverIndicator = revealEdge.topAnchor.constraint(equalTo: safe.bottomAnchor)
+        revealEdgeOverIndicator.priority = .defaultLow
+        let revealEdgeOverEdge = revealEdge.topAnchor.constraint(
+            equalTo: view.bottomAnchor, constant: -ChromeGeometry.revealEdgeMinimum
+        )
+        revealEdgeOverEdge.priority = .defaultLow
 
         pillOnBar = pill.bottomAnchor.constraint(equalTo: buttonBar.topAnchor, constant: -ChromeGeometry.gap)
         pillOnEdge = pill.bottomAnchor.constraint(equalTo: rest.topAnchor)
@@ -260,6 +281,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             duo.panesLeading,
             duo.panesTrailing,
             panes.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            // The reveal edge: the home-indicator zone (at least 16 pt) under the focused pane.
+            revealEdge.leadingAnchor.constraint(equalTo: lane.leadingAnchor),
+            revealEdge.trailingAnchor.constraint(equalTo: lane.trailingAnchor),
+            revealEdge.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            revealEdge.topAnchor.constraint(lessThanOrEqualTo: safe.bottomAnchor),
+            revealEdge.topAnchor.constraint(
+                lessThanOrEqualTo: view.bottomAnchor, constant: -ChromeGeometry.revealEdgeMinimum
+            ),
+            revealEdgeOverIndicator,
+            revealEdgeOverEdge,
 
             duo.top.pullIndicatorTop as NSLayoutConstraint,
             pullIndicator.centerXAnchor.constraint(equalTo: lane.centerXAnchor),
@@ -720,10 +752,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         setPageTopStart(0, for: pageScrollView)
         for slot in panes.slots { slot.setRingTopInset(0) }
         let pageBottom = panes.view.frame.maxY
-        let collapsed = geometry.collapsedInset(pageBottom: pageBottom)
+        let hidden = geometry.hiddenInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)
-        let obscured = pageInset.collapsed ? collapsed : expanded
-        applyPageInsets(obscuredBottom: obscured, collapsedBottom: collapsed, expandedBottom: expanded)
+        let obscured = geometry.obscuredInset(pageBottom: pageBottom, rest: pageInset.rest)
+        applyPageInsets(obscuredBottom: obscured, minimumBottom: hidden, expandedBottom: expanded)
     }
 
     /// Moves the page's inset to the bar's resting state, unless the page is bouncing past an
@@ -738,12 +770,22 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             applied = pageInset.applyIfSettled(offset: 0, top: 0, bottom: 0)
         }
         guard applied else { return }
-        if pageInset.collapsed {
-            Signposts.signposter.emitEvent(Signposts.pageInset, "collapsed")
-        } else {
-            Signposts.signposter.emitEvent(Signposts.pageInset, "expanded")
+        switch pageInset.rest {
+        case .expanded: Signposts.signposter.emitEvent(Signposts.pageInset, "expanded")
+        case .pill: Signposts.signposter.emitEvent(Signposts.pageInset, "collapsed")
+        case .hidden: Signposts.signposter.emitEvent(Signposts.pageInset, "hidden")
         }
+        let scrollView = pageScrollView
+        let wasAtEnd = scrollView.map { !$0.isTracking && $0.contentOffset.y >= scrollRange($0).bottom - 1 } ?? false
         updatePageInsets()
+        // The bar came back at the page's end: the page rises with it, so its last lines are not
+        // left under the bar. A scroll, not a relayout, and never under the finger.
+        if wasAtEnd, let scrollView {
+            let bottom = scrollRange(scrollView).bottom
+            if bottom > scrollView.contentOffset.y + 1 {
+                scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: bottom), animated: true)
+            }
+        }
     }
 
     /// The smallest and largest content offsets of the page at rest.
@@ -764,7 +806,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let pillMove = geometry.pillTransform(progress: progress)
         pill.transform = CGAffineTransform(translationX: 0, y: pillMove.translationY)
             .scaledBy(x: pillMove.scale, y: pillMove.scale)
+        pill.alpha = ChromeGeometry.pillAlpha(progress: progress)
         pill.isCompact = progress > 0
+        let isGone = progress >= ChromeRest.hidden.progress
+        if pill.accessibilityElementsHidden != isGone { pill.accessibilityElementsHidden = isGone }
         guard !usesVerticalBar else { return }
         buttonBar.transform = CGAffineTransform(translationX: 0, y: geometry.barTranslation(progress: progress))
         if !isEditingAddress { buttonBar.alpha = ChromeGeometry.barAlpha(progress: progress) }
@@ -772,6 +817,49 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     func expandChrome(animated: Bool) {
         settleCollapse(at: 0, animated: animated)
+    }
+
+    /// Brings a collapsed or hidden bar back whole, and says why (signpost). A bar already
+    /// expanded, or on its way there, is left alone.
+    func revealChrome(_ reason: ChromeRevealReason) {
+        let resting = snap.isRunning ? snap.target : crossfadeTarget ?? collapse.progress
+        guard resting > 0 else { return }
+        Signposts.signposter.emitEvent(Signposts.toolbarReveal, "\(reason.rawValue, privacy: .public)")
+        expandChrome(animated: true)
+    }
+
+    /// Lets the pill sink away while the user reads.
+    private func hideChrome(_ reason: String) {
+        let resting = snap.isRunning ? snap.target : crossfadeTarget ?? collapse.progress
+        guard resting < ChromeRest.hidden.progress else { return }
+        Signposts.signposter.emitEvent(Signposts.toolbarHide, "\(reason, privacy: .public)")
+        settleCollapse(at: ChromeRest.hidden.progress, animated: true)
+    }
+
+    @objc private func revealEdgeTapped() {
+        revealChrome(.edgeTap)
+    }
+
+    @objc private func keyboardWillShow() {
+        guard !isEditingAddress else { return }
+        revealChrome(.keyboard)
+    }
+
+    @objc private func assistiveTechChanged() {
+        updateButtons()
+        if !rules.chromeMayHide, collapse.rest == .hidden { revealChrome(.accessibility) }
+    }
+
+    /// The page is long enough for the bar to hide: at least two screens, so the hidden bar has
+    /// a page to give back, and the page's end (where the bar returns) is not already in sight.
+    private func pageAllowsHiding(_ scrollView: UIScrollView, top: CGFloat, bottom: CGFloat) -> Bool {
+        rules.chromeMayHide && bottom - top >= scrollView.bounds.height
+    }
+
+    /// The offset at which the page's end reaches the screen's bottom edge: from there on the bar
+    /// is out (`ChromeCollapse.scrolled`).
+    private func pageEnd(_ scrollView: UIScrollView) -> CGFloat {
+        scrollView.contentSize.height - scrollView.bounds.height
     }
 
     /// A new page brings the bar back. A finger on the page keeps the bar until it lifts, and then
@@ -802,13 +890,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // A rest that waited for a bounce is stale now that the bar moves again.
         pageInset.barMoved()
         cancelCrossfade()
+        collapse.head(to: ChromeRest(progress: target))
+        // The edge takes taps only while the bar rests hidden.
+        revealEdge.isUserInteractionEnabled = false
         if animated, Motion.prefersCrossfade {
             // Reduce Motion: the bar crossfades to its place instead of sliding.
             snap.jump(to: target)
             let crossfade = crossfades
             crossfadeTarget = target
             Motion.crossfade(chromeGlass, changes: {
-                self.collapse.settle(at: target)
+                self.collapse.place(at: target)
                 self.applyCollapse(target)
             }, completion: { [weak self] in
                 // A newer settle or a drag owns the end.
@@ -827,9 +918,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         // At rest the driver's value is stale: the drag moved the bar since. Start from the screen.
         if !snap.isRunning { snap.jump(to: collapse.progress) }
-        snap.animate(to: target, velocity: velocity, in: view, onFrame: { [weak self] progress in
+        // Hiding is the calmer spring; everything else (coming back, the snap) the snap's.
+        let spring = target >= ChromeRest.hidden.progress ? Motion.toolbarHide : Motion.toolbarSnap
+        snap.animate(to: target, velocity: velocity, spring: spring, in: view, onFrame: { [weak self] progress in
             guard let self else { return }
-            self.collapse.settle(at: progress)
+            self.collapse.place(at: progress)
             self.applyCollapse(self.collapse.progress)
         }, completion: { [weak self] in
             self?.snapEnded(at: target)
@@ -853,7 +946,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             signposter.endInterval(Signposts.toolbarCollapse, interval)
             collapseInterval = nil
         }
-        pageInset.barRested(collapsed: target >= 1)
+        let rest = ChromeRest(progress: target)
+        collapse.settle(at: target)
+        revealEdge.isUserInteractionEnabled = rest == .hidden
+        pageInset.barRested(rest)
         applyPendingInset()
     }
 
@@ -861,8 +957,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         guard scrollView === pageScrollView else { return }
-        // A drag during a snap takes the bar from where it is on screen, with no jump.
-        if snap.isRunning || crossfadeTarget != nil {
+        // A drag during a snap between expanded and the pill takes the bar from where it is on
+        // screen, with no jump. Hiding and coming back are not the finger's: they finish, and the
+        // drag can still turn them around (`ChromeCollapse.scrolled`).
+        let runningTarget = snap.isRunning ? snap.target : crossfadeTarget
+        if let runningTarget, runningTarget <= 1, collapse.progress <= 1 {
             cancelCrossfade()
             collapse.settle(at: snap.stop())
             if let interval = snapInterval {
@@ -875,28 +974,45 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView === pageScrollView, !isEditingAddress else { return }
+        let signposter = Signposts.signposter
+        let step = signposter.isEnabled ? signposter.beginInterval(Signposts.scrollStep) : nil
+        defer { if let step { signposter.endInterval(Signposts.scrollStep, step) } }
         let (top, bottom) = scrollRange(scrollView)
         let offset = scrollView.contentOffset.y
 
         // A resting state that waited for a bounce applies once the page is back in range.
         if pageInset.pending != nil { applyPendingInset() }
 
-        guard scrollView.isTracking else {
-            // Coasting into the top brings the bar back, as reaching the top by hand does.
-            let restingProgress = snap.isRunning ? snap.target : collapse.progress
-            if scrollView.isDecelerating, offset <= top, restingProgress > 0 {
-                expandChrome(animated: true)
-            }
+        let tracking = scrollView.isTracking
+        if tracking { trackPull(top - offset) }
+        // Only the user's scrolling moves the bar: a page's own scroll, a zoom or the rise at the
+        // end (`applyPendingInset`) leave it alone.
+        guard tracking || scrollView.isDecelerating else { return }
+        // A page that barely scrolls keeps its bar, and one that became too short gets it back.
+        guard bottom - top > collapse.distance * 2 else {
+            if collapse.rest == .hidden { revealChrome(.shortPage) }
             return
         }
-        trackPull(top - offset)
-        // A page that barely scrolls keeps its bar.
-        guard !snap.isRunning, bottom - top > collapse.distance * 2 else { return }
-        if collapse.scrolled(to: offset, top: top, bottom: bottom) {
+        let isHidden = collapse.rest == .hidden
+        // The finger's speed matters only to bring a hidden bar back.
+        let velocity = tracking && isHidden ? -scrollView.panGestureRecognizer.velocity(in: scrollView).y / 1000 : 0
+        let change = collapse.scrolled(
+            to: offset, top: top, bottom: bottom, pageEnd: pageEnd(scrollView),
+            tracking: tracking, snapping: snap.isRunning || crossfadeTarget != nil, velocity: velocity,
+            canHide: !isHidden && pageAllowsHiding(scrollView, top: top, bottom: bottom)
+        )
+        switch change {
+        case .none:
+            break
+        case .moved:
             if collapseInterval == nil {
-                collapseInterval = Signposts.signposter.beginInterval(Signposts.toolbarCollapse)
+                collapseInterval = signposter.beginInterval(Signposts.toolbarCollapse)
             }
             applyCollapse(collapse.progress)
+        case .hide:
+            hideChrome(tracking ? "reading" : "coast")
+        case .reveal:
+            revealChrome(offset <= top ? .pageTop : offset >= pageEnd(scrollView) ? .pageEnd : .scrollUp)
         }
     }
 
@@ -914,16 +1030,33 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // The snap starts as the finger lifts, toward the release velocity when it is clear, and
         // runs alongside the page's deceleration instead of waiting for it to end.
         let (top, bottom) = scrollRange(scrollView)
+        let offset = scrollView.contentOffset.y
         let collapsible = bottom - top > collapse.distance * 2
-        let target: CGFloat
-        if !collapsible || scrollView.contentOffset.y <= top || expandOnRelease {
-            target = 0
+        let rest: ChromeRest
+        if !collapsible || offset <= top || expandOnRelease {
+            rest = .expanded
         } else {
-            target = collapse.settleTarget(velocity: velocity.y)
+            let coastEnd = targetContentOffset.pointee.y
+            let nearEnd = pageEnd(scrollView) - collapse.distance
+            rest = collapse.settleTarget(
+                velocity: velocity.y, coast: coastEnd - offset,
+                canHide: pageAllowsHiding(scrollView, top: top, bottom: bottom),
+                coastReachesEnd: coastEnd >= nearEnd, atEnd: offset >= nearEnd
+            )
         }
-        settleCollapse(
-            at: target, animated: true, velocity: collapse.snapVelocity(scrollVelocity: velocity.y, toward: target)
-        )
+        let target = rest.progress
+        switch rest {
+        case .hidden:
+            // A hide already under way keeps going; a flick that will carry the reader past the
+            // hide travel goes straight there, in one motion.
+            if collapse.rest != .hidden { hideChrome("flick") }
+        case .expanded where collapse.rest == .hidden:
+            revealChrome(.scrollUp)
+        default:
+            settleCollapse(
+                at: target, animated: true, velocity: collapse.snapVelocity(scrollVelocity: velocity.y, toward: target)
+            )
+        }
     }
 
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -938,6 +1071,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     public func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
         expandChrome(animated: true)
+    }
+
+    /// A status bar tap while the bar is hidden brings the bar back and keeps the reader's place;
+    /// the next tap scrolls to the top (as in DuckDuckGo and Brave).
+    public func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        guard scrollView === pageScrollView, collapse.rest == .hidden else { return true }
+        revealChrome(.statusBar)
+        return false
     }
 
     // MARK: Pull to refresh

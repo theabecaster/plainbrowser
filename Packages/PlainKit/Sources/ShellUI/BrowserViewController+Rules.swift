@@ -20,6 +20,7 @@ extension BrowserViewController {
         state.isSplit = isSplit
         state.hasClosed = tabs.canReopenClosedTab
         state.hasArchived = tabs.hasArchivedTabs
+        state.usesAssistiveTech = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
         guard let tab = currentTab else {
             state.others = tabs.otherTabCount(besides: nil)
             return state

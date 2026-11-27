@@ -233,13 +233,14 @@ extension BrowserViewController {
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar
         )
         let expanded = geometry.expandedInset(pageBottom: bottom)
-        let collapsed = geometry.collapsedInset(pageBottom: bottom)
+        let hidden = geometry.hiddenInset(pageBottom: bottom)
         session.pool.setInsets(
             for: tab,
             obscured: UIEdgeInsets(top: 0, left: 0, bottom: expanded, right: 0),
-            minimumViewport: UIEdgeInsets(top: 0, left: 0, bottom: collapsed, right: 0),
+            minimumViewport: UIEdgeInsets(top: 0, left: 0, bottom: hidden, right: 0),
             maximumViewport: UIEdgeInsets(top: 0, left: 0, bottom: expanded, right: 0)
         )
+        session.pool.scrollView(for: tab)?.followObscuredBottom(expanded)
     }
 
     // MARK: Focus

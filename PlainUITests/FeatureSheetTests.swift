@@ -7,13 +7,13 @@ import XCTest
 final class FeatureSheetTests: XCTestCase {
     private var server: TestServer!
 
-    private func launch() throws -> XCUIApplication {
+    private func launch(_ arguments: [String] = []) throws -> XCUIApplication {
         continueAfterFailure = false
         server = try TestServer()
         try server.start()
         addTeardownBlock { [server] in server?.stop() }
         let app = XCUIApplication.isolated()
-        app.launchArguments += ["-PlainInMemoryStore"]
+        app.launchArguments += ["-PlainInMemoryStore"] + arguments
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
         return app
@@ -42,6 +42,39 @@ final class FeatureSheetTests: XCTestCase {
         let action = app.buttons[item]
         XCTAssertTrue(action.waitForExistence(timeout: 3), "\"\(item)\" is not in the page menu")
         action.tap()
+    }
+
+    /// The archive in sections by when tabs moved there (the seed puts tabs in all four), newest
+    /// first, with the footer once under the last; one tap on a row brings its tab back.
+    func testArchiveGroupsTabsByWhenTheyWereArchived() throws {
+        let app = try launch(["-PlainSeedArchive"])
+        go(app, to: "/a", heading: "Page A")
+        pageMenu(app, pick: "more.archivedTabs")
+        let sheet = app.otherElements["archiveSheet"]
+        XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+        XCTAssertTrue(sheet.staticTexts["Today"].waitForExistence(timeout: 3))
+        // Newest first (the order itself is ArchiveModelTests').
+        if sheet.staticTexts["Yesterday"].exists {
+            XCTAssertLessThan(sheet.staticTexts["Today"].frame.minY, sheet.staticTexts["Yesterday"].frame.minY)
+        }
+        let headers = ["Today", "Yesterday", "This Week", "Earlier"]
+        let list = sheet.collectionViews.firstMatch
+        var seen = Set<String>()
+        for _ in 0 ..< 4 {
+            seen.formUnion(headers.filter { sheet.staticTexts[$0].exists })
+            if seen.count == headers.count { break }
+            list.swipeUp(velocity: .slow)
+        }
+        XCTAssertEqual(seen, Set(headers), "a section is missing")
+        let footer = sheet.staticTexts["Tabs you haven't opened in a week move here, and leave after 30 days."]
+        if !footer.exists { list.swipeUp(velocity: .slow) }
+        XCTAssertTrue(footer.waitForExistence(timeout: 2), "the footer says when tabs come and go")
+
+        let row = sheet.buttons.matching(identifier: "archiveRow")
+            .matching(NSPredicate(format: "label BEGINSWITH 'A farewell to Arc'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 2))
+        row.tap()
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 3), "one tap restores the tab and closes the archive")
     }
 
     func testSettingsEngineChangeReachesTheNextSearch() throws {

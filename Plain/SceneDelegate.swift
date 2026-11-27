@@ -462,8 +462,12 @@ nonisolated struct LaunchOptions: Sendable {
     let inMemory: Bool
     /// `-PlainSeedFavorites`: a few favorites, for screenshots. Debug builds only.
     var seedFavorites = false
-    /// `-PlainSeedArchive`: a few archived tabs, for screenshots of the archive. Debug builds only.
+    /// `-PlainSeedArchive`: a few archived tabs across Today, Yesterday, This Week and Earlier, for
+    /// screenshots and tests of the archive. Debug builds only.
     var seedArchive = false
+    /// `-PlainSeedFullArchive`: a full archive (`FixedChoices.archivedTabLimit` tabs over its 30
+    /// days), to measure the Archive screen at its largest. Debug builds only.
+    var seedFullArchive = false
     /// `-PlainSeedHistory`: a few visited pages, for screenshots of the focused address bar.
     /// Debug builds only.
     var seedHistory = false
@@ -480,6 +484,7 @@ nonisolated struct LaunchOptions: Sendable {
         #if DEBUG
         seedFavorites = arguments.contains("-PlainSeedFavorites")
         seedArchive = arguments.contains("-PlainSeedArchive")
+        seedFullArchive = arguments.contains("-PlainSeedFullArchive")
         seedHistory = arguments.contains("-PlainSeedHistory")
         if let index = arguments.firstIndex(of: "-PlainAwayOffset"), arguments.indices.contains(index + 1) {
             awayOffset = TimeInterval(arguments[index + 1]) ?? 0
@@ -526,18 +531,36 @@ nonisolated struct LaunchOptions: Sendable {
 
     @concurrent func seed(_ database: AppDatabase) async {
         if seedArchive {
+            // Hours before the start of today (negative: after it), so each lands in its section
+            // whatever time the run starts.
+            let today = Calendar.current.startOfDay(for: Date())
             let pages: [(String, String, Double)] = [
-                ("https://www.theverge.com/tech", "The Verge — Tech", 3),
-                ("https://en.wikipedia.org/wiki/Liquid_glass", "Liquid glass — Wikipedia", 20),
-                ("https://developer.apple.com/documentation/webkit", "WebKit | Apple Developer Documentation", 30),
+                ("https://www.theverge.com/tech", "The Verge — Tech", -0.02),
+                ("https://en.wikipedia.org/wiki/Liquid_glass", "Liquid glass — Wikipedia", 4),
+                ("https://developer.apple.com/documentation/webkit", "WebKit | Apple Developer Documentation", 10),
                 ("https://news.ycombinator.com/item?id=1", "Show HN: A plain browser", 50),
-                ("https://www.nytimes.com/section/food", "Food — The New York Times", 80),
+                ("https://www.nytimes.com/section/food", "Food — The New York Times", 100),
+                ("https://arc.net/blog/farewell", "A farewell to Arc", 230),
+                ("https://www.apple.com/iphone/", "iPhone - Apple", 400),
             ]
             for (address, title, hours) in pages {
-                let date = Date().addingTimeInterval(-hours * 3600)
+                let date = min(Date(), today.addingTimeInterval(-hours * 3600))
                 let entry = TabEntry(url: URL(string: address), title: title, createdAt: date, lastActiveAt: date)
                 database.tabSession.enqueue(.archive([entry], at: date))
             }
+            await database.tabSession.flush()
+        }
+        if seedFullArchive {
+            let count = FixedChoices.archivedTabLimit
+            let step = FixedChoices.archivedTabLifetime / Double(count + 1)
+            let entries = (0 ..< count).map { index in
+                let date = Date().addingTimeInterval(-step * Double(index + 1))
+                return (TabEntry(
+                    url: URL(string: "https://example.com/archive/\(index)"), title: "Archived page \(index)",
+                    createdAt: date, lastActiveAt: date
+                ), date)
+            }
+            for (entry, date) in entries { database.tabSession.enqueue(.archive([entry], at: date)) }
             await database.tabSession.flush()
         }
         if seedHistory {

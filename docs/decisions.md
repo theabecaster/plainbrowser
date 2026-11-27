@@ -832,6 +832,50 @@ Research and sources: docs/research/dark-mode.md.
 ## Browse for Me result source
 
 - **Search results page in a hidden tab, no API key.** DuckDuckGo's lite page is the default because it is stable and light; the user's chosen engine is used when its page parses. Free, works for every tester, and needs no server. Trade-off: a page redesign can break parsing, so the parser is tested against saved pages. Brave Search API stays a later opt-in. (Owner's choice, 2026-11-26.)
+- **How "when its page parses" works (2026-11-27):** checked live in a hidden view. Bing's page
+  parses (a recipe of CSS selectors for its results and ad containers), so Bing users get Bing
+  first and DuckDuckGo lite second; a page with no organic result, a challenge ("unusual
+  traffic") or a 4 s timeout falls through. Google's does not: a hidden view gets its "turn on
+  JavaScript" page with no results. Brave's results link through encrypted `/go/v1#…` redirects.
+  So Google, Brave and every other engine (Kagi, Perplexity, ChatGPT, a custom engine) use
+  DuckDuckGo lite, and the progress line says "Searching DuckDuckGo…". The lite parser is tested
+  against a saved lite page (`IntelligenceTests/Fixtures`).
+
+## On-device AI: Browse for Me and Summarize Page (2026-11-27)
+
+Research: docs/research/browse-for-me.md.
+
+- **Module:** `Intelligence` (engine layer, next to Reader and WebEngine). It holds the pipeline
+  (`SummaryRun`), the model behind a small protocol (`SummaryModel`, with Apple's
+  `FoundationSummaryModel` and a scripted stand-in for tests) and the hidden readers
+  (`HiddenBrowsing`). The rules and values without a model or web view are in BrowserCore
+  (`BrowseForMe`, `Summaries.swift`), the screen in FeatureUI (`SummaryView`, SwiftUI: a
+  low-frequency screen), the wiring in ShellUI. No new dependency: FoundationModels is Apple's.
+- **On the device only.** `SystemLanguageModel` with `.permissiveContentTransformations`
+  guardrails (summarizing pages the user asked for is that use). Never Private Cloud Compute.
+- **Entries follow the rules.** Browse for Me is a row above the search field while the text
+  would search; Summarize Page joins Find and Reader in the page menu on readerable pages and in
+  the reader. Without the model (ineligible phone, Apple Intelligence off, model not ready,
+  unsupported language) both are left out with no explanation; the answer is read again each time
+  the app becomes active, so they appear by themselves once the model is ready. Rejected: a
+  one-time explanation, which needs a dead button or an unasked-for banner to live on.
+- **A sheet, not a tab.** The summary is a paper sheet over the page (Sheet mode), like History.
+  It never enters the tab list, history or the session, so nothing about it is saved. A source
+  opens in a new tab with the summary kept behind it; Back on the source's first page closes it
+  and brings the summary back, as Back returns from a child tab to its opener. The row's menu
+  opens a source in the background instead. Rejected: the summary as a tab page (Arc), which
+  would need a scheme handler, restoration and history exclusions for a page nobody revisits.
+- **Hidden views in a fresh non-persistent store per run**, for regular and private tabs alike:
+  the user's cookies and logins are never sent to pages they didn't open, and nothing a hidden
+  page sets survives the run. Sources load with JavaScript off (FixedChoices). Each view is
+  released as soon as its text is read; at most five exist at once.
+- **Citations are numbers per point**, cleaned against the sources read; the sources list with
+  the same numbers ends the summary. Arc showed sources but not which claim came from which;
+  reviewers' main complaint was not being able to trust the answer without checking.
+- **One pass of the model.** Sources are fitted to the context (water-filling, then the model's
+  own token count); a long page for Summarize Page is condensed to its opening plus paragraphs
+  spread over the rest. Rejected for now: map-reduce over chunks (Apple's TN3193 recipe), which
+  delays the first words by one model pass per chunk.
 
 ## Sheets on paper (2026-11-26)
 

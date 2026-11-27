@@ -117,6 +117,9 @@ public struct ChromeState: Sendable, Equatable {
     /// The page's language is known, can be translated on the device, and is not one the user
     /// reads (their preferred languages).
     public var isForeignLanguage = false
+    /// The page's language is known and is not one the user reads, whether or not the device can
+    /// translate it (Summarize Page would write in that language).
+    public var isUnreadLanguage = false
     /// The page shows translated text, or a translation is on its way.
     public var isTranslated = false
     /// The user turned cookie banner handling off for this site.
@@ -135,6 +138,11 @@ public struct ChromeState: Sendable, Equatable {
     public var sideTabs = false
     /// VoiceOver or Switch Control runs: the bar stays reachable, never hidden.
     public var usesAssistiveTech = false
+    /// Apple's on-device model can run now (`AIAvailability.available`): eligible phone, Apple
+    /// Intelligence on, model ready, language supported.
+    public var isAIAvailable = false
+    /// The search field holds text that would search, not an address (`AddressBarInput.search`).
+    public var queryIsSearch = false
 
     public init() {}
 }
@@ -356,6 +364,16 @@ public struct ControlRules: Sendable, Equatable {
         ].contains(code)
     }
 
+    /// Summarize Page: an article (the reader's own, or a loaded page Reader can read), where the
+    /// on-device model can run. A page Reader can't read has no article to summarize; without
+    /// the model the item is left out, never dimmed (§4). Not on a page in a language the user
+    /// doesn't read: the summary is written in the page's language, so Translate Page is the
+    /// item that helps there (and the menu keeps fitting the Duo's outer screen).
+    public var summarizePage: Bool {
+        guard state.isAIAvailable, state.hasPage, !state.isUnreadLanguage else { return false }
+        return state.isReaderOpen || (state.condition == .loaded && state.isReaderAvailable && !state.isPDF)
+    }
+
     /// Downloads: while any ran this session.
     public var downloads: Bool { state.hasDownloads }
 
@@ -390,6 +408,13 @@ public struct ControlRules: Sendable, Equatable {
 
     public var moreReopenClosedTab: Bool { state.hasClosed }
     public var moreArchivedTabs: Bool { state.hasArchived }
+
+    // MARK: The search field (§6)
+
+    /// Browse for Me beside the field: while the text would search (an address opens, there is
+    /// nothing to browse), where the on-device model can run. Private tabs too: it leaves nothing
+    /// behind (`FixedChoices.summariesLeaveNoTrace`).
+    public var browseForMe: Bool { state.isEditing && state.queryIsSearch && state.isAIAvailable }
 
     // MARK: The start screen (§3)
 

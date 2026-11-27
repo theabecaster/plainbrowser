@@ -23,7 +23,9 @@ final class OpenerEdgeSwipe: NSObject, UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let browser, let tab = browser.currentTab, !browser.isEditingAddress, !browser.isShowingGallery,
               browser.presentedViewController == nil else { return false }
-        return browser.returnsToOpener(tab) && !tab.canGoBack && !browser.isShowingReader
+        // A source opened from a summary goes back to the summary, as its Back button does.
+        let returns = browser.returnsToOpener(tab) || browser.summaryUI.returnTab === tab
+        return returns && !tab.canGoBack && !browser.isShowingReader
     }
 
     @objc private func panned(_ pan: UIScreenEdgePanGestureRecognizer) {
@@ -47,7 +49,8 @@ final class OpenerEdgeSwipe: NSObject, UIGestureRecognizerDelegate {
             }, completion: { [weak browser, weak tab] in
                 page.transform = .identity
                 guard let browser, let tab, tab === browser.currentTab else { return }
-                browser.closeTab(tab)
+                // Back's own path: it closes the tab, then shows the opener or the summary.
+                browser.performBack()
             })
         default:
             break

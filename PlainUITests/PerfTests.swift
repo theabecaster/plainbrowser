@@ -462,6 +462,47 @@ final class PerfTests: XCTestCase {
         XCTAssertTrue(more.waitForExistence(timeout: 3))
     }
 
+    /// Summarize Page with Apple's on-device model, from the tap to the first words of the summary
+    /// on screen (`summary.firstWords`: reading the page, fitting it, the model's first tokens).
+    /// Skips where the model can't run (the item is left out): on a simulator it runs only when the
+    /// Mac has Apple Intelligence on, and the Mac's model is not the phone's. Report-only: no
+    /// budget yet in perf/budgets.json.
+    func testSummaryStart() throws {
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.introSeen()
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/article") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["The Quiet Page"].waitForExistence(timeout: 10))
+        Thread.sleep(forTimeInterval: 1)
+        let more = app.buttons["more"]
+        more.tap()
+        guard app.buttons["menu.summarize"].waitForExistence(timeout: 3) else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+            throw XCTSkip("Apple Intelligence isn't available here")
+        }
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+        Thread.sleep(forTimeInterval: 0.5)
+        let metric = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.summaryFirstWords)
+        )
+        let options = self.options
+        options.invocationOptions = [.manuallyStop]
+        measure(metrics: [metric], options: options) {
+            more.tap()
+            let summarize = app.buttons["menu.summarize"]
+            XCTAssertTrue(summarize.waitForExistence(timeout: 3))
+            summarize.tap()
+            XCTAssertTrue(app.otherElements["summaryText"].firstMatch.waitForExistence(timeout: 60))
+            stopMeasuring()
+            app.buttons["Done"].tap()
+            Thread.sleep(forTimeInterval: 0.8)
+        }
+    }
+
     /// Scrolling a long real page. Needs the network: it loads a Wikipedia article.
     func testPageScrollHitches() {
         let app = XCUIApplication.introSeen()

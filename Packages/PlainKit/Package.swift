@@ -76,6 +76,14 @@ let package = Package(
             resources: [.copy("Resources/Reader")]
         ),
 
+        // On-device AI (docs/research/browse-for-me.md): Browse for Me and Summarize Page. Apple's
+        // Foundation Models write; Reader reads the pages, which load in the pool's hidden views.
+        .target(
+            name: "Intelligence",
+            dependencies: ["Reader", "WebEngine", "BrowserCore", "PerfSignposts"],
+            swiftSettings: mainActorByDefault
+        ),
+
         // The system's copies of the favorites (Spotlight, the App Group file, widget timelines)
         // and the activities the system hands back. Engine layer: it reads Storage, never the UI.
         .target(name: "SystemSync", dependencies: ["Storage", "PlainShared", "BrowserCore"]),
@@ -85,6 +93,8 @@ let package = Package(
             name: "ShellUI",
             dependencies: [
                 "WebEngine", "ContentBlocking", "Reader", "Storage", "BrowserCore", "DesignSystem", "PerfSignposts",
+                // Browse for Me and Summarize Page.
+                "Intelligence",
                 // The shell presents Settings, History, the favorites editor, Downloads and the
                 // archive as sheets.
                 "FeatureUI",
@@ -129,6 +139,12 @@ let package = Package(
         // The gallery's geometry and flick rules run on macOS; its UIKit behavior and the 100-tab
         // scroll perf test run on an iOS simulator (xcodebuild), like the WebKit tests.
         .testTarget(name: "TabGalleryUITests", dependencies: ["TabGalleryUI", "DesignSystem", "PerfSignposts"]),
+        // The summary pipeline with a scripted model and pages (macOS); the hidden views reading
+        // saved results pages and articles from a local server (iOS simulator, xcodebuild).
+        .testTarget(
+            name: "IntelligenceTests", dependencies: ["Intelligence", "Reader", "WebEngine", "BrowserCore"],
+            resources: [.copy("Fixtures")]
+        ),
         // Reader extraction and rendering on saved article pages; iOS simulator only, like above.
         .testTarget(name: "ReaderTests", dependencies: ["Reader"], resources: [.copy("Fixtures")]),
         // WebKit tests against a local HTTP server; they run on an iOS simulator (xcodebuild).

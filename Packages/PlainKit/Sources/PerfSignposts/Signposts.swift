@@ -181,6 +181,31 @@ public enum Signposts {
     /// Event: Show Reader or Hide Reader from the page menu (or Back closing the reader).
     public static let readerToggle: StaticString = "page.reader"
 
+    // MARK: On-device AI (Browse for Me, Summarize Page)
+
+    /// Interval: a summary from the tap (Browse for Me or Summarize Page) until it is written,
+    /// failed or closed. The message says which ("done", "failed", "cancelled").
+    public static let summary: StaticString = "summary"
+    /// Interval: loading one results page in its hidden view and reading its links (message: the
+    /// engine and how many results).
+    public static let summaryResults: StaticString = "summary.results"
+    /// Interval: one source, from its hidden view's load to its text read and the view torn
+    /// down (message: "read" or why it was skipped).
+    public static let summarySource: StaticString = "summary.source"
+    /// Interval: fitting the sources to the model's context (counting tokens off the main thread).
+    public static let summaryFit: StaticString = "summary.fit"
+    /// Interval: from the tap until the first words of the summary are on screen. The latency
+    /// the perf test measures for summary start.
+    public static let summaryFirstWords: StaticString = "summary.firstWords"
+    /// Interval: the model writing, from the prompt sent until the last words.
+    public static let summaryWrite: StaticString = "summary.write"
+    /// Event: the summary screen opened for Browse for Me or Summarize Page.
+    public static let summaryShow: StaticString = "summary.show"
+    /// Event: Back from a source's first page brought its summary back.
+    public static let summaryShowAgain: StaticString = "summary.showAgain"
+    /// Event: a source opened from a summary (message: "new tab" or "background").
+    public static let summaryOpenSource: StaticString = "summary.openSource"
+
     // MARK: Content blocking
 
     /// Interval: loading the allow-list and every bundled rule list (lookups, compiles on a miss).

@@ -546,6 +546,87 @@ public enum FixedChoices {
     /// read a few words and reach the button, gone before it is in the way. Same as the gallery's.
     public static let toastDuration = Duration.seconds(4)
 
+    // MARK: On-device AI (docs/research/browse-for-me.md)
+
+    /// Summaries are written by Apple's on-device model only, never Private Cloud Compute or any
+    /// server: the pages read stay on the phone. Where the model can't run, the entries are not
+    /// there at all (docs/state-rules.md §4, §6), and they appear by themselves once it is ready.
+    public static let summariesOnDeviceOnly = true
+    /// Browse for Me reads this many results, as Arc Search does: enough points of view to
+    /// cross-check, few enough to read in a few seconds and to fit the model's context.
+    public static let browseSources = 5
+    /// Results kept beyond those five: a page that fails or is too slow early is replaced by the
+    /// next result while the time budget lasts.
+    public static let browseCandidates = 8
+    /// The results page gets this long to load and show its results before Plain tries the next
+    /// one (DuckDuckGo's lite page) or gives up. Results pages answer in well under a second on a
+    /// good connection; four seconds covers a slow one without a long wait on a broken engine.
+    public static let browseResultsTimeout = Duration.seconds(4)
+    /// The sources are read in parallel within this budget, from the results arriving. Whatever
+    /// was read by then is summarized; slower pages are skipped, and the screen says so.
+    public static let browseReadBudget = Duration.seconds(7)
+    /// Past the budget with nothing read, Plain waits this much longer for the first page before
+    /// saying none could be read.
+    public static let browseFirstSourceGrace = Duration.seconds(3)
+    /// No replacement for a skipped source starts this close to the end of the read budget: it
+    /// would not finish in time, and would only cost a page load.
+    public static let browseReplacementCutoff = Duration.seconds(1)
+    /// A results page whose list comes from script and is still empty when its HTML has parsed
+    /// gets this long more, until its load event, before Plain reads it again.
+    public static let browseResultsScriptWait = Duration.seconds(2)
+    /// How often a hidden page is asked whether its HTML has parsed. Each answer is immediate (no
+    /// promise a navigation could leave hanging); 50 ms is under the time a parse takes.
+    public static let hiddenPageReadyPoll = Duration.milliseconds(50)
+    /// Links read from a results page at most: far more than the eight results kept, enough to
+    /// get past ads and the engine's own links.
+    public static let browseResultsLinksRead = 40
+    /// Summarize Page reads the page's text within this time; a page that takes longer (a script
+    /// stuck in WebKit) says it has no text instead of leaving "Writing…" up.
+    public static let summaryPageReadTimeout = Duration.seconds(5)
+    /// A source with less readable text than this (characters) is a page without an article:
+    /// a login wall, a video, an app shell. It is skipped.
+    public static let browseMinimumText = 400
+    /// Text read from one page at most (characters), before fitting: bounds memory and the work of
+    /// the fit, and is more than any page's share of the context.
+    public static let summaryMaxPageText = 24_000
+    /// Sites whose result pages hold no article text, or only behind a login: videos and social
+    /// posts. Skipped, so a source slot goes to a page that can be read.
+    public static let browseSkippedSites: [String] = [
+        "youtube.com", "youtu.be", "tiktok.com", "instagram.com", "facebook.com", "x.com", "twitter.com",
+        "pinterest.com", "linkedin.com", "maps.google.com",
+    ]
+    /// Source pages load with their JavaScript off: an article's text is in its HTML, the page's
+    /// own scripts (ads, analytics, trackers) never run, nothing they would send leaves the phone,
+    /// and each hidden page costs a fraction of the memory. Reader runs in its own world either
+    /// way. A results page that may build its list with script (Bing) keeps it on.
+    public static let browseSourcesWithoutJavaScript = true
+    /// Tokens kept for the instructions, the answer's schema and a margin (measured: about 520
+    /// for both with the schema in the prompt).
+    public static let summaryReservedTokens = 700
+    /// The answer's room in tokens: a title and up to four sections of up to four points, with
+    /// citations, is about 600.
+    public static let summaryResponseTokens = 800
+    /// Characters per token for the first fit, before the model counts the real prompt: English
+    /// runs about 4, other languages less; 3 leaves room for both.
+    public static let summaryCharactersPerToken = 3.0
+    /// A prompt the model counts over its room is cut to this share of the room it would need:
+    /// a tenth below the count, since cutting at paragraph ends removes less than asked.
+    public static let summaryRefitMargin = 0.9
+    /// A result's title read from a results page at most (characters): a long headline, never a
+    /// whole snippet.
+    public static let browseResultTitleLength = 300
+    /// Summarize Page on a page longer than the context: this share of the room goes to the
+    /// page's opening, the rest to paragraphs spread over the remainder.
+    public static let summaryOpeningShare = 0.6
+    /// The summary screen redraws the streaming text at most this often: smooth to the eye at
+    /// a fraction of the layout work of a redraw per token.
+    public static let summaryRedrawInterval = Duration.milliseconds(66)
+    /// Browse for Me and Summarize Page write nothing to disk: no history, no tab, no website
+    /// data. Hidden pages load in a non-persistent store made for each run and dropped after it,
+    /// for regular and private tabs alike, so the user's cookies and logins are never sent to
+    /// pages they didn't choose to open.
+    public static let summariesLeaveNoTrace = true
+
     // MARK: System integration (docs/research/system-integration.md)
 
     /// Spotlight gets favorites only. Favorites are pages the user chose to keep at hand, so

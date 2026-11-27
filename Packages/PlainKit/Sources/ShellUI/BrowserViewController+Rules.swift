@@ -23,6 +23,8 @@ extension BrowserViewController {
         state.hasClosed = tabs.canReopenClosedTab
         state.hasArchived = tabs.hasArchivedTabs
         state.usesAssistiveTech = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
+        state.isAIAvailable = session.summaries.isAvailable
+        state.queryIsSearch = isEditingAddress && Self.isSearch(pill.textField.text ?? "")
         guard let tab = currentTab else {
             state.others = tabs.otherTabCount(besides: nil) + tabs.otherProfilesTabCount
             // The last tab's picture stands in until the restored session is in.
@@ -60,6 +62,9 @@ extension BrowserViewController {
         }
         state.isPDF = tab.isPDF
         state.isForeignLanguage = tab.translationTarget != nil
+        if let language = tab.pageLanguage {
+            state.isUnreadLanguage = !PageLanguage.isRead(language.maximalIdentifier, preferred: Locale.preferredLanguages)
+        }
         state.isTranslated = tab.translation != .original
         // Both only while Plain is dark: the page reports `.inactive` otherwise.
         state.isDarkened = tab.darkPages == .darkened

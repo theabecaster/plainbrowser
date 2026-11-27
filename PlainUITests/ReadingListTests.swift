@@ -124,8 +124,11 @@ final class ReadingListTests: XCTestCase {
         row.tap()
         let reader = app.webViews["readerView"]
         XCTAssertTrue(reader.waitForExistence(timeout: 10), "the saved copy opens in the reader")
-        XCTAssertTrue(reader.staticTexts["The Quiet Page"].waitForExistence(timeout: 5))
+        // The toast stays 4 s: check it first.
+        let toast = app.staticTexts["Showing your saved copy."]
+        XCTAssertTrue(toast.waitForExistence(timeout: 4), "a toast says why the page reads as the reader")
         shot("r5-offline-copy")
+        XCTAssertTrue(reader.staticTexts["The Quiet Page"].waitForExistence(timeout: 5))
         // The menu acts on the saved page, not on Page A still under the error.
         openPageMenu(app)
         let item = app.buttons["menu.readLater"]

@@ -106,7 +106,7 @@ struct ReadingListRowView: View {
         Button(action: open) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
-                    .foregroundStyle(row.isRead ? .secondary : .primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                 Text(row.detail)
                     .font(.footnote)

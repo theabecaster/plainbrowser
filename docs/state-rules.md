@@ -281,7 +281,7 @@ its address, Back and Forward, the tabs slot; nothing in the bar moves when the 
 | Toast | Rule |
 |---|---|
 | Tab closed — Reopen | After a hand close of a regular tab: the tabs menu's Close Tab, a card swipe or menu, Close All Tabs. Only when the close added a batch to the recently closed stack, and Reopen brings back exactly that batch. Never for private tabs. Never when Back closes a child tab (that is navigation). When the close leaves the gallery (the last card, Close All), the offer moves with it and shows above the search field. |
-| This page didn't load. Here's your saved copy. — Try Again | When a saved page's copy opens in the reader after a network failure. Try Again closes the reader and loads the page. Once per failure. |
+| Showing your saved copy. — Try Again | When a saved page's copy opens in the reader after a network failure. Try Again closes the reader and loads the page. Once per failure. |
 | Opened in background — Show | After Open in Background. Show is dropped if the tab closed meanwhile. |
 | Download finished / failed — Show | Shows on the page or the start screen. While the gallery or a sheet is up, the newest one waits and shows when it closes (a toast over them could not open Downloads). |
 | While the gallery is up | The shell's toast hides; the gallery has its own Reopen toast. |

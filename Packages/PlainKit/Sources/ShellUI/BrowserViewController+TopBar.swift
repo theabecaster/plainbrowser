@@ -171,6 +171,7 @@ extension BrowserViewController {
         engineUI.reader.setInsets(obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
         setPageTopStart(geometry.expandedInset, for: engineUI.reader.webView?.scrollView)
         duo.top.pullIndicatorTop.constant = geometry.expandedInset + Spacing.s
+        for slot in self.panes.slots { slot.setRingTopInset(geometry.expandedInset) }
         // A split's other pane follows a change of the bar's height (the strip coming or going).
         let panes = session.tabs.panes
         for index in shownPanes where index != session.tabs.focusedPane {

@@ -12,7 +12,7 @@ extension BrowserViewController {
     var chromeState: ChromeState {
         let tabs = session.tabs
         var state = ChromeState()
-        state.usesVerticalBar = usesVerticalBar || chromeOnTop
+        state.usesVerticalBar = usesVerticalBar
         state.isEditing = isEditingAddress
         state.hasDownloads = !session.pool.downloads.downloads.isEmpty
         state.sideTabs = duo.layout?.showsSidebar ?? false

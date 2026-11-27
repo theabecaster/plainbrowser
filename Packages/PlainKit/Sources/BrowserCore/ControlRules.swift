@@ -96,8 +96,7 @@ public struct ChromeState: Sendable, Equatable {
     public var hasClosed = false
     /// The archive holds at least one tab.
     public var hasArchived = false
-    /// The buttons sit in a bar with fixed slots, the system's vertical bar (the Duo's outer
-    /// screen) or the top bar (a wide screen): it dims instead of hiding.
+    /// The buttons sit in the system's vertical bar (iPhone Duo): it dims instead of hiding.
     public var usesVerticalBar = false
     // Facts about the page, for the page menu.
     public var isWebPage = false

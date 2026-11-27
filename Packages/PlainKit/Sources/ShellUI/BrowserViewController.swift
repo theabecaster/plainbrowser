@@ -718,6 +718,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         // Back from a top bar (a fold to the outer screen): the page's top rests at the top again.
         setPageTopStart(0, for: pageScrollView)
+        for slot in panes.slots { slot.setRingTopInset(0) }
         let pageBottom = panes.view.frame.maxY
         let collapsed = geometry.collapsedInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)

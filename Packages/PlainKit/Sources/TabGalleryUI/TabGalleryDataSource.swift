@@ -41,6 +41,21 @@ public struct TabGalleryItem: Hashable, Sendable, Identifiable {
         if !trimmed.isEmpty { return trimmed }
         return host ?? String(localized: "New Tab")
     }
+
+    /// The title for a narrow tab (the strip, the sidebar): without the site's name when the title
+    /// ends with it ("Web browser - Wikipedia" on wikipedia.org reads "Web browser"), since the
+    /// tile already shows the site and the words that tell tabs apart come first.
+    public var compactTitle: String {
+        let full = displayTitle
+        guard let site = host?.split(separator: ".").dropLast().last?.lowercased(), !site.isEmpty else { return full }
+        for separator in [" - ", " – ", " — ", " | ", " · ", " : "] {
+            guard let range = full.range(of: separator, options: .backwards) else { continue }
+            let head = full[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
+            let tail = full[range.upperBound...].lowercased().filter { $0.isLetter || $0.isNumber }
+            if !head.isEmpty, !tail.isEmpty, tail.contains(site) || site.contains(tail) { return head }
+        }
+        return full
+    }
 }
 
 #if canImport(UIKit)

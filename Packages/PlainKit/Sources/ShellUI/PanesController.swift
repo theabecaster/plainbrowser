@@ -18,6 +18,7 @@ final class PaneSlot: UIViewController {
     /// Splits draw panes as rounded cards with a gutter; a single pane fills its area.
     private var isSplit = false
     private var clipInsets: [NSLayoutConstraint] = []
+    private var ringTop: NSLayoutConstraint!
 
     override func loadView() {
         let root = TouchReportingView()
@@ -47,18 +48,25 @@ final class PaneSlot: UIViewController {
             view.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
             view.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
         ]
-        NSLayoutConstraint.activate(clipInsets + [
+        ringTop = ring.topAnchor.constraint(equalTo: clip.topAnchor)
+        NSLayoutConstraint.activate(clipInsets + [ringTop,
             container.topAnchor.constraint(equalTo: clip.topAnchor),
             container.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
             container.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
-            ring.topAnchor.constraint(equalTo: clip.topAnchor),
             ring.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
             ring.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
             ring.bottomAnchor.constraint(equalTo: clip.bottomAnchor),
         ])
         resolveRingColor()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (slot: PaneSlot, _) in slot.resolveRingColor() }
+    }
+
+    /// The ring starts under a top bar (the Duo's inner screen): the bar is both panes', so the
+    /// ring marks only the page it acts on.
+    func setRingTopInset(_ inset: CGFloat) {
+        loadViewIfNeeded()
+        if ringTop.constant != inset { ringTop.constant = inset }
     }
 
     private func resolveRingColor() {

@@ -23,6 +23,12 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     private var focusedID: UUID?
     private var otherID: UUID?
     private var flow: UICollectionViewFlowLayout!
+    /// Holds the tabs and fades the edge a scrolled tab leaves under, so a cut-off tab reads as
+    /// "more this way" rather than a broken fragment.
+    private let fade = UIView()
+    private let fadeMask = CAGradientLayer()
+    private var fadedEdges: (leading: Bool, trailing: Bool) = (false, false)
+    private static let fadeLength: CGFloat = 24
     /// The focused tab has not been scrolled into view since the strip was laid out.
     private var needsFocusScroll = true
 
@@ -75,7 +81,12 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         collectionView.dragInteractionEnabled = true
         collectionView.register(TabStripCell.self, forCellWithReuseIdentifier: TabStripCell.reuseID)
         collectionView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(collectionView)
+        fade.translatesAutoresizingMaskIntoConstraints = false
+        fadeMask.startPoint = CGPoint(x: 0, y: 0.5)
+        fadeMask.endPoint = CGPoint(x: 1, y: 0.5)
+        fade.layer.mask = fadeMask
+        view.addSubview(fade)
+        fade.addSubview(collectionView)
 
         newTabButton.setImage(
             UIImage(systemName: "plus", withConfiguration: UIImage.SymbolConfiguration(textStyle: .headline)), for: .normal
@@ -93,10 +104,14 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         view.addSubview(newTabButton)
 
         NSLayoutConstraint.activate([
-            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: newTabButton.leadingAnchor),
-            collectionView.topAnchor.constraint(equalTo: view.topAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            fade.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            fade.trailingAnchor.constraint(equalTo: newTabButton.leadingAnchor),
+            fade.topAnchor.constraint(equalTo: view.topAnchor),
+            fade.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            collectionView.leadingAnchor.constraint(equalTo: fade.leadingAnchor),
+            collectionView.trailingAnchor.constraint(equalTo: fade.trailingAnchor),
+            collectionView.topAnchor.constraint(equalTo: fade.topAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: fade.bottomAnchor),
             newTabButton.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             newTabButton.centerYAnchor.constraint(equalTo: collectionView.centerYAnchor),
             newTabButton.widthAnchor.constraint(equalToConstant: Metrics.tapTarget),
@@ -129,6 +144,13 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateItemWidth()
+        if fadeMask.frame != fade.bounds {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            fadeMask.frame = fade.bounds
+            CATransaction.commit()
+            updateFade(force: true)
+        }
         // The first layout with tabs: the focused one comes into view (a strip built while the
         // twentieth tab is on screen shows it, not the first).
         if needsFocusScroll, collectionView.bounds.width > 0, let focusedID, let indexPath = diffable.indexPath(for: focusedID) {
@@ -136,6 +158,29 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
             collectionView.layoutIfNeeded()
             collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: false)
         }
+    }
+
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateFade(force: false)
+    }
+
+    /// Fades an edge only while tabs continue past it. Changes the mask's colors only when an
+    /// edge flips, not per scroll frame.
+    private func updateFade(force: Bool) {
+        let width = collectionView.bounds.width
+        guard width > 0 else { return }
+        let offset = collectionView.contentOffset.x
+        let edges = (leading: offset > 1, trailing: offset + width < collectionView.contentSize.width - 1)
+        guard force || edges != fadedEdges else { return }
+        fadedEdges = edges
+        let stop = min(0.5, Self.fadeLength / width)
+        let clear = UIColor.clear.cgColor
+        let solid = UIColor.black.cgColor
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        fadeMask.colors = [edges.leading ? clear : solid, solid, solid, edges.trailing ? clear : solid]
+        fadeMask.locations = [0, NSNumber(value: Double(stop)), NSNumber(value: Double(1 - stop)), 1]
+        CATransaction.commit()
     }
 
     /// The tabs share the strip's width, between the narrowest and the widest a tab may be.
@@ -312,7 +357,7 @@ final class TabStripCell: UICollectionViewCell {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     func configure(item: TabGalleryItem, isFocused: Bool, isInOtherPane: Bool) {
-        titleLabel.text = item.displayTitle
+        titleLabel.text = item.compactTitle
         if let first = SideTabCell.siteName(of: item.host)?.first {
             letter.text = String(first).uppercased()
             symbol.image = nil
@@ -323,7 +368,7 @@ final class TabStripCell: UICollectionViewCell {
         tile.backgroundColor = item.isPrivate ? Palette.privateBackground : Palette.surface
         // On the strip's glass only the focused tab is a lifted card; the others are its text.
         highlight.backgroundColor = isFocused ? Palette.surface : (item.isPrivate ? Palette.privateBackground : .clear)
-        highlight.layer.borderWidth = isFocused ? 1.5 : (isInOtherPane ? 1 : 0)
+        highlight.layer.borderWidth = isFocused ? 1 : (isInOtherPane ? 1 : 0)
         self.isInOtherPane = isInOtherPane
         resolveBorder()
         closeButton.isHidden = !isFocused

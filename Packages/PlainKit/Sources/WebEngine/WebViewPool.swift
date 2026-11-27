@@ -45,6 +45,15 @@ public final class WebViewPool {
     private let pageZooms: any SitePageZoomStore
     let contentRules: (any UserContentRules)?
     private let pageScripts: (any PageScripts)?
+    /// False until Apple grants the web-browser entitlement: pages then get `SignInScripts`'
+    /// passkey fallback (`FixedChoices.passkeysEnabled`).
+    let passkeysEnabled: Bool
+    /// The passkey fallback and its relay, made once per pool (their event name is random).
+    private let signInScripts: SignInScripts?
+    /// Sites already told that passkeys can't work yet, this launch: one toast per site, not one
+    /// per attempt. Private tabs keep theirs apart and drop them with the private session.
+    private var passkeyNoticeSites: Set<String> = []
+    private var privatePasskeyNoticeSites: Set<String> = []
     let dataStore: WKWebsiteDataStore
     /// Where Copy Link and Copy Image write. Tests use a private one: reading the general
     /// pasteboard needs the user's permission.
@@ -86,6 +95,8 @@ public final class WebViewPool {
     ///   - thumbnailDirectory: where thumbnails are written. Defaults to Caches/Thumbnails.
     ///   - downloadDirectory: where downloads go. Defaults to Documents/Downloads (Files-visible).
     ///   - pageZooms: remembered page zoom per site.
+    ///   - passkeysEnabled: whether the app has the web-browser entitlement, so WebKit can use
+    ///     passkeys. Tests pass both.
     public init(
         dataStore: WKWebsiteDataStore = .default(),
         tabStates: TabStateStore? = nil,
@@ -95,8 +106,11 @@ public final class WebViewPool {
         pageScripts: (any PageScripts)? = nil,
         thumbnailDirectory: URL? = nil,
         downloadDirectory: URL? = nil,
-        pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore()
+        pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
+        passkeysEnabled: Bool = FixedChoices.passkeysEnabled
     ) {
+        self.passkeysEnabled = passkeysEnabled
+        signInScripts = passkeysEnabled ? nil : SignInScripts()
         baseConfiguration = Self.makeBaseConfiguration(dataStore: dataStore)
         self.dataStore = dataStore
         self.tabStates = tabStates
@@ -173,6 +187,10 @@ public final class WebViewPool {
         controller.addUserScript(UserScripts.subframePress)
         // Its message handler is added by the tab's `Slot`, which receives the reports.
         controller.addUserScript(UserScripts.media)
+        if let signInScripts {
+            controller.addUserScript(signInScripts.passkeyFallback)
+            controller.addUserScript(signInScripts.passkeyRelay)
+        }
         pageScripts?.install(in: controller)
         return controller
     }
@@ -362,6 +380,7 @@ public final class WebViewPool {
         guard let store = privateDataStore else { return }
         privateDataStore = nil
         privateSiteChoices = nil
+        privatePasskeyNoticeSites = []
         Task { await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) }
     }
 
@@ -459,6 +478,28 @@ public final class WebViewPool {
 
     /// How many tabs hold a web view, for tests and debugging.
     var liveWebViewCount: Int { slots.count }
+
+    // MARK: - Sign-in
+
+    /// A page in `tab` asked for a passkey and was refused (`SignInScripts`). Tells the shell
+    /// until it has told the user once for the site this launch. The site is the tab's page, also
+    /// when the request came from one of its frames: that is the site the user is signing in to.
+    func passkeyRequestFailed(in tab: Tab) {
+        guard !passkeysEnabled, let site = NavigationRules.siteKey(for: tab.url) else { return }
+        let told = tab.isPrivate ? privatePasskeyNoticeSites.contains(site) : passkeyNoticeSites.contains(site)
+        guard !told else {
+            Signposts.signposter.emitEvent(Signposts.passkeyUnavailable, "already told")
+            return
+        }
+        let shown = host?.tab(tab, couldNotUsePasskeysOn: site) ?? false
+        Signposts.signposter.emitEvent(Signposts.passkeyUnavailable, "\(shown ? "told" : "not shown", privacy: .public)")
+        guard shown else { return }
+        if tab.isPrivate {
+            privatePasskeyNoticeSites.insert(site)
+        } else {
+            passkeyNoticeSites.insert(site)
+        }
+    }
 
     // MARK: - Commands from Tab
 
@@ -1017,6 +1058,7 @@ extension WebViewPool {
             let messages = EngineMessageHandler(slot: self)
             controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.mediaHandlerName)
             controller.add(messages, contentWorld: UserScripts.world, name: UserScripts.subframePressHandlerName)
+            controller.add(messages, contentWorld: UserScripts.world, name: SignInScripts.passkeyHandlerName)
             observe()
         }
 
@@ -1199,6 +1241,10 @@ extension WebViewPool {
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == UserScripts.subframePressHandlerName {
                 if let time = message.body as? Double { slot?.lastSubframePress = time }
+                return
+            }
+            if message.name == SignInScripts.passkeyHandlerName {
+                if let tab = slot?.tab { tab.pool?.passkeyRequestFailed(in: tab) }
                 return
             }
             guard let body = message.body as? [String: Any], let id = body["id"] as? String else { return }

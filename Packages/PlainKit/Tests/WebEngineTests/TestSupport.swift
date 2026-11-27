@@ -116,6 +116,16 @@ final class FakeHost: EngineHost {
         return permissionAnswer
     }
 
+    /// Sites the shell told that passkeys can't work yet.
+    var passkeyNotices: [String] = []
+    /// Whether the fake shell says it showed the notice (a page on screen).
+    var showsPasskeyNotice = true
+    func tab(_ tab: Tab, couldNotUsePasskeysOn site: String) -> Bool {
+        guard showsPasskeyNotice else { return false }
+        passkeyNotices.append(site)
+        return true
+    }
+
     func downloadDidStart(_ download: Download) {
         startedDownloads.append(download)
     }
@@ -178,6 +188,7 @@ final class Harness {
         contentRules: (any UserContentRules)? = nil,
         tabStates: Bool = false,
         pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
+        passkeysEnabled: Bool = false,
         route: @escaping @Sendable (TestServer.Request) -> TestServer.Response = Pages.route
     ) async throws {
         server = try await TestServer(route: route)
@@ -189,7 +200,8 @@ final class Harness {
             contentRules: contentRules,
             thumbnailDirectory: directory.appending(path: "Thumbnails"),
             downloadDirectory: directory.appending(path: "Downloads"),
-            pageZooms: pageZooms
+            pageZooms: pageZooms,
+            passkeysEnabled: passkeysEnabled
         )
         pool.host = host
         host.pool = pool

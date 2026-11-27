@@ -192,6 +192,7 @@ Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen.
 | Opened in background — Show | After Open in Background. Show is dropped if the tab closed meanwhile. |
 | Download finished / failed — Show | Shows on the page or the start screen. While the gallery or a sheet is up, the newest one waits and shows when it closes (a toast over them could not open Downloads). |
 | While the gallery is up | The shell's toast hides; the gallery has its own Reopen toast. |
+| Passkeys will work once Apple approves Plain | A page on screen asked for a passkey and Plain refused it (no web-browser entitlement yet, so WebKit would too). Once per site per launch; never for silent (conditional) requests or background tabs. Gone once `FixedChoices.passkeysEnabled` is on. |
 
 ### Sheets (Sheet mode)
 

@@ -277,8 +277,8 @@ Dropped: outer-screen "peek" (no API), hinge gestures (gimmick), tabletop video 
 
 ## 10. Risks
 
-- **Web-browser entitlement**: Apple grants it by hand; unclear for non-App-Store apps. Without it: no default-browser setting, passkeys only on owned domains, no service workers. Everything else works.
-- **Password AutoFill**: suggestions work in WKWebView; saving new passwords is flaky. Test on device.
+- **Web-browser entitlement**: Apple grants it by hand; unclear for non-App-Store apps. Without it: no default-browser setting, passkeys only on owned domains, no AutoFill Passwords button on web login fields, no service workers. Everything else works. See `docs/research/sign-in.md`.
+- **Password AutoFill**: needs the entitlement in practice (measured on the simulator); no third-party browser can trigger "Save password?". Test on device.
 - **Web Push**: not available in WKWebView.
 - **Extensions**: `WKWebExtension` exists, but there is no store access. Deferred.
 - **Overnight scope**: M0–M4 is a lot for one night. Order is chosen so a stop at any milestone still leaves a usable browser.

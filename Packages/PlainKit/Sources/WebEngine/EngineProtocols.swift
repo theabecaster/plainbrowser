@@ -240,8 +240,9 @@ extension LinkMenuPresenter {
     public func tab(_ tab: Tab, didComplete action: LinkMenuItem, succeeded: Bool) {}
 }
 
-/// Everything the shell implements for the engine. `LinkMenuPresenter` has defaults for every
-/// requirement.
+/// Everything the shell implements for the engine. `LinkMenuPresenter` and `SignInPresenter` have
+/// defaults for every requirement.
 public typealias EngineHost = TabPresenter & JavaScriptDialogPresenter & AuthenticationPresenter
     & ExternalAppPresenter & PermissionPresenter & DownloadPresenter & LinkMenuPresenter
+    & SignInPresenter
 #endif

@@ -34,6 +34,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var introWindow: UIWindow?
     /// The browser was built (on launch, or when the intro finished).
     private var browserShown = false
+    private weak var browser: BrowserViewController?
+    /// Web links other apps opened before the browser was built.
+    private var pendingLinks: [URL] = []
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -48,8 +51,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         #endif
-        // After the intro was seen this is one defaults read; no intro code runs.
-        if IntroGate.shouldShow(arguments: arguments) {
+        pendingLinks = Self.webLinks(options.urlContexts.map(\.url) + options.userActivities.compactMap(Self.webLink))
+        // After the intro was seen this is one defaults read; no intro code runs. A link from
+        // another app opens its page at once: the intro waits for the next launch.
+        if pendingLinks.isEmpty, IntroGate.shouldShow(arguments: arguments) {
             showIntro(in: windowScene)
         } else {
             showBrowser(in: windowScene)
@@ -84,8 +89,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             tabStates: TabStateStore(directory: self.options.tabStateDirectory),
             windowID: savedWindow
         )
-        let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) {
+        let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) { [weak self] in
             Signposts.signposter.endInterval(Signposts.launch, launchInterval)
+            // Links that launched the app open once the launch focus is done, so the search
+            // field never comes up over their page.
+            self?.openPendingLinks()
         }
         // The navigation controller gives the page buttons a place in the system's vertical bar
         // (iPhone Duo). Its navigation bar stays hidden; the browser shows its toolbar only where
@@ -95,6 +103,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = navigation
         window.makeKeyAndVisible()
         self.window = window
+        self.browser = browser
         attachDatabase(to: browser)
         #if DEBUG
         // `-PlainOpen <url>,<url>` opens pages after launch, `-PlainSplit` puts the last one in a
@@ -111,6 +120,47 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             sidebar: value(after: "-PlainSidebar")
         )
         #endif
+    }
+
+    // MARK: Links from other apps
+
+    /// Web links another app opens in Plain (as the default browser) while it runs.
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        open(Self.webLinks(URLContexts.map(\.url)), in: scene)
+    }
+
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        open(Self.webLinks([Self.webLink(userActivity)].compactMap { $0 }), in: scene)
+    }
+
+    /// Opens `links` in the browser; while the intro is up it gives way, unseen, so the page shows
+    /// now and the intro comes back on the next launch.
+    private func open(_ links: [URL], in scene: UIScene) {
+        guard !links.isEmpty else { return }
+        pendingLinks += links
+        if browser?.viewIfLoaded?.window != nil {
+            openPendingLinks()
+            return
+        }
+        guard let windowScene = scene as? UIWindowScene, introWindow != nil else { return }
+        introWindow?.isHidden = true
+        introWindow = nil
+        showBrowser(in: windowScene)
+    }
+
+    private func openPendingLinks() {
+        guard let browser, !pendingLinks.isEmpty else { return }
+        let links = pendingLinks
+        pendingLinks = []
+        links.forEach(browser.open(externalURL:))
+    }
+
+    private static func webLink(_ activity: NSUserActivity) -> URL? {
+        activity.activityType == NSUserActivityTypeBrowsingWeb ? activity.webpageURL : nil
+    }
+
+    private static func webLinks(_ urls: [URL]) -> [URL] {
+        urls.filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
     }
 
     func sceneWillResignActive(_ scene: UIScene) {

@@ -530,7 +530,8 @@ Each entry: what was chosen, and why. Newest last.
 
 - **Chosen:** a short intro on first launch only, replacing "no onboarding" (the owner's choice;
   docs/ui-reference.md, "First run"). Steps: the Stem mark assembling, the promise, what's inside,
-  pick your icon, the blocking demo, the default-browser step (gated), then a dissolve into the
+  pick your icon, the blocking demo, Browse for Me where Apple Intelligence can run (below,
+  "Setup steps in the intro"), the default-browser step (gated), then a dissolve into the
   search field. Skip on every step. Structure and rhythm follow Arc Search's intro; the look is
   Plain's own (below, "Intro styling"). The reasoning is in docs/research/intro.md.
 - **Its own window above the browser's.** On first launch the scene shows only the intro; the
@@ -670,6 +671,77 @@ Each entry: what was chosen, and why. Newest last.
 - **One paper hook** (`IntroPaper`): the intro's ground view and its sheets' fill come from one
   place, so the shared paper texture (a parallel lane) is applied there and nowhere else in the
   intro. The intro builds no texture of its own.
+
+## Setup steps in the intro: Browse for Me, shown (2026-11-27)
+
+Owner: "Things that need the user to set something up, like Apple Intelligence, should be
+elegantly added to the onboarding without overcomplicating it … Don't be wordy, and follow the
+current principles of showing things, like the ad blocker switch." And: "Don't be too annoying.
+Show it only where needed, elegantly; follow what credible research says."
+
+- **Grounded in Apple's HIG.** Onboarding: "design a flow that's fast, fun, and optional",
+  "Teach through interactivity", "Postpone nonessential setup flows", and if people skip, "don't
+  present it again on subsequent launches"; "Don't let large downloads hinder onboarding".
+  Privacy: "Request permission only when your app clearly needs access", and avoid asking at
+  launch unless the feature needs it
+  ([Onboarding](https://developer.apple.com/design/human-interface-guidelines/onboarding),
+  [Privacy](https://developer.apple.com/design/human-interface-guidelines/privacy)). So the step
+  is a demo first and a setup only when the setup is the one thing missing, shown once with the
+  rest of the intro, skippable, with no prompt, badge or reminder after it. Outside the intro the
+  AI entries stay left out while Apple Intelligence can't run (above); any later in-context hint
+  belongs to the switched-off-features lane, not here.
+- **What needs the user, and what made it in:**
+  - **Apple Intelligence (Browse for Me, Summarize): in.** The one Plain feature that a switch
+    outside Plain turns off, and real value: an answer with sources instead of ten links. A step
+    after the blocking demo, so the intro's two shows sit together and its last step leads into
+    the search field where Browse for Me lives.
+  - **Default browser: already a step**, behind `FixedChoices.defaultBrowserPromptsEnabled`
+    (nothing shows while it is off). It stays last, after Browse for Me.
+  - **Password managers, AutoFill, passkeys: out.** There is nothing to set up for Plain: AutoFill
+    uses whatever manager the user already chose for Safari, and passkeys use the system's
+    (`FixedChoices.passkeysEnabled` and the entitlement turn both on). A step would teach the
+    system, not Plain, which the HIG says onboarding should not do.
+  - **Widgets and the Lock Screen: out.** No API adds a widget, so a step could only describe the
+    Home Screen's edit mode: a tell, with nothing to press. They are findable where people look
+    for them.
+- **The step** (`BrowseForMeDemo`, `IntroSetup.browseForMe`): "Let Plain *browse* for you" over a
+  mock of Plain's own search on paper. The question types itself into the field, Browse for Me is
+  pressed, three source chips spin and turn into numbers, and three short points arrive, each
+  ending with its Lagoon citation, as the real summary writes them (about 3.5 s). It plays once by
+  itself; a tap on its Browse for Me row plays it again, as the blocking demo's toggle flips. Every
+  part holds its place from the first frame, so nothing moves while it plays. One line under it,
+  by state:
+  - available: "Written on your iPhone, with every source cited." Next. Nothing to do.
+  - Apple Intelligence off: "Find it in Settings, under Apple Intelligence & Siri." and Turn On
+    Apple Intelligence, with Not Now under it. Neither blocks: Skip and Not Now always go on.
+  - model downloading: a small spinner and "Apple Intelligence is getting ready…", with Next.
+  - device not eligible, or a language the model doesn't read: no step at all.
+  Turned on in Settings, or finished downloading while the step is up, the line becomes a check
+  mark and "Apple Intelligence is ready.", and the buttons become Next.
+- **Settings destination:** `UIApplication.openSettingsURLString`, Plain's own page in Settings.
+  No public URL opens Apple Intelligence & Siri (checked in the iOS 27.2 SDK: UIKit has only the
+  app's page and Default Apps; FoundationModels has none), and private `App-Prefs:` URLs are not
+  used. That is why the line names where to go.
+- **Re-checks:** the answer is read once before the first step (during the splash; the first step
+  waits at most 0.4 s for it, else the intro goes on without the step), again on arriving at the
+  step, when the app returns to the foreground, and every 2 s while the model is getting ready and
+  the step is on screen. Nothing runs on the other steps, and after the intro was seen none of it
+  is made. The steps are decided before the first one, so the rings never change under the user.
+- **Asks no permission.** The step opens Settings only when tapped; no system alert is involved.
+
+## Apple Intelligence availability, shared (2026-11-27)
+
+- **One check for screens outside a summary run:** ShellUI's `OnDeviceAI.availabilityCheck()`
+  returns a closure that reads `SystemLanguageModel.default` off the main thread
+  (`FoundationSummaryModel.currentAvailability()`), with the same mapping to `AIAvailability`
+  (BrowserCore) as `SummaryService`. The intro takes it as `IntroViewController(aiAvailability:)`
+  from the app, so FeatureUI needs no Intelligence dependency. Other screens that explain a
+  switched-off feature use the same closure.
+- **One Debug override:** `-PlainAIAvailability off,available` (`AIAvailability.scripted`,
+  BrowserCore/AIAvailabilityOverride.swift) answers each call with the next state and keeps the
+  last; names are available, off, notReady, notEligible, unsupportedLanguage. It is read only in
+  Debug builds and isolated runs. An isolated run without it gets `.deviceNotEligible`, so no test
+  depends on the Mac a simulator runs on.
 
 ## Sign-in: passkeys, passwords and the web-browser entitlement (2026-11-26)
 
@@ -856,7 +928,8 @@ Research: docs/research/browse-for-me.md.
 - **Entries follow the rules.** Browse for Me is a row above the search field while the text
   would search; Summarize Page joins Find and Reader in the page menu on readerable pages and in
   the reader. Without the model (ineligible phone, Apple Intelligence off, model not ready,
-  unsupported language) both are left out with no explanation; the answer is read again each time
+  unsupported language) both are left out with no explanation (the first-run intro shows
+  Browse for Me once, with Turn On Apple Intelligence where it is off); the answer is read again each time
   the app becomes active, so they appear by themselves once the model is ready. Rejected: a
   one-time explanation, which needs a dead button or an unasked-for banner to live on.
 - **A sheet, not a tab.** The summary is a paper sheet over the page (Sheet mode), like History.

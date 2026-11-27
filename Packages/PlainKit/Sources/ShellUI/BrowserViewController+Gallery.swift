@@ -493,7 +493,9 @@ extension BrowserViewController: GalleryHost {
     /// them; once it recedes for suggestions the sheet's paper is, and the system's style returns.
     func updateStatusBarForStart() {
         let start = tabsUI.start
-        let light = !start.isHidden && start.isPrivate && !start.isReceded
+        // Not where the system's vertical bar holds the status items (the Duo's outer screen):
+        // they sit on that bar's own light strip there, not over the start screen.
+        let light = !start.isHidden && start.isPrivate && !start.isReceded && !usesVerticalBar
         guard light != tabsUI.prefersLightStatusBar else { return }
         tabsUI.prefersLightStatusBar = light
         setNeedsStatusBarAppearanceUpdate()

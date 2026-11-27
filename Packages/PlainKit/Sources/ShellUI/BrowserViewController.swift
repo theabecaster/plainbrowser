@@ -470,6 +470,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let vertical = traitCollection.verticalBarEdge != .unspecified && preferredVerticalBarBehavior == .automatic
         let changed = vertical != usesVerticalBar || pillOnBar.isActive == pillOnEdge.isActive
         usesVerticalBar = vertical
+        if changed { updateStatusBarForStart() }
         navigationController?.setToolbarHidden(!vertical, animated: false)
         // Nothing is ever pushed; the left edge belongs to the page's swipe back.
         navigationController?.interactivePopGestureRecognizer?.isEnabled = false

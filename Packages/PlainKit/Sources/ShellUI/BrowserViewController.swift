@@ -101,6 +101,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var pageInset = PageInsetState()
     /// A page started loading under the finger: the bar comes back when the finger lifts.
     private var expandOnRelease = false
+    /// The bar came back at the page's end while the finger was down: the page's end (before the
+    /// inset grew) to rise from once it lifts.
+    private var riseFromEnd: CGFloat?
     /// Counts Reduce Motion crossfades, so only the newest one ends the snap.
     private var crossfades = 0
     /// Where a running Reduce Motion crossfade takes the bar.
@@ -776,16 +779,34 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         case .hidden: Signposts.signposter.emitEvent(Signposts.pageInset, "hidden")
         }
         let scrollView = pageScrollView
-        let wasAtEnd = scrollView.map { !$0.isTracking && $0.contentOffset.y >= scrollRange($0).bottom - 1 } ?? false
+        let endBefore = scrollView.map { scrollRange($0).bottom }
         updatePageInsets()
         // The bar came back at the page's end: the page rises with it, so its last lines are not
-        // left under the bar. A scroll, not a relayout, and never under the finger.
-        if wasAtEnd, let scrollView {
-            let bottom = scrollRange(scrollView).bottom
-            if bottom > scrollView.contentOffset.y + 1 {
-                scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: bottom), animated: true)
-            }
+        // left under the bar. Under the finger, it waits for the finger to lift.
+        guard let scrollView, let endBefore, pageInset.rest == .expanded,
+              scrollView.contentOffset.y >= endBefore - 1 else { return }
+        if scrollView.isTracking {
+            riseFromEnd = endBefore
+        } else {
+            riseToEnd(scrollView)
         }
+    }
+
+    /// Scrolls the page to its end, which the grown inset moved down. A scroll, not a relayout;
+    /// under Reduce Motion it jumps.
+    private func riseToEnd(_ scrollView: UIScrollView) {
+        riseFromEnd = nil
+        let bottom = scrollRange(scrollView).bottom
+        guard bottom > scrollView.contentOffset.y + 1 else { return }
+        scrollView.setContentOffset(
+            CGPoint(x: scrollView.contentOffset.x, y: bottom), animated: !Motion.prefersCrossfade
+        )
+    }
+
+    /// The rules changed (`updateButtons`): a hidden bar the state no longer allows comes back.
+    func chromeRulesChanged() {
+        guard collapse.rest == .hidden, !rules.chromeMayHide else { return }
+        revealChrome(rules.state.usesAssistiveTech ? .accessibility : .state)
     }
 
     /// The smallest and largest content offsets of the page at rest.
@@ -846,8 +867,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     @objc private func assistiveTechChanged() {
+        // `updateButtons` reads VoiceOver and Switch Control and brings a hidden bar back.
         updateButtons()
-        if !rules.chromeMayHide, collapse.rest == .hidden { revealChrome(.accessibility) }
     }
 
     /// The page is long enough for the bar to hide: at least two screens, so the hidden bar has
@@ -957,6 +978,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         guard scrollView === pageScrollView else { return }
+        riseFromEnd = nil
         // A drag during a snap between expanded and the pill takes the bar from where it is on
         // screen, with no jump. Hiding and coming back are not the finger's: they finish, and the
         // drag can still turn them around (`ChromeCollapse.scrolled`).
@@ -988,18 +1010,18 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Only the user's scrolling moves the bar: a page's own scroll, a zoom or the rise at the
         // end (`applyPendingInset`) leave it alone.
         guard tracking || scrollView.isDecelerating else { return }
-        // A page that barely scrolls keeps its bar, and one that became too short gets it back.
-        guard bottom - top > collapse.distance * 2 else {
-            if collapse.rest == .hidden { revealChrome(.shortPage) }
-            return
-        }
+        let mayHide = pageAllowsHiding(scrollView, top: top, bottom: bottom)
+        // A hidden bar on a page that became too short (or a state that no longer allows it) comes
+        // back; a page that barely scrolls keeps its bar.
+        if collapse.rest == .hidden, !mayHide { return revealChrome(.shortPage) }
+        guard bottom - top > collapse.distance * 2 else { return }
         let isHidden = collapse.rest == .hidden
         // The finger's speed matters only to bring a hidden bar back.
         let velocity = tracking && isHidden ? -scrollView.panGestureRecognizer.velocity(in: scrollView).y / 1000 : 0
         let change = collapse.scrolled(
             to: offset, top: top, bottom: bottom, pageEnd: pageEnd(scrollView),
             tracking: tracking, snapping: snap.isRunning || crossfadeTarget != nil, velocity: velocity,
-            canHide: !isHidden && pageAllowsHiding(scrollView, top: top, bottom: bottom)
+            canHide: !isHidden && mayHide
         )
         switch change {
         case .none:
@@ -1029,6 +1051,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         guard !isEditingAddress else { return }
         // The snap starts as the finger lifts, toward the release velocity when it is clear, and
         // runs alongside the page's deceleration instead of waiting for it to end.
+        // A reveal under way (a move up brought the bar back mid-drag) finishes as it is.
+        let runningTarget = snap.isRunning ? snap.target : crossfadeTarget
+        if runningTarget == 0, collapse.rest == .expanded { return }
         let (top, bottom) = scrollRange(scrollView)
         let offset = scrollView.contentOffset.y
         let collapsible = bottom - top > collapse.distance * 2
@@ -1060,7 +1085,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        guard scrollView === pageScrollView, !decelerate else { return }
+        guard scrollView === pageScrollView else { return }
+        // The bar came back at the end under the finger: the page rises now, unless the finger
+        // left the end.
+        if let riseFromEnd {
+            if scrollView.contentOffset.y >= riseFromEnd - 1 { riseToEnd(scrollView) } else { self.riseFromEnd = nil }
+        }
+        guard !decelerate else { return }
         applyPendingInset()
     }
 

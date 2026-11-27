@@ -633,7 +633,8 @@ final class CaptureTests: XCTestCase {
         shot("scroll-5-back-edge-tap")
         webView.swipeUp(velocity: .slow)
         pause(1)
-        for _ in 0..<4 { webView.swipeUp(velocity: .fast) }
+        let end = webView.staticTexts["End of page."]
+        for _ in 0..<14 where !(end.exists && end.isHittable) { webView.swipeUp(velocity: .fast) }
         pause(2.5)
         shot("scroll-6-back-page-end")
     }

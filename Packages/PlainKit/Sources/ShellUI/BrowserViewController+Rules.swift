@@ -87,6 +87,8 @@ extension BrowserViewController {
     /// slot's face. Called whenever the tab on screen or the tab list changes.
     func updateButtons() {
         rules = currentRules()
+        // A state that no longer lets the bar hide (a load, an error, VoiceOver) brings it back.
+        chromeRulesChanged()
         // Under the gallery the page's own buttons rest; Tabs goes back to the page.
         let onPage = !isShowingGallery
         let tabsSlot: ControlVisibility = rules.tabsSlot == .hidden ? .hidden : .shown

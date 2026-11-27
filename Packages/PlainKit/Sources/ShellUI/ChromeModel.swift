@@ -392,5 +392,6 @@ enum ChromeRevealReason: String {
     case alert
     case newTab = "new tab"
     case shortPage = "short page"
+    case state
     case accessibility
 }

@@ -262,6 +262,7 @@ extension BrowserViewController {
     func focusPane(_ index: Int) {
         guard session.tabs.panes.indices.contains(index), index != session.tabs.focusedPane else { return }
         if isEditingAddress { endAddressEditing() }
+        let outgoing = currentTab
         session.tabs.focusPane(index)
         if let id = session.tabs.panes[index] {
             show(session.tabs.tab(id))
@@ -269,6 +270,9 @@ extension BrowserViewController {
             clearPage()
         }
         focusDidChange()
+        // The pane it leaves keeps its page, which may have the pill's or the hidden bar's inset:
+        // it gets the other pane's expanded reserve.
+        if let outgoing, outgoing !== currentTab, isShownInOtherPane(outgoing.id) { applyOtherPaneInsets(to: outgoing) }
     }
 
     /// The focused pane changed: the ring, the lane (the pill slides over the new pane) and the

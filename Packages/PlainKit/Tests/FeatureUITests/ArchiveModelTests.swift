@@ -27,6 +27,40 @@ actor FakeArchive: ArchiveStoring {
     }
 }
 
+/// An archive whose reads can be held, to land a change while one is under way.
+actor GatedArchive: ArchiveStoring {
+    private let tabs: [ArchivedTab]
+    private var isClosed = false
+    private var held: [CheckedContinuation<Void, Never>] = []
+    private var readerArrived: CheckedContinuation<Void, Never>?
+    private var hasReader = false
+
+    init(_ tabs: [ArchivedTab]) { self.tabs = tabs }
+
+    func close() { isClosed = true }
+
+    func open() {
+        isClosed = false
+        for waiter in held { waiter.resume() }
+        held = []
+    }
+
+    func waitForReader() async {
+        if hasReader { return }
+        await withCheckedContinuation { readerArrived = $0 }
+    }
+
+    func archivedTabs(matching query: String, limit: Int) async throws -> [ArchivedTab] {
+        if isClosed {
+            hasReader = true
+            readerArrived?.resume()
+            readerArrived = nil
+            await withCheckedContinuation { held.append($0) }
+        }
+        return Array(tabs.prefix(limit))
+    }
+}
+
 @MainActor
 struct ArchiveModelTests {
     private static func tab(_ title: String?, _ address: String, archivedHoursAgo hours: Double) -> ArchivedTab {
@@ -139,6 +173,25 @@ struct ArchiveModelTests {
         #expect(model.sections.map(\.period) == [.earlier])
     }
 
+    @Test func aRowDeletedWhileTheListLoadsStaysGone() async {
+        let first = Self.tab("A", archivedAt: Self.date(day: 27, hour: 10))
+        let second = Self.tab("B", archivedAt: Self.date(day: 10, hour: 10))
+        let archive = GatedArchive([first, second])
+        let model = ArchiveModel(
+            store: archive, onRestore: { _ in }, onDelete: { _ in }, now: { Self.now }, calendar: Self.calendar
+        )
+        await model.load()
+        // A second load waits inside the read; the delete lands meanwhile.
+        await archive.close()
+        let reload = Task { await model.load() }
+        await archive.waitForReader()
+        model.delete(model.rows[0])
+        await archive.open()
+        await reload.value
+        #expect(model.rows.map(\.id) == [second.id])
+        #expect(model.sections.map(\.period) == [.earlier], "the emptied section stays gone too")
+    }
+
     @Test func aClockMovedBackKeepsFutureTabsInToday() {
         let later = Self.now.addingTimeInterval(3_600 * 30)
         #expect(ArchivePeriod.of(later, now: Self.now, calendar: Self.calendar) == .today)
@@ -168,7 +221,7 @@ struct ArchiveModelTests {
         var times: [Duration] = []
         for _ in 0 ..< 10 {
             let start = ContinuousClock.now
-            let sections = await ArchiveModel.group(tabs, leavingOut: [], now: Self.now, calendar: Self.calendar)
+            let sections = await ArchiveModel.group(tabs, now: Self.now, calendar: Self.calendar)
             times.append(ContinuousClock.now - start)
             #expect(sections.reduce(0) { $0 + $1.rows.count } == tabs.count)
         }

@@ -52,7 +52,7 @@ public struct ArchiveView: View {
             .overlay {
                 if model.loadFailed {
                     ReadFailedView(message: Wording.archiveReadFailed, systemImage: "archivebox") { await model.load() }
-                } else if model.isLoaded, model.rows.isEmpty {
+                } else if model.isLoaded, model.isEmpty {
                     if model.query.isEmpty {
                         ContentUnavailableView {
                             Label("No archived tabs.", systemImage: "archivebox")

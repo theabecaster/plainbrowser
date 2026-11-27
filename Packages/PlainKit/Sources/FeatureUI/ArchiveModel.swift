@@ -90,8 +90,10 @@ public nonisolated struct ArchiveSection: Hashable, Sendable, Identifiable {
 @Observable
 public final class ArchiveModel {
     public private(set) var sections: [ArchiveSection] = []
-    /// Every row, in order.
+    /// Every row, in order (tests; the screen walks `sections`).
     public var rows: [ArchiveRow] { sections.flatMap(\.rows) }
+    /// Nothing to show: no section is ever left empty.
+    public var isEmpty: Bool { sections.isEmpty }
     /// False until the first load finishes, so the screen doesn't flash its empty state.
     public private(set) var isLoaded = false
     /// The search text. Changing it searches after a short pause.
@@ -151,9 +153,13 @@ public final class ArchiveModel {
     /// Takes a row off the screen for good; a section left empty goes with it.
     private func remove(_ id: TabID) {
         deleted.insert(id)
-        sections = sections.compactMap { section in
+        sections = Self.removing([id], from: sections)
+    }
+
+    private nonisolated static func removing(_ ids: Set<TabID>, from sections: [ArchiveSection]) -> [ArchiveSection] {
+        sections.compactMap { section in
             var section = section
-            section.rows.removeAll { $0.id == id }
+            section.rows.removeAll { ids.contains($0.id) }
             return section.rows.isEmpty ? nil : section
         }
     }
@@ -179,9 +185,11 @@ public final class ArchiveModel {
         do {
             let tabs = try await store.archivedTabs(matching: query, limit: limit)
             guard current == generation, !Task.isCancelled else { return }
-            let grouped = await Self.group(tabs, leavingOut: deleted, now: now(), calendar: calendar)
+            let grouped = await Self.group(tabs, now: now(), calendar: calendar)
             guard current == generation, !Task.isCancelled else { return }
-            sections = grouped
+            // Rows deleted or restored here, before or while the read and the grouping ran, stay
+            // gone (their deletes may not be written yet).
+            sections = deleted.isEmpty ? grouped : Self.removing(deleted, from: grouped)
             loadFailed = false
         } catch {
             guard current == generation, !(error is CancellationError) else { return }
@@ -194,11 +202,9 @@ public final class ArchiveModel {
 
     /// Rows for `tabs` (newest first) in their periods, off the main thread.
     @concurrent
-    nonisolated static func group(
-        _ tabs: [ArchivedTab], leavingOut deleted: Set<TabID>, now: Date, calendar: Calendar
-    ) async -> [ArchiveSection] {
+    nonisolated static func group(_ tabs: [ArchivedTab], now: Date, calendar: Calendar) async -> [ArchiveSection] {
         var sections: [ArchiveSection] = []
-        for tab in tabs where !deleted.contains(tab.id) {
+        for tab in tabs {
             let period = ArchivePeriod.of(tab.archivedAt, now: now, calendar: calendar)
             if let last = sections.indices.last, sections[last].period == period {
                 sections[last].rows.append(ArchiveRow(tab))

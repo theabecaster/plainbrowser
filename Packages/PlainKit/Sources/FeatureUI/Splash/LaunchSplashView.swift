@@ -2,15 +2,22 @@
 import BrowserCore
 import UIKit
 
-/// The launch splash's window: above the browser's and the intro's, and never in the way. Every
-/// touch goes straight through to the app underneath, which is built and interactive from its
-/// first frame, and the first one ends the splash.
+/// The launch splash's window: above the browser's and the intro's. The first touch ends the
+/// splash and does nothing else: the app underneath is built and interactive, but a tap on
+/// something that cannot be seen must not act on it (a tap on the search sheet's empty space
+/// would close the search). Touches after that one go straight through while the splash fades.
 final class SplashWindow: UIWindow {
     var onTouch: (() -> Void)?
+    /// The event time of the touch that ended the splash; UIKit may hit-test one touch twice.
+    private var ending: TimeInterval?
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        onTouch?()
-        return nil
+        guard let ending else {
+            ending = event?.timestamp ?? 0
+            onTouch?()
+            return rootViewController?.view
+        }
+        return event?.timestamp == ending ? rootViewController?.view : nil
     }
 }
 

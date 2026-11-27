@@ -67,8 +67,8 @@ and compile to nothing on macOS.
    with the frost (`+Launch`). The app ends `launch` (message: the opening screen).
    **The launch splash** (a cold launch's first scene; `SplashGate`) is a second window above
    the browser's (or the intro's), made in the same turn, so it is in the app's first frame. The
-   browser underneath is built exactly as without it and takes every touch: the splash window's
-   `hitTest` answers nil and ends the splash. As the scene connects, before the browser is
+   browser underneath is built exactly as without it. The first touch ends the splash and is
+   not passed on; later ones go through the splash window to the app. As the scene connects, before the browser is
    built, `LaunchSplash.init` starts two jobs off the main thread: the splash's three pictures
    drawn with Core Graphics (`SplashArt`: the icon's field, the mark, the dawn in its window;
    they depend only on the icon and the screen's scale) and the GPU kit (`SplashKit`: shaders

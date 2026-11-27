@@ -131,17 +131,19 @@ final class LaunchSplashTests: XCTestCase {
         XCTAssertTrue(app.textFields["searchField"].hasKeyboardFocus)
     }
 
-    /// A touch ends the splash at once and still lands on the app underneath.
-    func testATouchEndsItAndReachesTheApp() {
+    /// A touch ends the splash at once and does nothing to the app underneath.
+    func testATouchEndsItAndLeavesTheAppAsItWas() {
         let app = launch(["-PlainSplashHold", "20"])
         Thread.sleep(forTimeInterval: 1)
         XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "plainLaunchSplash").firstMatch.exists, "the splash ended by itself")
         // The field has focus under the splash; its keyboard waits for the splash to open.
         XCTAssertTrue(app.textFields["searchField"].hasKeyboardFocus)
         XCTAssertFalse(app.keyboards.firstMatch.exists, "the keyboard lies over the splash")
-        // A tap goes through the splash to the app (here, the field itself) and ends the splash.
-        app.textFields["searchField"].tap()
+        // A tap ends the splash and is not passed on: in the middle of the screen it would fall
+        // on the search sheet's empty space, which closes the search.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(ending(app, within: 2).hasPrefix("skipped"))
+        XCTAssertTrue(app.textFields["searchField"].hasKeyboardFocus, "the tap that ended the splash acted on the app")
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "the keyboard did not come once the splash ended")
     }
 

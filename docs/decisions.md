@@ -2041,8 +2041,10 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
   iris's own pictures be missing, the splash fades.)
 - **The app never waits for the splash.** The browser is built exactly as before, in the same
   turn, and is in the same first frame under the splash; the search field takes focus before
-  that frame as it always did. The splash is a second window above it whose `hitTest` answers
-  nil, so every touch lands on the app, and the first one ends the splash (a 0.12 s fade).
+  that frame as it always did. The splash is a second window above it. The first touch ends the splash
+  (a 0.12 s fade) and does nothing else: a tap on something that cannot be seen must not act
+  on it (it closed the search when it fell on the search sheet's empty space). Later touches
+  go through to the app while the splash fades.
   Typing, a link from another app, a rotation or a fold end it too; leaving the foreground
   removes it at once with nothing drawn in the background.
 - **The keyboard waits for the dive.** On a search-first launch the field is first responder

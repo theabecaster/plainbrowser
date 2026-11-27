@@ -247,7 +247,6 @@ Newest feature last.
 - **Signposts.** New Tab reusing an empty tab emits no `tab.open`; the tip's display and
   retirement emit none. (Code review, round 1.)
 
-
 ## Appearance and dark pages (2026-11-26)
 
 - **Device hitch numbers for dark pages.** The simulator has no hitch metric; its in-page frame
@@ -270,3 +269,22 @@ Newest feature last.
 - **Settings polish seen in captures, not this lane's:** the dark sheet's Done capsule reads low
   contrast; rows are full capsules where ui-reference says 6–10 pt corners; the Archive Tabs
   footer says "used" where ui-reference says "opened". (Design review, polish.)
+
+## One-tab switcher (2026-11-26)
+
+- **Card footer band.** A page's card shows a dark band under the page picture: the thumbnail is
+  shorter than the card (the card takes the whole screen's shape), so the card's surface shows.
+  Every gallery card has it, not only the lone one. Capture the thumbnail at the card's aspect or
+  fill the card with the page's background. (Design review, round 1; flagged blocking, left here
+  because it predates this lane and touches the thumbnail pipeline.)
+- **Heading under the status bar mid-swipe.** Held part way up, the shrinking page's top passes
+  under the clock and the Dynamic Island, as in the app switcher. Consider keeping the page's top
+  inset while it shrinks. (Design review, round 1.)
+- **Gallery bar contrast and backdrop blur.** The bar's pale blue glyphs on the dark glass read a
+  little inactive, and the blurred backdrop reads mostly as flat slate. (Design review, round 1.)
+- **Duo outer: the next card under the status column.** The New Tab card (like any next card in the
+  cascade) runs under the system's vertical bar, where the status icons draw over it. Clip the
+  cascade to the safe area there.
+- **New Tab card fade reversal.** Back to one card within the 0.15 s fade-out (a reopen then a
+  close), the card restarts its grow-in from nothing instead of from where the fade had it.
+  (Code review, round 2.)

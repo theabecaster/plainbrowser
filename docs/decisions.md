@@ -1218,3 +1218,76 @@ empty." Research in docs/research/launch.md; rules in docs/state-rules.md, "Laun
   if any, behind the frost.
 - **Debug clock:** `-PlainAwayOffset <seconds>` runs the rules' clock ahead (Debug builds), so UI
   tests reach "4 hours away" without waiting.
+
+## Duo inner screen: the bar in the status row (2026-11-27)
+
+Owner, on the device (inner screen, landscape): "There's a huge bar on the top when I open the
+Duo." And: "I want the URL bar at the level next to those things [the clock and battery]. I don't
+want the wasted space on top." The device screenshot (951x669 pt): the top safe area is 81 pt, but
+the status items sit only in the top-trailing corner (x 828–928, y 24–69). The bar sat under that
+81 pt band on an opaque paper band, and the page started at 132 pt (20% of the screen). The
+simulator's 24 pt status bar had hidden this.
+
+- **Chosen: the row sits in the status zone, on the status items' row.** Back/Forward, the
+  address and Tabs/Share/More are centered on the corner's vertical middle, and the row's trailing
+  end stops 12 pt before the corner. Nothing above the row is Plain's: the page runs to the top
+  edge under the zone and the floating glass (no band, the owner's rule for the bottom pill).
+- **How the corner is found (no device geometry), in order:**
+  1. `UIView.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))`, the iOS 26 guide for
+     "bar-like content at the top of a scene" beside a corner element (iPadOS's window controls).
+     Where system UI keeps to a corner, that guide's top is shorter than the safe area's and its
+     leading or trailing inset is larger; the corner is the rect from that inset to the edge, from
+     the guide's top down to the safe area's top (`StatusCorner.rect(width:safeTop:...)`).
+  2. Else the camera the status items wrap: an occlusion region
+     (`reservedRegions(kind: .occlusion, options: .includeInactive)`) inside the top safe area and
+     in the outer quarter of the width. The simulator reports the Duo's inner camera as a 37 pt
+     circle at x 884.7–921.7, y 29.3–66.3 (landscape; 602.7 in the 669 pt portrait window), the
+     center of the device's battery ring (903.5, 47.6 in the owner's screenshot), and the device's
+     81 pt safe area clears it. The corner is centered on the camera's row (at least a row high)
+     and reaches `FixedChoices.statusItemsReach` (64 pt) past it toward the middle, for the clock.
+     In the simulator's portrait window (safe top 82) the horizontal guide equals the safe area,
+     so this second source is what places the row there; the device may report either.
+  3. Neither: a full-width status bar (phones, the simulator's landscape window with its 20 pt
+     safe area): no corner.
+- **Layout math (`TopChromeGeometry`, root view coordinates, panes start at the top edge):**
+  - In the zone: row center = corner.midY; rowTop = max(center − 22, corner.minY); the row ends
+    12 pt before the corner. Strip top = row bottom + 4. At rest the page's top inset = the row's
+    bottom + 4 (+ strip 34 + 4), and never above the corner's bottom. Pill and hidden: the row's
+    bottom or the corner's, whichever is lower (the page gets everything under the status row;
+    fixed headers stay clear of the clock).
+  - Device numbers, status items as measured (828–928 x 24–69, safe top 81): row 24.5–68.5, page
+    top at rest 72.5 pt (was 132), 110.5 pt with the strip (was 170), 69 pt while reading (was
+    81). Safari: 84 pt at rest.
+  - From the camera (source 2): row 25.8–69.8 around the camera's 47.8, the row's end at 808.7
+    (the clock starts at 828), page at 73.8 pt.
+  - From a guide corner spanning the zone (0–81): row 18.5–62.5, page at 82 pt (the corner's
+    bottom), 104.5 pt with the strip, which then keeps clear of the corner like the row.
+  - No corner (fallback): the row sits 2 pt under the safe area's top, as before, but floats over
+    the page, which runs under the status bar: page top = safe top + 50 (+ 38 strip).
+- **The scroll view leaves the safe area out under a top bar**
+  (`contentInsetAdjustmentBehavior = .never`, `setPageTopStart`): with the pages at the top edge,
+  UIKit would add the 81 pt safe area to the page's own top inset and push the page under the
+  whole zone. The bottom keeps the home indicator's inset by hand (`pageBottomInset`), for the
+  scroll range and for WebKit's obscured and viewport insets, so fixed footers rest above it.
+- **The address takes the room between the capsules first, then centers** (fill priority over
+  centering): beside the corner the row is lopsided, and a centered pill shrank to a stub in the
+  669 pt portrait window. Where nothing is in the way it is still capped at 560 pt and centered.
+- **Reading state:** in the zone the address shrinks in place (70%) on the row, the buttons and
+  strip rise and fade; hidden lifts it off the top edge. No band appears in any state. Under a
+  short status bar the pill tucks under it as before.
+- **Portrait:** the same code; the guides and regions say where the status items are.
+- **Split:** one row spans both panes, as before, and keeps clear of the corner. Partly folded, the
+  row keeps to the focused pane's side of the fold and to the corner.
+- **Rail (Left, Right):** stays under the safe area's top. The root view's paper shows above it,
+  the same paper as the rail, so the column reads as one from the top edge.
+- **The strip** spans the lane under the row where it starts below the corner (72.5 > 69 on the
+  device); where it would start beside it, it stops where the row does (`stripClearance`). Under
+  the corner it rises on its way out only to the corner's bottom while it fades, so it never
+  passes over the clock (Codex review, round 2).
+- **Diagnostics:** the safe area, both corner-adaptive guides, the margins guide and the
+  occlusion regions are logged when the bounds or guides change (`duo` category, debug level), so
+  the device's numbers can be read back. `-PlainStatusCorner x,y,w,h` (Debug) forces a corner on
+  the simulator for captures.
+- **Not verified on the device:** the simulator draws no status bar in its resizable window and
+  reports the safe area differently. Captures use the window's real camera region (portrait) and
+  the forced device corner (landscape).

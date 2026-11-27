@@ -40,6 +40,7 @@ extension BrowserViewController {
                 strip.removeFromParent()
                 duo.strip = nil
                 duo.top.stripTop = nil
+                duo.top.stripClearance = []
             }
             return
         }
@@ -52,15 +53,29 @@ extension BrowserViewController {
         strip.view.translatesAutoresizingMaskIntoConstraints = false
         // Over the pages and the sidebar, under the chrome and the search sheet.
         view.insertSubview(strip.view, aboveSubview: duo.sidebar?.view ?? panes.view)
-        let safe = view.safeAreaLayoutGuide
-        let geometry = TopChromeGeometry(pageTop: 0, stripHeight: layout.stripHeight)
-        let top = strip.view.topAnchor.constraint(equalTo: safe.topAnchor, constant: geometry.stripTop)
+        // Under the row, from the root view's top (`applyTopBarPlacement` keeps it there).
+        let geometry = makeTopGeometry(stripHeight: layout.stripHeight)
+        let top = strip.view.topAnchor.constraint(equalTo: view.topAnchor, constant: geometry.stripTop)
+        // Across the lane, unless it starts beside the status corner (`stripClearance`).
+        let lane = duo.chromeLane
+        let leading = strip.view.leadingAnchor.constraint(equalTo: lane.leadingAnchor, constant: Spacing.m)
+        leading.priority = .defaultHigh
+        let trailing = strip.view.trailingAnchor.constraint(equalTo: lane.trailingAnchor, constant: -Spacing.m)
+        trailing.priority = .defaultHigh
+        let clearance = geometry.stripClearance
+        let clearLeading = strip.view.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: clearance.leading)
+        let clearTrailing = strip.view.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -clearance.trailing)
         NSLayoutConstraint.activate([
             top,
-            strip.view.leadingAnchor.constraint(equalTo: duo.chromeLane.leadingAnchor, constant: Spacing.m),
-            strip.view.trailingAnchor.constraint(equalTo: duo.chromeLane.trailingAnchor, constant: -Spacing.m),
+            leading,
+            trailing,
+            strip.view.leadingAnchor.constraint(greaterThanOrEqualTo: lane.leadingAnchor, constant: Spacing.m),
+            strip.view.trailingAnchor.constraint(lessThanOrEqualTo: lane.trailingAnchor, constant: -Spacing.m),
+            clearLeading,
+            clearTrailing,
             strip.view.heightAnchor.constraint(equalToConstant: layout.stripHeight),
         ])
+        duo.top.stripClearance = [clearLeading, clearTrailing]
         let edgeEffect = UIScrollEdgeElementContainerInteraction()
         edgeEffect.edge = .top
         strip.view.addInteraction(edgeEffect)

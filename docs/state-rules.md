@@ -161,10 +161,13 @@ goes away it changes as the motion ends, so the footer never sits under a bar st
 same holds for the top bar on the Duo's inner screen. Under Reduce Motion, hiding and revealing are a
 crossfade.
 
-**Duo inner screen (top bar).** The same three states drive the top bar: Expanded is the row
-(Back/Forward, the pill, Tabs/Share/More) and the strip; Pill is the address tucked under the
-status bar, buttons and strip faded; Hidden lifts the tucked address off the top edge and the
-page's top inset drops to 0 (only the status bar). Same triggers and the same never-hidden list.
+**Duo inner screen (top bar).** The same three states drive the top bar. Where the status items
+keep to a corner (the Duo's inner screen) the row sits on their row, clear of the corner, and the
+page runs to the top edge: Expanded is the row (Back/Forward, the pill, Tabs/Share/More) and the
+strip, page inset = their bottom; Pill shrinks the address in place on the row, buttons and strip
+faded; Hidden lifts it off the top edge. Pill and Hidden give the page everything under the status
+row. Under a full-width status bar the row sits under it, Pill tucks the address under the status
+bar, and Hidden leaves only the status bar. Same triggers and the same never-hidden list.
 
 ## 4. The page menu (More, and a long press on the pill)
 

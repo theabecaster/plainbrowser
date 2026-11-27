@@ -49,6 +49,9 @@ final class DuoUIState {
     /// The top bar on a wide screen (`+TopBar`): its constraints, and its geometry while it shows.
     let top = TopBarLayout()
     var topGeometry: TopChromeGeometry?
+    /// The corner the status items keep to (`readStatusCorner`), read before each layout pass.
+    var statusCorner: CGRect?
+    var lastStatusReading: StatusZoneReading?
     /// Page tabs in the window, kept as tabs change: the strip shows from the second.
     var pageTabCount = 0
 
@@ -106,6 +109,7 @@ extension BrowserViewController {
         if ProcessInfo.processInfo.arguments.contains("-PlainIgnoreOcclusions") { occlusions = [] }
         #endif
         let pillFrame = pill.frame
+        let row = makeTopGeometry(stripHeight: 0)
         return DuoLayoutInput(
             pageArea: pageArea,
             isRegularWidth: traitCollection.horizontalSizeClass == .regular,
@@ -119,7 +123,7 @@ extension BrowserViewController {
             isDivisionActive: division?.isActive ?? false,
             occlusions: occlusions,
             chromeBand: chromeOnTop
-                ? safe.top...(safe.top + TopChromeGeometry.topGap + TopChromeGeometry.rowHeight)
+                ? row.rowTop...row.rowBottom
                 : min(pillFrame.minY, bounds.maxY - ChromeGeometry.pillHeight * 2)...bounds.maxY
         )
     }
@@ -129,9 +133,12 @@ extension BrowserViewController {
     func updateDuoLayout() {
         guard view.bounds.width > 0 else { return }
         restoreSidebarStateIfNeeded()
+        duo.statusCorner = readStatusCorner()
         let input = layoutInput()
         let layout = DuoLayout(input)
         let previous = duo.layout
+        // The row's place follows the status zone even when nothing else in the layout changed.
+        applyTopBarPlacement(layout.chromeOnTop ? makeTopGeometry(stripHeight: layout.stripHeight) : nil, layout: layout)
         let shown = layout.splitShown ? [0, 1] : [session.tabs.focusedPane]
         guard layout != previous || shown != panes.shown else { return }
         duo.layout = layout

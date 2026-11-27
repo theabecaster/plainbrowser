@@ -495,7 +495,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar
         )
         let top = duo.layout?.chromeOnTop == true
-            ? TopChromeGeometry(pageTop: panes.view.frame.minY, stripHeight: duo.layout?.stripHeight ?? 0) : nil
+            ? makeTopGeometry(stripHeight: duo.layout?.stripHeight ?? 0) : nil
         guard next != geometry || top != duo.topGeometry else { return }
         geometry = next
         duo.topGeometry = top
@@ -781,6 +781,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         // Back from a top bar (a fold to the outer screen): the page's top rests at the top again.
         setPageTopStart(0, for: pageScrollView)
+        // The reader's bottom inset was the top bar's own (`pageBottomInset`); the safe area is
+        // back in its adjustment.
+        engineUI.reader.webView?.scrollView.followObscuredBottom(0)
         for slot in panes.slots { slot.setRingTopInset(0) }
         let pageBottom = panes.view.frame.maxY
         let hidden = geometry.hiddenInset(pageBottom: pageBottom)

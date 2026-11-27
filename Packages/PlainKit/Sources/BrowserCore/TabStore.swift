@@ -130,13 +130,28 @@ public final class TabStore {
 
     // MARK: Windows
 
-    /// Adds an empty window (a new scene) and returns its id.
+    /// Adds an empty window (a new scene) and returns its id. A window with `id` already in the
+    /// store is left as it is.
     @discardableResult
-    public func addWindow() -> WindowID {
-        let window = TabWindow()
-        windows.append(window)
+    public func addWindow(id: WindowID = WindowID()) -> WindowID {
+        guard windowIndex(id) == nil else { return id }
+        windows.append(TabWindow(id: id))
         saveSession()
-        return window.id
+        return id
+    }
+
+    /// Moves every tab of `source` to the end of `target`'s lists and removes `source`: a window
+    /// whose scene is gone for good joins one that has a scene, so no tab is left where no window
+    /// shows it. `target`'s panes stay as they are.
+    public func mergeWindow(_ source: WindowID, into target: WindowID) {
+        guard source != target, let from = windowIndex(source), windowIndex(target) != nil else { return }
+        let moving = windows.remove(at: from)
+        let index = windowIndex(target)!
+        windows[index].tabIDs += moving.tabIDs
+        windows[index].privateTabIDs += moving.privateTabIDs
+        Self.normalizePinned(&windows[index].tabIDs, entries: tabs)
+        for id in moving.tabIDs + moving.privateTabIDs { windowOfTab[id] = target }
+        saveSession()
     }
 
     /// Closes a window: its regular tabs become one recently closed batch, its private tabs are
@@ -469,24 +484,29 @@ public final class TabStore {
 
     /// Reopens the last closed batch (of `profile`, when given) where it was: after the tab that
     /// preceded it when that is still open, else at its old index. Tabs that were on screen show
-    /// again, else the first. Returns the reopened ids in order.
+    /// again, else the first. Returns the reopened ids in order. With `window`, that profile's last
+    /// batch closed in the window comes first; tabs whose window is gone come back in `window`.
     @discardableResult
-    public func reopenLastClosed(in profile: ProfileID? = nil) -> [TabID] {
-        guard let batch = profile.map(lastClosedBatch(in:)) ?? recentlyClosed.last else { return [] }
-        return reopenClosed(batch.id)
+    public func reopenLastClosed(in profile: ProfileID? = nil, window: WindowID? = nil) -> [TabID] {
+        let candidates = profile.map { id in recentlyClosed.filter { $0.tabs.first?.entry.profileID == id } } ?? recentlyClosed
+        let mine = window.flatMap { id in candidates.last { $0.tabs.contains { $0.windowID == id } } }
+        guard let batch = mine ?? candidates.last else { return [] }
+        return reopenClosed(batch.id, fallbackWindow: window)
     }
 
     /// Reopens one closed batch, as `reopenLastClosed` does, wherever it is in the stack: a Reopen
     /// offer brings back exactly the close it was made for. Nothing when that batch is gone.
+    /// `fallbackWindow` takes tabs whose window is gone (default: the first window).
     @discardableResult
-    public func reopenClosed(_ batchID: UUID) -> [TabID] {
+    public func reopenClosed(_ batchID: UUID, fallbackWindow: WindowID? = nil) -> [TabID] {
         guard let position = recentlyClosed.lastIndex(where: { $0.id == batchID }) else { return [] }
         let batch = recentlyClosed.remove(at: position)
         let date = now()
         var reopened: [TabID] = []
         var toShow: [ClosedTab] = []
         for closed in batch.tabs where tabs[closed.entry.id] == nil {
-            let windowID = windowIndex(closed.windowID) != nil ? closed.windowID : windows[0].id
+            let fallback = fallbackWindow.flatMap { windowIndex($0) != nil ? $0 : nil } ?? windows[0].id
+            let windowID = windowIndex(closed.windowID) != nil ? closed.windowID : fallback
             let index = windowIndex(windowID)!
             var entry = closed.entry
             entry.lastActiveAt = date

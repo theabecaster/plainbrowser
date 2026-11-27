@@ -102,19 +102,45 @@ public enum FixedChoices {
     /// 10–30 thousand; a dark design's rules sit in any of them, but reading more than this costs
     /// more than a frame on a slow phone, and the background check catches the rest.
     public static let darkPagesMaxRulesRead = 20_000
-    /// Elements checked for a background picture set by a style sheet (so it keeps its colors).
-    /// About a long article's worth; past it, background pictures may show inverted, which is the
-    /// cost of never spending more than a few milliseconds per page.
-    public static let darkPagesMaxElementsScanned = 4_000
+    /// Darkening works per color, by the role the color plays, in OKLab lightness (L, 0 black to
+    /// 1 white), keeping hue and as much chroma as fits. Backgrounds lighter than
+    /// `darkPagesBackgroundThreshold` turn dark, white landing on `darkPagesBackgroundLightness`;
+    /// darker backgrounds (a black hero, a dark card, a saturated brand button) stay exactly as
+    /// the site made them. 0.21 is about #181818: Dark Reader's and Chrome's page dark, a step off
+    /// black so cards and shadows still read. 0.62 keeps mid-tone brand colors (Apple's blue
+    /// button is 0.57) and catches every light grey section, card and tint.
+    public static let darkPagesBackgroundLightness = 0.21
+    public static let darkPagesBackgroundThreshold = 0.62
+    /// Text darker than `darkPagesTextThreshold` turns light, black landing on
+    /// `darkPagesTextLightness`; lighter text (white on a dark hero, light links) stays. The line
+    /// between them is continuous (0.66 maps to itself), so greys keep their order: body text
+    /// becomes near white, secondary grey a softer light grey. 0.94 is Dark Reader's text
+    /// (#e8e6e3): bright, short of glaring white.
+    public static let darkPagesTextLightness = 0.94
+    public static let darkPagesTextThreshold = 0.66
+    /// Borders and rules: light ones turn into a grey that still shows on the dark page (white
+    /// becomes 0.30, a typical #d2d2d7 hairline 0.37); dark ones stay.
+    public static let darkPagesBorderLightness = 0.30
+    public static let darkPagesBorderThreshold = 0.55
+    /// Text whose contrast with what is behind it falls under this (WCAG AA for body text, the
+    /// target Safari's Adaptive Dark Mode states) is made lighter or darker until it passes.
+    public static let darkPagesMinimumContrast = 4.5
+    /// Script time spent in the first frame on elements the style sheets can't reach (inline
+    /// styles, legacy color attributes, sheets from another origin, icons, contrast fixes). The
+    /// page's top is first in the document, so this covers the visible area; the rest is done in
+    /// idle slices of `darkPagesSliceBudget`, which never hold a frame.
+    public static let darkPagesFirstFrameBudget = 8.0
+    public static let darkPagesSliceBudget = 5.0
     /// An inline SVG with a fill or stroke at least this colorful (0 grey, 1 a pure hue) is a
     /// logo or an illustration and keeps its colors; one in greys is an icon that flips with the
     /// text so it stays visible. 0.25 keeps brand colors and leaves near-greys to flip.
     public static let darkPagesColoredSVGChroma = 0.25
     /// Shapes read per inline SVG for that check: a logo shows its colors in its first few shapes.
     public static let darkPagesSVGShapesChecked = 24
-    /// After load, content a page adds is checked for background pictures in batches this many
+    /// Content and style sheets a page adds after load are darkened in batches at most this many
     /// milliseconds apart, so an infinite-scroll page costs one pass per burst, not one per node.
-    public static let darkPagesWatchDelay = 250
+    /// While the page is still loading, batches run every frame instead.
+    public static let darkPagesWatchDelay = 100
     /// A page that drops Plain's style sheets without touching its DOM gets them back on the next
     /// scroll or touch, checked at most this many milliseconds apart (and once more after a
     /// burst): a few microseconds of work twice a second at most, back before a line is read.

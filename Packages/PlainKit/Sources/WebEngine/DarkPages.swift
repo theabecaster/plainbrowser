@@ -67,11 +67,10 @@ final class LayeredDarkPagesStore: SiteDarkPagesStore {
 /// me"), for `prefers-color-scheme: dark` rules in the style sheets it can read, and for a light
 /// background with the page's own colors. Only a page that fails all three is darkened.
 ///
-/// Darkening is one CSS filter on the root (`invert(1) hue-rotate(180deg)`): colors flip in
-/// lightness and keep their hue, and pictures, video, canvases, frames and background images get
-/// the same filter again, which puts them back as they were. WebKit draws the filter on the GPU
-/// as the page is composited, so it costs no script work while scrolling and nothing per element;
-/// the script runs a handful of checks per page and then sleeps.
+/// Darkening goes color by color, by role (`DarkPagesEngine.swift`): light backgrounds turn dark,
+/// dark text turns light, and what is already dark (a black hero, a dark card) or already light
+/// (white text on it) stays exactly as made. Pictures, video, canvases, frames, emoji and colored
+/// logos are never changed.
 ///
 /// While the app is dark and the page has not been judged yet, a guard keeps the page's
 /// background dark, so a page never flashes white before it is darkened; it goes as soon as the
@@ -82,8 +81,9 @@ enum DarkPages {
     /// The message handler the script reports its state to (`DarkPagesState` raw values).
     static let handlerName = "plainDarkPages"
 
-    /// The area past a darkened page's edges: the page's white turned dark by the filter.
-    static let overscrollColor = UIColor.black
+    /// The area past a darkened page's edges: white as dark pages turns it
+    /// (`FixedChoices.darkPagesBackgroundLightness`, about #181818), so overscroll matches the page.
+    static let overscrollColor = UIColor(white: 24 / 255, alpha: 1)
 
     /// The script for one kind of tab, with the sites where dark pages is off.
     static func userScript(offSites: Set<String>) -> WKUserScript {
@@ -113,10 +113,8 @@ enum DarkPages {
             (() => {
               if (window !== window.top || !/^https?:$/.test(location.protocol)) return;
               const OFF_SITES = new Set([\(sites)]);
-              const LIGHT = \(FixedChoices.darkPagesLightBackground);
-              const MAX_RULES = \(FixedChoices.darkPagesMaxRulesRead);
-              const MAX_SCAN = \(FixedChoices.darkPagesMaxElementsScanned);
-              \(scriptBody)
+              \(engineConstants)
+              \(engineBody)
             })();
             """
     }
@@ -131,309 +129,6 @@ enum DarkPages {
             }
         }.joined()
         return "\"\(escaped)\""
-    }
-
-    /// The filter that darkens: lightness flips, hue stays. Applied twice it gives the original
-    /// colors back (both steps commute, and two half turns of hue are a whole one), which is how
-    /// pictures inside a darkened page keep their colors.
-    static let filter = "invert(1) hue-rotate(180deg)"
-
-    /// What gets the filter again, so it shows as the site made it: pictures, video, canvases
-    /// (charts, maps, games), frames and plugins, and elements with an inline background image.
-    /// The script marks the rest with `data-plain-dark-media`: elements whose background image is
-    /// set by a style sheet, and inline SVGs drawn in color (logos). Inline SVGs in greys are
-    /// icons drawn like text and flip with it, as Safari's Adaptive Dark Mode does with simple
-    /// black-and-white images.
-    static let mediaSelector = """
-        img, picture, video, canvas, iframe, embed, object, svg image, [data-plain-dark-media], \
-        [style*="background-image"], [style*="background:url"], [style*="background: url"]
-        """
-
-    private static var scriptBody: String {
-        """
-        const site = location.hostname.toLowerCase().replace(/^www\\./, '');
-        const media = '\(mediaSelector.replacingOccurrences(of: "\n", with: " "))';
-        const MARK = 'data-plain-dark-media';
-        const dark = matchMedia('(prefers-color-scheme: dark)');
-        let off = OFF_SITES.has(site);
-        let verdict = null;   // 'darken' or 'native' once judged; null while the page is still loading
-        let settled = false;  // judged for good after the page's load event
-        let posted = '';
-        let scanned = 0;
-        let observer = null;
-
-        const sheet = (css) => { const s = new CSSStyleSheet(); s.replaceSync(css); s.disabled = true; return s; };
-        const guard = sheet('html, body { background-color: #000 !important; }');
-        const theme = sheet(`@media screen {
-          html { filter: \(filter) !important; background-color: #fff; }
-          :is(${media}) { filter: \(filter) !important; }
-          :is(${media}) :is(${media}) { filter: none !important; }
-        }`);
-        const ours = (s) => s === guard || s === theme;
-        // Puts the sheets back if the page replaced its adopted style sheets.
-        const adopt = () => {
-          const list = document.adoptedStyleSheets;
-          if (!list.includes(guard) || !list.includes(theme)) {
-            document.adoptedStyleSheets = [...list.filter((s) => !ours(s)), guard, theme];
-          }
-        };
-
-        // The state for the app's page menu, and whether this page has dark pages off: the app
-        // corrects a page that kept an old choice (one restored from the back-forward cache).
-        const post = (state, force) => {
-          if (state === posted && !force) return;
-          posted = state;
-          try { webkit.messageHandlers.\(handlerName).postMessage({ state, off }); } catch (e) {}
-        };
-
-        // A computed color as { lum: relative luminance 0-1, alpha, chroma 0-1 }, or null when
-        // the format is unknown. Computed colors are rgb(), color(srgb | display-p3 …), or the
-        // lab family when the site wrote them that way.
-        const measure = (color) => {
-          if (!color || color === 'transparent') return { lum: 0, alpha: 0, chroma: 0 };
-          const m = color.match(/^([a-z-]+)\\((.*)\\)$/);
-          if (!m) return null;
-          const [main, slash] = m[2].split('/');
-          let parts = main.trim().split(/[\\s,]+/);
-          let alpha = slash !== undefined ? parseFloat(slash) / (slash.includes('%') ? 100 : 1) : 1;
-          const num = (v, scale) => v.endsWith('%') ? parseFloat(v) / 100 : parseFloat(v) / scale;
-          const linear = m[1] === 'color' && parts[0] === 'srgb-linear';
-          const lin = (c) => linear ? c : c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-          const fromRGB = (r, g, b) => ({
-            lum: 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b), alpha,
-            chroma: Math.max(r, g, b) - Math.min(r, g, b),
-          });
-          switch (m[1]) {
-            case 'rgb': case 'rgba':
-              if (parts.length === 4 && slash === undefined) alpha = parseFloat(parts[3]);
-              return fromRGB(num(parts[0], 255), num(parts[1], 255), num(parts[2], 255));
-            case 'color':
-              if (!/^(srgb|display-p3|srgb-linear)$/.test(parts[0])) return null;
-              return fromRGB(num(parts[1], 1), num(parts[2], 1), num(parts[3], 1));
-            case 'oklab': case 'oklch': {
-              const l = num(parts[0], 1);
-              const c = m[1] === 'oklch' ? parseFloat(parts[1]) : Math.hypot(parseFloat(parts[1]), parseFloat(parts[2]));
-              return { lum: Math.pow(Math.max(0, l), 3), alpha, chroma: Math.min(1, c / 0.25) };
-            }
-            case 'lab': case 'lch': {
-              const l = num(parts[0], 100) * 100;
-              const c = m[1] === 'lch' ? parseFloat(parts[1]) : Math.hypot(parseFloat(parts[1]), parseFloat(parts[2]));
-              return { lum: l > 8 ? Math.pow((l + 16) / 116, 3) : l / 903.3, alpha, chroma: Math.min(1, c / 100) };
-            }
-            default: return null;
-          }
-        };
-
-        // Rules that apply in dark mode, in the style sheets this page can read: its own, the
-        // ones they import, and its adopted ones. Another origin's sheet throws, and is skipped.
-        const DARK_QUERY = /prefers-color-scheme\\s*:\\s*dark/;
-        const hasDarkRules = () => {
-          let read = 0;
-          const visitSheet = (s) => {
-            if (s.media && DARK_QUERY.test(s.media.mediaText)) return true;
-            let rules = null;
-            try { rules = s.cssRules; } catch (e) { return false; }
-            return rules ? visit(rules) : false;
-          };
-          const visit = (rules) => {
-            for (const rule of rules) {
-              if (++read > MAX_RULES) return false;
-              if (rule.media && DARK_QUERY.test(rule.media.mediaText)) return true;
-              if (rule.conditionText && DARK_QUERY.test(rule.conditionText)) return true;
-              if (rule.styleSheet && visitSheet(rule.styleSheet)) return true;
-              if (rule.cssRules && visit(rule.cssRules)) return true;
-            }
-            return false;
-          };
-          for (const s of document.styleSheets) {
-            if (visitSheet(s)) return true;
-            if (read > MAX_RULES) return false;
-          }
-          for (const s of document.adoptedStyleSheets) {
-            if (!ours(s) && visitSheet(s)) return true;
-          }
-          return false;
-        };
-
-        // 'native' when the page has a dark design, asks never to be darkened, is already dark,
-        // or shows a background color Plain can't read; 'darken' when its background is light.
-        // Read with Plain's own sheets off, so only the page's colors count.
-        const judge = () => {
-          const meta = document.querySelector('meta[name="color-scheme" i]');
-          const declared = ((meta && meta.content) || '') + ' ' + getComputedStyle(document.documentElement).colorScheme;
-          if (/\\bdark\\b/.test(declared) || /\\bonly\\b/.test(declared)) return 'native';
-          if (hasDarkRules()) return 'native';
-          const was = [guard.disabled, theme.disabled];
-          guard.disabled = true;
-          theme.disabled = true;
-          let color = measure(getComputedStyle(document.documentElement).backgroundColor);
-          if (color && color.alpha < 0.5 && document.body) color = measure(getComputedStyle(document.body).backgroundColor);
-          [guard.disabled, theme.disabled] = was;
-          if (!color) return 'native';
-          // No background of its own: the page shows on the browser's white canvas.
-          return (color.alpha < 0.5 ? 1 : color.lum) >= LIGHT ? 'darken' : 'native';
-        };
-
-        // An inline SVG drawn in color is a logo or an illustration: it keeps its colors. One in
-        // greys is an icon drawn like text, and flips with it so it stays visible.
-        // A paint is colorful when it is a colored color, or a gradient or pattern (`url(#id)`)
-        // with a colored stop.
-        const colorful = (paint, depth = 0) => {
-          const c = measure(paint);
-          if (c) return c.alpha >= 0.5 && c.chroma >= \(FixedChoices.darkPagesColoredSVGChroma);
-          // Computed paints name the gradient by its full address; the fragment is the id.
-          const ref = /url\\(["']?[^"')#]*#([^"')]+)/.exec(paint || '');
-          const target = ref && document.getElementById(ref[1]);
-          if (!target) return false;
-          for (const stop of target.querySelectorAll('stop')) {
-            const s = measure(getComputedStyle(stop).stopColor);
-            if (s && s.alpha >= 0.5 && s.chroma >= \(FixedChoices.darkPagesColoredSVGChroma)) return true;
-          }
-          // A pattern: colorful when anything drawn in it is.
-          return depth < 2 && target.localName === 'pattern' && coloredSVG(target, depth + 1);
-        };
-        const coloredSVG = (svg, depth = 0) => {
-          const shapes = svg.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line, text, use');
-          for (let i = 0; i < shapes.length && i < \(FixedChoices.darkPagesSVGShapesChecked); i++) {
-            const style = getComputedStyle(shapes[i]);
-            for (const paint of [style.fill, style.stroke]) if (colorful(paint, depth)) return true;
-          }
-          return false;
-        };
-        // Pictures set by style sheets, and colored inline SVGs, get the media filter too.
-        const check = (el) => {
-          if (el.hasAttribute(MARK)) return;
-          if (el.localName === 'svg') {
-            if (coloredSVG(el)) el.setAttribute(MARK, '');
-            return;
-          }
-          const image = getComputedStyle(el).backgroundImage;
-          if (image && image !== 'none' && image.includes('url(')) el.setAttribute(MARK, '');
-        };
-        const scan = (rootNode) => {
-          if (scanned >= MAX_SCAN || !rootNode.querySelectorAll) return;
-          const nodes = rootNode.querySelectorAll('*');
-          for (let i = 0; i < nodes.length && scanned < MAX_SCAN; i++, scanned++) check(nodes[i]);
-        };
-        // After load, pages that add content (infinite scroll, late widgets) are checked in
-        // batches, and Plain's sheets are put back if the page replaced its adopted ones.
-        const watch = () => {
-          if (observer || !document.body) return;
-          let pending = [];
-          let timer = 0;
-          observer = new MutationObserver((records) => {
-            for (const r of records) for (const n of r.addedNodes) if (n.nodeType === 1) pending.push(n);
-            if (!timer) timer = setTimeout(() => {
-              timer = 0;
-              const batch = pending; pending = [];
-              if (theme.disabled) return;
-              adopt();
-              for (const n of batch) if (n.isConnected && scanned < MAX_SCAN) { scanned++; check(n); scan(n); }
-            }, \(FixedChoices.darkPagesWatchDelay));
-          });
-          observer.observe(document.body, { childList: true, subtree: true });
-        };
-
-        // A page that replaces its adopted style sheets without touching the DOM drops Plain's
-        // too. There is no event for that, so the next scroll or touch puts them back (throttled,
-        // with one last check after a burst; the listeners are passive and never delay scrolling).
-        let keeping = false;
-        let lastKept = 0;
-        const keep = () => {
-          if (keeping) return;
-          keeping = true;
-          let trailing = 0;
-          const check = () => {
-            if (theme.disabled) return;
-            const wait = \(FixedChoices.darkPagesSheetCheckInterval) - (Date.now() - lastKept);
-            if (wait > 0) {
-              // Too soon: check once more when the interval is up, so the last event counts.
-              if (!trailing) trailing = setTimeout(() => { trailing = 0; check(); }, wait);
-              return;
-            }
-            lastKept = Date.now();
-            adopt();
-          };
-          addEventListener('scroll', check, { passive: true, capture: true });
-          addEventListener('pointerdown', check, { passive: true, capture: true });
-        };
-
-        // Applies the current choice: darkened, the guard while judging, or nothing.
-        let adopted = false;
-        const render = () => {
-          const active = dark.matches && !off && !document.webkitFullscreenElement;
-          // A page that is never dark never gets the style sheets.
-          if (active || adopted) { adopt(); adopted = true; }
-          if (active && verdict === null) {
-            guard.disabled = false;
-            theme.disabled = true;
-          } else {
-            guard.disabled = true;
-            theme.disabled = !(active && verdict === 'darken');
-          }
-          if (!theme.disabled) {
-            if (document.body && scanned === 0) scan(document.body);
-            if (settled) watch();
-            keep();
-          }
-          post(!dark.matches ? 'inactive' : off ? '\(DarkPagesState.offForSite.rawValue)'
-            : verdict === 'darken' ? 'darkened' : verdict === 'native' ? 'native' : 'inactive');
-        };
-
-        // Judges once the page can be judged: a body, and every style sheet in the head loaded
-        // (WebKit paints nothing before those, so the first frame is already right).
-        const ready = () => {
-          if (!document.body) return false;
-          for (const link of document.head ? document.head.querySelectorAll('link[rel~="stylesheet" i]') : []) {
-            if (!link.sheet && !link.disabled && link.media !== 'print') return false;
-          }
-          return true;
-        };
-        // Time spent in this script's work on the page, for the engine's perf tests.
-        let cost = 0;
-        const timed = (work) => { const start = performance.now(); work(); cost += performance.now() - start; };
-        const decide = (final) => timed(() => {
-          if (settled || !dark.matches || off) return;
-          if (!final && !ready()) return;
-          verdict = judge();
-          if (final) settled = true;
-          render();
-        });
-        const frame = () => {
-          if (verdict !== null || !dark.matches || off) return;
-          decide(false);
-          if (verdict === null) requestAnimationFrame(frame);
-        };
-
-        // Judged only while it matters: a light app never reads the page's styles. Each switch to
-        // dark (or back on for the site) judges the page as it is now.
-        const refresh = () => timed(() => {
-          if (dark.matches && !off && document.readyState !== 'loading') {
-            settled = document.readyState === 'complete';
-            verdict = judge();
-          }
-          render();
-          if (verdict === null && dark.matches && !off) requestAnimationFrame(frame);
-        });
-        globalThis.__plainDarkPages = {
-          setOff(value) { if (off !== value) { off = value; refresh(); } else { post(posted, true); } },
-          get cost() { return cost; },
-          // The engine's perf test: the judgement and a full scan, averaged over `runs` (the
-          // page's clock counts whole milliseconds).
-          bench(runs) {
-            const start = performance.now();
-            for (let i = 0; i < runs; i++) { judge(); scanned = 0; scan(document.body); }
-            return (performance.now() - start) / runs;
-          },
-        };
-        dark.addEventListener('change', refresh);
-        document.addEventListener('webkitfullscreenchange', refresh);
-        document.addEventListener('DOMContentLoaded', () => decide(document.readyState === 'complete'));
-        addEventListener('load', () => { settled = false; decide(true); });
-        addEventListener('pageshow', (e) => { if (e.persisted) post(posted, true); });
-        render();
-        if (dark.matches && !off) requestAnimationFrame(frame);
-        """
     }
 }
 #endif

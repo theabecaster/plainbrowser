@@ -197,7 +197,8 @@ enum DarkPages {
           let parts = main.trim().split(/[\\s,]+/);
           let alpha = slash !== undefined ? parseFloat(slash) / (slash.includes('%') ? 100 : 1) : 1;
           const num = (v, scale) => v.endsWith('%') ? parseFloat(v) / 100 : parseFloat(v) / scale;
-          const lin = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+          const linear = m[1] === 'color' && parts[0] === 'srgb-linear';
+          const lin = (c) => linear ? c : c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
           const fromRGB = (r, g, b) => ({
             lum: 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b), alpha,
             chroma: Math.max(r, g, b) - Math.min(r, g, b),
@@ -275,14 +276,26 @@ enum DarkPages {
 
         // An inline SVG drawn in color is a logo or an illustration: it keeps its colors. One in
         // greys is an icon drawn like text, and flips with it so it stays visible.
+        // A paint is colorful when it is a colored color, or a gradient or pattern (`url(#id)`)
+        // with a colored stop.
+        const colorful = (paint) => {
+          const c = measure(paint);
+          if (c) return c.alpha >= 0.5 && c.chroma >= \(FixedChoices.darkPagesColoredSVGChroma);
+          const ref = /url\\(["']?#([^"')]+)/.exec(paint || '');
+          const target = ref && document.getElementById(ref[1]);
+          if (!target) return false;
+          for (const stop of target.querySelectorAll('stop')) {
+            const s = measure(getComputedStyle(stop).stopColor);
+            if (s && s.alpha >= 0.5 && s.chroma >= \(FixedChoices.darkPagesColoredSVGChroma)) return true;
+          }
+          // A pattern: colorful when anything drawn in it is.
+          return target.localName === 'pattern' && coloredSVG(target);
+        };
         const coloredSVG = (svg) => {
           const shapes = svg.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line, text, use');
           for (let i = 0; i < shapes.length && i < \(FixedChoices.darkPagesSVGShapesChecked); i++) {
             const style = getComputedStyle(shapes[i]);
-            for (const paint of [style.fill, style.stroke]) {
-              const c = measure(paint);
-              if (c && c.alpha >= 0.5 && c.chroma >= \(FixedChoices.darkPagesColoredSVGChroma)) return true;
-            }
+            for (const paint of [style.fill, style.stroke]) if (colorful(paint)) return true;
           }
           return false;
         };
@@ -320,6 +333,24 @@ enum DarkPages {
           observer.observe(document.body, { childList: true, subtree: true });
         };
 
+        // A page that replaces its adopted style sheets without touching the DOM drops Plain's
+        // too. There is no event for that, so the next scroll or touch puts them back (at most
+        // twice a second; the listeners are passive and never delay scrolling).
+        let keeping = false;
+        let lastKept = 0;
+        const keep = () => {
+          if (keeping) return;
+          keeping = true;
+          const check = () => {
+            const now = Date.now();
+            if (now - lastKept < 500 || theme.disabled) return;
+            lastKept = now;
+            adopt();
+          };
+          addEventListener('scroll', check, { passive: true, capture: true });
+          addEventListener('pointerdown', check, { passive: true, capture: true });
+        };
+
         // Applies the current choice: darkened, the guard while judging, or nothing.
         let adopted = false;
         const render = () => {
@@ -336,6 +367,7 @@ enum DarkPages {
           if (!theme.disabled) {
             if (document.body && scanned === 0) scan(document.body);
             if (settled) watch();
+            keep();
           }
           post(!dark.matches ? 'inactive' : off ? '\(DarkPagesState.offForSite.rawValue)'
             : verdict === 'darken' ? 'darkened' : verdict === 'native' ? 'native' : 'inactive');

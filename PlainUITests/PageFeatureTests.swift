@@ -36,7 +36,7 @@ final class PageFeatureTests: XCTestCase {
         let more = app.buttons["more"]
         XCTAssertTrue(more.waitForExistence(timeout: 2))
         more.tap()
-        XCTAssertTrue(app.buttons["Settings…"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["menu.settings"].waitForExistence(timeout: 3))
     }
 
     private func closeMenu(_ app: XCUIApplication) {

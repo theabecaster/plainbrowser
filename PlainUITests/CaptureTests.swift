@@ -91,7 +91,7 @@ final class CaptureTests: XCTestCase {
         app.buttons["more"].tap()
         pause(1)
         shot("s1-page-menu")
-        app.buttons["Settings…"].tap()
+        app.buttons["menu.settings"].tap()
         pause(1.5)
         shot("s2-settings")
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Search Engine'")).firstMatch.tap()
@@ -494,7 +494,7 @@ final class CaptureTests: XCTestCase {
             }
 
             app.buttons["more"].tap()
-            app.buttons["Settings…"].tap()
+            app.buttons["menu.settings"].tap()
             pause(1.5)
             shot("p3-settings-\(name)")
             app.navigationBars.buttons["Done"].tap()

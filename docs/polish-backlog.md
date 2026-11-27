@@ -334,3 +334,8 @@ Newest feature last.
   (not by a site rule) gets the engine after DOMContentLoaded, so its banner can show for a moment
   before it is rejected. If it shows on real sites, inject only the prehide CSS of the generic rules
   for the hosts the probe saw, before the engine.
+- **Sheet bar hides on the Duo's outer screen.** Scrolled far down, History's title, Clear and Done
+  leave the screen there (iOS 27; the same with the old bottom search field, before this change).
+  `.toolbarVisibility(.visible, for: .navigationBar)` doesn't keep it. Swipe down still closes the
+  sheet and scrolling back up brings the bar. Design review called it blocking; check on the device
+  whether the vertical bar is meant to take the items there.

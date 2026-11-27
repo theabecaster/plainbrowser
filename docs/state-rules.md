@@ -195,7 +195,7 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). |
 | New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "New Tab": it turns this empty tab, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
 | Downloads | while any this session | ← same | ← | ← | ← | ← | Subtitle "1 in progress" while one runs. |
-| History, Edit Favorites, Settings… | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. |
+| History, Edit Favorites, Settings | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. |
 
 ## 5. The tabs menu (long press on the tabs slot)
 

@@ -59,7 +59,7 @@ final class PerfTests: XCTestCase {
         // state it opened with: reopen it until Settings is enabled.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
         XCTAssertTrue(app.buttons["more"].waitForExistence(timeout: 3))
-        let settings = app.buttons["Settings…"]
+        let settings = app.buttons["menu.settings"]
         for _ in 0..<10 {
             app.buttons["more"].tap()
             XCTAssertTrue(settings.waitForExistence(timeout: 3))

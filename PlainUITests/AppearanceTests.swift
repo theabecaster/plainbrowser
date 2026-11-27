@@ -38,7 +38,7 @@ final class AppearanceTests: XCTestCase {
         }
         XCTAssertTrue(app.buttons["more"].waitForExistence(timeout: 3))
         app.buttons["more"].tap()
-        let settings = app.buttons["Settings…"]
+        let settings = app.buttons["menu.settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 3))
         settings.tap()
     }
@@ -71,7 +71,7 @@ final class AppearanceTests: XCTestCase {
         let more = app.buttons["more"]
         XCTAssertTrue(more.waitForExistence(timeout: 2))
         more.tap()
-        XCTAssertTrue(app.buttons["Settings…"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["menu.settings"].waitForExistence(timeout: 3))
         // The dark pages switch lives in the Site Settings submenu.
         let site = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Site Settings'")).firstMatch
         if site.exists { site.tap() }

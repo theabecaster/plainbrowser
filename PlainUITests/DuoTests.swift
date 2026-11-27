@@ -127,7 +127,7 @@ final class DuoTests: XCTestCase {
     /// Settings > Tab Layout > `choice`, then Done.
     private func chooseTabLayout(_ app: XCUIApplication, _ choice: String, file: StaticString = #filePath, line: UInt = #line) {
         app.buttons["more"].tap()
-        let settings = app.buttons["Settings…"]
+        let settings = app.buttons["menu.settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 3), file: file, line: line)
         settings.tap()
         let layout = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Tab Layout'")).firstMatch

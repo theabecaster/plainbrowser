@@ -1189,7 +1189,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self?.showHistory()
         }
         history.accessibilityIdentifier = "menu.history"
-        let settings = UIAction(title: "Settings…", image: UIImage(systemName: "gearshape")) { [weak self] _ in
+        let settings = UIAction(title: "Settings", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.showSettings()
         }
         settings.accessibilityIdentifier = "menu.settings"

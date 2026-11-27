@@ -30,3 +30,4 @@ investigate before relying on it. Gallery ends at the spring settle (see perf/bu
 | 2026-11-26 15:17 | 2ced874 | sim | 3271.3 | 441 | n/a | 1480.7 | — | FAIL |
 | 2026-11-26 15:23 | ebab6bf | sim | — | 447.6 | n/a | 1482.9 | — | FAIL |
 | 2026-11-26 23:26 | 32eecbe | device | — | 219.4 | 0 | 984.1 | — | FAIL |
+| 2026-11-27 00:46 | 503cd9a | device | 246.6 | 224.8 | 0 | 559.6 | 1090.5 | FAIL |

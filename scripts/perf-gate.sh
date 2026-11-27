@@ -27,7 +27,7 @@ esac
 
 BUDGETS=perf/budgets.json
 LOG=docs/perf-log.md
-METRICS=(launchMs searchFieldMs hitchMsPerS galleryMs swipeMs)
+METRICS=(launchMs searchFieldMs hitchMsPerS galleryMs swipeMs lastTabMs)
 SIM_NAME=${PLAIN_SIM_PREFIX:-plain}-perf-duo
 SIM_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-Duo
 SIM_RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4
@@ -87,18 +87,19 @@ typeset -A value=(
   hitchMsPerS   "$(median 'PerfTests/testPageScrollHitches()' '.displayName | test("hitch.*ratio"; "i")' 1)"
   galleryMs     "$(median 'PerfTests/testGalleryOpen()' '.identifier | endswith("OSSignpost-gallery.show.duration")' 1000)"
   swipeMs       "$(median 'PerfTests/testBarSwipe()' '.identifier | endswith("OSSignpost-tab.swipeSettle.duration")' 1000)"
+  lastTabMs     "$(median 'PerfTests/testLaunchToLastTab()' '.identifier | endswith("OSSignpost-launch.firstFrame.duration")' 1000)"
 )
 
 # The previous sim row's values, by column (docs/perf-log.md: | Date | SHA | Target | launch | field | hitch |
-# gallery | swipe | Result |). Rows from before the gallery and swipe columns hold the result there, which is
-# not a number, so those two then have no previous value.
+# gallery | swipe | last tab | Result |). Rows from before a column hold the result (or nothing) there, which
+# is not a number, so that metric then has no previous value.
 typeset -A previous
 if [[ $MODE == sim ]]; then
   last=$(grep -E '^\| [0-9]{4}-' $LOG | awk -F'|' '$4 ~ /sim/' | tail -1 || true)
   if [[ -n "$last" ]]; then
     cols=("${(@s:|:)last}")
     previous=(launchMs "${cols[5]// /}" searchFieldMs "${cols[6]// /}" hitchMsPerS "${cols[7]// /}"
-      galleryMs "${cols[8]// /}" swipeMs "${cols[9]// /}")
+      galleryMs "${cols[8]// /}" swipeMs "${cols[9]// /}" lastTabMs "${cols[10]// /}")
   fi
 fi
 
@@ -135,7 +136,7 @@ done
 
 verdict=pass
 (( ${#failures} == 0 )) || verdict=FAIL
-echo "| $(date +%Y-%m-%d\ %H:%M) | $sha | $MODE | ${value[launchMs]} | ${value[searchFieldMs]} | ${value[hitchMsPerS]} | ${value[galleryMs]} | ${value[swipeMs]} | $verdict |" >> $LOG
+echo "| $(date +%Y-%m-%d\ %H:%M) | $sha | $MODE | ${value[launchMs]} | ${value[searchFieldMs]} | ${value[hitchMsPerS]} | ${value[galleryMs]} | ${value[swipeMs]} | ${value[lastTabMs]} | $verdict |" >> $LOG
 echo "logged to $LOG; results: $result"
 
 if (( ${#failures} )); then

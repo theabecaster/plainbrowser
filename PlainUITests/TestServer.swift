@@ -104,6 +104,12 @@ final class TestServer: @unchecked Sendable {
         switch path {
         case "/a":
             return ("200 OK", html("Plain Test A", "<h1>Page A</h1><p><a href=\"/b\">Go to B</a></p>"))
+        case "/opener":
+            // A link that opens a new tab, and an ordinary one (the link menu's preview).
+            let paragraphs = (1...30).map { "<p>Line \($0) of the page that opens a new tab.</p>" }
+            return ("200 OK", html("Plain Opener", "<h1>Opener Page</h1>"
+                + "<p><a id=\"newtab\" href=\"/b\" target=\"_blank\">Open B in a new tab</a></p>"
+                + "<p><a id=\"plain\" href=\"/long\">Read the long page</a></p>" + paragraphs.joined()))
         case "/b":
             return ("200 OK", html("Plain Test B", "<h1>Page B</h1>"))
         case "/c":

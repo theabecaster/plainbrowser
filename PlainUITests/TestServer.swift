@@ -10,6 +10,8 @@ import Network
 /// - `/count`: "Load N", where N counts this page's loads (pull to refresh reloads it).
 /// - `/long`: a long article, for scrolling and the toolbar collapse.
 /// - `/footer`: a long page with a `position: fixed` footer, for the page's bottom inset.
+/// - `/fixed-header`, `/sticky-header`, `/dark-header`: long pages with a fixed, a sticky, and a
+///   dark page's fixed black header, for the top bar's inset on the Duo's inner screen.
 /// - `/ua`: "Desktop UA" or "Mobile UA", from the request's user agent (Desktop Site).
 /// - `/blocking`: "Ad blocked" or "Ad loaded", whether `/jquery.overlayad.js` (an EasyList rule
 ///   that matches any site) was blocked.
@@ -127,6 +129,25 @@ final class TestServer: @unchecked Sendable {
             let footer = "<div style=\"position:fixed;left:0;right:0;bottom:0;padding:14px 20px;"
                 + "background:#2973FF;color:#fff;font-weight:600\">Fixed Footer</div>"
             return ("200 OK", html("Plain Footer", "<h1>Footer Page</h1>" + paragraphs.joined() + "<p>End of page.</p>" + footer))
+        case "/fixed-header", "/sticky-header", "/dark-header":
+            // Long pages with a header like most news and shop sites have: `position: fixed`
+            // (the body leaves room for it), `position: sticky`, and a dark page with a fixed
+            // black header. On the Duo's inner screen WebKit fills an obscured top inset above
+            // such a header with its color; the top bar's inset must leave no such band.
+            let fixed = path != "/sticky-header"
+            let dark = path == "/dark-header"
+            let color = dark ? "#000" : fixed ? "#C0392B" : "#1F6F43"
+            let name = dark ? "Dark Header Page" : fixed ? "Fixed Header Page" : "Sticky Header Page"
+            let header = "<header style=\"position:\(fixed ? "fixed" : "sticky");top:0;left:0;right:0;height:56px;"
+                + "background:\(color);color:#fff;font-weight:700;display:flex;align-items:center;padding:0 16px;"
+                + "z-index:2\">\(fixed ? "Fixed" : "Sticky") Header</header>"
+            let paragraphs = (1...60).map {
+                "<p>Line \($0). A header that stays at the top is fine; a band of its color above it is not.</p>"
+            }
+            let css = "body{margin:0;background:\(dark ? "#121212" : "#fff");color:\(dark ? "#eee" : "#222")}"
+                + "main{padding:\(fixed ? "56px" : "0") 16px 0}"
+            return ("200 OK", styled("Plain \(name)", css, header + "<main><h1>\(name)</h1><p>First line of the page.</p>"
+                + paragraphs.joined() + "<p>End of page.</p></main>"))
         case "/light-site", "/light-site-2":
             // A site designed only in light: white page, a colored header, a grey card, pictures,
             // an emoji. Dark pages darkens it while Plain is dark.

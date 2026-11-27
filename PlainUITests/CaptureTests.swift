@@ -670,6 +670,71 @@ final class CaptureTests: XCTestCase {
         shot("reveal-2-scroll-up")
     }
 
+    /// The Duo inner screen's top bar over pages with a fixed, a sticky, a dark page's and no
+    /// header: at rest (no band of the header's color behind the controls, the first line under
+    /// them), read part way (the pill, then hidden), revealed mid-page, back at the top, and back
+    /// from another page. Each step follows a 2 s still, so a screen recording of the inner
+    /// display made alongside (`simctl io recordVideo --display=<id>`) gives a frame strip of
+    /// every collapse and reveal; `XCUIScreen.main` is the outer screen there, so the attachments
+    /// only mark each step's time in the log. Pass the
+    /// device's status corner with `TEST_RUNNER_PLAIN_STATUS_CORNER=828,24,100,45` on the
+    /// simulator; it skips unless the window is the inner screen in landscape.
+    func testCaptureTopBarOverHeaders() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.introSeen()
+        if let corner = ProcessInfo.processInfo.environment["PLAIN_STATUS_CORNER"] {
+            app.launchArguments += ["-PlainStatusCorner", corner]
+        }
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 20))
+        try XCTSkipUnless(app.windows.firstMatch.frame.width >= 900, "needs the Duo's inner screen in landscape")
+        let webView = app.webViews.firstMatch
+        func open(_ path: String, _ heading: String) {
+            if !(field.exists && field.hasKeyboardFocus) {
+                app.buttons["addressPill"].tap()
+                XCTAssertTrue(field.waitForExistence(timeout: 2))
+            }
+            field.typeText(server.address(path) + "\n")
+            XCTAssertTrue(webView.staticTexts[heading].waitForExistence(timeout: 10))
+            pause(2)
+        }
+        func drag(_ from: CGFloat, _ to: CGFloat) {
+            let start = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from))
+            let end = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        for (path, heading, name) in [
+            ("/fixed-header", "Fixed Header Page", "fixed"), ("/sticky-header", "Sticky Header Page", "sticky"),
+            ("/dark-header", "Dark Header Page", "dark"), ("/long", "Long Read", "none"),
+        ] {
+            open(path, heading)
+            shot("\(name)-1-rest")
+            drag(0.6, 0.45)
+            pause(2)
+            shot("\(name)-2-pill")
+            webView.swipeUp(velocity: .slow)
+            pause(2)
+            shot("\(name)-3-hidden")
+            drag(0.4, 0.55)
+            pause(2)
+            shot("\(name)-4-revealed")
+            for _ in 0..<4 { webView.swipeDown(velocity: .fast) }
+            pause(2)
+            shot("\(name)-5-top")
+        }
+        // Back to a page with a fixed header from another page: restored at its top, as it was.
+        open("/fixed-header", "Fixed Header Page")
+        open("/b", "Page B")
+        app.buttons["back"].tap()
+        XCTAssertTrue(webView.staticTexts["Fixed Header Page"].waitForExistence(timeout: 10))
+        pause(2)
+        shot("fixed-6-back")
+    }
+
     /// The page menu on a readerable page, a foreign page, and a readerable foreign page with a
     /// closed tab to reopen (its tallest common state), for the fit on the Duo's outer screen.
     func testCapturePageMenuStates() throws {

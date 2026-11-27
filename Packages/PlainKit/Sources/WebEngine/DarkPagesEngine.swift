@@ -486,10 +486,11 @@ extension DarkPages {
             for (const longhand of longhands) if (longhand !== 'background-image') write(longhand, color, important, role);
             continue;
           }
-          // One variable holding more than a color (a gradient, a whole border): a background
-          // gets it as its picture; any other shorthand is repeated whole, its only part.
+          // One variable holding a gradient: a background gets it as its picture. (A variable
+          // holding a whole border is left: repeating the shorthand would reset widths a later
+          // rule sets.)
           const only = /^var\(\s*(--[\w-]+)\s*(?:,[^]*)?\)$/.exec(v.trim());
-          if (only && kinds.get(only[1]) === 3) write(p === 'background' ? 'background-image' : p, v, important, role);
+          if (p === 'background' && only && kinds.get(only[1]) === 3) write('background-image', v, important, role);
         }
       }
       return { out, emit, changed };
@@ -605,7 +606,13 @@ extension DarkPages {
                 if (!stats.unreadable++ && built) rewalk();
               });
     };
-    const signature = (s, rules) => rules.length + '|' + (s.media ? s.media.mediaText : '') + '|' + (s.ownerNode && s.ownerNode.localName === 'style' ? s.ownerNode.textContent.length : '');
+    // What tells a changed sheet: its rule count, media, and the size of its first and last
+    // rules (a sheet replaced whole, a <style> given new text).
+    const signature = (s, rules) => {
+      const n = rules.length;
+      return n + '|' + (s.media ? s.media.mediaText : '') + '|' + (n ? rules[0].cssText.length + ':' + rules[n - 1].cssText.length : '')
+        + '|' + (s.ownerNode && s.ownerNode.localName === 'style' ? s.ownerNode.textContent.length : '');
+    };
     const pageSheets = () => {
       const list = [];
       for (const s of document.styleSheets) if (!s.disabled) list.push(s);
@@ -654,7 +661,10 @@ extension DarkPages {
           if (twin.version === kindsVersion) continue;
           let stale = false;
           for (const name of twin.unknown) if (kinds.has(name)) { stale = true; break; }
-          if (stale) { twinFor(s, rules); again = true; } else twin.version = kindsVersion;
+          if (!stale) { twin.version = kindsVersion; continue; }
+          if (now() > deadline) { sheetsDirty = true; later(); continue; }
+          twinFor(s, rules);
+          again = true;
         }
         if (!again) break;
       }
@@ -1068,6 +1078,7 @@ extension DarkPages {
     const changedElements = new Set();
     const inlineSeen = new WeakMap();
     const classRechecks = new WeakMap();
+    const trailingRecheck = new WeakSet();
     // The color part of an element's inline style, to tell a color change from an animation.
     const inlineColors = (el) => {
       const text = el.getAttribute('style') || '';
@@ -1091,19 +1102,25 @@ extension DarkPages {
         sheetsDirty = false;
         if (dirty || sheetsChanged()) timed(() => syncSheets(2 * SLICE_MS), 'rewriteMs');
       }
-      for (const el of changedElements) {
+      for (let el of changedElements) {
         if (!el.isConnected) continue;
+        // A shape is fixed from its SVG as a whole: the SVG gets the look.
+        if (el.ownerSVGElement) { const svg = el.closest('svg'); if (svg) el = svg; }
+        // Everything below it was judged against its old colors: all of it gets another look.
+        // In a small subtree (a component) the fixes come off first, so the new styles are
+        // read as the site wrote them; on a large one (a theme class on the body) they stay
+        // until replaced, so nothing flashes, and the new look adds to them.
+        const below = el.getElementsByTagName('*');
+        const fresh = below.length < 300;
         if (el.hasAttribute(ATTR)) el.removeAttribute(ATTR);
         seen.delete(el);
         info.delete(el);
-        // Fixes below it were made against its old colors: they get another look too.
-        for (const d of el.querySelectorAll('[' + ATTR + ']')) {
-          d.removeAttribute(ATTR);
+        above.delete(el);
+        for (const d of below) {
+          if (fresh && d.hasAttribute(ATTR)) d.removeAttribute(ATTR);
           seen.delete(d);
           info.delete(d);
-          // Shapes are fixed from their SVG as a whole: that SVG gets the look.
-          const svg = d.closest('svg');
-          if (svg) seen.delete(svg);
+          above.delete(d);
         }
         queue.unshift(el);
         stats.rechecked++;
@@ -1145,8 +1162,13 @@ extension DarkPages {
             } else if (r.attributeName !== 'class') changedElements.add(t);
             else if (stats.unreadable || t.hasAttribute(ATTR) || t.querySelector('[' + ATTR + ']')) {
               // At most once a second per element: some pages toggle classes every frame.
-              const last = classRechecks.get(t) || -1e9;
-              if (now() - last > 1000) { classRechecks.set(t, now()); changedElements.add(t); }
+              // with one last look when the burst is over.
+              const wait = 1000 - (now() - (classRechecks.get(t) || -1e9));
+              if (wait <= 0) { classRechecks.set(t, now()); changedElements.add(t); }
+              else if (!trailingRecheck.has(t)) {
+                trailingRecheck.add(t);
+                setTimeout(() => { trailingRecheck.delete(t); classRechecks.set(t, now()); changedElements.add(t); later(); }, wait);
+              }
             }
           }
         }
@@ -1283,7 +1305,10 @@ extension DarkPages {
     // whatever the page adds later.
     let built = false;
     // Every element looked at again (fixes kept until each is checked, so nothing flashes).
-    const rewalk = () => {
+    // `clean`: the fixes come off first (back on after being off, when the page may have
+    // changed under them); the top of the page is redone at once so nothing shows undone.
+    const rewalk = (clean) => {
+      if (clean) for (const el of document.querySelectorAll('[' + ATTR + ']')) el.removeAttribute(ATTR);
       seen = new WeakSet();
       walk = null;
       queue = [document.documentElement];
@@ -1315,7 +1340,7 @@ extension DarkPages {
           const text = BASE + (noBackground ? `html { background-color: ${PAGE_BG_CSS}; }` : '');
           if (base.cssRules.length !== (noBackground ? 2 : 1)) base.replaceSync(text);
           setEnabled(true);
-          if (!built) { built = true; build(); } else if (rewalkNeeded) { rewalkNeeded = false; rewalk(); }
+          if (!built) { built = true; build(); } else if (rewalkNeeded) { rewalkNeeded = false; rewalk(true); timed(() => { step(now() + FIRST_MS); write(); }, 'patchMs'); }
           if (stats.firstDark < 0) stats.firstDark = now();
         } else if (enabled) {
           setEnabled(false);

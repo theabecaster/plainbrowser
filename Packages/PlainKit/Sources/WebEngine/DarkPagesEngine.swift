@@ -228,7 +228,23 @@ extension DarkPages {
     // shadows, and color variables (pointed at the role's twin, the original as fallback).
     // `ctx.unknown` collects variables used here that aren't known colors yet; `ctx.found` is set
     // when the value holds a color at all.
+    // Values without variables repeat across a site's rules (the same few colors thousands of
+    // times), so their rewrites are kept.
+    const scanCache = new Map();
     const scan = (v, role, ctx) => {
+      if (v.includes('var(')) return scanValue(v, role, ctx);
+      const key = role + v;
+      let hit = scanCache.get(key);
+      if (hit === undefined) {
+        const probe = { found: false };
+        hit = [scanValue(v, role, probe), probe.found];
+        if (scanCache.size > 20000) scanCache.clear();
+        scanCache.set(key, hit);
+      }
+      if (hit[1] && ctx) ctx.found = true;
+      return hit[0];
+    };
+    const scanValue = (v, role, ctx) => {
       let out = '';
       let i = 0;
       const n = v.length;
@@ -391,6 +407,12 @@ extension DarkPages {
       ((p === 'background-clip' || p === '-webkit-background-clip') && v.includes('text'))
       || ((p === 'mask-image' || p === '-webkit-mask-image' || p === 'mask' || p === '-webkit-mask') && v !== 'none' && !v.startsWith('linear-gradient')));
     const NONE = { out: '', emit: false };
+    let schemeDark = false;
+    const rootRule = (r) => {
+      try {
+        return document.documentElement.matches(r.selectorText) || (!!document.body && document.body.matches(r.selectorText));
+      } catch (e) { return false; }
+    };
 
     // The rewritten declarations of one style block: { out, emit }. Every color declaration is
     // repeated (unchanged ones too), so twins compete with each other exactly as the originals
@@ -407,7 +429,12 @@ extension DarkPages {
         let v = scan(value, role, ctx);
         if (v !== value) changed = true;
         if (ctx.base && v.includes('url(')) v = absolute(v, ctx.base);
-        out += prop + ':' + v + (force || important ? ' !important' : '') + ';';
+        const bang = force || important ? ' !important' : '';
+        out += prop + ':' + v + bang + ';';
+        // The site's own text and background colors travel with the twins' (custom properties
+        // inherit like color does), so the judgement and text over pictures can read them.
+        if (prop === 'color') out += '--plain-o-color:' + value + bang + ';';
+        else if (prop === 'background-color' && role === 'b') out += '--plain-o-bg:' + value + bang + ';';
       };
       for (const [p, v, important] of list) {
         if (p.charCodeAt(0) === 45 && p.charCodeAt(1) === 45) {
@@ -423,6 +450,11 @@ extension DarkPages {
           changed = true;
           continue;
         }
+        if (p === 'color-scheme') {
+          // A dark color-scheme on the root or body is a dark design of the site's own.
+          if (/\b(dark|only)\b/.test(v) && ctx.rule && rootRule(ctx.rule)) schemeDark = true;
+          continue;
+        }
         const longhands = LONGHANDS[p];
         let role = longhands ? shorthandRole(p) : roleOf(p);
         if (!role) continue;
@@ -431,13 +463,7 @@ extension DarkPages {
           if (foreground) role = 'f';
         }
         emit = true;
-        if (!longhands) {
-          write(p, v, important, role);
-          // The site's own text color travels with it (inherited like color), so text found
-          // over a picture can get it back.
-          if (p === 'color') out += '--plain-o-color:' + v + (force || important ? ' !important' : '') + ';';
-          continue;
-        }
+        if (!longhands) { write(p, v, important, role); continue; }
         let any = false;
         for (const longhand of longhands) {
           const value = st.getPropertyValue(longhand);
@@ -462,6 +488,7 @@ extension DarkPages {
         const r = rules[i];
         ctx.count++;
         if (r.type === 1) {
+          ctx.rule = r;
           const d = r.style.length ? declarations(r.style, ctx, false) : null;
           const nested = r.cssRules && r.cssRules.length ? rewriteRules(r.cssRules, ctx) : '';
           if ((d && d.emit) || nested) out += r.selectorText + '{' + (d && d.emit ? d.out : '') + nested + '}';
@@ -1038,7 +1065,22 @@ extension DarkPages {
         attributeFilter: ['style', 'class', 'bgcolor', 'color', 'fill', 'stroke', 'media', 'disabled', 'rel'],
       });
       // A style sheet's load event doesn't bubble; captured here, it brings the sheet in at once.
-      document.addEventListener('load', (e) => { if (e.target && e.target.localName === 'link') { sheetsDirty = true; later(); } }, true);
+      // A picture that loads late (lazy images) may now lie under text checked before it had a
+      // size: that text gets another look.
+      document.addEventListener('load', (e) => {
+        const t = e.target;
+        if (!t || !t.localName) return;
+        if (t.localName === 'link') { sheetsDirty = true; later(); return; }
+        if (t.localName !== 'img' || !enabled) return;
+        pictures = null;
+        const r = t.getBoundingClientRect();
+        if (r.width < 120 || r.height < 80) return;
+        let a = t.parentElement;
+        for (let i = 0; a && i < 6 && !/\S/.test(a.textContent); i++) a = a.parentElement;
+        if (!a || a === document.body || a === document.documentElement) return;
+        for (const el of a.querySelectorAll('*')) if (seen.has(el) && hasText(el)) changedElements.add(el);
+        later();
+      }, true);
     };
 
     // A page that replaces its adopted style sheets, or adds rules with insertRule, changes no
@@ -1109,13 +1151,6 @@ extension DarkPages {
       return false;
     };
 
-    // Runs `work` with Plain's sheets off, so only the page's own colors count.
-    const asMade = (work) => {
-      const all = [guard, base, patch, ...[...twins.values()].map((t) => t.sheet)];
-      const was = all.map((s) => s.disabled);
-      for (const s of all) s.disabled = true;
-      try { return work(); } finally { all.forEach((s, i) => { s.disabled = was[i]; }); }
-    };
     // 'native' when the page has a dark design, asks never to be darkened, is already dark,
     // or shows a background color Plain can't read; 'darken' when its background is light.
     let noBackground = false;
@@ -1123,28 +1158,43 @@ extension DarkPages {
       const meta = document.querySelector('meta[name="color-scheme" i]');
       return /\b(dark|only)\b/.test((meta && meta.content) || '') || hasDarkRules();
     };
+    // The page's own background on `el`. A twin that set it carries the site's value in
+    // --plain-o-bg, so it reads right with the twins on.
+    const ownBackground = (el) => {
+      const cs = getComputedStyle(el);
+      const c = parseColor(cs.backgroundColor);
+      const o = cs.getPropertyValue('--plain-o-bg').trim();
+      const original = o && parseColor(o);
+      if (original && c && c[3] > 0 && Math.abs(original[3] - c[3]) < 0.01 && close(mapRGBA('b', original), c)) return original;
+      return c;
+    };
+    const BASE = ':root { color-scheme: dark !important; }';
+    // The twins are built first (style sheets only, no style pass) and the page is read with
+    // them on, so judging costs no style pass beyond the one the darkened first frame needs. A
+    // page found native switches them off again in `render`.
     const judge = () => timed(() => {
       if (declaresDark()) return 'native';
-      return asMade(() => {
-        const root = getComputedStyle(document.documentElement);
-        if (/\b(dark|only)\b/.test(root.colorScheme)) return 'native';
-        let color = parseColor(root.backgroundColor);
-        const rootEmpty = !!color && color[3] < 0.5;
-        if (rootEmpty && document.body) color = parseColor(getComputedStyle(document.body).backgroundColor);
-        if (!color) return 'native';
-        noBackground = color[3] < 0.5;
-        // No background of its own: the page shows on the browser's white canvas.
-        return (noBackground ? 1 : luminance(color)) >= LIGHT ? 'darken' : 'native';
-      });
+      timed(syncSheets, 'rewriteMs');
+      if (schemeDark || /\b(dark|only)\b/.test(document.documentElement.style.colorScheme || '')) return 'native';
+      if (base.cssRules.length !== 1) base.replaceSync(BASE);
+      guard.disabled = true;
+      setEnabled(true);
+      let color = ownBackground(document.documentElement);
+      if (color && color[3] < 0.5 && document.body) color = ownBackground(document.body);
+      if (!color) return 'native';
+      noBackground = color[3] < 0.5;
+      // No background of its own: the page shows on the browser's white canvas.
+      return (noBackground ? 1 : luminance(color)) >= LIGHT ? 'darken' : 'native';
     }, 'judgeMs');
 
-    // Darkens the page now: the sheets' twins, then the top of the document, the rest in idle
-    // time.
+    // Darkens the page now: the top of the document in this frame, the rest in idle time, and
+    // whatever the page adds later.
+    let built = false;
     const build = () => {
-      base.replaceSync(':root { color-scheme: dark !important; }' + (noBackground ? `html { background-color: ${PAGE_BG_CSS}; }` : ''));
-      timed(syncSheets, 'rewriteMs');
+      const t0 = now();
       if (!queue.length && !walk && document.documentElement && !seen.has(document.documentElement)) queue.push(document.documentElement);
       timed(() => { step(now() + FIRST_MS); write(); }, 'patchMs');
+      if (!stats.firstFrame) stats.firstFrame = { judge: stats.judgeMs, rewrite: stats.rewriteMs, elements: now() - t0, checked: stats.checked };
       pump();
       watch();
       keep();
@@ -1160,11 +1210,13 @@ extension DarkPages {
       } else {
         guard.disabled = true;
         const on = active && verdict === 'darken';
-        if (on && !enabled) {
+        if (on) {
+          const text = BASE + (noBackground ? `html { background-color: ${PAGE_BG_CSS}; }` : '');
+          if (base.cssRules.length !== (noBackground ? 2 : 1)) base.replaceSync(text);
           setEnabled(true);
-          build();
+          if (!built) { built = true; build(); } else { sheetsDirty = true; later(); }
           if (stats.firstDark < 0) stats.firstDark = now();
-        } else if (!on && enabled) setEnabled(false);
+        } else if (enabled) setEnabled(false);
       }
       post(!dark.matches ? 'inactive' : off ? '\#(DarkPagesState.offForSite.rawValue)'
         : verdict === 'darken' ? 'darkened' : verdict === 'native' ? 'native' : 'inactive');
@@ -1241,11 +1293,12 @@ extension DarkPages {
       bench(runs) {
         const parts = { judge: 0, rewrite: 0, elements: 0 };
         for (let i = 0; i < runs; i++) {
-          let t = now(); judge(); parts.judge += now() - t;
-          t = now();
+          let t = now();
           for (const twin of twins.values()) twin.signature = '';
           kinds.clear(); kindsVersion++;
           syncSheets(); parts.rewrite += now() - t;
+          // Sheets unchanged now: the judgement is its checks and the style pass it reads.
+          t = now(); judge(); parts.judge += now() - t;
           t = now();
           seen = new WeakSet(); queue = [document.documentElement]; walk = null;
           step(Infinity); write(); parts.elements += now() - t;

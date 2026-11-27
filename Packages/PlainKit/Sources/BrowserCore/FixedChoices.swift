@@ -129,7 +129,7 @@ public enum FixedChoices {
     /// styles, legacy color attributes, sheets from another origin, icons, contrast fixes). The
     /// page's top is first in the document, so this covers the visible area; the rest is done in
     /// idle slices of `darkPagesSliceBudget`, which never hold a frame.
-    public static let darkPagesFirstFrameBudget = 8.0
+    public static let darkPagesFirstFrameBudget = 4.0
     public static let darkPagesSliceBudget = 5.0
     /// An inline SVG with a fill or stroke at least this colorful (0 grey, 1 a pure hue) is a
     /// logo or an illustration and keeps its colors; one in greys is an icon that flips with the

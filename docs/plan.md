@@ -15,11 +15,33 @@ Correction from research: Arc Search was not fully pulled from iOS. Its AI featu
 
 The build fails if a budget is broken. Budgets are measured on the Duo, never the simulator.
 
+The perf gate's budgets (target = the best realistic number, fail = a regression guard; reasons
+in `perf/budgets.json`, sources in `docs/research/perf-goals.md`). On top of `fail`, a device run
+fails when a metric is more than 10% (or one frame) worse than its best in the last 5 passing
+device rows.
+
+| Metric | Target | Fail | How measured |
+|---|---|---|---|
+| Cold launch, `main` to first frame | 150 ms | 300 ms | `launch.firstFrame` signpost |
+| Cold launch to a focused search field | 150 ms | 300 ms | `launch` signpost |
+| Cold launch with the last tab on the first frame | 150 ms | 300 ms | `launch.firstFrame` signpost |
+| Hitch ratio, scrolling a page | 0 ms/s | 5 ms/s | `XCTHitchMetric` |
+| Hitch ratio, scrolling a large page with dark pages | 0 ms/s | 10 ms/s | `XCTHitchMetric` |
+| Tabs button to gallery settled | 610 ms | 750 ms | `gallery.show` signpost |
+| Gallery card tap to page settled | 610 ms | 750 ms | `gallery.openTab` signpost |
+| Bar swipe, finger lift to page settled | 320 ms | 600 ms | `tab.swipeSettle` signpost |
+| Address pill tap to keyboard at rest | 510 ms | 600 ms | `urlBar.ready` signpost (the system keyboard's 0.5 s rise inside) |
+| New Tab to keyboard at rest | 510 ms | 600 ms | `tab.newReady` signpost |
+| Keystroke to local suggestions | 8.3 ms | 50 ms | `search.suggestions` signpost |
+| Link tap to next page's first paint (local page) | 100 ms | 200 ms | the pages' Paint Timing |
+| App memory with 10 tabs | 60 MB | 150 MB | `XCTMemoryMetric`, absolute footprint |
+
+Other budgets, not yet in the gate:
+
 | Metric | Budget | How measured |
 |---|---|---|
-| Cold launch to a focused search field | < 300 ms target, fail at 400 ms | `XCTApplicationLaunchMetric` + signpost when the field becomes first responder |
-| Hitch ratio (scroll, tab gallery, transitions) | < 5 ms/s, fail at 10 ms/s | `XCTHitchMetric`, `XCTOSSignpostMetric`, `xctrace` Animation Hitches |
-| Frame rate | 120 Hz on all motion | `CADisableMinimumFrameDurationOnPhone` is set. No `CAFrameRateRange` exists yet: add `CAFrameRateRange(80,120,120)` where a display link drives big motion, and verify 120 Hz on the Duo with the Animation Hitches trace. |
+| Hitch ratio, tab gallery and transitions | < 5 ms/s, fail at 10 ms/s | `XCTOSSignpostMetric`, `xctrace` Animation Hitches |
+| Frame rate | 120 Hz on all native motion (WebKit holds page content near 60 Hz) | `CADisableMinimumFrameDurationOnPhone` is set. No `CAFrameRateRange` exists yet: add `CAFrameRateRange(80,120,120)` where a display link drives big motion, and verify 120 Hz on the Duo with the Animation Hitches trace. |
 | Omnibox query on 100k history rows | p95 < 16 ms | unit perf test |
 | Tap-to-visual-response | same frame | no async hop before the first visual change |
 | App memory per discarded tab | < 1 MB | `XCTMemoryMetric` |

@@ -165,6 +165,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             controller.view.setNeedsLayout()
         }
         data.onSettingsChange = { [weak self] in self?.settingsDidChange() }
+        observeAppearance()
 
         tabsUI.swipe.browser = self
         tabsUI.swipe.install(on: [pill, buttonBar])

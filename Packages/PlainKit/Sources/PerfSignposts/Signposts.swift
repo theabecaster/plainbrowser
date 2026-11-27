@@ -30,8 +30,10 @@ public enum Signposts {
     public static let historyClear: StaticString = "history.clear"
     /// Interval: Settings > Clear History and Data confirmed, until the data is cleared.
     public static let clearBrowsingData: StaticString = "settings.clearData"
-    /// Event: the user changed a setting (search engine, tab layout or archive interval).
+    /// Event: the user changed a setting (search engine, tab layout, archive interval or appearance).
     public static let settingsChange: StaticString = "settings.change"
+    /// Event: a window crossfades to new colors (Settings > Appearance).
+    public static let appearanceChange: StaticString = "settings.appearance"
     /// Event: the user opened a page from History.
     public static let historyOpen: StaticString = "history.open"
     /// Interval: deleting a page from History, until it is gone from the store.
@@ -70,6 +72,8 @@ public enum Signposts {
     public static let findOnPage: StaticString = "page.find"
     public static let copyLink: StaticString = "page.copyLink"
     public static let desktopSite: StaticString = "page.desktopSite"
+    /// Event: Turn Off / Turn On Dark Pages for This Site in the page menu.
+    public static let darkPagesToggle: StaticString = "page.darkPages"
     /// Event: Add to Favorites or Remove from Favorites in the page menu.
     public static let favoriteToggle: StaticString = "page.favorite"
 

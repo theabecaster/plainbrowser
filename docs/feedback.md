@@ -4,8 +4,6 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
-- **URL bar should get out of the way while reading:** scrolling a page collapses the bar to the pill, but the pill never leaves. Keep reading and the bar should disappear and let the page have the screen, and come back the moment it is wanted. (Scroll chrome lane.)
-
 - **Launch with tabs feels empty:** open to the last tab (or a search with the last tab behind it), like Arc but smoother. (Launch lane.)
 
 
@@ -13,6 +11,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 
 ## Done
+
+- **URL bar should get out of the way while reading:** keep reading past the pill and the bar sinks away, leaving the whole page; a move up, a tap on the bottom edge or the status bar, the page's end, a new page, Find or a page's keyboard brings it back whole. Never hidden while a page loads, on error pages or with VoiceOver. On the Duo's inner screen the top bar's tucked address rises away the same way. (dev, scroll chrome lane.)
 
 - **Duo inner screen: chrome takes too much space, portrait bottom menu looks broken — follow Safari on iPhone Duo:** done the Safari way. On the inner screen the system's side column is off and one top bar sits under the status bar in both orientations: Back and Forward on the left, the address in the middle, Tabs, Share and More on the right; the page gets the full width under it. There is no bottom menu on the inner screen any more. Tabs (Tab Layout Above, now the default) are a slim strip under the bar from the second tab, with short titles; Left and Right are a thinner 52 pt rail. While reading, the bar shrinks to the address and the strip hides. The page shows 89% of the landscape screen with one tab (was 76%), 83% with the strip, 91% while reading; portrait 88–94% (was 80%). The outer screen is unchanged. (dev, Duo layout lane; to check on the device, see the polish backlog.)
 

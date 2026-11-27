@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Swipe up with one tab:** dragging the bar up with a single page opens the switcher with that card and a clear way to add a new tab, as in Arc. (One-tab lane.)
+
 - **Appearance:** Settings choice of System (default), Light or Dark, saved; sites follow it, and pages without a dark mode get darkened like Safari's new auto dark mode, with a per-site off switch. (Appearance lane.)
 
 - **Paper texture:** a subtle, elegant paper texture on the app's own surfaces, never costing frames or quality, never called out in the UI. (Paper lane.)

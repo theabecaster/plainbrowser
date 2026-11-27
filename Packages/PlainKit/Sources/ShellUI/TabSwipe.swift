@@ -196,6 +196,9 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         Paper.apply(to: swipe.preview)
         swipe.preview.bounds = browser.webContainer.bounds
         swipe.preview.center = browser.webContainer.center
+        // Hidden until the finger picks a side (`apply`): over the page and untransformed, the
+        // empty preview would blank it for the frame or two before the first move arrives.
+        swipe.preview.isHidden = true
         browser.pageClip.insertSubview(swipe.preview, aboveSubview: browser.webContainer)
         self.swipe = swipe
         Haptic.selection.prepare()

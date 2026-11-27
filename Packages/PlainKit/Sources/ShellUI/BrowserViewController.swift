@@ -1472,9 +1472,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if rules.readLater, let isSaved = marks?.isSaved {
             keep.append(readLaterMenuItem(for: tab, url: url, isSaved: isSaved))
         }
-        let siteItems = siteMenuItems(
+        var siteItems = siteMenuItems(
             for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
         )
+        // The permissions the site asked for, with what iOS allows (Off in Settings).
+        if !siteItems.isEmpty { siteItems += sitePermissionMenuItems(for: tab) }
         if siteItems.count > 1, let host = url.host() {
             // Desktop Site, blocking, cookie banners and dark pages: set once per site, then remembered.
             let site = UIMenu(

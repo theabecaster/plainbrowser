@@ -108,6 +108,16 @@ public struct SummaryBudgets: Sendable {
         endSignposts(.cancelled)
     }
 
+    /// Ends a run that can't go on (Apple Intelligence became unavailable on the way): it stops
+    /// like `cancel()`, then shows `failure`'s one line in place of what was being written.
+    public func end(with failure: SummaryFailure) {
+        guard task != nil else { return }
+        cancel()
+        progress.draft = SummaryDraft()
+        progress.stage = .failed(failure)
+        onProgress(progress)
+    }
+
     /// Waits for the run to finish (tests).
     public func finished() async {
         await task?.value
@@ -324,6 +334,7 @@ public struct SummaryBudgets: Sendable {
         case .declined: .declined
         case .unsupportedLanguage: .unsupportedLanguage
         case .unavailable: .unavailable
+        case .busy: .busy
         default: .failed
         }
     }

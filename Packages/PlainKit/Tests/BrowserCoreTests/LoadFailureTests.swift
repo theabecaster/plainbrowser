@@ -30,5 +30,9 @@ import Testing
         // WebKit refuses restricted ports (9, 25, ...) itself.
         #expect(LoadFailure(domain: "WebKitErrorDomain", code: 103) == .blockedPort)
         #expect(LoadFailure(domain: "WebKitErrorDomain", code: 103).message == "Plain doesn't open pages on this port.")
+        // Screen Time's and content filters' blocks.
+        #expect(LoadFailure(domain: "WebKitErrorDomain", code: 104) == .restricted)
+        #expect(LoadFailure(domain: "WebKitErrorDomain", code: 106) == .restricted)
+        #expect(LoadFailure.restricted.message == "This site is restricted on this iPhone.")
     }
 }

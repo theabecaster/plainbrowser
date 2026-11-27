@@ -23,6 +23,10 @@ public enum LoadFailure: Equatable, Sendable {
     /// A port the engine never opens (WebKit's restricted ports: 9, 25 and the like), so the
     /// request never leaves the device.
     case blockedPort
+    /// Screen Time or a content filter blocked the site (WebKit's FrameLoadBlockedByContentFilter,
+    /// 104, and FrameLoadBlockedByRestrictions, 106). Where the filter has a page of its own,
+    /// WebKit loads it next, which clears this one.
+    case restricted
     /// Anything else.
     case other
 
@@ -33,6 +37,10 @@ public enum LoadFailure: Equatable, Sendable {
         let networkDomains: Set<String> = [NSURLErrorDomain, "kCFErrorDomainCFNetwork"]
         if domain == Self.webKitDomain, code == Self.webKitRestrictedPort {
             self = .blockedPort
+            return
+        }
+        if domain == Self.webKitDomain, Self.webKitContentFilter.contains(code) {
+            self = .restricted
             return
         }
         guard networkDomains.contains(domain), let failure = Self.network(code) else {
@@ -50,6 +58,8 @@ public enum LoadFailure: Equatable, Sendable {
     /// (`WebKitErrorCannotUseRestrictedPort`).
     static let webKitDomain = "WebKitErrorDomain"
     static let webKitRestrictedPort = 103
+    /// WebKit's content filter and restrictions codes (Screen Time, parental controls).
+    static let webKitContentFilter: Set<Int> = [104, 106]
 
     private static func network(_ code: Int) -> LoadFailure? {
         switch code {
@@ -91,6 +101,7 @@ public enum LoadFailure: Equatable, Sendable {
         case .redirectLoop: "This site keeps redirecting."
         case .badResponse: "The site sent something Plain can't show."
         case .blockedPort: "Plain doesn't open pages on this port."
+        case .restricted: "This site is restricted on this iPhone."
         case .other: "Plain couldn't open this page."
         }
     }

@@ -467,6 +467,10 @@ nonisolated struct LaunchOptions: Sendable {
     /// `-PlainSeedHistory`: a few visited pages, for screenshots of the focused address bar.
     /// Debug builds only.
     var seedHistory = false
+    /// `-PlainSeedSitePermissions <site> camera=true,location=false`: remembered answers for one
+    /// site (an origin such as `http://localhost:8080`), for UI tests and screenshots of Site
+    /// Settings: a local page can't reach WebKit's prompts (they need a secure page). Debug only.
+    var seedSitePermissions: (site: String, answers: [(String, Bool)])?
     /// `-PlainTestStore`: a database and tab state on disk in a temporary folder that survives
     /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. The perf
     /// tests start each launch from an empty session this way, on disk like the real store. The
@@ -481,6 +485,14 @@ nonisolated struct LaunchOptions: Sendable {
         seedFavorites = arguments.contains("-PlainSeedFavorites")
         seedArchive = arguments.contains("-PlainSeedArchive")
         seedHistory = arguments.contains("-PlainSeedHistory")
+        if let index = arguments.firstIndex(of: "-PlainSeedSitePermissions"), arguments.indices.contains(index + 2) {
+            let answers = arguments[index + 2].split(separator: ",").compactMap { pair -> (String, Bool)? in
+                let parts = pair.split(separator: "=")
+                guard parts.count == 2 else { return nil }
+                return (String(parts[0]), parts[1] == "true")
+            }
+            seedSitePermissions = (arguments[index + 1], answers)
+        }
         if let index = arguments.firstIndex(of: "-PlainAwayOffset"), arguments.indices.contains(index + 1) {
             awayOffset = TimeInterval(arguments[index + 1]) ?? 0
         }
@@ -525,6 +537,11 @@ nonisolated struct LaunchOptions: Sendable {
     }
 
     @concurrent func seed(_ database: AppDatabase) async {
+        if let seedSitePermissions {
+            for (permission, allowed) in seedSitePermissions.answers {
+                try? await database.setSitePermission(allowed, permission, forSite: seedSitePermissions.site)
+            }
+        }
         if seedArchive {
             let pages: [(String, String, Double)] = [
                 ("https://www.theverge.com/tech", "The Verge — Tech", 3),

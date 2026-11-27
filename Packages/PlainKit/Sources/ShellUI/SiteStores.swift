@@ -27,6 +27,17 @@ nonisolated struct StorageSitePermissionStore: SitePermissionStore {
         guard let database = await database() else { return }
         try? await database.setSitePermission(allowed, permission.rawValue, forSite: site)
     }
+
+    func answers(forSite site: String) async -> [SitePermission: Bool] {
+        guard let database = await database(), let stored = try? await database.sitePermissions(forSite: site) else {
+            return [:]
+        }
+        var answers: [SitePermission: Bool] = [:]
+        for (name, allowed) in stored {
+            if let permission = SitePermission(rawValue: name) { answers[permission] = allowed }
+        }
+        return answers
+    }
 }
 
 /// Desktop or mobile per site. The engine asks on every navigation start, so answers come from an

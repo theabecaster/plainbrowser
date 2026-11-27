@@ -35,7 +35,9 @@ final class SummaryService {
         // UI tests and screenshots: a scripted model and scripted pages, no network, no Apple
         // Intelligence (the simulator's would be the Mac's).
         if arguments.contains("-PlainTestSummaries") {
-            model = ScriptedSummaryModel(pace: .milliseconds(40))
+            // Slower when the test leaves the app mid-summary, so the summary is still on its way.
+            let leaves = arguments.contains("-PlainAIGoesAwayInBackground")
+            model = ScriptedSummaryModel(pace: .milliseconds(leaves ? 400 : 40))
             scripted = ScriptedBrowsing()
             return
         }
@@ -45,6 +47,9 @@ final class SummaryService {
 
     isolated deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
+        #if DEBUG
+        if let backgroundObserver { NotificationCenter.default.removeObserver(backgroundObserver) }
+        #endif
     }
 
     /// Reads the first answer and follows the app becoming active.
@@ -55,16 +60,40 @@ final class SummaryService {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
+        #if DEBUG
+        // `-PlainAIGoesAwayInBackground` (with `-PlainTestSummaries`): the scripted model stops
+        // being ready while Plain is in the background, as a model whose assets went away would,
+        // so a UI test can check what an open summary and the entries do on the way back.
+        if ProcessInfo.processInfo.arguments.contains("-PlainAIGoesAwayInBackground"), let scripted = model as? ScriptedSummaryModel {
+            backgroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+            ) { _ in
+                MainActor.assumeIsolated { scripted.answer = .modelNotReady }
+            }
+        }
+        #endif
         refresh()
     }
+
+    #if DEBUG
+    private var backgroundObserver: (any NSObjectProtocol)?
+    #endif
 
     func refresh() {
         refreshing?.cancel()
         refreshing = Task { [weak self, model] in
             let answer = await model.availability()
-            guard let self, !Task.isCancelled, answer != availability else { return }
-            availability = answer
-            onAvailabilityChange()
+            guard let self, !Task.isCancelled else { return }
+            if answer != availability {
+                availability = answer
+                onAvailabilityChange()
+            }
+            // The model downloading or preparing can finish while Plain is open: look again now
+            // and then, so the entries appear by themselves without a trip out of the app.
+            guard answer == .modelNotReady else { return }
+            try? await Task.sleep(for: FixedChoices.aiNotReadyRecheck)
+            guard !Task.isCancelled, UIApplication.shared.applicationState == .active else { return }
+            refresh()
         }
     }
 

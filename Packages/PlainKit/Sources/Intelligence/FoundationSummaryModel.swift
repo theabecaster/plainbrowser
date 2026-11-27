@@ -124,7 +124,7 @@ public final class FoundationSummaryModel: SummaryModel {
             case .guardrailViolation, .refusal: return .declined
             case .unsupportedLanguageOrLocale: return .unsupportedLanguage
             case .contextSizeExceeded: return .contextExceeded
-            case .rateLimited: return .unavailable
+            case .rateLimited: return .busy
             default: return .failed
             }
         }

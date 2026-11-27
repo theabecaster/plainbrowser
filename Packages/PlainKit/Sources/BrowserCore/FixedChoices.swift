@@ -46,6 +46,23 @@ public enum FixedChoices {
     /// Page zoom and desktop/mobile site are remembered per site, automatically.
     public static let perSiteChoicesRemembered = true
 
+    // MARK: Launch and return (docs/research/launch.md)
+
+    /// Away this long or longer, Plain opens to a fresh search over the last tab instead of the
+    /// tab itself. Chrome and Firefox both switch to a start page at 4 hours: a short break (a
+    /// call, lunch, a meeting) comes back to the page being read, while the next morning is a new
+    /// errand. It sits well inside the shortest auto-archive interval (12 hours), so the last tab
+    /// is still there behind the search.
+    public static let freshSearchAfter: TimeInterval = 4 * 3600
+    /// The longest the first frame waits for the last tab's picture to finish decoding off the
+    /// main thread (it starts as the scene connects and usually finishes first). A frame of bare
+    /// paper where the page should be reads as "empty"; 40 ms is under three frames, and the
+    /// launch screen is still up meanwhile.
+    public static let launchPictureWait: Duration = .milliseconds(40)
+    /// The live page takes over from the picture once it has finished loading, or after this long
+    /// at most, so a slow network never leaves a frozen picture on screen.
+    public static let launchPictureMaxHold: Duration = .seconds(3)
+
     // MARK: First run
 
     /// A short intro on first launch only (the owner's choice, docs/ui-reference.md, "First run"),

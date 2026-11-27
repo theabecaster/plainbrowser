@@ -169,9 +169,15 @@ struct TopChromeGeometry: Equatable {
         -Self.rowHeight / 2 * min(max(progress, 0), 1)
     }
 
-    /// The strip's rise at `progress`: up under the row, while it fades.
+    /// The strip's rise at `progress`: up under the row, while it fades. A strip spanning under the
+    /// status corner rises only as far as the corner's bottom, so it never passes over the clock
+    /// on its way out (it is faded by then anyway).
     func stripTranslation(progress: CGFloat) -> CGFloat {
-        -(Self.rowHeight + Self.gap) * min(max(progress, 0), 1)
+        var rise = Self.rowHeight + Self.gap
+        if let corner, stripClearance.leading == 0, stripClearance.trailing == 0 {
+            rise = min(rise, max(0, stripTop - corner.maxY))
+        }
+        return -rise * min(max(progress, 0), 1)
     }
 
     /// The hidden bar's height over the page: the smallest top inset the page sees. In the status

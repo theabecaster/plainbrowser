@@ -358,6 +358,22 @@ struct TopChromeGeometryTests {
         #expect(bar.stripTranslation(progress: 1) < 0 && bar.buttonsTranslation(progress: 1) < 0)
     }
 
+    @Test func stripNeverRisesOverTheStatusCorner() {
+        // The strip spans under the corner (72.5 > 69): on its way out it rises only to the
+        // corner's bottom, at every step of the collapse.
+        let bar = Self.device(strip: Self.strip)
+        for step in 0...20 {
+            let progress = CGFloat(step) / 10
+            #expect(bar.stripTop + bar.stripTranslation(progress: progress) >= Self.deviceCluster.maxY)
+        }
+        // Clear of the corner already (it stops where the row does), it rises under the row.
+        let corner = CGRect(x: 816, y: 0, width: 135, height: 81)
+        let beside = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: Self.strip)
+        #expect(beside.stripTranslation(progress: 1) == -(TopChromeGeometry.rowHeight + TopChromeGeometry.gap))
+        // Under a full-width status bar nothing is in the way.
+        #expect(Self.simulator(strip: Self.strip).stripTranslation(progress: 1) == -48)
+    }
+
     @Test func cornerFromTheScreensTopStillBeatsSafari() throws {
         // If the guide's corner runs from the top edge to the safe area (0–81), the row centers on
         // that band (18.5–62.5), and the page never starts above the corner's bottom: 82 pt.

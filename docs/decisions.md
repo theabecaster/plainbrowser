@@ -1281,7 +1281,9 @@ simulator's 24 pt status bar had hidden this.
 - **Rail (Left, Right):** stays under the safe area's top. The root view's paper shows above it,
   the same paper as the rail, so the column reads as one from the top edge.
 - **The strip** spans the lane under the row where it starts below the corner (72.5 > 69 on the
-  device); where it would start beside it, it stops where the row does (`stripClearance`).
+  device); where it would start beside it, it stops where the row does (`stripClearance`). Under
+  the corner it rises on its way out only to the corner's bottom while it fades, so it never
+  passes over the clock (Codex review, round 2).
 - **Diagnostics:** the safe area, both corner-adaptive guides, the margins guide and the
   occlusion regions are logged when the bounds or guides change (`duo` category, debug level), so
   the device's numbers can be read back. `-PlainStatusCorner x,y,w,h` (Debug) forces a corner on

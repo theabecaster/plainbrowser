@@ -281,6 +281,18 @@ final class ButtonBar: UIView {
         // Glass picks its content's style from what is behind it unless told (AddressPill).
         glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
         trailingGlass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
+        // The glyphs too: over a white page the glass still drew them dark on the violet.
+        for button in buttons.values {
+            if isPrivate {
+                button.configurationUpdateHandler = { button in
+                    button.configuration?.baseForegroundColor = button.isEnabled ? .white : UIColor(white: 1, alpha: 0.35)
+                }
+            } else {
+                button.configurationUpdateHandler = nil
+                button.configuration?.baseForegroundColor = nil
+            }
+            button.setNeedsUpdateConfiguration()
+        }
     }
 
     override func layoutSubviews() {

@@ -1257,6 +1257,14 @@ public final class WebViewPool {
     /// Asks once per site and permission, then answers from `permissionStore`. Only the tab on
     /// screen can ask; background requests are denied without being remembered.
     func decide(_ permissions: [SitePermission], site: String, for tab: Tab) async -> Bool {
+        // Off for Plain in iOS: no question of Plain's could help. WebKit usually refuses these
+        // before asking (a simulator's stand-in cameras skip that check); either way the page is
+        // refused, nothing is remembered, and the shell says why.
+        let blocked = permissions.compactMap(\.systemFeature).filter { systemAccess.access($0).isBlocked }
+        if !blocked.isEmpty {
+            if isAttached(tab), let host { host.tab(tab, wasDenied: blocked, forSite: site) }
+            return false
+        }
         // A private tab's answers last for its private session and never reach disk.
         let permissionStore = siteChoices(for: tab).permissions
         var unknown: [SitePermission] = []

@@ -128,15 +128,4 @@ extension BrowserViewController {
     }
 }
 
-extension SitePermission {
-    /// The iOS switch a site's permission also needs; motion has none.
-    var systemFeature: SystemFeature? {
-        switch self {
-        case .camera: .camera
-        case .microphone: .microphone
-        case .location: .location
-        case .motion: nil
-        }
-    }
-}
 #endif

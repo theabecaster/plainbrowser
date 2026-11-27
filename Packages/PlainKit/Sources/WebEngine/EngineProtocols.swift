@@ -65,6 +65,18 @@ nonisolated public enum SitePermission: String, Sendable, Codable, CaseIterable 
     case camera, microphone, location, motion
 }
 
+extension SitePermission {
+    /// The iOS switch a site's permission also needs; motion has none.
+    nonisolated public var systemFeature: SystemFeature? {
+        switch self {
+        case .camera: .camera
+        case .microphone: .microphone
+        case .location: .location
+        case .motion: nil
+        }
+    }
+}
+
 /// Remembers the answer to each permission prompt per site (an origin such as
 /// `https://example.com`), so a site asks once. Per-site choices are remembered automatically,
 /// never configured (AGENTS.md).

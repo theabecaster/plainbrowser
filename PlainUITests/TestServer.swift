@@ -310,7 +310,7 @@ final class TestServer: @unchecked Sendable {
         case "/photo":
             return ("200 OK", html("Plain Photo", """
                 <h1>Photo</h1>
-                <img src="/sunset.svg" alt="Sunset" style="width:100%;height:260px;border-radius:8px">
+                <a href="/a"><img src="/sunset.svg" alt="Sunset" style="width:100%;height:260px;border-radius:8px"></a>
                 """))
         case "/sunset.svg":
             return ("200 OK", """

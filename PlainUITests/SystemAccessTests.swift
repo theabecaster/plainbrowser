@@ -84,7 +84,8 @@ final class SystemAccessTests: XCTestCase {
     func testCellularOffErrorPage() throws {
         let app = try launch(["-PlainSystemAccess", "cellular=denied"])
         let field = app.textFields["searchField"]
-        field.typeText("localhost:1/nothing\n")
+        // A closed port that isn't one WebKit refuses outright (port 1 is restricted).
+        field.typeText("localhost:65530/nothing\n")
         XCTAssertTrue(app.staticTexts["Cellular data is off for Plain."].waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons["pageState.button"].label, "Open Settings")
         XCTAssertEqual(app.buttons["pageState.secondary"].label, "Try Again")

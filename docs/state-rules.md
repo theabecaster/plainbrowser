@@ -154,8 +154,11 @@ the progress and the page may not have painted); a failed, crashed or resend pag
 VoiceOver or Switch Control running (the bar stays in reach, as in Chrome, Firefox and Safari); a
 page shorter than two screens (the end, where the bar comes back, is already near).
 
-The inset changes once, when a motion ends, never per frame (docs/plan.md, engine rule 4), so a
-fixed footer sits above whatever rests there. Under Reduce Motion, hiding and revealing are a
+The inset changes once per motion, never per frame (docs/plan.md, engine rule 4): when the bar
+comes back (to the pill or expanded from further down) it changes as the motion starts, so a fixed
+footer moves up in the frame the bar starts rising and the bar slides in under it; when the bar
+goes away it changes as the motion ends, so the footer never sits under a bar still on screen. The
+same holds for the top bar on the Duo's inner screen. Under Reduce Motion, hiding and revealing are a
 crossfade.
 
 **Duo inner screen (top bar).** The same three states drive the top bar: Expanded is the row
@@ -165,10 +168,12 @@ page's top inset drops to 0 (only the status bar). Same triggers and the same ne
 
 ## 4. The page menu (More, and a long press on the pill)
 
-Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: Reload
-(or Stop), Share and Copy Link are one row of three; Find on Page, Print… and Save as PDF are one
-row of three while the page can be printed, captioned "Find", "Print…" and "Save PDF" (Find on
-Page alone otherwise); Desktop Site, blocking, cookie
+Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: the tabs
+items (New Private Tab, Reopen Closed Tab, Archived Tabs) are one captioned row when two or more
+apply; Reload (or Stop), Share and Copy Link are one row of three; Find on Page, Show Reader and
+Translate Page are one captioned row when two or more apply ("Find", "Reader", "Translate" or
+"Original"; each alone keeps its full name and subtitle); Print and Save as PDF are not in the
+menu but in the share sheet (Share), as in Safari and Chrome; Desktop Site, blocking, cookie
 banners and Dark Pages fold into a "Site Settings" submenu when two or more apply; History, Edit
 Favorites and Settings are one row of three, so the whole menu fits the Duo's outer screen.
 
@@ -179,7 +184,7 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Show / Hide Reader | — | — | when readerable | — | — | Hide Reader | Safari: "Show Reader (if available)". |
 | Save PDF to Files | — | — | on a PDF | — | — | — | |
 | Translate Page / Show Original | — | Show Original while translated | Translate Page when the page's language is one the user doesn't read and the device can translate it; Show Original while translated | — | — | — | Subtitled with the pair ("French to English"), "Translating…" while the first text is on its way. The tab keeps translating its next pages in that language until Show Original. Under the reader it would act out of sight. One toast the first time ever a foreign page shows, then only the menu. |
-| Print…, Save as PDF | — | — | shown (http(s) or a PDF; Save as PDF not on a PDF, which has Save PDF to Files) | — | — | shown (prints the article) | Nothing finished to print while loading; an error page is Plain's message, not the site's. |
+| Print, Save as PDF (share sheet) | — | — | shown (http(s) or a PDF; Save as PDF not on a PDF, which has Save PDF to Files) | — | — | shown (prints the article) | In the share sheet as Plain's own actions, wherever Share opens it (page menu, the inner screen's Share button). Nothing finished to print while loading; an error page is Plain's message, not the site's. |
 | Share, Copy Link | — | shown | shown | shown (the address tried) | shown | shown (the page's address) | |
 | Zoom row (− % +) | — | shown | shown; − / + dim at the ends, % dim at 100 % | — | — | — | Zoom acts on the page, which is hidden under the reader. |
 | Desktop Site | — | http(s) | http(s) | http(s) | — | — | A remembered Desktop Site choice can be why a page fails, so the switch back stays (it retries the load). Under the reader it would act out of sight. |
@@ -190,7 +195,7 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). |
 | New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "New Tab": it turns this empty tab, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
 | Downloads | while any this session | ← same | ← | ← | ← | ← | Subtitle "1 in progress" while one runs. |
-| History, Edit Favorites, Settings… | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. |
+| History, Edit Favorites, Settings | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. |
 
 ## 5. The tabs menu (long press on the tabs slot)
 

@@ -19,6 +19,7 @@ import Network
 /// - `/login`: a sign-in form with the `autocomplete` hints AutoFill reads.
 /// - `/passkey`: "Sign In with a Passkey", which asks for a passkey; the heading says how it ended.
 /// - `/french`: a page in French (`lang="fr"`) whose sentences the app's test translator knows.
+/// - `/french-article`: a readerable article in French (Show Reader and Translate Page both apply).
 /// - `/consent`: a shop page with a OneTrust cookie banner; the heading says how it was answered.
 final class TestServer: @unchecked Sendable {
     private let listener: NWListener
@@ -188,6 +189,18 @@ final class TestServer: @unchecked Sendable {
                 <p>Venez tôt pour trouver le meilleur pain de la région.</p>
                 """
             return ("200 OK", html("Le marché", body).replacingOccurrences(of: "<html>", with: "<html lang=\"fr\">"))
+        case "/french-article":
+            // Readerable and foreign at once: the page menu's tallest page state (Show Reader and
+            // Translate Page both apply).
+            let paragraphs = (1...12).map {
+                "<p>Paragraphe \($0) de l'article. Lire sur un téléphone devrait être calme : le texte donne le "
+                    + "rythme, les marges lui laissent de la place, et rien ne bouge sauf si vous le demandez. "
+                    + "Une vue de lecture garde les mots et retire tout le reste autour d'eux.</p>"
+            }
+            let body = "<header><nav><a href=\"/a\">Accueil</a> · <a href=\"/b\">Archives</a></nav></header>"
+                + "<article><h1>La page tranquille</h1><p class=\"byline\">Par Plain</p>"
+                + paragraphs.joined() + "</article><footer><p>Liens de pied de page.</p></footer>"
+            return ("200 OK", html("La page tranquille", body).replacingOccurrences(of: "<html>", with: "<html lang=\"fr\">"))
         case "/consent":
             let body = """
                 <h1 id="state">Cookies not answered</h1><p>Fresh bread, every morning.</p>

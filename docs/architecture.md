@@ -183,7 +183,8 @@ exactly what the app emits.
 | `search.suggestions` | interval | keystroke → local suggestions on screen |
 | `toolbar.collapse` | interval | bar starts moving → bar settled |
 | `toolbar.snap` | interval | finger lifts (or a tap or load expands the bar) → bar at rest ("settled"), or a drag grabs it ("grabbed") |
-| `toolbar.pageInset` | event | page's bottom inset switched to the resting bar ("expanded" / "collapsed") |
+| `toolbar.pageInset` | event | page's bottom inset switched to the resting bar ("expanded" / "collapsed" / "hidden"); a reveal switches it as it starts |
+| `cookieBanners.engine` | event | the cookie banner engine went into a page, and why ("site rule", "host", "page") |
 | `ptr.arm` / `ptr.refresh` | event | pull crosses 80 pt / released armed |
 | `pageMenu.open` | event | page menu built |
 | `nav.back` / `nav.forward` | event | Back / Forward button |

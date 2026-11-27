@@ -24,9 +24,6 @@ extension View {
     func paperSheet() -> some View {
         scrollContentBackground(.hidden)
             .background { PaperBackground().ignoresSafeArea() }
-            // The floating search field (History, Archive) gets the system's hard edge, so rows
-            // under it fade out instead of showing through its glass. No bar, no effect.
-            .scrollEdgeEffectStyle(.hard, for: .bottom)
             .foregroundStyle(Style.ink, Style.inkSecondary, Style.inkSecondary)
     }
 

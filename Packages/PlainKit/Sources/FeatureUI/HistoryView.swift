@@ -57,7 +57,14 @@ public struct HistoryView: View {
                     }
                 }
             }
-            .searchable(text: $model.query, prompt: "Search History")
+            // Search sits under the title and scrolls away with the rows, as in Safari's history:
+            // the bottom field's glass, and a field kept on screen (`.always`, which floats once the
+            // bar hides on scroll), showed a ghost of the row behind it on paper.
+            .searchable(
+                text: $model.query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search History"
+            )
+            // Rows scrolled under the field fade out at a hard edge instead of showing through it.
+            .scrollEdgeEffectStyle(.hard, for: .top)
             .sheetTitle("History")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

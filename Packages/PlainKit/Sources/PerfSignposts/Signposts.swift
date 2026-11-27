@@ -100,6 +100,8 @@ public enum Signposts {
     public static let cookieBannersToggle: StaticString = "page.cookieBanners"
     /// Event: the cookie banner engine answered a banner ("rejected") or gave up ("failed").
     public static let cookieBannerAnswered: StaticString = "cookieBanners.answered"
+    /// Event: the cookie banner engine went into a page, and why ("site rule", "host", "page").
+    public static let cookieBannerEngine: StaticString = "cookieBanners.engine"
     /// Interval: reading the cookie banner engine and rules off the main thread after launch.
     public static let cookieBannersPrepare: StaticString = "cookieBanners.prepare"
     /// Interval: Translate Page, from the menu tap until the first translated text is on screen

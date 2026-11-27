@@ -130,7 +130,7 @@ Each entry: what was chosen, and why. Newest last.
 - **Elsewhere a custom glass bar, not the system toolbar:** hiding a system toolbar changes the
   page's safe area, which relayouts the page on every collapse. The custom bar moves by transform
   and alpha only. The page's bottom `obscuredContentInsets` follows the bar's resting state,
-  switched when a snap ends (never during the top bounce), so the expanded bar never covers
+  switched once per snap (never during the top bounce), so the expanded bar never covers
   fixed page footers (docs/plan.md, engine rule 4; docs/research/design-audit.md).
 - **Address bar data behind a protocol (`AddressBarData`):** the shell never touches GRDB or the
   network. `LiveAddressBarData` joins Storage, settings and `SuggestionClient`; tests and later
@@ -288,7 +288,8 @@ Each entry: what was chosen, and why. Newest last.
   keeps the bar. Under Reduce Motion the snap is a 0.2 s crossfade of the chrome.
 - **Page inset follows the resting bar** (plan, engine rule 4): `PageInsetState` switches
   `obscuredContentInsets.bottom` between the collapsed and expanded chrome once per rest, and
-  waits while the page is pulled past its top or bottom; a new snap drops a change still waiting. WebKit already extends a fixed footer's
+  waits while the page is pulled past its top or bottom; a new snap drops a change still waiting.
+  A reveal (the inset grows) switches it as the snap starts instead (follow-ups, 2026-11-27). WebKit already extends a fixed footer's
   background to the screen edge under the bar (measured on the simulator).
 - **One glass container, no shadow.** `Glass.makeContainer` wraps `UIGlassContainerEffect` in a
   view that passes touches through, so it can cover the screen. Merge spacing 4 pt, under the
@@ -829,9 +830,13 @@ Research and sources: docs/research/dark-mode.md.
   6–10 pt rule, as for the system menus): matching it would mean drawing every card by hand.
 - **Ink caveat:** the sheet's ink foreground replaces the system's footer gray and a button's
   tint, so footers, values (`ValueLabel`), Clear History and Use Custom Engine name their color.
-- **Search field:** History's and Archive's floating search field gets the system's hard bottom
-  scroll edge (`.scrollEdgeEffectStyle(.hard, for: .bottom)`), so rows fade under it instead of
-  showing through its glass on paper.
+- **Search field:** History's and Archive's search sits at the top, under the title, and
+  scrolls away with the rows (`.searchable(placement: .navigationBarDrawer(displayMode:
+  .automatic))`; pull down to bring it back), as in Safari's history. The system's floating bottom
+  field showed a ghost of the row behind its glass on paper, even with a hard bottom scroll edge
+  (follow-ups, 2026-11-27; lead's call). `.always` was tried: on iOS 27 the sheet's bar hides as the
+  list scrolls and the kept field floats over the rows as glass, with the same ghost. The list's
+  top scroll edge is hard, so rows under the bar fade out.
 - **Duo outer screen:** the bar's leading button moves to the side column there, which left the
   system title off center ("Downloads"); the serif title is a `.principal` item, which the bar
   centers.
@@ -908,9 +913,12 @@ Research and sources: docs/research/print-pdf.md.
 - **The reader prints the article**, not the page under it. Not on Start, while loading, or on an
   error or crashed page (state rules §4). A PDF tab prints, and keeps "Save PDF to Files" for the
   original file instead of Save as PDF.
-- **In the page menu, in Find on Page's row** ("Find", "Print…", "Save PDF"), so the two rare
-  actions take no section of their own. A row of icons without captions was tried and rejected in
-  design review (Find and Save PDF were not told apart).
+- **In the share sheet** (since the follow-ups of 2026-11-27): Print and Save as PDF are Plain's
+  own share sheet actions (`PageActivity`), where Safari and Chrome keep them, so the page menu
+  fits the Duo's outer screen. They were first in Find on Page's row of the page menu ("Find",
+  "Print…", "Save PDF"); with Show Reader and Translate Page on a foreign article the menu ran past
+  the outer screen. A row of icons without captions was rejected in design review (Find and Save
+  PDF were not told apart).
 - **The same document:** an export marks the document with a token in the engine's world and checks
   it, the tab and the web view before the sheet shows, so a reload or a tab switch meanwhile drops
   the export instead of showing the wrong page.
@@ -945,7 +953,8 @@ Research and sources: docs/research/cookie-banners.md.
   approach, which Plain already has from the EasyList Cookie List: a hidden banner never says no,
   and scroll locks stay).
 - **Wiring (DuckDuckGo iOS's pattern, an idea, no code taken):** one reply handler in Plain's own
-  content world. Main frames get the engine at document start; its `init` is answered with the
+  content world. Main frames get the engine only when the page shows a sign of a consent manager
+  (see "Cookie banners: the engine only where a banner is", below); its `init` is answered with the
   generic rules plus only the site rules whose address pattern matches (matched off the main
   thread, 0.4 ms per page on a Mac). Subframes get a one-line script that reports the frame's
   address; only a frame a rule targets (Sourcepoint's dialog, about 20 hosts) gets the engine, so
@@ -958,8 +967,9 @@ Research and sources: docs/research/cookie-banners.md.
   (for consent that means "no"). Turning cookie banner blocking off for a site stops the
   answering; the hiding follows "Turn Off Blocking on This Site". Moving the cookie list into its
   own switchable list needs a regeneration of the blocking lists (polish backlog).
-- **Perf cost:** a long article without a banner loads in 65–104 ms with the engine against
-  38–48 ms without, on the iPhone 17 simulator (parsing the 129 KB script at document start); a
+- **Perf cost (before the probe below):** a long article without a banner loads in 65–104 ms
+  with the engine against 38–48 ms without, on the iPhone 17 simulator (parsing the 129 KB script
+  at document start); a
   OneTrust banner is rejected about 0.8 s after the page starts (0.5 s of it is the engine's own
   wait for the banner's script). The rules are read off the main thread once after launch.
 
@@ -1066,3 +1076,67 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   during motion: the edge strip toggles `isUserInteractionEnabled`, the pill moves by transform and
   alpha, and insets change once per rest. The device perf gate (`testPageScrollHitches`) is the
   check for 120 Hz.
+
+## The page inset moves at the start of a reveal (2026-11-27)
+
+- **Owner feedback:** coming back from the pill or hidden, the bar arrived first and then a fixed
+  page footer jumped up into place, because the page's bottom inset switched when the snap ended.
+- **Chosen:** a reveal (any snap toward more chrome than the inset shows) switches
+  `obscuredContentInsets` and the scroll view's bottom inset as it starts
+  (`PageInsetState.barHeading(to:)`); a hide still switches when the bar rests, so a footer is
+  never under a bar still on screen. The top bar on the Duo's inner screen reads the same state.
+  The bounce rule stays: while the page is pulled past an edge the change waits. A page resting
+  at its end rises with the bar instead of after it.
+- **Measured** (Duo outer screen simulator, `/footer` test page, 60 Hz): the inset change costs
+  0.1–0.2 ms on the main thread; the 26 reveal frames show no interval over 17.5 ms, the same as
+  before the change (16.7–17.7 ms). In the recorded frame strip WebKit moves the footer in the
+  same frame the bar starts to rise (before: about 0.5 s later, after the pill had covered it),
+  so no first-frame deferral was needed. The footer moves in one step (WebKit has no animated
+  inset change); the bar then slides in under it.
+
+## Page menu fits the Duo's outer screen (2026-11-27)
+
+- **Problem:** on a readerable page in another language the page menu ran past the Duo's outer
+  screen (466x678): the History, Favorites and Settings row was cut off. The menu opens from the
+  vertical bar's More with about 473 pt of height.
+- **Chosen:** Print and Save as PDF moved to the share sheet (decision above). That alone was not
+  enough (measured: the last row still cut on the simulator), so the rows that apply together
+  became captioned rows of up to three, like Reload, Share and Copy Link: Find on Page, Show
+  Reader and Translate Page ("Find", "Reader", "Translate" / "Original") and the tabs items (New
+  Private Tab, Reopen Closed Tab, Archived Tabs: "Private Tab", "Reopen Tab", "Archive"), each only
+  when two or more apply. VoiceOver reads the full names and Translate Page's language pair. A
+  single item keeps its full name and subtitle.
+- **Trade-off:** in the row, Translate Page loses its visible "French to English" subtitle; the
+  first-time toast names the language, and VoiceOver reads the pair.
+- **Verified:** `PageFeatureTests.testPageMenuFitsTheScreen` opens the menu on a French article with
+  a closed tab to reopen and checks that the first and last rows lie inside the menu without
+  scrolling, on the Duo outer screen and the iPhone 17.
+- **Not covered:** with a download this session as well, Downloads adds a row and the last row
+  needs a short scroll on the outer screen (polish backlog).
+
+## Cookie banners: the engine only where a banner is (2026-11-27)
+
+- **Problem:** every main frame parsed the 129 KB autoconsent engine at document start, and its
+  detection ran on every page: +20 ms per load on a long article loaded back to back, and the
+  page's own first script 3–4 ms later in a fresh web view, on pages that never had a banner.
+- **Chosen:** a probe of about 3 KB goes into main frames at document start instead. It posts the
+  page's address once; a site turned off stops it, and a site with a rule of its own (about 900
+  address patterns, matched off the main thread) gets the engine at once, so its banner is still
+  hidden before it shows. Otherwise it watches for a consent manager: a resource from one of 33
+  consent manager hosts (OneTrust, Cookiebot, Didomi, Usercentrics, TrustArc, Quantcast,
+  Sourcepoint, consentmanager, Funding Choices and others; a `PerformanceObserver` on resource
+  entries, buffered, so scripts and frames loaded before it count), or one of 40 banner
+  containers (ids and classes only) at DOMContentLoaded, at load, and 1.7 s and 5 s after load
+  (`FixedChoices.cookieBannerWatchMilliseconds`). The first sign puts the engine into that frame
+  (`evaluateJavaScript` in Plain's world) and the probe stops. Subframes are unchanged.
+- **Fallback:** the EasyList Cookie List stays on and hides the long tail the probe doesn't know
+  (autoconsent's 700 generic rules are mostly one site's own banner). A banner from a known
+  consent manager loses the engine's prehide (it may show for a moment before it is rejected);
+  site rules keep it.
+- **Measured** (`CookieBannerPageTests.costPerPage`, iPhone Duo simulator, 3 runs each): long
+  article back to back (median of 5 loads), without cookie banner handling 29.0–29.7 ms, with the
+  engine 48.9–50.4 ms; with the probe 30.7–31.5 ms against 29.8–30.3 ms without. In a fresh web
+  view the page's first script ran at 4–5 ms with the engine, 1 ms without, and 1 ms with the
+  probe. A OneTrust banner is still rejected: 1.24–1.31 s after the load started before, 1.26–1.32
+  s after (the page found at DOMContentLoaded; the engine's own wait for the banner dominates). A
+  banner a script adds after load, and a site rule's page, are covered by tests.

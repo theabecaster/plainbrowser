@@ -185,6 +185,10 @@ public enum FixedChoices {
     /// Known banners are hidden from the first frame while they are judged, so they never flash;
     /// after this many milliseconds a banner the engine could not answer shows again.
     public static let cookieBannerPrehideTimeout = 2_000
+    /// A page is watched for signs of a consent manager until this many milliseconds after it
+    /// loads; only then does the engine go into it. Consent managers load with the page or soon
+    /// after, and the EasyList Cookie List still hides a banner that comes later.
+    public static let cookieBannerWatchMilliseconds = 5_000
     /// A banner answered this many times on one site within `cookieBannerLoopWindow` (a page that
     /// reloads itself after each answer) means the answer doesn't stick: the site is left alone
     /// for the rest of the launch instead of reloading forever.

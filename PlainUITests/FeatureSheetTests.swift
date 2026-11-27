@@ -48,7 +48,7 @@ final class FeatureSheetTests: XCTestCase {
         let app = try launch()
         go(app, to: "/a", heading: "Page A")
 
-        pageMenu(app, pick: "Settings…")
+        pageMenu(app, pick: "menu.settings")
         let engineRow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Search Engine'")).firstMatch
         XCTAssertTrue(engineRow.waitForExistence(timeout: 3))
         XCTAssertEqual(engineRow.label, "Search Engine, Google")

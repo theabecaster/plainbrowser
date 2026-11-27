@@ -909,10 +909,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let signposter = Signposts.signposter
         if collapseInterval == nil { collapseInterval = signposter.beginInterval(Signposts.toolbarCollapse) }
         if snapInterval == nil { snapInterval = signposter.beginInterval(Signposts.toolbarSnap) }
-        // A rest that waited for a bounce is stale now that the bar moves again.
-        pageInset.barMoved()
+        // A rest that waited for a bounce is stale now that the bar moves again. A bar coming back
+        // takes its inset now, so a fixed page footer rises with it, in one motion; a bar going
+        // away keeps the inset until it rests (`snapEnded`).
+        let rest = ChromeRest(progress: target)
+        pageInset.barHeading(to: rest)
+        applyPendingInset()
         cancelCrossfade()
-        collapse.head(to: ChromeRest(progress: target))
+        collapse.head(to: rest)
         // The edge takes taps only while the bar rests hidden.
         revealEdge.isUserInteractionEnabled = false
         if animated, Motion.prefersCrossfade {
@@ -986,6 +990,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let runningTarget = snap.isRunning ? snap.target : crossfadeTarget
         if let runningTarget, runningTarget <= 1, collapse.progress <= 1 {
             cancelCrossfade()
+            // A reveal's inset still waiting for a bounce is the finger's call now.
+            pageInset.barMoved()
             collapse.settle(at: snap.stop())
             if let interval = snapInterval {
                 Signposts.signposter.endInterval(Signposts.toolbarSnap, interval, "grabbed")
@@ -1183,7 +1189,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self?.showHistory()
         }
         history.accessibilityIdentifier = "menu.history"
-        let settings = UIAction(title: "Settings…", image: UIImage(systemName: "gearshape")) { [weak self] _ in
+        let settings = UIAction(title: "Settings", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.showSettings()
         }
         settings.accessibilityIdentifier = "menu.settings"
@@ -1208,7 +1214,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // apply to this page are left out, Stop takes Reload's place while loading.
         let rules = currentRules()
         // The tabs items first: New Private Tab, Reopen Closed Tab, Archived Tabs where they apply.
-        let top = UIMenu(options: .displayInline, children: tabItemsForMore(rules))
+        let tabItems = tabItemsForMore(rules)
+        let top = UIMenu(options: .displayInline, children: tabItems)
+        if tabItems.count > 1 {
+            for case let action as UIAction in tabItems { Self.caption(action) }
+            top.preferredElementSize = .medium
+        }
         guard rules.shareAndCopy, let tab = currentTab, let url = pageAddress else {
             // An empty pane of a split can still be swapped or closed.
             let paneItems = paneMenuItems(for: nil, rules: rules)
@@ -1241,21 +1252,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             find.accessibilityIdentifier = "menu.find"
             pageItems.append(find)
         }
-        // Find on Page, Print and Save as PDF share one row of three when the page can be printed,
-        // with one-line captions ("Find", "Print…", "Save PDF"), so the two rare actions take no
-        // section of their own.
-        let export = exportMenuItems(rules)
-        if !export.isEmpty {
-            for case let find as UIAction in pageItems {
-                find.title = "Find"
-                find.accessibilityLabel = "Find on Page"
-            }
-            let row = UIMenu(options: .displayInline, children: pageItems + export)
+        pageItems += readerMenuItems(rules.reader)
+        pageItems += translateMenuItems(for: tab, item: rules.translate)
+        // Find on Page, Show Reader and Translate Page share one captioned row when two or more
+        // apply, so the menu fits the Duo's outer screen on an article in another language
+        // (Print and Save as PDF are in the share sheet). The full names stay for VoiceOver.
+        if pageItems.count > 1 {
+            for case let action as UIAction in pageItems { Self.caption(action) }
+            let row = UIMenu(options: .displayInline, children: pageItems)
             row.preferredElementSize = .medium
             pageItems = [row]
         }
-        pageItems += readerMenuItems(rules.reader)
-        pageItems += translateMenuItems(for: tab, item: rules.translate)
         if rules.savePDF { pageItems += pdfMenuItems(for: tab) }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
             guard let self else { return }
@@ -1263,6 +1270,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 self.usesVerticalBar ? self.barItems[.more] : self.buttonBar.button(.more)
             self.share(from: source)
         }
+        share.accessibilityIdentifier = "menu.share"
         let copy = UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { _ in
             Signposts.signposter.emitEvent(Signposts.copyLink)
             UIPasteboard.plain.url = url
@@ -1308,6 +1316,20 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         placeItems += paneItems
         if !placeItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: placeItems)) }
         return [top] + sections + [app]
+    }
+
+    /// Shortens a page item to its one-line caption for a row of three ("Find on Page" reads
+    /// "Find", "Translate Page" "Translate"); VoiceOver keeps the full name and the subtitle.
+    static func caption(_ action: UIAction) {
+        let captions = [
+            "Find on Page": String(localized: "Find"), "Translate Page": String(localized: "Translate"),
+            "Show Original": String(localized: "Original"), "Show Reader": String(localized: "Reader"),
+            "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
+            "Archived Tabs": String(localized: "Archive"),
+        ]
+        action.accessibilityLabel = [action.title, action.subtitle].compactMap { $0 }.joined(separator: ", ")
+        action.title = captions[action.title] ?? action.title
+        action.subtitle = nil
     }
 
     /// A site's name as the pill shows it: the host without `www.`.
@@ -1400,7 +1422,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // A failed page shares the address that was tried.
         guard let url = pageAddress else { return }
         Signposts.signposter.emitEvent(Signposts.share)
-        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        // Print and Save as PDF live here, where Safari and Chrome keep them (state rules §4).
+        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: exportActivities(currentRules()))
+        sheet.completionWithItemsHandler = { [weak self, weak sheet] type, completed, _, _ in
+            guard completed, let type, let sheet else { return }
+            self?.runExportActivity(type, after: sheet)
+        }
         sheet.popoverPresentationController?.sourceItem = source ?? pill
         present(sheet, animated: true)
     }

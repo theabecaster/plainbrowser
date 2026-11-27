@@ -138,26 +138,30 @@ extension BrowserViewController {
 
     // MARK: Print and Save as PDF
 
-    /// Print and Save as PDF (state rules §4: on what finished loading, or the reader's article,
-    /// which they act on instead of the page under it). They sit in Find on Page's row.
-    func exportMenuItems(_ rules: ControlRules) -> [UIMenuElement] {
-        var items: [UIMenuElement] = []
-        if rules.print {
-            let print = UIAction(title: "Print…", image: UIImage(systemName: "printer")) { [weak self] _ in
-                self?.printPage()
-            }
-            print.accessibilityIdentifier = "menu.print"
-            items.append(print)
+    /// Print and Save as PDF in the share sheet (state rules §4: on what finished loading, or the
+    /// reader's article, which they act on instead of the page under it). Safari and Chrome keep
+    /// them there, and the page menu stays short enough for the Duo's outer screen.
+    func exportActivities(_ rules: ControlRules) -> [UIActivity] {
+        var activities: [UIActivity] = []
+        if rules.print { activities.append(PageActivity.print) }
+        if rules.saveAsPDF { activities.append(PageActivity.saveAsPDF) }
+        return activities
+    }
+
+    /// The share sheet closed on one of Plain's export activities: run it once the sheet is gone,
+    /// since the print sheet and the PDF's share sheet present from the browser.
+    func runExportActivity(_ type: UIActivity.ActivityType, after sheet: UIViewController) {
+        let action: () -> Void
+        switch type {
+        case PageActivity.printType: action = { [weak self] in self?.printPage() }
+        case PageActivity.saveAsPDFType: action = { [weak self] in self?.saveAsPDF() }
+        default: return
         }
-        if rules.saveAsPDF {
-            let save = UIAction(title: "Save PDF", image: UIImage(systemName: "doc.richtext")) { [weak self] _ in
-                self?.saveAsPDF()
-            }
-            save.accessibilityLabel = "Save as PDF"
-            save.accessibilityIdentifier = "menu.saveAsPDF"
-            items.append(save)
+        if let coordinator = sheet.transitionCoordinator {
+            coordinator.animate(alongsideTransition: nil) { _ in action() }
+        } else {
+            action()
         }
-        return items
     }
 
     /// What Print and Save as PDF act on: the reader's article while it shows, else the page.
@@ -282,5 +286,35 @@ extension BrowserViewController {
             break
         }
     }
+}
+
+/// One of Plain's actions in the share sheet (Print, Save as PDF). The sheet reports the choice
+/// through its completion handler, and the browser runs it after the sheet is gone.
+nonisolated final class PageActivity: UIActivity {
+    static let printType = UIActivity.ActivityType("dev.abrahamgonzalez.plainbrowser.print")
+    static let saveAsPDFType = UIActivity.ActivityType("dev.abrahamgonzalez.plainbrowser.saveAsPDF")
+
+    static var print: PageActivity { PageActivity(type: printType, title: String(localized: "Print"), symbol: "printer") }
+    static var saveAsPDF: PageActivity {
+        PageActivity(type: saveAsPDFType, title: String(localized: "Save as PDF"), symbol: "doc.richtext")
+    }
+
+    private let type: UIActivity.ActivityType
+    private let title: String
+    private let symbol: String
+
+    private init(type: UIActivity.ActivityType, title: String, symbol: String) {
+        self.type = type
+        self.title = title
+        self.symbol = symbol
+        super.init()
+    }
+
+    override class var activityCategory: UIActivity.Category { .action }
+    override var activityType: UIActivity.ActivityType? { type }
+    override var activityTitle: String? { title }
+    override var activityImage: UIImage? { UIImage(systemName: symbol) }
+    override func canPerform(withActivityItems activityItems: [Any]) -> Bool { true }
+    override func perform() { activityDidFinish(true) }
 }
 #endif

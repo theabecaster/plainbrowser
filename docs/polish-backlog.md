@@ -270,11 +270,6 @@ Newest feature last.
 
 ## Sheets on paper (2026-11-26)
 
-- **History's floating search field.** With the hard bottom scroll edge, rows fade under the glass
-  field, but a ghost of the row behind its upper edge still shows (light and dark, iPhone 17). It
-  is the system's bottom search glass; a clean backdrop means moving the field to the top
-  (`.searchable(placement: .navigationBarDrawer(displayMode: .always))`), which changes where
-  search lives in History and Archive. A call for the owner. (Design review, round 2.)
 - **Supporting text in dark.** Raised to 76 % paper (90 % with Increase Contrast) and readable,
   but the reviewer still finds footers, addresses and times subdued at night. Check on the Duo
   before going higher, which flattens the hierarchy. (Design review, round 2.)
@@ -300,16 +295,6 @@ Newest feature last.
   in tools/blocklists so one switch shows a site's banner as the site made it.
 - **Cookie banners: rules updates.** autoconsent ships rule fixes almost daily; bump
   `tools/autoconsent` each release (no remote config).
-- **Cookie banners: engine cost per page.** Parsing the 129 KB engine at document start adds
-  about 30–50 ms to a long page's load on the simulator; check on the Duo, and consider the
-  document-end injection for pages without a known consent manager's prehide selectors.
-- **Page menu height on the Duo's outer screen.** The menu already filled the outer screen on a
-  readerable page (New Private Tab, actions, Find, Show Reader, zoom, Favorites, Site Settings, app
-  row). The Find / Print… / Save PDF row is taller than the Find item alone, and Translate Page adds
-  a row on foreign pages, so the History/Favorites/Settings row is cut by a few points there
-  (design review, blocking for the lead to decide). Options: Print and Save PDF in the share sheet
-  (Safari's and Chrome's place), Show Reader and Translate Page as captions in one row, or New
-  Private Tab out of the page menu on a page.
 - **Cookie switch wording.** Design review suggests "Cookie Banner Blocking" with a checkmark
   instead of "Turn Off / On …"; it follows the blocking switch's wording today. Change both
   together if at all.
@@ -333,3 +318,27 @@ Newest feature last.
   tabs; a count or a scroll position hint may help (design review, round 2).
 - **Existing installs keep Left.** Above is the new default, but a stored Tab Layout is kept;
   the owner's Duo may need Settings > Tab Layout > Above once.
+
+## Follow-ups: reveal inset, page menu, cookie probe, History search (2026-11-27)
+
+- **Page menu with a download this session.** On the Duo's outer screen the menu fits a
+  readerable foreign page with a closed tab to reopen, but a Downloads row on top of that (only
+  after a download this launch) puts the History/Favorites/Settings row about 45 pt past the
+  menu's edge, so it scrolls. Options: Downloads in the tabs row, or zoom into Site Settings.
+- **Translate Page in the captioned row** loses its visible "French to English" subtitle (VoiceOver
+  reads it); "Translating…" no longer shows in the row either.
+- **Top bar reveal on the inner screen.** Same `PageInsetState` path as the bottom bar, unit-tested,
+  but not frame-checked: the fold can't be set from the command line and XCUITest can't drive the
+  simulator's resizable window. Check a fixed page header against the top bar on the Duo.
+- **Cookie banners: prehide for known consent managers.** A consent manager found by the probe
+  (not by a site rule) gets the engine after DOMContentLoaded, so its banner can show for a moment
+  before it is rejected. If it shows on real sites, inject only the prehide CSS of the generic rules
+  for the hosts the probe saw, before the engine.
+- **Sheet bar hides on the Duo's outer screen.** Scrolled far down, History's title, Clear and Done
+  leave the screen there (iOS 27; the same with the old bottom search field, before this change).
+  `.toolbarVisibility(.visible, for: .navigationBar)` doesn't keep it. Swipe down still closes the
+  sheet and scrolling back up brings the bar. Design review called it blocking; check on the device
+  whether the vertical bar is meant to take the items there.
+- **Footer step at a reveal.** A fixed page footer now moves up in the frame the bar starts back
+  (one motion with the bar, not after it), but in one step: WebKit doesn't animate an inset change,
+  and changing it per frame would relayout the page during the spring (engine rule 4).

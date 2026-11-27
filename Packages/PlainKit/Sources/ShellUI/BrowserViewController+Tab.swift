@@ -494,12 +494,13 @@ extension BrowserViewController {
         let signposter = Signposts.signposter
         let state = signposter.beginInterval(Signposts.readingListOfflineCopy)
         engineUI.readerTask?.cancel()
-        engineUI.readerTask = Task { [weak self, data] in
+        engineUI.readerTask = Task { [weak self, weak tab, data] in
             defer { signposter.endInterval(Signposts.readingListOfflineCopy, state) }
             guard let copy = await data.savedCopy(for: url), let article = await Self.decodeArticle(copy) else { return }
             // Still the same failure: a new load (even one that failed another way, such as a
             // certificate warning that must stay in front) or another tab makes the copy moot.
-            guard let self, !Task.isCancelled, self.currentTab === tab, !tab.isLoading, tab.loadError == failure
+            guard let self, let tab, !Task.isCancelled, self.currentTab === tab, !tab.isLoading,
+                  tab.loadError == failure
             else { return }
             // Once the copy is on screen, say why the page reads as the reader and offer the live
             // page again.

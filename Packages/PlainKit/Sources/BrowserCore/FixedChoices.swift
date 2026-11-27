@@ -333,6 +333,32 @@ public enum FixedChoices {
     /// keeps a close runner-up in the list.
     public static let inputHistoryMatches = 2
 
+    // MARK: Reading list (docs/research/bookmarks.md)
+
+    /// No bookmark folders: Favorites are the one list of kept pages, History and the archive
+    /// find the rest, and the reading list holds pages saved to read once. Folder use was never
+    /// shown to be common, and Arc proved a browser works without bookmarks.
+    public static let bookmarkFolders = false
+    /// Saving for later keeps a reader copy of the article (Readability), as Chrome does, not a
+    /// web archive: it is small, opens instantly in Plain's reader, and an article is what people
+    /// save to read later. A page with no article is saved as its link only.
+    public static let readingListKeepsReaderCopy = true
+    /// A saved page opens live; when the network fails it (offline, the site gone or slow to
+    /// answer), its saved copy opens in the reader on its own, with no setting or extra tap.
+    public static let readingListOpensCopyWhenOffline = true
+    /// Opening a page from the reading list marks it read, as in Safari and Chrome; a swipe
+    /// marks it unread again.
+    public static let readingListMarksReadOnOpen = true
+    /// Reading speed for the "6 min" estimate: about 230 words a minute of about 5.5 characters
+    /// with the space (adult silent reading, Brysbaert 2019).
+    public static let readingCharactersPerMinute = 1_250
+    /// Unread saved pages that match the typed text rank right after favorites in the address
+    /// bar: the user saved them to come back to.
+    public static let readingListRanksInSuggestions = true
+    /// Rows the Reading List screen reads at most: years of saving for most people, and one cheap
+    /// indexed read.
+    public static let readingListLimit = 1_000
+
     // MARK: Storage maintenance
 
     /// Pages kept in history; the least frecent go first beyond this. Firefox's expiration

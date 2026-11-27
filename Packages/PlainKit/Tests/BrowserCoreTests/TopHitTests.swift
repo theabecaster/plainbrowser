@@ -8,7 +8,7 @@ import Testing
     }
 
     func urls(_ suggestions: [AddressBarSuggestion]) -> [String] {
-        suggestions.compactMap { if case .page(let url, _, _) = $0 { url.absoluteString } else { nil } }
+        suggestions.compactMap { if case .page(let url, _, _, _) = $0 { url.absoluteString } else { nil } }
     }
 
     @Test func siteRootBeatsDeepPagesWhileTypingAHost() {

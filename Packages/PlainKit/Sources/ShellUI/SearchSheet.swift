@@ -530,7 +530,7 @@ final class SuggestionRow: UIControl {
     /// `AddressBarSuggestions` dedupes it) or a search's text, ignoring case.
     static func identity(of suggestion: AddressBarSuggestion) -> String {
         switch suggestion {
-        case .page(let url, _, _): "page " + AddressBarSuggestions.addressKey(url)
+        case .page(let url, _, _, _): "page " + AddressBarSuggestions.addressKey(url)
         case .search(let query): "search " + query.lowercased()
         }
     }
@@ -605,13 +605,13 @@ final class SuggestionRow: UIControl {
         shownIndex = index
         identity = Self.identity(of: suggestion)
         switch suggestion {
-        case .page(let url, let pageTitle, let isFavorite):
+        case .page(let url, let pageTitle, let isFavorite, let isSaved):
             let address = Self.displayAddress(url)
             let name = pageTitle.flatMap { $0.isEmpty ? nil : $0 }
             setText(title, name ?? address)
             setText(detail, name == nil ? nil : address)
             if detail.isHidden != (name == nil) { detail.isHidden = name == nil }
-            setSymbol(isFavorite ? "star" : "clock")
+            setSymbol(isFavorite ? "star" : isSaved ? "eyeglasses" : "clock")
             pick = .page(url)
             accessibilityIdentifier = "suggestion.page.\(index)"
             accessibilityLabel = title.text

@@ -209,7 +209,7 @@ struct AddressBarDataTests {
         await data.flush()
         var pages: [URL] = []
         await data.suggestions(for: "example page") { updates in
-            pages = updates.compactMap { if case .page(let url, _, _) = $0 { url } else { nil } }
+            pages = updates.compactMap { if case .page(let url, _, _, _) = $0 { url } else { nil } }
         }
         #expect(pages.first == typed)
 
@@ -217,7 +217,7 @@ struct AddressBarDataTests {
         data.suggestionPicked(input: "example page", url: linked)
         await data.flush()
         await data.suggestions(for: "example page") { updates in
-            pages = updates.compactMap { if case .page(let url, _, _) = $0 { url } else { nil } }
+            pages = updates.compactMap { if case .page(let url, _, _, _) = $0 { url } else { nil } }
         }
         #expect(pages.first == linked)
     }

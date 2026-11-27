@@ -130,6 +130,25 @@ public enum Signposts {
     /// Event: the favorites editor opened from the favorites strip.
     public static let favoritesEditorOpen: StaticString = "favorites.editorOpen"
 
+    // MARK: Reading list
+
+    /// Interval: Read Later in the page menu, from the tap until the page (and its reader copy,
+    /// when it has an article) is saved. Message: "copy" or "link".
+    public static let readingListSave: StaticString = "readingList.save"
+    /// Event: Remove from Reading List in the page menu.
+    public static let readingListRemove: StaticString = "readingList.remove"
+    /// Event: the Reading List sheet opened from the page menu.
+    public static let readingListShow: StaticString = "readingList.show"
+    /// Interval: the Reading List screen reading its rows (opening or a search), until they show.
+    public static let readingListLoad: StaticString = "readingList.load"
+    /// Event: the user opened a saved page from the Reading List.
+    public static let readingListOpen: StaticString = "readingList.open"
+    /// Event: a swipe or menu marked a saved page read or unread, or deleted it.
+    public static let readingListEdit: StaticString = "readingList.edit"
+    /// Interval: a saved page failed to load (offline, site gone), until its saved copy is handed
+    /// to the reader.
+    public static let readingListOfflineCopy: StaticString = "readingList.offlineCopy"
+
     // MARK: Reader
 
     /// Interval: a reader request, from asking for the page's article until it is returned (or

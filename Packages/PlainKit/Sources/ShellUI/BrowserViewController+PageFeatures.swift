@@ -59,7 +59,7 @@ extension BrowserViewController {
 
     /// After a zoom step, the open menu shows the new percentage.
     private func refreshOpenPageMenu(source: PageMenuSource) {
-        let menu = UIMenu(children: pageMenuElements(isFavorite: lastFavoriteAnswer, source: source))
+        let menu = UIMenu(children: pageMenuElements(marks: lastPageMarks, source: source))
         switch source {
         case .pill: pill.updateVisibleMenu(menu)
         case .button: buttonBar.button(.more).contextMenuInteraction?.updateVisibleMenu { _ in menu }

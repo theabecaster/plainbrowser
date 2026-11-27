@@ -1419,3 +1419,39 @@ routed to the lanes that own them.
 - **Start screen shortcuts use the page menu's captions** ("Reopen Tab", "Archive") in equal
   columns, full names for VoiceOver; an empty private tab's sentence says it is private ("A private
   tab: Plain keeps no history of it."), with no badge.
+
+## Bookmarks and the reading list (2026-11-27)
+
+Research: docs/research/bookmarks.md.
+
+- **No bookmark folders.** Favorites stay the one list of kept pages (flat, ordered, above the
+  keyboard); History search and the tab archive find the rest. Bookmark use is low in every
+  published number, nothing shows folders are common, and Arc shipped without bookmarks
+  (`FixedChoices.bookmarkFolders`).
+- **Reading List, "Read Later" in the page menu.** A page saved to read once. Unread until opened
+  from the list; read pages move to a Read section under the unread ones and stay until deleted.
+- **Offline copy: the reader's article, not a web archive** (Chrome's choice). Readability is
+  already in Plain; the copy is the article's cleaned HTML as JSON, LZFSE-compressed in a table of
+  its own (`readingListCopy`, deleted with its item), so the list and the address bar never read
+  copies. A page with no article (the readerable check said no) is saved as its link, and
+  Readability is never run on it. Web archives are heavy, break on script-driven pages and don't
+  open in a reader.
+- **Offline is automatic, no switch:** a saved page opens live; when its load fails for want of
+  the network (offline, connection lost, host not found, not answering, timed out;
+  `ControlRules.opensSavedCopy`) its copy opens in the reader over the error. Back or Hide Reader
+  shows the error and its Try Again. Not on certificate errors: the warning stays in front.
+- **Address bar:** unread saved pages that match rank right after favorites, with the eyeglasses
+  symbol. Read ones match as ordinary pages. The reading list query runs in the same read as
+  history and favorites, on its own FTS5 index (title and address, prefixes 1 and 2).
+- **Clear History and Data keeps the reading list**, as it keeps favorites and open tabs.
+- **Page menu, fitting the Duo's outer screen** (`testPageMenuFitsTheScreen`): Add to Favorites,
+  Read Later and Site Settings share one captioned row when two or more apply ("Favorite" /
+  "Unfavorite", "Read Later" / "Unsave", "Site"); VoiceOver reads the full names and the site.
+  Measured: a row of Favorite and Read Later alone added 19 pt and pushed the app's places off
+  the screen; folding Site Settings (a two-line item) into the row gives that back and more.
+  The app's places row became History, Reading List, Favorites, Settings: a captioned row holds
+  only three (a fourth wrapped to a second row, measured), so it is a row of four symbols, Safari's
+  own (clock, eyeglasses, star, gear), with the names for VoiceOver.
+- **Signposts:** `readingList.save` (interval, "copy" or "link"), `readingList.remove`,
+  `readingList.show`, `readingList.load` (interval), `readingList.open`, `readingList.edit`,
+  `readingList.offlineCopy` (interval).

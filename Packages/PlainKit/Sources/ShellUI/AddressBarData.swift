@@ -14,7 +14,20 @@ public struct FavoritePage: Hashable, Sendable {
     }
 }
 
-/// What the address bar needs from history, favorites, settings and the search engine. The shell
+/// Whether a page is a favorite and whether it is in the reading list, read together for the
+/// page menu.
+public struct PageMarks: Hashable, Sendable {
+    public var isFavorite: Bool
+    public var isSaved: Bool
+
+    public init(isFavorite: Bool, isSaved: Bool) {
+        self.isFavorite = isFavorite
+        self.isSaved = isSaved
+    }
+}
+
+/// What the address bar needs from history, favorites, the reading list, settings and the search
+/// engine. The shell
 /// talks only to this seam, so it never reaches into storage or the network itself.
 public protocol AddressBarData: AnyObject {
     /// The engine Return searches with.
@@ -30,6 +43,14 @@ public protocol AddressBarData: AnyObject {
     func isFavorite(_ url: URL) async -> Bool
     /// Adds `url` to the end of the favorites, or removes it. Returns false when it couldn't.
     func setFavorite(_ isFavorite: Bool, url: URL, title: String?) async -> Bool
+    /// Whether `url` is a favorite and whether it is in the reading list, read together.
+    func pageMarks(for url: URL) async -> PageMarks
+    /// Saves the page for later (again: it moves to the top, unread). Returns false when it couldn't.
+    func saveForLater(_ page: SavedPage) async -> Bool
+    /// Removes `url` from the reading list. Returns false when it couldn't.
+    func removeFromReadingList(url: URL) async -> Bool
+    /// The reader copy saved with `url`, or nil when it is not saved or was saved as a link.
+    func savedCopy(for url: URL) async -> Data?
     /// A page finished loading. `kind` is `.typed` when the address bar asked for it (an address,
     /// a search or a picked suggestion), which weighs more in ranking.
     func pageVisited(url: URL, title: String?, kind: VisitKind)
@@ -163,8 +184,9 @@ public final class LiveAddressBarData: AddressBarData {
         async let cachedAnswer = client.cachedSuggestions(for: query, engine: engine, isPrivate: isPrivate)
         var history: [PageCandidate] = []
         var favorites: [PageCandidate] = []
+        var saved: [PageCandidate] = []
         if let database, let candidates = try? await database.addressBarCandidates(for: query) {
-            (history, favorites) = candidates
+            (history, favorites, saved) = candidates
         }
         let cached = await cachedAnswer
         guard !Task.isCancelled else { return }
@@ -191,7 +213,9 @@ public final class LiveAddressBarData: AddressBarData {
             shownSearches = searches
             shownQuery = query
             if !holding { heldSince = nil } else if heldSince == nil { heldSince = now }
-            update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: searches))
+            update(AddressBarSuggestions.merge(
+                query: query, history: history, favorites: favorites, saved: saved, searches: searches
+            ))
         }
         deliver(first, holding: !held.isEmpty)
         guard remote else { return }
@@ -285,6 +309,28 @@ public final class LiveAddressBarData: AddressBarData {
     public func isFavorite(_ url: URL) async -> Bool {
         guard let database else { return false }
         return (try? await database.favorite(for: url)) != nil
+    }
+
+    public func pageMarks(for url: URL) async -> PageMarks {
+        guard let database, let marks = try? await database.marks(for: url) else {
+            return PageMarks(isFavorite: false, isSaved: false)
+        }
+        return PageMarks(isFavorite: marks.isFavorite, isSaved: marks.isSaved)
+    }
+
+    public func saveForLater(_ page: SavedPage) async -> Bool {
+        guard let database, Self.isRecordable(page.url) else { return false }
+        return (try? await database.saveForLater(page)) != nil
+    }
+
+    public func removeFromReadingList(url: URL) async -> Bool {
+        guard let database else { return false }
+        return (try? await database.removeFromReadingList(url: url)) != nil
+    }
+
+    public func savedCopy(for url: URL) async -> Data? {
+        guard let database else { return nil }
+        return try? await database.savedCopy(for: url)
     }
 
     public func setFavorite(_ isFavorite: Bool, url: URL, title: String?) async -> Bool {

@@ -132,7 +132,9 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
 
         let width = SidebarState.expanded.width
         NSLayoutConstraint.activate([
-            content.topAnchor.constraint(equalTo: view.topAnchor),
+            // The column (its paper, separator and shadow) runs to the screen's top edge; the
+            // tabs start under the status bar, the safe area this view gets from its parent.
+            content.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             content.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: view.trailingAnchor),

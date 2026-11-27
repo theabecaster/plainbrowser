@@ -107,7 +107,9 @@ extension BrowserViewController {
         duo.sidebarLeading = sidebar.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor)
         duo.sidebarTrailing = sidebar.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
         NSLayoutConstraint.activate([
-            sidebar.view.topAnchor.constraint(equalTo: safe.topAnchor),
+            // From the top edge, so no strip of the root view's paper sits above the column; its
+            // tabs start under the safe area (`SideTabsViewController`).
+            sidebar.view.topAnchor.constraint(equalTo: view.topAnchor),
             sidebar.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             width,
         ])

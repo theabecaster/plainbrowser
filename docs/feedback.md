@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Tabs button with one tab:** show the Tabs button (not "+") and open the switcher like the swipe-up does. (One-button lane.)
+
 
 - **Sign-in like Safari:** passkeys on sites that support them, and saved passwords from the Passwords app and every password manager on the phone (1Password, Bitwarden and others), as easily as in Safari. Both need Apple's web-browser entitlement; the request is ready for the owner to submit. Until it lands, sites are steered to password sign-in and a failed passkey attempt says why. Done when the entitlement ships and the device checks in `docs/research/sign-in.md` pass. (Sign-in lane.)
 

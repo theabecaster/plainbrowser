@@ -658,3 +658,40 @@ Each entry: what was chosen, and why. Newest last.
 - **One paper hook** (`IntroPaper`): the intro's ground view and its sheets' fill come from one
   place, so the shared paper texture (a parallel lane) is applied there and nowhere else in the
   intro. The intro builds no texture of its own.
+
+## Sign-in: passkeys, passwords and the web-browser entitlement (2026-11-26)
+
+Research and sources: `docs/research/sign-in.md`.
+
+- **One entitlement does it.** On iOS, `com.apple.developer.web-browser` alone gives `WKWebView`
+  passkeys for every site (Apple staff, forum 837755); the `.public-key-credential` key is macOS
+  only. It also lets AutoFill's "Passwords" button show on web login fields: measured on the iOS
+  27.2 simulator, a bare `WKWebView` in a plain app gets no button while a native field in the
+  same app and Safari do. `Plain/Plain-WebBrowser.entitlements` holds the key, unused by the build
+  until Apple grants it (signing with a managed entitlement the team lacks fails provisioning).
+- **No password store of Plain's own** (`FixedChoices.passwordsFromSystemAutoFill`). Firefox,
+  DuckDuckGo, Brave and Chrome keep one and register as an AutoFill provider so they can offer
+  "save password", which `WKWebView` can't trigger for other apps. Plain leaves passwords to the
+  system's Passwords app and the managers the user already chose: a second store is one more to
+  keep in sync, to secure and to export. Saving new passwords stays the managers' job (their
+  apps and extensions).
+- **Until the grant, steer sites to passwords** (`FixedChoices.passkeysEnabled = false`). WebKit
+  without the entitlement refuses every passkey request yet reports a platform authenticator in
+  `getClientCapabilities()` (measured), so sites offer passkey buttons and prompts that only fail.
+  A page-world script makes the passkey feature checks answer "no", so sites show their password
+  sign-in, like in a browser without passkeys. It keeps `PublicKeyCredential` itself (removing it
+  breaks scripts that reference the type) and wraps with `Proxy` so functions still read as
+  native code to bot checks. A request made anyway still fails with WebKit's own
+  `NotAllowedError`, so the site's fallback runs, and one toast per site per launch says why.
+  The page world gets no message handler of Plain's: the script fires a DOM event that the
+  engine's world relays. Cost: one small script per frame at document start, a few proxies, no
+  work until a site asks for a passkey.
+- **Not built: a native AutoFill bridge.** Plain could show its own key button on login fields,
+  open a native username and password field that gets the system's Passwords button, and copy
+  the picked account into the page. It would work today with every password manager, but it is
+  a second sign-in UI that the entitlement makes redundant, it moves passwords through Plain's
+  own code, and it needs a design pass. Revisit only if Apple refuses or delays the entitlement.
+- **Links from other apps** open in a new tab (`BrowserViewController.open(externalURL:)`). At
+  launch they wait for the launch focus, so the search field never comes up over the page. While
+  the first-run intro is up, the intro gives way unseen and shows again next launch: Apple
+  requires the requested page, not an interstitial.

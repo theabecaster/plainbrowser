@@ -61,7 +61,7 @@ These are the key facts from seven research reports, kept for builders. The plan
   - `kagi.com/api/autosuggest?q=`
   - `startpage.com/osuggestions?q=`
   - Bing's `osjson` endpoint is dead.
-- **Web-browser entitlement** (`com.apple.developer.web-browser`): needed for default browser, passkeys in `WKWebView` and service workers. Apple grants it manually. Not available yet.
+- **Web-browser entitlement** (`com.apple.developer.web-browser`): needed for default browser, passkeys in `WKWebView` (on iOS no other key), AutoFill's Passwords button on web fields (measured) and service workers. Apple grants it manually. Not available yet. Details and sources: `docs/research/sign-in.md`.
 
 ## Motion
 

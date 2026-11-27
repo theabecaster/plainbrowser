@@ -670,6 +670,50 @@ final class CaptureTests: XCTestCase {
         shot("reveal-2-scroll-up")
     }
 
+    /// The page menu on a readerable page, a foreign page, and a readerable foreign page with a
+    /// closed tab to reopen (its tallest common state), for the fit on the Duo's outer screen.
+    func testCapturePageMenuStates() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestTranslator", "-PlainTranslateHintShown", "YES"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 20))
+        func open(_ path: String, _ heading: String) {
+            if !(field.exists && field.hasKeyboardFocus) {
+                app.buttons["addressPill"].tap()
+                XCTAssertTrue(field.waitForExistence(timeout: 2))
+            }
+            field.typeText(server.address(path) + "\n")
+            XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 10))
+            pause(2)
+        }
+        func menuShot(_ name: String) {
+            app.buttons["more"].tap()
+            XCTAssertTrue(app.buttons["menu.settings"].waitForExistence(timeout: 3))
+            pause(1)
+            shot(name)
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.1)).tap()
+            pause(0.8)
+        }
+        open("/article", "The Quiet Page")
+        menuShot("menu-1-readerable")
+        open("/french", "Le marché du samedi")
+        menuShot("menu-2-foreign")
+        let tabs = app.buttons["tabs"]
+        tabs.press(forDuration: 1.0)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        open("/b", "Page B")
+        tabs.press(forDuration: 1.0)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Close Tab'")).firstMatch.tap()
+        pause(1)
+        open("/french-article", "La page tranquille")
+        menuShot("menu-3-readerable-foreign-reopen")
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

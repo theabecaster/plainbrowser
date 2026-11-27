@@ -301,10 +301,34 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
             old.indexOfItem(id) != nil && (items[id] != next[id] || marked.contains(id))
         }
         snapshot.reconfigureItems(changed)
+        let focusMoved = focused != focusedID
         items = next
         focusedID = focused
         otherID = other
         diffable.apply(snapshot, animatingDifferences: old.numberOfItems > 0 && view.window != nil)
+        if focusMoved { needsFocusScroll = true }
+        scrollFocusedIntoViewIfNeeded(animated: old.numberOfItems > 0 && view.window != nil)
+    }
+
+    /// The tab on screen has not been brought into view since the focus moved (or the list was
+    /// built: a rail made while the twentieth tab shows starts on it, not on the first).
+    private var needsFocusScroll = true
+
+    /// Brings the focused tab's row into view when it is not fully there; a row already in view
+    /// stays where it is, so picking a tab never moves the list under the finger.
+    private func scrollFocusedIntoViewIfNeeded(animated: Bool) {
+        guard needsFocusScroll, collectionView.bounds.height > 0, let focusedID,
+              let indexPath = diffable.indexPath(for: focusedID) else { return }
+        needsFocusScroll = false
+        collectionView.layoutIfNeeded()
+        guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame,
+              !collectionView.bounds.contains(frame) else { return }
+        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
+    }
+
+    override public func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        scrollFocusedIntoViewIfNeeded(animated: false)
     }
 
     private func configure(_ cell: SideTabCell, id: UUID) {

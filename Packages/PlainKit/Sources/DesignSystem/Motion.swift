@@ -14,6 +14,11 @@ public enum Motion {
     public static let urlFocus = Animation.spring(duration: 0.3, bounce: 0)
     /// Small state changes: a row highlight, an armed indicator.
     public static let quick = Animation.snappy(duration: 0.15)
+    /// Address-bar suggestions changing while typing: new rows fade in, old ones fade out where
+    /// they stand, and a row that stays but changes place slides there. A no-bounce spring
+    /// (`UIView.animate(springDuration:bounce:…)` with this duration), so the next keystroke
+    /// retargets it from wherever the rows are on screen.
+    public static let suggestionsDuration: TimeInterval = 0.18
     /// Toolbar snaps collapsed or expanded when a drag ends, from the release velocity. A spring
     /// value, not an `Animation`: `SpringDriver` runs it frame by frame so a new drag can grab it.
     public static let toolbarSnap = Spring.smooth(duration: 0.25)

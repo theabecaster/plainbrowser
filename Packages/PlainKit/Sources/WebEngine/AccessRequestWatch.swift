@@ -9,8 +9,8 @@ import WebKit
 /// `NotAllowedError` or `PERMISSION_DENIED`), so the only way to know a site asked is to see the
 /// call. The script wraps `getUserMedia`, `getCurrentPosition` and `watchPosition` and posts which
 /// features the call needed, then calls the original. It has to run in the page's own world to see
-/// the page's calls, so it is installed only while a feature is off (`watched(by:)`) and wraps
-/// only the APIs of the features that are off: with everything on, pages get nothing of Plain's.
+/// the page's calls, so it is installed only while a feature is off (`watched(by:)`): with
+/// everything on, pages get nothing of Plain's.
 /// A page that posts on its own can only make Plain say once what is already true: the shell
 /// checks the feature itself and tells each site once (`SystemAccessNoticeMemory`).
 enum AccessRequestWatch {
@@ -28,43 +28,42 @@ enum AccessRequestWatch {
         script.source.hasPrefix(marker)
     }
 
-    static func script(watching features: Set<SystemFeature>) -> WKUserScript {
-        WKUserScript(source: source(watching: features), injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page)
-    }
+    /// The script for every new document while something is off. It posts every feature the call
+    /// needs; the pool keeps those that are off (`pageAskedForSwitchedOff`).
+    static let script = WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page)
 
-    static func source(watching features: Set<SystemFeature>) -> String {
-        let camera = features.contains(.camera)
-        let microphone = features.contains(.microphone)
-        let location = features.contains(.location)
-        return """
-            \(marker)
-            (() => {
-              const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.\(handlerName);
-              if (!handler) return;
-              const post = (features) => { if (features.length) { try { handler.postMessage(features); } catch (e) {} } };
-              const wrap = (target, name, needs) => {
-                const original = target && target[name];
-                if (typeof original !== 'function') return;
-                const wrapped = { [name](...args) { post(needs(args)); return original.apply(this, args); } }[name];
-                try { Object.defineProperty(target, name, { value: wrapped, writable: true, configurable: true }); } catch (e) {}
-              };
-              // The prototypes, never the instances: a property set on a DOM wrapper is lost when
-              // JavaScriptCore remakes the wrapper (docs/research/notes.md, WebKit).
-              if (\(camera || microphone) && window.MediaDevices) {
-                wrap(MediaDevices.prototype, 'getUserMedia', (args) => {
-                  const wants = args[0] || {};
-                  const needs = [];
-                  if (\(camera) && wants.video) needs.push('camera');
-                  if (\(microphone) && wants.audio) needs.push('microphone');
-                  return needs;
-                });
-              }
-              if (\(location) && window.Geolocation) {
-                for (const name of ['getCurrentPosition', 'watchPosition']) wrap(Geolocation.prototype, name, () => ['location']);
-              }
-            })();
-            """
-    }
+    /// Idempotent, so it can also run in the documents already open when a feature goes off
+    /// (`WebViewPool.systemAccessDidChange`): a function it already wrapped is left alone. The
+    /// handler is looked up at each call, so a wrapper outliving it (the feature back on) posts
+    /// nothing.
+    static let source = """
+        \(marker)
+        (() => {
+          const mark = Symbol.for('plainAccessWatch');
+          const post = (features) => {
+            if (!features.length) return;
+            try { window.webkit.messageHandlers.\(handlerName).postMessage(features); } catch (e) {}
+          };
+          const wrap = (target, name, needs) => {
+            const original = target && target[name];
+            if (typeof original !== 'function' || original[mark]) return;
+            const wrapped = { [name](...args) { post(needs(args)); return original.apply(this, args); } }[name];
+            wrapped[mark] = true;
+            try { Object.defineProperty(target, name, { value: wrapped, writable: true, configurable: true }); } catch (e) {}
+          };
+          // The prototypes, never the instances: a property set on a DOM wrapper is lost when
+          // JavaScriptCore remakes the wrapper (docs/research/notes.md, WebKit).
+          if (window.MediaDevices) {
+            wrap(MediaDevices.prototype, 'getUserMedia', (args) => {
+              const wants = args[0] || {};
+              return [].concat(wants.video ? ['camera'] : [], wants.audio ? ['microphone'] : []);
+            });
+          }
+          if (window.Geolocation) {
+            for (const name of ['getCurrentPosition', 'watchPosition']) wrap(Geolocation.prototype, name, () => ['location']);
+          }
+        })();
+        """
 
     /// Receives the script's posts for one tab.
     final class Handler: NSObject, WKScriptMessageHandler {
@@ -76,7 +75,9 @@ enum AccessRequestWatch {
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             guard let names = message.body as? [String], let tab, let pool = tab.pool else { return }
-            let features = names.prefix(4).compactMap(SystemFeature.init(rawValue:))
+            // Only what a page can ask for: a post of "photos" must not reach Save Image's line.
+            let askable: Set<SystemFeature> = [.camera, .microphone, .location]
+            let features = names.prefix(4).compactMap(SystemFeature.init(rawValue:)).filter(askable.contains)
             pool.pageAskedForSwitchedOff(features, in: tab)
         }
     }

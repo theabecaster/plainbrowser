@@ -131,6 +131,8 @@ public final class WebViewPool {
     private var systemAccessStarted = false
     /// Remembered permission answers per site (`rememberedPermissions(for:)`).
     private var siteAnswers: [String: [SitePermission: Bool]] = [:]
+    /// Bumped when the private session ends, so a private read still on its way is dropped.
+    private var privateSessionGeneration = 0
     /// False while the app is in the background or inactive. Tests never leave the active state.
     private(set) var isAppActive = true
 
@@ -269,7 +271,7 @@ public final class WebViewPool {
         controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
         controller.addUserScript(DarkPages.frameScript)
         if translator != nil { controller.addUserScript(PageTranslation.languageScript) }
-        if !accessWatch.isEmpty { controller.addUserScript(AccessRequestWatch.script(watching: accessWatch)) }
+        if !accessWatch.isEmpty { controller.addUserScript(AccessRequestWatch.script) }
     }
 
     /// Dark pages for the tabs of one kind, built from its sites list once per change of the list.
@@ -502,6 +504,9 @@ public final class WebViewPool {
         privateSiteChoices = nil
         privatePasskeyNoticeSites = []
         privateDarkPagesStore = nil
+        // Private answers go with the session; a read still on its way is dropped.
+        siteAnswers = siteAnswers.filter { !$0.key.hasPrefix(Self.privateAnswersPrefix) }
+        privateSessionGeneration += 1
         darkPagesScripts[true] = nil
         Task { await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) }
     }
@@ -1076,8 +1081,10 @@ public final class WebViewPool {
     }
 
     private static func answersKey(_ site: String, isPrivate: Bool) -> String {
-        (isPrivate ? "private " : "") + site
+        (isPrivate ? privateAnswersPrefix : "") + site
     }
+
+    private static let privateAnswersPrefix = "private 
 
     /// What the user answered for the site `tab` shows: nothing for a permission never asked.
     public func rememberedPermissions(for tab: Tab) -> [SitePermission: Bool] {
@@ -1089,9 +1096,11 @@ public final class WebViewPool {
         guard let url, let site = Self.site(of: url) else { return }
         let key = Self.answersKey(site, isPrivate: tab.isPrivate)
         let store = siteChoices(for: tab).permissions
+        let generation = privateSessionGeneration
         Task { [weak self] in
             let answers = await store.answers(forSite: site)
-            self?.siteAnswers[key] = answers
+            guard let self, !tab.isPrivate || generation == privateSessionGeneration else { return }
+            siteAnswers[key] = answers
         }
     }
 
@@ -1117,8 +1126,9 @@ public final class WebViewPool {
     /// off now (from their next page on), and the shell updates what it says.
     private func systemAccessDidChange(_ changed: Set<SystemFeature>) {
         let watched = AccessRequestWatch.watched(by: systemAccess)
-        if watched != accessWatch {
-            accessWatch = watched
+        let wasWatching = !accessWatch.isEmpty
+        accessWatch = watched
+        if watched.isEmpty == wasWatching {
             var controllers = slots.values.map(\.controller)
             if let warm { controllers.append(warm.controller) }
             // WebKit removes user scripts only all at once: keep every other script and swap ours.
@@ -1126,9 +1136,14 @@ public final class WebViewPool {
                 let others = controller.userScripts.filter { !AccessRequestWatch.isWatchScript($0) }
                 controller.removeAllUserScripts()
                 others.forEach(controller.addUserScript)
-                if !watched.isEmpty { controller.addUserScript(AccessRequestWatch.script(watching: watched)) }
+                if !watched.isEmpty { controller.addUserScript(AccessRequestWatch.script) }
             }
-            for slot in slots.values { slot.setWatchesAccess(!watched.isEmpty) }
+            for slot in slots.values {
+                slot.setWatchesAccess(!watched.isEmpty)
+                // A user script runs from the next document on: the pages already open are
+                // watched from now (the script leaves what it already wrapped alone).
+                if !watched.isEmpty { slot.webView.evaluateJavaScript(AccessRequestWatch.source, in: nil, in: .page) { _ in } }
+            }
         }
         host?.pool(self, systemAccessDidChange: changed)
     }

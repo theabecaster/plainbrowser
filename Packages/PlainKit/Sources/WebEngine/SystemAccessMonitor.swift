@@ -89,7 +89,7 @@ public final class SystemAccessMonitor {
                 wifiDenied: path.status != .satisfied && path.unsatisfiedReason == .wifiDenied,
                 hasWiFi: path.status == .satisfied && path.usesInterfaceType(.wifi)
             )
-            Task { @MainActor in self?.network = snapshot }
+            Task { @MainActor in self?.pathDidChange(snapshot) }
         }
         pathMonitor.start(queue: DispatchQueue(label: "Plain.SystemAccess.path", qos: .utility))
         let cellular = CTCellularData()
@@ -99,6 +99,15 @@ public final class SystemAccessMonitor {
         }
         cellularData = cellular
         refresh()
+    }
+
+    /// The network path changed: when that changes why pages can't load (Wi-Fi back, cellular
+    /// data allowed again), it is reported as a cellular change.
+    private func pathDidChange(_ snapshot: NetworkSnapshot) {
+        guard snapshot != network else { return }
+        let before = networkBlock
+        network = snapshot
+        if networkBlock != before { onChange([.cellular]) }
     }
 
     /// A fresh answer the engine read on its own (Save Image reads Photos before it saves).

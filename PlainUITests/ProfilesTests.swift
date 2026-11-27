@@ -61,8 +61,12 @@ final class ProfilesTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 2))
         XCTAssertFalse(alert.buttons[button].isEnabled && (field.value as? String ?? "").isEmpty, "\(button) waits for a name")
         if let current = field.value as? String, !current.isEmpty, current != field.placeholderValue {
-            field.tap()
-            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+            let clear = field.buttons["Clear text"]
+            if clear.exists {
+                clear.tap()
+            } else {
+                field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+            }
         }
         field.typeText(name)
         alert.buttons[button].tap()
@@ -126,6 +130,63 @@ final class ProfilesTests: XCTestCase {
         XCTAssertTrue(profileButton(app).waitForNonExistence(timeout: 3))
         personalCard.tap()
         waitForPage(app, "Signed In")
+    }
+
+    /// Screenshots of every profile state for design review; runs only with `PLAIN_CAPTURE=1`
+    /// (see CaptureTests).
+    func testCaptureProfiles() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let app = try launch()
+        go(app, to: "/a")
+        waitForPage(app, "Page A")
+        go(app, to: "/c")
+        waitForPage(app, "Page C")
+        _ = openGallery(app)
+        pause(1.5)
+        app.buttons["galleryMenu"].tap()
+        pause(1)
+        shot("p1-more-menu")
+        pick(app, "New Profile")
+        pause(1)
+        shot("p2-new-profile")
+        name(app, "Work", confirm: "Create")
+        pause(1.5)
+        shot("p3-empty-work")
+        app.buttons["emptyNewTab"].tap()
+        pause(1.5)
+        shot("p4-work-start")
+        go(app, to: "/cookie")
+        waitForPage(app, "Signed Out")
+        _ = openGallery(app)
+        pause(1.5)
+        shot("p5-work-gallery")
+        profileButton(app).tap()
+        pause(1)
+        shot("p6-switcher-menu")
+        pick(app, "Personal")
+        pause(1.5)
+        shot("p7-personal-list")
+        profileButton(app).tap()
+        pick(app, "Work")
+        pause(1)
+        profileButton(app).tap()
+        pick(app, "Delete Profile")
+        pause(1)
+        shot("p8-delete-confirm")
+        app.alerts.firstMatch.buttons["Delete Profile"].tap()
+        pause(1.5)
+        shot("p9-after-delete")
+    }
+
+    private func pause(_ seconds: TimeInterval) {
+        Thread.sleep(forTimeInterval: seconds)
+    }
+
+    private func shot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testTheWindowsProfileComesBackAfterARelaunch() throws {

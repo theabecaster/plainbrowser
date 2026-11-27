@@ -122,7 +122,7 @@ extension BrowserViewController {
         let tabs = session.tabs
         askForProfileName(
             title: String(localized: "Rename Profile"), message: nil, action: String(localized: "Rename"),
-            placeholder: profile.name, text: profile.name,
+            placeholder: String(localized: "Name"), text: profile.name,
             isTaken: { tabs.store.isProfileNameTaken($0, besides: profile.id) }
         ) { [weak self] name in
             guard tabs.renameProfile(profile.id, to: name) else { return }

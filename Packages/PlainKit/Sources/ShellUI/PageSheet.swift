@@ -145,7 +145,7 @@ final class PageSheetController: UIViewController {
         }
         var host = UIButton.Configuration.plain()
         host.attributedTitle = AttributedString(address.host, attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .headline), .foregroundColor: Palette.ink,
+            .font: Self.gridFont(.headline), .foregroundColor: Palette.ink,
         ]))
         if address.notSecure {
             host.subtitle = String(localized: "Not Secure")
@@ -178,11 +178,13 @@ final class PageSheetController: UIViewController {
             row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Spacing.xs),
             row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Spacing.xs),
         ])
+        card.maximumContentSizeCategory = Self.gridLimit
         return card
     }
 
     private func tilesRow(_ actions: [UIAction]) -> UIView {
         let row = UIStackView(arrangedSubviews: actions.map { tile($0) })
+        row.maximumContentSizeCategory = Self.gridLimit
         row.axis = .horizontal
         row.distribution = .fillEqually
         row.alignment = .top
@@ -208,7 +210,7 @@ final class PageSheetController: UIViewController {
         // While the first translated text is on its way the tile says so ("Translating…").
         let caption = (isOn ? action.subtitle : nil) ?? Self.caption(action.title)
         configuration.attributedTitle = AttributedString(caption, attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .footnote),
+            .font: Self.gridFont(.footnote),
             .foregroundColor: isOn ? Palette.accentOnPaper : Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
@@ -245,6 +247,7 @@ final class PageSheetController: UIViewController {
             row.translatesAutoresizingMaskIntoConstraints = false
             card.addSubview(row)
             Self.pin(row, in: card, inset: Spacing.xs)
+            card.maximumContentSizeCategory = Self.gridLimit
             return card
         case .stepper(let actions):
             let card = Self.card()
@@ -252,7 +255,7 @@ final class PageSheetController: UIViewController {
                 let button = UIButton(configuration: .plain(), primaryAction: perform(action, dismisses: false))
                 if action.image == nil {
                     button.configuration?.attributedTitle = AttributedString(action.title, attributes: AttributeContainer([
-                        .font: UIFont.monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .medium),
+                        .font: UIFont.monospacedDigitSystemFont(ofSize: Self.gridFont(.body).pointSize, weight: .medium),
                     ]))
                 } else {
                     button.configuration?.image = action.image
@@ -268,6 +271,7 @@ final class PageSheetController: UIViewController {
             card.addSubview(row)
             Self.pin(row, in: card, inset: 0)
             card.heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget + Spacing.xs).isActive = true
+            card.maximumContentSizeCategory = Self.gridLimit
             return card
         }
     }
@@ -321,7 +325,7 @@ final class PageSheetController: UIViewController {
         let isOn = (element as? UIAction)?.state == .on
         configuration.baseForegroundColor = isOn ? Palette.accentOnPaper : Palette.ink
         configuration.attributedTitle = AttributedString(Self.caption(element.title), attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .footnote),
+            .font: Self.gridFont(.footnote),
             .foregroundColor: isOn ? Palette.accentOnPaper : Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
@@ -402,6 +406,19 @@ final class PageSheetController: UIViewController {
             view.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: inset),
             view.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -inset),
         ])
+    }
+
+    /// The largest text size of the sheet's fixed grids (the address row, the tiles, the chips and
+    /// the zoom row): three or four cells share the width, so past this size their captions were
+    /// cut to "Rea…" and "Su…" and the address row's buttons ran into each other. They stop at the
+    /// largest standard size, as the pill and the switcher's bar do (docs/ui-reference.md); the
+    /// rows under them keep growing.
+    private static let gridLimit = UIContentSizeCategory.extraExtraExtraLarge
+
+    private static func gridFont(_ style: UIFont.TextStyle) -> UIFont {
+        let category = UITraitCollection.current.preferredContentSizeCategory
+        let capped = category > gridLimit ? gridLimit : category
+        return .preferredFont(forTextStyle: style, compatibleWith: UITraitCollection(preferredContentSizeCategory: capped))
     }
 
     /// The short caption a tile or chip shows; VoiceOver keeps the full name.

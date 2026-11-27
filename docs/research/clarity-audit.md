@@ -195,7 +195,7 @@ change to make. Captures: `clarity/<config>/<shot>.jpg` in the session scratchpa
     state shows like the on tiles: the filled star and "Favorite", the glasses and "Saved", both
     in the accent; a tap removes it. VoiceOver keeps "Remove from Favorites" and "Remove from
     Reading List", selected. [before: i17-light/sheet-03-favorited-saved; after:
-    i17-xl/sheet-03-favorited-saved]
+    i17-final/sheet-03-favorited-saved]
 15. **Site Settings' items word the same thing three ways:** "Desktop Site", "Turn Off Blocking
     on This Site", "Turn Off Cookie Banner Blocking", "Turn Off Dark Pages for This Site". Under a
     menu titled Site Settings the tail is noise, and Desktop Site shows no on or off. **Lead's

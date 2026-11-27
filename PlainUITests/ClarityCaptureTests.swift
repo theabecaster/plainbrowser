@@ -743,6 +743,31 @@ final class ClarityCaptureTests: XCTestCase {
 
     // MARK: The Duo's inner screen
 
+    /// The inner screen's states reached by launch arguments alone: XCUITest's taps do not land in
+    /// the resizable window that stands in for the inner screen, so nothing here is driven.
+    func test14InnerStills() throws {
+        try XCTSkipUnless(inner, "inner screen only")
+        let article = "http://" + server.address("/article")
+        let long = "http://" + server.address("/long")
+        let a = "http://" + server.address("/a")
+        let states: [(String, [String])] = [
+            ("strip", ["-PlainOpen", "\(article),\(long),\(a)", "-PlainTabLayout", "above"]),
+            ("split", ["-PlainOpen", "\(article),\(long)", "-PlainSplit"]),
+            ("tabs-left", ["-PlainOpen", "\(article),\(long),\(a)", "-PlainTabLayout", "left", "-PlainSidebar", "expanded"]),
+            ("tabs-left-rail", ["-PlainOpen", "\(article),\(long),\(a)", "-PlainTabLayout", "left", "-PlainSidebar", "rail"]),
+            ("tabs-right", ["-PlainOpen", "\(article),\(long),\(a)", "-PlainTabLayout", "right", "-PlainSidebar", "expanded"]),
+            ("pane-reader", ["-PlainOpen", article, "-PlainSidePane", "reader"]),
+            ("pane-find", ["-PlainOpen", long, "-PlainSidePane", "find", "-PlainFind", "Paragraph 4"]),
+            ("pane-history", ["-PlainOpen", "\(a),\(article)", "-PlainSidePane", "history"]),
+        ]
+        for (name, arguments) in states {
+            let app = launch(arguments, wait: false)
+            pause(9)
+            shot("still-\(name)")
+            app.terminate()
+        }
+    }
+
     func test13Inner() throws {
         try XCTSkipUnless(inner, "inner screen only")
         var app = launch(["-PlainTabLayout", "above"])

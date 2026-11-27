@@ -45,11 +45,7 @@ public struct ArchiveView: View {
                     ReadFailedView(message: Wording.archiveReadFailed, systemImage: "archivebox") { await model.load() }
                 } else if model.isLoaded, model.rows.isEmpty {
                     if model.query.isEmpty {
-                        ContentUnavailableView {
-                            Label("No archived tabs.", systemImage: "archivebox")
-                        } description: {
-                            Text(footer)
-                        }
+                        PaperEmptyState(message: "No archived tabs.", systemImage: "archivebox", footer: footer)
                     } else {
                         ContentUnavailableView.search(text: model.query)
                     }

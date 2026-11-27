@@ -130,7 +130,7 @@ public struct HistoryView: View {
                 ReadFailedView(message: Wording.historyReadFailed, systemImage: "clock") { await model.load() }
             } else if model.isLoaded, model.isEmpty {
                 if model.query.isEmpty {
-                    ContentUnavailableView("Pages you visit show up here.", systemImage: "clock")
+                    PaperEmptyState(message: "Pages you visit show up here.", systemImage: "clock")
                 } else {
                     ContentUnavailableView.search(text: model.query)
                 }

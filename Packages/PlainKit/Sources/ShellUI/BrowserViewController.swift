@@ -1223,10 +1223,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self?.showHistory()
         }
         history.accessibilityIdentifier = "menu.history"
-        let readingList = UIAction(title: "Reading List", image: UIImage(systemName: "eyeglasses")) { [weak self] _ in
-            self?.showReadingList()
-        }
-        readingList.accessibilityIdentifier = "menu.readingList"
+        let readingList = readingListMenuItem()
         let settings = UIAction(title: "Settings", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.showSettings()
         }
@@ -1240,15 +1237,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // The database is still opening (the first moments after launch).
             for item in [history, readingList, favorites, settings] { item.attributes = .disabled }
         }
-        // The app's own places, always there and rarely needed mid-page: one row of four symbols
-        // (a captioned row holds only three), with Downloads (and its progress) above it while
-        // there are any. Safari's symbols for each; VoiceOver reads the names.
+        // The app's own places, always there and rarely needed mid-page: one row of three, with
+        // Downloads (and its progress) and the Reading List above it. Short titles fit the row.
         favorites.title = "Favorites"
         favorites.accessibilityLabel = "Edit Favorites"
-        let appRow = UIMenu(options: .displayInline, children: [history, readingList, favorites, settings])
-        appRow.preferredElementSize = .small
+        let appRow = UIMenu(options: .displayInline, children: [history, favorites, settings])
+        appRow.preferredElementSize = .medium
         let downloads = downloadsMenuItems()
-        let app = UIMenu(options: .displayInline, children: downloads.isEmpty ? [appRow] : downloads + [appRow])
+        let app = UIMenu(options: .displayInline, children: downloads + [readingList, appRow])
         // Every item below follows docs/state-rules.md §4 through ControlRules: items that never
         // apply to this page are left out, Stop takes Reload's place while loading.
         let rules = currentRules()
@@ -1333,15 +1329,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             keepItems.append(favorite)
         }
         if rules.readLater, let isSaved = marks?.isSaved {
-            let readLater = UIAction(
-                title: isSaved ? "Remove from Reading List" : "Read Later",
-                image: UIImage(systemName: isSaved ? "eyeglasses.slash" : "eyeglasses")
-            ) { [weak self, weak tab] _ in
-                guard let self, let tab else { return }
-                if isSaved { self.removeFromReadingList(url) } else { self.saveForLater(tab, url: url) }
-            }
-            readLater.accessibilityIdentifier = "menu.readLater"
-            keepItems.append(readLater)
+            keepItems.append(readLaterMenuItem(for: tab, url: url, isSaved: isSaved))
         }
         // The menu fits the Duo's outer screen (docs/ui-reference.md, page menu): the most used
         // actions are one row, the per-site choices one submenu, the app's places one row.
@@ -1351,30 +1339,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sections.append(actions)
         if !pageItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: pageItems)) }
         if rules.zoom { sections.append(zoomMenu(for: tab, source: source)) }
-        // What the user keeps or sets for this page, Add to Favorites, Read Later and Site
-        // Settings, share one captioned row when two or more apply ("Favorite", "Read Later",
-        // "Site"), so keeping a page costs the menu no extra line on the Duo's outer screen.
-        // VoiceOver reads the full names and the site.
-        let siteMenu = siteItems.count > 1 ? url.host() : nil
-        let inRow = keepItems.count + (siteMenu == nil ? 0 : 1) > 1
         var placeItems: [UIMenuElement] = keepItems
-        if let host = siteMenu {
+        if siteItems.count > 1, let host = url.host() {
             // Desktop Site, blocking and dark pages: set once per site, then remembered.
             let site = UIMenu(
-                title: inRow ? String(localized: "Site") : "Site Settings", subtitle: inRow ? nil : Self.siteName(host),
-                image: UIImage(systemName: "slider.horizontal.3"), children: siteItems
+                title: "Site Settings", subtitle: Self.siteName(host), image: UIImage(systemName: "slider.horizontal.3"),
+                children: siteItems
             )
             site.accessibilityIdentifier = "menu.siteSettings"
-            site.accessibilityLabel = "Site Settings, " + Self.siteName(host)
             placeItems.append(site)
         } else {
             placeItems += siteItems
-        }
-        if inRow {
-            for case let action as UIAction in keepItems { Self.caption(action) }
-            let row = UIMenu(options: .displayInline, children: placeItems)
-            row.preferredElementSize = .medium
-            placeItems = [row]
         }
         placeItems += paneItems
         if !placeItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: placeItems)) }
@@ -1389,8 +1364,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             "Show Original": String(localized: "Original"), "Show Reader": String(localized: "Reader"),
             "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
             "Archived Tabs": String(localized: "Archive"),
-            "Add to Favorites": String(localized: "Favorite"), "Remove from Favorites": String(localized: "Unfavorite"),
-            "Remove from Reading List": String(localized: "Unsave"),
         ]
         action.accessibilityLabel = [action.title, action.subtitle].compactMap { $0 }.joined(separator: ", ")
         action.title = captions[action.title] ?? action.title
@@ -1413,75 +1386,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
     }
 
-    /// Read Later: saves the page with its article as a reader copy when it has one (the reader's
-    /// own extraction, already done when the reader is open), else as a link. The extraction runs
-    /// in the page's web content process and the encoding off the main thread.
-    private func saveForLater(_ tab: Tab, url: URL) {
-        let signposter = Signposts.signposter
-        let state = signposter.beginInterval(Signposts.readingListSave)
-        // Only a page whose readerable check said yes is parsed: no 90 KB Readability run on a page
-        // with no article.
-        let page = currentRules().reader != .hidden ? session.pool.webView(for: tab) : nil
-        let title = tab.title
-        Haptic.success.prepare()
-        Task { [weak self, session, data] in
-            // The article must be this address's: the page under a saved copy can be another one,
-            // and the page may navigate before or while the extraction runs.
-            var article: ReaderArticle?
-            if let page, page.url == url {
-                article = try? await session.reader.article(in: page)
-                if page.url != url || article?.url.map({ AddressBarSuggestions.addressKey($0) != AddressBarSuggestions.addressKey(url) }) == true {
-                    article = nil
-                }
-            }
-            let saved = await Self.savedPage(url: url, title: title, article: article)
-            let ok = await data.saveForLater(saved)
-            if saved.copy == nil {
-                signposter.endInterval(Signposts.readingListSave, state, "link")
-            } else {
-                signposter.endInterval(Signposts.readingListSave, state, "copy")
-            }
-            if ok { Haptic.success.play() } else { Haptic.nothingThere.play() }
-            if ok, self?.pageAddress == url { self?.lastPageMarks?.isSaved = true }
-        }
-    }
-
-    /// The page to save, with `article` encoded as its reader copy. Encoding a long article takes
-    /// a few milliseconds, so it runs off the main thread.
-    @concurrent
-    nonisolated private static func savedPage(url: URL, title: String, article: ReaderArticle?) async -> SavedPage {
-        guard let article, let copy = try? JSONEncoder().encode(article) else {
-            return SavedPage(url: url, title: title.isEmpty ? nil : title)
-        }
-        return SavedPage(
-            url: url, title: title.isEmpty ? article.title : title, siteName: article.siteName,
-            excerpt: article.excerpt, copy: copy, copyLength: article.textLength
-        )
-    }
-
-    private func removeFromReadingList(_ url: URL) {
-        Signposts.signposter.emitEvent(Signposts.readingListRemove)
-        Task { [weak self, data] in
-            if await data.removeFromReadingList(url: url) {
-                Haptic.success.play()
-                if self?.pageAddress == url { self?.lastPageMarks?.isSaved = false }
-            } else {
-                Haptic.nothingThere.play()
-            }
-        }
-    }
-
     // MARK: Feature sheets
-
-    private func showReadingList() {
-        let list = sheets.readingList(
-            onOpen: { [weak self] url in
-                self?.closeSheet { self?.load(url) }
-            },
-            onDone: { [weak self] in self?.closeSheet() }
-        )
-        present(list, signpost: Signposts.readingListShow)
-    }
 
     private func showSettings() {
         // Tab Layout applies only where a tab list fits; elsewhere its row says why (docs/plan.md, section 4b).

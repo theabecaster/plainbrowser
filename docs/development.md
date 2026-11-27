@@ -167,7 +167,11 @@ terminal). Screenshots per screen: `xcrun simctl io <udid> enumerate`, then
 (`DuoTests`) skip unless the simulator is unfolded, so run them after `duo-fold.sh ... Open`.
 Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit`, `-PlainTabLayout above|left|right` and
 `-PlainSidebar rail|expanded|hidden` (none saved) to reach a split or a tab layout for screenshots
-without driving the UI. Device Hub can't be driven while the Mac is locked. Then a resizable
+without driving the UI. `-PlainSeedFavorites` and `-PlainSeedHistory` fill an isolated store for
+screenshots of the focused address bar (`FocusCaptureTests`, with `TEST_RUNNER_PLAIN_CAPTURE=1`;
+`TEST_RUNNER_PLAIN_CAPTURE_FAVORITES=1` and `TEST_RUNNER_PLAIN_CAPTURE_HISTORY=1` pick the seeds).
+XCUITest sees only the outer screen of an open Duo: record the inner one with `simctl io <sim>
+recordVideo --display=<id>` (the 2007x2853 one) while the capture runs. Device Hub can't be driven while the Mac is locked. Then a resizable
 window stands in for the inner screen: launch the app, run `xcrun devicectl device appResize start
 --device <sim> --preferred-size 951x669` (or `669x951`) and capture `simctl io <sim> screenshot
 --display=Resizable`; add `-PlainIgnoreOcclusions`, since that window still reports the outer

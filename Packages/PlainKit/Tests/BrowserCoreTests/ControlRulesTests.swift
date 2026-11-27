@@ -1,3 +1,4 @@
+import Foundation
 @testable import BrowserCore
 import Testing
 
@@ -221,6 +222,22 @@ import Testing
         #expect(rules.back == .dimmed && rules.share == .shown)
     }
 
+    @Test func readLaterFollowsFavoritesAndTheCopyOpensOnlyForNetworkFailures() {
+        for condition in [PageCondition.loaded, .loading, .failed, .crashed] {
+            let rules = ControlRules(Self.page(condition: condition))
+            #expect(rules.readLater == rules.favorite, "\(condition)")
+        }
+        var reader = Self.page(condition: .failed)
+        reader.isReaderOpen = true
+        #expect(ControlRules(reader).readLater, "the saved copy over a failed load can be removed")
+        for code in [NSURLErrorNotConnectedToInternet, NSURLErrorTimedOut, NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost] {
+            #expect(ControlRules.opensSavedCopy(errorDomain: NSURLErrorDomain, code: code))
+        }
+        #expect(!ControlRules.opensSavedCopy(errorDomain: NSURLErrorDomain, code: NSURLErrorServerCertificateUntrusted))
+        #expect(!ControlRules.opensSavedCopy(errorDomain: NSURLErrorDomain, code: NSURLErrorCancelled))
+        #expect(!ControlRules.opensSavedCopy(errorDomain: "WebKitErrorDomain", code: NSURLErrorTimedOut))
+    }
+
     @Test func darkPagesItemOnlyWhereItSwitchesSomething() {
         var state = Self.page()
         #expect(ControlRules(state).darkPages == .hidden, "light app or a site's own dark design")
@@ -380,6 +397,15 @@ import Testing
         page.isEditing = true
         page.hasQuery = true
         #expect(!ControlRules(page).startScreenRecedes, "no start screen on a page")
+    }
+
+    @Test func theStartScreenRecedesForTheFieldsOwnRows() {
+        var state = Self.emptyTab()
+        state.isEditing = true
+        state.showsFocusRows = true
+        #expect(ControlRules(state).startScreenRecedes, "recent pages take the paper the mark kept company")
+        state.showsFocusRows = false
+        #expect(!ControlRules(state).startScreenRecedes, "first run: the mark keeps the empty field company")
     }
 
     @Test func downloadsOnlyAfterOneRan() {

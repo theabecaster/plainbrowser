@@ -56,6 +56,20 @@ public enum Signposts {
     /// Interval from a tap on the URL pill to the field being first responder with the search
     /// sheet's layout applied (the first visual response).
     public static let urlBarFocus: StaticString = "urlBar.focus"
+    /// Interval: building the focused field's content (copied link, the page, recent and closed
+    /// pages) from what is already in memory, before the frame that shows the field. Main thread;
+    /// no disk.
+    public static let focusContent: StaticString = "urlBar.focusContent"
+    /// Interval: reading the favorites and recent pages for the focused field, off the main
+    /// thread, ahead of the next focus.
+    public static let focusContentLoad: StaticString = "urlBar.focusContentLoad"
+    /// Event: a row the focused field offered before typing was used ("copy", "edit", "copied",
+    /// "recent", "closed").
+    public static let focusAction: StaticString = "urlBar.focusAction"
+    /// Event: the page sheet opened (More, or a long press on the pill).
+    public static let pageSheet: StaticString = "pageSheet.open"
+    /// Event: editing the page's address began (the page sheet's address, or the page's row).
+    public static let editAddress: StaticString = "urlBar.editAddress"
     /// Interval from a tap on the URL pill to the keyboard at rest under the focused field
     /// (`keyboardDidShow`; `OpenIntervals`). The perf gate's `focusMs`: the system keyboard's own
     /// rise is inside it, so the app's part is what delays the rise's start.
@@ -133,6 +147,25 @@ public enum Signposts {
     public static let favoritesMenu: StaticString = "favorites.menu"
     /// Event: the favorites editor opened from the favorites strip.
     public static let favoritesEditorOpen: StaticString = "favorites.editorOpen"
+
+    // MARK: Reading list
+
+    /// Interval: Read Later in the page menu, from the tap until the page (and its reader copy,
+    /// when it has an article) is saved. Message: "copy" or "link".
+    public static let readingListSave: StaticString = "readingList.save"
+    /// Event: Remove from Reading List in the page menu.
+    public static let readingListRemove: StaticString = "readingList.remove"
+    /// Event: the Reading List sheet opened from the page menu.
+    public static let readingListShow: StaticString = "readingList.show"
+    /// Interval: the Reading List screen reading its rows (opening or a search), until they show.
+    public static let readingListLoad: StaticString = "readingList.load"
+    /// Event: the user opened a saved page from the Reading List.
+    public static let readingListOpen: StaticString = "readingList.open"
+    /// Event: a swipe or menu marked a saved page read or unread, or deleted it.
+    public static let readingListEdit: StaticString = "readingList.edit"
+    /// Interval: a saved page failed to load (offline, site gone), until its saved copy is handed
+    /// to the reader.
+    public static let readingListOfflineCopy: StaticString = "readingList.offlineCopy"
 
     // MARK: Reader
 

@@ -9,6 +9,7 @@ import Testing
 /// DatabasePool like the app uses, while simulating typing.
 @Suite(.serialized) struct OmniboxPerformanceTests {
     static let pageCount = 100_000
+    static let readingListCount = 1_000
     static let budget = Duration.milliseconds(16)
 
     @Test func omniboxQueryOn100kPagesMeetsBudget() async throws {
@@ -23,6 +24,15 @@ import Testing
         let seedTime = ContinuousClock.now - seedStart
         for index in 0..<20 {
             try await database.addFavorite(url: URL(string: "https://\(vocabulary[index]).com/")!, title: vocabulary[index + 20])
+        }
+        // A heavy reading list: years of saving, half of it read, titles from the same words, so
+        // its index matches the same keystrokes as history.
+        for index in 0..<Self.readingListCount {
+            let words = (0..<4).map { _ in vocabulary[Int.random(in: 0..<300, using: &generator)] }
+            let item = try await database.saveForLater(SavedPage(
+                url: URL(string: "https://\(words[0]).com/\(words[1])/\(index)")!, title: words.joined(separator: " ")
+            ))
+            if index.isMultiple(of: 2) { try await database.setReadingListItemRead(id: item.id!, at: Date()) }
         }
 
         // Every keystroke of typing these, then extra words, as people do.
@@ -57,6 +67,18 @@ import Testing
             """)
         #expect(samples.filter { $0.query.hasPrefix("gith") }.allSatisfy { $0.hits > 0 })
         #expect(percentile(0.95) < Self.budget)
+
+        // The reading list's share of each query, alone: its own index, on the same keystrokes.
+        var saved: [Duration] = []
+        for query in queries {
+            let start = ContinuousClock.now
+            _ = try await database.writer.read { db in
+                try AppDatabase.readingListMatches(HistoryQuery(query), limit: FixedChoices.maxPageSuggestions, in: db)
+            }
+            saved.append(ContinuousClock.now - start)
+        }
+        saved.sort()
+        print("[perf]   reading list (\(Self.readingListCount) saved) alone: p95 \(Self.ms(saved[Int(Double(saved.count) * 0.95)]))")
     }
 
     static func ms(_ duration: Duration) -> String {

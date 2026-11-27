@@ -464,6 +464,9 @@ nonisolated struct LaunchOptions: Sendable {
     var seedFavorites = false
     /// `-PlainSeedArchive`: a few archived tabs, for screenshots of the archive. Debug builds only.
     var seedArchive = false
+    /// `-PlainSeedHistory`: a few visited pages, for screenshots of the focused address bar.
+    /// Debug builds only.
+    var seedHistory = false
     /// `-PlainTestStore`: a database and tab state on disk in a temporary folder that survives
     /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. The perf
     /// tests start each launch from an empty session this way, on disk like the real store. The
@@ -477,6 +480,7 @@ nonisolated struct LaunchOptions: Sendable {
         #if DEBUG
         seedFavorites = arguments.contains("-PlainSeedFavorites")
         seedArchive = arguments.contains("-PlainSeedArchive")
+        seedHistory = arguments.contains("-PlainSeedHistory")
         if let index = arguments.firstIndex(of: "-PlainAwayOffset"), arguments.indices.contains(index + 1) {
             awayOffset = TimeInterval(arguments[index + 1]) ?? 0
         }
@@ -535,6 +539,22 @@ nonisolated struct LaunchOptions: Sendable {
                 database.tabSession.enqueue(.archive([entry], at: date))
             }
             await database.tabSession.flush()
+        }
+        if seedHistory {
+            let pages: [(String, String, Double)] = [
+                ("https://www.apple.com/iphone/", "iPhone - Apple", 1),
+                ("https://arc.net/blog/farewell", "A farewell to Arc", 2),
+                ("https://www.nytimes.com/section/food", "Food — The New York Times", 5),
+                ("https://en.wikipedia.org/wiki/Liquid_glass", "Liquid glass — Wikipedia", 9),
+                ("https://developer.apple.com/documentation/webkit", "WebKit | Apple Developer Documentation", 26),
+            ]
+            for (address, title, hours) in pages.reversed() {
+                guard let url = URL(string: address) else { continue }
+                await database.historyRecorder.record(
+                    HistoryVisit(url: url, title: title, visitedAt: Date().addingTimeInterval(-hours * 3600), kind: .typed)
+                )
+            }
+            await database.historyRecorder.flush()
         }
         guard seedFavorites else { return }
         let pages: [(String, String)] = [

@@ -287,6 +287,26 @@ public enum FixedChoices {
     public static let minTitleSearchLength = 2
     /// Total rows in the suggestion list; fits above the keyboard on the Duo's outer screen.
     public static let maxAddressBarSuggestions = 8
+
+    /// Recently visited pages the focused address bar shows before typing (Arc shows one, Safari
+    /// a row of Frequently Visited). Four read at a glance and leave room for favorites, the page
+    /// itself and a copied link above the keyboard on the Duo's outer screen.
+    public static let focusRecentPages = 4
+    /// How many of the newest visits `recentPages` reads to find that many distinct pages: enough
+    /// for a few reloads and back-and-forth, bounded so the read stays an index scan.
+    public static let recentPagesScan = 64
+    /// Recently closed tabs the focused address bar offers to reopen: the last two batches, the
+    /// ones people still remember closing.
+    public static let focusClosedTabs = 2
+    /// Unread Reading List pages the focused address bar offers: the two saved last, the ones
+    /// still meant for "later today".
+    public static let focusReadingList = 2
+    /// How long the copy button in the address bar shows its check mark: long enough to read,
+    /// short enough to copy again.
+    public static let copiedConfirmation: TimeInterval = 1.2
+    /// A web address on the pasteboard is offered ("Open Copied Link") only this long after Plain
+    /// first sees it, as Chrome does: an old copy is no longer an intention.
+    public static let copiedLinkFreshness: TimeInterval = 10 * 60
     /// Private tabs never send what is typed to the search engine: a private tab should leave no
     /// trace anywhere, and Firefox makes the same call (`browser.search.suggest.enabled.private`
     /// is false). History and favorites still suggest, from the device only.
@@ -332,6 +352,32 @@ public enum FixedChoices {
     /// Remembered picks offered per keystroke: the strongest becomes the top hit, and a second
     /// keeps a close runner-up in the list.
     public static let inputHistoryMatches = 2
+
+    // MARK: Reading list (docs/research/bookmarks.md)
+
+    /// No bookmark folders: Favorites are the one list of kept pages, History and the archive
+    /// find the rest, and the reading list holds pages saved to read once. Folder use was never
+    /// shown to be common, and Arc proved a browser works without bookmarks.
+    public static let bookmarkFolders = false
+    /// Saving for later keeps a reader copy of the article (Readability), as Chrome does, not a
+    /// web archive: it is small, opens instantly in Plain's reader, and an article is what people
+    /// save to read later. A page with no article is saved as its link only.
+    public static let readingListKeepsReaderCopy = true
+    /// A saved page opens live; when the network fails it (offline, the site gone or slow to
+    /// answer), its saved copy opens in the reader on its own, with no setting or extra tap.
+    public static let readingListOpensCopyWhenOffline = true
+    /// Opening a page from the reading list marks it read, as in Safari and Chrome; a swipe
+    /// marks it unread again.
+    public static let readingListMarksReadOnOpen = true
+    /// Reading speed for the "6 min" estimate: about 230 words a minute of about 5.5 characters
+    /// with the space (adult silent reading, Brysbaert 2019).
+    public static let readingCharactersPerMinute = 1_250
+    /// Unread saved pages that match the typed text rank right after favorites in the address
+    /// bar: the user saved them to come back to.
+    public static let readingListRanksInSuggestions = true
+    /// Rows the Reading List screen reads at most: years of saving for most people, and one cheap
+    /// indexed read.
+    public static let readingListLimit = 1_000
 
     // MARK: Storage maintenance
 

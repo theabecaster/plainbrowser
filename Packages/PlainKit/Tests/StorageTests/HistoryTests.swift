@@ -63,6 +63,21 @@ func visit(_ url: String, _ title: String? = nil, at offset: TimeInterval = 0) -
         #expect(try await database.recentVisits(limit: 1).count == 1)
     }
 
+    @Test func recentPagesAreDistinctNewestFirstWithTitles() async throws {
+        let database = try AppDatabase.inMemory()
+        try await database.record(visit("https://a.example", "A"))
+        try await database.record(visit("https://b.example", at: 60))
+        try await database.record(visit("https://www.a.example/", "A again", at: 120))
+        try await database.record(visit("https://c.example", "C", at: 180))
+
+        let pages = try await database.recentPages(limit: 10)
+        // One place per address (scheme, `www.` and a trailing slash aside), newest visit first.
+        #expect(pages.map(\.url.absoluteString) == ["https://c.example", "https://www.a.example/", "https://b.example"])
+        #expect(pages.first?.title == "C")
+        #expect(try await database.recentPages(limit: 2).count == 2)
+        #expect(try await database.recentPages(limit: 0).isEmpty)
+    }
+
     @Test func prefixSearchMatchesTitleAndAddress() async throws {
         let database = try AppDatabase.inMemory()
         try await database.apply([

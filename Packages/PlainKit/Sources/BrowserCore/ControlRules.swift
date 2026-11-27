@@ -91,6 +91,8 @@ public struct ChromeState: Sendable, Equatable {
     public var hasDownloads = false
     /// The search field holds a query (not only spaces).
     public var hasQuery = false
+    /// The empty field shows rows of its own (recent pages, closed tabs, a copied link).
+    public var showsFocusRows = false
     /// Open tabs besides the one on screen, regular and private together. Empty tabs never count.
     public var others = 0
     /// Tabs in the on-screen tab's own list (regular or private), itself included.
@@ -338,6 +340,22 @@ public struct ControlRules: Sendable, Equatable {
         return state.isReaderOpen || state.condition == .loaded
     }
 
+    /// Read Later follows Add to Favorites: a page that loaded, or the reader's page. A failed
+    /// page is not saved (there is nothing to read later, and it may never load).
+    public var readLater: Bool { favorite }
+
+    /// A saved page whose load failed for want of the network (offline, the site gone or slow to
+    /// answer) opens its saved copy in the reader (`FixedChoices.readingListOpensCopyWhenOffline`).
+    /// Not on a certificate error: the site answered, and its warning must stay in front.
+    public static func opensSavedCopy(errorDomain: String, code: Int) -> Bool {
+        guard FixedChoices.readingListOpensCopyWhenOffline, errorDomain == NSURLErrorDomain else { return false }
+        return [
+            NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost, NSURLErrorDataNotAllowed,
+            NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed, NSURLErrorTimedOut, NSURLErrorCannotConnectToHost,
+            NSURLErrorInternationalRoamingOff, NSURLErrorCallIsActive,
+        ].contains(code)
+    }
+
     /// Downloads: while any ran this session.
     public var downloads: Bool { state.hasDownloads }
 
@@ -377,9 +395,10 @@ public struct ControlRules: Sendable, Equatable {
 
     /// While a query is typed on the start screen, the mark, sentence and shortcuts recede (fade,
     /// shrink a little, drift up) so suggestion rows never draw over them; they come back when the
-    /// query is cleared or the field closes (owner, 2026-11-26).
-    public var startScreenRecedes: Bool { isStart && state.isEditing && state.hasQuery }
-
+    /// query is cleared or the field closes (owner, 2026-11-26). The same while the empty field
+    /// shows rows of its own (recent pages, closed tabs, a copied link): they take the paper the
+    /// mark kept company.
+    public var startScreenRecedes: Bool { isStart && state.isEditing && (state.hasQuery || state.showsFocusRows) }
     /// Small shortcuts under the mark on the start screen, only the ones that apply: a private tab
     /// always (a regular one from an empty private tab), Reopen Closed Tab with `closed`, Archived
     /// Tabs with `archived`.

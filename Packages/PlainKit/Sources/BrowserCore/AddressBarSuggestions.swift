@@ -7,26 +7,33 @@ public struct PageCandidate: Hashable, Sendable {
     /// The page's `Frecency` key, or nil for a favorite never visited.
     public var frecency: Double?
     public var isFavorite: Bool
+    /// An unread page in the reading list: it ranks right after favorites
+    /// (`FixedChoices.readingListRanksInSuggestions`).
+    public var isSaved: Bool
     /// How often the user picked this page after typing text that starts like the current
     /// input (adaptive history), or nil when never. Higher is stronger.
     public var adaptiveUse: Double?
 
-    public init(url: URL, title: String?, frecency: Double?, isFavorite: Bool, adaptiveUse: Double? = nil) {
+    public init(
+        url: URL, title: String?, frecency: Double?, isFavorite: Bool, isSaved: Bool = false, adaptiveUse: Double? = nil
+    ) {
         self.url = url
         self.title = title
         self.frecency = frecency
         self.isFavorite = isFavorite
+        self.isSaved = isSaved
         self.adaptiveUse = adaptiveUse
     }
 }
 
 /// One row in the address bar's suggestion list.
 public enum AddressBarSuggestion: Hashable, Sendable {
-    case page(url: URL, title: String?, isFavorite: Bool)
+    /// `isSaved`: an unread page in the reading list (its own symbol in the row).
+    case page(url: URL, title: String?, isFavorite: Bool, isSaved: Bool = false)
     case search(String)
 }
 
-/// Merges history, favorites and engine suggestions into the address bar's list.
+/// Merges history, favorites, the reading list and engine suggestions into the address bar's list.
 ///
 /// Order:
 /// 1. **Top hit**, the first of:
@@ -36,7 +43,7 @@ public enum AddressBarSuggestion: Hashable, Sendable {
 ///      host when only deeper pages were visited;
 ///    - once the text reaches a path ("github.com/ap"), the best page whose address starts with it.
 ///    So the obvious destination is one tap away.
-/// 2. **Pages**: favorites first, then history by frecency, up to `maxPages` in total with the top hit.
+/// 2. **Pages**: favorites first, then unread saved pages, then history by frecency, up to `maxPages` in total with the top hit.
 /// 3. **Searches** from the engine, filling the rest of the list.
 ///
 /// Pages are deduplicated by address, ignoring scheme, `www.`, a trailing slash and the fragment.
@@ -47,6 +54,7 @@ public enum AddressBarSuggestions {
         query: String,
         history: [PageCandidate],
         favorites: [PageCandidate],
+        saved: [PageCandidate] = [],
         searches: [String],
         maxPages: Int = FixedChoices.maxPageSuggestions,
         maxTotal: Int = FixedChoices.maxAddressBarSuggestions
@@ -54,7 +62,7 @@ public enum AddressBarSuggestions {
         let typed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty, maxTotal > 0 else { return [] }
 
-        let pages = rankedPages(favorites + history)
+        let pages = rankedPages(favorites + saved + history)
 
         var orderedPages = pages
         if let top = topHit(in: pages, typedAddress: normalizedPrefix(typed)) {
@@ -68,7 +76,7 @@ public enum AddressBarSuggestions {
         }
 
         var result = orderedPages.prefix(min(maxPages, maxTotal)).map {
-            AddressBarSuggestion.page(url: $0.url, title: $0.title, isFavorite: $0.isFavorite)
+            AddressBarSuggestion.page(url: $0.url, title: $0.title, isFavorite: $0.isFavorite, isSaved: $0.isSaved)
         }
 
         var seen: Set<String> = [typed.lowercased()]
@@ -121,7 +129,8 @@ public enum AddressBarSuggestions {
         String(key.prefix { $0 != "/" && $0 != "?" })
     }
 
-    /// Candidates merged by address and sorted: favorites first, then by frecency.
+    /// Candidates merged by address and sorted: favorites first, then unread saved pages, then by
+    /// frecency.
     static func rankedPages(_ candidates: [PageCandidate]) -> [PageCandidate] {
         var byKey: [String: PageCandidate] = [:]
         var order: [String] = []
@@ -133,6 +142,7 @@ public enum AddressBarSuggestions {
                 continue
             }
             existing.isFavorite = existing.isFavorite || candidate.isFavorite
+            existing.isSaved = existing.isSaved || candidate.isSaved
             existing.frecency = [existing.frecency, candidate.frecency].compactMap(\.self).max()
             existing.adaptiveUse = [existing.adaptiveUse, candidate.adaptiveUse].compactMap(\.self).max()
             if existing.title?.isEmpty ?? true { existing.title = candidate.title }
@@ -142,6 +152,7 @@ public enum AddressBarSuggestions {
         return order.enumerated().map { ($0.offset, byKey[$0.element]!) }
             .sorted { lhs, rhs in
                 if lhs.1.isFavorite != rhs.1.isFavorite { return lhs.1.isFavorite }
+                if lhs.1.isSaved != rhs.1.isSaved { return lhs.1.isSaved }
                 let left = lhs.1.frecency ?? -.infinity, right = rhs.1.frecency ?? -.infinity
                 if left != right { return left > right }
                 return lhs.0 < rhs.0

@@ -20,6 +20,30 @@ public enum PreviewData {
         FavoritesModel(store: SampleFavorites())
     }
 
+    /// A reading list with unread and read pages, some with a saved copy.
+    public static func readingListModel() -> ReadingListModel {
+        let database = try! AppDatabase.inMemory()
+        let model = ReadingListModel(store: database)
+        Task {
+            let pages: [(String, String, Int?)] = [
+                ("https://www.theatlantic.com/a", "The Case for Slower Software", 9_000),
+                ("https://www.nytimes.com/b", "How the Tide Tables Were Made", 14_000),
+                ("https://example.com/c", "A Page Without an Article", nil),
+            ]
+            for (url, title, length) in pages {
+                _ = try? await database.saveForLater(SavedPage(
+                    url: URL(string: url)!, title: title, copy: length.map { _ in Data("{}".utf8) }, copyLength: length
+                ))
+            }
+            if let read = try? await database.saveForLater(SavedPage(url: URL(string: "https://swift.org/blog")!, title: "Swift Blog")),
+               let id = read.id {
+                try? await database.setReadingListItemRead(id: id, at: Date())
+            }
+            await model.load()
+        }
+        return model
+    }
+
     /// Downloads in every state: running with a known size, starting, finished, cancelled, failed.
     public static func downloads() -> SampleDownloads {
         let folder = FileManager.default.temporaryDirectory.appending(path: "PreviewDownloads")

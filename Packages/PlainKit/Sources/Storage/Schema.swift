@@ -22,6 +22,9 @@ enum Schema {
     static let sitePageZoom = "sitePageZoom"
     static let darkPagesOff = "darkPagesOff"
     static let cookieBannersOff = "cookieBannersOff"
+    static let readingListItem = "readingListItem"
+    static let readingListCopy = "readingListCopy"
+    static let readingListSearch = "readingListSearch"
     static let profile = "profile"
 
     static func register(in migrator: inout DatabaseMigrator) {
@@ -240,6 +243,40 @@ enum Schema {
                 try db.alter(table: table) { t in
                     t.add(column: "profileID", .text).notNull().defaults(to: personal)
                 }
+            }
+        }
+
+        // The reading list (docs/research/bookmarks.md): pages saved to read later, unread until
+        // opened from the list, each with its reader copy for offline reading in a table of its
+        // own, so the list and the address bar never read the copies. Full-text search over title
+        // and address, like history. After profiles, which shipped first on dev.
+        migrator.registerMigration("v10.readingList") { db in
+            try db.create(table: readingListItem) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("url", .text).notNull().unique()
+                // As `historyPlace.address`: what people type, and what the index holds.
+                t.column("address", .text).notNull()
+                t.column("title", .text)
+                t.column("siteName", .text)
+                t.column("excerpt", .text)
+                t.column("addedAt", .datetime).notNull()
+                t.column("readAt", .datetime)
+                // The saved copy's text length, for the reading time; nil without a copy.
+                t.column("copyLength", .integer)
+            }
+            try db.create(index: "readingListItem_on_readAt_addedAt", on: readingListItem, columns: ["readAt", "addedAt"])
+            try db.create(table: readingListCopy) { t in
+                t.primaryKey("itemID", .integer)
+                    .references(readingListItem, onDelete: .cascade)
+                // The article as JSON, LZFSE-compressed.
+                t.column("data", .blob).notNull()
+            }
+            try db.create(virtualTable: readingListSearch, using: FTS5()) { t in
+                t.synchronize(withTable: readingListItem)
+                t.tokenizer = .unicode61(diacritics: .remove)
+                t.prefixes = [1, 2]
+                t.column("title")
+                t.column("address")
             }
         }
     }

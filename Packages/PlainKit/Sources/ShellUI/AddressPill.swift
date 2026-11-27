@@ -1,16 +1,17 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import UIKit
 
 /// The URL pill: a paper-tinted glass capsule at the bottom (Brand/identity.md, URL bar).
 ///
-/// Resting, it shows the page's host and the load progress; a tap asks to edit it and a long
-/// press opens the page menu. Editing, it is the search field, with the mint-to-blue focus rim.
+/// Resting, it shows the page's host and the load progress; a tap opens the search and a long
+/// press the page sheet. Editing, it is the search field, with the mint-to-blue focus rim.
 /// The same view does both, so focusing is the bar growing, not a second view appearing.
 ///
 /// Collapsed (`isCompact`), it takes taps only: it sits in the home-indicator zone, where swipes
 /// and holds belong to the system. Every other gesture attaches to the expanded pill.
-final class AddressPill: UIView, UIContextMenuInteractionDelegate {
+final class AddressPill: UIView {
     let textField = UITextField()
     let progressBar = ProgressBar()
     private let glass = Glass.makeView(shape: .capsule, interactive: true)
@@ -20,8 +21,24 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
 
     /// A tap on the resting pill.
     var onTap: () -> Void = {}
-    /// The page menu for a long press, or nil when there is no page.
-    var menuProvider: () -> UIMenu? = { nil }
+    /// A long press on the resting pill: the page sheet.
+    var onLongPress: () -> Void = {}
+    /// Copy inside the field, while it edits the page's own address.
+    var onCopy: () -> Void = {}
+    private lazy var copyButton: UIButton = {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "link")
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
+        configuration.baseForegroundColor = Palette.accentOnGlass
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: Spacing.s, bottom: 0, trailing: Spacing.s)
+        let button = UIButton(configuration: configuration)
+        button.frame = CGRect(x: 0, y: 0, width: Metrics.tapTarget, height: Metrics.tapTarget)
+        button.accessibilityLabel = String(localized: "Copy Link")
+        button.accessibilityIdentifier = "field.copy"
+        button.addAction(UIAction { [weak self] _ in self?.copyTapped() }, for: .touchUpInside)
+        return button
+    }()
+    private var copyToken = 0
 
     private(set) var isEditing = false
     /// The bar is collapsed, or on its way there: only the tap works.
@@ -30,7 +47,6 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     private var notSecure = false
     /// The glass has the private tint (`setPrivate`).
     var isPrivateTint = false
-    private var menuInteraction: UIContextMenuInteraction?
     /// The neighbour tab's host, sliding in during a bar swipe.
     private var incomingHost: UILabel?
 
@@ -38,10 +54,11 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         super.init(frame: frame)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
-        // The capsule keeps its height, so its text stops growing at the largest non-accessibility
-        // size, as Safari's address field does: past it the text overflowed the capsule and the
-        // head truncation left "…Secure — host".
-        maximumContentSizeCategory = .extraExtraExtraLarge
+        // The resting capsule keeps its height, so its host stops growing at the largest
+        // non-accessibility size, as Safari's address field does: past it the text overflowed the
+        // capsule and the head truncation left "…Secure — host". The field being typed in is not
+        // capped: what the user types keeps their text size, and the field scrolls sideways.
+        hostLabel.maximumContentSizeCategory = .extraExtraExtraLarge
 
         hostLabel.font = .preferredFont(forTextStyle: .body)
         hostLabel.adjustsFontForContentSizeCategory = true
@@ -121,9 +138,7 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         progressBar.layer.cornerRadius = 1.25
 
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
-        let menuInteraction = UIContextMenuInteraction(delegate: self)
-        addInteraction(menuInteraction)
-        self.menuInteraction = menuInteraction
+        addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(pressed(_:))))
 
         accessibilityIdentifier = "addressPill"
         accessibilityLabel = "Address"
@@ -154,13 +169,23 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
     func display(url: URL?, notSecure: Bool = false) {
         self.url = url
         self.notSecure = notSecure
-        hostLabel.attributedText = Self.hostText(for: url, notSecure: notSecure, placeholder: textField.placeholder ?? "")
+        hostLabel.attributedText = Self.hostText(
+            for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: textField.placeholder ?? ""
+        )
         accessibilityValue = url?.absoluteString ?? hostLabel.text
     }
 
-    /// What the resting pill says for `url`: its host without `www.`, after "Not Secure —" when
-    /// the page is not secure; the placeholder without a page.
-    private static func hostText(for url: URL?, notSecure: Bool, placeholder: String) -> NSAttributedString {
+    /// The query a page searches for when it is the search engine's results page (the shell
+    /// answers from Settings' engine), so the pill reads what was searched, as Safari's does.
+    var searchQuery: (URL) -> String? = { _ in nil }
+
+    /// What the resting pill says for `url`: the search on the engine's results page, otherwise
+    /// its host without `www.`, after "Not Secure —" when the page is not secure; the placeholder
+    /// without a page.
+    private static func hostText(for url: URL?, query: String? = nil, notSecure: Bool, placeholder: String) -> NSAttributedString {
+        if let query, !notSecure {
+            return NSAttributedString(string: query, attributes: [.foregroundColor: Palette.textPrimary])
+        }
         if let url, let host = url.host(), !host.isEmpty {
             let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
             guard notSecure else {
@@ -197,9 +222,10 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         let label = UILabel()
         label.font = hostLabel.font
         label.adjustsFontForContentSizeCategory = true
+        label.maximumContentSizeCategory = hostLabel.maximumContentSizeCategory
         label.textAlignment = .center
         label.lineBreakMode = .byTruncatingHead
-        label.attributedText = Self.hostText(for: url, notSecure: false, placeholder: "New Tab")
+        label.attributedText = Self.hostText(for: url, query: url.flatMap(searchQuery), notSecure: false, placeholder: "New Tab")
         label.alpha = 0
         label.isAccessibilityElement = false
         let height = max(hostLabel.bounds.height, label.font.lineHeight)
@@ -234,11 +260,6 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         hostLabel.alpha = isEditing ? 0 : 1
     }
 
-    /// Replaces the page menu while it is open (the zoom row's percentage changed).
-    func updateVisibleMenu(_ menu: UIMenu) {
-        menuInteraction?.updateVisibleMenu { _ in menu }
-    }
-
     /// Switches between the resting pill and the search field. Animatable: call it inside an
     /// animation block to cross over with the move.
     func setEditing(_ editing: Bool) {
@@ -253,6 +274,43 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         progressBar.isHidden = editing
         // Resting, the pill is one button for VoiceOver; editing, the field inside is reachable.
         isAccessibilityElement = !editing
+    }
+
+    /// Shows Copy inside the field (editing the page's own address) in place of the clear
+    /// button, or takes it away. No layout: the field's text area keeps its frame either way
+    /// within the pill.
+    func setCopyShown(_ shown: Bool) {
+        let showing = textField.rightView != nil && textField.rightViewMode == .always
+        guard shown != showing else { return }
+        if shown {
+            copyToken += 1
+            setCopyGlyph(copied: false)
+            textField.rightView = copyButton
+            textField.rightViewMode = .always
+            textField.clearButtonMode = .never
+        } else {
+            textField.rightView = nil
+            textField.rightViewMode = .never
+            textField.clearButtonMode = .whileEditing
+        }
+    }
+
+    private func copyTapped() {
+        onCopy()
+        copyToken += 1
+        let token = copyToken
+        setCopyGlyph(copied: true)
+        UIAccessibility.post(notification: .announcement, argument: String(localized: "Copied"))
+        DispatchQueue.main.asyncAfter(deadline: .now() + FixedChoices.copiedConfirmation) { [weak self] in
+            guard let self, self.copyToken == token else { return }
+            self.setCopyGlyph(copied: false)
+        }
+    }
+
+    /// The copy glyph, or a check mark for a moment after a copy: same size, so nothing moves.
+    private func setCopyGlyph(copied: Bool) {
+        copyButton.configuration?.image = UIImage(systemName: copied ? "checkmark" : "link")
+        copyButton.accessibilityLabel = copied ? String(localized: "Copied") : String(localized: "Copy Link")
     }
 
     /// Makes the field first responder. Resting, the field takes no touches (taps belong to the
@@ -275,16 +333,10 @@ final class AddressPill: UIView, UIContextMenuInteractionDelegate {
         onTap()
     }
 
-    // MARK: UIContextMenuInteractionDelegate
-
-    func contextMenuInteraction(
-        _ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint
-    ) -> UIContextMenuConfiguration? {
-        guard !isEditing, !isCompact, let menu = menuProvider() else { return nil }
-        let configuration = UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
-        // The same top-to-bottom order wherever the menu opens, app items last.
-        configuration.preferredMenuElementOrder = .fixed
-        return configuration
+    @objc private func pressed(_ press: UILongPressGestureRecognizer) {
+        guard press.state == .began, !isEditing, !isCompact else { return }
+        Haptic.threshold.play()
+        onLongPress()
     }
 }
 #endif

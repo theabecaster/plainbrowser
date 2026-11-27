@@ -179,16 +179,19 @@ status bar the row sits under it, the page's top inset is the status bar in ever
 tucks the address under the status bar, and Hidden leaves only the status bar. Same triggers and
 the same never-hidden list.
 
-## 4. The page menu (More, and a long press on the pill)
+## 4. The page sheet (More, and a long press on the pill)
 
-Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen. Layout: the tabs
-items (New Private Tab, Reopen Closed Tab, Archived Tabs) are one captioned row when two or more
-apply; Reload (or Stop), Share and Copy Link are one row of three; Find on Page, Show Reader and
-Translate Page are one captioned row when two or more apply ("Find", "Reader", "Translate" or
-"Original"; each alone keeps its full name and subtitle); Print and Save as PDF are not in the
-menu but in the share sheet (Share), as in Safari and Chrome; Desktop Site, blocking, cookie
-banners and Dark Pages fold into a "Site Settings" submenu when two or more apply; History, Edit
-Favorites and Settings are one row of three, so the whole menu fits the Duo's outer screen.
+Order is fixed (docs/ui-reference.md, "Page sheet"). Columns are states of the tab on screen.
+Layout: the address row first (Back and Forward, dimmed at a limit; the host, a tap edits the
+address; Copy Link; Reload or Stop); then at most four captioned tiles: Find on Page, Show Reader,
+Translate Page (or Show Original), and Share last; then keeping the page as one captioned row:
+Add to Favorites, Read Later (Remove from Reading List once saved) and Site Settings (a menu when
+two or more of Desktop Site, blocking, cookie banners and Dark Pages apply; a choice there closes
+the sheet); then Zoom (− % +), Save PDF to Files, the pane items, Downloads; then the tabs items
+(New Private Tab, Reopen Closed Tab, Archived Tabs) as captioned chips when two or more apply,
+and History, Reading List, Favorites and Settings as a row of four. Print and
+Save as PDF are in the share sheet (Share), as in Safari and Chrome. The whole sheet fits the
+Duo's outer screen. Without a page (the start screen) it holds the rows from the pane items on.
 
 | Item | Start | Loading | Loaded | Failed / offline | Crashed | Reader open | Notes |
 |---|---|---|---|---|---|---|---|
@@ -205,11 +208,14 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Turn Off / On Cookie Banner Blocking | — | http(s) | http(s) | — | — | — | In Site Settings. Applies by reloading. Private tabs: shown, kept for the private session only. Off for a site stops answering its banner; the cookie list's hiding follows the blocking switch. |
 | Turn Off / On Dark Pages for This Site | — | as Loaded | Only while Plain is dark: Turn Off while Plain darkens the page, Turn On while the user has it off for this site | — | — | — | Hidden in a light app (it would change nothing), on pages with their own dark design (nothing to turn off), on error pages and under the reader. Applies at once, no reload. Private tabs: shown, kept for the private session only. |
 | Add to / Remove from Favorites | — | — | recordable page | — | — | shown (the page's address) | A page that never loaded is not a favorite. |
+| Read Later / Remove from Reading List | — | — | recordable page | — (≠ its saved copy opens instead, below) | — | shown (the page's address; on a saved copy: Remove) | Same predicate as Add to Favorites (`ControlRules.readLater`). Saves the article as a reader copy when the readerable check said yes, else the link. Follows Add to Favorites. |
+| Saved copy (reader over the error) | — | — | — | when the failed page is in the reading list with a copy and the failure is the network's (offline, host not found, not answering, timed out; not a certificate error) | — | it is the reader | Automatic, no switch (`ControlRules.opensSavedCopy`). Back or Hide Reader shows the error and Try Again. |
 | Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). Not while the side pane is open (it holds the second pane's place). |
 | Swap Panes, Close Pane | while a split shows | ← same | ← | ← | ← | ← | Not while the side pane covers the second pane. |
 | Show / Hide Side Pane | where the side pane can show | ← same | ← | ← | ← | ← | The top bar's screens only (the Duo's inner screen, both size classes regular). Hide while it is open. Start screen too: History is useful there. |
 | New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "New Tab": it turns this empty tab, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
 | Downloads | while any this session | ← same | ← | ← | ← | ← | Subtitle "1 in progress" while one runs. |
+| Reading List | shown | shown | shown | shown | shown | shown | Above the History row. Always there, like History: its empty state says how to fill it. Dims while the database opens. |
 | History, Edit Favorites, Settings | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. History opens in the side pane where the pane can show, a sheet elsewhere. |
 
 ## 5. The tabs menu (long press on the tabs slot)
@@ -248,10 +254,15 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 |---|---|---|
 | Button bar | Hidden (faded out) | The keyboard and the field take the bottom. |
 | Bar gestures | Off | The field owns the touches. |
-| Favorites above the keyboard | Field empty, or still showing the page's own address, and at least one favorite | With none, the strip takes no space and says nothing; Edit Favorites is in the page menu. |
-| Suggestions | While typing | |
-| Start screen behind | Shown on Start while the field is empty (the sheet is clear) | The mark keeps the empty field company. |
-| Start screen while typing | With a query, the mark, sentence and shortcuts recede (fade, shrink to 94 %, drift up, with the snappy 0.3 spring; Reduce Motion: a crossfade) and the sheet takes the paper; cleared, or the field closed, they come back | Suggestion rows never draw over the mark (owner, 2026-11-26). The rows sit on the paper token themselves, so they read even mid-transition, in light and dark. |
+| Favorites above the keyboard | Field empty, or still showing the page's own address, and at least one favorite | With none, the strip takes no space and says nothing; Favorites is in the page sheet. |
+| Rows before typing (nearest the field first) | Open Copied Link (a web address on the pasteboard, offered once, within 10 minutes, never the page on screen); the page's own row (search over a page: title and host, Copy, a tap edits the address); up to 4 recently visited pages (regular tabs; never the page on screen, a favorite or a closed tab's page); up to 2 recently closed tabs (regular tabs); unread Reading List pages (up to 2); one sentence, "Pages you visit and your favorites show up here.", while nothing is kept yet (no recent, closed or unread pages, no favorites, no copied link; not on the start screen, which has its own) | Never an empty field (owner, 2026-11-27: "it just looks empty"). Everything is already in memory, so it shows in the frame the keyboard starts. Private tabs show no history: only the page, a copied link, favorites and a sentence that says Plain keeps none. |
+| The card | The rows, the favorites and the field sit on one paper card over the veiled page, from the top row to the keyboard | Arc's sheet; the page stays readable as context. |
+| Suggestions | While typing; a recent row that is also a suggestion keeps its row | |
+| Start screen behind | Shown on Start while the field is empty and has no rows of its own (the sheet is clear) | The mark keeps the empty field company (first run). |
+| Start screen while typing | With a query, or rows of the field's own, the mark, sentence and shortcuts recede (fade, shrink to 94 %, drift up, with the snappy 0.3 spring; Reduce Motion: a crossfade) and the sheet takes the paper; cleared, or the field closed, they come back | Suggestion rows never draw over the mark (owner, 2026-11-26). The rows sit on the paper token themselves, so they read even mid-transition, in light and dark. |
+| Search over a page (a tap on the pill) | The field opens empty over the veiled page; a submitted search or address opens a new tab whose opener is the page (Back on its first page closes it and shows the page); dismissing creates nothing. On the start screen it loads in place. | Arc's "go somewhere new": the page being read is never replaced by a stray search (owner, 2026-11-27). |
+| Edit the page's address (the page sheet's host, or the page's row) | The field shows the address, selected, with Copy inside it while untouched; Return loads in the same tab | The second door, for changing this page. |
+| On the search engine's results page | The pill shows the query; a tap brings it back selected and a new query replaces the results in the same tab | Safari: refining a search is not going somewhere new. |
 | Remote suggestions | Off in private tabs | FixedChoices. |
 | Tap outside the field, or swipe down on the sheet | Closes the field. On a fresh launch with no tab this shows the start screen, never a blank page; over a last tab it shows the tab. | Arc Search's swipe down back to the tab. |
 | Fresh search over a page | The sheet is clear and the page shows through a paper veil (70% paper, no blur); the field starts empty with favorites; a submitted search opens a new tab, so the page stays as it was. Lasts until the field closes. | The tab is visibly still there, one swipe away (owner, 2026-11-27). |
@@ -307,6 +318,7 @@ its address, Back and Forward, the tabs slot; nothing in the bar moves when the 
 | Toast | Rule |
 |---|---|
 | Tab closed — Reopen | After a hand close of a regular tab: the tabs menu's Close Tab, a card swipe or menu, Close All Tabs. Only when the close added a batch to the recently closed stack, and Reopen brings back exactly that batch. Never for private tabs. Never when Back closes a child tab (that is navigation). When the close leaves the gallery (the last card, Close All), the offer moves with it and shows above the search field. |
+| Showing your saved copy. — Try Again | When a saved page's copy opens in the reader after a network failure. Try Again closes the reader and loads the page. Once per failure. |
 | Opened in background — Show | After Open in Background. Show is dropped if the tab closed meanwhile. |
 | Download finished / failed — Show | Shows on the page or the start screen. While the gallery or a sheet is up, the newest one waits and shows when it closes (a toast over them could not open Downloads). |
 | While the gallery is up | The shell's toast hides; the gallery has its own Reopen toast. |
@@ -320,6 +332,7 @@ its address, Back and Forward, the tabs slot; nothing in the bar moves when the 
 | Archived Tabs | Not reachable while empty (tabs menu and gallery menu need `archived`). If the last one is deleted inside it: "No archived tabs." plus the footer. |
 | Downloads | Reachable only while any exist this session. The Show in Files folder button is always there. A finished row is a button (Quick Look) with Open, Share and Show in Files in its menu. A running row shows progress and keeps its Cancel button and menu item; the row itself is not a button. A failed or cancelled row reads as inactive and is not a button. |
 | Edit Favorites | "Add favorites from the page menu." |
+| Reading List | "Save pages to read later from the page menu." Unread rows first, then a "Read" section; each section shows only with rows. Tap opens the page (marks it read); swipe right Mark Read / Mark Unread, swipe left Delete, no confirmation. Search with no results: the system's no-results view. |
 | Every sheet | Loading a local list shows nothing (no spinner). A failed read or write says so in one sentence with Try Again, never as the empty state. A search with no results shows the system's no-results view, and actions on the whole list (Clear) stay available. Such actions dim only when the list itself is empty. |
 | Settings → Clear History and Data | Confirmation first (it is destructive and broad); the row dims while it runs; a failure says so in one sentence. |
 | Settings → Appearance | Always shown and enabled: it applies on every screen. Its footer is one sentence for the current choice. |

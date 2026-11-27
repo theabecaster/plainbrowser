@@ -3,6 +3,7 @@ import BrowserCore
 import DesignSystem
 import os
 import PerfSignposts
+import Reader
 import Storage
 import UIKit
 import WebEngine
@@ -70,8 +71,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let tabsUI = TabsUIState()
     /// What launch opened to: the last tab's picture and the fresh search's frost (`+Launch`).
     let launchUI = LaunchUIState()
-    /// The page menu's last Add to / Remove from Favorites answer, for rebuilding the open menu.
-    var lastFavoriteAnswer: Bool?
+    /// What the focused address bar offers before typing, and whether it edits the page's
+    /// address (`+AddressFocus`).
+    let focusUI = AddressFocusState()
+    /// The page sheet's last favorite and reading list answer, for rebuilding the open sheet.
+    var lastPageMarks: PageMarks?
+    /// The page sheet while it is up, so a change under it (zoom) shows at once.
+    weak var pageSheet: PageSheetController?
     /// Show Tabs asked for before the saved tabs were in (a cold launch from Siri); it runs once
     /// they are (`+System`).
     var showTabsAwaitingSession = false
@@ -123,7 +129,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var crossfadeTarget: CGFloat?
     private var pullTracker = PullToRefreshTracker()
     private var suggestionTask: Task<Void, Never>?
-    private var favoritesTask: Task<Void, Never>?
     /// Runs when the presented feature sheet closes, by Done or by a swipe.
     private var sheetClosed: (() -> Void)?
 
@@ -177,9 +182,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
-        pill.menuProvider = { [weak self] in self?.pageMenu(source: .pill) }
+        pill.onCopy = { [weak self] in self?.copyPageAddress() }
+        pill.searchQuery = { [weak self] url in self?.data.searchEngine.query(inResults: url) }
+        pill.onLongPress = { [weak self] in
+            guard let self else { return }
+            self.showPageSheet(from: self.pill)
+        }
 
-        sheet.onPick = { [weak self] pick in self?.open(pick) }
+        sheet.onPick = { [weak self] pick in
+            guard let self, !self.handleFocusPick(pick) else { return }
+            self.open(pick)
+        }
         sheet.onDismiss = { [weak self] in self?.endEditing() }
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
         // A swipe down closes the search, as a sheet closes (Arc Search's way back to the tab).
@@ -237,6 +250,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Back from the background: idle tabs move to the archive.
     @objc private func willEnterForeground() {
         archiveIdleTabs()
+        // Another app may have copied a link (checked without reading it).
+        refreshCopiedLink()
     }
 
     private func layOut() {
@@ -373,14 +388,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             let item: UIBarButtonItem
             switch kind {
             case .more:
-                button.menu = pageMenu(source: .button)
-                button.showsMenuAsPrimaryAction = true
-                // The same top-to-bottom order wherever the menu opens, app items last.
-                button.preferredMenuElementOrder = .fixed
-                item = UIBarButtonItem(
-                    title: kind.title, image: UIImage(systemName: kind.symbol), primaryAction: nil, menu: pageMenu(source: .barItem)
-                )
-                item.preferredMenuElementOrder = .fixed
+                // The page sheet: the address row, the page's actions, then the app's places.
+                button.addAction(UIAction { [weak self, weak button] _ in
+                    self?.showPageSheet(from: button)
+                }, for: .primaryActionTriggered)
+                let action = UIAction(title: kind.title, image: UIImage(systemName: kind.symbol)) { [weak self] _ in
+                    self?.showPageSheet()
+                }
+                item = UIBarButtonItem(primaryAction: action)
             case .tabs:
                 // A tap shows the gallery; a long press, the tabs menu.
                 let action = UIAction(title: kind.title, image: UIImage(systemName: kind.symbol)) { [weak self] _ in
@@ -567,8 +582,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func addressBarDataDidChange() {
         // The settings are in: idle tabs can move to the archive.
         archiveIdleTabs()
-        guard isEditingAddress else { return }
-        loadFavorites()
+        // Favorites and recent pages for the next focus (an open field takes them at once).
+        refreshFocusContent()
     }
 
     // MARK: Address bar
@@ -583,7 +598,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
         OpenIntervals.begin(Signposts.urlBarReady, until: UIResponder.keyboardDidShowNotification)
-        pill.textField.text = pageAddress?.absoluteString ?? ""
+        // Go somewhere new (Arc): the field opens empty over the page, which stays behind the
+        // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
+        // Editing the page's address is its own door: the page's row, or the page sheet.
+        let overPage = currentTab.map { !session.tabs.isEmpty($0.id) } ?? false
+        pill.setCopyShown(false)
+        if overPage, let address = pageAddress, let query = data.searchEngine.query(inResults: address) {
+            // On the engine's results page the search comes back, selected, to refine in place
+            // (Safari): a new query replaces the results rather than stacking tabs of them.
+            focusUI.isEditingPage = true
+            launchUI.isFreshSearch = false
+            pill.textField.text = query
+        } else {
+            focusUI.isEditingPage = false
+            launchUI.isFreshSearch = overPage
+            if overPage { Signposts.signposter.emitEvent(Signposts.freshSearch, "pill") }
+            pill.textField.text = ""
+        }
+        updateStartScreen()
         // The layout switches before the keyboard starts, so the keyboard's own animation carries
         // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.
         applyEditingLayout(true, animated: true)
@@ -596,17 +628,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         data.isPrivate = pill.isPrivateTint
         // First, so a preconnect to the suggestion host overlaps the sheet opening.
         data.prepareForTyping()
+        sheet.session += 1
         applyEditingLayout(true, animated: didFocusAtLaunch)
         if !(textField.text ?? "").isEmpty {
             textField.selectAll(nil)
         }
-        loadFavorites()
+        // The content is already in memory (`refreshFocusContent`); only the pasteboard is asked
+        // again, without reading it.
+        refreshCopiedLink()
         queryChanged()
     }
 
     public func textFieldDidEndEditing(_ textField: UITextField) {
         suggestionTask?.cancel()
         data.cancelSuggestions()
+        sheet.session += 1
+        focusUI.isEditingPage = false
+        pill.setCopyShown(false)
         updateStartForTyping(query: "")
         applyEditingLayout(false, animated: true)
     }
@@ -626,18 +664,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         return false
     }
 
-    @objc private func queryChanged() {
+    @objc func queryChanged() {
         let query = pill.textField.text ?? ""
         suggestionTask?.cancel()
         // The current page's address, untouched, is not a query: show favorites, as for an
         // empty field, until the user types.
         let isCurrentAddress = !query.isEmpty && query == pageAddress?.absoluteString
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
-        updateStartForTyping(query: query)
+        // Copy sits in the field while it still shows the page's own address.
+        pill.setCopyShown(focusUI.isEditingPage && isCurrentAddress)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            sheet.show([])
+            // Before typing: never empty (docs/decisions.md, "Address focus").
+            let items = focusItems()
+            updateStartForTyping(query: query, showsRows: !items.isEmpty)
+            sheet.show(items: items)
             return
         }
+        updateStartForTyping(query: query)
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.suggestionsShown)
         // The address bar's data is the app's: each query carries this window's private state, so
@@ -658,12 +701,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     func loadFavorites() {
-        favoritesTask?.cancel()
-        favoritesTask = Task { [weak self, data] in
-            let favorites = await data.favorites()
-            guard let self, !Task.isCancelled else { return }
-            self.sheet.setFavorites(favorites)
-        }
+        refreshFocusContent()
     }
 
     private func open(_ pick: SearchPick) {
@@ -678,6 +716,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 data.suggestionPicked(input: input, url: page)
             }
         case .search(let query): url = data.searchEngine.resultsURL(for: query)
+        default: return
         }
         guard let url else { return }
         let state = Signposts.signposter.beginInterval(Signposts.addressSubmit)
@@ -703,6 +742,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
+        focusUI.isEditingPage = false
+        pill.setCopyShown(false)
         pill.textField.text = pageAddress?.absoluteString ?? ""
         applyEditingLayout(true, animated: true)
         if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
@@ -726,8 +767,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
         isEditingAddress = editing
         // A fresh search lasts as long as its field: closing it uncovers the page.
-        if !editing { launchUI.isFreshSearch = false }
-        let frostAlpha: CGFloat = editing && launchUI.isFreshSearch ? 1 : 0
+        if !editing {
+            launchUI.isFreshSearch = false
+            focusUI.isEditingPage = false
+        }
+        // The page stays behind the veil for both intents: searching over it, or editing its
+        // address.
+        let frostAlpha: CGFloat = editing && (launchUI.isFreshSearch || focusUI.isEditingPage) ? 1 : 0
         guard changed || !animated else { return }
         // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
         // screen's button and shortcuts step aside for the field.
@@ -1217,74 +1263,129 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tab.goForward()
     }
 
-    /// The page menu (docs/ui-reference.md): built when it opens, with only the items that apply
-    /// now, in the reference's order, then History and Settings in their own last section. Zoom,
-    /// blocking and other pane arrive with their features.
-    private func pageMenu(source: PageMenuSource) -> UIMenu {
-        UIMenu(children: [
-            UIDeferredMenuElement.uncached { [weak self] completion in
-                Signposts.signposter.emitEvent(Signposts.pageMenu)
-                guard let self else { return completion([]) }
-                guard let url = self.currentTab?.url, LiveAddressBarData.isRecordable(url), self.currentRules().favorite else {
-                    self.lastFavoriteAnswer = nil
-                    return completion(self.pageMenuElements(isFavorite: nil, source: source))
-                }
-                // One indexed read off the main thread; the menu shows when it answers. If the
-                // page changed meanwhile, the answer is for another page: leave the item out.
-                Task { [weak self, data] in
-                    let isFavorite = await data.isFavorite(url)
-                    guard let self else { return completion([]) }
-                    let answer = self.currentTab?.url == url ? isFavorite : nil
-                    self.lastFavoriteAnswer = answer
-                    completion(self.pageMenuElements(isFavorite: answer, source: source))
-                }
-            },
-        ])
+    /// The page sheet (docs/decisions.md, "Address focus and the page sheet"): from More, a long
+    /// press on the pill or the Duo's top bar. It reads whether the page is a favorite first (one
+    /// indexed read off the main thread), so the sheet opens complete.
+    func showPageSheet(from source: (any UIPopoverPresentationControllerSourceItem)? = nil) {
+        guard presentedViewController == nil else { return }
+        if isEditingAddress { endAddressEditing() }
+        Signposts.signposter.emitEvent(Signposts.pageMenu)
+        Signposts.signposter.emitEvent(Signposts.pageSheet)
+        // The address the items act on (`pageAddress`): under a saved copy over a failed load,
+        // that is the page that failed, not the one the tab last showed.
+        guard let url = pageAddress, LiveAddressBarData.isRecordable(url), currentRules().favorite else {
+            lastPageMarks = nil
+            return presentPageSheet(from: source)
+        }
+        Task { [weak self, data] in
+            let marks = await data.pageMarks(for: url)
+            guard let self else { return }
+            // The page changed meanwhile: the answer is for another page.
+            self.lastPageMarks = self.pageAddress == url ? marks : nil
+            self.presentPageSheet(from: source)
+        }
     }
 
-    /// The menu's items. `isFavorite` is nil when there is no page that can be a favorite.
-    func pageMenuElements(isFavorite: Bool?, source: PageMenuSource) -> [UIMenuElement] {
+    /// Where the sheet points from on a wide screen: More in the bar, or the pill.
+    private var moreSource: any UIPopoverPresentationControllerSourceItem {
+        if usesVerticalBar || chromeOnTop, let item = barItems[.more] { return item }
+        let button = buttonBar.button(.more)
+        return button.window == nil ? pill : button
+    }
+
+    private func presentPageSheet(from source: (any UIPopoverPresentationControllerSourceItem)?) {
+        guard presentedViewController == nil else { return }
+        let controller = PageSheetController { [weak self] in
+            self?.pageSheetModel(marks: self?.lastPageMarks) ?? PageSheetModel()
+        }
+        controller.onEditAddress = { [weak self, weak controller] in
+            // The field rises as the sheet goes down: one hand-over, no pause between.
+            controller?.dismiss(animated: true)
+            self?.beginEditingPageAddress()
+        }
+        // A wide screen (the Duo's inner screen): a popover under More, as Safari's page menu
+        // there. Otherwise a bottom sheet over the dimmed page, sized to its content.
+        if traitCollection.horizontalSizeClass == .regular {
+            controller.modalPresentationStyle = .popover
+            controller.popoverPresentationController?.sourceItem = source ?? moreSource
+            controller.popoverPresentationController?.permittedArrowDirections = [.up, .down]
+        } else {
+            controller.modalPresentationStyle = .pageSheet
+            if let sheet = controller.sheetPresentationController {
+                sheet.prefersGrabberVisible = true
+                sheet.preferredCornerRadius = Radius.large * 2
+                sheet.detents = [.custom(identifier: .init("fitted")) { [weak controller] context in
+                    guard let controller else { return context.maximumDetentValue }
+                    return min(controller.fittingHeight(width: controller.view.bounds.width), context.maximumDetentValue)
+                }]
+                sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+            }
+        }
+        controller.onDismissed = { [weak self] in self?.sheetDidClose() }
+        pageSheet = controller
+        present(controller, animated: true)
+    }
+
+    /// The sheet's content: every item follows docs/state-rules.md §4 through ControlRules, built
+    /// from the same actions the page menu had.
+    func pageSheetModel(marks: PageMarks?) -> PageSheetModel {
+        let rules = currentRules()
+        var model = PageSheetModel()
         let history = UIAction(title: "History", image: UIImage(systemName: "clock")) { [weak self] _ in
             self?.showHistory()
         }
         history.accessibilityIdentifier = "menu.history"
+        let readingList = readingListMenuItem()
         let settings = UIAction(title: "Settings", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.showSettings()
         }
         settings.accessibilityIdentifier = "menu.settings"
-        // The menu way to what a long press on the favorites strip offers.
         let favorites = UIAction(title: "Edit Favorites", image: UIImage(systemName: "star.square.on.square")) { [weak self] _ in
             self?.showFavoritesEditor()
         }
         favorites.accessibilityIdentifier = "menu.editFavorites"
         if !sheets.isReady {
             // The database is still opening (the first moments after launch).
-            for item in [history, favorites, settings] { item.attributes = .disabled }
+            for item in [history, readingList, favorites, settings] { item.attributes = .disabled }
         }
-        // The app's own places, always there and rarely needed mid-page: one row of three, with
-        // Downloads (and its progress) above it while there are any. Short titles fit the row.
-        favorites.title = "Favorites"
-        favorites.accessibilityLabel = "Edit Favorites"
-        let appRow = UIMenu(options: .displayInline, children: [history, favorites, settings])
-        appRow.preferredElementSize = .medium
-        let downloads = downloadsMenuItems()
-        let app = UIMenu(options: .displayInline, children: downloads.isEmpty ? [appRow] : downloads + [appRow])
-        // Every item below follows docs/state-rules.md §4 through ControlRules: items that never
-        // apply to this page are left out, Stop takes Reload's place while loading.
-        let rules = currentRules()
-        // The tabs items first: New Private Tab, Reopen Closed Tab, Archived Tabs where they apply.
-        let tabItems = tabItemsForMore(rules)
-        let top = UIMenu(options: .displayInline, children: tabItems)
-        if tabItems.count > 1 {
-            for case let action as UIAction in tabItems { Self.caption(action) }
-            top.preferredElementSize = .medium
+        let tabItems = tabItemsForMore(rules).compactMap { $0 as? UIAction }
+        let downloads: [PageSheetModel.Row] = downloadsMenuItems().compactMap { element in
+            if let action = element as? UIAction { return .action(action) }
+            if let menu = element as? UIMenu { return .menu(menu) }
+            return nil
         }
+        // The app's places close the sheet, under the tabs' places and the other windows.
+        var tail: [PageSheetModel.Row] = downloads
+        for case let inline as UIMenu in otherWindowsMenu() {
+            for case let windows as UIMenu in inline.children { tail.append(.menu(windows)) }
+        }
+        if !tabItems.isEmpty { tail.append(tabItems.count > 1 ? .chips(tabItems) : .action(tabItems[0])) }
+        tail.append(.chips([history, readingList, favorites, settings]))
+
         guard rules.shareAndCopy, let tab = currentTab, let url = pageAddress else {
             // An empty pane of a split can still be swapped or closed, and the side pane opened.
             let paneItems = paneMenuItems(for: nil, rules: rules) + sidePaneMenuItems(rules)
-            return [top] + otherWindowsMenu() + (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
+            model.rows = paneItems.compactMap { ($0 as? UIAction).map { .action($0) } } + tail
+            return model
         }
-        var pageItems: [UIMenuElement] = []
+
+        // The address row: Back, Forward, the host, Copy Link, Reload or Stop.
+        var back: UIAction?
+        if rules.back.isVisible {
+            let action = UIAction(title: "Back", image: UIImage(systemName: "chevron.backward")) { [weak self] _ in self?.goBack() }
+            if !rules.back.isEnabled { action.attributes = .disabled }
+            action.accessibilityIdentifier = "pageSheet.back"
+            back = action
+        }
+        var forward: UIAction?
+        if rules.forward.isVisible {
+            let action = UIAction(title: "Forward", image: UIImage(systemName: "chevron.forward")) { [weak self] _ in self?.goForward() }
+            if !rules.forward.isEnabled { action.attributes = .disabled }
+            action.accessibilityIdentifier = "pageSheet.forward"
+            forward = action
+        }
+        let copy = UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { [weak self] _ in self?.copyPageAddress() }
+        copy.accessibilityIdentifier = "menu.copyLink"
         var reload: UIAction?
         switch rules.reload {
         case .reload:
@@ -1304,91 +1405,76 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         case .hidden:
             break
         }
+        let host = url.host().map(Self.siteName) ?? url.absoluteString
+        let notSecure = tab.security == .notSecure || tab.security == .certificateBypassed
+        model.address = .init(host: host, notSecure: notSecure, back: back, forward: forward, copy: copy, reload: reload)
+
+        // Tiles: the page actions people reach for most, at most four, Share always last.
+        var tiles: [UIAction] = []
         if rules.findOnPage {
             let find = UIAction(title: "Find on Page", image: UIImage(systemName: "doc.text.magnifyingglass")) { [weak self] _ in
                 self?.findOnPage()
             }
             find.accessibilityIdentifier = "menu.find"
-            pageItems.append(find)
+            tiles.append(find)
         }
-        pageItems += readerMenuItems(rules.reader)
-        pageItems += translateMenuItems(for: tab, item: rules.translate)
-        // Find on Page, Show Reader and Translate Page share one captioned row when two or more
-        // apply, so the menu fits the Duo's outer screen on an article in another language
-        // (Print and Save as PDF are in the share sheet). The full names stay for VoiceOver.
-        if pageItems.count > 1 {
-            for case let action as UIAction in pageItems { Self.caption(action) }
-            let row = UIMenu(options: .displayInline, children: pageItems)
-            row.preferredElementSize = .medium
-            pageItems = [row]
-        }
-        if rules.savePDF { pageItems += pdfMenuItems(for: tab) }
+        tiles += readerMenuItems(rules.reader).compactMap { $0 as? UIAction }
+        tiles += translateMenuItems(for: tab, item: rules.translate).compactMap { $0 as? UIAction }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
             guard let self else { return }
-            let source: (any UIPopoverPresentationControllerSourceItem)? =
-                self.usesVerticalBar ? self.barItems[.more] : self.buttonBar.button(.more)
-            self.share(from: source)
+            self.share(from: self.moreSource)
         }
         share.accessibilityIdentifier = "menu.share"
-        let copy = UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { _ in
-            Signposts.signposter.emitEvent(Signposts.copyLink)
-            UIPasteboard.plain.url = url
-            Haptic.success.play()
-        }
-        copy.accessibilityIdentifier = "menu.copyLink"
-        let siteItems = siteMenuItems(
-            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
-        )
-        let paneItems = paneMenuItems(for: tab, rules: rules) + sidePaneMenuItems(rules)
-        var favoriteItem: UIAction?
-        if rules.favorite, let isFavorite {
+        model.tiles = Array(tiles.prefix(3)) + [share]
+
+        // Keeping the page: Favorite, Read Later and Site Settings, one captioned row (the
+        // reading list lane's measured layout), so the sheet fits the Duo's outer screen.
+        var keep: [UIMenuElement] = []
+        if rules.favorite, let isFavorite = marks?.isFavorite {
             let title = tab.title
             let favorite = UIAction(
                 title: isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                image: UIImage(systemName: isFavorite ? "star.slash" : "star")
+                image: UIImage(systemName: isFavorite ? "star.fill" : "star")
             ) { [weak self] _ in
                 self?.setFavorite(!isFavorite, url: url, title: title)
             }
             favorite.accessibilityIdentifier = "menu.favorite"
-            favoriteItem = favorite
+            keep.append(favorite)
         }
-        // The menu fits the Duo's outer screen (docs/ui-reference.md, page menu): the most used
-        // actions are one row, the per-site choices one submenu, the app's places one row.
-        var sections: [UIMenuElement] = []
-        let actions = UIMenu(options: .displayInline, children: (reload.map { [$0] } ?? []) + [share, copy])
-        actions.preferredElementSize = .medium
-        sections.append(actions)
-        if !pageItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: pageItems)) }
-        if rules.zoom { sections.append(zoomMenu(for: tab, source: source)) }
-        var placeItems: [UIMenuElement] = favoriteItem.map { [$0] } ?? []
+        if rules.readLater, let isSaved = marks?.isSaved {
+            keep.append(readLaterMenuItem(for: tab, url: url, isSaved: isSaved))
+        }
+        let siteItems = siteMenuItems(
+            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
+        )
         if siteItems.count > 1, let host = url.host() {
-            // Desktop Site, blocking and dark pages: set once per site, then remembered.
+            // Desktop Site, blocking, cookie banners and dark pages: set once per site, then remembered.
             let site = UIMenu(
                 title: "Site Settings", subtitle: Self.siteName(host), image: UIImage(systemName: "slider.horizontal.3"),
                 children: siteItems
             )
             site.accessibilityIdentifier = "menu.siteSettings"
-            placeItems.append(site)
+            keep.append(site)
         } else {
-            placeItems += siteItems
+            keep += siteItems
         }
-        placeItems += paneItems
-        if !placeItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: placeItems)) }
-        return [top] + otherWindowsMenu() + sections + [app]
-    }
-
-    /// Shortens a page item to its one-line caption for a row of three ("Find on Page" reads
-    /// "Find", "Translate Page" "Translate"); VoiceOver keeps the full name and the subtitle.
-    static func caption(_ action: UIAction) {
-        let captions = [
-            "Find on Page": String(localized: "Find"), "Translate Page": String(localized: "Translate"),
-            "Show Original": String(localized: "Original"), "Show Reader": String(localized: "Reader"),
-            "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
-            "Archived Tabs": String(localized: "Archive"),
-        ]
-        action.accessibilityLabel = [action.title, action.subtitle].compactMap { $0 }.joined(separator: ", ")
-        action.title = captions[action.title] ?? action.title
-        action.subtitle = nil
+        var rows: [PageSheetModel.Row] = []
+        switch keep.count {
+        case 0: break
+        case 1:
+            if let menu = keep[0] as? UIMenu {
+                rows.append(.menu(menu))
+            } else if let action = keep[0] as? UIAction {
+                rows.append(.action(action))
+            }
+        default: rows.append(.chips(keep))
+        }
+        if rules.zoom { rows.append(.stepper(zoomActions(for: tab))) }
+        if rules.savePDF { rows += pdfMenuItems(for: tab).compactMap { ($0 as? UIAction).map { .action($0) } } }
+        let paneItems = paneMenuItems(for: tab, rules: rules) + sidePaneMenuItems(rules)
+        rows += paneItems.compactMap { ($0 as? UIAction).map { .action($0) } }
+        model.rows = rows + tail
+        return model
     }
 
     /// A site's name as the pill shows it: the host without `www.`.
@@ -1398,8 +1484,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
         Signposts.signposter.emitEvent(Signposts.favoriteToggle)
-        Task { [data] in
+        Task { [weak self, data] in
             if await data.setFavorite(isFavorite, url: url, title: title) {
+                self?.refreshFocusContent()
                 Haptic.success.play()
             } else {
                 Haptic.nothingThere.play()
@@ -1469,6 +1556,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         showPendingToast()
         tabsUI.tip.showIfPossible(in: self)
         session.tabs.refreshArchiveState()
+        // History may have been cleared, favorites edited: read them again.
+        refreshFocusContent()
     }
 
     /// The sheet was swiped down.

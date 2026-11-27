@@ -96,7 +96,7 @@ import Testing
             searches: []
         )
         let hosts = result.map { suggestion -> String? in
-            if case .page(let url, _, _) = suggestion { url.host() } else { nil }
+            if case .page(let url, _, _, _) = suggestion { url.host() } else { nil }
         }
         #expect(hosts == ["b.example", "a.example"])
     }

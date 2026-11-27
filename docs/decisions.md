@@ -1424,6 +1424,147 @@ routed to the lanes that own them.
 - **Start screen shortcuts use the page menu's captions** ("Reopen Tab", "Archive") in equal
   columns, full names for VoiceOver; an empty private tab's sentence says it is private ("A private
   tab: Plain keeps no history of it."), with no badge.
+## Address focus and the page sheet: Arc's two intents (2026-11-27)
+
+Owner, on TestFlight: "When a user taps the URL bar it just looks empty still." On the Duo's
+outer screen, dark, on apple.com: the page vanished behind flat paper, the field rose with
+`https://www.apple.com/` selected, and nothing else showed for as long as the field was open (no
+favorites saved, so the only content, the strip, said nothing). The owner's reference is Arc
+Search, recorded on the same phone: "Arc keeps it all very intuitive." Research in
+docs/research/address-focus.md.
+
+**Two intents, two doors (Arc's model).**
+
+1. **Go somewhere new: tap the pill.** The field opens empty ("Search or enter address"), the
+   page stays behind a paper veil (the fresh search's `FrostView`), and what is submitted opens in
+   a new tab whose opener is the page, so Back on its first page closes it and returns there (the
+   link rule, state rules §8). Dismissing creates nothing. On the start screen (an empty tab) it
+   loads in place, as before. Arc and Chrome's "new tab" habit; the page the user was reading is
+   never replaced by a stray search.
+2. **Do something to this page: More (or a long press on the pill).** The page sheet: the
+   address row first (Back, Forward, the host, Copy Link, Reload or Stop), captioned tiles, then
+   rows. Tapping the host edits the address: the sheet goes down as the field comes up with the
+   page's address selected and a Copy button inside the field; Return loads in the same tab.
+   One field for both intents, so suggestions, keyboard and motion are one design.
+
+The focused field's first row on a page is the page itself (its title and host, Copy, Edit), so
+editing the address is also one tap from the search.
+
+**What the focused field shows (nothing empty).** The favorites strip stays directly above the
+field, where it has always been (one row of big targets in thumb reach, Safari's Favorites); the
+rows sit above it, nearest first, the way the suggestions sit (best nearest the thumb). Every item
+comes from memory, so it is on screen in the frame the keyboard starts. Rows, in order:
+
+| Item | When | Why |
+|---|---|---|
+| Copied link ("Open Copied Link") | The pasteboard holds a web address (`detectPatterns`, no paste alert) that Plain has not offered since it changed, and it is not the page on screen | The most likely next address. The address is shown only when Plain copied it itself; others are read only on the tap. |
+| This page (title, host; Copy, Edit) | A page is on screen, search intent | Edit and copy stay one tap away (Chrome's current-page row). |
+| Unread Reading List (up to 2) | Pages saved and not read yet (private tabs too, as favorites) | Saved on purpose to read next. |
+| Favorites strip (directly above the field) | At least one favorite (private tabs too) | Unchanged. |
+| Recently visited (up to 4) | Regular tab; history has pages other than this one and the favorites | Arc's "context" row; Safari's Frequently Visited. Newest first, one row per page. |
+| Recently closed (up to 2) | Regular tab; the closed stack has a batch | Reopens that batch in place (`reopenClosed`). |
+| One sentence (top) | Nothing kept yet: no recent, closed or unread pages and no favorites, and no copied link (first run; not on the start screen, which has its own) | "Pages you visit and your favorites show up here." |
+
+Private tabs show no history and no closed tabs: only this page, a copied link and favorites.
+When typing starts, the same rows machinery takes over: a recent page that is also a suggestion
+keeps its row, the rest crossfade (0.12 s), one update per frame.
+
+**Layouts.**
+
+- **iPhone 17, Duo outer:** the pill rises above the keyboard (keyboard layout guide), the page
+  sheet is a bottom sheet sized to its content with a grabber.
+- **Duo inner, landscape and portrait (top bar in the status row):** the field still rises above
+  the keyboard, as on every screen (decided with the top bar: suggestions stay nearest the
+  thumb). The page sheet is a popover under More in the top bar (Safari on wide screens), the
+  same content at 360 pt.
+- **Split panes:** both intents act on the focused pane; a new tab from search goes to it.
+- **Dynamic Type XL:** rows grow; only whole rows show above the field (the top ones drop);
+  the page sheet scrolls past its largest detent.
+- **Reduce Motion:** every move below is a 0.2 s crossfade; the rows' crossfade is unchanged.
+- **Light and dark:** Palette and Paper tokens only; the veil is paper at 70 % in both.
+
+**Transitions.** Transform and opacity only, nothing lays out mid-motion, every one can be
+interrupted from where it is on screen, and nothing animates without a reason.
+
+| Transition | Purpose | Motion | What moves | No flicker because |
+|---|---|---|---|---|
+| Pill to field | The bar becomes the field: one object, so the eye follows it | `urlFocus` (spring 0.3, bounce 0) riding the keyboard | pill frame (keyboard layout guide), veil and sheet opacity, content 16 pt rise | Rows built from the cached focus snapshot in the same run-loop turn, before Core Animation commits; no fetch on focus |
+| Focused content to suggestions | The list answers the typing | `suggestionFade` 0.12 s linear | row opacity | Rows keyed by identity; one flush per turn; shared rows untouched |
+| Edit from the page row | The field takes the page's address | none: text swaps in place, selected | rows crossfade (0.12 s) | Field and pill keep their frame |
+| Copy in the field | Confirms the copy | `quick` | the glyph swaps to a check for 1.2 s, success haptic | No layout: same-size glyph |
+| More to the page sheet | Page actions over the page | system sheet / popover | system | Content and favorite state built before presenting |
+| Host to edit field | Hand over to the one field | sheet dismisses while the keyboard rises | system + `urlFocus` | The field is focused in the dismissal's first frame |
+| Field closes | Back to the page | `urlFocus` | the reverse of focus | |
+| Card grows or shrinks with the rows | The paper follows what it holds | grows at once under rows fading in; shrinks with the leaving rows' 0.12 s fade | the card's mask frame | The mask is laid out whenever the content is (the keyboard moves the content without the sheet laying out), inside the same animation |
+
+**How it is built.**
+
+- **Content before the frame.** `AddressBarData.focusContent()` reads favorites and the newest
+  distinct pages (`AppDatabase.recentPages`, a bounded scan of the `visitedAt` index) off the main
+  thread at launch, after a sheet closes and after a favorite or the Reading List changes, first
+  writing what the history writer still buffers; each recorded visit updates the copy in memory
+  at once (`noteVisit`), and a read that started before a visit is read again, so the writer's
+  batching never shows.
+  Focusing reads none of it: `focusItems()` builds rows from memory (signpost
+  `urlBar.focusContent`).
+- **Copied link without the paste alert.** `CopiedLinkWatcher` compares `changeCount` on return to
+  the foreground and after the first frame, then asks `detectPatterns(for: .probableWebURL)`, which
+  shows no alert. Plain never reads another app's link before the tap. The row then carries the
+  system Paste button (`UIPasteControl`: a tap there pastes with no alert); a tap elsewhere on the
+  row reads the pasteboard, which the system may confirm. A link Plain copied itself is known and
+  shown. Offered once per copy, within `FixedChoices.copiedLinkFreshness` (Chrome's 10 minutes).
+- **One rows machinery.** The focused field's rows are `SheetItem`s in the suggestion rows, so the
+  crossfade, the one-update-per-frame flush and whole-rows-only all hold; the page's row has a
+  Copy button beside it, as a second accessibility element.
+- **The page sheet** is built from the same `UIAction`s the page menu had (rules, titles,
+  identifiers), so ControlRules still decides every item; the long press on the pill opens it
+  too, so there is one page menu.
+- **Not built: inline completion in the field.** Setting the field's text while the keyboard
+  types desynchronised UIKit's input under fast typing (letters went missing in a UI test). The
+  top hit already sits nearest the field; revisit with `UITextInput` marked-text APIs.
+- **Not built: a blocked-trackers card.** WebKit has no public count of what a content rule list
+  blocked (`_WKContentRuleListAction` is private); a page-script matcher would run on every page
+  and count loads it saw, not loads blocked (docs/research/address-focus.md).
+- **Results pages show the query.** `SearchEngine.query(inResults:)` reads the query back from the
+  engine's own results URL (same host and path as its template), so the pill reads what was
+  searched; a tap brings it back selected and refines in the same tab.
+
+## Bookmarks and the reading list (2026-11-27)
+
+Research: docs/research/bookmarks.md.
+
+- **No bookmark folders.** Favorites stay the one list of kept pages (flat, ordered, above the
+  keyboard); History search and the tab archive find the rest. Bookmark use is low in every
+  published number, nothing shows folders are common, and Arc shipped without bookmarks
+  (`FixedChoices.bookmarkFolders`).
+- **Reading List, "Read Later" in the page menu.** A page saved to read once. Unread until opened
+  from the list; read pages move to a Read section under the unread ones and stay until deleted.
+- **Offline copy: the reader's article, not a web archive** (Chrome's choice). Readability is
+  already in Plain; the copy is the article's cleaned HTML as JSON, LZFSE-compressed in a table of
+  its own (`readingListCopy`, deleted with its item), so the list and the address bar never read
+  copies. A page with no article (the readerable check said no) is saved as its link, and
+  Readability is never run on it. Web archives are heavy, break on script-driven pages and don't
+  open in a reader.
+- **Offline is automatic, no switch:** a saved page opens live; when its load fails for want of
+  the network (offline, connection lost, host not found, not answering, timed out;
+  `ControlRules.opensSavedCopy`) its copy opens in the reader over the error. Back or Hide Reader
+  shows the error and its Try Again. Not on certificate errors: the warning stays in front.
+- **Address bar:** unread saved pages that match rank right after favorites, with the eyeglasses
+  symbol. Read ones match as ordinary pages. The reading list query runs in the same read as
+  history and favorites, on its own FTS5 index (title and address, prefixes 1 and 2).
+- **Clear History and Data keeps the reading list**, as it keeps favorites and open tabs.
+- **Page menu:** Read Later (Remove from Reading List once saved) follows Add to Favorites, under
+  the same rule (`ControlRules.readLater`); Reading List sits above the History, Favorites and
+  Settings row. Both are added through the existing builder only (`+ReadingList` builds them):
+  the menu's layout and its fit on the Duo's outer screen belong to the page menu redesign lane.
+  Measured for that lane on the outer screen (French article, a closed tab, 466x678): the two
+  extra lines push the History row out of the menu. A layout that fit with 63 pt to spare:
+  Add to Favorites, Read Later and Site Settings as one captioned row ("Favorite", "Read Later",
+  "Site"), and History, Reading List, Favorites and Settings as one row of four symbols (a
+  captioned `.medium` row holds three; a fourth wraps to a second row).
+- **Signposts:** `readingList.save` (interval, "copy" or "link"), `readingList.remove`,
+  `readingList.show`, `readingList.load` (interval), `readingList.open`, `readingList.edit`,
+  `readingList.offlineCopy` (interval).
 ## Duo inner screen: the side pane (2026-11-27)
 
 Plan, section 6, item 4: a supporting pane (~30%, 250 pt min) with the reader, find results and

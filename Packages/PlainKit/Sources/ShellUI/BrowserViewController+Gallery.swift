@@ -465,16 +465,17 @@ extension BrowserViewController: GalleryHost {
             webContainer.bringSubviewToFront(engineUI.pageState)
         }
         // A fresh search over a page is clear too: the page shows through the frost.
-        let clear = (showsStart && !start.isReceded) || (launchUI.isFreshSearch && !showsStart)
+        let clear = (showsStart && !start.isReceded) || ((launchUI.isFreshSearch || focusUI.isEditingPage) && !showsStart)
         sheet.backgroundColor = clear ? .clear : Paper.background
     }
 
     /// The start screen while typing (state rules §3): with a query, the mark and its shortcuts
     /// recede and the sheet takes the paper behind the suggestions; cleared, they come back.
-    func updateStartForTyping(query: String) {
+    func updateStartForTyping(query: String, showsRows: Bool = false) {
         var state = rules.state
         state.isEditing = isEditingAddress
         state.hasQuery = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        state.showsFocusRows = showsRows
         let recedes = ControlRules(state).startScreenRecedes
         let start = tabsUI.start
         guard recedes != start.isReceded else { return }

@@ -246,6 +246,9 @@ enum Wording {
     static let historyEditFailed = "Plain couldn't change your history. Try again."
     static let favoritesFooter = "Tap a favorite to rename it."
     static let favoritesFailed = "Plain couldn't change your favorites. Try again."
+    static let readingListReadFailed = "Plain couldn't load your reading list."
+    static let readingListEditFailed = "Plain couldn't change your reading list. Try again."
+    static let readingListEmpty = "Save pages to read later from the page menu."
 
     /// Shown only where a tab list fits, which has a top bar and no swipe up from the address bar:
     /// the Tabs button shows them all.
@@ -255,7 +258,7 @@ enum Wording {
     static let customEngineFooter = "Paste a search results address with %s where the search words go."
     static let clearFooter = "Removes your history, cookies and website data from this device."
     static let clearConfirmTitle = "Clear History and Data?"
-    static let clearConfirmMessage = "Your history, cookies and website data will be removed. Open tabs and favorites stay."
+    static let clearConfirmMessage = "Your history, cookies and website data will be removed. Open tabs, favorites and your reading list stay."
 
     static func message(for error: any Error) -> String {
         switch error as? SearchEngine.TemplateError {

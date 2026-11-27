@@ -3,11 +3,41 @@ import BrowserCore
 import DesignSystem
 import PerfSignposts
 import UIKit
+import UniformTypeIdentifiers
 
 /// What a row or tile in the search sheet opens.
-enum SearchPick {
+enum SearchPick: Equatable {
     case page(URL)
     case search(String)
+    /// The page's own row: edit its address in the field.
+    case editAddress
+    /// The page's own row's Copy button.
+    case copyAddress
+    /// "Open Copied Link": the address, when Plain knows it without reading the pasteboard.
+    case copiedLink(URL?)
+    /// A recently closed batch, reopened where it was.
+    case reopen(UUID)
+}
+
+/// One row of the search sheet: a suggestion while typing, or what the focused field offers
+/// before typing (docs/decisions.md, "Address focus"). Rows are matched across updates by
+/// `SuggestionRow.identity(of:)`, so a recent page that is also a suggestion keeps its row when
+/// typing starts.
+enum SheetItem: Hashable {
+    case suggestion(AddressBarSuggestion)
+    /// The page on screen (search over a page): its title and host, Copy, and a tap to edit.
+    case currentPage(url: URL, title: String?)
+    /// A web address on the pasteboard; the address itself only when Plain copied it.
+    case copiedLink(URL?)
+    /// A recently closed batch: its first tab's title and address, and how many tabs it holds.
+    case closed(batch: UUID, url: URL?, title: String?, count: Int)
+    /// One sentence when there is nothing else to show (first run).
+    case hint(String)
+
+    /// A visited page offered before typing: the same row a page suggestion uses.
+    static func recent(url: URL, title: String?) -> SheetItem {
+        .suggestion(.page(url: url, title: title, isFavorite: false))
+    }
 }
 
 /// The search sheet the URL pill grows into: it covers the page, lists suggestions above the field,
@@ -28,7 +58,7 @@ enum SearchPick {
 /// - Reduce Motion: the whole list crossfades at once.
 final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// The sheet's content. The owner pins its bottom above the pill and its sides to the margins.
-    let content = UIView()
+    let content = LayoutReportingView()
     var onPick: (SearchPick) -> Void = { _ in }
     /// A tap on the sheet outside any row: close the sheet.
     var onDismiss: () -> Void = {}
@@ -37,6 +67,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         didSet { favoritesStrip.onEdit = onEditFavorites }
     }
 
+    /// Bumped each time the field opens or closes (the shell), so an answer that arrives late
+    /// (the Paste button's) is only taken by the field it was for.
+    var session = 0
     private let rowsClip = PassThroughView()
     /// The paper behind the rows, so they read over the start screen's mark even while it
     /// recedes (docs/state-rules.md §6, start screen while typing). It covers the whole sheet, so
@@ -52,9 +85,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// Rows ready for reuse.
     private var spareRows: [SuggestionRow] = []
     /// The list waiting for the end of this run loop turn, and the observer that applies it.
-    private var pending: [AddressBarSuggestion]?
+    private var pending: [SheetItem]?
     private var flushObserver: CFRunLoopObserver?
-    private var current: [AddressBarSuggestion] = []
+    private var current: [SheetItem] = []
     private let favoritesStrip = FavoritesStrip()
     private var showsFavorites = false
     private var hasFavorites = false
@@ -71,7 +104,26 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         accessibilityIdentifier = "searchSheet"
 
         content.translatesAutoresizingMaskIntoConstraints = false
+        content.onLayout = { [weak self] in self?.layOutRows() }
         addSubview(content)
+
+        // Under everything: the card the rows, the favorites and the field sit on.
+        plate.isUserInteractionEnabled = false
+        plate.alpha = 0
+        Paper.apply(to: plate)
+        // By night the card is lifted a step above the veiled page (the sheets' card tone), so it
+        // reads as one surface; by day paper over a light page already does.
+        let lift = UIView()
+        lift.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? Palette.paperCard.resolvedColor(with: $0) : .clear }
+        lift.isUserInteractionEnabled = false
+        lift.frame = plate.bounds
+        lift.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        plate.addSubview(lift)
+        plateMask.backgroundColor = .black
+        plateMask.layer.cornerRadius = Radius.large
+        plateMask.layer.cornerCurve = .continuous
+        plate.mask = plateMask
+        content.addSubview(plate)
 
         // Under the rows: the favorites sit where the first rows would, and only one of them
         // shows at a time (favorites for an empty field, rows for a query).
@@ -84,13 +136,6 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         rowsClip.clipsToBounds = true
         rowsClip.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(rowsClip)
-
-        plate.isUserInteractionEnabled = false
-        plate.alpha = 0
-        Paper.apply(to: plate)
-        plateMask.backgroundColor = .black
-        plate.mask = plateMask
-        rowsClip.addSubview(plate)
 
         rowsStack.axis = .vertical
         rowsStack.spacing = 0
@@ -134,11 +179,19 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        layOutRows()
+    }
+
+    /// Fits the rows and the card to the space above the field. Runs when the sheet lays out and
+    /// when its content does: the content moves with the field (the keyboard, a fold) without the
+    /// sheet itself laying out, and the card must follow the rows exactly.
+    private func layOutRows() {
         rowsClip.layoutIfNeeded()
         // The plate covers the whole sheet, so its paper lines up with the sheet's.
-        let plateFrame = rowsClip.convert(bounds, from: self)
+        let plateFrame = content.convert(bounds, from: self)
         if plate.frame != plateFrame {
-            UIView.performWithoutAnimation { plate.frame = plateFrame }
+            // Inside whatever animation moves the content (the keyboard), so the card moves with it.
+            plate.frame = plateFrame
         }
         guard !isApplying else { return }
         // The space can change under the rows (keyboard, fold): only whole rows show.
@@ -146,15 +199,29 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             let fits = fits(row)
             if row.fits != fits { setFits(fits, row) }
         }
-        UIView.performWithoutAnimation { plateMask.frame = rowsArea() }
+        plateMask.frame = rowsArea(favorites: favoritesShown)
     }
 
     /// Shows `suggestions`, best first, the first one nearest the field. Applied once per run
     /// loop turn, just before the frame is committed.
     func show(_ suggestions: [AddressBarSuggestion]) {
-        pending = suggestions
+        show(items: suggestions.map(SheetItem.suggestion))
+    }
+
+    /// Shows `items` (suggestions, or the focused field's content before typing), best first,
+    /// the first one nearest the field. Applied once per run loop turn, like `show(_:)`.
+    func show(items: [SheetItem]) {
+        pending = items
         scheduleFlush()
     }
+
+    /// The most rows the sheet keeps: a full suggestion list, or the focused field's content
+    /// (copied link, the page, recent pages, closed tabs). Rows that don't fit above the field
+    /// stay out, so this only bounds the work.
+    static let maxRows = max(
+        FixedChoices.maxAddressBarSuggestions,
+        2 + FixedChoices.focusReadingList + FixedChoices.focusRecentPages + FixedChoices.focusClosedTabs
+    )
 
     /// Whether the favorites strip may show: only while the field is empty.
     func setFavoritesAllowed(_ allowed: Bool) {
@@ -208,11 +275,11 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         apply(list)
     }
 
-    private func apply(_ suggestions: [AddressBarSuggestion]) {
+    private func apply(_ suggestions: [SheetItem]) {
         let signposter = Signposts.signposter
         let signpost = signposter.beginInterval(Signposts.suggestionsApply)
         defer { signposter.endInterval(Signposts.suggestionsApply, signpost) }
-        let items = Array(suggestions.prefix(FixedChoices.maxAddressBarSuggestions))
+        let items = Array(suggestions.prefix(Self.maxRows))
         let showFavorites = showsFavorites && hasFavorites
         guard items != current || showFavorites != favoritesShown else { return }
         current = items
@@ -227,7 +294,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         topUpSpareRows()
     }
 
-    private func update(_ items: [AddressBarSuggestion], showFavorites: Bool, animated: Bool) {
+    private func update(_ items: [SheetItem], showFavorites: Bool, animated: Bool) {
         // The first rows after an empty list show at once, readable on the keystroke's frame:
         // there is no text there to crossfade from.
         let fillsEmpty = shownRows.isEmpty && leavingRows.isEmpty
@@ -336,9 +403,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         // VoiceOver reads best first.
         rowsStack.accessibilityElements = next.filter(\.fits)
 
-        let plateAlpha: CGFloat = next.isEmpty ? 0 : 1
+        let plateAlpha: CGFloat = next.isEmpty && !showFavorites ? 0 : 1
         if fillsEmpty, animated { plate.layer.removeAllAnimations(); plate.alpha = plateAlpha }
-        let area = rowsArea()
+        let area = rowsArea(favorites: showFavorites)
         if !animated {
             plate.alpha = plateAlpha
             UIView.performWithoutAnimation { plateMask.frame = area }
@@ -380,8 +447,8 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// then doesn't pay for their fonts, symbols and constraints in its frame.
     private func warmRows() {
         guard shownRows.isEmpty, leavingRows.isEmpty, pending == nil else { return }
-        let samples: [AddressBarSuggestion] = [
-            .page(url: URL(string: "https://example.com/a")!, title: "Example", isFavorite: false), .search("example"),
+        let samples: [SheetItem] = [
+            .recent(url: URL(string: "https://example.com/a")!, title: "Example"), .suggestion(.search("example")),
         ]
         let rows = spareRows
         UIView.performWithoutAnimation {
@@ -431,7 +498,18 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             guard let self, let pick = row?.pick else { return }
             self.onPick(pick)
         }, for: .touchUpInside)
+        row.onAccessory = { [weak self] in self?.onPick(.copyAddress) }
+        row.onPaste = { [weak self] url, session in
+            guard let self, session == self.session else { return }
+            self.onPick(.copiedLink(url))
+        }
+        row.sessionProvider = { [weak self] in self?.session ?? 0 }
         return row
+    }
+
+    /// The page's row answers a copy with its check mark.
+    func confirmCopied() {
+        shownRows.first { $0.identity?.hasPrefix("current ") == true }?.showCopied()
     }
 
     /// Fades the favorites in or out. They sit under the rows, so rows arriving cover them.
@@ -488,14 +566,37 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         rowsStack.accessibilityElements = shownRows.filter(\.fits)
     }
 
-    /// The part of the plate behind the rows that show, in the plate's space.
-    private func rowsArea() -> CGRect {
-        let showing = shownRows.filter(\.fits)
-        guard let top = showing.map({ clipFrame(of: $0).minY }).min(),
-              let bottom = showing.map({ clipFrame(of: $0).maxY }).max()
-        else { return .zero }
-        let rect = CGRect(x: 0, y: top, width: rowsClip.bounds.width, height: bottom - top)
-        return plate.convert(rect, from: rowsClip)
+    /// The card, in the plate's space: from just above the top row that shows (or the favorites)
+    /// down to the sheet's bottom, so the rows, the favorites and the field above the keyboard
+    /// sit on one paper card over the veiled page (Arc's sheet, with the field where the thumb
+    /// is). Zero with nothing to show.
+    private func rowsArea(favorites: Bool) -> CGRect {
+        // From the geometry itself (a whole row inside the clip), not the rows' `fits` flags, which
+        // a layout pass may not have caught up with yet.
+        var top = shownRows.map { clipFrame(of: $0).minY }.filter { $0 >= -0.5 }.min()
+            .map { plate.convert(CGPoint(x: 0, y: $0), from: rowsClip).y }
+        if favorites {
+            let strip = plate.convert(favoritesStrip.frame, from: content).minY
+            top = min(top ?? strip, strip)
+        }
+        guard let top else { return .zero }
+        let width = plate.convert(content.bounds, from: content)
+        let cardTop = top - Spacing.s
+        // A little wider than the rows and the field, so the field sits inside the card's edges.
+        return CGRect(
+            x: width.minX - Spacing.s, y: cardTop, width: width.width + 2 * Spacing.s,
+            height: max(0, plate.bounds.maxY - cardTop)
+        )
+    }
+}
+
+/// A view that says when it has laid out its subviews.
+final class LayoutReportingView: UIView {
+    var onLayout: () -> Void = {}
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout()
     }
 }
 
@@ -508,15 +609,36 @@ final class PassThroughView: UIView {
     }
 }
 
-/// One suggestion: a page (from history or favorites) or a search from the engine.
+/// One row: a page (from history or favorites) or a search from the engine while typing, or
+/// before typing the page on screen, a copied link, a closed tab or the first-run sentence.
 final class SuggestionRow: UIControl {
     private let icon = UIImageView()
     private let title = UILabel()
     private let detail = UILabel()
+    /// The trailing slot: Copy on the page's own row, the system Paste button on the copied
+    /// link's row (it hands Plain the link with no paste alert), empty elsewhere.
+    private let slot = UIView()
+    private let accessory = UIButton(type: .system)
+    private var pasteControl: UIPasteControl?
+    private var slotWidth: NSLayoutConstraint!
+    private var textTrailing: NSLayoutConstraint!
+    private enum Accessory { case none, copy, paste }
+    private var accessoryKind = Accessory.copy
+    /// The row's identifier while a button sits beside it (the row itself then is a container).
+    private(set) var mainIdentifier: String?
+    /// A link the Paste button handed over.
+    var onPaste: (URL, Int) -> Void = { _, _ in }
+    /// The open field's session (`SearchSheet.session`), read when Paste begins.
+    var sessionProvider: () -> Int = { 0 }
+    /// The row's main part for VoiceOver and UI tests while the accessory shows: the row itself
+    /// then can't be one element, or Copy would be out of reach.
+    private lazy var mainElement = RowElement(row: self)
     var pick: SearchPick?
+    /// The accessory's action (Copy on the page's row).
+    var onAccessory: () -> Void = {}
     /// The suggestion this row shows, as `identity(of:)` names it.
     private(set) var identity: String?
-    private var shown: AddressBarSuggestion?
+    private var shown: SheetItem?
     private var shownIndex = -1
     /// Whether the row fits in the space above the field (only whole rows show).
     var fits = true
@@ -525,13 +647,19 @@ final class SuggestionRow: UIControl {
     var place = -1
     /// Bumped whenever the row starts or stops fading out, so a stale fade's end is ignored.
     var leaveToken = 0
+    /// Bumped by each copy, so only the newest one's check mark turns back.
+    private var copyToken = 0
 
-    /// What makes two suggestions the same row across keystrokes: a page's address (as
-    /// `AddressBarSuggestions` dedupes it) or a search's text, ignoring case.
-    static func identity(of suggestion: AddressBarSuggestion) -> String {
-        switch suggestion {
-        case .page(let url, _, _): "page " + AddressBarSuggestions.addressKey(url)
-        case .search(let query): "search " + query.lowercased()
+    /// What makes two rows the same across updates: a page's address (as `AddressBarSuggestions`
+    /// dedupes it) or a search's text, ignoring case; the focused field's own rows by kind.
+    static func identity(of item: SheetItem) -> String {
+        switch item {
+        case .suggestion(.page(let url, _, _, _)): "page " + AddressBarSuggestions.addressKey(url)
+        case .suggestion(.search(let query)): "search " + query.lowercased()
+        case .currentPage(let url, _): "current " + AddressBarSuggestions.addressKey(url)
+        case .copiedLink: "copied"
+        case .closed(let batch, _, _, _): "closed " + batch.uuidString
+        case .hint: "hint"
         }
     }
 
@@ -551,6 +679,16 @@ final class SuggestionRow: UIControl {
         detail.textColor = Palette.textSecondary
         detail.lineBreakMode = .byTruncatingMiddle
 
+        var copy = UIButton.Configuration.plain()
+        copy.image = UIImage(systemName: "link")
+        copy.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
+        copy.baseForegroundColor = Palette.accentOnPaper
+        accessory.configuration = copy
+        accessory.accessibilityLabel = String(localized: "Copy Link")
+        accessory.accessibilityIdentifier = "focus.copyAddress"
+        accessory.isHidden = true
+        accessory.addAction(UIAction { [weak self] _ in self?.onAccessory() }, for: .touchUpInside)
+
         let text = UIStackView(arrangedSubviews: [title, detail])
         text.axis = .vertical
         text.spacing = Spacing.xxs
@@ -560,6 +698,13 @@ final class SuggestionRow: UIControl {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
+        slot.translatesAutoresizingMaskIntoConstraints = false
+        slot.clipsToBounds = true
+        addSubview(slot)
+        accessory.translatesAutoresizingMaskIntoConstraints = false
+        slot.addSubview(accessory)
+        slotWidth = slot.widthAnchor.constraint(equalToConstant: 0)
+        textTrailing = text.trailingAnchor.constraint(equalTo: slot.leadingAnchor)
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.rowHeight),
             {
@@ -572,11 +717,21 @@ final class SuggestionRow: UIControl {
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 24),
             text.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: Spacing.m),
-            text.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Spacing.m),
+            textTrailing,
             text.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: Spacing.s),
             text.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -Spacing.s),
             text.centerYAnchor.constraint(equalTo: centerYAnchor),
+            slot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Spacing.xs),
+            slot.topAnchor.constraint(equalTo: topAnchor),
+            slot.bottomAnchor.constraint(equalTo: bottomAnchor),
+            slotWidth,
+            accessory.trailingAnchor.constraint(equalTo: slot.trailingAnchor),
+            accessory.centerYAnchor.constraint(equalTo: slot.centerYAnchor),
+            accessory.widthAnchor.constraint(equalToConstant: Metrics.tapTarget),
+            accessory.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
         ])
+        pasteConfiguration = UIPasteConfiguration(acceptableTypeIdentifiers: [UTType.url.identifier, UTType.plainText.identifier])
+        setAccessory(.none)
         isAccessibilityElement = true
         accessibilityTraits = .button
     }
@@ -598,33 +753,164 @@ final class SuggestionRow: UIControl {
         isHighlighted = false
     }
 
-    func configure(_ suggestion: AddressBarSuggestion, index: Int) {
-        // A row that keeps its suggestion and place is left alone: nothing to redraw.
-        guard suggestion != shown || index != shownIndex || accessibilityIdentifier == nil else { return }
-        shown = suggestion
+    func configure(_ item: SheetItem, index: Int) {
+        // A row that keeps its item and place is left alone: nothing to redraw.
+        guard item != shown || index != shownIndex || accessibilityIdentifier == nil else { return }
+        shown = item
         shownIndex = index
-        identity = Self.identity(of: suggestion)
-        switch suggestion {
-        case .page(let url, let pageTitle, let isFavorite):
-            let address = Self.displayAddress(url)
-            let name = pageTitle.flatMap { $0.isEmpty ? nil : $0 }
-            setText(title, name ?? address)
-            setText(detail, name == nil ? nil : address)
-            if detail.isHidden != (name == nil) { detail.isHidden = name == nil }
-            setSymbol(isFavorite ? "star" : "clock")
+        identity = Self.identity(of: item)
+        var kind = Accessory.none
+        var tint = Palette.textSecondary
+        isEnabled = true
+        switch item {
+        case .suggestion(.page(let url, let pageTitle, let isFavorite, let isSaved)):
+            setPage(url: url, title: pageTitle)
+            setSymbol(isFavorite ? "star" : isSaved ? "eyeglasses" : "clock")
             pick = .page(url)
             accessibilityIdentifier = "suggestion.page.\(index)"
-            accessibilityLabel = title.text
-            accessibilityValue = detail.text
-        case .search(let query):
-            setText(title, query)
-            setText(detail, nil)
-            if !detail.isHidden { detail.isHidden = true }
+        case .suggestion(.search(let query)):
+            setLines(query, nil)
             setSymbol("magnifyingglass")
             pick = .search(query)
             accessibilityIdentifier = "suggestion.search.\(index)"
-            accessibilityLabel = query
-            accessibilityValue = nil
+        case .currentPage(let url, let pageTitle):
+            setPage(url: url, title: pageTitle)
+            setSymbol("pencil")
+            tint = Palette.accentOnPaper
+            pick = .editAddress
+            kind = .copy
+            accessibilityIdentifier = "focus.currentPage"
+            accessibilityHint = String(localized: "Edits the address")
+        case .copiedLink(let url):
+            setLines(String(localized: "Open Copied Link"), url.map(Self.displayAddress))
+            setSymbol("doc.on.clipboard")
+            tint = Palette.accentOnPaper
+            pick = .copiedLink(url)
+            accessibilityIdentifier = "focus.copiedLink"
+            // Another app's link: the system Paste button opens it with no alert. A tap on the
+            // row reads it too, after the system asks. Isolated runs copy to a private
+            // pasteboard, which the Paste button can't read.
+            if url == nil, !TestIsolation.isActive { kind = .paste }
+        case .closed(let batch, let url, let closedTitle, let count):
+            let name = closedTitle.flatMap { $0.isEmpty ? nil : $0 } ?? url.map(Self.displayAddress) ?? String(localized: "Closed Tab")
+            var secondLine = url.map(Self.displayAddress)
+            if count > 1 { secondLine = String(localized: "and \(count - 1) more tabs") }
+            setLines(name, secondLine)
+            setSymbol("arrow.uturn.backward")
+            pick = .reopen(batch)
+            accessibilityIdentifier = "focus.closed.\(index)"
+            accessibilityHint = String(localized: "Reopens the closed tab")
+        case .hint(let sentence):
+            setLines(sentence, nil)
+            setSymbol("sparkle.magnifyingglass")
+            pick = nil
+            isEnabled = false
+            accessibilityIdentifier = "focus.hint"
+        }
+        if case .hint = item {
+            title.numberOfLines = 0
+            title.textColor = Palette.textSecondary
+            title.font = .preferredFont(forTextStyle: .subheadline)
+        } else {
+            title.numberOfLines = 1
+            title.textColor = Palette.textPrimary
+            title.font = .preferredFont(forTextStyle: .body)
+        }
+        switch item {
+        case .currentPage, .closed: break
+        default: accessibilityHint = nil
+        }
+        icon.tintColor = tint
+        accessibilityLabel = title.text
+        accessibilityValue = detail.text
+        accessibilityTraits = item.isHint ? .staticText : .button
+        setAccessory(kind)
+        // With a button beside it, the row's main part carries its identifier (UI tests, VoiceOver).
+        mainIdentifier = accessibilityIdentifier
+        if kind != .none { accessibilityIdentifier = (mainIdentifier ?? "") + ".row" }
+    }
+
+    /// A page: its title over its address, or the address alone.
+    private func setPage(url: URL, title pageTitle: String?) {
+        let address = Self.displayAddress(url)
+        let name = pageTitle.flatMap { $0.isEmpty ? nil : $0 }
+        setLines(name ?? address, name == nil ? nil : address)
+    }
+
+    private func setLines(_ text: String, _ second: String?) {
+        setText(title, text)
+        setText(detail, second)
+        if detail.isHidden != (second == nil) { detail.isHidden = second == nil }
+    }
+
+    private func setAccessory(_ kind: Accessory) {
+        guard kind != accessoryKind else { return }
+        accessoryKind = kind
+        accessory.isHidden = kind != .copy
+        if kind == .paste, pasteControl == nil {
+            let configuration = UIPasteControl.Configuration()
+            configuration.displayMode = .labelOnly
+            configuration.cornerStyle = .capsule
+            configuration.baseForegroundColor = .white
+            configuration.baseBackgroundColor = Palette.accent
+            let control = UIPasteControl(configuration: configuration)
+            control.target = self
+            control.translatesAutoresizingMaskIntoConstraints = false
+            slot.addSubview(control)
+            NSLayoutConstraint.activate([
+                control.trailingAnchor.constraint(equalTo: slot.trailingAnchor, constant: -Spacing.xs),
+                control.centerYAnchor.constraint(equalTo: slot.centerYAnchor),
+            ])
+            pasteControl = control
+        }
+        pasteControl?.isHidden = kind != .paste
+        let width: CGFloat = switch kind {
+        case .none: 0
+        case .copy: Metrics.tapTarget
+        case .paste: (pasteControl?.intrinsicContentSize.width ?? 64) + Spacing.s
+        }
+        slotWidth.constant = width
+        textTrailing.constant = kind == .none ? -Spacing.m + Spacing.xs : -Spacing.xs
+        // With a button beside it, the row's main part and the button are two elements.
+        let button: UIView? = switch kind {
+        case .none: nil
+        case .copy: accessory
+        case .paste: pasteControl
+        }
+        isAccessibilityElement = button == nil
+        accessibilityElements = button.map { [mainElement, $0] }
+    }
+
+    /// The Paste button's link: a URL, or text that is one web address.
+    override func paste(itemProviders: [NSItemProvider]) {
+        // The field this Paste was for: a result that comes back after it closed is dropped.
+        let session = sessionProvider()
+        let deliver: @Sendable (URL?) -> Void = { [weak self] url in
+            guard let url, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
+            Task { @MainActor in self?.onPaste(url, session) }
+        }
+        if let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: URL.self) }) {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in deliver(url) }
+        } else if let provider = itemProviders.first(where: { $0.canLoadObject(ofClass: String.self) }) {
+            _ = provider.loadObject(ofClass: String.self) { text, _ in
+                // Text that is one web address ("www.example.com"), as the address bar reads it.
+                guard let text, case .url(let url)? = AddressBarInput(text) else { return deliver(nil) }
+                deliver(url)
+            }
+        }
+    }
+
+    /// Copy's answer: a check mark for a moment, said aloud for VoiceOver.
+    func showCopied() {
+        copyToken += 1
+        let token = copyToken
+        accessory.configuration?.image = UIImage(systemName: "checkmark")
+        accessory.accessibilityLabel = String(localized: "Copied")
+        UIAccessibility.post(notification: .announcement, argument: String(localized: "Copied"))
+        DispatchQueue.main.asyncAfter(deadline: .now() + FixedChoices.copiedConfirmation) { [weak self] in
+            guard let self, self.copyToken == token else { return }
+            self.accessory.configuration?.image = UIImage(systemName: "link")
+            self.accessory.accessibilityLabel = String(localized: "Copy Link")
         }
     }
 
@@ -647,7 +933,56 @@ final class SuggestionRow: UIControl {
         let path = url.path()
         return path.isEmpty || path == "/" ? host : host + path
     }
+
+    /// The row's main part as one VoiceOver element while Copy sits beside it.
+    private final class RowElement: UIAccessibilityElement {
+        weak var row: SuggestionRow?
+
+        init(row: SuggestionRow) {
+            self.row = row
+            super.init(accessibilityContainer: row)
+            accessibilityTraits = .button
+        }
+
+        override var accessibilityLabel: String? {
+            get { row?.title.text }
+            set {}
+        }
+
+        override var accessibilityValue: String? {
+            get { row?.detail.text }
+            set {}
+        }
+
+        override var accessibilityHint: String? {
+            get { row?.accessibilityHint }
+            set {}
+        }
+
+        override var accessibilityIdentifier: String? {
+            get { row?.mainIdentifier }
+            set {}
+        }
+
+        override var accessibilityFrameInContainerSpace: CGRect {
+            get {
+                guard let row else { return .zero }
+                return CGRect(x: 0, y: 0, width: row.slot.frame.minX, height: row.bounds.height)
+            }
+            set {}
+        }
+
+        override func accessibilityActivate() -> Bool {
+            row?.sendActions(for: .touchUpInside)
+            return true
+        }
+    }
 }
+
+private extension SheetItem {
+    var isHint: Bool { if case .hint = self { true } else { false } }
+}
+
 
 /// Favorites above the keyboard: a row of tiles that scrolls sideways when there are many. A long
 /// press anywhere on it offers "Edit Favorites".

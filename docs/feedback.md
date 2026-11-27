@@ -9,6 +9,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Done
 
+- **Tapping the address bar looks empty:** it never is now. A tap on the pill opens an empty field on a paper card over the page, which stays visible behind a veil (Arc's sheet), with, nearest the thumb: "Open Copied Link" when a link was just copied (checked without the paste alert), the page itself (title and address, Copy, a tap to edit), your favorites, the pages you visited last and the tabs you closed last; the first run says in one sentence what will show there. All of it is on screen in the frame the keyboard starts. Arc's two doors: what you type from a page opens a new tab (Back returns to the page); More (or a long press on the pill) opens the new page sheet, whose address row (Back, Forward, the host, Copy Link, Reload) edits the address in place with Copy inside the field, then Find, Reader, Translate, Favorite and Share tiles, then Zoom, Site Settings and the app's places. On a search results page the pill shows what you searched for. Private tabs show no history. (Address focus lane; to check on the device.)
+
 - **Duo inner: header-colored bar under the address row at rest; jumpy collapse:** gone. The bar
   floats over the page and leaves it no inset of its own, so WebKit paints no band of a site
   header's color behind the controls, and collapsing or bringing the bar back moves nothing in

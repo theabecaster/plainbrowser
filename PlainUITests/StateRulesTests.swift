@@ -28,6 +28,15 @@ final class StateRulesTests: XCTestCase {
         field.typeText(server.address(path) + "\n")
     }
 
+    /// Edits the page's own address (the page's row above the field) and goes, in the same tab.
+    private func edit(_ app: XCUIApplication, to path: String) {
+        app.buttons["addressPill"].tap()
+        let row = app.buttons["focus.currentPage"]
+        XCTAssertTrue(row.waitForExistence(timeout: 2))
+        row.tap()
+        app.textFields["searchField"].typeText(server.address(path) + "\n")
+    }
+
     private func waitForPage(_ app: XCUIApplication, _ heading: String, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(
             app.webViews.staticTexts[heading].waitForExistence(timeout: 10), "page \"\(heading)\" did not show",
@@ -310,7 +319,8 @@ final class StateRulesTests: XCTestCase {
         app.buttons["menu.reload"].tap()
         Thread.sleep(forTimeInterval: 1)
 
-        go(app, to: "/slow")
+        // In the same tab: edit the page's address (a search from the pill would open a new tab).
+        edit(app, to: "/slow")
         Thread.sleep(forTimeInterval: 1)
         app.buttons["more"].tap()
         let stop = app.buttons["menu.stop"]
@@ -321,26 +331,29 @@ final class StateRulesTests: XCTestCase {
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 3))
     }
 
-    /// Typing on the start screen: the mark steps back so suggestion rows never draw over it, and
-    /// it comes back when the query is cleared.
+    /// The start screen's mark keeps an empty field company only while the field has nothing of
+    /// its own to show (first run); rows, the field's own or suggestions, never draw over it.
     func testStartScreenYieldsToSuggestions() throws {
         let app = try launch()
+        let field = app.textFields["searchField"]
+        let mark = app.images["startMark"]
+        XCTAssertTrue(mark.waitForExistence(timeout: 2), "first run: the mark shows above the empty field")
         go(app, to: "/a")
         waitForPage(app, "Page A")
         tabsMenu(app, pick: "New Tab")
-        let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 2))
-        let mark = app.images["startMark"]
-        XCTAssertTrue(mark.waitForExistence(timeout: 2), "the mark shows above the empty field")
+        // Page A is a recent page now: the field shows it, and the mark steps back for it.
+        let recent = app.buttons["Plain Test A"]
+        XCTAssertTrue(recent.waitForExistence(timeout: 3), "the recent page above the empty field")
+        XCTAssertTrue(mark.waitForNonExistence(timeout: 2), "the mark recedes for the field's own rows")
 
         field.typeText("Plain Test")
-        let row = app.buttons["Plain Test A"]
-        XCTAssertTrue(row.waitForExistence(timeout: 5), "history suggestion for page A")
-        XCTAssertTrue(row.isHittable, "rows sit above everything")
-        XCTAssertTrue(mark.waitForNonExistence(timeout: 2), "the mark recedes while there is a query")
+        XCTAssertTrue(recent.waitForExistence(timeout: 5), "history suggestion for page A, the same row")
+        XCTAssertTrue(recent.isHittable, "rows sit above everything")
 
-        // Cleared, the mark comes back.
+        // Cleared, the field's own rows come back, still without the mark under them.
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Plain Test".count))
-        XCTAssertTrue(mark.waitForExistence(timeout: 2), "the mark returns with an empty field")
+        XCTAssertTrue(recent.waitForExistence(timeout: 2))
+        XCTAssertFalse(mark.exists)
     }
 }

@@ -45,7 +45,15 @@ extension BrowserViewController {
     /// returns to the page that opened it.
     var canGoBack: Bool {
         guard let tab = currentTab else { return false }
-        return isShowingReader || tab.canGoBack || tab.openerID != nil
+        return isShowingReader || tab.canGoBack || returnsToOpener(tab)
+    }
+
+    /// The tab was opened from another one still open (a popup, a link, a search over a page):
+    /// Back on its first page closes it and shows that one again (state rules §8).
+    func returnsToOpener(_ tab: Tab) -> Bool {
+        if tab.openerID != nil { return true }
+        guard let opener = session.tabs.store.tabs[tab.id]?.openerID else { return false }
+        return session.tabs.store.tabs[opener] != nil
     }
 
     func performBack() {
@@ -55,7 +63,7 @@ extension BrowserViewController {
             closeReader(animated: true)
         } else if tab.canGoBack {
             tab.goBack()
-        } else if tab.openerID != nil {
+        } else if returnsToOpener(tab) {
             closeTab(tab)
         }
     }
@@ -69,6 +77,8 @@ extension BrowserViewController {
     /// search sheet when the user has not opened a page meanwhile.
     func startSession() {
         data.firstFrameDidCommit()
+        // After the first frame: is there a copied link to offer (asked without reading it)?
+        refreshCopiedLink()
         Task { [weak self, session] in
             let restored = await session.start()
             guard let self else { return }
@@ -149,10 +159,12 @@ extension BrowserViewController {
             let kind: VisitKind = self.engineUI.typedVisitTabs.remove(tab.id) != nil ? .typed : .link
             guard self.recordsHistory(for: tab) else { return }
             self.data.pageVisited(url: url, title: title, kind: kind, profile: tab.profileID)
+            self.noteVisit(url: url, title: title)
         }
         tab.onVisitTitleChange = { [weak self, weak tab] url, title in
             guard let self, let tab, self.recordsHistory(for: tab) else { return }
             self.data.pageTitleChanged(url: url, title: title, profile: tab.profileID)
+            self.noteVisit(url: url, title: title)
         }
         engineUI.observation = TabObservation(tab) { [weak self] old, new in
             self?.tabChanged(from: old, to: new)
@@ -273,6 +285,11 @@ extension BrowserViewController {
         updateButtons()
         updatePageState()
         updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
+        // A page from the reading list that can't load offline opens its saved copy instead.
+        if new.isFailed, old?.isFailed != true, let error = new.loadError, let tried = new.shownAddress,
+           ControlRules.opensSavedCopy(errorDomain: error.domain, code: error.code) {
+            openSavedCopy(of: tried)
+        }
         // A new tab on screen, a new address or a finished load: the side pane follows the page.
         if old == nil || old?.url != new.url || old?.isLoading != new.isLoading { sidePanePageDidChange() }
     }
@@ -495,23 +512,67 @@ extension BrowserViewController {
             let article = try? await session.reader.article(in: page)
             guard let self, !Task.isCancelled, self.currentTab === tab else { return }
             guard let article else { return Haptic.nothingThere.play() }
-            self.expandChrome(animated: true)
-            let reader = self.engineUI.reader
-            reader.onOpenLink = { [weak self] url in
-                guard let self, let tab = self.currentTab else { return }
-                self.closeReader(animated: true)
-                tab.load(url)
-            }
-            reader.onShown = { [weak self] in self?.updateButtons() }
-            reader.prepare(
-                pool: session.pool, isPrivate: tab.isPrivate, profile: tab.profileID, in: self.webContainer, scrollDelegate: self
-            )
-            // A tap on the status bar scrolls the reader, not the page under it.
-            session.pool.scrollView(for: tab)?.scrollsToTop = false
-            self.updatePageInsets()
-            try? await reader.show(article)
-            self.updateButtons()
+            await self.presentReader(article, over: tab)
         }
+    }
+
+    /// A saved page failed to load for want of the network (`ControlRules.opensSavedCopy`): its
+    /// reader copy, if the reading list has one, opens over the error, as if the user had opened
+    /// the reader. Back or Hide Reader returns to the error and its Try Again.
+    func openSavedCopy(of url: URL) {
+        guard let tab = currentTab, !isShowingReader, let failure = tab.loadError else { return }
+        let signposter = Signposts.signposter
+        let state = signposter.beginInterval(Signposts.readingListOfflineCopy)
+        engineUI.readerTask?.cancel()
+        engineUI.readerTask = Task { [weak self, weak tab, data] in
+            defer { signposter.endInterval(Signposts.readingListOfflineCopy, state) }
+            guard let copy = await data.savedCopy(for: url), let article = await Self.decodeArticle(copy) else { return }
+            // Still the same failure: a new load (even one that failed another way, such as a
+            // certificate warning that must stay in front) or another tab makes the copy moot.
+            guard let self, let tab, !Task.isCancelled, self.currentTab === tab, !tab.isLoading,
+                  tab.loadError == failure
+            else { return }
+            // Once the copy is on screen, say why the page reads as the reader and offer the live
+            // page again.
+            await self.presentReader(article, over: tab) { [weak self, weak tab] in
+                self?.showToastWhenFree { [weak self, weak tab] in
+                    self?.tabsUI.toast.show(String(localized: "Showing your saved copy."), button: "Try Again") {
+                        guard let self, let tab, self.currentTab === tab else { return }
+                        Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again from saved copy")
+                        self.closeReader(animated: true)
+                        tab.load(url)
+                    }
+                }
+            }
+        }
+    }
+
+    @concurrent
+    nonisolated private static func decodeArticle(_ data: Data) async -> ReaderArticle? {
+        try? JSONDecoder().decode(ReaderArticle.self, from: data)
+    }
+
+    /// Puts `article` in the reader view over `tab`'s page; `shown` runs once it is on screen.
+    private func presentReader(_ article: ReaderArticle, over tab: Tab, shown: (() -> Void)? = nil) async {
+        expandChrome(animated: true)
+        let reader = engineUI.reader
+        reader.onOpenLink = { [weak self] url in
+            guard let self, let tab = self.currentTab else { return }
+            self.closeReader(animated: true)
+            tab.load(url)
+        }
+        reader.onShown = { [weak self] in
+            self?.updateButtons()
+            shown?()
+        }
+        reader.prepare(
+            pool: session.pool, isPrivate: tab.isPrivate, profile: tab.profileID, in: webContainer, scrollDelegate: self
+        )
+        // A tap on the status bar scrolls the reader, not the page under it.
+        session.pool.scrollView(for: tab)?.scrollsToTop = false
+        updatePageInsets()
+        try? await reader.show(article)
+        updateButtons()
     }
 
     /// Back to the page under the reader.

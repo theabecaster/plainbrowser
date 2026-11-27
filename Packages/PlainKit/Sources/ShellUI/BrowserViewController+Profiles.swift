@@ -24,6 +24,9 @@ extension BrowserViewController {
     /// archive follow it. Its history database opens off the main thread the first time.
     private func profileDidChange(_ profile: ProfileID) {
         data.profile = profile
+        // The field never shows another profile's pages, not even for a moment.
+        focusUI.content = .empty
+        sheet.setFavorites([])
         sheets.useProfile(profile, database: nil)
         updateStartScreenMessage()
         Task { [weak self, session] in
@@ -32,7 +35,7 @@ extension BrowserViewController {
             sheets.useProfile(profile, database: database)
             if let database { onProfileDatabaseChange?(database) }
             updateButtons()
-            if isEditingAddress { loadFavorites() }
+            refreshFocusContent()
         }
     }
 

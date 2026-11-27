@@ -8,6 +8,19 @@ import Testing
         #expect(url?.absoluteString == "https://www.google.com/search?q=a%26b%3Dc%20d%2Be%23f")
     }
 
+    @Test func resultsPagesGiveBackTheirQuery() throws {
+        for engine in SearchEngine.catalog {
+            let url = try #require(engine.resultsURL(for: "swift & ui + more"))
+            #expect(engine.query(inResults: url) == "swift & ui + more", "\(engine.name)")
+        }
+        let google = SearchEngine.google
+        #expect(google.query(inResults: URL(string: "https://google.com/search?q=plain+browser&hl=en")!) == "plain browser")
+        #expect(google.query(inResults: URL(string: "https://www.google.com/maps?q=plain")!) == nil, "another path")
+        #expect(google.query(inResults: URL(string: "https://www.bing.com/search?q=plain")!) == nil, "another engine")
+        #expect(google.query(inResults: URL(string: "https://www.google.com/search?tbm=isch")!) == nil, "no query")
+        #expect(SearchEngine.duckDuckGo.query(inResults: URL(string: "https://duckduckgo.com/?q=a+b&t=h_")!) == "a b")
+    }
+
     @Test func searchInputResolvesThroughEngine() {
         let input = AddressBarInput("plain browser")
         #expect(input?.destination(searchingWith: .google)?.absoluteString

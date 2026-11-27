@@ -131,6 +131,14 @@ public final class FeatureSheets {
         return host
     }
 
+    /// The reading list of the window's profile. `onOpen` gets the page the user tapped (already
+    /// marked read).
+    func readingList(onOpen: @escaping (URL) -> Void, onDone: @escaping () -> Void) -> UIViewController? {
+        guard let database = activeDatabase else { return nil }
+        let model = ReadingListModel(store: database)
+        return Self.sheet(ReadingListView(model: model, onOpen: onOpen, onDone: onDone), identifier: "readingListSheet")
+    }
+
     /// The favorites editor.
     func favoritesEditor(onDone: @escaping () -> Void) -> UIViewController? {
         guard let database = activeDatabase else { return nil }
@@ -209,7 +217,7 @@ nonisolated struct ShellHistoryStore: HistoryStoring {
 /// Settings > Clear History and Data: history (after the visits the shell has queued, through
 /// the one history writer), cached site icons, then every cookie, cache and storage entry in the
 /// website data store the web views share, then what the system holds for Plain (`cleared`).
-/// Open tabs and favorites stay.
+/// Open tabs, favorites and the reading list stay.
 nonisolated struct LiveBrowsingDataClearer: BrowsingDataClearing {
     let database: AppDatabase
     let settle: @MainActor @Sendable () async -> Void

@@ -137,6 +137,7 @@ targets:
       - path: PlainUITests
         excludes:
           - "*.xctestplan"
+          - Info.plist
     dependencies:
       - target: Plain
       # Signpost names, shared with the app so the metrics measure exactly what the app emits.
@@ -146,6 +147,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser.uitests
         GENERATE_INFOPLIST_FILE: YES
+        # Merged into the generated one: the app's link scheme (PlainLinkScheme), for SystemTests.
+        INFOPLIST_FILE: PlainUITests/Info.plist
         TEST_TARGET_NAME: Plain
 schemes:
   Plain:

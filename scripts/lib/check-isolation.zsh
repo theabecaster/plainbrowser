@@ -37,6 +37,11 @@ done < <(code_matching 'launchArguments *(=[^=]|\.remove|\.insert|\[)' \
 
 grep -q 'override func launch()' PlainUITests/SmokeTests.swift \
   || problems+="IsolatedApplication.launch() (the launch-time isolation check) is missing"
+# A Plain link spelled out in a test reaches the TestFlight app from a Plain Dev run, unisolated:
+# tests take the scheme of the app under test (PlainLinkScheme in PlainUITests/Info.plist).
+while IFS= read -r line; do
+  [[ -n $line ]] && problems+="literal plainbrowser: link in a UI test (use the PlainLinkScheme of the app under test): $line"
+done < <(code_matching '"plainbrowser(\.[a-z]+)?:' || true)
 grep -q 'override func open(_ url: URL)' PlainUITests/SmokeTests.swift \
   || problems+="IsolatedApplication.open(_:) (the isolation check for a launch from a link) is missing"
 
@@ -93,12 +98,17 @@ done
 for file in Packages/PlainKit/Sources/SystemSync/SpotlightIndex.swift Packages/PlainKit/Sources/SystemSync/SystemSync.swift \
     Packages/PlainKit/Sources/PlainShared/SharedFavorites.swift Packages/PlainKit/Sources/ShellUI/BrowserViewController+System.swift; do
   [[ -f $file ]] || continue
-  grep -q 'TestIsolation.isActive' $file || problems+="$file reaches the system without checking TestIsolation.isActive"
+  grep -vE '^ *//' $file | grep -q 'TestIsolation.isActive' \
+    || problems+="$file reaches the system without checking TestIsolation.isActive"
 done
-if grep -q 'updateAppShortcutParameters' Plain/SceneDelegate.swift; then
-  grep -q 'SystemSync.live' Plain/SceneDelegate.swift \
-    || problems+="Plain/SceneDelegate.swift updates App Shortcuts outside SystemSync.live (which skips it in isolated runs)"
-fi
+# The only App Shortcuts update is SystemSync.live's onChange (dropped in an isolated run): within
+# the three lines after `SystemSync.live {`.
+while IFS= read -r line; do
+  [[ -z $line ]] && continue
+  n=${${line#*:}%%:*}
+  sed -n "$(( n > 3 ? n - 3 : 1 )),$(( n - 1 ))p" ${line%%:*} | grep -q 'SystemSync.live {' \
+    || problems+="App Shortcuts updated outside SystemSync.live's onChange (isolated runs skip only that): $line"
+done < <(grep -nE 'updateAppShortcutParameters' $sources | grep -vE '^[^:]+:[0-9]+: *//' || true)
 
 # 5. A plan that runs the hosted unit tests passes the isolation argument to their host app.
 for plan in PlainUITests/*.xctestplan(N); do

@@ -24,8 +24,17 @@ final class SystemTests: XCTestCase {
         return app
     }
 
+    /// The app under test's scheme (`plainbrowser`, or `plainbrowser.dev` for Plain Dev), from this
+    /// bundle's Info.plist: a link opened through the system goes to whichever app owns the scheme,
+    /// so it must be this build's, never the TestFlight app's (which would run unisolated).
+    private static let scheme: String = {
+        guard let scheme = Bundle(for: SystemTests.self).object(forInfoDictionaryKey: "PlainLinkScheme") as? String,
+              scheme.hasPrefix("plainbrowser") else { preconditionFailure("PlainUITests/Info.plist has no PlainLinkScheme") }
+        return scheme
+    }()
+
     private func link(_ path: String, _ query: [String: String] = [:]) -> URL {
-        var components = URLComponents(string: "plainbrowser://\(path)")!
+        var components = URLComponents(string: "\(Self.scheme)://\(path)")!
         if !query.isEmpty { components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) } }
         return components.url!
     }

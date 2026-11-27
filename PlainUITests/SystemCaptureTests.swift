@@ -5,7 +5,9 @@ import XCTest
 /// so it is best effort and skips itself unless `PLAIN_CAPTURE=1` reaches the runner (like
 /// CaptureTests). Export the attachments with `xcrun xcresulttool export attachments`.
 ///
-/// Simulator only: it adds widgets to the Home Screen, which on the owner's phone is theirs. The
+/// Simulator only: it adds widgets to the Home Screen, which on the owner's phone is theirs, and
+/// the widget extension is a process the system starts, without the app's isolation arguments, so
+/// it reads the installed app's real App Group (on a simulator, a throwaway one). The
 /// app runs isolated, so its favorites stay in the run's own folder: the widget on the Home Screen
 /// shows its empty face and Spotlight has no favorites from a test (TestIsolation). The faces
 /// with favorites are rendered by SystemIntegrationTests (WidgetTests) instead.

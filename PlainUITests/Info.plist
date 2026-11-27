@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into the generated Info.plist. The link scheme of the app under test, which follows the
+     bundle suffix like the app's (plainbrowser.dev for Plain Dev): SystemTests sends its links to
+     that app only, never to the TestFlight app, which would get them without isolation. -->
+<plist version="1.0">
+<dict>
+	<key>PlainLinkScheme</key>
+	<string>plainbrowser$(PLAIN_BUNDLE_SUFFIX)</string>
+</dict>
+</plist>

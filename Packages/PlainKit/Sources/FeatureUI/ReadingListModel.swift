@@ -95,11 +95,11 @@ public final class ReadingListModel {
     /// Swipe to delete: gone for good, no confirmation (docs/ui-reference.md, swipe actions).
     public func delete(_ row: ReadingListRow) {
         Signposts.signposter.emitEvent(Signposts.readingListEdit, "delete")
-        generation += 1
         unread.removeAll { $0.id == row.id }
         read.removeAll { $0.id == row.id }
         let store = store, id = row.id
         writes.enqueue({ try await store.removeReadingListItem(id: id) }, onError: { [weak self] _ in self?.failed() })
+        reloadAfterEdit()
     }
 
     private func setRead(_ isRead: Bool, _ row: ReadingListRow, signpost: Bool) {
@@ -110,8 +110,6 @@ public final class ReadingListModel {
                 Signposts.signposter.emitEvent(Signposts.readingListEdit, "unread")
             }
         }
-        // A load already under way holds the old state; its answer is dropped.
-        generation += 1
         var moved = row
         moved.isRead = isRead
         unread.removeAll { $0.id == row.id }
@@ -125,6 +123,14 @@ public final class ReadingListModel {
         }
         let store = store, id = row.id, date: Date? = isRead ? now() : nil
         writes.enqueue({ try await store.setReadingListItemRead(id: id, at: date) }, onError: { [weak self] _ in self?.failed() })
+        reloadAfterEdit()
+    }
+
+    /// A load already under way holds the old state: its answer is dropped, and the list is read
+    /// again once the edit is written (reads wait for writes), so a search in flight still lands
+    /// and the moved row takes its exact place.
+    private func reloadAfterEdit() {
+        scheduleReload(after: .zero)
     }
 
     /// A write failed: say so, and show what the store holds.

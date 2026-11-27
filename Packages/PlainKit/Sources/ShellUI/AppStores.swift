@@ -17,12 +17,17 @@ public final class AppStores {
     let darkPages: StorageSiteDarkPagesStore
     let cookieBannerSites: StorageSiteCookieBannersStore
     let blocker: ContentBlocker
+    /// Each profile's history database (Personal's is the main one), opened once for every window.
+    public let profileData: ProfileDatabases
     private var loading: Task<Bool, Never>?
     private var preparingBlocker: Task<Void, Never>?
     private var didPruneFiles = false
 
-    public init(database: @escaping DatabaseProvider) {
+    /// - Parameter profileData: where profiles other than Personal keep their history (the app
+    ///   decides it from the test isolation: in memory for an isolated in-memory run).
+    public init(database: @escaping DatabaseProvider, profileData: ProfileDataLocation) {
         tabs = AppTabs(database: database)
+        self.profileData = ProfileDatabases(main: database, location: profileData)
         contentModes = StorageSiteContentModeStore(database: database)
         pageZooms = StorageSitePageZoomStore(database: database)
         darkPages = StorageSiteDarkPagesStore(database: database)

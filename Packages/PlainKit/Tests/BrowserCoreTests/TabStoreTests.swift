@@ -466,13 +466,13 @@ final class RecordingPersistence: TabPersistence {
         store.close(a)
         store.close(b)
         // The first window's own close, though b's is newer.
-        #expect(store.reopenLastClosed(in: first) == [a])
+        #expect(store.reopenLastClosed(window: first) == [a])
         #expect(store.windowID(of: a) == first)
         let third = store.addWindow()
         let c = store.open(url("c"), in: third)
         store.closeWindow(third)
         // c's window is gone: it comes back in the window that asked.
-        #expect(store.reopenLastClosed(in: first) == [c], "the first window closed nothing left: the newest batch")
+        #expect(store.reopenLastClosed(window: first) == [c], "the first window closed nothing left: the newest batch")
         #expect(store.windowID(of: c) == first)
     }
 

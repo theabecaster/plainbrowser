@@ -25,6 +25,9 @@ public final class AppTabs {
     private var loading: Task<Void, Never>?
     /// The saved session is in the store.
     private(set) var isLoaded = false
+    /// The saved profile list was read (not a failed read standing in as empty), so data of
+    /// profiles missing from it really belongs to deleted ones.
+    private(set) var areProfilesKnown = false
     /// Windows a connected scene shows.
     private var claimed: Set<WindowID> = []
     /// Windows claimed before the load without a saved id: each takes a saved window at load.
@@ -139,7 +142,9 @@ public final class AppTabs {
 
     private func performLoad() async {
         guard let database = await database() else { return }
-        let saved = (try? await database.loadTabSession()) ?? .empty
+        let read = try? await database.loadTabSession()
+        let saved = read ?? .empty
+        areProfilesKnown = read != nil
         let current = store
         var session = saved
         var remapped: [WindowID: WindowID] = [:]
@@ -169,7 +174,8 @@ public final class AppTabs {
                 }
             } else {
                 session.windows.append(WindowSession(
-                    id: window.id, tabIDs: window.tabIDs, panes: window.panes, focusedPane: window.focusedPane
+                    id: window.id, tabIDs: window.tabIDs, panes: window.panes, focusedPane: window.focusedPane,
+                    profileID: window.profileID
                 ))
                 if hasTabs { openedBeforeLoad.insert(window.id) }
             }
@@ -232,6 +238,14 @@ public final class AppTabs {
         for box in engines {
             guard let engine = box.engine, engine !== source else { continue }
             engine.storeChangedElsewhere()
+        }
+    }
+
+    /// A window deleted `profile`: every other window drops its tabs and store.
+    func profileDeleted(_ profile: ProfileID, from source: EngineTabs) {
+        for box in engines {
+            guard let engine = box.engine, engine !== source else { continue }
+            engine.profileDeletedElsewhere(profile)
         }
     }
 

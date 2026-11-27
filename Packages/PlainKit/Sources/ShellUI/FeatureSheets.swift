@@ -39,8 +39,11 @@ public final class FeatureSheets {
     }
 
     /// Runs after Clear History and Data has cleared Plain's own data: the app empties what the
-    /// system holds for it (Spotlight). Set once, when the system sync starts.
+    /// system holds for it (Spotlight).
     public var didClearBrowsingData: @Sendable () async -> Void = {}
+
+    /// A setting was saved here: the app hands it to its other windows' address bars.
+    public var settingsSaved: ((BrowserSettings) -> Void)?
 
     private func runClearHook() async {
         await didClearBrowsingData()
@@ -82,7 +85,10 @@ public final class FeatureSheets {
     func makeSettingsModel() -> SettingsModel? {
         if let settingsModel { return settingsModel }
         guard let database else { return nil }
-        let store = LiveSettingsStore(database: database) { [addressBar] in addressBar.apply($0) }
+        let store = LiveSettingsStore(database: database) { [weak self, addressBar] settings in
+            addressBar.apply(settings)
+            self?.settingsSaved?(settings)
+        }
         // Read when the clear runs: the model is kept, and the hook and the profiles may be set
         // after it was made.
         let clearer = LiveBrowsingDataClearer(

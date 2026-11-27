@@ -244,11 +244,11 @@ final class SidePaneReader: UIViewController, SidePaneContent, UIScrollViewDeleg
         case false?:
             showMessage(String(localized: "This page has no article to read."))
         case true?:
-            load(from: page, isPrivate: tab.isPrivate)
+            load(from: page, isPrivate: tab.isPrivate, profile: tab.profileID)
         }
     }
 
-    private func load(from page: WKWebView, isPrivate: Bool) {
+    private func load(from page: WKWebView, isPrivate: Bool, profile: ProfileID) {
         guard let browser else { return }
         task?.cancel()
         let url = page.url
@@ -258,7 +258,7 @@ final class SidePaneReader: UIViewController, SidePaneContent, UIScrollViewDeleg
             guard let self, !Task.isCancelled else { return }
             guard let article else { return showMessage(String(localized: "This page has no article to read.")) }
             presenter.close(animated: false)
-            presenter.prepare(pool: session.pool, isPrivate: isPrivate, in: view, scrollDelegate: self)
+            presenter.prepare(pool: session.pool, isPrivate: isPrivate, profile: profile, in: view, scrollDelegate: self)
             presenter.webView?.accessibilityIdentifier = "sidePane.readerView"
             shownPage = (page, url)
             try? await presenter.show(article)
@@ -503,6 +503,8 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
 final class SidePaneHistory: UIViewController, SidePaneContent {
     private weak var browser: BrowserViewController?
     private var host: UIViewController?
+    /// The profile whose history shows: the window's when it was built.
+    private var shownProfile: ProfileID?
 
     init(browser: BrowserViewController?) {
         self.browser = browser
@@ -517,17 +519,28 @@ final class SidePaneHistory: UIViewController, SidePaneContent {
         view.backgroundColor = .clear
     }
 
-    func sectionDidShow() {
-        guard host == nil, let browser else { return }
+    func sectionDidShow() { buildIfNeeded() }
+
+    /// The window moved to another profile's tab: its history shows instead.
+    func pageDidChange() { buildIfNeeded() }
+
+    private func buildIfNeeded() {
+        guard let browser else { return }
+        let profile = browser.session.tabs.activeProfile
+        guard host == nil || shownProfile != profile else { return }
         guard let history = browser.sheets.historyPane(onOpen: { [weak browser] url in browser?.load(url) }) else { return }
+        if let host {
+            host.willMove(toParent: nil)
+            host.view.removeFromSuperview()
+            host.removeFromParent()
+        }
         addChild(history)
         history.view.frame = view.bounds
         history.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(history.view)
         history.didMove(toParent: self)
         host = history
+        shownProfile = profile
     }
-
-    func pageDidChange() {}
 }
 #endif

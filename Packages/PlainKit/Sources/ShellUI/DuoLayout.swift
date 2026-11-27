@@ -243,8 +243,8 @@ struct DuoLayout: Equatable {
         let corner = chromeOnTop ? input.statusCorner : nil
         // Only regions within the status zone (above the pages' top) that meet the corner are the
         // bar's own to clear; anything reaching below it still moves the lanes.
-        // (a few points of slack: the region ends at the safe area's top, 81 or 82 pt on the Duo).
-        let statusZoneBottom = input.pageArea.minY + 2
+        // (`FixedChoices.statusZoneRounding`: the region ends at the safe area's top, 81 or 82 pt).
+        let statusZoneBottom = input.pageArea.minY + CGFloat(FixedChoices.statusZoneRounding)
         let occlusions = input.occlusions.filter { region in
             guard let corner, region.maxY <= statusZoneBottom else { return true }
             return !region.intersects(corner)

@@ -117,8 +117,9 @@ enum StatusCorner {
     /// full-width band (the outer screen's Dynamic Island) or a region below the safe area's top.
     private static func cornerSide(_ region: Region, width: CGFloat, safeTop: CGFloat) -> Bool? {
         let frame = region.frame
-        // Up to 2 pt past the safe area's top is rounding (the Duo reports 81 or 82).
-        guard frame.height > 0, frame.minY < safeTop, frame.maxY <= safeTop + 2 else { return nil }
+        // A point or two past the safe area's top is rounding (`FixedChoices.statusZoneRounding`).
+        let rounding = CGFloat(FixedChoices.statusZoneRounding)
+        guard frame.height > 0, frame.minY < safeTop, frame.maxY <= safeTop + rounding else { return nil }
         if frame.minX >= width * 0.75 { return true }
         if frame.maxX <= width * 0.25 { return false }
         return nil

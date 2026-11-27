@@ -516,6 +516,11 @@ public enum FixedChoices {
     /// 0–82, items 27–69), so a 44 pt row ending 12 pt above the bottom (26–70) is centered on
     /// them. Centered on the region instead, the row sat 7 pt above the clock (design review).
     public static let statusRegionBottomPadding: Double = 12
+    /// How far past the safe area's top a status-zone region may end and still count as inside
+    /// it: rounding, since the Duo's inner screen reports a safe area of 81 or 82 pt against a
+    /// region ending at 82. Used where the corner is read and where the lanes skip its regions,
+    /// so both agree.
+    public static let statusZoneRounding: Double = 2
     /// Between the top bar's end (Tabs, Share and More) and the status items' left edge (the
     /// clock) on the Duo's inner screen: the glass sits snug beside them without touching, at the
     /// bar's own spacing (its capsules sit 6 pt from the address). Was 12 on top of a 64 pt

@@ -180,8 +180,10 @@ apply; Reload (or Stop), Share and Copy Link are one row of three; Find on Page,
 Translate Page are one captioned row when two or more apply ("Find", "Reader", "Translate" or
 "Original"; each alone keeps its full name and subtitle); Print and Save as PDF are not in the
 menu but in the share sheet (Share), as in Safari and Chrome; Desktop Site, blocking, cookie
-banners and Dark Pages fold into a "Site Settings" submenu when two or more apply; History, Edit
-Favorites and Settings are one row of three, so the whole menu fits the Duo's outer screen.
+banners and Dark Pages fold into a "Site Settings" submenu when two or more apply; Add to
+Favorites, Read Later and Site Settings are one captioned row when two or more apply ("Favorite",
+"Read Later", "Site"); History, Reading List, Edit Favorites and Settings are one row of four
+symbols, so the whole menu fits the Duo's outer screen.
 
 | Item | Start | Loading | Loaded | Failed / offline | Crashed | Reader open | Notes |
 |---|---|---|---|---|---|---|---|
@@ -198,10 +200,12 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Turn Off / On Cookie Banner Blocking | — | http(s) | http(s) | — | — | — | In Site Settings. Applies by reloading. Private tabs: shown, kept for the private session only. Off for a site stops answering its banner; the cookie list's hiding follows the blocking switch. |
 | Turn Off / On Dark Pages for This Site | — | as Loaded | Only while Plain is dark: Turn Off while Plain darkens the page, Turn On while the user has it off for this site | — | — | — | Hidden in a light app (it would change nothing), on pages with their own dark design (nothing to turn off), on error pages and under the reader. Applies at once, no reload. Private tabs: shown, kept for the private session only. |
 | Add to / Remove from Favorites | — | — | recordable page | — | — | shown (the page's address) | A page that never loaded is not a favorite. |
+| Read Later / Remove from Reading List | — | — | recordable page | — (≠ its saved copy opens instead, below) | — | shown (the page's address; on a saved copy: Remove) | Same predicate as Add to Favorites (`ControlRules.readLater`). Saves the article as a reader copy when the readerable check said yes, else the link. Shares a captioned row with Add to Favorites and Site Settings when two or more apply. |
+| Saved copy (reader over the error) | — | — | — | when the failed page is in the reading list with a copy and the failure is the network's (offline, host not found, not answering, timed out; not a certificate error) | — | it is the reader | Automatic, no switch (`ControlRules.opensSavedCopy`). Back or Hide Reader shows the error and Try Again. |
 | Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). |
 | New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "New Tab": it turns this empty tab, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
 | Downloads | while any this session | ← same | ← | ← | ← | ← | Subtitle "1 in progress" while one runs. |
-| History, Edit Favorites, Settings | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. |
+| History, Reading List, Edit Favorites, Settings | shown | shown | shown | shown | shown | shown | One row of four symbols. Dim only in the first moments while the database opens. Reading List is always there, like History: its empty state says how to fill it. |
 
 ## 5. The tabs menu (long press on the tabs slot)
 
@@ -290,6 +294,7 @@ its address, Back and Forward, the tabs slot; nothing in the bar moves when the 
 | Archived Tabs | Not reachable while empty (tabs menu and gallery menu need `archived`). If the last one is deleted inside it: "No archived tabs." plus the footer. |
 | Downloads | Reachable only while any exist this session. The Show in Files folder button is always there. A finished row is a button (Quick Look) with Open, Share and Show in Files in its menu. A running row shows progress and keeps its Cancel button and menu item; the row itself is not a button. A failed or cancelled row reads as inactive and is not a button. |
 | Edit Favorites | "Add favorites from the page menu." |
+| Reading List | "Save pages to read later from the page menu." Unread rows first, then a "Read" section; each section shows only with rows. Tap opens the page (marks it read); swipe right Mark Read / Mark Unread, swipe left Delete, no confirmation. Search with no results: the system's no-results view. |
 | Every sheet | Loading a local list shows nothing (no spinner). A failed read or write says so in one sentence with Try Again, never as the empty state. A search with no results shows the system's no-results view, and actions on the whole list (Clear) stay available. Such actions dim only when the list itself is empty. |
 | Settings → Clear History and Data | Confirmation first (it is destructive and broad); the row dims while it runs; a failure says so in one sentence. |
 | Settings → Appearance | Always shown and enabled: it applies on every screen. Its footer is one sentence for the current choice. |

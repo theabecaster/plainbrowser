@@ -1,5 +1,6 @@
 #if os(iOS)
 import DesignSystem
+import PerfSignposts
 import SwiftUI
 
 /// The few style values the FeatureUI screens share. Colors come from `DesignSystem`.
@@ -19,6 +20,7 @@ enum Style {
 /// menu's Copy Link does (it leaves nothing else on screen).
 @MainActor
 func copyLink(_ url: URL) {
+    Signposts.signposter.emitEvent(Signposts.copyLink, "sheet")
     UIPasteboard.plain.url = url
     Haptic.success.play()
 }

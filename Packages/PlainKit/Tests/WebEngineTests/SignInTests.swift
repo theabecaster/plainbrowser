@@ -107,6 +107,54 @@ struct SignInTests {
         #expect(harness.host.passkeyNotices == ["127.0.0.1"])
     }
 
+    @Test func theNoticeWaitsUntilTheShellCouldShowIt() async throws {
+        let harness = try await Harness(route: Self.route)
+        defer { harness.cleanUp() }
+        // A tab that is not on screen: the shell says nothing, so the site is not marked told.
+        harness.host.showsPasskeyNotice = false
+        let tab = try await openLogin(harness)
+        _ = try await page(Self.passkeyRequest, in: harness, tab: tab)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(harness.host.passkeyNotices.isEmpty)
+        harness.host.showsPasskeyNotice = true
+        try await harness.load("/login", in: tab)
+        _ = try await page(Self.passkeyRequest, in: harness, tab: tab)
+        try await waitUntil("passkey notice") { harness.host.passkeyNotices == ["127.0.0.1"] }
+    }
+
+    @Test func anAbortedRequestKeepsItsAbortError() async throws {
+        let harness = try await Harness(route: Self.route)
+        defer { harness.cleanUp() }
+        let tab = try await openLogin(harness)
+        let result = try await page("""
+            const abort = new AbortController();
+            abort.abort();
+            try {
+              await navigator.credentials.get({ signal: abort.signal, publicKey: { challenge: new Uint8Array(32) } });
+              return 'ok';
+            } catch (e) { return e.name; }
+            """, in: harness, tab: tab) as? String
+        #expect(result == "AbortError")
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(harness.host.passkeyNotices.isEmpty)
+    }
+
+    @Test func aPageCannotFakeTheNotice() async throws {
+        let harness = try await Harness(route: Self.route)
+        defer { harness.cleanUp() }
+        let tab = try await openLogin(harness)
+        // The event's name is random per pool, and the fallback dispatches with references taken
+        // before page scripts ran.
+        _ = try await page("""
+            for (const name of ['plain-passkey-unavailable', 'plain-passkey', 'plainPasskey']) {
+              document.dispatchEvent(new CustomEvent(name));
+            }
+            return 0;
+            """, in: harness, tab: tab)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(harness.host.passkeyNotices.isEmpty)
+    }
+
     @Test func aPasskeyRequestInAFrameNamesThePageSite() async throws {
         let harness = try await Harness(route: Self.route)
         defer { harness.cleanUp() }

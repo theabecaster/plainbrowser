@@ -116,9 +116,14 @@ final class FakeHost: EngineHost {
         return permissionAnswer
     }
 
+    /// Sites the shell told that passkeys can't work yet.
     var passkeyNotices: [String] = []
-    func tab(_ tab: Tab, couldNotUsePasskeysOn site: String) {
+    /// Whether the fake shell says it showed the notice (a page on screen).
+    var showsPasskeyNotice = true
+    func tab(_ tab: Tab, couldNotUsePasskeysOn site: String) -> Bool {
+        guard showsPasskeyNotice else { return false }
         passkeyNotices.append(site)
+        return true
     }
 
     func downloadDidStart(_ download: Download) {

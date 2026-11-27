@@ -68,7 +68,9 @@ public enum FixedChoices {
     /// entitlement.
     public static let passkeysEnabled = false
     /// Passwords come from iOS AutoFill (the Passwords app and every password manager the user
-    /// turned on in Settings), in the keyboard's suggestion bar, as in Safari. Plain keeps no
+    /// turned on in Settings), in the keyboard's suggestion bar, as in Safari. On web fields the
+    /// system shows it only to apps with the web-browser entitlement (docs/research/sign-in.md),
+    /// so it arrives with the grant. Plain keeps no
     /// password store of its own: a second place for passwords is one more to keep in sync, and
     /// the system's already holds the user's passwords and passkeys.
     public static let passwordsFromSystemAutoFill = true

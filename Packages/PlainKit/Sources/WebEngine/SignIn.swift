@@ -25,17 +25,41 @@ import WebKit
 ///
 /// The overrides are `Proxy` objects around WebKit's own functions, so they keep their names and
 /// still read as native code to sites that check.
-enum SignInScripts {
+struct SignInScripts {
     /// The engine-world message handler the passkey report arrives on.
     static let passkeyHandlerName = "plainPasskey"
-    /// The DOM event the page-world script fires on a refused passkey request; the engine-world
-    /// relay turns it into a message, so the page world gets no message handler of Plain's.
-    static let passkeyFailedEvent = "plain-passkey-unavailable"
 
-    static let passkeyFallbackSource = """
+    /// In the page's world: it changes what the page's own scripts see. Every frame, at document
+    /// start, before any page script runs.
+    let passkeyFallback: WKUserScript
+    /// Relays the fallback's event to the engine, at most once a second per frame.
+    let passkeyRelay: WKUserScript
+
+    /// - Parameter token: makes the DOM event's name unguessable (one per pool), so a page can't
+    ///   fire it to show Plain's toast. The fallback keeps its own references to
+    ///   `dispatchEvent` and `CustomEvent` from before any page script ran.
+    init(token: String = UUID().uuidString) {
+        let event = "plain-passkey-\(token)"
+        passkeyFallback = WKUserScript(
+            source: Self.fallbackSource(event: event), injectionTime: .atDocumentStart, forMainFrameOnly: false,
+            in: .page
+        )
+        passkeyRelay = WKUserScript(
+            source: Self.relaySource(event: event), injectionTime: .atDocumentStart, forMainFrameOnly: false,
+            in: UserScripts.world
+        )
+    }
+
+    /// A modal request whose signal is already aborted goes to WebKit, which answers `AbortError`
+    /// as the spec asks; only a live request is refused and reported.
+    static func fallbackSource(event: String) -> String {
+        """
         (() => {
           const PKC = window.PublicKeyCredential;
           if (!PKC) return;
+          const dispatch = EventTarget.prototype.dispatchEvent;
+          const Custom = CustomEvent;
+          const Refusal = DOMException;
           const replace = (owner, name, apply) => {
             const original = owner[name];
             if (typeof original !== 'function') return;
@@ -59,49 +83,46 @@ enum SignInScripts {
           if (!credentials) return;
           const refuse = (target, self, args) => {
             const options = args[0];
-            if (!options || !options.publicKey || options.mediation === 'conditional') {
+            if (!options || !options.publicKey || options.mediation === 'conditional'
+              || (options.signal && options.signal.aborted)) {
               return Reflect.apply(target, self, args);
             }
-            document.dispatchEvent(new CustomEvent('\(passkeyFailedEvent)'));
-            return Promise.reject(new DOMException('Passkeys are not available in this browser yet.', 'NotAllowedError'));
+            Reflect.apply(dispatch, document, [new Custom('\(event)')]);
+            return Promise.reject(new Refusal('Passkeys are not available in this browser yet.', 'NotAllowedError'));
           };
           replace(credentials, 'get', refuse);
           replace(credentials, 'create', refuse);
         })();
         """
+    }
 
-    /// In the page's world: it changes what the page's own scripts see. Every frame, at document
-    /// start, before any page script runs.
-    static let passkeyFallback = WKUserScript(
-        source: passkeyFallbackSource, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page
-    )
-
-    /// Relays `passkeyFailedEvent` to the engine. At most one message per document: the engine
-    /// only needs to know that the site tried.
-    static let passkeyRelaySource = """
+    static func relaySource(event: String) -> String {
+        """
         (() => {
-          document.addEventListener('\(passkeyFailedEvent)', () => {
+          let last = 0;
+          document.addEventListener('\(event)', () => {
+            const now = Date.now();
+            if (now - last < 1000) return;
+            last = now;
             try { webkit.messageHandlers.\(passkeyHandlerName).postMessage(1); } catch (e) {}
-          }, { once: true });
+          });
         })();
         """
-
-    static let passkeyRelay = WKUserScript(
-        source: passkeyRelaySource, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: UserScripts.world
-    )
+    }
 }
 
 /// What the shell says about sign-in. Every requirement has a default, so a shell without it keeps
 /// compiling.
 public protocol SignInPresenter: AnyObject {
     /// A page in `tab` asked for a passkey and was refused, because Plain can't use passkeys
-    /// until Apple grants the web-browser entitlement (`FixedChoices.passkeysEnabled`). Called at
-    /// most once per site per launch, for private tabs too. The shell says so in one sentence
-    /// when `tab` is on screen. Default: nothing.
-    func tab(_ tab: Tab, couldNotUsePasskeysOn site: String)
+    /// until Apple grants the web-browser entitlement (`FixedChoices.passkeysEnabled`). The shell
+    /// says so in one sentence when `tab` is on screen, and returns whether it did: the engine
+    /// stops asking for that site, this launch, only once the user was told. Private tabs too.
+    /// Default: says nothing, returns false.
+    func tab(_ tab: Tab, couldNotUsePasskeysOn site: String) -> Bool
 }
 
 extension SignInPresenter {
-    public func tab(_ tab: Tab, couldNotUsePasskeysOn site: String) {}
+    public func tab(_ tab: Tab, couldNotUsePasskeysOn site: String) -> Bool { false }
 }
 #endif

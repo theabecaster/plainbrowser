@@ -48,6 +48,8 @@ public final class WebViewPool {
     /// False until Apple grants the web-browser entitlement: pages then get `SignInScripts`'
     /// passkey fallback (`FixedChoices.passkeysEnabled`).
     let passkeysEnabled: Bool
+    /// The passkey fallback and its relay, made once per pool (their event name is random).
+    private let signInScripts: SignInScripts?
     /// Sites already told that passkeys can't work yet, this launch: one toast per site, not one
     /// per attempt. Private tabs keep theirs apart and drop them with the private session.
     private var passkeyNoticeSites: Set<String> = []
@@ -108,6 +110,7 @@ public final class WebViewPool {
         passkeysEnabled: Bool = FixedChoices.passkeysEnabled
     ) {
         self.passkeysEnabled = passkeysEnabled
+        signInScripts = passkeysEnabled ? nil : SignInScripts()
         baseConfiguration = Self.makeBaseConfiguration(dataStore: dataStore)
         self.dataStore = dataStore
         self.tabStates = tabStates
@@ -184,9 +187,9 @@ public final class WebViewPool {
         controller.addUserScript(UserScripts.subframePress)
         // Its message handler is added by the tab's `Slot`, which receives the reports.
         controller.addUserScript(UserScripts.media)
-        if !passkeysEnabled {
-            controller.addUserScript(SignInScripts.passkeyFallback)
-            controller.addUserScript(SignInScripts.passkeyRelay)
+        if let signInScripts {
+            controller.addUserScript(signInScripts.passkeyFallback)
+            controller.addUserScript(signInScripts.passkeyRelay)
         }
         pageScripts?.install(in: controller)
         return controller
@@ -479,16 +482,23 @@ public final class WebViewPool {
     // MARK: - Sign-in
 
     /// A page in `tab` asked for a passkey and was refused (`SignInScripts`). Tells the shell
-    /// once per site per launch. The site is the tab's page, also when the request came from one
-    /// of its frames: that is the site the user is signing in to.
+    /// until it has told the user once for the site this launch. The site is the tab's page, also
+    /// when the request came from one of its frames: that is the site the user is signing in to.
     func passkeyRequestFailed(in tab: Tab) {
         guard !passkeysEnabled, let site = NavigationRules.siteKey(for: tab.url) else { return }
-        let isNew = tab.isPrivate
-            ? privatePasskeyNoticeSites.insert(site).inserted
-            : passkeyNoticeSites.insert(site).inserted
-        Signposts.signposter.emitEvent(Signposts.passkeyUnavailable, "\(isNew ? "told" : "already told", privacy: .public)")
-        guard isNew else { return }
-        host?.tab(tab, couldNotUsePasskeysOn: site)
+        let told = tab.isPrivate ? privatePasskeyNoticeSites.contains(site) : passkeyNoticeSites.contains(site)
+        guard !told else {
+            Signposts.signposter.emitEvent(Signposts.passkeyUnavailable, "already told")
+            return
+        }
+        let shown = host?.tab(tab, couldNotUsePasskeysOn: site) ?? false
+        Signposts.signposter.emitEvent(Signposts.passkeyUnavailable, "\(shown ? "told" : "not shown", privacy: .public)")
+        guard shown else { return }
+        if tab.isPrivate {
+            privatePasskeyNoticeSites.insert(site)
+        } else {
+            passkeyNoticeSites.insert(site)
+        }
     }
 
     // MARK: - Commands from Tab

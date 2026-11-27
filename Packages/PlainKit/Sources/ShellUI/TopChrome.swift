@@ -42,6 +42,30 @@ enum StatusCorner {
         }
         return nil
     }
+
+    /// The corner around a camera the status items wrap, where the guide reports none: an
+    /// occlusion region (`reservedRegions(kind: .occlusion, options: .includeInactive)`) inside the
+    /// top safe area, in the outer quarter of the width at either side. The Duo's inner screen
+    /// reports its camera so (37 pt at x 885–922, y 29–66 in landscape), its safe area's top
+    /// (81 pt) clears it, and the clock and battery ring sit around it. The corner reaches
+    /// `FixedChoices.statusItemsReach` past the camera toward the middle (the clock) and is
+    /// centered on the camera's row, at least a row high. Nil for anything else: a full-width
+    /// band (the outer screen's Dynamic Island) or a region below the safe area's top.
+    static func rect(aroundOcclusions regions: [CGRect], width: CGFloat, safeTop: CGFloat) -> CGRect? {
+        let reach = CGFloat(FixedChoices.statusItemsReach)
+        for region in regions where region.height > 0 && region.minY < safeTop && region.maxY <= safeTop + 0.5 {
+            let half = max(region.height, TopChromeGeometry.rowHeight) / 2
+            let top = max(0, region.midY - half)
+            let height = region.midY + half - top
+            if region.minX >= width * 0.75 {
+                return CGRect(x: region.minX - reach, y: top, width: width - region.minX + reach, height: height)
+            }
+            if region.maxX <= width * 0.25 {
+                return CGRect(x: 0, y: top, width: region.maxX + reach, height: height)
+            }
+        }
+        return nil
+    }
 }
 
 /// Where the top bar and the strip under it sit, expanded and collapsed, in the root view's

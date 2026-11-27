@@ -73,10 +73,13 @@ extension BrowserViewController {
         top.pullIndicatorTop = pullIndicator.topAnchor.constraint(equalTo: panes.view.topAnchor, constant: Spacing.s)
         top.panesTopEdge = panes.view.topAnchor.constraint(equalTo: view.topAnchor)
 
+        // As wide as the room between the capsules allows (up to its cap), then as near the
+        // lane's center as that leaves it: beside the status corner the row is lopsided, and a
+        // centered pill would shrink to a stub.
         let centered = pill.centerXAnchor.constraint(equalTo: lane.centerXAnchor)
-        centered.priority = .defaultHigh
+        centered.priority = .defaultHigh - 1
         let fill = pill.widthAnchor.constraint(equalTo: lane.widthAnchor)
-        fill.priority = .defaultLow
+        fill.priority = .defaultHigh
         // The row's top and its clearance from the status corner are constants set before each
         // layout pass (`applyTopBarPlacement`).
         top.pillTop = pill.topAnchor.constraint(equalTo: view.topAnchor)
@@ -125,9 +128,9 @@ extension BrowserViewController {
 
     // MARK: The status zone
 
-    /// The corner the status items keep to, from the safe area and its corner-adaptive guide
-    /// (`StatusCorner`), or nil under a full-width status bar. Read before each layout pass where
-    /// a top bar may show; the guides never come from the device or the screen.
+    /// The corner the status items keep to, from the safe area and its corner-adaptive guide, or
+    /// else the camera they wrap (`StatusCorner`); nil under a full-width status bar. Read before
+    /// each layout pass where a top bar may show; never from the device or the screen.
     func readStatusCorner() -> CGRect? {
         guard wantsHorizontalBars else { return nil }
         #if DEBUG
@@ -136,9 +139,14 @@ extension BrowserViewController {
         #endif
         let safe = view.safeAreaInsets
         let adapted = view.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))
+        // The corner-adaptive guide first; else the camera the status items wrap, where the safe
+        // area's top is there to clear it.
         let corner = StatusCorner.rect(
             width: view.bounds.width, safeTop: safe.top, safeLeft: safe.left, safeRight: safe.right,
             adaptedTop: adapted.top, adaptedLeft: adapted.left, adaptedRight: adapted.right
+        ) ?? StatusCorner.rect(
+            aroundOcclusions: view.reservedRegions(kind: .occlusion, options: .includeInactive).map(\.frame),
+            width: view.bounds.width, safeTop: safe.top
         )
         let reading = StatusZoneReading(size: view.bounds.size, safe: safe, adapted: adapted)
         if reading != duo.lastStatusReading {

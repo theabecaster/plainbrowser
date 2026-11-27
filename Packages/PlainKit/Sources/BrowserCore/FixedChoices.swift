@@ -412,6 +412,12 @@ public enum FixedChoices {
     /// The top bar's pill while reading, relative to its resting size: the address stays readable
     /// (about 31 pt high) and the chrome drops under 9% of the inner screen.
     public static let topBarCollapsedScale: Double = 0.7
+    /// How far the status items reach past the camera they wrap, where the system reports the
+    /// camera (an occlusion region inside the top safe area) but no corner-adaptive guide: the
+    /// clock sits beside it. On the Duo's inner screen the time starts 57 pt before the camera;
+    /// 64 leaves room for the widest time ("12:59"). The top bar's row stops this far (plus its
+    /// gap) before the camera.
+    public static let statusItemsReach: Double = 64
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375

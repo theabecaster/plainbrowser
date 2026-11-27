@@ -264,6 +264,36 @@ struct TopChromeGeometryTests {
         #expect(corner == CGRect(x: 0, y: 10, width: 120, height: 60))
     }
 
+    @Test func cameraInTheSafeAreaGivesTheCornerWhenTheGuideDoesNot() throws {
+        // The Duo's inner camera as UIKit reports it (simulator, landscape and portrait): the
+        // device's battery ring wraps it, its safe area's top (81) clears it.
+        let camera = CGRect(x: 884.67, y: 29.33, width: 37, height: 37)
+        let corner = try #require(StatusCorner.rect(aroundOcclusions: [camera], width: 951, safeTop: 81))
+        #expect(abs(corner.midY - camera.midY) < 0.001, "the row centers on the camera's row")
+        #expect(corner.maxX == 951)
+        #expect(abs(corner.minX - (camera.minX - CGFloat(FixedChoices.statusItemsReach))) < 0.001)
+        let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: 0)
+        // Row 25.8–69.8 around the camera's 47.8; it ends 12 pt before the clock's reach (808.7),
+        // left of the device's clock (828). Page at 73.8 pt.
+        #expect(abs(bar.rowTop - 25.83) < 0.01)
+        #expect(abs(bar.expandedInset - 73.83) < 0.01)
+        #expect(951 - bar.rowClearance.trailing < 828)
+        let portrait = try #require(StatusCorner.rect(
+            aroundOcclusions: [CGRect(x: 266, y: 0, width: 200, height: 82), CGRect(x: 602.67, y: 29.33, width: 37, height: 37)],
+            width: 669, safeTop: 82
+        ))
+        #expect(portrait.maxX == 669 && abs(portrait.midY - 47.83) < 0.01)
+    }
+
+    @Test func occlusionsElsewhereGiveNoCorner() {
+        // Below the safe area's top (the simulator's landscape window: 20 pt) the system has not
+        // made room for it: the row stays under the status bar, and the lane avoids it when active.
+        #expect(StatusCorner.rect(aroundOcclusions: [CGRect(x: 884.67, y: 29.33, width: 37, height: 37)], width: 951, safeTop: 20) == nil)
+        // A region across the middle (the outer screen's island) is not a corner.
+        #expect(StatusCorner.rect(aroundOcclusions: [CGRect(x: 266, y: 0, width: 200, height: 82)], width: 669, safeTop: 82) == nil)
+        #expect(StatusCorner.rect(aroundOcclusions: [], width: 951, safeTop: 81) == nil)
+    }
+
     @Test func fullWidthStatusBarHasNoCorner() {
         // The guide equals the safe area: a phone, the simulator, a wide window.
         #expect(StatusCorner.rect(

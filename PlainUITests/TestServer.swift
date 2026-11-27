@@ -21,6 +21,11 @@ import Network
 /// - `/french`: a page in French (`lang="fr"`) whose sentences the app's test translator knows.
 /// - `/french-article`: a readerable article in French (Show Reader and Translate Page both apply).
 /// - `/consent`: a shop page with a OneTrust cookie banner; the heading says how it was answered.
+/// - `/paint-start`, `/paint-target`: the perf gate's link tap to first paint. The start page notes
+///   when its link is tapped; the target shows "Paint <ms> fcp", from that tap to its own first
+///   contentful paint (Paint Timing), both on the page's clock.
+/// - `/big`: a large light-only page (3,000 paragraphs, 4,000 style rules, 300 background
+///   pictures; the same as WebEngineTests' `DarkPagesTests.bigPage`), for the heavy scroll test.
 final class TestServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "TestServer")
@@ -223,6 +228,33 @@ final class TestServer: @unchecked Sendable {
                 </script>
                 """
             return ("200 OK", html("Plain Bakery", body))
+        case "/paint-start":
+            // The tap: the link's touchend (the finger lifting), or its click when no touch came.
+            let script = "<script>sessionStorage.removeItem('plainTap');"
+                + "const mark = () => { if (!sessionStorage.getItem('plainTap')) "
+                + "sessionStorage.setItem('plainTap', String(performance.timeOrigin + performance.now())); };"
+                + "const go = document.getElementById('go');"
+                + "go.addEventListener('touchend', mark, { passive: true }); go.addEventListener('click', mark);</script>"
+            let link = "<a id=\"go\" href=\"/paint-target\" style=\"display:block;font-size:32px;padding:48px 0\">Open Paint Target</a>"
+            return ("200 OK", html("Plain Paint Start", "<h1>Paint Start</h1>" + link + script))
+        case "/paint-target":
+            // First contentful paint, from the tap noted on the start page. Without Paint Timing,
+            // the second animation frame after this script stands in ("raf"). The last word is
+            // the tap's own time, so each report reads differently from the one before.
+            let script = "<script>const tap = Number(sessionStorage.getItem('plainTap') || 0);"
+                + "sessionStorage.removeItem('plainTap'); let done = false;"
+                + "const show = (t, how) => { if (done) return; done = true; document.getElementById('paint').textContent ="
+                + " tap ? `Paint ${(t - tap).toFixed(1)} ${how} ${Math.round(tap) % 1000000}` : 'Paint none'; };"
+                + "let raf = 0; requestAnimationFrame(() => requestAnimationFrame(() => { raf = performance.timeOrigin + performance.now(); }));"
+                + "try { new PerformanceObserver((list) => { for (const e of list.getEntries()) {"
+                + " if (e.name === 'first-contentful-paint') show(performance.timeOrigin + e.startTime, 'fcp'); } })"
+                + ".observe({ type: 'paint', buffered: true }); } catch (e) {}"
+                + "setTimeout(() => { if (raf) show(raf, 'raf'); }, 1000);</script>"
+            let body = "<h1>Paint Target</h1><p id=\"paint\">Paint pending</p>"
+                + "<p><a id=\"back\" href=\"/paint-start\" style=\"display:block;font-size:32px;padding:48px 0\">Back to Paint Start</a></p>"
+            return ("200 OK", html("Plain Paint Target", body + script))
+        case "/big":
+            return ("200 OK", Self.bigPage)
         case "/slow":
             return ("200 OK", html("Plain Slow", "<h1>Slow Page</h1>"))
         case "/motion":
@@ -277,6 +309,25 @@ final class TestServer: @unchecked Sendable {
             return ("404 Not Found", html("Not Found", "<h1>Not Found</h1>"))
         }
     }
+
+    /// `/big`: WebEngineTests' `DarkPagesTests.bigPage`, built once.
+    private static let bigPage: String = {
+        let picture = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10'>"
+            + "<rect width='10' height='10' fill='%2300aa00'/></svg>"
+        var rules = ""
+        for i in 0..<4_000 { rules += ".c\(i){color:#\(String(format: "%03x", i % 4096));margin:\(i % 7)px}\n" }
+        var body = "<h1>Big Page</h1>"
+        for i in 0..<3_000 {
+            body += "<p class=c\(i % 4_000)>Paragraph \(i) with <a href='#\(i)'>a link</a> and some text to wrap.</p>"
+            if i % 10 == 0 { body += "<div class=hero style='height:20px'></div>" }
+        }
+        return """
+            <!doctype html><html><head><meta charset="utf-8">\
+            <meta name="viewport" content="width=device-width, initial-scale=1"><title>Plain Big Page</title>\
+            <style>body{background:#fff;color:#222} .hero{background-image:url("\(picture)")}
+            \(rules)</style></head><body>\(body)</body></html>
+            """
+    }()
 
     private func styled(_ title: String, _ css: String, _ body: String, head: String = "") -> String {
         """

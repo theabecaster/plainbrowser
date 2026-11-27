@@ -347,8 +347,9 @@ extension BrowserViewController {
                 if state != .hidden { duo.lastShownSidebar = state }
                 view.setNeedsLayout()
             }
-            guard !pages.isEmpty || !privatePages.isEmpty else { return }
+            // A capture of a layout shows the page, not the search field a launch may open.
             endAddressEditing()
+            guard !pages.isEmpty || !privatePages.isEmpty else { return }
             let paced = pages.count + privatePages.count > 4
             for (page, isPrivate) in pages.map({ ($0, false) }) + privatePages.map({ ($0, true) }) {
                 let tab = session.tabs.newTab(isPrivate: isPrivate)

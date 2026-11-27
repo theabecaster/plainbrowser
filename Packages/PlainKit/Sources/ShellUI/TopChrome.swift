@@ -44,14 +44,16 @@ struct TopChromeGeometry: Equatable {
     /// The collapsed pill tucks under the status bar: only the address is left.
     var collapsedBottom: CGFloat { pageTop + collapsedPillHeight }
 
-    /// The pill's vertical translation and scale at collapse `progress` (0 expanded, 1 collapsed),
-    /// for a transform about its center.
+    /// The pill's vertical translation and scale at collapse `progress` (0 expanded, 1 collapsed,
+    /// 2 hidden), for a transform about its center. Past 1 the tucked pill rises off the top edge,
+    /// `ChromeGeometry.hiddenClearance` past it, as the bottom pill sinks off the bottom.
     func pillTransform(progress: CGFloat) -> (translationY: CGFloat, scale: CGFloat) {
         let p = min(max(progress, 0), 1)
         let scale = 1 - (1 - Self.compactScale) * p
         let restCenter = rowTop + Self.rowHeight / 2
         let collapsedCenter = pageTop + collapsedPillHeight / 2
-        return ((collapsedCenter - restCenter) * p, scale)
+        let rise = (collapsedBottom + ChromeGeometry.hiddenClearance) * min(max(progress - 1, 0), 1)
+        return ((collapsedCenter - restCenter) * p - rise, scale)
     }
 
     /// The buttons' rise at `progress`: half a row, while they fade (`ChromeGeometry.barAlpha`).
@@ -71,9 +73,22 @@ struct TopChromeGeometry: Equatable {
     /// to the collapsed one (WebKit wants the maximum viewport inset strictly larger).
     var expandedInset: CGFloat { max(expandedBottom - pageTop, collapsedInset + 1) }
 
+    /// The hidden bar's height over the page: nothing, the page starts under the status bar. The
+    /// smallest top inset the page sees.
+    var hiddenInset: CGFloat { 0 }
+
     /// The page's obscured top inset for the bar resting collapsed or expanded.
     func obscuredInset(collapsed: Bool) -> CGFloat {
         collapsed ? collapsedInset : expandedInset
+    }
+
+    /// The page's obscured top inset for the bar resting at `rest`.
+    func obscuredInset(rest: ChromeRest) -> CGFloat {
+        switch rest {
+        case .expanded: expandedInset
+        case .pill: collapsedInset
+        case .hidden: hiddenInset
+        }
     }
 
     /// The share of `screen` the chrome covers at rest (`collapsed` false) or while reading: the

@@ -748,7 +748,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // During a fold or rotation the insets wait for the transition's completion.
         guard view.bounds.height > 0, !duo.isResizing else { return }
         if let top = duo.topGeometry {
-            applyTopBarInsets(top, collapsed: pageInset.collapsed)
+            applyTopBarInsets(top, rest: pageInset.rest)
             return
         }
         // Back from a top bar (a fold to the outer screen): the page's top rests at the top again.

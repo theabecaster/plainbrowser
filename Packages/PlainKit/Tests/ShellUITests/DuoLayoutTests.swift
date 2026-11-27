@@ -253,6 +253,18 @@ struct TopChromeGeometryTests {
         #expect(bar.stripTranslation(progress: 1) < 0 && bar.buttonsTranslation(progress: 1) < 0)
     }
 
+    @Test func hiddenTopPillRisesOffTheTopEdgeAndLeavesNoInset() {
+        let bar = TopChromeGeometry(pageTop: Self.status, stripHeight: 34)
+        let hidden = bar.pillTransform(progress: 2)
+        #expect(hidden.scale == TopChromeGeometry.compactScale)
+        let center = bar.rowTop + TopChromeGeometry.rowHeight / 2 + hidden.translationY
+        #expect(abs(center + bar.collapsedPillHeight / 2 + ChromeGeometry.hiddenClearance) < 0.001)
+        #expect(bar.obscuredInset(rest: .hidden) == 0)
+        #expect(bar.obscuredInset(rest: .pill) == bar.collapsedInset)
+        #expect(bar.obscuredInset(rest: .expanded) == bar.expandedInset)
+        #expect(bar.hiddenInset < bar.collapsedInset)
+    }
+
     @Test func chromeStaysNearTwelvePercentAtRestAndUnderTenWhileReading() {
         let bar = TopChromeGeometry(pageTop: Self.status, stripHeight: 0)
         #expect(bar.chromeShare(of: Self.landscape, collapsed: false) <= 0.12)

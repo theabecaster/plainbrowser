@@ -232,6 +232,15 @@ Newest feature last.
   shows black on dark. Needs a same-origin canvas read; other-origin pictures can't be read.
 - **Shadow DOM and frames.** Open shadow roots (web components) and same-site iframes are not
   darkened; their light boxes stay light.
+- **Engine limits accepted in review (code review, rounds 1–2):** rules in an anonymous `@layer`
+  get a twin in a new anonymous layer, after the page's named layers (unlayered rules still win
+  as before); a rule's declarations edited in place through the CSSOM, with no change in rule
+  count or first/last rule size, keep the old twin; one very large sheet arriving late is
+  rewritten in one go; a border shorthand set from one variable keeps its light color (repeating
+  the shorthand would reset widths); a multicolored SVG logo whose outline comes from a grey
+  CSS `fill` gets a light outline; a theme class on a large subtree (over 300 elements) keeps its
+  old element fixes until each is replaced. Page scripts can read the darkened computed colors
+  and the `data-plain-dark` attribute (Safari hides its changes; an app cannot).
 - **Link previews.** The link menu's preview web view has no dark pages script, so a light-only
   page previews white in a dark app.
 - **Frames.** Iframes are kept as made (an embed in a darkened page stays light), by design; a

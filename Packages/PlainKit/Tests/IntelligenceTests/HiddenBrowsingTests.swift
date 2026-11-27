@@ -11,12 +11,12 @@ import WebKit
 /// organic links (a saved DuckDuckGo lite page), the challenge page, an article read with its
 /// JavaScript off, and that nothing is left behind: no view, no cookie in the tabs' store.
 @MainActor @Suite(.serialized) struct HiddenBrowsingTests {
-    static func fixture(_ name: String) -> Data {
+    nonisolated static func fixture(_ name: String) -> Data {
         let url = Bundle.module.url(forResource: name, withExtension: "html", subdirectory: "Fixtures")!
         return try! Data(contentsOf: url)
     }
 
-    static let route: @Sendable (TestServer.Request) -> TestServer.Response = { request in
+    nonisolated static let route: @Sendable (TestServer.Request) -> TestServer.Response = { request in
         switch request.path {
         case "/lite": .data(fixture("ddg-lite"), type: "text/html; charset=utf-8")
         case "/challenge": .data(fixture("challenge"), type: "text/html; charset=utf-8")
@@ -114,12 +114,12 @@ import WebKit
         // The saved results point at the real web; read the article fixture in their place.
         let results = BrowseForMe.organicResults(links, engineHosts: page.engineHosts)
         try #require(results.count >= 3)
-        let texts = try await withThrowingTaskGroup(of: ReaderText?.self) { group in
-            for _ in 0..<3 { group.addTask { @MainActor in try await browsing.text(of: server.url("/article")) } }
-            var texts: [ReaderText?] = []
-            for try await text in group { texts.append(text) }
-            return texts
-        }
+        // Three at once, as a run reads them.
+        let url = server.url("/article")
+        async let first = browsing.text(of: url)
+        async let second = browsing.text(of: url)
+        async let third = browsing.text(of: url)
+        let texts = try await [first, second, third]
         #expect(texts.compactMap { $0 }.count == 3)
         #expect(pool.hiddenWebViewCount == 0)
     }

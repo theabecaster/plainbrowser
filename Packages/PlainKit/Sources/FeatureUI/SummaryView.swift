@@ -353,9 +353,12 @@ private struct PointRow: View {
 
     private var attributed: AttributedString {
         var text = AttributedString(point.text)
-        for number in point.sources {
-            var space = AttributedString("\u{2009}")
-            space.font = .caption2
+        // "¹,²", never "¹²": two sources must not read as source twelve.
+        for (index, number) in point.sources.enumerated() {
+            var space = AttributedString(index == 0 ? "\u{2009}" : ",\u{2009}")
+            space.font = .caption2.weight(.semibold)
+            space.foregroundColor = Style.inkSecondary
+            space.baselineOffset = 5
             var mark = AttributedString("\(number)")
             mark.font = .caption2.weight(.semibold)
             mark.foregroundColor = Style.accent

@@ -849,3 +849,109 @@ Research and sources: docs/research/dark-mode.md.
   sentence and Try Again in place of the list when a read fails, never the empty state and never
   stale rows. History's Clear dims only when history itself is empty: a search that finds nothing
   reads one visit to know.
+
+## Translate Page: Apple Translation, text nodes in place (2026-11-27)
+
+Research and sources: docs/research/translate.md.
+
+- **Engine: Apple's Translation framework, on the device** (`FixedChoices.translationOnDevice`).
+  No server sees the page, it works offline once a language is downloaded, and it costs nothing.
+  Sessions are made without a view (`TranslationSession(installedSource:target:preferredStrategy:
+  .lowLatency)`, iOS 26), one per language pair, reused per batch. Only a language that is not
+  downloaded needs the system's download sheet, which the framework shows only from SwiftUI's
+  `translationTask`: a 1-point invisible hosting controller is added to the browser for that one
+  question and removed after it (`ShellUI/PageTranslators.swift`). The framework does not run in
+  the simulator, so UI tests use a phrase-book stand-in (`-PlainTestTranslator`, Debug only).
+- **Layering:** WebEngine owns the page side (`PageTranslation`: the language check, the
+  translator script, `Tab.translation`) behind a `PageTranslator` seam; the shell owns the
+  framework. The engine never imports Translation or SwiftUI.
+- **Language:** a document-end script in its own content world sends `<html lang>` and up to 2,000
+  characters of text; `NLLanguageRecognizer` decides off the main thread (confidence ≥ 0.6),
+  falling back to `lang`. `PageLanguage.isRead` compares with `Locale.preferredLanguages` by
+  language, and by script for Chinese. The item shows only when the device can translate the pair
+  (`LanguageAvailability`), answered once per language per launch.
+- **In place, text nodes only.** The translator writes each translation to the same text node's
+  `nodeValue`: never new nodes, never HTML. Layout, links, event handlers and frameworks that hold
+  those nodes (React, Vue) keep working (Google Translate's node replacement is what breaks React
+  pages). Skipped: code, pre, form fields, `translate="no"`, `.notranslate`, contenteditable.
+  Show Original writes every original back where the page has not changed it since; a test checks
+  `innerHTML` is byte-identical afterwards.
+- **Visible first, lazily.** An `IntersectionObserver` (1.5 screens ahead) feeds batches of at most
+  1,500 characters or 40 pieces, two in flight; far text is translated only as it scrolls near. A
+  throttled `MutationObserver` (250 ms) translates what the page adds or changes, and tells its
+  own writes apart. Measured (iPhone 17 simulator, fake translator): a 3,000-paragraph page sends
+  1,943 characters in 3 requests before anything is scrolled, first text in about 60 ms, and the
+  translator's start (collect and watch) takes 6 ms in the page.
+- **Trade-off: per-node context.** A sentence split by a link is translated in pieces. Apple's
+  `translate(_: AttributedString)` (iOS 26.4) could carry the runs; that is in the polish backlog.
+- **UI:** one page-menu item, "Translate Page" subtitled with the pair ("French to English"),
+  which becomes "Show Original". The tab keeps translating its next pages in the same language
+  until Show Original (`FixedChoices.translationFollowsTab`), as Chrome and Safari do. No banner:
+  the one hint is a toast the first time ever a foreign page shows ("This page is in French",
+  Translate), `FixedChoices.translateHintShownOnce`. A failed translation puts the page back and
+  says so in a toast. Main frame only (frames: polish backlog).
+
+## Print and Save as PDF: the print formatter, paginated (2026-11-27)
+
+Research and sources: docs/research/print-pdf.md.
+
+- **Print** is the system print sheet with the web view's `viewPrintFormatter()`: paper, copies,
+  range and printers are the system's, and the page's `@media print` styles apply. Chrome and
+  Firefox on iOS do the same.
+- **Save as PDF is paginated**, from the same formatter through `UIPrintPageRenderer`, on Letter
+  in the regions that use it and A4 elsewhere (`FixedChoices.letterPaperRegions`), with half-inch
+  margins. Not `createPDF`: it draws the screen styles as one tall page (cut at 200 inches), which
+  reads badly in every PDF viewer. The file (named for the page title) goes to the share sheet
+  from a temporary folder that is removed when the sheet closes.
+- **Lazy pictures** are told to load first (`loading=eager`, waiting at most 800 ms): WebKit prints
+  a lazy picture that never scrolled into view as a blank box.
+- **The reader prints the article**, not the page under it. Not on Start, while loading, or on an
+  error or crashed page (state rules §4). A PDF tab prints, and keeps "Save PDF to Files" for the
+  original file instead of Save as PDF.
+- **Perf cost:** the formatter lays the document out in the page's process and the first drawn page
+  waits for it on the main thread. Pages are drawn one per run-loop turn after that. Measured
+  (iPhone 17 simulator): a 3,000-paragraph page (121 A4 pages) holds the main thread for 14 ms
+  (layout) plus 423 ms (first page), 558 ms in all; a two-page article is imperceptible. Only ever
+  from a menu tap. A long-document spinner is in the polish backlog.
+
+## Cookie banners: DuckDuckGo autoconsent, reject first (2026-11-27)
+
+Research and sources: docs/research/cookie-banners.md.
+
+- **Chosen:** DuckDuckGo's autoconsent 18.12.0 (MPL-2.0), unmodified, bundled by
+  `tools/autoconsent` (npm + esbuild, pinned) into `ContentBlocking/Resources/CookieBanners`: a
+  129 KB script (engine and Plain's 40-line bridge) and 736 KB of rules. It finds the consent
+  manager (OneTrust, Cookiebot, Didomi, Sourcepoint, TrustArc, Usercentrics and about 1,600
+  rules for the long tail), clicks through to "reject all" including second-layer settings
+  screens, and checks the result. Default on (`FixedChoices.cookieBannersHandled`); "Turn Off
+  Cookie Banner Blocking" in Site Settings, remembered per site (`cookieBannersOff` table, the
+  private session in memory).
+- **License:** MPL-2.0 §1.12 lists the GNU AGPL 3.0 as a Secondary License and §3.3 allows the
+  combination ("Larger Work"); no autoconsent file carries the "Incompatible With Secondary
+  Licenses" notice. Obligations: the files stay MPL-2.0, unmodified, with the license
+  (`MPL-2.0.txt`) and where the source of the exact version is (`NOTICE.txt`).
+- **Not chosen:** a hand-written reject script for a dozen consent managers (first-layer buttons
+  only; breaks on settings flows, US variants, iframes and shadow DOM; Firefox's list died of
+  this maintenance), "I don't care about cookies" (GPL-3.0, but it accepts on some sites, the
+  opposite of reject-first), Consent-O-Matic (MIT; autoconsent dropped its rules in v16), Firefox
+  cookie banner reduction (removed in Firefox 155, rules archived), and hiding alone (Brave's
+  approach, which Plain already has from the EasyList Cookie List: a hidden banner never says no,
+  and scroll locks stay).
+- **Wiring (DuckDuckGo iOS's pattern, an idea, no code taken):** one reply handler in Plain's own
+  content world. Main frames get the engine at document start; its `init` is answered with the
+  generic rules plus only the site rules whose address pattern matches (matched off the main
+  thread, 0.4 ms per page on a Mac). Subframes get a one-line script that reports the frame's
+  address; only a frame a rule targets (Sourcepoint's dialog, about 20 hosts) gets the engine, so
+  ad and video frames cost nothing. Eval steps (a consent manager's own API, for example
+  `OneTrust.RejectAll()`) run in the asking frame's page world, wrapped to return only a Boolean.
+  Heuristic detection is off: a wrong click is worse than a visible banner. A site whose banner
+  comes back after every answer (3 in 60 s) is left alone for the launch.
+- **With the cookie list:** the EasyList Cookie List stays in the blocking lists and hides banners
+  autoconsent has no rule for. A banner it hides is invisible to autoconsent and stays unanswered
+  (for consent that means "no"). Turning cookie banner blocking off for a site stops the
+  answering; the hiding follows "Turn Off Blocking on This Site". Moving the cookie list into its
+  own switchable list needs a regeneration of the blocking lists (polish backlog).
+- **Perf cost:** a long article without a banner loads in 65–104 ms with the engine against
+  38–48 ms without, on the iPhone 17 simulator (parsing the 129 KB script at document start); a
+  OneTrust banner is rejected about 0.8 s after the page starts (0.5 s of it is the engine's own
+  wait for the banner's script). The rules are read off the main thread once after launch.

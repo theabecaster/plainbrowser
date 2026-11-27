@@ -278,3 +278,29 @@ Newest feature last.
 - **Supporting text in dark.** Raised to 76 % paper (90 % with Increase Contrast) and readable,
   but the reviewer still finds footers, addresses and times subdued at night. Check on the Duo
   before going higher, which flattens the hierarchy. (Design review, round 2.)
+
+## v0.2 page features: translate, print and PDF, cookie banners (2026-11-27)
+
+- **Translate: sentence context across links.** Each text node is translated alone, so a sentence
+  split by a link or bold run loses context. Try `TranslationSession.translate(_: AttributedString)`
+  (iOS 26.4) with one run per text node, and map the runs back.
+- **Translate: frames and shadow roots.** Only the main frame's document is translated; open
+  shadow roots and same-origin frames could follow (Firefox translates each frame on its own).
+- **Translate: attributes.** `placeholder`, `title`, `alt`, `aria-label` and button values stay in
+  the original language (VoiceOver reads `aria-label`).
+- **Translate: the reader.** Translate Page is hidden under the reader; translating the article
+  view itself would be the better answer for a foreign article.
+- **Translate on the device.** The framework doesn't run in the simulator: the real download sheet,
+  `.lowLatency` quality and timings need a check on the Duo.
+- **Save as PDF on very long pages.** The first page waits for the page's process to lay out the
+  whole document (about 0.4 s for 121 pages on the simulator). Show a small progress cue past
+  ~150 ms, or build the pages from `createPDF` off the main thread.
+- **Cookie list in its own compiled list.** "Turn Off Cookie Banner Blocking" stops the answering
+  but the EasyList Cookie List's hiding stays with the blocking switch. Split the cookie list out
+  in tools/blocklists so one switch shows a site's banner as the site made it.
+- **Cookie banners: rules updates.** autoconsent ships rule fixes almost daily; bump
+  `tools/autoconsent` each release (no remote config).
+- **Cookie banners: engine cost per page.** Parsing the 129 KB engine at document start adds
+  about 30–50 ms to a long page's load on the simulator; check on the Duo, and consider the
+  document-end injection for pages without a known consent manager's prehide selectors.
+

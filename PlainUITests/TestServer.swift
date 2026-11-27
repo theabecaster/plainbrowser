@@ -254,6 +254,16 @@ final class TestServer: @unchecked Sendable {
                   <p><button style="font-size:20px">Sign In</button></p>
                 </form>
                 """))
+        case "/cookie":
+            // A site login stand-in: `?set` signs in with a cookie; the heading says whether this
+            // website data store has it (profiles keep theirs apart).
+            return ("200 OK", html("Plain Cookie", """
+                <h1 id="state">Checking</h1>
+                <script>
+                if (location.search.includes('set')) document.cookie = 'plain=1; max-age=3600; path=/';
+                document.getElementById('state').textContent = document.cookie.includes('plain=1') ? 'Signed In' : 'Signed Out';
+                </script>
+                """))
         case "/passkey":
             return ("200 OK", html("Plain Passkey", """
                 <h1 id="state">Passkey</h1>

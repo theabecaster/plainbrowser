@@ -106,6 +106,9 @@ public final class WebViewPool {
     /// Private tabs' dark pages choices, for the private session only.
     private var privateDarkPagesStore: LayeredDarkPagesStore?
     private var warm: (webView: WKWebView, controller: WKUserContentController)?
+    /// Hidden web views lent out (`makeHiddenWebView`), with their controllers, so their content
+    /// rules are released when they are.
+    var hiddenWebViews: [ObjectIdentifier: WKUserContentController] = [:]
     private var useClock: UInt64 = 0
     private var popupLimiter = RateLimiter(limit: EngineChoices.popupLimit, window: EngineChoices.popupWindow)
     private var dialogLimiter = RateLimiter(limit: EngineChoices.dialogLimit, window: EngineChoices.dialogWindow)

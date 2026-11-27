@@ -607,4 +607,56 @@ import Testing
         duo.usesVerticalBar = true
         #expect(ControlRules(duo).chromeMayHide)
     }
+
+    // MARK: On-device AI (§4 Summarize Page, §6 Browse for Me)
+
+    @Test func summarizePageNeedsAnArticleAndTheModel() {
+        var article = page()
+        article.isReaderAvailable = true
+        article.isAIAvailable = true
+        #expect(ControlRules(article).summarizePage)
+        var reader = article
+        reader.isReaderOpen = true
+        reader.isReaderAvailable = false
+        #expect(ControlRules(reader).summarizePage)
+        var noModel = article
+        noModel.isAIAvailable = false
+        #expect(!ControlRules(noModel).summarizePage)
+        var notReadable = article
+        notReadable.isReaderAvailable = false
+        #expect(!ControlRules(notReadable).summarizePage)
+        for condition in [PageCondition.loading, .failed, .crashed, .awaitingResubmit] {
+            var other = article
+            other.condition = condition
+            #expect(!ControlRules(other).summarizePage, "\(condition)")
+        }
+        var pdf = article
+        pdf.isPDF = true
+        #expect(!ControlRules(pdf).summarizePage)
+        var start = ChromeState()
+        start.hasTab = true
+        start.isAIAvailable = true
+        #expect(!ControlRules(start).summarizePage)
+    }
+
+    @Test func browseForMeOnlyForASearchWithTheModel() {
+        var editing = ChromeState()
+        editing.isEditing = true
+        editing.hasQuery = true
+        editing.queryIsSearch = true
+        editing.isAIAvailable = true
+        #expect(ControlRules(editing).browseForMe)
+        var private_ = editing
+        private_.isPrivate = true
+        #expect(ControlRules(private_).browseForMe)
+        var address = editing
+        address.queryIsSearch = false
+        #expect(!ControlRules(address).browseForMe)
+        var noModel = editing
+        noModel.isAIAvailable = false
+        #expect(!ControlRules(noModel).browseForMe)
+        var closed = editing
+        closed.isEditing = false
+        #expect(!ControlRules(closed).browseForMe)
+    }
 }

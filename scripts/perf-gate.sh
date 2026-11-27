@@ -82,7 +82,7 @@ typeset -A value=(
   searchFieldMs "$(median 'PerfTests/testLaunchToSearchFieldReady()' '.identifier | endswith("OSSignpost-launch.duration")' 1000)"
   hitchMsPerS   "$(median 'PerfTests/testPageScrollHitches()' '.displayName | test("hitch.*ratio"; "i")' 1)"
   galleryMs     "$(median 'PerfTests/testGalleryOpen()' '.identifier | endswith("OSSignpost-gallery.show.duration")' 1000)"
-  swipeMs       "$(median 'PerfTests/testBarSwipe()' '.identifier | endswith("OSSignpost-tab.swipe.duration")' 1000)"
+  swipeMs       "$(median 'PerfTests/testBarSwipe()' '.identifier | endswith("OSSignpost-tab.swipeSettle.duration")' 1000)"
 )
 
 # The previous sim row's values, by column (docs/perf-log.md: | Date | SHA | Target | launch | field | hitch |

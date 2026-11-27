@@ -24,9 +24,10 @@
       "reason": "Ends when the page is within 0.5 pt of its card (TabGalleryTransition), not at Core Animation's settle of the 0.42 s spring (~0.98 s on the Duo). The spring alone takes ~0.6 s to come within 0.5 pt, so 800 leaves ~200 ms for stalls."
     },
     "swipeMs": {
-      "label": "Bar swipe to page settled (ms)",
-      "target": 650,
-      "fail": 900
+      "label": "Bar swipe: finger lift to page settled (ms)",
+      "target": 450,
+      "fail": 650,
+      "reason": "Measured from the finger lifting (tab.swipeSettle), so the scripted drag in the UI test is left out. The 0.35 s tab-switch spring plus the web view hand-off should land near 400 ms."
     }
   }
 }

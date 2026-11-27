@@ -38,6 +38,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     private final class Swipe {
         let current: Tab
         let interval: OSSignpostIntervalState
+        /// From the finger lifting until the page settles (`tab.swipeSettle`): the part the app owns.
+        var settleInterval: OSSignpostIntervalState?
         /// 1 toward the next tab (finger moving left), -1 toward the previous one, 0 not yet.
         var side = 0
         var neighbour: Tab?
@@ -309,6 +311,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
                   velocity < FixedChoices.galleryFlickSpeed {
             target = -width
         }
+        swipe.settleInterval = Signposts.signposter.beginInterval(Signposts.tabSwipeSettle)
         settle(to: target, velocity: velocity)
     }
 
@@ -352,18 +355,21 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             browser.completeTabSwipe(to: neighbour, cover: cover)
             reset(swipe, browser: browser, detachingNeighbour: false)
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)
+            if let settle = swipe.settleInterval { signposter.endInterval(Signposts.tabSwipeSettle, settle) }
             signposter.emitEvent(Signposts.tabSwipeEnd, "switched")
         } else if target != 0, swipe.isNewTabCard {
             Haptic.tap.play()
             reset(swipe, browser: browser, detachingNeighbour: false)
             browser.openNewTabFromSwipe()
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)
+            if let settle = swipe.settleInterval { signposter.endInterval(Signposts.tabSwipeSettle, settle) }
             signposter.emitEvent(Signposts.tabSwipeEnd, "newTab")
         } else {
             // Rubber-banded against nothing: the "nothing there" haptic, as for any no-op gesture.
             if swipe.side != 0, swipe.neighbour == nil, !swipe.isNewTabCard { Haptic.nothingThere.play() }
             reset(swipe, browser: browser, detachingNeighbour: true)
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)
+            if let settle = swipe.settleInterval { signposter.endInterval(Signposts.tabSwipeSettle, settle) }
             signposter.emitEvent(Signposts.tabSwipeEnd, "stayed")
         }
     }
@@ -401,6 +407,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         mode = .none
         reset(swipe, browser: browser, detachingNeighbour: true)
         Signposts.signposter.endInterval(Signposts.tabSwipe, swipe.interval)
+        if let settle = swipe.settleInterval { Signposts.signposter.endInterval(Signposts.tabSwipeSettle, settle) }
         Signposts.signposter.emitEvent(Signposts.tabSwipeEnd, "cancelled")
     }
 }

@@ -73,15 +73,15 @@ final class PerfTests: XCTestCase {
         }
     }
 
-    /// A fast swipe along the address bar to the neighbour tab, until the page settles
-    /// (`tab.swipe`). Alternates direction, so each iteration has a neighbour.
+    /// A fast swipe along the address bar to the neighbour tab, from the finger lifting until the
+    /// page settles (`tab.swipeSettle`; the drag itself is the test's scripted gesture). Alternates direction, so each iteration has a neighbour.
     func testBarSwipe() throws {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
         let app = launchWithTwoTabs(server)
         let metric = XCTOSSignpostMetric(
-            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.tabSwipe)
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.tabSwipeSettle)
         )
         let pill = app.buttons["addressPill"]
         var toPrevious = true

@@ -17,6 +17,7 @@ extension BrowserViewController {
             return
         }
         let sidebar = installSidebarIfNeeded()
+        placeSidebarRows(layout.chromeOnTop ? makeTopGeometry(stripHeight: layout.stripHeight) : nil, layout: layout)
         sidebar.floats = layout.sidebarFloats
         sidebar.isOnRight = layout.sidebarOnRight
         // The outgoing edge lets go first, so the two never pin the sidebar together.
@@ -76,9 +77,6 @@ extension BrowserViewController {
             strip.view.heightAnchor.constraint(equalToConstant: layout.stripHeight),
         ])
         duo.top.stripClearance = [clearLeading, clearTrailing]
-        let edgeEffect = UIScrollEdgeElementContainerInteraction()
-        edgeEffect.edge = .top
-        strip.view.addInteraction(edgeEffect)
         strip.didMove(toParent: self)
         duo.strip = strip
         duo.top.stripTop = top
@@ -110,7 +108,9 @@ extension BrowserViewController {
         duo.sidebarLeading = sidebar.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor)
         duo.sidebarTrailing = sidebar.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
         NSLayoutConstraint.activate([
-            sidebar.view.topAnchor.constraint(equalTo: safe.topAnchor),
+            // From the top edge, so no strip of the root view's paper sits above the column; its
+            // tabs start under the safe area (`SideTabsViewController`).
+            sidebar.view.topAnchor.constraint(equalTo: view.topAnchor),
             sidebar.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             width,
         ])

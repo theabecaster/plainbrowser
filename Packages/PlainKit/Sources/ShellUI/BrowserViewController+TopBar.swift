@@ -182,6 +182,7 @@ extension BrowserViewController {
                 duo.panesTop.isActive = true
             }
         }
+        placeSidebarRows(geometry, layout: layout)
         guard let geometry else { return }
         Self.set(top.pillTop, geometry.rowTop)
         Self.set(top.barTop, geometry.rowTop)
@@ -194,6 +195,18 @@ extension BrowserViewController {
             Self.set(top.stripClearance[0], strip.leading)
             Self.set(top.stripClearance[1], -strip.trailing)
         }
+    }
+
+    /// The rail's first row sits on the top bar's row where the status zone beside it is empty
+    /// (the status items keep to the other corner); else its rows start under the safe area.
+    func placeSidebarRows(_ geometry: TopChromeGeometry?, layout: DuoLayout) {
+        guard let sidebar = duo.sidebar else { return }
+        var center: CGFloat?
+        if let geometry, let corner = geometry.corner {
+            let cornerOnTrailing = corner.midX > geometry.width / 2
+            if cornerOnTrailing != layout.sidebarOnRight { center = geometry.rowTop + TopChromeGeometry.rowHeight / 2 }
+        }
+        sidebar.setFirstRowCenter(center)
     }
 
     private static func set(_ constraint: NSLayoutConstraint?, _ constant: CGFloat) {
@@ -251,9 +264,6 @@ extension BrowserViewController {
         if top.pillBetweenButtons.first?.isActive != between {
             between ? NSLayoutConstraint.activate(top.pillBetweenButtons) : NSLayoutConstraint.deactivate(top.pillBetweenButtons)
         }
-        // The page's text fades under whichever edge the chrome is on.
-        let edge: UIRectEdge = pillOnTop || barOnTop ? .top : .bottom
-        for effect in pageEdgeEffects where effect.edge != edge { effect.edge = edge }
     }
 
     /// The layout switched between the top bar and the bottom row (a fold, an unfold, a rotation
@@ -321,16 +331,19 @@ extension BrowserViewController {
         // A split's other pane follows a change of the bar's height (the strip coming or going).
         let panes = session.tabs.panes
         for index in shownPanes where index != session.tabs.focusedPane {
-            if let id = panes[index], let tab = session.tabs.existingTab(id) { applyOtherPaneTopInsets(to: tab, geometry: geometry) }
+            if let id = panes[index], let tab = session.tabs.existingTab(id) {
+                applyOtherPaneTopInsets(to: tab, geometry: geometry, rest: rest)
+            }
         }
     }
 
-    /// The other pane of a split under the top bar: the expanded bar's inset, so a focus switch
-    /// never relayouts either page.
-    func applyOtherPaneTopInsets(to tab: Tab, geometry: TopChromeGeometry) {
+    /// The other pane of a split under the top bar: the one bar spans both panes, so it follows the
+    /// same resting state as the focused one (`rest`). While reading its top inset is then 0 too,
+    /// and no header-colored band stays above it; a focus switch still never relayouts either page.
+    func applyOtherPaneTopInsets(to tab: Tab, geometry: TopChromeGeometry, rest: ChromeRest) {
         session.pool.setInsets(
             for: tab,
-            obscured: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0),
+            obscured: UIEdgeInsets(top: geometry.obscuredInset(rest: rest), left: 0, bottom: pageBottomInset, right: 0),
             minimumViewport: UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: pageBottomInset, right: 0),
             maximumViewport: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0)
         )

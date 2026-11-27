@@ -47,11 +47,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// The pill and the button bar, rendered as one glass surface (docs/plan.md, section 5,
     /// Chrome). It covers the view but takes no touches of its own.
     let chromeGlass = Glass.makeContainer(spacing: ChromeGeometry.glassMergeSpacing)
-    /// The system scroll edge effect under the chrome, so page text under the bar stays readable.
-    /// One per control, not on `chromeGlass`: the effect reaches as high as its container, and
-    /// `chromeGlass` covers the whole screen. WebKit hides it by itself where it extends a fixed
-    /// footer's color to the edge instead.
-    let pageEdgeEffects = [UIScrollEdgeElementContainerInteraction(), UIScrollEdgeElementContainerInteraction()]
     let pill = AddressPill()
     let buttonBar = ButtonBar()
     let sheet = SearchSheet()
@@ -107,6 +102,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var snapInterval: OSSignpostIntervalState?
     /// Which resting state the page's bottom inset follows, and a change waiting for a bounce.
     private var pageInset = PageInsetState()
+    /// The resting state the page's insets follow now (a split's other pane follows it too).
+    var pageInsetRest: ChromeRest { pageInset.rest }
     /// A page started loading under the finger: the bar comes back when the finger lifts.
     private var expandOnRelease = false
     /// The bar came back at the page's end while the finger was down: the page's end (before the
@@ -165,10 +162,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         installPanes()
         prepareLaunch()
-        for (effect, control) in zip(pageEdgeEffects, [pill, buttonBar] as [UIView]) {
-            effect.edge = .bottom
-            control.addInteraction(effect)
-        }
 
         revealEdge.isUserInteractionEnabled = false
         revealEdge.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(revealEdgeTapped)))

@@ -64,6 +64,31 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     }
     private var separatorOnTrailing: NSLayoutConstraint!
     private var separatorOnLeading: NSLayoutConstraint!
+    /// The tabs start under the safe area, or with the first row centered on `firstRowCenter`.
+    private var contentUnderSafeArea: NSLayoutConstraint!
+    private var contentFromTop: NSLayoutConstraint!
+
+    /// Where the first row (New Tab) is centered, from this view's top, or nil for just under the
+    /// safe area. The column runs from the screen's top edge; beside an empty status zone (the
+    /// Duo's inner screen, status items in the other corner) its first row sits on the top bar's
+    /// row, so no empty paper stands above it.
+    public func setFirstRowCenter(_ center: CGFloat?) {
+        loadViewIfNeeded()
+        if let center {
+            let top = center - SideTabCell.height / 2 - Spacing.xs
+            if contentFromTop.constant != top { contentFromTop.constant = top }
+        }
+        let fromTop = center != nil
+        guard contentFromTop.isActive != fromTop else { return }
+        // The outgoing one lets go first.
+        if fromTop {
+            contentUnderSafeArea.isActive = false
+            contentFromTop.isActive = true
+        } else {
+            contentFromTop.isActive = false
+            contentUnderSafeArea.isActive = true
+        }
+    }
 
     public init(dataSource: any SideTabsDataSource) {
         self.dataSource = dataSource
@@ -131,8 +156,13 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         view.addSubview(separator)
 
         let width = SidebarState.expanded.width
+        contentUnderSafeArea = content.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+        contentFromTop = content.topAnchor.constraint(equalTo: view.topAnchor)
         NSLayoutConstraint.activate([
-            content.topAnchor.constraint(equalTo: view.topAnchor),
+            // The column (its paper, separator and shadow) runs to the screen's top edge; the
+            // tabs start under the status bar, the safe area this view gets from its parent, or on
+            // the top bar's row (`setFirstRowCenter`).
+            contentUnderSafeArea,
             content.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: view.trailingAnchor),

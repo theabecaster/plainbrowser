@@ -129,11 +129,8 @@ extension BrowserViewController {
         if let scrollView = session.pool.scrollView(for: tab) {
             scrollView.delegate = self
             scrollView.alwaysBounceVertical = true
-            // No edge effect: the page runs under the bar and the pill floats on it (owner's
-            // choice). The pill's own dense glass keeps its text readable.
-            scrollView.bottomEdgeEffect.isHidden = true
+            scrollView.hideChromeEdgeEffects()
         }
-        attachEdgeEffects()
         // The page's first web view is off screen until attached: size it before insets apply.
         session.pool.defaultPaneSize = webContainer.bounds.size
         view.layoutIfNeeded()
@@ -311,11 +308,6 @@ extension BrowserViewController {
     }
 
     // MARK: Insets
-
-    /// The chrome's scroll edge effects follow the scroll view on screen: the reader's or the page's.
-    func attachEdgeEffects() {
-        for effect in pageEdgeEffects { effect.scrollView = pageScrollView }
-    }
 
     /// Every inset change goes through here: the page and, while it shows, the reader. Values
     /// come from `updatePageInsets()`, which decides them.
@@ -496,7 +488,6 @@ extension BrowserViewController {
             reader.prepare(pool: session.pool, isPrivate: tab.isPrivate, in: self.webContainer, scrollDelegate: self)
             // A tap on the status bar scrolls the reader, not the page under it.
             session.pool.scrollView(for: tab)?.scrollsToTop = false
-            self.attachEdgeEffects()
             self.updatePageInsets()
             try? await reader.show(article)
             self.updateButtons()
@@ -510,7 +501,6 @@ extension BrowserViewController {
         guard isShowingReader else { return }
         engineUI.reader.close(animated: animated)
         if let tab = currentTab { session.pool.scrollView(for: tab)?.scrollsToTop = true }
-        attachEdgeEffects()
         updateButtons()
         updatePageInsets()
     }
@@ -621,6 +611,16 @@ extension UIScrollView {
         let bottom = max(0, obscuredBottom - system)
         guard abs(contentInset.bottom - bottom) > 0.5 else { return }
         contentInset.bottom = bottom
+    }
+
+    /// No scroll edge effect where Plain's chrome floats: the page runs under the bottom pill and
+    /// under the inner screen's top bar, and the glass's own dense tint keeps the controls readable
+    /// (owner's rule: no band, docs/decisions.md). The top one would otherwise blur and dim a band
+    /// under the status row while reading, after the bar has gone. Set where the scroll view is
+    /// attached, once; a scroll view whose effects are hidden is left alone.
+    func hideChromeEdgeEffects() {
+        if !bottomEdgeEffect.isHidden { bottomEdgeEffect.isHidden = true }
+        if !topEdgeEffect.isHidden { topEdgeEffect.isHidden = true }
     }
 }
 #endif

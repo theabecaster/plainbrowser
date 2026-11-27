@@ -335,15 +335,35 @@ struct TopChromeGeometryTests {
         let strip = Self.device(strip: Self.strip)
         #expect(strip.stripTop == 72.5)
         #expect(strip.expandedInset == 72.5 + Self.strip + 4)
-        // While reading the page gets everything under the status row (the corner's bottom, 69).
-        #expect(bar.obscuredInset(rest: .pill) == 69)
-        #expect(bar.obscuredInset(rest: .hidden) == 69)
-        #expect(strip.obscuredInset(rest: .hidden) == 69)
         #expect(bar.hiddenInset < bar.expandedInset, "WebKit wants the largest viewport inset strictly larger")
         // 10.8% of the screen at rest (Safari 12.6%), 16.5% with the strip.
         #expect(bar.chromeShare(of: Self.landscape, collapsed: false) < 0.11)
         #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.17)
         #expect(bar.chromeShare(of: Self.landscape, collapsed: true) < 0.11)
+    }
+
+    @Test func deviceReadingLeavesNoBandAtTheTop() {
+        // Owner, on the device: "when I scroll ... the bar stays." While reading, the page's top
+        // inset is 0 in the status zone, with or without the strip, so WebKit places a fixed
+        // header at the top edge and extends no header color into a band above it; the page runs
+        // under the status items, as Safari's full-screen reading does.
+        for bar in [Self.device(), Self.device(strip: Self.strip)] {
+            #expect(bar.obscuredInset(rest: .hidden) == 0)
+            #expect(bar.obscuredInset(rest: .pill) == 0, "the shrunken address floats alone over the page")
+            #expect(bar.chromeShare(of: Self.landscape, collapsed: true) == 0)
+            // At rest the page's first line still starts under the controls.
+            #expect(bar.obscuredInset(rest: .expanded) == bar.expandedBottom)
+            #expect(bar.obscuredInset(rest: .expanded) > bar.obscuredInset(rest: .hidden))
+        }
+        #expect(Self.device().obscuredInset(rest: .expanded) == 72.5)
+        // Portrait, beside a corner: the same.
+        let portrait = TopChromeGeometry(
+            width: 669, safeTop: 81, corner: CGRect(x: 546, y: 24, width: 100, height: 45), stripHeight: 0
+        )
+        #expect(portrait.obscuredInset(rest: .hidden) == 0 && portrait.obscuredInset(rest: .pill) == 0)
+        // Under a full-width status bar (no corner: iPad-size windows) the page still keeps clear
+        // of the status bar.
+        #expect(Self.simulator().obscuredInset(rest: .hidden) == Self.simulator().safeTop)
     }
 
     @Test func deviceCollapseShrinksTheAddressInPlaceThenLiftsItOff() {
@@ -376,14 +396,14 @@ struct TopChromeGeometryTests {
 
     @Test func cornerFromTheScreensTopStillBeatsSafari() throws {
         // If the guide's corner runs from the top edge to the safe area (0–81), the row centers on
-        // that band (18.5–62.5), and the page never starts above the corner's bottom: 82 pt.
+        // that band (18.5–62.5), and the page never starts above the corner's bottom at rest: 81 pt.
         let corner = try #require(StatusCorner.rect(
             width: 951, safeTop: 81, safeLeft: 0, safeRight: 0, adaptedTop: 0, adaptedLeft: 0, adaptedRight: 135
         ))
         let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: 0)
         #expect(bar.rowTop == 18.5)
-        #expect(bar.hiddenInset == 81)
-        #expect(bar.expandedInset == 82)
+        #expect(bar.hiddenInset == 0, "while reading the page runs to the top edge")
+        #expect(bar.expandedInset == 81)
         #expect(bar.expandedInset <= 84)
         #expect(951 - bar.rowClearance.trailing == 816 - TopChromeGeometry.cornerGap)
         // The strip starts beside that corner (66.5 < 81), so it keeps clear of it like the row.

@@ -6,13 +6,13 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Suggestions flicker while typing:** the list should update smoothly between keystrokes. (Suggestions lane.)
 
-- **Tabs button with one tab:** show the Tabs button (not "+") and open the switcher like the swipe-up does. (One-button lane.)
-
 
 - **Sign-in like Safari:** passkeys on sites that support them, and saved passwords from the Passwords app and every password manager on the phone (1Password, Bitwarden and others), as easily as in Safari. Both need Apple's web-browser entitlement; the request is ready for the owner to submit. Until it lands, sites are steered to password sign-in and a failed passkey attempt says why. Done when the entitlement ships and the device checks in `docs/research/sign-in.md` pass. (Sign-in lane.)
 
 
 ## Done
+
+- **Tabs button with one tab:** with a single page the tabs button is the normal Tabs button, and a tap opens the switcher the swipe up opens (the page's card and a New Tab card), with the same motion. Its long press is unchanged; the start screen alone still has no tabs button. New Tab stays on the switcher's +, its New Tab card, More and the tabs menu. (dev, one-button lane.)
 
 - **New Tab card content drifts:** fixed; the + and label stay at the card's center. (dev, next build.)
 

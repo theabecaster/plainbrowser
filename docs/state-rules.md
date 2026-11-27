@@ -24,8 +24,8 @@ the state of the app."
    sentence and one main button (docs/ui-reference.md).
 3. **One predicate per action.** A button, its gesture and its menu item share one condition, so
    they never disagree. The swipe up and Show All Tabs both open the switcher whenever it has a
-   card to show (`others ≥ 1`, or a page on screen). The tabs button's tap is Tabs only with
-   `others ≥ 1`; with one page tab it is "+" (§3).
+   card to show (`others ≥ 1`, or a page on screen), and so does the tabs button's tap: with one
+   page tab all three open the switcher with its card and a New Tab card (§3).
 4. **The same gesture always means the same thing.** When a gesture has nothing to do, it
    rubber-bands and plays the "nothing there" haptic. It never does something else instead
    (today a swipe up with no tabs opens search; that changes).
@@ -45,12 +45,13 @@ the state of the app."
    it (switching tabs, opening a page in another tab, the gallery) drops it with no Reopen. New Tab
    on an empty tab reuses it. The gallery therefore never shows a blank card, and the swipe never
    lands on one.
-8. **At most one New Tab button on screen, and none on an empty tab.** The new-tab affordances
-   are: the tabs slot as "+" when there is one tab, the gallery's "+", the card past the last tab
-   (a gesture), the New Tab card beside a lone card in the gallery, and the tabs menu. No two of
-   the buttons show at once. The two cards are places, where the next tab would sit, not buttons:
-   the one-card gallery shows its card next to the bar's "+", which keeps the bar's shape. A menu
-   item that repeats the button it opened from is fine.
+8. **At most one New Tab button on screen, and none on an empty tab.** The bar has no New Tab
+   button: on a page, New Tab is one tap into the switcher, as in Safari and Arc. The new-tab
+   affordances are: the gallery's "+", the New Tab card beside a lone card in the gallery, the
+   card past the last tab (a gesture), New Tab in the tabs menu and New Private Tab in More. No
+   two of the buttons show at once. The two cards are places, where the next tab would sit, not
+   buttons: the one-card gallery shows its card next to the bar's "+", which keeps the bar's
+   shape. A menu item that repeats the button it opened from is fine.
 
 Sources behind these choices are in section 9.
 
@@ -71,13 +72,13 @@ Sources behind these choices are in section 9.
 
 ### Tabs slot (third button; the system bar's Tabs item on the Duo)
 
-One slot, three faces. The long press always opens the tabs menu (section 5), so the slot's long
-press means the same thing whatever it shows.
+One slot, two faces: Tabs, or hidden. The long press always opens the tabs menu (section 5). The
+tap follows the swipe up's predicate (principle 3), so the button and the gesture never disagree.
 
 | State | Face | Tap | Why |
 |---|---|---|---|
 | `others ≥ 1` | Tabs (`square.on.square`) | Gallery | There is somewhere to switch to. |
-| `others = 0`, `page` | New Tab (`plus`) | New tab, search field up | The one useful tap is a second tab: Arc Search keeps its "+" beside the switcher button for the same reason, and Plain has one slot, so with one tab it is the "+". The switcher, with this tab's card and a New Tab card, is the swipe up and Show All Tabs (owner, 2026-11-26). |
+| `others = 0`, `page` | Tabs (`square.on.square`) | Gallery: this tab's card and a New Tab card, with the same page-to-card motion as the swipe up | Owner, 2026-11-27: "Not having a tabs button when there's only one tab is weird too — match the behavior to what dragging the URL bar up does now." Was "+" (New Tab) until then. New Tab is the switcher's "+" or its New Tab card, one tap further, and the tabs menu's New Tab and More's New Private Tab as before. |
 | `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) stay in More (section 4) and show as shortcuts on the start screen, so none of them is ever out of reach. |
 | Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. The sidebar's New Tab follows principle 8 (hidden on an empty tab). |
 
@@ -87,7 +88,9 @@ press means the same thing whatever it shows.
   long press on the tabs slot is a shortcut to the same items, as Safari keeps Recently Closed
   behind a long press on its New Tab button. The Reopen toast after every close is the visible
   way back.
-- **Teaching the long press: a one-time TipKit tip, no glyph on the button.** Options weighed: a
+- **Teaching the long press: a one-time TipKit tip, no glyph on the button.** Kept after the
+  one-tab change (2026-11-27): the long press still holds the same menu, and the button now shows
+  as Tabs in more states, so the tip has more chances to be seen, not fewer. Options weighed: a
   menu indicator on the button (`UIButton.Configuration.indicator`) is the pop-up button's
   chevron, which tells the user a tap opens a menu, and here a tap does something else; it also
   breaks the bar's five equal glyphs. Safari's and Mail's toolbar buttons with long-press menus
@@ -254,9 +257,9 @@ combines its base state with the rows that modify it (for example, private + loa
 | First run, field closed | — | — | — | — | ✓ (New Private Tab on top) | ≠ bump | ≠ rubber-band | — | off | — | ✓, Search button, Private Tab shortcut |
 | No tabs, some closed or archived | — | — | — | — | ✓ (Reopen Closed Tab, Archived Tabs on top) | ≠ bump | ≠ rubber-band | — | off | — | ✓ + shortcuts |
 | One empty tab, others ≥ 1 | — | — | Tabs | — | ✓ | gallery | neighbours | — | off | — | ✓ |
-| One page, no others | ✓ / dim | — / ✓ | ≠ "+" (long press: Show All Tabs) | ✓ | ✓ | gallery (its card + New Tab card) | ≠ rubber-band | ✓ | ✓ | while loading | — |
+| One page, no others | ✓ / dim | — / ✓ | Tabs (gallery: its card + New Tab card) | ✓ | ✓ | gallery (its card + New Tab card) | ≠ rubber-band | ✓ | ✓ | while loading | — |
 | Several tabs | ✓ / dim | — / ✓ | Tabs | ✓ | ✓ | gallery | neighbours | when last | ✓ | while loading | — |
-| Private only (one private page) | ✓ / dim | — / ✓ | ≠ "+" (private) | ✓ | ✓ | gallery (its card + New Tab card) | ≠ rubber-band | ✓ (private) | ✓ | while loading | — |
+| Private only (one private page) | ✓ / dim | — / ✓ | Tabs (private gallery: its card + New Tab card) | ✓ | ✓ | gallery (its card + New Tab card) | ≠ rubber-band | ✓ (private) | ✓ | while loading | — |
 | Private + regular | ✓ / dim | — / ✓ | Tabs | ✓ | ✓ | gallery (this list) | within this list | when last in this list | ✓ | while loading | — |
 | Page loading | ✓ / dim | — / ✓ | as above | ✓ | ✓, Stop | as above | as above | as above | ✓ | ✓ | — |
 | Page failed / offline | ✓ / dim | — / ✓ | as above | ✓ | ✓, reduced (§4) | as above | as above | as above | off (Try Again) | — | — |
@@ -312,12 +315,14 @@ the ones the state lane closed (2026-11-26); line numbers are from the audit, be
 
 1. **Fixed.** `ShellUI/BrowserViewController.swift:576` — the tabs button is always shown and enabled, with
    0, 1 or many tabs → the tabs slot has three faces (§3): Tabs with `others ≥ 1`, "+" with one
-   page tab, hidden on Start with nothing else.
+   page tab, hidden on Start with nothing else. Revised 2026-11-27 (owner): "+" is gone; with one
+   page tab the slot is Tabs and opens the switcher.
 2. **Fixed.** `ShellUI/BrowserViewController+Gallery.swift:48` and `ShellUI/TabSwipe.swift:80` — a tap or a
    swipe up with one tab opens a one-card gallery; with no tabs both open the search field → both
    follow `others ≥ 1`; otherwise the "+" tap (button) or the bump (swipe). Revised 2026-11-26
    (owner): with one page tab the swipe up and Show All Tabs open the gallery with the card and a
    New Tab card (§3, §6); the tap stays "+", and the bump is left for an empty tab alone.
+   Revised again 2026-11-27 (owner): the tap opens the same gallery.
 3. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:610` with `ShellUI/GalleryTabs.swift:81` — closing
    a private card shows the Reopen toast, and its Reopen brings back the last closed *regular*
    batch (or does nothing) → the toast shows only when the close made a batch, and reopens that

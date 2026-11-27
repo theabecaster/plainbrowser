@@ -639,6 +639,37 @@ final class CaptureTests: XCTestCase {
         shot("scroll-6-back-page-end")
     }
 
+    /// The hidden bar coming back over a fixed footer, for a frame strip: the caller records the
+    /// screen (`simctl io recordVideo`) while this runs. Each reveal follows a 2 s still, so the
+    /// strip can find it: a tap on the bottom edge, then a move up.
+    func testCaptureRevealOverFooter() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.introSeen()
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 20))
+        field.typeText(server.address("/footer") + "\n")
+        let webView = app.webViews.firstMatch
+        XCTAssertTrue(webView.staticTexts["Footer Page"].waitForExistence(timeout: 10))
+        pause(1.5)
+        webView.swipeUp(velocity: .slow)
+        pause(2)
+        shot("reveal-0-hidden")
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.995)).tap()
+        pause(2)
+        shot("reveal-1-edge-tap")
+        webView.swipeUp(velocity: .slow)
+        pause(2)
+        let start = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+        start.press(forDuration: 0.05, thenDragTo: webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
+                    withVelocity: .slow, thenHoldForDuration: 0.3)
+        pause(2)
+        shot("reveal-2-scroll-up")
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

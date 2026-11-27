@@ -318,9 +318,12 @@ struct ChromeCollapse: Equatable {
 
 /// When the page's bottom inset may follow the bar's resting state (docs/plan.md, engine rule 4).
 ///
-/// The bar comes to rest at the end of each snap. The inset then changes once, to the expanded,
-/// pill or hidden chrome, never per frame. While the page is pulled past its top or bottom the
-/// change waits, because WebKit clamps the overscroll on any inset change and the bounce would jump.
+/// The inset changes once per motion, to the expanded, pill or hidden chrome, never per frame.
+/// A bar that comes back (the inset grows) moves it as the motion starts, so a fixed page footer
+/// rises with the bar instead of jumping into place after it; a bar that goes away (the inset
+/// shrinks) moves it when the bar rests, so the footer never sits under a bar still on screen.
+/// While the page is pulled past its top or bottom the change waits, because WebKit clamps the
+/// overscroll on any inset change and the bounce would jump.
 struct PageInsetState: Equatable {
     /// The resting state the page's inset shows. The bar starts out.
     private(set) var rest = ChromeRest.expanded
@@ -335,6 +338,12 @@ struct PageInsetState: Equatable {
     /// The bar is on the move again: a change still waiting for a bounce is stale.
     mutating func barMoved() {
         pending = nil
+    }
+
+    /// A snap starts toward `rest`. Coming back (more chrome than the page's inset shows), the
+    /// inset follows now; going away, it waits for the bar to rest (`barRested`).
+    mutating func barHeading(to rest: ChromeRest) {
+        pending = rest.progress < self.rest.progress ? rest : nil
     }
 
     /// Applies a waiting change when the page is within its scroll range: `offset` is the content

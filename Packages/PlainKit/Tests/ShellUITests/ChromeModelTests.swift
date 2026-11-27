@@ -352,6 +352,50 @@ struct PageInsetStateTests {
         #expect(inset.applyIfSettled(offset: 0, top: 0, bottom: -300) == true)
     }
 
+    /// A reveal moves the inset as the bar starts back, so a fixed footer rises with the bar; a
+    /// hide waits for the bar to rest.
+    @Test func aRevealMovesTheInsetAtItsStartAHideAtItsEnd() {
+        var inset = PageInsetState()
+        inset.barHeading(to: .hidden)
+        #expect(inset.pending == nil, "a hide waits for the rest")
+        inset.barRested(.hidden)
+        #expect(inset.applyIfSettled(offset: 300, top: 0, bottom: 2000) == true)
+        inset.barHeading(to: .expanded)
+        #expect(inset.pending == .expanded, "a reveal applies now")
+        #expect(inset.applyIfSettled(offset: 300, top: 0, bottom: 2000) == true)
+        #expect(inset.rest == .expanded)
+        inset.barRested(.expanded)
+        #expect(inset.pending == nil, "nothing left for the rest")
+        // The pill back to expanded is a reveal too; hidden to the pill grows the inset as well.
+        inset.barRested(.pill)
+        _ = inset.applyIfSettled(offset: 300, top: 0, bottom: 2000)
+        inset.barHeading(to: .expanded)
+        #expect(inset.pending == .expanded)
+    }
+
+    @Test func aRevealStillWaitsForABounce() {
+        var inset = PageInsetState()
+        inset.barRested(.hidden)
+        _ = inset.applyIfSettled(offset: 300, top: 0, bottom: 2000)
+        inset.barHeading(to: .expanded)
+        #expect(inset.applyIfSettled(offset: 2040, top: 0, bottom: 2000) == false)
+        #expect(inset.rest == .hidden)
+        #expect(inset.applyIfSettled(offset: 1990, top: 0, bottom: 2000) == true)
+        #expect(inset.rest == .expanded)
+    }
+
+    @Test func aHideThatTurnsAroundDropsAWaitingReveal() {
+        var inset = PageInsetState()
+        inset.barRested(.hidden)
+        _ = inset.applyIfSettled(offset: 300, top: 0, bottom: 2000)
+        inset.barHeading(to: .expanded)
+        #expect(inset.applyIfSettled(offset: -30, top: 0, bottom: 2000) == false)
+        inset.barHeading(to: .hidden)
+        #expect(inset.pending == nil)
+        #expect(inset.applyIfSettled(offset: 0, top: 0, bottom: 2000) == false)
+        #expect(inset.rest == .hidden)
+    }
+
     @Test func aRestBackToTheShownStateCancelsTheWait() {
         var inset = PageInsetState()
         inset.barRested(.pill)

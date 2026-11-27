@@ -130,7 +130,7 @@ Each entry: what was chosen, and why. Newest last.
 - **Elsewhere a custom glass bar, not the system toolbar:** hiding a system toolbar changes the
   page's safe area, which relayouts the page on every collapse. The custom bar moves by transform
   and alpha only. The page's bottom `obscuredContentInsets` follows the bar's resting state,
-  switched when a snap ends (never during the top bounce), so the expanded bar never covers
+  switched once per snap (never during the top bounce), so the expanded bar never covers
   fixed page footers (docs/plan.md, engine rule 4; docs/research/design-audit.md).
 - **Address bar data behind a protocol (`AddressBarData`):** the shell never touches GRDB or the
   network. `LiveAddressBarData` joins Storage, settings and `SuggestionClient`; tests and later
@@ -288,7 +288,8 @@ Each entry: what was chosen, and why. Newest last.
   keeps the bar. Under Reduce Motion the snap is a 0.2 s crossfade of the chrome.
 - **Page inset follows the resting bar** (plan, engine rule 4): `PageInsetState` switches
   `obscuredContentInsets.bottom` between the collapsed and expanded chrome once per rest, and
-  waits while the page is pulled past its top or bottom; a new snap drops a change still waiting. WebKit already extends a fixed footer's
+  waits while the page is pulled past its top or bottom; a new snap drops a change still waiting.
+  A reveal (the inset grows) switches it as the snap starts instead (follow-ups, 2026-11-27). WebKit already extends a fixed footer's
   background to the screen edge under the bar (measured on the simulator).
 - **One glass container, no shadow.** `Glass.makeContainer` wraps `UIGlassContainerEffect` in a
   view that passes touches through, so it can cover the screen. Merge spacing 4 pt, under the
@@ -1066,3 +1067,20 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   during motion: the edge strip toggles `isUserInteractionEnabled`, the pill moves by transform and
   alpha, and insets change once per rest. The device perf gate (`testPageScrollHitches`) is the
   check for 120 Hz.
+
+## The page inset moves at the start of a reveal (2026-11-27)
+
+- **Owner feedback:** coming back from the pill or hidden, the bar arrived first and then a fixed
+  page footer jumped up into place, because the page's bottom inset switched when the snap ended.
+- **Chosen:** a reveal (any snap toward more chrome than the inset shows) switches
+  `obscuredContentInsets` and the scroll view's bottom inset as it starts
+  (`PageInsetState.barHeading(to:)`); a hide still switches when the bar rests, so a footer is
+  never under a bar still on screen. The top bar on the Duo's inner screen reads the same state.
+  The bounce rule stays: while the page is pulled past an edge the change waits. A page resting
+  at its end rises with the bar instead of after it.
+- **Measured** (Duo outer screen simulator, `/footer` test page, 60 Hz): the inset change costs
+  0.1–0.2 ms on the main thread; the 26 reveal frames show no interval over 17.5 ms, the same as
+  before the change (16.7–17.7 ms). In the recorded frame strip WebKit moves the footer in the
+  same frame the bar starts to rise (before: about 0.5 s later, after the pill had covered it),
+  so no first-frame deferral was needed. The footer moves in one step (WebKit has no animated
+  inset change); the bar then slides in under it.

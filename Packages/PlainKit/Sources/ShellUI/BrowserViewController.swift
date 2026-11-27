@@ -909,10 +909,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let signposter = Signposts.signposter
         if collapseInterval == nil { collapseInterval = signposter.beginInterval(Signposts.toolbarCollapse) }
         if snapInterval == nil { snapInterval = signposter.beginInterval(Signposts.toolbarSnap) }
-        // A rest that waited for a bounce is stale now that the bar moves again.
-        pageInset.barMoved()
+        // A rest that waited for a bounce is stale now that the bar moves again. A bar coming back
+        // takes its inset now, so a fixed page footer rises with it, in one motion; a bar going
+        // away keeps the inset until it rests (`snapEnded`).
+        let rest = ChromeRest(progress: target)
+        pageInset.barHeading(to: rest)
+        applyPendingInset()
         cancelCrossfade()
-        collapse.head(to: ChromeRest(progress: target))
+        collapse.head(to: rest)
         // The edge takes taps only while the bar rests hidden.
         revealEdge.isUserInteractionEnabled = false
         if animated, Motion.prefersCrossfade {

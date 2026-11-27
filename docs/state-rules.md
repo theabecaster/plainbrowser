@@ -154,8 +154,11 @@ the progress and the page may not have painted); a failed, crashed or resend pag
 VoiceOver or Switch Control running (the bar stays in reach, as in Chrome, Firefox and Safari); a
 page shorter than two screens (the end, where the bar comes back, is already near).
 
-The inset changes once, when a motion ends, never per frame (docs/plan.md, engine rule 4), so a
-fixed footer sits above whatever rests there. Under Reduce Motion, hiding and revealing are a
+The inset changes once per motion, never per frame (docs/plan.md, engine rule 4): when the bar
+comes back (to the pill or expanded from further down) it changes as the motion starts, so a fixed
+footer moves up in the frame the bar starts rising and the bar slides in under it; when the bar
+goes away it changes as the motion ends, so the footer never sits under a bar still on screen. The
+same holds for the top bar on the Duo's inner screen. Under Reduce Motion, hiding and revealing are a
 crossfade.
 
 **Duo inner screen (top bar).** The same three states drive the top bar: Expanded is the row

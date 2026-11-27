@@ -507,7 +507,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // The start screen's bar: a round glass button at the row's end, the pill beside it.
         // Under a top bar: two capsules at the row's ends.
         // Compact height: the same two capsules at the bottom row's ends, the pill between them.
-        buttonBar.setSplit((onTop || singleRow) && hasBar)
+        buttonBar.setSplit((onTop || singleRow) && hasBar, packsLeading: !singleRow)
         buttonBar.setBesidePill(beside)
         if singleRow, !isEditingAddress {
             NSLayoutConstraint.activate(pillInSingleRow)

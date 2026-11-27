@@ -167,8 +167,8 @@ and revealing are a crossfade.
 
 **Compact height (an iPhone on its side).** Expanded is one bottom row: Back and Forward in a
 capsule at the leading end, the pill, then Tabs, Share and More in a capsule at the trailing end
-(the top bar's two capsules, at the bottom). The pill keeps a fixed place, so Forward coming and
-going never moves it. Pill and Hidden are as above: the capsules drop and fade, the pill shrinks
+(the top bar's two capsules, at the bottom). The leading capsule keeps both slots and the pill a
+fixed place, so Forward coming and going hides in place and moves nothing. Pill and Hidden are as above: the capsules drop and fade, the pill shrinks
 into the home-indicator zone, then sinks away. The start screen keeps its own row (More beside the
 pill); editing lifts the pill above the keyboard, full width, as everywhere.
 

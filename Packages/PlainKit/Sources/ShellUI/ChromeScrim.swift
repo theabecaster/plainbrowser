@@ -22,10 +22,11 @@ final class ChromeScrim: UIView {
     }
 
     /// How far the glow reaches past the glass (the shadow's blur radius).
-    static let feather: CGFloat = 8
+    static let feather: CGFloat = 6
     /// How far the solid part reaches past the glass edge, so the edge itself is covered too, and
-    /// the 6 pt gap between the pill and the bar is closed (no sliver of text between them).
-    static let outset: CGFloat = 5
+    /// the 6 pt gap between the pill and the bar mostly is. Small on purpose: over a colored page
+    /// a wider glow read as a cream halo joining the capsules (design review).
+    static let outset: CGFloat = 3
     /// Under the glass the page shows only faintly; at the edge the glow fades out.
     static let opacity: Float = 0.82
 

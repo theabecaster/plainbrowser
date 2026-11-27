@@ -31,11 +31,11 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - No badges, banners or standing overlays.
 - **The floating controls read over any page.** Liquid Glass shows the page almost unblurred, so
   each glass control on the page (the pill, the button capsules) has a soft paper glow under it
-  (`ChromeScrim`): the glass's own shape a few points larger, feathered out over about 8 pt,
+  (`ChromeScrim`): the glass's own shape 3 pt larger, feathered out over about 6 pt,
   inside the control so it moves and fades with it. It is local, never a band across the screen.
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
-  Back and Forward in a capsule at the leading end, the pill in a fixed place, Tabs, Share and
-  More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
+  Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
+  pill in a fixed place, Tabs, Share and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, Share and
   More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab

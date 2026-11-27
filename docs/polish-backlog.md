@@ -429,13 +429,14 @@ Newest feature last.
 
 ## UX audit leftovers: shell and engine (2026-11-27)
 
-- **Glow over colored pages.** Over a saturated fixed footer (the blue test footer) the paper glow
-  reads as a soft halo around the capsules. Check on the Duo whether it wants to be smaller there.
+- **Glow over colored pages.** Narrowed after the design review (3 pt, feathered over 6 pt); over
+  a saturated fixed footer it still shows as a faint paper rim. Check on the Duo.
 - **Landscape side bars.** In compact height the page is still pillarboxed with paper bars beside
   the safe area (audit item 12); that is the page area's inset (top/inner insets lane).
 - **Back to the opener by the edge swipe** still slides the page over paper, then switches; the
   button now shows the opener underneath. Give the swipe the same live opener under the page.
-- **Leading capsule in the one-row bar.** With Back only, the pill keeps its place, so a 50 pt
-  gap shows the page between the Back capsule and the pill (as in the top bar).
+- **Download Linked File wraps** in the link menu beside a preview (the system sizes the menu).
+- **Fixed footer color under the bar.** WebKit fills the obscured strip under the bar with a
+  fixed footer's color; the footer itself sits above the bar (design review read it as behind).
 - **HTTPS-first wait.** Not reproduced for IP addresses on the simulator; check a `.local` or
   intranet name on the device to confirm WebKit no longer tries HTTPS there.

@@ -1954,15 +1954,17 @@ The shell and engine items left from docs/research/ux-audit.md.
 
 - **A soft paper glow under the floating glass (`ChromeScrim`), not a stronger tint or a band.**
   The pill's tint was already 88% Paper; Liquid Glass still showed body text almost unblurred
-  under the host and the buttons. A blurred capsule of the background color (82%, 5 pt past the
-  glass, feathered over 8 pt) sits inside each control behind its glass, so it moves, scales and
+  under the host and the buttons. A blurred capsule of the background color (82%, 3 pt past the
+  glass, feathered over 6 pt) sits inside each control behind its glass, so it moves, scales and
   fades with the control at no per-frame cost (one layer shadow with a fixed path, no offscreen
-  pass). The 5 pt also closes the 6 pt gap between the pill and the bar, which showed a sliver of
-  text. Over a colored footer the glow reads as a soft paper halo around the capsules; a band or a
-  page-colored scrim were the alternatives (a band is what the owner removed at the top).
+  pass). It mostly closes the 6 pt gap between the pill and the bar, which showed a sliver of
+  text. A first try (5 pt, feathered over 8 pt) read as a cream halo joining the capsules over a
+  colored footer (design review); a band or a page-colored scrim were the alternatives (a band is
+  what the owner removed at the top).
 - **Compact height is one bottom row.** The top bar's split shape (Back and Forward in a capsule,
   Tabs, Share and More in another) at the bottom row's ends, with the pill between them in a
-  fixed place. Kept at the bottom rather than moved to the top: the thumb stays where it was in
+  fixed place. Unlike the top bar's, the leading capsule keeps both slots (Forward hides in
+  place), so it never changes shape inside a mode (state rules, principle 5; design review). Kept at the bottom rather than moved to the top: the thumb stays where it was in
   portrait, the scroll-chrome rules apply unchanged (`ChromeGeometry` treats it as a bar-less
   row), and the top inset belongs to the top bar lane. 69 pt of 402 at rest on an iPhone 17
   (17%, was ~40%).

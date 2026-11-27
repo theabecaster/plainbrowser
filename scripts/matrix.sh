@@ -182,7 +182,7 @@ if [[ ${PLAIN_MATRIX_ON_HOST:-0} != 1 ]] && (( ! local_run )); then
   source scripts/lib/remote.zsh
   [[ -n $host ]] || host=$(remote_default_host)
   if [[ $host == local || $host == auto:* ]]; then
-    here="PLAIN_MATRIX_ON_HOST=1 ${PLAIN_SIM_PREFIX:+PLAIN_SIM_PREFIX=${(q)PLAIN_SIM_PREFIX}} scripts/matrix.sh ${(j: :)${(q)forward}} --out ${(q)out}; r=\$?; rm -rf build/sim build/build.log; exit \$r"
+    here="PLAIN_MATRIX_ON_HOST=1 ${PLAIN_SIM_PREFIX:+PLAIN_SIM_PREFIX=${(q)PLAIN_SIM_PREFIX}} scripts/matrix.sh ${(j: :)${(@q)forward}} --out ${(q)out}; r=\$?; rm -rf build/sim build/build.log; exit \$r"
     rc=0
     if [[ $host == local ]]; then
       print "== matrix on this Mac (local slot)"
@@ -203,7 +203,7 @@ if [[ ${PLAIN_MATRIX_ON_HOST:-0} != 1 ]] && (( ! local_run )); then
     print "== matrix on $host (lane $lane)"
     rc=0
     remote_run $host $lane \
-      "PLAIN_MATRIX_ON_HOST=1 ${PLAIN_SIM_PREFIX:+PLAIN_SIM_PREFIX=${(q)PLAIN_SIM_PREFIX}} scripts/matrix.sh ${(j: :)${(q)forward}} --out $remote_out" \
+      "rm -rf $remote_out; PLAIN_MATRIX_ON_HOST=1 ${PLAIN_SIM_PREFIX:+PLAIN_SIM_PREFIX=${(q)PLAIN_SIM_PREFIX}} scripts/matrix.sh ${(j: :)${(@q)forward}} --out $remote_out" \
       || rc=$?
     rm -rf $out
     mkdir -p $out

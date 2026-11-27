@@ -50,6 +50,103 @@ final class ShellFixesCaptureTests: XCTestCase {
         XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 10))
     }
 
+    /// The whole screen as the user sees it, in any orientation (the app's own screenshot comes
+    /// out rotated and cut off in landscape).
+    private func screen(_ name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    /// Every fix on whatever screen this runs on, portrait and then landscape, for the per-device
+    /// check (smallest iPhone, Pro Max, the Duo's outer and inner screens).
+    func testCaptureEveryFix() {
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro"]
+        app.launch()
+        // 8. The intro's inside step (the unfold row only on a foldable's window).
+        let next = app.buttons["introNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 8))
+        next.tap()
+        XCTAssertTrue(app.staticTexts["Private Tabs"].waitForExistence(timeout: 5))
+        pause(1.5)
+        screen("all-8a-intro")
+        app.buttons["introSkip"].tap()
+        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        pause(0.8)
+        // 8. The empty private tab's "Regular Tab".
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        if app.buttons["start.privateTab"].waitForExistence(timeout: 3) {
+            app.buttons["start.privateTab"].tap()
+            pause(0.8)
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+            XCTAssertTrue(app.buttons["start.regularTab"].waitForExistence(timeout: 3))
+            pause(1)
+            screen("all-8b-private-start")
+            app.buttons["start.regularTab"].tap()
+            pause(0.8)
+        }
+        // 1. The glass over body text.
+        go(app, "/long", heading: "Long Read")
+        let webView = app.webViews.firstMatch
+        webView.swipeUp(velocity: .slow)
+        webView.swipeDown(velocity: 300)
+        pause(1.2)
+        screen("all-1-glass")
+        // 3. Back to the opener (before and after; the motion is in the screen recording).
+        go(app, "/opener", heading: "Opener Page")
+        app.webViews.links["Open B in a new tab"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 10))
+        pause(1)
+        app.buttons["back"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Opener Page"].waitForExistence(timeout: 5))
+        pause(0.8)
+        screen("all-3-back-opener")
+        // 6. A refused connection.
+        let closed = try? TestServer()
+        try? closed?.start()
+        let port = closed?.port ?? 1
+        closed?.stop()
+        app.buttons["addressPill"].tap()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        field.typeText("http://127.0.0.1:\(port)/nothing\n")
+        XCTAssertTrue(app.staticTexts["The site isn't answering."].waitForExistence(timeout: 6))
+        pause(0.8)
+        screen("all-6-refused")
+        // 7. An empty sheet.
+        app.buttons["more"].tap()
+        let favorites = app.buttons["menu.editFavorites"]
+        if favorites.waitForExistence(timeout: 3) {
+            favorites.tap()
+            pause(1.2)
+            screen("all-7-favorites-empty")
+            if app.buttons["Done"].waitForExistence(timeout: 2) { app.buttons["Done"].tap() }
+            pause(1)
+        }
+        // 2. Landscape: the page, while reading, the link preview.
+        go(app, "/long", heading: "Long Read")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        pause(2.5)
+        screen("all-2a-landscape-page")
+        webView.swipeUp(velocity: 200)
+        pause(1.5)
+        screen("all-2b-landscape-reading")
+        webView.swipeDown(velocity: 300)
+        pause(1.5)
+        go(app, "/opener", heading: "Opener Page")
+        pause(1)
+        screen("all-2c-landscape-opener")
+        // 4. The link preview and its whole menu, beside it here; last, since a live preview
+        // keeps the app from idling for a minute after it closes.
+        app.webViews.links["Read the long page"].press(forDuration: 1.2)
+        if app.buttons["linkMenu.downloadLinkedFile"].waitForExistence(timeout: 5) {
+            pause(1.2)
+            screen("all-4b-landscape-preview")
+        }
+    }
+
     /// The pill and the buttons over body text, light and dark, at rest and as the pill.
     func testCaptureChromeOverText() {
         let app = launch()

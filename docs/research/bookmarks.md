@@ -67,11 +67,10 @@ MacStories and TidBITS on Arc Search, Google Chrome Help (Reading List, iOS), Ch
 
 ## Where it shows
 
-- Page menu: "Read Later" (or "Remove from Reading List") beside Add to Favorites, one captioned
-  row with Site Settings ("Favorite", "Read Later", "Site"), so the menu still fits the Duo's
-  outer screen.
-- Page menu: the app's places row gains Reading List (History, Reading List, Favorites,
-  Settings), as four symbols: a captioned row holds three.
+- Page menu: "Read Later" (or "Remove from Reading List") after Add to Favorites, and Reading
+  List with the app's places (History, Favorites, Settings). Where they sit is the page menu
+  redesign's call (docs/decisions.md).
+- Address bar: unread saved pages, with the eyeglasses symbol.
 - The Reading List sheet: paper, unread then read, searchable; swipe right to mark read or
   unread, left to delete; long press for Open, Mark as Read, Copy Link, Delete.
 

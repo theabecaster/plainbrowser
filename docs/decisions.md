@@ -1444,14 +1444,15 @@ Research: docs/research/bookmarks.md.
   symbol. Read ones match as ordinary pages. The reading list query runs in the same read as
   history and favorites, on its own FTS5 index (title and address, prefixes 1 and 2).
 - **Clear History and Data keeps the reading list**, as it keeps favorites and open tabs.
-- **Page menu, fitting the Duo's outer screen** (`testPageMenuFitsTheScreen`): Add to Favorites,
-  Read Later and Site Settings share one captioned row when two or more apply ("Favorite" /
-  "Unfavorite", "Read Later" / "Unsave", "Site"); VoiceOver reads the full names and the site.
-  Measured: a row of Favorite and Read Later alone added 19 pt and pushed the app's places off
-  the screen; folding Site Settings (a two-line item) into the row gives that back and more.
-  The app's places row became History, Reading List, Favorites, Settings: a captioned row holds
-  only three (a fourth wrapped to a second row, measured), so it is a row of four symbols, Safari's
-  own (clock, eyeglasses, star, gear), with the names for VoiceOver.
+- **Page menu:** Read Later (Remove from Reading List once saved) follows Add to Favorites, under
+  the same rule (`ControlRules.readLater`); Reading List sits above the History, Favorites and
+  Settings row. Both are added through the existing builder only (`+ReadingList` builds them):
+  the menu's layout and its fit on the Duo's outer screen belong to the page menu redesign lane.
+  Measured for that lane on the outer screen (French article, a closed tab, 466x678): the two
+  extra lines push the History row out of the menu. A layout that fit with 63 pt to spare:
+  Add to Favorites, Read Later and Site Settings as one captioned row ("Favorite", "Read Later",
+  "Site"), and History, Reading List, Favorites and Settings as one row of four symbols (a
+  captioned `.medium` row holds three; a fourth wraps to a second row).
 - **Signposts:** `readingList.save` (interval, "copy" or "link"), `readingList.remove`,
   `readingList.show`, `readingList.load` (interval), `readingList.open`, `readingList.edit`,
   `readingList.offlineCopy` (interval).

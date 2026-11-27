@@ -285,6 +285,10 @@ Newest feature last.
 - **Duo outer: the next card under the status column.** The New Tab card (like any next card in the
   cascade) runs under the system's vertical bar, where the status icons draw over it. Clip the
   cascade to the safe area there.
+- **New Tab card entrance.** It grows in after the page has landed on its card, which reads as a
+  second animation. Starting it as the zoom settles would feel like one motion, but while the page
+  still moves above the gallery the card's overlap would pop at the end; solve both together.
+  (Design review, round 2.)
 - **New Tab card fade reversal.** Back to one card within the 0.15 s fade-out (a reopen then a
   close), the card restarts its grow-in from nothing instead of from where the fade had it.
   (Code review, round 2.)

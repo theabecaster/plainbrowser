@@ -18,6 +18,8 @@ import Network
 /// - `/motion`: a button that asks for motion sensors (a permission prompt after a tap).
 /// - `/login`: a sign-in form with the `autocomplete` hints AutoFill reads.
 /// - `/passkey`: "Sign In with a Passkey", which asks for a passkey; the heading says how it ended.
+/// - `/french`: a page in French (`lang="fr"`) whose sentences the app's test translator knows.
+/// - `/consent`: a shop page with a OneTrust cookie banner; the heading says how it was answered.
 final class TestServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "TestServer")
@@ -176,6 +178,33 @@ final class TestServer: @unchecked Sendable {
                 + paragraphs.joined() + "<p>Next, <a href=\"/b\">read page B</a>.</p></article>"
                 + "<footer><p>Footer links and other chrome.</p></footer>"
             return ("200 OK", html("The Quiet Page", body))
+        case "/french":
+            let body = """
+                <h1>Le marché du samedi</h1>
+                <p>Chaque samedi matin, la place du village se remplit d'étals colorés.</p>
+                <p>Les producteurs locaux vendent des fruits, des légumes et du fromage. <a href="/b">Lire la suite</a></p>
+                <h2>Les horaires</h2>
+                <p>Le marché ouvre à huit heures et ferme à midi.</p>
+                <p>Venez tôt pour trouver le meilleur pain de la région.</p>
+                """
+            return ("200 OK", html("Le marché", body).replacingOccurrences(of: "<html>", with: "<html lang=\"fr\">"))
+        case "/consent":
+            let body = """
+                <h1 id="state">Cookies not answered</h1><p>Fresh bread, every morning.</p>
+                <div id="onetrust-consent-sdk"><div id="onetrust-banner-sdk" style="position:fixed;left:0;right:0;bottom:0;
+                  padding:20px;background:#fff;border-top:1px solid #ccc;font-size:17px">
+                  <p>We use cookies to improve your experience and for marketing.</p>
+                  <button id="onetrust-accept-btn-handler">Accept All</button>
+                  <button id="onetrust-reject-all-handler">Reject All</button>
+                </div></div>
+                <script>
+                  const answer = (text) => { document.getElementById('state').textContent = 'Cookies ' + text;
+                    document.getElementById('onetrust-banner-sdk').style.display = 'none'; };
+                  document.getElementById('onetrust-reject-all-handler').onclick = () => answer('rejected');
+                  document.getElementById('onetrust-accept-btn-handler').onclick = () => answer('accepted');
+                </script>
+                """
+            return ("200 OK", html("Plain Bakery", body))
         case "/slow":
             return ("200 OK", html("Plain Slow", "<h1>Slow Page</h1>"))
         case "/motion":

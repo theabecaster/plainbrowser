@@ -133,9 +133,9 @@ extension BrowserViewController {
 
     // MARK: Print and Save as PDF
 
-    /// Print and Save as PDF as one row of two (state rules §4: on what finished loading, or the
-    /// reader's article, which they act on instead of the page under it).
-    func exportMenu(_ rules: ControlRules) -> UIMenu? {
+    /// Print and Save as PDF (state rules §4: on what finished loading, or the reader's article,
+    /// which they act on instead of the page under it). They sit in Find on Page's row.
+    func exportMenuItems(_ rules: ControlRules) -> [UIMenuElement] {
         var items: [UIMenuElement] = []
         if rules.print {
             let print = UIAction(title: "Print…", image: UIImage(systemName: "printer")) { [weak self] _ in
@@ -151,10 +151,7 @@ extension BrowserViewController {
             save.accessibilityIdentifier = "menu.saveAsPDF"
             items.append(save)
         }
-        guard !items.isEmpty else { return nil }
-        let row = UIMenu(options: .displayInline, children: items)
-        row.preferredElementSize = .medium
-        return row
+        return items
     }
 
     /// What Print and Save as PDF act on: the reader's article while it shows, else the page.

@@ -1026,6 +1026,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             find.accessibilityIdentifier = "menu.find"
             pageItems.append(find)
         }
+        // Find on Page, Print and Save as PDF share one row of three when the page can be printed,
+        // so the two rare actions cost the menu no height of their own (it fits the Duo's outer
+        // screen).
+        let export = exportMenuItems(rules)
+        if !export.isEmpty {
+            let row = UIMenu(options: .displayInline, children: pageItems + export)
+            row.preferredElementSize = .medium
+            pageItems = [row]
+        }
         pageItems += readerMenuItems(rules.reader)
         pageItems += translateMenuItems(for: tab, item: rules.translate)
         if rules.savePDF { pageItems += pdfMenuItems(for: tab) }
@@ -1064,7 +1073,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         actions.preferredElementSize = .medium
         sections.append(actions)
         if !pageItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: pageItems)) }
-        if let export = exportMenu(rules) { sections.append(export) }
         if rules.zoom { sections.append(zoomMenu(for: tab, source: source)) }
         var placeItems: [UIMenuElement] = favoriteItem.map { [$0] } ?? []
         if siteItems.count > 1, let host = url.host() {

@@ -105,7 +105,7 @@ final class AppleTranslator: PageTranslator {
                 .frame(width: 1, height: 1)
                 .translationTask(configuration) { session in
                     let ready = await SessionBox(session).prepare()
-                    await done(ready)
+                    done(ready)
                 }
         }
     }

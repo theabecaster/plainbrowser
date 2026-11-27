@@ -962,3 +962,67 @@ Research and sources: docs/research/cookie-banners.md.
   38–48 ms without, on the iPhone 17 simulator (parsing the 129 KB script at document start); a
   OneTrust banner is rejected about 0.8 s after the page starts (0.5 s of it is the engine's own
   wait for the banner's script). The rules are read off the main thread once after launch.
+
+## Duo inner screen: Safari's top bar (2026-11-27)
+
+Owner, after using the Duo: the tab bar took too much space and looked broken, the page should get
+the screen, and the portrait bottom menu (the pill over a full-width button bar) looked horrible.
+Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
+
+- **Chosen: a top bar wherever Tab Layout applies** (both size classes regular, page ≥ 640 pt: the
+  inner screen in both orientations, iPad-size windows). One row under the status bar: Back and
+  Forward in a capsule at the leading end, the address pill in the middle (at most 560 pt), Tabs,
+  Share and More in a capsule at the trailing end. Safari puts its bar at the top of the inner
+  screen in both orientations with a full-width viewport (WebKit's Safari 27.1 table: 951 and 669
+  CSS px), and thumbs holding the open Duo sit at its sides, near the row's ends. The outer screen
+  and phones keep the bottom pill.
+- **The system's vertical bar is off there** (`preferredVerticalBarBehavior = .disabled`, tied to
+  the size classes only, as the header asks). It cost 84 pt of width beside every page and held the
+  buttons on the far right only. Supersedes M3's "keep the vertical bar in inner landscape".
+- **Floating, like the bottom pill.** The bar and strip float over the page (no band, the owner's
+  rule for the pill) and move by transform and alpha only. The page's `contentInset.top` is the
+  expanded bar's height (fixed while the bar collapses, so the page never jumps) and its obscured
+  inset follows the resting state, as on the bottom. `obscuredContentInsets` alone does not move
+  the scroll range (measured), so without the content inset the first lines sat under the bar.
+- **While reading** the pill shrinks to 70% under the status bar showing the address; the buttons
+  rise and fade, the strip slides up and fades. Tap the address to bring it back, as before.
+- **Tab Layout Above is the default** (was Left). Safari shows tabs under the address bar on the
+  inner screen; it looks the same in landscape and portrait (a sidebar never fit beside a portrait
+  page, so Left showed a strip there anyway); it costs height only while two or more tabs are open
+  and hides while reading. A stored Left or Right is kept.
+- **The strip:** 34 pt, one glass surface, tabs share its width (140 to 280 pt each, then it
+  scrolls), the focused tab a lifted paper card with its close button. It shows from the second tab
+  (one tab has nothing to switch to) and comes in with the focused tab in view.
+- **The rail is 52 pt** (was 64), close to Safari's vertical-tab strip, with 32 pt tiles.
+- **Split:** one bar spans both panes and acts on the focused one (its ring shows which); a 475 pt
+  pane is too narrow for a bar of its own. Partly folded, the bar keeps to the focused pane's side
+  of the fold.
+- **Editing:** the pill still rises above the keyboard with the search sheet, as on every screen,
+  so suggestions stay nearest the thumb and the search sheet stays one design. Safari on iPad edits
+  in place at the top; revisit if the owner prefers that.
+- **No swipe up from a top bar** (it would pull away from the page); Tabs, the strip and the
+  sidebar are at hand. A sideways swipe on the pill still switches tabs.
+- **Back and Forward show only what applies.** Their capsule holds the buttons that show (Forward
+  hides until there is somewhere forward, as on a phone) and grows away from Back, so Back never
+  moves; on Start, with neither, it leaves no empty glass. Tabs, Share and More keep their slots.
+  The design review called two dead arrows wasted width (round 1).
+- **Narrow tabs drop the site's name** from the end of a title ("Web browser - Wikipedia" reads
+  "Web browser" in the strip and the sidebar; `TabGalleryItem.compactTitle`): the tile already
+  shows the site, and the words that tell tabs apart come first. The strip's edges fade where tabs
+  continue. In a split the focus ring starts under the bar, which belongs to both panes.
+- **Page area** (inner landscape 951x669, status bar 24 pt; % of the screen the page shows):
+
+  | State | Before (M3) | After at rest | After while reading | Safari 27.1 |
+  |---|---|---|---|---|
+  | Landscape, one tab | 75.9% (84 pt bar column, 64 pt rail, bottom pill) | 88.9% | 91.2% | 87.4% / 92.7% |
+  | Landscape, Above, 3 tabs | 75.4% (strip 48 pt, bar column, bottom pill) | 83.3% | 91.2% | |
+  | Landscape, Left rail, 3 tabs | 75.9% | 84.1% | 86.2% | |
+  | Portrait, Above, 3 tabs | 79.6% (strip 48 pt, pill over a 48 pt bar) | 88.2% | 93.8% | 91.2% / 94.8% (one tab) |
+  | Portrait, one tab | 79.6% (the strip showed with one tab) | 92.2% | 93.8% | 91.2% / 94.8% |
+
+- **Perf:** no new work per frame: the collapse sets three transforms and two alphas instead of two
+  and one. The layout model adds one Boolean and a tab count kept on tab changes, not read per
+  layout pass. The strip's item width is computed on layout and tab-count changes only.
+- **Not verified on the device yet:** the Mac was locked, so Device Hub's fold could not be driven.
+  Captures come from the simulator's resizable window at 951x669 and 669x951 (`docs/development.md`),
+  which has no fold and no vertical bar of its own. Checks for the device are in the polish backlog.

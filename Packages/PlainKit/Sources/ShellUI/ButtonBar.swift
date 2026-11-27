@@ -57,6 +57,24 @@ final class ButtonBar: UIView {
     /// The bar's width while beside the pill: one `ChromeGeometry.barHeight` per button.
     private(set) var besideWidth: NSLayoutConstraint!
 
+    /// The top bar's shape (a wide screen): Back and Forward in a capsule at the row's leading
+    /// end, Tabs, Share and More in one at its trailing end, the pill between them, where Safari
+    /// has them on the Duo's inner screen and on iPad. The leading capsule holds only what shows
+    /// and grows away from Back (Forward comes in to its right), so Back never moves; the trailing
+    /// capsule keeps every slot. The pill keeps its place either way.
+    private(set) var isSplit = false
+    private let trailingGlass = Glass.makeView(shape: .capsule)
+    private let trailingStack = UIStackView()
+    private var glassTrailing: NSLayoutConstraint!
+    private var splitConstraints: [NSLayoutConstraint] = []
+    private var leadingWidth: NSLayoutConstraint?
+    /// The buttons in the trailing capsule of the split shape.
+    static let trailingKinds: [PageButton] = [.tabs, .share, .more]
+    /// The width of each capsule of the split shape: one 44 pt slot per button.
+    static var splitLeadingWidth: CGFloat { slot * CGFloat(PageButton.allCases.count - trailingKinds.count) }
+    static var splitTrailingWidth: CGFloat { slot * CGFloat(trailingKinds.count) }
+    private static var slot: CGFloat { CGFloat(FixedChoices.topBarHeight) }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         glass.translatesAutoresizingMaskIntoConstraints = false
@@ -81,15 +99,100 @@ final class ButtonBar: UIView {
         stackLeading = stack.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: Spacing.s)
         stackTrailing = stack.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -Spacing.s)
         besideWidth = widthAnchor.constraint(equalToConstant: ChromeGeometry.barHeight)
+        glassTrailing = glass.trailingAnchor.constraint(equalTo: trailingAnchor)
         NSLayoutConstraint.activate([
             stackLeading, stackTrailing,
             glass.topAnchor.constraint(equalTo: topAnchor),
             glass.bottomAnchor.constraint(equalTo: bottomAnchor),
             glass.leadingAnchor.constraint(equalTo: leadingAnchor),
-            glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glassTrailing,
             stack.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
             stack.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
         ])
+
+        // The split shape's trailing capsule: built once, in the view only while split.
+        trailingStack.axis = .horizontal
+        trailingStack.distribution = .fillEqually
+        trailingStack.translatesAutoresizingMaskIntoConstraints = false
+        trailingGlass.translatesAutoresizingMaskIntoConstraints = false
+        trailingGlass.contentView.addSubview(trailingStack)
+        trailingStack.topAnchor.constraint(equalTo: trailingGlass.contentView.topAnchor).isActive = true
+        trailingStack.bottomAnchor.constraint(equalTo: trailingGlass.contentView.bottomAnchor).isActive = true
+        trailingStack.leadingAnchor.constraint(equalTo: trailingGlass.contentView.leadingAnchor).isActive = true
+        trailingStack.trailingAnchor.constraint(equalTo: trailingGlass.contentView.trailingAnchor).isActive = true
+    }
+
+    /// Between the bar under the pill (or beside it) and the top bar's two capsules. The buttons
+    /// move between the capsules and keep their actions and menus. The caller owns the constraints
+    /// that place the bar: in the split shape it spans the row, and the pill sits between the
+    /// capsules. Call inside the layout's animation.
+    func setSplit(_ split: Bool) {
+        guard split != isSplit else { return }
+        if split { setBesidePill(false) }
+        isSplit = split
+        if split {
+            addSubview(trailingGlass)
+            for kind in Self.trailingKinds {
+                let button = button(kind)
+                stack.removeArrangedSubview(button)
+                trailingStack.addArrangedSubview(button)
+            }
+            glassTrailing.isActive = false
+            stackLeading.constant = 0
+            stackTrailing.constant = 0
+            let leading = glass.widthAnchor.constraint(equalToConstant: Self.splitLeadingWidth)
+            leadingWidth = leading
+            splitConstraints = [
+                leading,
+                trailingGlass.topAnchor.constraint(equalTo: topAnchor),
+                trailingGlass.bottomAnchor.constraint(equalTo: bottomAnchor),
+                trailingGlass.trailingAnchor.constraint(equalTo: trailingAnchor),
+                trailingGlass.widthAnchor.constraint(equalToConstant: Self.splitTrailingWidth),
+            ]
+            NSLayoutConstraint.activate(splitConstraints)
+        } else {
+            NSLayoutConstraint.deactivate(splitConstraints)
+            splitConstraints = []
+            leadingWidth = nil
+            for case let button as UIButton in stack.arrangedSubviews {
+                let removed = isBesidePill && !button.isUserInteractionEnabled
+                if button.isHidden != removed { button.isHidden = removed }
+            }
+            for kind in Self.trailingKinds {
+                let button = button(kind)
+                trailingStack.removeArrangedSubview(button)
+                stack.addArrangedSubview(button)
+            }
+            trailingGlass.removeFromSuperview()
+            glassTrailing.isActive = true
+            stackLeading.constant = Spacing.s
+            stackTrailing.constant = -Spacing.s
+        }
+        updateCapsules()
+    }
+
+    /// A capsule of the split shape with no button showing (Back and Forward on the start screen)
+    /// leaves no empty glass behind.
+    private func updateCapsules() {
+        let leadingShown = stack.arrangedSubviews.filter { $0.isUserInteractionEnabled }
+        if isSplit {
+            // Back and Forward: only what shows, packed from Back.
+            for view in stack.arrangedSubviews where view.isHidden == view.isUserInteractionEnabled {
+                view.isHidden = !view.isUserInteractionEnabled
+            }
+            let width = Self.slot * CGFloat(max(1, leadingShown.count))
+            if leadingWidth?.constant != width { leadingWidth?.constant = width }
+        }
+        let showsLeading = !isSplit || !leadingShown.isEmpty
+        if glass.isHidden == showsLeading { glass.isHidden = !showsLeading }
+        let showsTrailing = trailingStack.arrangedSubviews.contains { $0.isUserInteractionEnabled }
+        if trailingGlass.isHidden == showsTrailing { trailingGlass.isHidden = !showsTrailing }
+    }
+
+    /// In the split shape only the two capsules take touches: the pill sits in the gap.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard isSplit else { return super.point(inside: point, with: event) }
+        return glass.frame.contains(point) || trailingGlass.frame.contains(point)
     }
 
     @available(*, unavailable)
@@ -106,10 +209,13 @@ final class ButtonBar: UIView {
         button.isUserInteractionEnabled = visibility.isVisible
         button.accessibilityElementsHidden = !visibility.isVisible
         button.isAccessibilityElement = visibility.isVisible
-        // Beside the pill a hidden button gives up its slot: the bar is only what it shows.
-        let removed = isBesidePill && !visibility.isVisible
+        // Beside the pill a hidden button gives up its slot: the bar is only what it shows. So
+        // does Back or Forward in the top bar's leading capsule.
+        let packs = isBesidePill || (isSplit && button.superview === stack)
+        let removed = packs && !visibility.isVisible
         if button.isHidden != removed { button.isHidden = removed }
         if isBesidePill { updateBesideWidth() }
+        if isSplit { updateCapsules() }
         guard button.alpha != alpha else { return }
         if window == nil || UIView.inheritedAnimationDuration > 0 {
             button.alpha = alpha
@@ -122,7 +228,7 @@ final class ButtonBar: UIView {
     /// screen, `ControlRules.barBesidePill`). The caller owns the constraints that place the bar;
     /// this sets its own width and packs the buttons that show. Call inside the layout's animation.
     func setBesidePill(_ beside: Bool) {
-        guard beside != isBesidePill else { return }
+        guard beside != isBesidePill, !(beside && isSplit) else { return }
         isBesidePill = beside
         for button in buttons.values {
             let removed = beside && !button.isUserInteractionEnabled
@@ -151,6 +257,7 @@ final class ButtonBar: UIView {
         let effect = UIGlassEffect(style: .regular)
         effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
         glass.effect = effect
+        trailingGlass.effect = effect
     }
 }
 

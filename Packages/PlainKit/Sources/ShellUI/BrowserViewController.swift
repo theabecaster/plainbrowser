@@ -52,7 +52,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let pill = AddressPill()
     let buttonBar = ButtonBar()
     let sheet = SearchSheet()
-    private let pullIndicator = PullIndicator()
+    let pullIndicator = PullIndicator()
     var barItems: [PageButton: UIBarButtonItem] = [:]
 
     /// The tab on screen (BrowserCore's `TabStore` owns the list; `EngineTabs` keeps it in step).
@@ -78,6 +78,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var pillSpansRow: NSLayoutConstraint!
     private var pillBesideBar: NSLayoutConstraint!
     private var barSpansRow: NSLayoutConstraint!
+    /// The pill's leading edge on the bottom row (off while the top bar holds it, `+TopBar`).
+    private var pillOnRowLeading: NSLayoutConstraint!
     /// Set while `applyEditingLayout` runs, which lays out the bar's shape in its own animation.
     private var isApplyingEditingLayout = false
     private var geometry = ChromeGeometry(viewHeight: 0, safeBottom: 0, hasButtonBar: true)
@@ -169,6 +171,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         var traits: [UITrait] = [UITraitHorizontalSizeClass.self, UITraitVerticalSizeClass.self]
         traits += UITraitCollection.systemTraitsAffectingVerticalBarEdge
         registerForTraitChanges(traits) { (controller: BrowserViewController, _) in
+            controller.setNeedsUpdateOfVerticalBarConfiguration()
             controller.updateBarMode()
             controller.view.setNeedsLayout()
         }
@@ -205,6 +208,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         duo.panesTrailing = panes.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
         duo.panesTop = panes.view.topAnchor.constraint(equalTo: safe.topAnchor)
         let margin = Spacing.m
+        makeTopBarConstraints()
         // The resting chrome's bottom: above the home indicator, or 8 pt above a plain edge.
         let rest = UILayoutGuide()
         view.addLayoutGuide(rest)
@@ -257,7 +261,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             duo.panesTrailing,
             panes.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            pullIndicator.topAnchor.constraint(equalTo: panes.view.topAnchor, constant: Spacing.s),
+            duo.top.pullIndicatorTop as NSLayoutConstraint,
             pullIndicator.centerXAnchor.constraint(equalTo: lane.centerXAnchor),
             pullIndicator.widthAnchor.constraint(equalToConstant: PullIndicator.size),
             pullIndicator.heightAnchor.constraint(equalToConstant: PullIndicator.size),
@@ -272,12 +276,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             sheet.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             sheet.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             sheet.content.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: Spacing.s),
-            sheet.content.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s),
+            duo.top.sheetOverPill as NSLayoutConstraint,
 
-            pill.heightAnchor.constraint(equalToConstant: ChromeGeometry.pillHeight),
+            duo.top.pillHeight as NSLayoutConstraint,
 
-            // The toast floats just above the pill, centered on it.
-            tabsUI.toast.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s),
+            // The toast floats just above the pill, centered on it (under a top bar: low on the
+            // page, `+TopBar`).
+            duo.top.toastOverPill as NSLayoutConstraint,
             tabsUI.toast.centerXAnchor.constraint(equalTo: pill.centerXAnchor),
             tabsUI.toast.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
             tabsUI.toast.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
@@ -287,10 +292,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pillSpansRow = pill.trailingAnchor.constraint(equalTo: row.trailingAnchor)
         pillBesideBar = pill.trailingAnchor.constraint(equalTo: buttonBar.leadingAnchor, constant: -ChromeGeometry.gap)
         barSpansRow = buttonBar.leadingAnchor.constraint(equalTo: row.leadingAnchor)
+        pillOnRowLeading = pill.leadingAnchor.constraint(equalTo: row.leadingAnchor)
         NSLayoutConstraint.activate([
             row.topAnchor.constraint(equalTo: lane.topAnchor),
             row.bottomAnchor.constraint(equalTo: lane.bottomAnchor),
-            pill.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            pillOnRowLeading,
             pillSpansRow,
         ])
         buttonBarConstraints = [
@@ -358,7 +364,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Shows the page buttons in the system's vertical bar where it has one, otherwise in the
     /// glass bar under the pill. Layout follows the traits, never the device.
     private func updateBarMode() {
-        let vertical = traitCollection.verticalBarEdge != .unspecified
+        // `verticalBarEdge` keeps the system's edge while the vertical bar is disabled (a wide
+        // screen's top bar, `+TopBar`): it is in use only where Plain leaves it on.
+        let vertical = traitCollection.verticalBarEdge != .unspecified && preferredVerticalBarBehavior == .automatic
         let changed = vertical != usesVerticalBar || pillOnBar.isActive == pillOnEdge.isActive
         usesVerticalBar = vertical
         navigationController?.setToolbarHidden(!vertical, animated: false)
@@ -372,34 +380,46 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             chromeGlass.contentView.insertSubview(buttonBar, belowSubview: pill)
             NSLayoutConstraint.activate(buttonBarConstraints)
         }
-        if changed { updatePillRestConstraint() }
+        if changed || buttonBar.superview != nil { updatePillRestConstraint() }
         view.setNeedsLayout()
         // The rules depend on the bar (the vertical bar dims instead of hiding).
         if changed { updateButtons() }
     }
 
-    private func updatePillRestConstraint() {
-        let beside = rules.barBesidePill && buttonBar.superview != nil
+    func updatePillRestConstraint() {
+        let onTop = chromeOnTop
+        let hasBar = buttonBar.superview != nil
+        let beside = !onTop && rules.barBesidePill && hasBar
+        // Under a top bar the pill leaves it only to edit, above the keyboard.
+        let pillOnTop = onTop && !isEditingAddress
         pillOnKeyboard.isActive = false
         pillOnBar.isActive = false
         pillOnEdge.isActive = false
+        pillOnRowLeading.isActive = false
+        pillSpansRow.isActive = false
+        pillBesideBar.isActive = false
+        if hasBar { NSLayoutConstraint.deactivate(buttonBarConstraints) }
+        setTopBarConstraints(pill: pillOnTop, bar: onTop && hasBar)
         if isEditingAddress {
             pillOnKeyboard.isActive = true
+        } else if pillOnTop {
+            // The top bar places it.
         } else if usesVerticalBar || beside {
             pillOnEdge.isActive = true
         } else {
             pillOnBar.isActive = true
         }
         // The start screen's bar: a round glass button at the row's end, the pill beside it.
+        // Under a top bar: two capsules at the row's ends.
+        buttonBar.setSplit(onTop && hasBar)
         buttonBar.setBesidePill(beside)
-        if beside {
-            barSpansRow.isActive = false
-            pillSpansRow.isActive = false
-            pillBesideBar.isActive = true
-        } else {
-            pillBesideBar.isActive = false
-            pillSpansRow.isActive = true
-            if buttonBar.superview != nil { barSpansRow.isActive = true }
+        if !pillOnTop {
+            pillOnRowLeading.isActive = true
+            if beside { pillBesideBar.isActive = true } else { pillSpansRow.isActive = true }
+        }
+        if hasBar, !onTop {
+            NSLayoutConstraint.activate(buttonBarConstraints.filter { $0 !== barSpansRow })
+            barSpansRow.isActive = !beside
         }
     }
 
@@ -407,7 +427,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// sits beside the pill, on a page under it. Called whenever the rules change; the editing
     /// layout moves the bar itself, inside the keyboard's animation.
     func updateBarShapeIfNeeded() {
-        let beside = rules.barBesidePill && buttonBar.superview != nil
+        let beside = !chromeOnTop && rules.barBesidePill && buttonBar.superview != nil
         guard pillOnBar != nil, beside != buttonBar.isBesidePill, !isApplyingEditingLayout else { return }
         updatePillRestConstraint()
         guard view.window != nil else { return }
@@ -425,11 +445,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let next = ChromeGeometry(
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar
         )
-        guard next != geometry else { return }
+        let top = duo.layout?.chromeOnTop == true
+            ? TopChromeGeometry(pageTop: panes.view.frame.minY, stripHeight: duo.layout?.stripHeight ?? 0) : nil
+        guard next != geometry || top != duo.topGeometry else { return }
         geometry = next
+        duo.topGeometry = top
         applyCollapse(collapse.progress)
         // During a fold or rotation the insets wait for the transition's completion.
         if !duo.isResizing { updatePageInsets() }
+    }
+
+    /// Off where the top bar holds the buttons (`+TopBar`): the Duo's inner screen, as Safari.
+    override public var preferredVerticalBarBehavior: UIVerticalBarBehavior {
+        wantsHorizontalBars ? .disabled : .automatic
     }
 
     override public func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
@@ -607,6 +635,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
     }
 
+    /// How collapsed the bar is now (0 expanded, 1 collapsed).
+    var collapseProgress: CGFloat { collapse.progress }
+
     /// The bar is collapsed, or on its way there.
     var isChromeCollapsed: Bool {
         (snap.isRunning ? snap.target : collapse.progress) > 0
@@ -681,6 +712,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     func updatePageInsets() {
         // During a fold or rotation the insets wait for the transition's completion.
         guard view.bounds.height > 0, !duo.isResizing else { return }
+        if let top = duo.topGeometry {
+            applyTopBarInsets(top, collapsed: pageInset.collapsed)
+            return
+        }
+        // Back from a top bar (a fold to the outer screen): the page's top rests at the top again.
+        setPageTopStart(0, for: pageScrollView)
+        for slot in panes.slots { slot.setRingTopInset(0) }
         let pageBottom = panes.view.frame.maxY
         let collapsed = geometry.collapsedInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)
@@ -718,7 +756,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     // MARK: Toolbar collapse
 
     /// Places the pill and button bar for collapse `progress` with transform and alpha only.
-    private func applyCollapse(_ progress: CGFloat) {
+    func applyCollapse(_ progress: CGFloat) {
+        if let top = duo.topGeometry {
+            applyTopBarCollapse(progress, geometry: top)
+            return
+        }
         let pillMove = geometry.pillTransform(progress: progress)
         pill.transform = CGAffineTransform(translationX: 0, y: pillMove.translationY)
             .scaledBy(x: pillMove.scale, y: pillMove.scale)

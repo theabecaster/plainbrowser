@@ -85,8 +85,9 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             // Tab switching belongs to the pill; the glass bar takes the swipe up only.
             return view === browser.pill
         }
-        // Up only, and not while a sideways swipe is settling.
-        return velocity.y < 0 && swipe == nil
+        // Up only, and not while a sideways swipe is settling. A top bar (the Duo's inner screen)
+        // has no swipe up: it would pull away from the page, and Tabs and the strip are at hand.
+        return velocity.y < 0 && swipe == nil && !browser.chromeOnTop
     }
 
     @objc private func panned(_ pan: UIPanGestureRecognizer) {

@@ -41,6 +41,36 @@ public struct TabGalleryItem: Hashable, Sendable, Identifiable {
         if !trimmed.isEmpty { return trimmed }
         return host ?? String(localized: "New Tab")
     }
+
+    /// The title for a narrow tab (the strip, the sidebar): without the site's name when the title
+    /// ends with it ("Web browser - Wikipedia" on wikipedia.org reads "Web browser"), since the
+    /// tile already shows the site and the words that tell tabs apart come first.
+    public var compactTitle: String {
+        let full = displayTitle
+        guard let site = Self.siteName(of: host) else { return full }
+        for separator in [" - ", " – ", " — ", " | ", " · ", " : "] {
+            guard let range = full.range(of: separator, options: .backwards) else { continue }
+            let head = full[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
+            let tail = full[range.upperBound...].lowercased().filter { $0.isLetter || $0.isNumber }
+            if !head.isEmpty, tail == site { return head }
+        }
+        return full
+    }
+
+    /// The site's name from its host, lowercased: "wikipedia" for en.wikipedia.org, "bbc" for
+    /// bbc.co.uk. Nil when the host has no name before its suffix.
+    static func siteName(of host: String?) -> String? {
+        guard let host else { return nil }
+        var labels = host.lowercased().split(separator: ".").map(String.init)
+        guard labels.count > 1 else { return nil }
+        labels.removeLast()
+        // A short second level under a country code (co.uk, com.au) is not the site's name.
+        if labels.count > 1, let last = labels.last, ["co", "com", "org", "net", "ac", "gov", "edu"].contains(last) {
+            labels.removeLast()
+        }
+        guard let name = labels.last, name.count > 1 else { return nil }
+        return name
+    }
 }
 
 #if canImport(UIKit)

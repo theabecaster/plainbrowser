@@ -114,12 +114,12 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Control | Start | Page | Hide or dim | Why |
 |---|---|---|---|---|
 | Back | — | shown; dim when there is nothing to go back to | Dim inside Page | The most used button, leftmost; its place is muscle memory. Safari and Arc both keep Back in reach. On Start there is no page and no history. |
-| Forward | — | hidden in place until there is somewhere forward | Hide (slot kept) | Rarely available. Safari 26 shows Forward only after Back is used (MacRumors). The slot is kept, so Tabs, Share and More never move. On the Duo's vertical bar: dim. |
+| Forward | — | hidden in place until there is somewhere forward | Hide (slot kept) | Rarely available. Safari 26 shows Forward only after Back is used (MacRumors). The slot is kept, so Tabs, Share and More never move. On the Duo's vertical bar: dim. In the inner screen's top bar Back and Forward have their own capsule, which holds only what shows and grows away from Back, so nothing else moves. |
 | Back in special pages | | Reader: closes the reader. A child tab's first page: closes the tab and returns to its opener. | | One Back for "go to what I was looking at". |
 | Share | — | shown when the tab has an address | Hide on Start | Nothing to share on Start. On a failed page it shares the address that was tried. |
 | More (page menu) | shown | shown | Never hidden | History, Settings and Edit Favorites apply everywhere. |
 | Tabs slot | see above | see above | | |
-| Bar shape | beside the pill: the bar shrinks to a round glass button (More), or a capsule (Tabs and More), at the pill's trailing end, and the pill takes the rest of the row at the bottom (`ControlRules.barBesidePill`) | under the pill, full width | Changes between modes only | A full-width bar holding one button read as unfinished. Start is its own mode, so the bar may change shape (principle 5); the Duo's vertical bar packs its items itself. |
+| Bar shape | beside the pill: the bar shrinks to a round glass button (More), or a capsule (Tabs and More), at the pill's trailing end, and the pill takes the rest of the row at the bottom (`ControlRules.barBesidePill`) | under the pill, full width | Changes between modes only | A full-width bar holding one button read as unfinished. Start is its own mode, so the bar may change shape (principle 5); the Duo's vertical bar packs its items itself. On a wide screen (the Duo's inner screen) the bar is the top bar in every mode: Back and Forward at the row's leading end, Tabs, Share and More at its trailing end, the pill between; a capsule with nothing to show (Back and Forward on Start) leaves no empty glass. |
 | Pill | placeholder "Search or enter address" | host, "Not Secure —" first on http, mixed content or a passed certificate; on a failed page the address that was tried | Never hidden | The one way to search. |
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
@@ -280,7 +280,8 @@ combines its base state with the rows that modify it (for example, private + loa
 | Recently closed empty / not | | | | | | | | | | | Reopen Closed Tab hidden / shown (§5, §6) |
 | Downloads none / active / finished | | | | | Downloads hidden / shown "1 in progress" / shown | | | | | | toast on finish |
 | Duo outer (system vertical bar) | dim when none | dim when none | per table, dim instead of hide inside Page | ✓ | ✓ | same | same | same | same | same | same |
-| Duo inner, single pane | as Duo outer | | | | | | | | | | |
+| Duo inner (top bar), single pane | as Duo outer | | | | | off (no swipe up from a top bar; Tabs and the strip are at hand) | pill, sideways | | | | |
+| Tab Layout Above, two or more tabs | | | | | | | | | | | the strip shows under the top bar; one tab: no strip (nothing to switch to) |
 | Duo split | per focused pane | | | | | | | | | | Open in Other Pane shown; Close Tab acts on the focused pane |
 | Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | |
 | Book pose | as the pane's state; pills and toasts avoid the fold | | | | | | | | | | |

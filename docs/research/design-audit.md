@@ -83,8 +83,8 @@ Source short names:
 ## iPhone Duo
 
 ### Change
-- **Keep the system vertical bar in inner landscape.** The HIG keeps controls on the side through an unfold. Confirm what Safari does on the device. developer.apple.com/design/human-interface-guidelines (Designing for iPhone Duo).
-- **Sidebar gets a ~64 pt icon-rail state,** forced during a split or a fold. A 260 pt sidebar leaves ~345 pt per split pane, less than the outer screen. Safari 27.3 ships an icon strip.
+- **Inner screen: top bar, vertical bar off (changed 2026-11-27).** Safari puts its bar at the top of the inner screen in both orientations, with a 951 pt (669 pt) viewport, so it turns the side column off there (WebKit's Safari 27.1 viewport table; docs/research/safari-duo.md). Plain does the same with `preferredVerticalBarBehavior = .disabled` where both size classes are regular. The earlier "keep the vertical bar in inner landscape" is superseded.
+- **Sidebar gets a 52 pt icon-rail state** (64 pt until 2026-11-27), forced during a split or a fold. A 260 pt sidebar leaves ~345 pt per split pane, less than the outer screen. Safari 27.3 ships an icon strip.
 - **The 640 pt side-tab gate applies to the space left after the sidebar,** not the window.
 - **No custom tabletop layout.** The HIG says to adjust, not rearrange. Only floating controls avoid the fold; WebKit's fullscreen player already handles tabletop video, so that feature is dropped.
 - **Pills avoid the fold and the inner camera.** In book pose, shift pills and toasts off the fold region (`reservedRegions(kind: .division)`); read `.occlusion` for the camera.
@@ -100,6 +100,6 @@ Source short names:
 - `UIArrangementViewController` for split tabs, sidebar as its sibling, never nested.
 - Even 2 or 4 grid columns on the inner screen.
 - Outer screen: system vertical bar plus a custom bottom pill.
-- Inner portrait: horizontal bars, one pane.
+- Inner portrait: one pane (now under the same top bar as inner landscape).
 - Same web views through a fold; content mode never switched mid-page.
 - No `UIHingeInteraction`, no outer-screen peek.

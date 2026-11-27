@@ -19,7 +19,7 @@ final class SideTabCell: UICollectionViewCell {
     private let closeButton = UIButton(type: .system)
 
     static let height: CGFloat = 48
-    static let tileSize: CGFloat = 36
+    static let tileSize: CGFloat = 32
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -76,7 +76,7 @@ final class SideTabCell: UICollectionViewCell {
     /// Lays the row out for `item`. `isFocused`: the focused pane shows it; `isInOtherPane`: the
     /// split's other pane does; `railWidth`: where the tile centers.
     func configure(item: TabGalleryItem, isFocused: Bool, isInOtherPane: Bool, showsTitle: Bool) {
-        titleLabel.text = item.displayTitle
+        titleLabel.text = item.compactTitle
         titleLabel.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(isFocused ? .semibold : .regular)
         if let first = Self.siteName(of: item.host)?.first {
             letter.text = String(first).uppercased()

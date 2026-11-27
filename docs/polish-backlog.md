@@ -314,3 +314,22 @@ Newest feature last.
   instead of "Turn Off / On …"; it follows the blocking switch's wording today. Change both
   together if at all.
 - **Zoom row's 100%.** Design review: the current value reads as disabled; use secondary text.
+
+## Duo inner screen top bar (2026-11-27)
+
+- **Check on the device.** Built while the Mac was locked: captured in the simulator's resizable
+  window, which has no fold and no vertical bar. On the Duo: the vertical bar really goes away on
+  unfold and comes back on fold; the status bar's height; where the inner camera's occlusion sits
+  against the row; book pose with the bar on the focused pane's side; the unfold motion (pill from
+  the bottom to the top).
+- **Edit in place at the top?** The pill still rises above the keyboard to edit, a long move from
+  the top bar. Safari on iPad edits in place with suggestions under the field.
+- **Strip in the row.** With the strip the chrome is 17% of the landscape screen at rest. A Safari
+  compact-style row (tabs beside the address) would bring it near 11%, at the cost of short titles.
+- **Split divider** runs up behind the top bar; it could stop under the bar.
+- **Split focus ring** reads as a strong box around the page (design review, round 2); a lighter
+  ring or a tint on the bar's address could mark focus more quietly.
+- **Strip overflow cue.** With many tabs the fade at the strip's edge is the only sign of more
+  tabs; a count or a scroll position hint may help (design review, round 2).
+- **Existing installs keep Left.** Above is the new default, but a stored Tab Layout is kept;
+  the owner's Duo may need Settings > Tab Layout > Above once.

@@ -35,11 +35,15 @@ public struct ArchiveView: View {
                             }
                     }
                 } footer: {
-                    if !model.rows.isEmpty, model.query.isEmpty { Text(footer) }
+                    if !model.rows.isEmpty, model.query.isEmpty { Text(footer).foregroundStyle(.secondary) }
                 }
+                .paperRows()
             }
+            .paperSheet()
             .overlay {
-                if model.isLoaded, model.rows.isEmpty {
+                if model.loadFailed {
+                    ReadFailedView(message: Wording.archiveReadFailed, systemImage: "archivebox") { await model.load() }
+                } else if model.isLoaded, model.rows.isEmpty {
                     if model.query.isEmpty {
                         ContentUnavailableView {
                             Label("No archived tabs.", systemImage: "archivebox")
@@ -52,8 +56,7 @@ public struct ArchiveView: View {
                 }
             }
             .searchable(text: $model.query, prompt: "Search Archive")
-            .navigationTitle("Archived Tabs")
-            .navigationBarTitleDisplayMode(.inline)
+            .sheetTitle("Archived Tabs")
             .toolbar { DoneButton(onDone: onDone) }
             .alert(model.errorMessage ?? "", isPresented: Binding(
                 get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } }

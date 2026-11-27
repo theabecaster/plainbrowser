@@ -8,13 +8,17 @@ import Testing
 actor FakeArchive: ArchiveStoring {
     var tabs: [ArchivedTab]
     private(set) var queries: [String] = []
+    var failNextRead = false
 
     init(_ tabs: [ArchivedTab]) {
         self.tabs = tabs
     }
 
+    func failNextReadCall() { failNextRead = true }
+
     func archivedTabs(matching query: String, limit: Int) async throws -> [ArchivedTab] {
         queries.append(query)
+        if failNextRead { failNextRead = false; throw URLError(.cannotOpenFile) }
         let matches = query.isEmpty ? tabs : tabs.filter {
             ($0.entry.title ?? "").localizedCaseInsensitiveContains(query)
                 || ($0.entry.url?.absoluteString ?? "").localizedCaseInsensitiveContains(query)
@@ -42,6 +46,21 @@ struct ArchiveModelTests {
         #expect(model.isLoaded)
         #expect(model.rows.map(\.title) == ["Swift Forums", "example.com"])
         #expect(model.rows.map(\.address) == ["forums.swift.org/latest", "example.com"])
+    }
+
+    @Test func failedReadShowsTryAgainNotTheEmptyState() async {
+        let archive = FakeArchive([Self.tab("Swift Forums", "https://forums.swift.org/latest", archivedHoursAgo: 1)])
+        let model = ArchiveModel(store: archive, onRestore: { _ in }, onDelete: { _ in })
+        await archive.failNextReadCall()
+        await model.load()
+        #expect(model.loadFailed)
+        #expect(model.isLoaded)
+        await model.load()
+        #expect(!model.loadFailed)
+        #expect(model.rows.count == 1)
+        await archive.failNextReadCall()
+        await model.load()
+        #expect(model.rows.isEmpty, "stale rows don't stay under the failure")
     }
 
     @Test func restoreAndDeleteLeaveTheListAndReachTheShell() async {

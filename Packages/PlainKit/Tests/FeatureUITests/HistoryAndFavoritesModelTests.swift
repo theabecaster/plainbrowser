@@ -10,16 +10,19 @@ actor FakeHistory: HistoryStoring {
     private(set) var queries: [String] = []
     private(set) var clearedSince: [Date?] = []
     var failNext = false
+    var failNextRead = false
 
     init(_ visits: [HistoryVisit]) {
         self.visits = visits.sorted { $0.visitedAt > $1.visitedAt }
     }
 
     func failNextCall() { failNext = true }
+    func failNextReadCall() { failNextRead = true }
 
     func visits(matching query: String, limit: Int) async throws -> [HistoryVisit] {
         queries.append(query)
         if failNext { failNext = false; throw CancellationError() }
+        if failNextRead { failNextRead = false; throw URLError(.cannotOpenFile) }
         let matches = query.isEmpty ? visits : visits.filter { ($0.title ?? "").localizedCaseInsensitiveContains(query) }
         return Array(matches.prefix(limit))
     }
@@ -179,6 +182,64 @@ actor GatedHistory: HistoryStoring {
         #expect(model.days.flatMap(\.rows).map(\.id) == [3])
     }
 
+    @Test func failedReadShowsTryAgainNotTheEmptyState() async {
+        let store = FakeHistory(Self.sample)
+        let model = makeModel(store)
+        await store.failNextReadCall()
+        await model.load()
+        #expect(model.loadFailed)
+        #expect(model.isLoaded)
+        #expect(model.errorMessage == nil, "a failed read is shown in place, not as an alert")
+        #expect(model.hasHistory, "a failed read doesn't prove history is empty")
+        await model.load()
+        #expect(!model.loadFailed)
+        await store.failNextReadCall()
+        await model.load()
+        #expect(model.days.isEmpty, "stale rows don't stay under the failure")
+        await model.load()
+        #expect(!model.loadFailed, "Try Again clears it")
+        #expect(model.days.flatMap(\.rows).count == 5)
+    }
+
+    @Test func clearDimsOnlyWhenHistoryItselfIsEmpty() async throws {
+        let model = makeModel(FakeHistory(Self.sample))
+        await model.load()
+        #expect(model.hasHistory)
+        model.query = "nothing matches this"
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        #expect(model.isEmpty)
+        #expect(model.hasHistory, "a search with no results keeps Clear")
+
+        let empty = makeModel(FakeHistory([]))
+        await empty.load()
+        #expect(!empty.hasHistory)
+        empty.query = "Alpha"
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        #expect(!empty.hasHistory, "typing a search into empty history doesn't enable Clear")
+
+        await model.clear(.all)
+        #expect(!model.hasHistory)
+    }
+
+    @Test func clearDimsWhenASearchedDeleteEmptiesHistory() async throws {
+        let store = FakeHistory([Self.visit(1, "a.example", "Alpha", hoursAgo: 0.5)])
+        let model = makeModel(store)
+        await model.load()
+        model.query = "Alpha"
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        await model.delete(model.days[0].rows[0])
+        #expect(!model.hasHistory, "the last visit went while a search was typed")
+    }
+
+    @Test func clearDimsWhenTodaysClearEmptiesHistoryUnderASearch() async throws {
+        let model = makeModel(FakeHistory([Self.visit(1, "a.example", "Alpha", hoursAgo: 0.5)]))
+        await model.load()
+        model.query = "Alpha"
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        await model.clear(.today)
+        #expect(!model.hasHistory)
+    }
+
     @Test func failedDeleteReloadsAndShowsAMessage() async {
         let store = FakeHistory(Self.sample)
         let model = makeModel(store)
@@ -286,6 +347,28 @@ actor GatedHistory: HistoryStoring {
         #expect(titles(model).first == "Alpha")
     }
 
+    @Test func failedReadShowsTryAgainNotTheEmptyState() async {
+        let store = FlakyFavorites(database: database)
+        let model = FavoritesModel(store: store)
+        await model.load()
+        #expect(model.loadFailed)
+        #expect(model.errorMessage == nil)
+        await model.load()
+        #expect(!model.loadFailed, "Try Again clears it")
+        #expect(titles(model) == ["A", "B", "C", "D", "E"])
+    }
+
+    @Test func failedReloadReplacesTheListShown() async {
+        let store = FlakyFavorites(database: database, failFirst: false)
+        let model = FavoritesModel(store: store)
+        await model.load()
+        #expect(titles(model).count == 5)
+        await store.failNextRead()
+        await model.load()
+        #expect(model.loadFailed)
+        #expect(model.favorites.isEmpty, "stale favorites don't stay under the failure")
+    }
+
     @Test func failedWriteReloadsFromTheStore() async throws {
         let model = FavoritesModel(store: FailingFavorites(database: database))
         await model.load()
@@ -307,6 +390,24 @@ struct SlowFavorites: FavoritesStoring {
     }
     func removeFavorite(id: Int64) async throws { try await database.removeFavorite(id: id) }
     func moveFavorite(id: Int64, to index: Int) async throws { try await database.moveFavorite(id: id, to: index) }
+}
+
+/// Favorites whose next read fails (the first one, unless told otherwise).
+actor FlakyFavorites: FavoritesStoring {
+    let database: AppDatabase
+    private var failNext: Bool
+    init(database: AppDatabase, failFirst: Bool = true) {
+        self.database = database
+        failNext = failFirst
+    }
+    func failNextRead() { failNext = true }
+    func favorites() async throws -> [Favorite] {
+        if failNext { failNext = false; throw URLError(.cannotOpenFile) }
+        return try await database.favorites()
+    }
+    func renameFavorite(id: Int64, title: String) async throws {}
+    func removeFavorite(id: Int64) async throws {}
+    func moveFavorite(id: Int64, to index: Int) async throws {}
 }
 
 struct FailingFavorites: FavoritesStoring {

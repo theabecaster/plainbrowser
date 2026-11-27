@@ -38,6 +38,12 @@ public final class HistoryModel {
         }
     }
     public var errorMessage: String?
+    /// The last read failed: the screen says so with Try Again, never as the empty state.
+    public private(set) var loadFailed = false
+    /// Whether there is any history at all, whatever the search shows. Clear dims only when there
+    /// is known to be none (docs/state-rules.md §6, Sheets), so it starts true and a failed read
+    /// leaves it as it was.
+    public private(set) var hasHistory = true
 
     public var isEmpty: Bool { days.isEmpty }
 
@@ -140,14 +146,26 @@ public final class HistoryModel {
         let limit = limit
         do {
             let visits = try await store.visits(matching: query, limit: limit)
+            // A search that finds nothing says nothing about the rest of history: one more read of
+            // a single visit tells whether there is any.
+            let anyHistory = if visits.isEmpty, !query.isEmpty {
+                try await !store.visits(matching: "", limit: 1).isEmpty
+            } else {
+                !visits.isEmpty
+            }
             let grouped = await Self.group(visits, now: now(), calendar: calendar, locale: locale)
             guard current == generation else { return }
             days = grouped
             mayHaveMore = visits.count >= limit
+            hasHistory = anyHistory
+            loadFailed = false
             isLoaded = true
         } catch {
             guard current == generation, !(error is CancellationError) else { return }
-            errorMessage = Wording.historyFailed
+            // Rows from an earlier read would be stale under the failure; it replaces them.
+            days = []
+            mayHaveMore = false
+            loadFailed = true
             isLoaded = true
         }
     }

@@ -44,11 +44,12 @@ struct AppIconView: View {
                     .accessibilityAddTraits(choice == current ? .isSelected : [])
                 }
             } footer: {
-                Text("The icon on your Home Screen.")
+                Text("The icon on your Home Screen.").foregroundStyle(.secondary)
             }
+            .paperRows()
         }
-        .navigationTitle("App Icon")
-        .navigationBarTitleDisplayMode(.inline)
+        .paperSheet()
+        .sheetTitle("App Icon")
         .task {
             for choice in AppIconChoice.allCases where previews[choice] == nil {
                 previews[choice] = await AppIcons.preview(choice)

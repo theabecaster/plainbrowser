@@ -19,9 +19,9 @@ Newest feature last.
 
 ## Integration 1: sheets and history wiring (2026-11-26)
 
-- **Grouped-list radii and the focus rim.** System grouped lists in the sheets use larger radii
-  than the 6–10 pt rule, and the field's mint-to-blue rim reads as a second accent. Either adjust
-  or record them as exceptions in docs/ui-reference.md.
+- **The focus rim.** The field's mint-to-blue rim reads as a second accent. Either adjust or
+  record it as an exception in docs/ui-reference.md. (The sheets' grouped-list radius is now a
+  recorded exception: "Sheets on paper" in docs/decisions.md.)
 - **Visits on commit, pushState and reloads.** History records at load end per back-forward item.
   Same-document navigations and reloads are not new visits until WebEngine's navigation delegate
   reports commits (Lane C).
@@ -61,9 +61,9 @@ Newest feature last.
 
 ## M4 completeness (lane M4, 2026-11-26)
 
-- **Downloads sheet styling.** The list card's large radius, the gap under the toolbar and the bold
-  empty-state sentence come from the system `List` and `ContentUnavailableView`, shared with
-  History. Revisit both sheets together. (Design review, round 1.)
+- **Downloads sheet styling.** The gap under the toolbar and the bold empty-state sentence come
+  from the system `List` and `ContentUnavailableView`, shared with History. The card's radius is
+  now a recorded exception ("Sheets on paper" in docs/decisions.md). (Design review, round 1.)
 - **Share in Downloads** uses `ShareLink`, which has no signpost hook. (Code review, round 1.)
 - **Iframe images in the link menu.** The pressed-image lookup reads the main frame only, so an
   image inside an iframe gets the link items but not Save Image / Copy Image. A press in an iframe
@@ -202,9 +202,6 @@ Newest feature last.
 
 - **Book pose.** Pills and toasts avoiding the fold (§8 "Book pose") are the M3 layout's, not
   `ControlRules`'; check them on the device with the state rules in mind.
-- **Sheet failure states.** History, Archive and Favorites show OK on a failed read, not Try
-  Again, and History's Clear is enabled with an empty history while a search is typed (§6,
-  Sheets; pre-existing, not in the gaps list). (Code review, round 1.)
 - **Fixed choices.** The tabs tip's trigger (2 gallery opens) and display count, the bump's
   travel and the edge swipe's commit distance live in their files; move them to `FixedChoices`
   when that file is free of other lanes' edits. (Code review, round 1.)
@@ -233,8 +230,8 @@ Newest feature last.
 - **Crossfade duration** (0.3 s) lives in `AppAppearance`; move it to `Motion` when the
   DesignSystem lane is free. (Code review, polish.)
 - **Settings polish seen in captures, not this lane's:** the dark sheet's Done capsule reads low
-  contrast; rows are full capsules where ui-reference says 6–10 pt corners. (Design review,
-  polish.)
+  contrast. (Design review, polish.) Rows' radius: a recorded exception ("Sheets on paper" in
+  docs/decisions.md).
 
 ## One-tab switcher (2026-11-26)
 
@@ -252,10 +249,6 @@ Newest feature last.
   but WebKit has no `prefers-reduced-transparency`, so the reader page keeps its texture. Bridge the
   setting into the reader (a class on the root, or a flat stylesheet), including changes while it
   is open. (Code review, round 1.)
-- **Sheets on paper.** Settings, History, Favorites, Archive and Downloads keep the system grouped
-  list look. Hiding the list background in `FeatureSheets.sheet` alone leaves white rows on a white
-  sheet, so paper there needs `PaperBackground()` inside each screen's `NavigationStack` and a row
-  color that suits Deep Lagoon. A design call for the owner.
 - **Duo start screen wash.** The start screen's bottom wash (`EmptyTabView`'s glow) ends at the
   start screen's edge, so on the Duo it stops in a hard vertical line at the vertical bar's lane.
   Pre-existing; extend the wash under the lane or fade it out before the edge. (Design review,
@@ -274,3 +267,14 @@ Newest feature last.
 - **Thumbnail memory on the device.** Thumbnails are now 3x at card width (about 5 MB decoded
   each, 40 MB cache). Check memory with many tabs on the Duo and lower the cache if it pushes the
   app toward a memory warning.
+
+## Sheets on paper (2026-11-26)
+
+- **History's floating search field.** With the hard bottom scroll edge, rows fade under the glass
+  field, but a ghost of the row behind its upper edge still shows (light and dark, iPhone 17). It
+  is the system's bottom search glass; a clean backdrop means moving the field to the top
+  (`.searchable(placement: .navigationBarDrawer(displayMode: .always))`), which changes where
+  search lives in History and Archive. A call for the owner. (Design review, round 2.)
+- **Supporting text in dark.** Raised to 76 % paper (90 % with Increase Contrast) and readable,
+  but the reviewer still finds footers, addresses and times subdued at night. Check on the Duo
+  before going higher, which flattens the hierarchy. (Design review, round 2.)

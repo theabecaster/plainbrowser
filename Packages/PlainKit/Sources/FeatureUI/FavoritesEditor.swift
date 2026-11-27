@@ -43,17 +43,20 @@ public struct FavoritesEditor: View {
                     .onMove { model.move(fromOffsets: $0, toOffset: $1) }
                     .onDelete { model.delete(atOffsets: $0) }
                 } footer: {
-                    if !model.favorites.isEmpty { Text(Wording.favoritesFooter) }
+                    if !model.favorites.isEmpty { Text(Wording.favoritesFooter).foregroundStyle(.secondary) }
                 }
+                .paperRows()
             }
             .environment(\.editMode, .constant(.active))
+            .paperSheet()
             .overlay {
-                if model.isLoaded, model.favorites.isEmpty {
+                if model.loadFailed {
+                    ReadFailedView(message: Wording.favoritesReadFailed, systemImage: "star") { await model.load() }
+                } else if model.isLoaded, model.favorites.isEmpty {
                     ContentUnavailableView("Add favorites from the page menu.", systemImage: "star")
                 }
             }
-            .navigationTitle("Favorites")
-            .navigationBarTitleDisplayMode(.inline)
+            .sheetTitle("Favorites")
             .toolbar { DoneButton(onDone: onDone) }
             .alert("Rename Favorite", isPresented: Binding(
                 get: { renaming != nil }, set: { if !$0 { renaming = nil } }

@@ -61,6 +61,8 @@ public final class ArchiveModel {
         }
     }
     public var errorMessage: String?
+    /// The last read failed: the screen says so with Try Again, never as the empty state.
+    public private(set) var loadFailed = false
 
     private let store: any ArchiveStoring
     private let onRestore: (ArchivedTab) -> Void
@@ -117,9 +119,12 @@ public final class ArchiveModel {
             let tabs = try await store.archivedTabs(matching: query, limit: FixedChoices.archiveSearchLimit)
             guard current == generation, !Task.isCancelled else { return }
             rows = tabs.filter { !deleted.contains($0.id) }.map(ArchiveRow.init)
+            loadFailed = false
         } catch {
-            guard current == generation else { return }
-            errorMessage = "The archive couldn't be read."
+            guard current == generation, !(error is CancellationError) else { return }
+            // Rows from an earlier read would be stale under the failure; it replaces them.
+            rows = []
+            loadFailed = true
         }
         isLoaded = true
     }

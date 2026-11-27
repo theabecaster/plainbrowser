@@ -12,7 +12,9 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **New Tab card content drifts:** fixed; the + and label stay at the card's center. (dev, next build.)
 
-- **Paper texture:** faint fibre and grain on the start screen, search, tab cards, sidebar and strip, reader and intro; flat under Increase Contrast. Settings-style sheets keep the system list look for now. (dev, next build.)
+- **Sheets on paper:** Settings, History, Favorites, Archived Tabs and Downloads sit on Plain's textured paper, with rows on lifted paper cards, ink text and New York titles; everything else (swipes, search, edit, menus, Dynamic Type) stays native. A failed read shows Try Again instead of an empty list. (dev, sheets lane.)
+
+- **Paper texture:** faint fibre and grain on the start screen, search, tab cards, sidebar and strip, reader and intro; flat under Increase Contrast. (dev, next build.)
 
 - **Swipe up with one tab:** dragging the bar up (or Show All Tabs) with a single page opens the switcher with the same page-to-card motion: the card rests centered and a paper New Tab card grows in beside it; the tabs button's tap stays "+". On the start screen alone the swipe still bumps. (dev, one-tab lane.)
 

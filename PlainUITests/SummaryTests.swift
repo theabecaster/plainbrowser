@@ -69,7 +69,10 @@ final class SummaryTests: XCTestCase {
         shot("b3-writing")
         let source = app.buttons["summarySource.1"]
         XCTAssertTrue(source.waitForExistence(timeout: 15), "the sources end the summary")
-        XCTAssertTrue(app.staticTexts["The sources differ on timing, so check the latest one."].exists)
+        // Each point reads with the sites it cites (VoiceOver).
+        let last = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "The sources differ on timing")).firstMatch
+        XCTAssertTrue(last.exists)
+        XCTAssertTrue(last.label.contains("Sources: "), last.label)
         shot("b4-done")
         app.swipeUp()
         shot("b5-sources")

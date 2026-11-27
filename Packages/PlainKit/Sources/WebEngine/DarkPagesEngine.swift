@@ -907,8 +907,10 @@ extension DarkPages {
         // A picture is what the text sits on when it is the background, not a small icon on a
         // colored box.
         if (picture.includes('url(') && (!(own && own[3] > 0.9) || /cover|contain/.test(cs.backgroundSize))) image = true;
-        // A logo drawn as the background of an empty box (its name hidden off the box).
+        // A logo drawn as the background of an empty box (its name hidden off the box), once:
+        // a repeating picture is a pattern, not a logo.
         if (!(own && own[3] > 0) && up.darkened && !up.image && !el.firstElementChild
+            && cs.backgroundRepeat === 'no-repeat'
             && (!hasText(el) || parseFloat(cs.textIndent) < -500 || parseFloat(cs.fontSize) === 0)) {
           const urls = picture.match(/url\(/g);
           const m = /url\(\s*(['"]?)([^'")]+)\1\s*\)/.exec(picture);
@@ -1150,7 +1152,46 @@ extension DarkPages {
         return g.getImageData(0, 0, w, h).data; // throws for a picture another origin won't share
       } finally { const t2 = now() - t; stats.logoMs += t2; stats.logoMax = Math.max(stats.logoMax, t2); cost += t2; }
     };
+    // An SVG picture is judged from its source, never drawn: rasterizing an SVG on the main
+    // thread costs milliseconds where a PNG costs microseconds. Its paints must all be greys
+    // without white (no colors, no embedded pictures); no paint at all means SVG's default black.
+    const isSVG = (src) => /^data:image\/svg\+xml/i.test(src) || /\.svg(?:[?#]|$)/i.test(src);
+    const svgSource = async (src) => {
+      if (src.startsWith('data:')) {
+        const comma = src.indexOf(',');
+        const body = src.slice(comma + 1);
+        try { return /;base64/i.test(src.slice(0, comma)) ? atob(body) : decodeURIComponent(body); } catch (e) { return null; }
+      }
+      let other;
+      try { other = new URL(src).origin !== location.origin; } catch (e) { return null; }
+      try {
+        const response = await fetch(src, { mode: other ? 'cors' : 'same-origin', credentials: other ? 'omit' : 'same-origin' });
+        const text = response.ok ? await response.text() : null;
+        return text && text.length <= 65536 ? text : null;
+      } catch (e) { return null; }
+    };
+    const PAINT = /(?:^|[\s;"'{])(?:fill|stroke|stop-color)\s*[=:]\s*["']?([^"';>}\n]+)/gi;
+    const svgMarkColor = (text) => {
+      const t = now();
+      try {
+        if (/<(image|foreignObject)\b/i.test(text)) return false;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (const m of text.matchAll(PAINT)) {
+          const value = m[1].trim().toLowerCase();
+          if (value === 'none' || value === 'transparent' || value.startsWith('url(') || value === 'inherit') continue;
+          const c = value === 'currentcolor' ? [0, 0, 0, 1] : parseColor(value);
+          if (!c || c[3] === 0) continue;
+          if (chroma(c) >= SVG_CHROMA || luminance(c) > 0.6) return false;
+          r += c[0]; g += c[1]; b += c[2]; n++;
+        }
+        return n ? [r / n, g / n, b / n, 1] : [0, 0, 0, 1];
+      } finally { const t2 = now() - t; stats.logoMs += t2; cost += t2; }
+    };
     const readLogo = async (img, src, rect) => {
+      if (isSVG(src)) {
+        const text = await svgSource(src);
+        return text ? svgMarkColor(text) : false;
+      }
       const sample = (nw, nh) => {
         if (!nw || !nh) { nw = rect.width; nh = rect.height; }
         const k = Math.min(1, LOGO_SAMPLE / Math.max(nw, nh));

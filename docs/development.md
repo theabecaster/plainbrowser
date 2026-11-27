@@ -89,8 +89,9 @@ Simulator builds sign without a team, and the group works there too. Tests:
 
 - `PlainTests` (hosted in the app, in the Smoke plan): performs every App Intent and checks the
   command it sends.
-- `PlainUITests/SystemTests` (Smoke): the `plainbrowser:` links end to end (simulator builds have
-  no suffix).
+- `PlainUITests/SystemTests` (Smoke): the `plainbrowser:` links end to end, with the scheme of the
+  app under test (`PlainLinkScheme` in `PlainUITests/Info.plist`), so a Plain Dev run never sends a
+  link to the TestFlight app.
 - `SystemIntegrationTests` (PlainKit): links, the shared file, the Spotlight sync against a fake
   index and the widget timeline run with `swift test`; on a simulator they also render the widget
   faces to PNGs:

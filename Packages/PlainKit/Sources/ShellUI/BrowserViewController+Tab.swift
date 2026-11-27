@@ -283,6 +283,11 @@ extension BrowserViewController {
         updateButtons()
         updatePageState()
         updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
+        // A page from the reading list that can't load offline opens its saved copy instead.
+        if new.isFailed, old?.isFailed != true, let error = new.loadError, let tried = new.shownAddress,
+           ControlRules.opensSavedCopy(errorDomain: error.domain, code: error.code) {
+            openSavedCopy(of: tried)
+        }
     }
 
     // MARK: Page state (crash, error, form waiting)
@@ -489,21 +494,65 @@ extension BrowserViewController {
             let article = try? await session.reader.article(in: page)
             guard let self, !Task.isCancelled, self.currentTab === tab else { return }
             guard let article else { return Haptic.nothingThere.play() }
-            self.expandChrome(animated: true)
-            let reader = self.engineUI.reader
-            reader.onOpenLink = { [weak self] url in
-                guard let self, let tab = self.currentTab else { return }
-                self.closeReader(animated: true)
-                tab.load(url)
-            }
-            reader.onShown = { [weak self] in self?.updateButtons() }
-            reader.prepare(pool: session.pool, isPrivate: tab.isPrivate, in: self.webContainer, scrollDelegate: self)
-            // A tap on the status bar scrolls the reader, not the page under it.
-            session.pool.scrollView(for: tab)?.scrollsToTop = false
-            self.updatePageInsets()
-            try? await reader.show(article)
-            self.updateButtons()
+            await self.presentReader(article, over: tab)
         }
+    }
+
+    /// A saved page failed to load for want of the network (`ControlRules.opensSavedCopy`): its
+    /// reader copy, if the reading list has one, opens over the error, as if the user had opened
+    /// the reader. Back or Hide Reader returns to the error and its Try Again.
+    func openSavedCopy(of url: URL) {
+        guard let tab = currentTab, !isShowingReader, let failure = tab.loadError else { return }
+        let signposter = Signposts.signposter
+        let state = signposter.beginInterval(Signposts.readingListOfflineCopy)
+        engineUI.readerTask?.cancel()
+        engineUI.readerTask = Task { [weak self, weak tab, data] in
+            defer { signposter.endInterval(Signposts.readingListOfflineCopy, state) }
+            guard let copy = await data.savedCopy(for: url), let article = await Self.decodeArticle(copy) else { return }
+            // Still the same failure: a new load (even one that failed another way, such as a
+            // certificate warning that must stay in front) or another tab makes the copy moot.
+            guard let self, let tab, !Task.isCancelled, self.currentTab === tab, !tab.isLoading,
+                  tab.loadError == failure
+            else { return }
+            // Once the copy is on screen, say why the page reads as the reader and offer the live
+            // page again.
+            await self.presentReader(article, over: tab) { [weak self, weak tab] in
+                self?.showToastWhenFree { [weak self, weak tab] in
+                    self?.tabsUI.toast.show(String(localized: "Showing your saved copy."), button: "Try Again") {
+                        guard let self, let tab, self.currentTab === tab else { return }
+                        Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again from saved copy")
+                        self.closeReader(animated: true)
+                        tab.load(url)
+                    }
+                }
+            }
+        }
+    }
+
+    @concurrent
+    nonisolated private static func decodeArticle(_ data: Data) async -> ReaderArticle? {
+        try? JSONDecoder().decode(ReaderArticle.self, from: data)
+    }
+
+    /// Puts `article` in the reader view over `tab`'s page; `shown` runs once it is on screen.
+    private func presentReader(_ article: ReaderArticle, over tab: Tab, shown: (() -> Void)? = nil) async {
+        expandChrome(animated: true)
+        let reader = engineUI.reader
+        reader.onOpenLink = { [weak self] url in
+            guard let self, let tab = self.currentTab else { return }
+            self.closeReader(animated: true)
+            tab.load(url)
+        }
+        reader.onShown = { [weak self] in
+            self?.updateButtons()
+            shown?()
+        }
+        reader.prepare(pool: session.pool, isPrivate: tab.isPrivate, in: webContainer, scrollDelegate: self)
+        // A tap on the status bar scrolls the reader, not the page under it.
+        session.pool.scrollView(for: tab)?.scrollsToTop = false
+        updatePageInsets()
+        try? await reader.show(article)
+        updateButtons()
     }
 
     /// Back to the page under the reader.

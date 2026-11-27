@@ -140,8 +140,8 @@ final class PageFeatureTests: XCTestCase {
         Thread.sleep(forTimeInterval: 2)
         openPageMenu(app)
         let ids = ["pageSheet.address", "menu.copyLink", "menu.reload", "menu.find", "menu.reader", "menu.translate",
-                   "menu.share", "menu.zoomIn", "menu.favorite", "more.newPrivateTab", "more.reopenClosedTab",
-                   "menu.history", "menu.settings"]
+                   "menu.share", "menu.zoomIn", "menu.favorite", "menu.readLater", "menu.siteSettings", "more.newPrivateTab", "more.reopenClosedTab",
+                   "menu.history", "menu.readingList", "menu.editFavorites", "menu.settings"]
         for id in ids {
             XCTAssertTrue(app.buttons[id].waitForExistence(timeout: 3), "\(id) is in the page sheet")
         }

@@ -41,6 +41,13 @@ extension BrowserViewController {
         if let page, !focusUI.isEditingPage {
             items.append(.currentPage(url: page, title: tab?.title))
         }
+        // Unread Reading List pages: saved on purpose to read next, so private tabs show them
+        // too, as they show favorites.
+        var taken = Set([page].compactMap { $0 }.map(AddressBarSuggestions.addressKey))
+        for saved in focusUI.content.unread.prefix(FixedChoices.focusReadingList) {
+            guard taken.insert(AddressBarSuggestions.addressKey(saved.url)).inserted else { continue }
+            items.append(.suggestion(.page(url: saved.url, title: saved.title, isFavorite: false, isSaved: true)))
+        }
         guard !isPrivate else {
             if items.isEmpty, focusUI.content.favorites.isEmpty {
                 items.append(.hint(String(localized: "Private tab: Plain keeps no history of the pages you visit here.")))
@@ -54,7 +61,6 @@ extension BrowserViewController {
                 guard let first = batch.tabs.first else { return nil }
                 return .closed(batch: batch.id, url: first.entry.url, title: first.entry.title, count: batch.tabs.count)
             }
-        var taken = Set([page].compactMap { $0 }.map(AddressBarSuggestions.addressKey))
         for case .closed(_, let url?, _, _) in closed { taken.insert(AddressBarSuggestions.addressKey(url)) }
         let recent = focusUI.content.recent
             .filter { !taken.contains(AddressBarSuggestions.addressKey($0.url)) }

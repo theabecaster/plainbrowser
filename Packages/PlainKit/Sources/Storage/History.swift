@@ -313,12 +313,12 @@ extension AppDatabase {
         }
     }
 
-    /// History and favorite matches for the address bar, read in one consistent snapshot. Feed the
-    /// result to `AddressBarSuggestions.merge` with the engine's suggestions; it deduplicates and
-    /// trims to the final page count.
+    /// History, favorite and reading list matches for the address bar, read in one consistent
+    /// snapshot. Feed the result to `AddressBarSuggestions.merge` with the engine's suggestions; it
+    /// deduplicates and trims to the final page count.
     public func addressBarCandidates(
         for text: String, historyLimit: Int = FixedChoices.maxPageSuggestions
-    ) async throws -> (history: [PageCandidate], favorites: [PageCandidate]) {
+    ) async throws -> (history: [PageCandidate], favorites: [PageCandidate], saved: [PageCandidate]) {
         let query = HistoryQuery(text)
         return try await writer.read { db in
             var history = try query.pattern.map {
@@ -344,7 +344,8 @@ extension AppDatabase {
                 }
             }
             let favorites = try Self.favoriteMatches(query.text, in: db)
-            return (history, favorites)
+            let saved = try Self.readingListMatches(query, limit: historyLimit, in: db)
+            return (history, favorites, saved)
         }
     }
 

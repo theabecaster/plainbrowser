@@ -1,3 +1,4 @@
+import Foundation
 @testable import BrowserCore
 import Testing
 
@@ -219,6 +220,22 @@ import Testing
         #expect(rules.blockingToggle)
         #expect(!rules.pullToRefresh, "Try Again owns it")
         #expect(rules.back == .dimmed && rules.share == .shown)
+    }
+
+    @Test func readLaterFollowsFavoritesAndTheCopyOpensOnlyForNetworkFailures() {
+        for condition in [PageCondition.loaded, .loading, .failed, .crashed] {
+            let rules = ControlRules(Self.page(condition: condition))
+            #expect(rules.readLater == rules.favorite, "\(condition)")
+        }
+        var reader = Self.page(condition: .failed)
+        reader.isReaderOpen = true
+        #expect(ControlRules(reader).readLater, "the saved copy over a failed load can be removed")
+        for code in [NSURLErrorNotConnectedToInternet, NSURLErrorTimedOut, NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost] {
+            #expect(ControlRules.opensSavedCopy(errorDomain: NSURLErrorDomain, code: code))
+        }
+        #expect(!ControlRules.opensSavedCopy(errorDomain: NSURLErrorDomain, code: NSURLErrorServerCertificateUntrusted))
+        #expect(!ControlRules.opensSavedCopy(errorDomain: NSURLErrorDomain, code: NSURLErrorCancelled))
+        #expect(!ControlRules.opensSavedCopy(errorDomain: "WebKitErrorDomain", code: NSURLErrorTimedOut))
     }
 
     @Test func darkPagesItemOnlyWhereItSwitchesSomething() {

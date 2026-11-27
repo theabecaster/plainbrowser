@@ -1519,3 +1519,40 @@ interrupted from where it is on screen, and nothing animates without a reason.
 - **Results pages show the query.** `SearchEngine.query(inResults:)` reads the query back from the
   engine's own results URL (same host and path as its template), so the pill reads what was
   searched; a tap brings it back selected and refines in the same tab.
+
+## Bookmarks and the reading list (2026-11-27)
+
+Research: docs/research/bookmarks.md.
+
+- **No bookmark folders.** Favorites stay the one list of kept pages (flat, ordered, above the
+  keyboard); History search and the tab archive find the rest. Bookmark use is low in every
+  published number, nothing shows folders are common, and Arc shipped without bookmarks
+  (`FixedChoices.bookmarkFolders`).
+- **Reading List, "Read Later" in the page menu.** A page saved to read once. Unread until opened
+  from the list; read pages move to a Read section under the unread ones and stay until deleted.
+- **Offline copy: the reader's article, not a web archive** (Chrome's choice). Readability is
+  already in Plain; the copy is the article's cleaned HTML as JSON, LZFSE-compressed in a table of
+  its own (`readingListCopy`, deleted with its item), so the list and the address bar never read
+  copies. A page with no article (the readerable check said no) is saved as its link, and
+  Readability is never run on it. Web archives are heavy, break on script-driven pages and don't
+  open in a reader.
+- **Offline is automatic, no switch:** a saved page opens live; when its load fails for want of
+  the network (offline, connection lost, host not found, not answering, timed out;
+  `ControlRules.opensSavedCopy`) its copy opens in the reader over the error. Back or Hide Reader
+  shows the error and its Try Again. Not on certificate errors: the warning stays in front.
+- **Address bar:** unread saved pages that match rank right after favorites, with the eyeglasses
+  symbol. Read ones match as ordinary pages. The reading list query runs in the same read as
+  history and favorites, on its own FTS5 index (title and address, prefixes 1 and 2).
+- **Clear History and Data keeps the reading list**, as it keeps favorites and open tabs.
+- **Page menu:** Read Later (Remove from Reading List once saved) follows Add to Favorites, under
+  the same rule (`ControlRules.readLater`); Reading List sits above the History, Favorites and
+  Settings row. Both are added through the existing builder only (`+ReadingList` builds them):
+  the menu's layout and its fit on the Duo's outer screen belong to the page menu redesign lane.
+  Measured for that lane on the outer screen (French article, a closed tab, 466x678): the two
+  extra lines push the History row out of the menu. A layout that fit with 63 pt to spare:
+  Add to Favorites, Read Later and Site Settings as one captioned row ("Favorite", "Read Later",
+  "Site"), and History, Reading List, Favorites and Settings as one row of four symbols (a
+  captioned `.medium` row holds three; a fourth wraps to a second row).
+- **Signposts:** `readingList.save` (interval, "copy" or "link"), `readingList.remove`,
+  `readingList.show`, `readingList.load` (interval), `readingList.open`, `readingList.edit`,
+  `readingList.offlineCopy` (interval).

@@ -207,7 +207,10 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// The most rows the sheet keeps: a full suggestion list, or the focused field's content
     /// (copied link, the page, recent pages, closed tabs). Rows that don't fit above the field
     /// stay out, so this only bounds the work.
-    static let maxRows = max(FixedChoices.maxAddressBarSuggestions, 2 + FixedChoices.focusRecentPages + FixedChoices.focusClosedTabs)
+    static let maxRows = max(
+        FixedChoices.maxAddressBarSuggestions,
+        2 + FixedChoices.focusReadingList + FixedChoices.focusRecentPages + FixedChoices.focusClosedTabs
+    )
 
     /// Whether the favorites strip may show: only while the field is empty.
     func setFavoritesAllowed(_ allowed: Bool) {
@@ -634,7 +637,7 @@ final class SuggestionRow: UIControl {
     /// dedupes it) or a search's text, ignoring case; the focused field's own rows by kind.
     static func identity(of item: SheetItem) -> String {
         switch item {
-        case .suggestion(.page(let url, _, _)): "page " + AddressBarSuggestions.addressKey(url)
+        case .suggestion(.page(let url, _, _, _)): "page " + AddressBarSuggestions.addressKey(url)
         case .suggestion(.search(let query)): "search " + query.lowercased()
         case .currentPage(let url, _): "current " + AddressBarSuggestions.addressKey(url)
         case .copiedLink: "copied"
@@ -743,9 +746,9 @@ final class SuggestionRow: UIControl {
         var tint = Palette.textSecondary
         isEnabled = true
         switch item {
-        case .suggestion(.page(let url, let pageTitle, let isFavorite)):
+        case .suggestion(.page(let url, let pageTitle, let isFavorite, let isSaved)):
             setPage(url: url, title: pageTitle)
-            setSymbol(isFavorite ? "star" : "clock")
+            setSymbol(isFavorite ? "star" : isSaved ? "eyeglasses" : "clock")
             pick = .page(url)
             accessibilityIdentifier = "suggestion.page.\(index)"
         case .suggestion(.search(let query)):

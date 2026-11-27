@@ -3,6 +3,8 @@ import BrowserCore
 import DesignSystem
 import os
 import PerfSignposts
+import Reader
+import Storage
 import UIKit
 import WebEngine
 import WebKit
@@ -67,8 +69,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// What the focused address bar offers before typing, and whether it edits the page's
     /// address (`+AddressFocus`).
     let focusUI = AddressFocusState()
-    /// The page menu's last Add to / Remove from Favorites answer, for rebuilding the open menu.
-    var lastFavoriteAnswer: Bool?
+    /// The page sheet's last favorite and reading list answer, for rebuilding the open sheet.
+    var lastPageMarks: PageMarks?
     /// The page sheet while it is up, so a change under it (zoom) shows at once.
     weak var pageSheet: PageSheetController?
     /// Show Tabs asked for before the saved tabs were in (a cold launch from Siri); it runs once
@@ -1240,15 +1242,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if isEditingAddress { endAddressEditing() }
         Signposts.signposter.emitEvent(Signposts.pageMenu)
         Signposts.signposter.emitEvent(Signposts.pageSheet)
-        guard let url = currentTab?.url, LiveAddressBarData.isRecordable(url), currentRules().favorite else {
-            lastFavoriteAnswer = nil
+        // The address the items act on (`pageAddress`): under a saved copy over a failed load,
+        // that is the page that failed, not the one the tab last showed.
+        guard let url = pageAddress, LiveAddressBarData.isRecordable(url), currentRules().favorite else {
+            lastPageMarks = nil
             return presentPageSheet(from: source)
         }
         Task { [weak self, data] in
-            let isFavorite = await data.isFavorite(url)
+            let marks = await data.pageMarks(for: url)
             guard let self else { return }
             // The page changed meanwhile: the answer is for another page.
-            self.lastFavoriteAnswer = self.currentTab?.url == url ? isFavorite : nil
+            self.lastPageMarks = self.pageAddress == url ? marks : nil
             self.presentPageSheet(from: source)
         }
     }
@@ -1263,7 +1267,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private func presentPageSheet(from source: (any UIPopoverPresentationControllerSourceItem)?) {
         guard presentedViewController == nil else { return }
         let controller = PageSheetController { [weak self] in
-            self?.pageSheetModel(isFavorite: self?.lastFavoriteAnswer) ?? PageSheetModel()
+            self?.pageSheetModel(marks: self?.lastPageMarks) ?? PageSheetModel()
         }
         controller.onEditAddress = { [weak self, weak controller] in
             // The field rises as the sheet goes down: one hand-over, no pause between.
@@ -1295,13 +1299,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// The sheet's content: every item follows docs/state-rules.md §4 through ControlRules, built
     /// from the same actions the page menu had.
-    func pageSheetModel(isFavorite: Bool?) -> PageSheetModel {
+    func pageSheetModel(marks: PageMarks?) -> PageSheetModel {
         let rules = currentRules()
         var model = PageSheetModel()
         let history = UIAction(title: "History", image: UIImage(systemName: "clock")) { [weak self] _ in
             self?.showHistory()
         }
         history.accessibilityIdentifier = "menu.history"
+        let readingList = readingListMenuItem()
         let settings = UIAction(title: "Settings", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.showSettings()
         }
@@ -1312,7 +1317,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         favorites.accessibilityIdentifier = "menu.editFavorites"
         if !sheets.isReady {
             // The database is still opening (the first moments after launch).
-            for item in [history, favorites, settings] { item.attributes = .disabled }
+            for item in [history, readingList, favorites, settings] { item.attributes = .disabled }
         }
         let tabItems = tabItemsForMore(rules).compactMap { $0 as? UIAction }
         let downloads: [PageSheetModel.Row] = downloadsMenuItems().compactMap { element in
@@ -1323,7 +1328,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // The app's places close the sheet, under the tabs' places.
         var tail: [PageSheetModel.Row] = downloads
         if !tabItems.isEmpty { tail.append(tabItems.count > 1 ? .chips(tabItems) : .action(tabItems[0])) }
-        tail.append(.chips([history, favorites, settings]))
+        tail.append(.chips([history, readingList, favorites, settings]))
 
         guard rules.shareAndCopy, let tab = currentTab, let url = pageAddress else {
             // An empty pane of a split can still be swapped or closed.
@@ -1382,8 +1387,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         tiles += readerMenuItems(rules.reader).compactMap { $0 as? UIAction }
         tiles += translateMenuItems(for: tab, item: rules.translate).compactMap { $0 as? UIAction }
-        var favoriteItem: UIAction?
-        if rules.favorite, let isFavorite {
+        let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
+            guard let self else { return }
+            self.share(from: self.moreSource)
+        }
+        share.accessibilityIdentifier = "menu.share"
+        model.tiles = Array(tiles.prefix(3)) + [share]
+
+        // Keeping the page: Favorite, Read Later and Site Settings, one captioned row (the
+        // reading list lane's measured layout), so the sheet fits the Duo's outer screen.
+        var keep: [UIMenuElement] = []
+        if rules.favorite, let isFavorite = marks?.isFavorite {
             let title = tab.title
             let favorite = UIAction(
                 title: isFavorite ? "Remove from Favorites" : "Add to Favorites",
@@ -1392,24 +1406,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 self?.setFavorite(!isFavorite, url: url, title: title)
             }
             favorite.accessibilityIdentifier = "menu.favorite"
-            favoriteItem = favorite
+            keep.append(favorite)
         }
-        let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
-            guard let self else { return }
-            self.share(from: self.moreSource)
+        if rules.readLater, let isSaved = marks?.isSaved {
+            keep.append(readLaterMenuItem(for: tab, url: url, isSaved: isSaved))
         }
-        share.accessibilityIdentifier = "menu.share"
-        // Favorite takes a tile when one is free; otherwise it is a row.
-        var rows: [PageSheetModel.Row] = []
-        if let favoriteItem {
-            if tiles.count < 3 { tiles.append(favoriteItem) } else { rows.append(.action(favoriteItem)) }
-        }
-        model.tiles = tiles + [share]
-        if rules.zoom {
-            let zoom = zoomActions(for: tab)
-            rows.append(.stepper(zoom))
-        }
-        if rules.savePDF { rows += pdfMenuItems(for: tab).compactMap { ($0 as? UIAction).map { .action($0) } } }
         let siteItems = siteMenuItems(
             for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
         )
@@ -1420,10 +1421,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 children: siteItems
             )
             site.accessibilityIdentifier = "menu.siteSettings"
-            rows.append(.menu(site))
+            keep.append(site)
         } else {
-            rows += siteItems.compactMap { ($0 as? UIAction).map { .action($0) } }
+            keep += siteItems
         }
+        var rows: [PageSheetModel.Row] = []
+        switch keep.count {
+        case 0: break
+        case 1:
+            if let menu = keep[0] as? UIMenu {
+                rows.append(.menu(menu))
+            } else if let action = keep[0] as? UIAction {
+                rows.append(.action(action))
+            }
+        default: rows.append(.chips(keep))
+        }
+        if rules.zoom { rows.append(.stepper(zoomActions(for: tab))) }
+        if rules.savePDF { rows += pdfMenuItems(for: tab).compactMap { ($0 as? UIAction).map { .action($0) } } }
         rows += paneMenuItems(for: tab, rules: rules).compactMap { ($0 as? UIAction).map { .action($0) } }
         model.rows = rows + tail
         return model

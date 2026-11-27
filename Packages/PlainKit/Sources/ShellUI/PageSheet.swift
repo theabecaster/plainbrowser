@@ -24,7 +24,7 @@ struct PageSheetModel {
         /// A row that opens a menu (Site Settings).
         case menu(UIMenu)
         /// Small captioned buttons in one card (the tabs' places, the app's places).
-        case chips([UIAction])
+        case chips([UIMenuElement])
         /// Zoom: − percentage +, acting in place.
         case stepper([UIAction])
     }
@@ -202,7 +202,7 @@ final class PageSheetController: UIViewController {
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .title2)
         configuration.imagePlacement = .top
         configuration.imagePadding = Spacing.s
-        configuration.attributedTitle = AttributedString(Self.caption(action), attributes: AttributeContainer([
+        configuration.attributedTitle = AttributedString(Self.caption(action.title), attributes: AttributeContainer([
             .font: UIFont.preferredFont(forTextStyle: .caption1), .foregroundColor: Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
@@ -304,21 +304,30 @@ final class PageSheetController: UIViewController {
     }
 
     /// A small captioned button inside a card (History, Favorites, Settings; the tabs' places).
-    private func chip(_ action: UIAction) -> UIButton {
+    private func chip(_ element: UIMenuElement) -> UIButton {
         var configuration = UIButton.Configuration.plain()
-        configuration.image = action.image
+        configuration.image = element.image
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
         configuration.imagePlacement = .top
         configuration.imagePadding = Spacing.xs
         configuration.baseForegroundColor = Palette.ink
-        configuration.attributedTitle = AttributedString(Self.caption(action), attributes: AttributeContainer([
+        configuration.attributedTitle = AttributedString(Self.caption(element.title), attributes: AttributeContainer([
             .font: UIFont.preferredFont(forTextStyle: .caption1), .foregroundColor: Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.contentInsets = NSDirectionalEdgeInsets(top: Spacing.s, leading: Spacing.xxs, bottom: Spacing.s, trailing: Spacing.xxs)
-        let button = UIButton(configuration: configuration, primaryAction: perform(action, dismisses: true))
-        Self.identify(button, as: action)
-        button.isEnabled = !action.attributes.contains(.disabled)
+        let button = UIButton(configuration: configuration)
+        if let menu = element as? UIMenu {
+            // A chip that opens a menu (Site Settings); a choice there closes the sheet.
+            button.menu = dismissing(menu)
+            button.showsMenuAsPrimaryAction = true
+            button.accessibilityIdentifier = menu.accessibilityIdentifier
+            button.accessibilityLabel = [menu.title, menu.subtitle].compactMap { $0 }.joined(separator: ", ")
+        } else if let action = element as? UIAction {
+            button.addAction(perform(action, dismisses: true), for: .primaryActionTriggered)
+            Self.identify(button, as: action)
+            button.isEnabled = !action.attributes.contains(.disabled)
+        }
         return button
     }
 
@@ -385,7 +394,7 @@ final class PageSheetController: UIViewController {
     }
 
     /// The short caption a tile or chip shows; VoiceOver keeps the full name.
-    private static func caption(_ action: UIAction) -> String {
+    private static func caption(_ title: String) -> String {
         let captions = [
             "Find on Page": String(localized: "Find"), "Translate Page": String(localized: "Translate"),
             "Show Original": String(localized: "Original"), "Show Reader": String(localized: "Reader"),
@@ -393,8 +402,9 @@ final class PageSheetController: UIViewController {
             "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
             "Archived Tabs": String(localized: "Archive"), "Add to Favorites": String(localized: "Favorite"),
             "Remove from Favorites": String(localized: "Unfavorite"), "Edit Favorites": String(localized: "Favorites"),
+            "Remove from Reading List": String(localized: "Remove"),
         ]
-        return captions[action.title] ?? action.title
+        return captions[title] ?? title
     }
 
     private static func identify(_ button: UIButton, as action: UIAction) {

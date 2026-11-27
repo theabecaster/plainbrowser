@@ -634,8 +634,12 @@ import Testing
         pdf.isPDF = true
         #expect(!ControlRules(pdf).summarizePage)
         var foreign = article
-        foreign.isForeignLanguage = true
-        #expect(!ControlRules(foreign).summarizePage, "Translate Page helps there; a summary would be in that language")
+        foreign.isUnreadLanguage = true
+        #expect(!ControlRules(foreign).summarizePage, "a summary would be in a language the user doesn't read")
+        var translatable = article
+        translatable.isForeignLanguage = true
+        translatable.isUnreadLanguage = true
+        #expect(!ControlRules(translatable).summarizePage, "Translate Page helps there")
         var start = ChromeState()
         start.hasTab = true
         start.isAIAvailable = true

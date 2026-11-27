@@ -124,7 +124,7 @@ public struct SummaryBudgets: Sendable {
             update { $0.stage = .writing }
             await write(SummaryRequest(subject: progress.subject, sources: read))
         case .page(let title, let url, let read):
-            let text = try? await Self.within(budgets.pageRead) { try await read() }
+            let text = try? await abandoning(after: budgets.pageRead) { try await read() }
             guard !Task.isCancelled else { return }
             guard let text = text ?? nil, text.text.count >= FixedChoices.browseMinimumText else {
                 return finish(.failed(.pageUnreadable))
@@ -337,7 +337,7 @@ public struct SummaryBudgets: Sendable {
         var fitted = request.with(texts: await Self.fit(texts, budget: budget, condense: condense))
         let limit = contextTokens - FixedChoices.summaryResponseTokens
         if let count = await model.tokenCount(for: fitted), count > limit {
-            let ratio = Double(limit) / Double(count) * 0.9
+            let ratio = Double(limit) / Double(count) * FixedChoices.summaryRefitMargin
             fitted = request.with(texts: await Self.fit(texts, budget: Int(Double(budget) * ratio), condense: condense))
         }
         return fitted

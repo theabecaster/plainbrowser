@@ -97,11 +97,12 @@ import WebKit
               if (!a.href) continue;
               const heading = a.querySelector('h3, h2, .title');
               const title = (heading ? heading.textContent : a.textContent) || "";
-              out.push({ href: a.href, title: title.trim().slice(0, 300), isAd: !!(ads && a.closest(ads)) });
+              out.push({ href: a.href, title: title.trim().slice(0, titleLength), isAd: !!(ads && a.closest(ads)) });
               if (out.length >= max) break;
             }
             return JSON.stringify(out);
-            """, arguments: ["links": recipe.links, "ads": recipe.ads, "max": FixedChoices.browseResultsLinksRead],
+            """, arguments: ["links": recipe.links, "ads": recipe.ads, "max": FixedChoices.browseResultsLinksRead,
+                        "titleLength": FixedChoices.browseResultTitleLength],
             in: nil, contentWorld: world)
         guard let json = value as? String else { return [] }
         return try await decode(json)
@@ -240,68 +241,4 @@ import WebKit
     }
 }
 
-/// Runs `operation` and returns its result, or throws `CancellationError` as soon as the caller
-/// is cancelled, without waiting for `operation` to notice. WebKit's script calls can't be
-/// interrupted; this lets a cancelled read return at once while the call ends on its own, its
-/// answer dropped.
-@MainActor func abandoningOnCancel<Value: Sendable>(
-    _ operation: @escaping @MainActor () async throws -> Value
-) async throws -> Value {
-    let gate = CancelGate<Value>()
-    return try await withTaskCancellationHandler {
-        try await withCheckedThrowingContinuation { continuation in
-            let task = Task { @MainActor in
-                do { gate.resume(.success(try await operation())) } catch { gate.resume(.failure(error)) }
-            }
-            gate.attach(continuation, task: task)
-        }
-    } onCancel: {
-        gate.resume(.failure(CancellationError()))
-    }
-}
-
-/// Resumes one continuation exactly once, from whichever side gets there first: the operation's
-/// result or the cancellation (which may arrive on any thread, even before the continuation).
-private nonisolated final class CancelGate<Value: Sendable>: Sendable {
-    private struct State {
-        var continuation: CheckedContinuation<Value, any Error>?
-        var task: Task<Void, Never>?
-        var early: Result<Value, any Error>?
-        var done = false
-    }
-
-    private let state = Mutex(State())
-
-    func attach(_ continuation: CheckedContinuation<Value, any Error>, task: Task<Void, Never>) {
-        let early: Result<Value, any Error>? = state.withLock { state in
-            if let early = state.early {
-                state.done = true
-                return early
-            }
-            state.continuation = continuation
-            state.task = task
-            return nil
-        }
-        if let early {
-            if case .failure(let error) = early, error is CancellationError { task.cancel() }
-            continuation.resume(with: early)
-        }
-    }
-
-    func resume(_ result: Result<Value, any Error>) {
-        let pending: (CheckedContinuation<Value, any Error>, Task<Void, Never>?)? = state.withLock { state in
-            guard !state.done else { return nil }
-            guard let continuation = state.continuation else {
-                if state.early == nil { state.early = result }
-                return nil
-            }
-            state.done = true
-            state.continuation = nil
-            return (continuation, state.task)
-        }
-        guard let (continuation, task) = pending else { return }
-        if case .failure(let error) = result, error is CancellationError { task?.cancel() }
-        continuation.resume(with: result)
-    }
-}
 #endif

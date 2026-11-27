@@ -62,6 +62,9 @@ extension BrowserViewController {
         }
         state.isPDF = tab.isPDF
         state.isForeignLanguage = tab.translationTarget != nil
+        if let language = tab.pageLanguage {
+            state.isUnreadLanguage = !PageLanguage.isRead(language.maximalIdentifier, preferred: Locale.preferredLanguages)
+        }
         state.isTranslated = tab.translation != .original
         // Both only while Plain is dark: the page reports `.inactive` otherwise.
         state.isDarkened = tab.darkPages == .darkened

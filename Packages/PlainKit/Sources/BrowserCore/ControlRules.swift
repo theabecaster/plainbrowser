@@ -117,6 +117,9 @@ public struct ChromeState: Sendable, Equatable {
     /// The page's language is known, can be translated on the device, and is not one the user
     /// reads (their preferred languages).
     public var isForeignLanguage = false
+    /// The page's language is known and is not one the user reads, whether or not the device can
+    /// translate it (Summarize Page would write in that language).
+    public var isUnreadLanguage = false
     /// The page shows translated text, or a translation is on its way.
     public var isTranslated = false
     /// The user turned cookie banner handling off for this site.
@@ -367,7 +370,7 @@ public struct ControlRules: Sendable, Equatable {
     /// doesn't read: the summary is written in the page's language, so Translate Page is the
     /// item that helps there (and the menu keeps fitting the Duo's outer screen).
     public var summarizePage: Bool {
-        guard state.isAIAvailable, state.hasPage, !state.isForeignLanguage else { return false }
+        guard state.isAIAvailable, state.hasPage, !state.isUnreadLanguage else { return false }
         return state.isReaderOpen || (state.condition == .loaded && state.isReaderAvailable && !state.isPDF)
     }
 

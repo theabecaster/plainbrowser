@@ -212,6 +212,28 @@ import Testing
         #expect(clock.now - start < .seconds(2))
     }
 
+    @Test func aPageReadThatIgnoresCancellationIsAbandonedAtTheDeadline() async throws {
+        let recorder = Recorder()
+        var budgets = Self.budgets
+        budgets.pageRead = .milliseconds(200)
+        let clock = ContinuousClock()
+        let start = clock.now
+        let run = SummaryRun(
+            .page(title: "Stuck", url: URL(string: "https://stuck.example")!) {
+                // Like a WebKit script call: it answers when it answers, cancelled or not.
+                await withCheckedContinuation { continuation in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { continuation.resume() }
+                }
+                return nil
+            },
+            model: ScriptedSummaryModel(), budgets: budgets
+        ) { recorder.reports.append($0) }
+        run.start()
+        await run.finished()
+        #expect(recorder.reports.last?.stage == .failed(.pageUnreadable))
+        #expect(clock.now - start < .seconds(2))
+    }
+
     @Test func aBrowseWithOnePageReadStillCitesIt() async throws {
         let browsing = ScriptedBrowsing(resultsDelay: .milliseconds(10), pageDelay: .milliseconds(20))
         browsing.emptyHosts = Set(ScriptedBrowsing.links.compactMap { URL(string: $0.href)?.host() }).subtracting(["handbook.example"])

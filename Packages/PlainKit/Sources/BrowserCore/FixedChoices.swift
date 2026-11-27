@@ -609,6 +609,12 @@ public enum FixedChoices {
     /// Characters per token for the first fit, before the model counts the real prompt: English
     /// runs about 4, other languages less; 3 leaves room for both.
     public static let summaryCharactersPerToken = 3.0
+    /// A prompt the model counts over its room is cut to this share of the room it would need:
+    /// a tenth below the count, since cutting at paragraph ends removes less than asked.
+    public static let summaryRefitMargin = 0.9
+    /// A result's title read from a results page at most (characters): a long headline, never a
+    /// whole snippet.
+    public static let browseResultTitleLength = 300
     /// Summarize Page on a page longer than the context: this share of the room goes to the
     /// page's opening, the rest to paragraphs spread over the remainder.
     public static let summaryOpeningShare = 0.6

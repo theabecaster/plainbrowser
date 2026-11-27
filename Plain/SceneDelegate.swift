@@ -47,6 +47,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             let window = UIWindow(windowScene: windowScene)
             window.rootViewController = DefaultBrowserCardPreviewController()
             window.makeKeyAndVisible()
+            TestIsolationMarker.install(in: window)
             self.window = window
             return
         }
@@ -78,6 +79,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
         }
         window.makeKeyAndVisible()
+        TestIsolationMarker.install(in: window)
         introWindow = window
         LaunchFirstFrame.endAtNextFrame()
     }
@@ -87,11 +89,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let window = UIWindow(windowScene: windowScene)
         // Settings > Appearance from the first frame (the database is read later).
         AppAppearance.prepare(window)
-        let savedWindow = (windowScene.session.userInfo?[Self.windowIDKey] as? String).flatMap(UUID.init(uuidString:))
         self.session = BrowserSession(
             database: { [database] in await database.value },
             tabStates: TabStateStore(directory: self.options.tabStateDirectory),
-            windowID: savedWindow,
+            windowID: Self.savedWindowID(of: windowScene.session),
             thumbnailDirectory: self.options.thumbnailDirectory
         )
         let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) { [weak self] in
@@ -107,6 +108,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         navigation.setNavigationBarHidden(true, animated: false)
         window.rootViewController = navigation
         window.makeKeyAndVisible()
+        TestIsolationMarker.install(in: window)
         self.window = window
         self.browser = browser
         LaunchFirstFrame.endAtNextFrame()
@@ -172,9 +174,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneWillResignActive(_ scene: UIScene) {
         // Final once the saved tabs are in; written each time so the next launch finds it.
         guard let session else { return }
-        var info = scene.session.userInfo ?? [:]
-        info[Self.windowIDKey] = session.windowID.uuidString
-        scene.session.userInfo = info
+        SceneState.set(session.windowID.uuidString, forKey: Self.windowIDKey, in: scene.session)
+    }
+
+    /// The scene's window id (`SceneState`: never the owner's scene state in an isolated run).
+    private static func savedWindowID(of sceneSession: UISceneSession) -> UUID? {
+        SceneState.string(forKey: windowIDKey, in: sceneSession).flatMap(UUID.init(uuidString:))
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
@@ -228,41 +233,35 @@ private enum LaunchFirstFrame {
     }
 }
 
-/// Where the database lives, and the test-only launch arguments.
+/// Where the database lives, and the test-only launch arguments. The isolation arguments
+/// (`TestIsolation`: `-PlainInMemoryStore`, `-PlainTestStore`, `-PlainResetStore`) work in every
+/// configuration, so a Release perf run on the owner's phone uses throwaway state too. The seeds
+/// are Debug only.
 private nonisolated struct LaunchOptions: Sendable {
-    /// `-PlainInMemoryStore`: a fresh, empty database (UI tests). Debug builds only.
-    var inMemory = false
+    /// `-PlainInMemoryStore`: a fresh, empty database (UI tests).
+    let inMemory: Bool
     /// `-PlainSeedFavorites`: a few favorites, for screenshots. Debug builds only.
     var seedFavorites = false
     /// `-PlainSeedArchive`: a few archived tabs, for screenshots of the archive. Debug builds only.
     var seedArchive = false
     /// `-PlainTestStore`: a database and tab state on disk in a temporary folder that survives
-    /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. Release
-    /// builds too: the perf tests start each launch from an empty session this way, on disk like the
-    /// real store, and never read or write the user's own tabs. The reset only ever touches that
-    /// temporary folder.
-    var testStore = false
-    var resetStore = false
+    /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. The perf
+    /// tests start each launch from an empty session this way, on disk like the real store. The
+    /// reset only ever touches that temporary folder.
+    let resetStore: Bool
 
     init(arguments: [String]) {
-        testStore = arguments.contains("-PlainTestStore")
-        resetStore = testStore && arguments.contains("-PlainResetStore")
         #if DEBUG
-        inMemory = arguments.contains("-PlainInMemoryStore")
         seedFavorites = arguments.contains("-PlainSeedFavorites")
         seedArchive = arguments.contains("-PlainSeedArchive")
         #endif
-        let temporary = FileManager.default.temporaryDirectory
-        if testStore {
-            directory = temporary.appending(path: "PlainUITestStore", directoryHint: .isDirectory)
-        } else if inMemory {
-            directory = temporary.appending(path: "Plain-\(UUID().uuidString)", directoryHint: .isDirectory)
-        } else {
-            directory = URL.applicationSupportDirectory.appending(path: "Plain", directoryHint: .isDirectory)
-        }
+        inMemory = TestIsolation.mode == .inMemory
+        resetStore = TestIsolation.resetRequested
+        directory = TestIsolation.directory
+            ?? URL.applicationSupportDirectory.appending(path: "Plain", directoryHint: .isDirectory)
     }
 
-    /// The database's folder: Application Support/Plain, or a fresh temporary one for UI tests.
+    /// The database's folder: Application Support/Plain, or a temporary one in an isolated run.
     let directory: URL
 
     /// Where tabs' history, scroll and sessionStorage are saved for relaunch, next to the database.
@@ -271,12 +270,10 @@ private nonisolated struct LaunchOptions: Sendable {
 
     /// Thumbnails next to a test database (nil: the pool's Caches/Thumbnails). Launch prunes
     /// thumbnails that no tab in the database names, so a test store must never share the user's.
-    var thumbnailDirectory: URL? {
-        testStore || inMemory ? directory.appending(path: "Thumbnails", directoryHint: .isDirectory) : nil
-    }
+    var thumbnailDirectory: URL? { TestIsolation.folder("Thumbnails") }
 
     @concurrent func makeDatabase() async throws -> AppDatabase {
-        if inMemory, !testStore { return try AppDatabase.inMemory() }
+        if inMemory { return try AppDatabase.inMemory() }
         if resetStore { try? FileManager.default.removeItem(at: directory) }
         return try await AppDatabase.open(
             at: directory.appending(path: "Plain.sqlite"), tabStateDirectory: tabStateDirectory
@@ -311,5 +308,23 @@ private nonisolated struct LaunchOptions: Sendable {
             guard let url = URL(string: address) else { continue }
             _ = try? await database.addFavorite(url: url, title: title)
         }
+    }
+}
+
+/// The safety net's app side: in an isolated test run every window carries a tiny, invisible
+/// accessibility element (`TestIsolation.markerIdentifier`, value the mode). The UI tests look for
+/// it right after each launch and stop at once when it is missing, so a build that ignored the
+/// isolation arguments can't go on touching the owner's data. Nothing is added otherwise.
+@MainActor
+private enum TestIsolationMarker {
+    static func install(in window: UIWindow) {
+        guard TestIsolation.isActive else { return }
+        let marker = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        marker.isUserInteractionEnabled = false
+        marker.isAccessibilityElement = true
+        marker.accessibilityIdentifier = TestIsolation.markerIdentifier
+        marker.accessibilityLabel = "Test isolation"
+        marker.accessibilityValue = TestIsolation.mode.rawValue
+        window.addSubview(marker)
     }
 }

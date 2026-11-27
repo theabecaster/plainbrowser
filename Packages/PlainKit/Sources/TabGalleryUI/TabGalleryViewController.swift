@@ -4,6 +4,7 @@ import DesignSystem
 import os
 import PerfSignposts
 import UIKit
+import WebEngine
 
 /// The tab gallery: every open tab as a card (docs/plan.md, sections 5 and 6;
 /// docs/research/arc-tab-switcher.md).
@@ -1049,7 +1050,7 @@ extension TabGalleryViewController: UIContextMenuInteractionDelegate {
         if let url = item.url {
             top.append(UIAction(title: "Copy Link", image: UIImage(systemName: "link")) { _ in
                 Signposts.signposter.emitEvent(Signposts.galleryCopyLink)
-                UIPasteboard.general.url = url
+                UIPasteboard.plain.url = url
                 Haptic.success.play()
             })
             top.append(UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in

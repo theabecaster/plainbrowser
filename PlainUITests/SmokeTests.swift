@@ -40,14 +40,42 @@ extension XCUIApplication {
         return app
     }
 
-    /// Plain with a throwaway database and tab state, so a UI test never touches the device
-    /// owner's real tabs, history or settings. `-PlainTestStore` (a temporary on-disk store)
-    /// takes precedence where a test needs relaunch persistence.
-    static func isolated() -> XCUIApplication {
+    /// Plain with a throwaway database, tab state, defaults, website data, downloads and icon, so
+    /// a UI test never touches the device owner's real data (TestIsolation in the app, any build).
+    /// `-PlainTestStore` (a temporary on-disk store) takes precedence where a test needs relaunch
+    /// persistence. The only way UI tests make Plain: scripts/lib/check-isolation.zsh fails on any
+    /// other `XCUIApplication(` or on a `launchArguments =` that could drop the isolation argument.
+    static func isolated() -> IsolatedApplication {
         // The test target's app, whatever bundle id it was built with (".dev" on the owner's device).
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore"]
+        let app = IsolatedApplication()
+        app.launchArguments = [IsolatedApplication.inMemoryArgument]
         return app
+    }
+}
+
+/// Plain, launched only in isolation. Before launching it checks that the launch arguments ask for
+/// isolation, and launches nothing otherwise; right after, it checks that the app reports it (the
+/// marker every isolated window carries) and terminates the app at once if it doesn't, so a build
+/// that ignored the arguments (the Release perf run, once) can't go on using the owner's data.
+@MainActor
+final class IsolatedApplication: XCUIApplication {
+    /// TestIsolation's arguments and marker (the UI tests can't import BrowserCore).
+    static let inMemoryArgument = "-PlainInMemoryStore"
+    static let testStoreArgument = "-PlainTestStore"
+    static let markerIdentifier = "plainTestIsolation"
+
+    override func launch() {
+        guard launchArguments.contains(Self.inMemoryArgument) || launchArguments.contains(Self.testStoreArgument) else {
+            XCTFail("refusing to launch Plain without an isolation argument: \(launchArguments)")
+            return
+        }
+        super.launch()
+        let marker = descendants(matching: .any).matching(identifier: Self.markerIdentifier).firstMatch
+        guard marker.waitForExistence(timeout: 10) else {
+            terminate()
+            XCTFail("Plain did not report test isolation; terminated it so it can't touch the owner's data")
+            return
+        }
     }
 }
 

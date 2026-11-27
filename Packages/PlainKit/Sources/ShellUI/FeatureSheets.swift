@@ -5,6 +5,7 @@ import Storage
 #if os(iOS)
 import SwiftUI
 import UIKit
+import WebEngine
 import WebKit
 #endif
 
@@ -163,9 +164,11 @@ nonisolated struct LiveBrowsingDataClearer: BrowsingDataClearing {
     }
 
     #if os(iOS)
+    /// The store the tabs share (`AppWebsiteData.store`): in an isolated test run that is a
+    /// throwaway store, so clearing never reaches the owner's cookies and logins.
     @MainActor
     private static func removeWebsiteData() async {
-        await WKWebsiteDataStore.default().removeData(
+        await AppWebsiteData.store.removeData(
             ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast
         )
     }

@@ -86,8 +86,9 @@ public final class WebViewPool {
     private var privatePasskeyNoticeSites: Set<String> = []
     let dataStore: WKWebsiteDataStore
     /// Where Copy Link and Copy Image write. Tests use a private one: reading the general
-    /// pasteboard needs the user's permission.
-    var pasteboard = UIPasteboard.general
+    /// pasteboard needs the user's permission. An isolated run gets a private one too
+    /// (`UIPasteboard.plain`).
+    var pasteboard = UIPasteboard.plain
     let trustExceptions = ServerTrustExceptions()
 
     private var slots: [UUID: Slot] = [:]
@@ -124,15 +125,17 @@ public final class WebViewPool {
     ///   - contentModes: remembered desktop/mobile choices from the page menu.
     ///   - contentRules: content blocking, applied to each web view's own controller.
     ///   - pageScripts: user scripts added to each tab's own controller (Reader's check).
-    ///   - thumbnailDirectory: where thumbnails are written. Defaults to Caches/Thumbnails.
-    ///   - downloadDirectory: where downloads go. Defaults to Documents/Downloads (Files-visible).
+    ///   - thumbnailDirectory: where thumbnails are written. Defaults to Caches/Thumbnails, or a
+    ///     temporary folder in an isolated test run (its pruning must never reach the owner's).
+    ///   - downloadDirectory: where downloads go. Defaults to Documents/Downloads (Files-visible),
+    ///     or a temporary folder in an isolated test run.
     ///   - pageZooms: remembered page zoom per site.
     ///   - passkeysEnabled: whether the app has the web-browser entitlement, so WebKit can use
     ///     passkeys. Tests pass both.
     ///   - darkPages: the sites where the user turned dark pages off.
     ///   - translator: Translate Page's engine (Apple's Translation framework, from the shell).
     public init(
-        dataStore: WKWebsiteDataStore = .default(),
+        dataStore: WKWebsiteDataStore = AppWebsiteData.store,
         tabStates: TabStateStore? = nil,
         permissionStore: any SitePermissionStore = InMemorySitePermissionStore(),
         contentModes: any SiteContentModeStore = InMemorySiteContentModeStore(),
@@ -158,10 +161,13 @@ public final class WebViewPool {
         self.contentRules = contentRules
         self.pageScripts = pageScripts
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        thumbnails = ThumbnailService(directory: thumbnailDirectory ?? caches.appending(path: "Thumbnails"))
+        thumbnails = ThumbnailService(
+            directory: thumbnailDirectory ?? TestIsolation.folder("Thumbnails") ?? caches.appending(path: "Thumbnails")
+        )
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         downloads = DownloadCoordinator(
-            directory: downloadDirectory ?? documents.appending(path: EngineChoices.downloadsFolderName)
+            directory: downloadDirectory ?? TestIsolation.folder(EngineChoices.downloadsFolderName)
+                ?? documents.appending(path: EngineChoices.downloadsFolderName)
         )
         downloads.pool = self
         let center = NotificationCenter.default

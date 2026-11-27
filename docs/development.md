@@ -14,6 +14,11 @@ Xcode 27.2+, XcodeGen (`brew install xcodegen`) and `jq`. Every script runs from
 
 Package tests alone: `cd Packages/PlainKit && swift test`.
 
+## Test isolation
+
+Tests on the owner's device are isolated. Every UI, perf and capture launch goes through `XCUIApplication.isolated()`, which adds `-PlainInMemoryStore` (or a test adds `-PlainTestStore`), and the app honors these in Debug and Release (`TestIsolation` in BrowserCore). An isolated run uses a temporary database, tab state, thumbnails, downloads and TipKit store, a separate defaults suite, its own website data store (never the default one, so the owner's cookies and logins are never read or changed) and a private pasteboard. It never changes the Home Screen icon or adds to Photos. Only WebKit's compiled blocking lists stay shared: a cache built from the bundled lists, with no user data.
+`IsolatedApplication` refuses to launch without the argument and terminates the app if no `plainTestIsolation` marker shows. `scripts/test.sh` and `scripts/perf-gate.sh` run `scripts/lib/check-isolation.zsh` first and stop when any test could launch Plain another way, or when app code reaches owner state (standard defaults, general pasteboard, default website data, icon, Documents, scene state, Photos) outside the files that route it through `TestIsolation`.
+
 WebKit tests (`WebEngineTests`, `ContentBlockingTests`) need an iOS simulator; on macOS only their
 pure parts run. Run them on one of your own `plain-*` simulators:
 
@@ -67,11 +72,11 @@ reads the metrics with `xcrun xcresulttool get test-results metrics`, and append
   budgets in `perf/budgets.json`. A locked or unreachable phone exits 2 with a message instead of
   hanging.
 
-The tab tests (`testGalleryOpen`, `testBarSwipe`) launch with `-PlainTestStore -PlainResetStore`
-(honored in Release builds too): an empty store on disk in the app's temporary folder, so each run
-starts from the same two tabs, and on the device the owner's own tabs are never restored, archived
-or touched. Thumbnails live next to that store too. WebKit's website data (cookies, site storage)
-and the compiled blocking lists stay shared: the tests only visit their own local pages.
+Every perf test runs isolated (see "Test isolation"). The tab tests (`testGalleryOpen`,
+`testBarSwipe`) add `-PlainTestStore -PlainResetStore`: an empty store on disk in the app's
+temporary folder, so each run starts from the same two tabs. Only the compiled blocking lists stay
+shared with the owner's app: a read-only cache built from the bundled lists, the same for every
+run, holding no user data (which sites have blocking off lives in the isolated database).
 
 Exit codes: 0 pass, 1 budget breach, regression or test failure, 2 device not ready.
 

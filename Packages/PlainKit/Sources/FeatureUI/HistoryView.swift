@@ -31,7 +31,7 @@ public struct HistoryView: View {
                                 .contextMenu {
                                     Button("Open", systemImage: "arrow.up.forward.app") { open(row) }
                                     Button("Copy Link", systemImage: "doc.on.doc") {
-                                        UIPasteboard.general.url = row.url
+                                        UIPasteboard.plain.url = row.url
                                     }
                                     Section {
                                         Button("Delete", systemImage: "trash", role: .destructive) {

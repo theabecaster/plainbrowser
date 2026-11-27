@@ -32,6 +32,9 @@ SIM_NAME=${PLAIN_SIM_PREFIX:-plain}-perf-duo
 SIM_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-Duo
 SIM_RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4
 
+# Every perf launch must use throwaway state: the phone is the owner's own. Refuse otherwise.
+scripts/lib/check-isolation.zsh
+
 extra=()
 if [[ $MODE == device ]]; then
   require_device

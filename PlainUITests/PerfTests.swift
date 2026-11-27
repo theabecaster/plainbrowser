@@ -29,8 +29,9 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launchFirstFrame)
         )
+        prepareLaunchStore()
         measure(metrics: [metric], options: options) {
-            XCUIApplication.introSeen().launch()
+            Self.launchOnDiskStore().launch()
         }
     }
 
@@ -39,9 +40,44 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launch)
         )
+        prepareLaunchStore()
         measure(metrics: [metric], options: options) {
-            XCUIApplication.introSeen().launch()
+            Self.launchOnDiskStore().launch()
         }
+    }
+
+    /// The launch tests open a database on disk like a real launch, not the in-memory one: the
+    /// isolated test store, emptied and migrated once here, then reopened by every measured launch.
+    private func prepareLaunchStore() {
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestStore", "-PlainResetStore"]
+        app.launch()
+        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 10))
+        // The search field shows before the database opens. Settings' Appearance row enables once
+        // the saved settings are read, so the store is created and migrated before the terminate.
+        // More's Settings item is disabled until the database is attached, and the menu keeps the
+        // state it opened with: reopen it until Settings is enabled.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        XCTAssertTrue(app.buttons["more"].waitForExistence(timeout: 3))
+        let settings = app.buttons["Settings…"]
+        for _ in 0..<10 {
+            app.buttons["more"].tap()
+            XCTAssertTrue(settings.waitForExistence(timeout: 3))
+            if settings.isEnabled { break }
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "database opens")], timeout: 0.5)
+        }
+        settings.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Appearance'")).firstMatch
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: row)
+        XCTAssertEqual(XCTWaiter().wait(for: [enabled], timeout: 10), .completed, "the test store did not open")
+        app.terminate()
+    }
+
+    private static func launchOnDiskStore() -> XCUIApplication {
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestStore"]
+        return app
     }
 
     /// Two local pages in two tabs, side by side and both live, with the search sheet closed: the

@@ -41,21 +41,33 @@ public nonisolated enum AppIconChoice: String, CaseIterable, Sendable, Identifia
 }
 
 #if os(iOS)
+import BrowserCore
 import PerfSignposts
 import UIKit
 
 /// Reads and changes the Home Screen icon. The system shows its own "You have changed the icon"
 /// alert after a change; Plain adds nothing on top.
+///
+/// An isolated test run (`TestIsolation`) never changes the Home Screen icon: the choice is kept in
+/// memory for the run, so the picker behaves the same and the owner's icon stays.
 @MainActor
 public enum AppIcons {
     public static var current: AppIconChoice {
-        AppIconChoice(alternateIconName: UIApplication.shared.alternateIconName)
+        if TestIsolation.isActive { return isolatedChoice }
+        return AppIconChoice(alternateIconName: UIApplication.shared.alternateIconName)
     }
+
+    /// The icon an isolated run has "set", starting from the default.
+    private static var isolatedChoice = AppIconChoice.dawn
 
     /// Switches the icon. Returns false when the system refused (it then keeps the old icon).
     @discardableResult
     public static func set(_ choice: AppIconChoice) async -> Bool {
         guard choice != current else { return true }
+        if TestIsolation.isActive {
+            isolatedChoice = choice
+            return true
+        }
         guard UIApplication.shared.supportsAlternateIcons else { return false }
         let interval = Signposts.signposter.beginInterval(Signposts.appIconChange)
         defer { Signposts.signposter.endInterval(Signposts.appIconChange, interval) }

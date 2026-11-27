@@ -465,7 +465,7 @@ final class CaptureTests: XCTestCase {
         do {
             let name = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_TAG"] ?? "light"
             let intro = XCUIApplication.isolated()
-            intro.launchArguments = ["-PlainInMemoryStore", "-PlainShowIntro"]
+            intro.launchArguments += ["-PlainShowIntro"]
             intro.launch()
             pause(3)
             shot("p0-intro-\(name)")

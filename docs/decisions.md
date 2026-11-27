@@ -535,8 +535,8 @@ Each entry: what was chosen, and why. Newest last.
   while the intro fades off the top. After the intro was seen, launch runs one user-defaults read
   (`IntroGate.shouldShow`, key `PlainIntroSeen`) and nothing else of the intro: no views, layers
   or images are made. `-PlainIntroSeen YES` (the argument domain, Release too) marks it seen for
-  the perf and smoke tests; Debug UI tests with `-PlainInMemoryStore`/`-PlainTestStore` skip it
-  unless `-PlainShowIntro` is given.
+  the perf and smoke tests; isolated runs (`-PlainInMemoryStore`/`-PlainTestStore`, any build)
+  skip it unless the Debug `-PlainShowIntro` or `-PlainRespectIntroSeen` is given.
 - **Splash in Core Animation, steps in SwiftUI.** The mark is the icon's own geometry (ported from
   `Brand/tools/gen_icon.py`) as shape and gradient layers; the fold is a half turn of a
   `CATransformLayer` about the crease, with a double-sided coral back. Every splash and field

@@ -27,7 +27,7 @@ public struct ArchiveView: View {
                             .contextMenu {
                                 Button("Open", systemImage: "arrow.up.forward.app") { model.restore(row) }
                                 if let url = row.tab.entry.url {
-                                    Button("Copy Link", systemImage: "doc.on.doc") { UIPasteboard.general.url = url }
+                                    Button("Copy Link", systemImage: "doc.on.doc") { UIPasteboard.plain.url = url }
                                 }
                                 Section {
                                     Button("Delete", systemImage: "trash", role: .destructive) { model.delete(row) }

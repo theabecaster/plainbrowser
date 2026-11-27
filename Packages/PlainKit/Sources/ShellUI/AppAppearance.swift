@@ -15,14 +15,15 @@ import UIKit
 /// flashing the system's and switching a moment later. The database value replaces the copy as
 /// soon as it is read.
 public enum AppAppearance {
-    /// The user-defaults key of the launch copy.
+    /// The user-defaults key of the launch copy, in `TestIsolation.defaults`: a test suite in an
+    /// isolated run, so tests never change the owner's copy.
     static let launchKey = "PlainAppearance"
     /// The crossfade when the choice changes: one whole-screen change, at the top of the motion
     /// table's 0.15–0.3 s range so the colors visibly settle rather than blink.
     static let crossfadeDuration: TimeInterval = 0.3
 
     /// The choice to show before the database is read: the last one applied.
-    public static func launchAppearance(defaults: UserDefaults = .standard) -> Appearance {
+    public static func launchAppearance(defaults: UserDefaults = TestIsolation.defaults) -> Appearance {
         defaults.string(forKey: launchKey).flatMap(Appearance.init(rawValue:)) ?? FixedChoices.defaultAppearance
     }
 
@@ -45,7 +46,7 @@ public enum AppAppearance {
 
     /// Applies `appearance` to every window of every connected scene and keeps the launch copy.
     /// A window whose colors change crossfades; one already showing them is left alone.
-    static func apply(_ appearance: Appearance, defaults: UserDefaults = .standard) {
+    static func apply(_ appearance: Appearance, defaults: UserDefaults = TestIsolation.defaults) {
         let style = style(for: appearance)
         current = style
         if defaults.string(forKey: launchKey) != appearance.rawValue {

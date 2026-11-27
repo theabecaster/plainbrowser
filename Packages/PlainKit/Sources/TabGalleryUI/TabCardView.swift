@@ -249,10 +249,10 @@ final class TabCardView: UIView {
         shadowView.layer.shadowOpacity = dark ? 0.5 : 0.16
         let layer = thumbnailContainer.layer
         if isSelectedTab, marksSelection {
-            // Coral marks the active tab (Brand/identity.md), and only in the grid: in the cascade
+            // Lagoon (the accent) marks the active tab, and only in the grid: in the cascade
             // the tab on screen is the one in the middle, as in the app switcher.
             layer.borderWidth = Self.selectionWidth
-            layer.borderColor = Palette.coral.cgColor
+            layer.borderColor = Palette.accent.cgColor
         } else {
             layer.borderWidth = dark ? 1 : 0
             layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor

@@ -94,6 +94,7 @@ extension BrowserViewController: GalleryHost {
         // Over the page, under the chrome (which fades as the gallery's own bar arrives) and the
         // search sheet (a new tab from the gallery opens it).
         view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
+        gallery.pageTopInset = currentTab.map { session.pool.obscuredTop(for: $0) } ?? 0
         gallery.prepareToShow()
         gallery.view.isHidden = false
         tabsUI.gallery = gallery
@@ -168,6 +169,7 @@ extension BrowserViewController: GalleryHost {
         tabsUI.isPrewarmScheduled = false
         guard tabsUI.spareGallery == nil, !isShowingGallery, presentedViewController == nil, wantsSpareGallery else { return }
         let gallery = makeGallery(galleryTabs())
+        gallery.pageTopInset = currentTab.map { session.pool.obscuredTop(for: $0) } ?? 0
         gallery.prepareToShow()
         tabsUI.spareGallery = gallery
     }

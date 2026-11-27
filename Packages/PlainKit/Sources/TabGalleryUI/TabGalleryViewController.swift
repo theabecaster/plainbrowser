@@ -78,6 +78,13 @@ public final class TabGalleryViewController: UIViewController {
     private var scrollInterval: OSSignpostIntervalState?
     private var didFocusSelection = false
 
+    /// How much of the page's top a floating bar covers (the Duo's inner top bar). Thumbnails
+    /// leave it out, so cards take the shape of the rest of the page and a thumbnail fills its
+    /// card the way the zoom draws it. Set by the shell before the gallery shows.
+    public var pageTopInset: CGFloat = 0 {
+        didSet { if pageTopInset != oldValue, isViewLoaded { view.setNeedsLayout() } }
+    }
+
     public init(dataSource: any TabGalleryDataSource) {
         self.dataSource = dataSource
         super.init(nibName: nil, bundle: nil)
@@ -251,7 +258,8 @@ public final class TabGalleryViewController: UIViewController {
             // With a second profile the switcher's room stays reserved, private list or not, so
             // the cards never jump when it hides.
             topChrome: dataSource.profileCount > 1 ? GalleryProfileButton.reserve : 0,
-            centeredRow: order.count == 1 ? 1 : 0
+            centeredRow: order.count == 1 ? 1 : 0,
+            pageTopInset: pageTopInset
         )
         if next != metrics { apply(next) }
         if !didFocusSelection, bounds.width > 0 {
@@ -559,8 +567,11 @@ public final class TabGalleryViewController: UIViewController {
         // change waits for no one and lands without motion, so nothing moves under the thumb.
         let rules = GalleryRules(galleryState)
         if bottomBar.setShown(menu: rules.more, newTab: rules.newTabButton, done: rules.done) {
-            let atRest = !isTouching && view.window != nil && !view.isHidden
-            bottomBar.animateRowChange(animated: atRest) { [weak self] in
+            let atRest = { [weak self] in
+                guard let self else { return false }
+                return !isTouching && view.window != nil && !view.isHidden
+            }
+            bottomBar.animateRowChange(animated: atRest(), canAnimate: atRest) { [weak self] in
                 guard let self else { return }
                 view.setNeedsLayout()
                 view.layoutIfNeeded()

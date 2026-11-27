@@ -90,34 +90,46 @@ final class GalleryBottomBar: UIView {
 
     /// After `setShown`: a control leaving fades where it stands, then the others glide to the
     /// new centered row with a short spring as the capsule takes its new width (`layout` lays the
-    /// bar out in its parent); one arriving fades in at its place. Without `animated` everything
-    /// lands at once. Never called mid-gesture: the gallery waits until the bar is at rest.
-    func animateRowChange(animated: Bool, layout: @escaping () -> Void) {
+    /// bar out in its parent); one arriving fades in at its place. Without `animated`, or when
+    /// `canAnimate` says a finger is on the gallery by the time the glide would start, everything
+    /// lands at once. A newer change takes over from wherever the last one was.
+    func animateRowChange(animated: Bool, canAnimate: @escaping () -> Bool, layout: @escaping () -> Void) {
+        rowGeneration += 1
+        let generation = rowGeneration
         let buttons: [(UIButton, Bool)] = [(menuButton, showsMenu), (newTabButton, showsNewTab), (doneButton, showsDone)]
-        guard animated, window != nil, !Motion.prefersCrossfade else {
+        let land = {
             for (button, shown) in buttons {
+                button.layer.removeAllAnimations()
                 button.isHidden = !shown
                 button.alpha = 1
             }
             layout()
-            return
         }
+        guard animated, window != nil, !Motion.prefersCrossfade else { return land() }
         let leaving = buttons.filter { !$0.1 && !$0.0.isHidden }.map(\.0)
-        let arriving = buttons.filter { $0.1 && $0.0.isHidden }.map(\.0)
-        for button in arriving {
+        // Arriving: hidden ones, and any caught fading out by the change before this one.
+        let arriving = buttons.filter { $0.1 && ($0.0.isHidden || $0.0.alpha < 1) }.map(\.0)
+        for button in arriving where button.isHidden {
             button.alpha = 0
             button.isHidden = false
         }
         Motion.animate(Motion.quick, changes: { for button in leaving { button.alpha = 0 } }, completion: { [weak self] in
-            guard let self else { return }
-            for button in leaving where !self.isShown(button) { button.isHidden = true; button.alpha = 1 }
+            guard let self, generation == rowGeneration else { return }
+            for button in leaving {
+                button.isHidden = true
+                button.alpha = 1
+            }
         })
         // The glide starts as the fade is mostly done, so nothing slides under a fading glyph.
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.glideDelay) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.glideDelay) { [weak self] in
+            guard let self, generation == rowGeneration else { return }
+            guard canAnimate() else { return land() }
             Motion.animate(Motion.barGlide, changes: layout)
             Motion.animate(Motion.quick) { for button in arriving { button.alpha = 1 } }
         }
     }
+
+    private var rowGeneration = 0
 
     private func isShown(_ button: UIButton) -> Bool {
         switch button {

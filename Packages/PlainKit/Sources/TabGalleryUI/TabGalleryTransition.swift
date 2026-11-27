@@ -86,7 +86,7 @@ public final class TabGalleryTransition {
 
         wrapper.clipsToBounds = true
         wrapper.layer.cornerCurve = .continuous
-        wrapper.layer.borderColor = Palette.coral.cgColor
+        wrapper.layer.borderColor = Palette.accent.cgColor
         wrapper.backgroundColor = Palette.surface
         wrapper.accessibilityElementsHidden = true
         snapshot.layer.anchorPoint = CGPoint(x: 0.5, y: 0)

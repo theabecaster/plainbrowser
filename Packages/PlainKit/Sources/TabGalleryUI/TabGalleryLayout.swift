@@ -90,15 +90,18 @@ struct TabGalleryMetrics: Equatable {
     /// In the grid, this many slots (a lone card) sit in one row centered on the screen instead
     /// of filling the grid from its top left; 0 fills the grid as usual.
     var centeredRow = 0
+    /// The page's top that a floating bar covers; thumbnails leave it out (`pageAspect`).
+    var pageTopInset: CGFloat = 0
 
     /// Space around the cards and between grid cards.
     static let margin: CGFloat = 16
     static let spacing: CGFloat = 16
     /// A cascade card is this much of the space it has: the Arc measurement (0.66 of the screen).
     static let cascadeWidthFraction: CGFloat = 0.66
-    /// Grid cards take the page's shape, kept inside these bounds (height over width). Taller than
+    /// Grid cards take the page's shape (below a floating top bar, about 0.6 on the Duo's inner
+    /// screen in landscape), kept inside these bounds (height over width). Taller than
     /// 1.1 and a portrait grid fits only one row.
-    static let gridAspect: ClosedRange<CGFloat> = 0.62...1.1
+    static let gridAspect: ClosedRange<CGFloat> = 0.55...1.1
     /// The site icon over each card.
     static let faviconSize: CGFloat = 20
     /// The gap between the title row and its card.
@@ -124,7 +127,7 @@ struct TabGalleryMetrics: Equatable {
     /// card of this shape shows the whole picture with no strip of card under it.
     var pageAspect: CGFloat {
         guard width > 0 else { return 1 }
-        return max(1, height - safeTop) / contentWidth
+        return max(1, height - safeTop - pageTopInset) / contentWidth
     }
 
     /// The page preview's height over its width. In the cascade a card is the whole page, the

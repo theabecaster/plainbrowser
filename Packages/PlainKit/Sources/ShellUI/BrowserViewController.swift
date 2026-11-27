@@ -231,7 +231,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Their constants make room for the sidebar (either side) and the tab strip (`+Panes`).
         duo.panesLeading = panes.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor)
         duo.panesTrailing = panes.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
-        duo.panesTop = panes.view.topAnchor.constraint(equalTo: safe.topAnchor)
+        // The panes run under the status bar on every screen: the page goes to the top edge, as in
+        // Safari, and the status bar floats over it (docs/decisions.md, "The page's top inset
+        // never follows the bar").
+        duo.panesTop = panes.view.topAnchor.constraint(equalTo: view.topAnchor)
         let margin = Spacing.m
         makeTopBarConstraints()
         // The resting chrome's bottom: above the home indicator, or 8 pt above a plain edge.
@@ -285,8 +288,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             lane.topAnchor.constraint(equalTo: view.topAnchor),
             lane.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            // The panes fill the view below the status bar and beside a vertical bar and the
-            // sidebar. Their bottom runs under the chrome; obscuredContentInsets tells WebKit what
+            // The panes fill the view from its top edge, under the status bar, and beside a
+            // vertical bar and the sidebar. Their bottom runs under the chrome; obscuredContentInsets tells WebKit what
             // the chrome covers.
             duo.panesTop,
             duo.panesLeading,
@@ -778,7 +781,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // The reader's bottom inset was the top bar's own (`pageBottomInset`); the safe area is
         // back in its adjustment.
         engineUI.reader.webView?.scrollView.followObscuredBottom(0)
-        for slot in panes.slots { slot.setRingTopInset(0) }
+        for slot in panes.slots { slot.setRingTopInset(pageStatusInset) }
+        duo.top.pullIndicatorTop.constant = pageStatusInset + Spacing.s
         let pageBottom = panes.view.frame.maxY
         let hidden = geometry.hiddenInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)

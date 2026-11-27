@@ -670,16 +670,16 @@ final class CaptureTests: XCTestCase {
         shot("reveal-2-scroll-up")
     }
 
-    /// The Duo inner screen's top bar over pages with a fixed, a sticky, a dark page's and no
-    /// header: at rest (no band of the header's color behind the controls, the first line under
-    /// them), read part way (the pill, then hidden), revealed mid-page, back at the top, and back
-    /// from another page. Each step follows a 2 s still, so a screen recording of the inner
-    /// display made alongside (`simctl io recordVideo --display=<id>`) gives a frame strip of
-    /// every collapse and reveal; `XCUIScreen.main` is the outer screen there, so the attachments
-    /// only mark each step's time in the log. Pass the
-    /// device's status corner with `TEST_RUNNER_PLAIN_STATUS_CORNER=828,24,100,45` on the
-    /// simulator; it skips unless the window is the inner screen in landscape.
-    func testCaptureTopBarOverHeaders() throws {
+    /// The bar over pages with a fixed, a sticky, a dark page's and no header, on any screen (the
+    /// Duo's inner top bar, or the bottom bar of phones and the outer screen, where the page runs
+    /// under the status bar): at rest (no band of the header's color behind Plain's controls, the
+    /// first line under them), read part way (the pill, then hidden), revealed mid-page, back at
+    /// the top, and back from another page. Each step follows a 2 s still, so a screen recording
+    /// made alongside (`simctl io recordVideo`) gives a frame strip of every collapse and reveal.
+    /// On the unfolded Duo `XCUIScreen.main` is the outer screen, so record the inner display
+    /// (`--display=<id>`); the attachments then only mark each step's time in the log. Pass the
+    /// device's status corner with `TEST_RUNNER_PLAIN_STATUS_CORNER=828,24,100,45` there.
+    func testCaptureBarOverHeaders() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
         let server = try TestServer()
         try server.start()
@@ -691,7 +691,6 @@ final class CaptureTests: XCTestCase {
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 20))
-        try XCTSkipUnless(app.windows.firstMatch.frame.width >= 900, "needs the Duo's inner screen in landscape")
         let webView = app.webViews.firstMatch
         func open(_ path: String, _ heading: String) {
             if !(field.exists && field.hasKeyboardFocus) {

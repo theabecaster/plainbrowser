@@ -310,17 +310,29 @@ extension BrowserViewController {
     // MARK: Insets
 
     /// Every inset change goes through here: the page and, while it shows, the reader. Values
-    /// come from `updatePageInsets()`, which decides them.
+    /// come from `updatePageInsets()`, which decides them. The top is the status bar's height
+    /// (`pageStatusInset`), the same in every state of the bar.
     func applyPageInsets(obscuredBottom: CGFloat, minimumBottom: CGFloat, expandedBottom: CGFloat) {
-        let obscured = UIEdgeInsets(top: 0, left: 0, bottom: obscuredBottom, right: 0)
-        let minimum = UIEdgeInsets(top: 0, left: 0, bottom: minimumBottom, right: 0)
-        let maximum = UIEdgeInsets(top: 0, left: 0, bottom: expandedBottom, right: 0)
+        let top = pageStatusInset
+        let obscured = UIEdgeInsets(top: top, left: 0, bottom: obscuredBottom, right: 0)
+        let minimum = UIEdgeInsets(top: top, left: 0, bottom: minimumBottom, right: 0)
+        let maximum = UIEdgeInsets(top: top, left: 0, bottom: expandedBottom, right: 0)
         if let tab = currentTab {
             session.pool.setInsets(for: tab, obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
             session.pool.scrollView(for: tab)?.followObscuredBottom(obscuredBottom)
+            session.pool.scrollView(for: tab)?.showStatusEdgeEffect(top > 0)
         }
         engineUI.reader.setInsets(obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
+        engineUI.reader.webView?.scrollView.showStatusEdgeEffect(top > 0)
     }
+
+    /// Under a bottom bar (phones, the Duo's outer screen) the page runs under the status bar, as
+    /// in Safari, and its obscured top inset is the status bar: a fixed header rests just under
+    /// the clock, and WebKit extends its color up behind the status bar the way Safari's does. The
+    /// page's first line starts under the status bar too: that is the scroll view's safe-area
+    /// adjustment (`setPageTopStart(0)`), the same height, so WebKit's own top and the scroll
+    /// range's start agree and nothing needs moving after a load.
+    var pageStatusInset: CGFloat { view.safeAreaInsets.top }
 
     // MARK: Page commands
 
@@ -638,6 +650,15 @@ extension UIScrollView {
     func hideChromeEdgeEffects() {
         if !bottomEdgeEffect.isHidden { bottomEdgeEffect.isHidden = true }
         if !topEdgeEffect.isHidden { topEdgeEffect.isHidden = true }
+    }
+
+    /// The system's top edge effect under a status bar that spans the page (phones, the Duo's
+    /// outer screen), where the page now runs under the status bar: its soft blur keeps the clock
+    /// readable over the page's text, as in Safari. It covers the scroll view's top inset, which
+    /// there is the status bar alone (the safe area), never Plain's chrome. Off under the inner
+    /// screen's top bar, whose inset is the bar's (`hideChromeEdgeEffects`). Set with the insets.
+    func showStatusEdgeEffect(_ show: Bool) {
+        if topEdgeEffect.isHidden == show { topEdgeEffect.isHidden = !show }
     }
 }
 #endif

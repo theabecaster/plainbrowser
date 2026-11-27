@@ -1320,7 +1320,9 @@ simulator's 24 pt status bar had hidden this.
     line clear. WebKit then loads each page scrolled to its obscured top, the first line and the
     header under the row (capture, round 2), so it was reverted. Removing that fill would need a
     scroll correction after every load and history restore (a visible jump) or WebKit SPI; left
-    for the owner to judge on the device. Safari paints the same fill.
+    for the owner to judge on the device. Safari paints the same fill. **Superseded** by "The
+    page's top inset never follows the bar" below: the owner judged it ("that bar needs to be
+    removed"), and the correction is done in the same pass as WebKit's move, so nothing shows.
   - **No scroll edge effect on the page or the reader, top or bottom**
     (`UIScrollView.hideChromeEdgeEffects`), on every attached page, the split's other pane and the
     reader. The bottom one was already off (the page runs under the pill); the chrome's
@@ -1419,3 +1421,61 @@ routed to the lanes that own them.
 - **Start screen shortcuts use the page menu's captions** ("Reopen Tab", "Archive") in equal
   columns, full names for VoiceOver; an empty private tab's sentence says it is private ("A private
   tab: Plain keeps no history of it."), with no badge.
+
+## The page's top inset never follows the bar (2026-11-27)
+
+Owner, on the latest beta, Duo inner screen: "The bar under the URL text field is still there
+when the text field is present, and the transition to the no-bar state is terrible. I think that
+bar needs to be removed and the address URL can work normally." UX audit, the same family on
+phones and the Duo's outer screen: a paper (navy in dark, lilac in private) strip filled the status
+bar above every page. Research: docs/research/inset-fill.md.
+
+- **Cause.** WebKit's fixed color extension fills any obscured inset above a fixed or sticky
+  element with the element's color. At rest the inner screen's obscured top was the controls'
+  bottom (72.5 pt), so a fixed header sat under the controls with 72.5 pt of its color above it:
+  the bar. When the bar came to rest collapsed the inset went to 0 in one step, so the header
+  jumped 72.5 pt and the fill vanished after the controls had gone: the transition. On phones the
+  panes started under the status bar and the root view's paper showed above them.
+- **Chosen: the bar floats over the page and gives it no inset of its own.** Under the top bar
+  the obscured top is the status items' strip in every state (`TopChromeGeometry.obscuredInset`):
+  0 in the status zone, the status bar's height under a full-width status bar. No public API turns
+  the fill off (`_shouldSuppressTopColorExtensionView` is SPI) and the viewport insets don't move
+  fixed elements, so an obscured top that never covers the controls is the only public way. With
+  nothing changing, nothing can jump: a collapse and a reveal move only the glass (transform and
+  alpha), the page relayouts never.
+- **The first line still starts under the controls.** The scroll range starts under the
+  expanded bar (`contentInset.top` 72.5, as before). WebKit's own top is minus the obscured inset:
+  a load's first commit, a history restore and a page's `scrollTo(0, 0)` set the offset to
+  exactly 0. `UIScrollView.keepPageTopUnderBar` moves such a move on to the range's start inside
+  the same `scrollViewDidScroll`, before the frame is drawn (WebKit reads the corrected offset for
+  its visible-rect update). Moves under the finger, a coast, a bounce and zooming are left alone.
+  Every page under the top bar gets it, a split's other pane (its scroll view's delegate is now
+  the browser too; the other callbacks still act on the focused page only) and the reader.
+- **A fixed header at the page's top rests under the controls, not behind them.** WebKit keeps
+  the layout viewport inside the document while the page sits above its scroll origin, so at the
+  top a fixed header sits at the document's top (72.5 pt, under the row, the page's own
+  background above it) and rides up with the page to the top edge as it scrolls: one continuous
+  motion, like a sticky header. Measured on the simulator (captures below).
+- **Phones and the Duo's outer screen: the page runs under the status bar**, as in Safari. The
+  panes start at the root view's top on every screen; the obscured top is the status bar's height
+  (`pageStatusInset`) in every state, and the scroll view's safe-area adjustment puts the first
+  line under it, so WebKit's top and the range's start agree and no correction is needed. A
+  fixed header rests just under the clock and WebKit extends its color behind the status bar, as
+  Safari does; that strip is the system's, not Plain's, and a header under the clock would lose
+  its buttons to the status bar's tap target. The bottom bar's own rules are unchanged.
+- **Cost.** At rest mid-page (a reveal) the floating controls sit over a fixed header, as the
+  glass floats over the page everywhere else; scroll to the top and it comes out from under them.
+  A page's scroll position at the top reads as negative (the page sits above WebKit's origin by
+  the bar's height). A smooth programmatic scroll to
+  the very top ends with a 72.5 pt step (rare: WebKit animates it, and only its last frame lands
+  on 0).
+- **Phones and the outer screen get the system's top edge effect back**
+  (`UIScrollView.showStatusEdgeEffect`): with the page under the status bar, the clock sat on the
+  page's text with nothing behind it (capture). Its soft blur covers the scroll view's top inset,
+  which there is the status bar alone, as in Safari; it is the system's, not a band of Plain's.
+  Under the inner screen's top bar it stays off, since that inset is the bar's.
+- **Captures** (simulator, landscape inner screen with the device's forced corner, the outer
+  screen and iPhone 17; fixtures `/fixed-header`, `/sticky-header`, `/dark-header`, `/long`):
+  before, a red band filled 0–72.5 behind the controls at rest and the header jumped to the top
+  edge in one frame at collapse; after, nothing above the header at rest, the header rides with
+  the page, a fresh load and Back show the first line under the controls from the first frame.

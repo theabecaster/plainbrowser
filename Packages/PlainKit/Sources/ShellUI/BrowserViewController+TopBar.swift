@@ -32,9 +32,6 @@ final class TopBarLayout {
     /// The row keeps clear of the status items' corner: its distance from each edge.
     var leadingClearance: [NSLayoutConstraint] = []
     var trailingClearance: [NSLayoutConstraint] = []
-    /// The panes start at the root view's top under a top bar (the page runs under the status zone
-    /// and the floating bar), and under the status bar otherwise (`DuoUIState.panesTop`).
-    var panesTopEdge: NSLayoutConstraint!
     /// The strip's distance from the leading and trailing edges, past the status corner where it
     /// starts beside it (`TopChromeGeometry.stripClearance`); empty without a strip.
     var stripClearance: [NSLayoutConstraint] = []
@@ -74,7 +71,6 @@ extension BrowserViewController {
         top.sheetOverPill = sheet.content.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s)
         top.sheetLow = sheet.content.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -Spacing.s)
         top.pullIndicatorTop = pullIndicator.topAnchor.constraint(equalTo: panes.view.topAnchor, constant: Spacing.s)
-        top.panesTopEdge = panes.view.topAnchor.constraint(equalTo: view.topAnchor)
 
         // As wide as the room between the capsules allows (up to its cap), then as near the
         // lane's center as that leaves it: beside the status corner the row is lopsided, and a
@@ -167,21 +163,10 @@ extension BrowserViewController {
         )
     }
 
-    /// Places the row, the strip and the sidebar for `geometry`, and moves the panes to the root
-    /// view's top under a top bar. Constants only, set before the layout pass that uses them.
+    /// Places the row, the strip and the sidebar for `geometry`. Constants only, set before the
+    /// layout pass that uses them.
     func applyTopBarPlacement(_ geometry: TopChromeGeometry?, layout: DuoLayout) {
         let top = duo.top
-        let onTop = geometry != nil
-        if top.panesTopEdge.isActive != onTop {
-            // The outgoing one lets go first, so the two never pin the panes together.
-            if onTop {
-                duo.panesTop.isActive = false
-                top.panesTopEdge.isActive = true
-            } else {
-                top.panesTopEdge.isActive = false
-                duo.panesTop.isActive = true
-            }
-        }
         placeSidebarRows(geometry, layout: layout)
         guard let geometry else { return }
         Self.set(top.pillTop, geometry.rowTop)
@@ -321,6 +306,7 @@ extension BrowserViewController {
         let insets = topBarInsets(geometry)
         engineUI.reader.setInsets(obscured: insets.obscured, minimumViewport: insets.minimum, maximumViewport: insets.maximum)
         setPageTopStart(geometry.expandedInset, for: engineUI.reader.webView?.scrollView)
+        engineUI.reader.webView?.scrollView.showStatusEdgeEffect(false)
         engineUI.reader.webView?.scrollView.followObscuredBottom(pageBottomInset)
         duo.top.pullIndicatorTop.constant = geometry.expandedInset + Spacing.s
         for slot in self.panes.slots { slot.setRingTopInset(geometry.expandedInset) }
@@ -340,6 +326,7 @@ extension BrowserViewController {
         session.pool.setInsets(for: tab, obscured: insets.obscured, minimumViewport: insets.minimum, maximumViewport: insets.maximum)
         let scrollView = session.pool.scrollView(for: tab)
         setPageTopStart(geometry.expandedInset, for: scrollView)
+        scrollView?.showStatusEdgeEffect(false)
         // Nothing of Plain's rests at the bottom; the page and its fixed footers stop above the home indicator.
         scrollView?.followObscuredBottom(pageBottomInset)
     }

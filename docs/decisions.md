@@ -1745,4 +1745,8 @@ From docs/research/ux-audit.md, items 6, 10, 11, 12 (gallery part) and 25.
   fold) as wide as two rows allow: about 334 pt in landscape, was four 217 pt columns
   (`TabGalleryChoices.minGridCardWidth` 180 → 300). Thumbnails leave out the strip a floating top
   bar covers (`WKSnapshotConfiguration.rect` from `obscuredContentInsets.top`), and the page↔card
-  zoom slides that strip out of the card over the way so the landing matches the thumbnail.
+  zoom slides that strip out of the card over the way so the landing matches the thumbnail. Cards
+  take the shape of the page below that bar (`pageTopInset`, grid aspect floor 0.62 → 0.55), so
+  the cropped thumbnail fills its card at the same scale the zoom draws it (Codex review).
+- **The selected card's ring is Lagoon** (`Palette.accent`), not coral: coral is kept for the one
+  thing that matters on screen, the progress bar's tip (profiles lane design review).

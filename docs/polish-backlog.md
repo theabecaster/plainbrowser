@@ -411,3 +411,10 @@ Newest feature last.
   site's fixed header (its buttons are reachable once the bar hides or at the page's top).
 - **Gallery thumbnails** now include the status bar's strip of the page on phones (the inner
   screen already did, UX audit item 25).
+- **Motion on the device.** The simulator's recorder dropped every in-between frame of the
+  collapse under the machine's load (1.4 s gaps), so the strips show only rest states: the header
+  moves with the page in each, and the inset no longer changes at all. Check the collapse and
+  reveal over a fixed header on the Duo (design review, round 2).
+- **Status items over a colored header.** On the inner screen the system's status items turn black
+  over a red header at rest and while reading; check on the device that the switch doesn't flash
+  during motion (design review, round 1).

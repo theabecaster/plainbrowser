@@ -81,6 +81,7 @@ typeset -A allowed=(
   'documentDirectory|documentsDirectory' 'WebEngine/WebViewPool.swift'
   'applicationSupportDirectory'   'Plain/SceneDelegate.swift'
   'session\.userInfo|sessionRole' 'ShellUI/SceneState.swift|Plain/AppDelegate.swift'
+  'shared\.openSessions|requestSceneSessionDestruction' 'ShellUI/SceneState.swift'
   'PHPhotoLibrary'                'WebEngine/LinkMenu.swift'
   'Tips\.configure'               'ShellUI/TabsMenuTip.swift'
   'SecItem(Add|Update|Delete|CopyMatching)' '^$'

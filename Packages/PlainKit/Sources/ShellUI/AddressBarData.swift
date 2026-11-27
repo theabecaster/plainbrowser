@@ -63,8 +63,9 @@ public protocol AddressBarData: AnyObject {
     /// Settings > Appearance, once the saved settings are read; nil before (the windows keep
     /// the launch copy, `AppAppearance`).
     var appearance: Appearance? { get }
-    /// Called on the main thread when the settings in effect change (read at launch, or saved).
-    var onSettingsChange: (() -> Void)? { get set }
+    /// `observer` runs on the main thread each time the settings in effect change (read at launch,
+    /// or saved). Every window adds one: the data is the app's.
+    func observeSettings(_ observer: @escaping () -> Void)
 }
 
 extension AddressBarData {
@@ -97,7 +98,7 @@ public final class LiveAddressBarData: AddressBarData {
     public var archiveAfter: ArchiveAfter? { hasSettings ? settings.archiveAfter : nil }
     public var tabLayout: TabLayout? { hasSettings ? settings.tabLayout : nil }
     public var appearance: Appearance? { hasSettings ? settings.appearance : nil }
-    public var onSettingsChange: (() -> Void)?
+    private var settingsObservers: [() -> Void] = []
     private var hasFirstFrame = false
     private var preconnectAfterFirstFrame = false
     public var searchEngine: SearchEngine { settings.searchEngine }
@@ -142,7 +143,7 @@ public final class LiveAddressBarData: AddressBarData {
             settings = stored
         }
         hasSettings = true
-        onSettingsChange?()
+        settingsDidChange()
     }
 
     /// Puts `settings` in effect; Settings calls it after each save.
@@ -150,7 +151,15 @@ public final class LiveAddressBarData: AddressBarData {
         settingsEdits += 1
         self.settings = settings
         hasSettings = true
-        onSettingsChange?()
+        settingsDidChange()
+    }
+
+    public func observeSettings(_ observer: @escaping () -> Void) {
+        settingsObservers.append(observer)
+    }
+
+    private func settingsDidChange() {
+        for observer in settingsObservers { observer() }
     }
 
     /// Writes buffered history. Call when the app moves to the background.

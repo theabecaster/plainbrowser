@@ -2,7 +2,7 @@ import Foundation
 
 /// One item of the link context menu (docs/ui-reference.md, "Context menus on links").
 nonisolated public enum LinkMenuItem: String, Sendable, Equatable, CaseIterable {
-    case openInNewTab, openInBackground, openInOtherPane
+    case openInNewTab, openInBackground, openInOtherPane, openInNewWindow
     case copyLink, share
     case downloadLinkedFile
     case saveImage, copyImage
@@ -12,6 +12,7 @@ nonisolated public enum LinkMenuItem: String, Sendable, Equatable, CaseIterable 
         case .openInNewTab: "Open in New Tab"
         case .openInBackground: "Open in Background"
         case .openInOtherPane: "Open in Other Pane"
+        case .openInNewWindow: "Open in New Window"
         case .copyLink: "Copy Link"
         case .share: "Share"
         case .downloadLinkedFile: "Download Linked File"
@@ -25,6 +26,7 @@ nonisolated public enum LinkMenuItem: String, Sendable, Equatable, CaseIterable 
         case .openInNewTab: "plus.square.on.square"
         case .openInBackground: "square.on.square.dashed"
         case .openInOtherPane: "rectangle.split.2x1"
+        case .openInNewWindow: "macwindow.badge.plus"
         case .copyLink: "link"
         case .share: "square.and.arrow.up"
         case .downloadLinkedFile: "arrow.down.circle"
@@ -49,15 +51,19 @@ nonisolated public struct LinkElement: Sendable, Equatable {
 nonisolated enum LinkMenuRules {
     /// - Parameters:
     ///   - canOpenInOtherPane: the shell has a second pane on screen.
+    ///   - canOpenInNewWindow: the system takes another window here (the Duo's inner screen).
     ///   - canSaveImages: the app may add to Photos (it declares `NSPhotoLibraryAddUsageDescription`).
     static func sections(
-        for element: LinkElement, canOpenInOtherPane: Bool, canSaveImages: Bool
+        for element: LinkElement, canOpenInOtherPane: Bool, canOpenInNewWindow: Bool = false, canSaveImages: Bool
     ) -> [[LinkMenuItem]] {
         var sections: [[LinkMenuItem]] = []
         if let link = element.linkURL {
             let isWeb = NavigationRules.schemeKind(of: link) == .web
             if isWeb {
-                sections.append([.openInNewTab, .openInBackground] + (canOpenInOtherPane ? [.openInOtherPane] : []))
+                sections.append(
+                    [.openInNewTab, .openInBackground] + (canOpenInOtherPane ? [.openInOtherPane] : [])
+                        + (canOpenInNewWindow ? [.openInNewWindow] : [])
+                )
             }
             sections.append([.copyLink, .share])
             if isWeb { sections.append([.downloadLinkedFile]) }

@@ -199,7 +199,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             controller.updateBarMode()
             controller.view.setNeedsLayout()
         }
-        data.onSettingsChange = { [weak self] in self?.settingsDidChange() }
+        data.observeSettings { [weak self] in self?.settingsDidChange() }
         observeAppearance()
 
         tabsUI.swipe.browser = self
@@ -588,6 +588,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     public func textFieldDidBeginEditing(_ textField: UITextField) {
+        // The address bar's data is the app's: this window's private state wins while it types.
+        data.isPrivate = pill.isPrivateTint
         // First, so a preconnect to the suggestion host overlaps the sheet opening.
         data.prepareForTyping()
         applyEditingLayout(true, animated: didFocusAtLaunch)

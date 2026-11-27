@@ -22,7 +22,9 @@ import WebEngine
 /// `tab.unarchive`, `tab.closeAll` events are emitted here, around the `TabStore` calls.
 final class EngineTabs {
     let pool: WebViewPool
-    private(set) var store: TabStore
+    /// The app's tabs in every window (`AppTabs`): one store for all scenes.
+    let app: AppTabs
+    var store: TabStore { app.store }
     /// The window this scene shows (per-window state, docs/plan.md, section 6): every read and
     /// change here acts on it. The scene keeps it across launches.
     private(set) var windowID: WindowID
@@ -39,21 +41,41 @@ final class EngineTabs {
     /// The saved session is in the store (after `restoreSession()`).
     private(set) var isSessionLoaded = false
     /// The saved profile list was read (not a failed read standing in as empty), so data of
-    /// profiles missing from it really belongs to deleted ones.
-    private(set) var areProfilesKnown = false
+    /// profiles missing from it really belongs to deleted ones (`AppTabs`).
+    var areProfilesKnown: Bool { app.areProfilesKnown }
     /// The archive holds at least one tab (read off the main thread; `refreshArchiveState()`).
     private(set) var hasArchivedTabs = false
 
-    /// - Parameter windowID: the window the scene showed last time, when it has one; the saved
-    ///   session's first window otherwise.
-    init(pool: WebViewPool, database: @escaping DatabaseProvider, tabStates: TabStateStore?, windowID: WindowID? = nil) {
+    /// - Parameter windowID: the window the scene showed last time, when it has one (`AppTabs`
+    ///   decides which window the scene shows).
+    init(
+        pool: WebViewPool, app: AppTabs, database: @escaping DatabaseProvider, tabStates: TabStateStore?,
+        windowID: WindowID? = nil, isNewWindow: Bool = false
+    ) {
         self.pool = pool
+        self.app = app
         self.database = database
         self.tabStates = tabStates
-        let id = windowID ?? WindowID()
-        self.windowID = id
-        store = TabStore(session: TabSession(windows: [WindowSession(id: id, tabIDs: [], panes: [nil], focusedPane: 0)]))
-        wireStore()
+        self.windowID = app.claim(saved: windowID, isNew: isNewWindow)
+        app.register(self)
+    }
+
+    /// The scene went away; its window stays in the store for when it comes back.
+    func releaseWindow() {
+        app.release(windowID)
+    }
+
+    /// Whether this window's engine tab `id` must stay open (media, a download).
+    func isBusy(_ id: TabID) -> Bool {
+        engineTabs[id]?.isBusy ?? false
+    }
+
+    /// Another window changed the store (archive, reopen, a closed window): engine tabs whose tab
+    /// left it go, and the lists reload.
+    func storeChangedElsewhere() {
+        for id in engineTabs.keys where store.tabs[id] == nil { drop(id) }
+        checkProfile()
+        scheduleChange()
     }
 
     private var window: WindowID { windowID }
@@ -135,6 +157,22 @@ final class EngineTabs {
             }
         }
         pool.forgetProfile(id)
+        checkProfile()
+        refreshArchiveState()
+        scheduleChange()
+        // The profile's tabs in other windows went too: they let go of its web views and store.
+        app.profileDeleted(id, from: self)
+    }
+
+    /// Another window deleted `profile`: its engine tabs here close for good, the pool lets go of
+    /// its website data store, and the window moves to another profile if it showed that one.
+    func profileDeletedElsewhere(_ profile: ProfileID) {
+        for (id, tab) in engineTabs where store.tabs[id] == nil {
+            watches.removeValue(forKey: id)?.cancel()
+            engineTabs[id] = nil
+            pool.close(tab, keepingSavedState: false)
+        }
+        pool.forgetProfile(profile)
         checkProfile()
         refreshArchiveState()
         scheduleChange()
@@ -314,20 +352,27 @@ final class EngineTabs {
         if isPrivate { endPrivateSessionIfEmpty() }
     }
 
-    /// Reopens the window's profile's last closed batch; the store shows it. Returns its ids.
+    /// Reopens the window's profile's last closed batch, the one closed in this window first;
+    /// the store shows it, and tabs of a window that is gone come back here. Returns its ids.
     @discardableResult
     func reopenLastClosed() -> [TabID] {
         Signposts.signposter.emitEvent(Signposts.tabReopen)
-        defer { checkProfile() }
-        return store.reopenLastClosed(in: activeProfile)
+        defer {
+            checkProfile()
+            app.didChange(from: self)
+        }
+        return store.reopenLastClosed(in: activeProfile, window: window)
     }
 
     /// Reopens exactly the batch a Reopen offer was made for; nothing if it is gone.
     @discardableResult
     func reopenClosed(_ batchID: UUID) -> [TabID] {
         Signposts.signposter.emitEvent(Signposts.tabReopen)
-        defer { checkProfile() }
-        return store.reopenClosed(batchID)
+        defer {
+            checkProfile()
+            app.didChange(from: self)
+        }
+        return store.reopenClosed(batchID, fallbackWindow: window)
     }
 
     /// Moves `id` to `index` in its list.
@@ -377,7 +422,11 @@ final class EngineTabs {
         }
         let archived = await store.archiveIdleTabs(after: setting)
         for id in archived { drop(id) }
-        if !archived.isEmpty { refreshArchiveState() }
+        if !archived.isEmpty {
+            refreshArchiveState()
+            // Other windows' idle tabs went too.
+            app.didChange(from: self)
+        }
         signposter.endInterval(Signposts.tabArchive, interval, "\(archived.count)")
     }
 
@@ -403,45 +452,15 @@ final class EngineTabs {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.launchRestoreTab)
         defer { signposter.endInterval(Signposts.launchRestoreTab, interval) }
-        guard let database = await database() else { return nil }
-        let loaded = try? await database.loadTabSession()
-        let saved = loaded ?? .empty
-        areProfilesKnown = loaded != nil
-        let mine = store
-        let myWindow = windowID
-        let openedMeanwhile = !mine.tabs.isEmpty
-        var session = saved
-        // This scene's saved window, else the first one saved.
-        let savedIndex = session.windows.firstIndex { $0.id == myWindow } ?? (session.windows.isEmpty ? nil : 0)
-        if openedMeanwhile {
-            // The user's tabs join the saved window and stay on screen.
-            let current = mine.session
-            session.tabs += current.tabs
-            if let savedIndex, let window = current.windows.first {
-                session.windows[savedIndex].tabIDs += window.tabIDs
-                session.windows[savedIndex].panes = window.panes
-                session.windows[savedIndex].focusedPane = window.focusedPane
-            } else {
-                session.windows = current.windows
-            }
-        }
-        store = TabStore(session: session, persistence: database.tabSession)
-        windowID = savedIndex.map { session.windows[$0].id } ?? store.windows[0].id
-        wireStore()
-        // Empty tabs are never left behind: a blank saved tab (an older build kept them) goes.
-        for entry in saved.tabs where entry.url == nil { store.discard(entry.id) }
-        // Private tabs opened before the session loaded stay (the store never saves them).
-        for entry in mine.tabs(in: myWindow, private: true) {
-            store.open(entry.url, title: entry.title, in: window, isPrivate: true, id: entry.id)
-        }
-        if let id = mine.selectedTabID(in: myWindow), mine.tabs[id]?.isPrivate == true {
-            store.select(id)
-        }
+        await app.load()
+        guard app.isLoaded else { return nil }
+        windowID = app.resolved(windowID)
+        guard !isSessionLoaded else { return nil }
         isSessionLoaded = true
         checkProfile()
         refreshArchiveState()
         scheduleChange()
-        guard !openedMeanwhile, let id = selectedID, store.tabs[id]?.url != nil else { return nil }
+        guard !app.hadTabsBeforeLoad(windowID), let id = selectedID, store.tabs[id]?.url != nil else { return nil }
         return tab(id)
     }
 
@@ -461,10 +480,6 @@ final class EngineTabs {
     }
 
     // MARK: Private
-
-    private func wireStore() {
-        store.isTabInUse = { [weak self] id in self?.engineTabs[id]?.isBusy ?? false }
-    }
 
     /// Starts following an engine tab's address, title and thumbnail into the store.
     private func adopt(_ tab: Tab) {

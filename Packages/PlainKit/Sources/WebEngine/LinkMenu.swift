@@ -82,6 +82,7 @@ extension WebViewPool {
         }
         let sections = LinkMenuRules.sections(
             for: element, canOpenInOtherPane: host?.canOpenInOtherPane(from: tab) ?? false,
+            canOpenInNewWindow: host?.canOpenInNewWindow(from: tab) ?? false,
             canSaveImages: Self.canSaveToPhotos
         )
         return sections.isEmpty ? nil : LinkMenu(element: element, sections: sections)
@@ -157,11 +158,12 @@ extension WebViewPool {
         Signposts.signposter.emitEvent(Signposts.linkMenuAction, "\(item.rawValue, privacy: .public)")
         let link = element.linkURL
         switch item {
-        case .openInNewTab, .openInBackground, .openInOtherPane:
+        case .openInNewTab, .openInBackground, .openInOtherPane, .openInNewWindow:
             guard let link else { return }
             let placement: LinkOpenPlacement = switch item {
             case .openInBackground: .backgroundTab
             case .openInOtherPane: .otherPane
+            case .openInNewWindow: .newWindow
             default: .newTab
             }
             host?.tab(tab, open: link, placement: placement)

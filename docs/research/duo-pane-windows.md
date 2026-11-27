@@ -42,8 +42,12 @@ Labels: **[S]** Sourced (URL in Sources). **[I]** Inferred (basis given). **[U]*
   own card [S4] [U: no Duo equivalent found].
 - Removing an app's card from the app switcher discards its scene sessions; the app hears it
   in `didDiscardSceneSessions` at the next launch [S8, I].
-- Simulator: the iPhone Duo simulator (iOS 27.2) reports `supportsMultipleScenes` and opens a
-  second window from "Open in New Window" on the inner screen [M, SidePaneTests].
+- Simulator: the iPhone Duo simulator (iOS 27.2) opens a second window from New Window on the
+  inner screen [M, SidePaneTests]. It comes up full screen over the first (no Split View by
+  itself); bringing the first one back through `activateSceneSession(for: .init(session:))`
+  works [M]. With several scenes open the system shows an "N Views Open" pill over the status
+  row on launch [M]. Device Hub can't drive Split View, so two windows side by side and a fold with
+  two windows were not seen [U].
 
 ## Safari
 

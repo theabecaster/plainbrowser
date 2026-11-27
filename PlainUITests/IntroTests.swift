@@ -41,15 +41,15 @@ final class IntroTests: XCTestCase {
     }
 
     /// "Made for iPhone Duo" shows only where the window can be a foldable's: the outer screen's
-    /// vertical bar edge or a regular-by-regular window (`IntroRules`). The test tells the two
-    /// simulators apart by size only: a portrait iPhone is under 450 pt wide and over 700 pt
-    /// tall; the Duo's outer screen (466 x 678) and inner screen (951 x 669) are not.
+    /// vertical bar edge or a regular-by-regular window (`IntroRules`). The test tells the
+    /// simulators apart by width only: a portrait iPhone is under 450 pt wide (440 at most); the
+    /// Duo's outer screen (466) and inner screen (951 or 669) are not.
     func testUnfoldRowOnlyOnAFoldable() {
         let app = launch()
         tapNext(app, step: "promise")
         XCTAssertTrue(app.staticTexts["Private Tabs"].waitForExistence(timeout: 5))
         let window = app.windows.firstMatch.frame
-        let plainIPhone = window.width < 450 && window.height > 700
+        let plainIPhone = window.width < 450
         XCTAssertEqual(app.staticTexts["Made for iPhone Duo"].exists, !plainIPhone)
     }
 

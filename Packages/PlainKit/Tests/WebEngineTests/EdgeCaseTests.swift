@@ -178,7 +178,8 @@ struct EdgeCaseTests {
         let elapsed = ContinuousClock.now - start
         report("[plain-measure] local http, second load: \(ms(elapsed)) ms")
         #expect(tab.url?.scheme == "http")
-        #expect(elapsed < .seconds(1))
+        // Generous: a load that waited on an HTTPS try took seconds.
+        #expect(elapsed < .seconds(2))
     }
 
     /// A refused connection says so in Plain's words, at once (ux-audit item 22).

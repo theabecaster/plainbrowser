@@ -40,6 +40,11 @@ final class ProgressBar: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    // The run loop keeps a timer alive: it must not outlive the bar.
+    isolated deinit {
+        creepTimer?.invalidate()
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         fill.transform = .identity
@@ -122,7 +127,8 @@ final class ProgressBar: UIView {
     }
 
     private func creep() {
-        guard alpha > 0, progress < Self.creepCeiling else { return stopCreep() }
+        // The ease never quite reaches the ceiling: stop just short of it.
+        guard alpha > 0, progress < Self.creepCeiling - 0.01 else { return stopCreep() }
         guard Date().timeIntervalSince(lastReport) >= Self.creepQuietTime else { return }
         move(to: progress + (Self.creepCeiling - progress) * Self.creepStep)
     }

@@ -92,11 +92,13 @@ extension WebViewPool {
     func contextMenuConfiguration(for linkURL: URL?, in tab: Tab) async -> UIContextMenuConfiguration? {
         guard let menu = await linkMenu(for: linkURL, in: tab) else { return nil }
         let preview: UIContextMenuContentPreviewProvider?
-        if menu.hasPreview, let url = menu.element.linkURL {
+        // No preview where the menu alone fills the screen (the largest text, a short window):
+        // the whole menu matters more than a glimpse of the page.
+        if menu.hasPreview, let url = menu.element.linkURL, let size = linkPreviewSize(for: menu, in: tab) {
             preview = { [weak self, weak tab] in
                 guard let self, let tab else { return nil }
                 let controller = self.makeLinkPreview(url, isPrivate: tab.isPrivate, profile: tab.profileID)
-                if let size = self.linkPreviewSize(for: menu, in: tab) { controller.preferredContentSize = size }
+                controller.preferredContentSize = size
                 return controller
             }
         } else {
@@ -151,7 +153,8 @@ extension WebViewPool {
     }
 
     /// The preview's size for `menu` in `tab`'s window (`LinkMenuRules.previewSize`): short
-    /// enough that every item shows without scrolling. Nil before the tab is in a window.
+    /// enough that every item shows without scrolling. Nil when there is no room for one, or
+    /// before the tab is in a window.
     private func linkPreviewSize(for menu: LinkMenu, in tab: Tab) -> CGSize? {
         guard let window = existingWebView(for: tab)?.window else { return nil }
         let traits = window.traitCollection

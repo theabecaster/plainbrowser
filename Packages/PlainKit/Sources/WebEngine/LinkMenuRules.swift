@@ -88,22 +88,26 @@ nonisolated enum LinkMenuRules {
     ///   - rows: the menu's items; `sections` its groups (a gap between each).
     ///   - rowHeight: one item's height at the current text size.
     ///   - menuBeside: the menu sits beside the preview (compact height), not under it.
+    /// - Returns: nil when the menu leaves no room for a useful preview: show the menu alone.
     static func previewSize(
         window: CGSize, safeTop: CGFloat, safeBottom: CGFloat, rows: Int, sections: Int, rowHeight: CGFloat,
         menuBeside: Bool
-    ) -> CGSize {
+    ) -> CGSize? {
         let margin = previewMargin
         let usableHeight = window.height - safeTop - safeBottom - 2 * margin
         if menuBeside {
             // The menu takes its own column; the preview gets the height and about half the width.
-            return CGSize(width: (window.width / 2).rounded(), height: max(previewMinimumHeight, usableHeight.rounded()))
+            guard usableHeight >= previewMinimumHeight else { return nil }
+            return CGSize(width: (window.width / 2).rounded(), height: usableHeight.rounded())
         }
         let width = window.width - 2 * margin
         let menu = CGFloat(rows) * rowHeight + CGFloat(max(0, sections - 1)) * previewSectionGap + 2 * margin
         let room = usableHeight - menu - margin
-        // Never taller than a page-shaped card, never so short it shows nothing.
+        // Never taller than a page-shaped card; none at all when it would be a sliver (the
+        // largest text sizes, a long image menu): the menu needs the room more.
+        guard room >= previewMinimumHeight else { return nil }
         let height = min(room, width * previewMaximumAspect).rounded()
-        return CGSize(width: width.rounded(), height: max(previewMinimumHeight, height))
+        return CGSize(width: width.rounded(), height: height)
     }
 
     /// Around the preview and the menu, and between them.

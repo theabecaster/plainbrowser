@@ -109,6 +109,7 @@ extension BrowserViewController {
         // The simulator's resizable window (`devicectl device appResize`, the stand-in for the
         // inner screen while Device Hub can't be driven) reports the outer screen's sensor regions.
         if ProcessInfo.processInfo.arguments.contains("-PlainIgnoreOcclusions") { occlusions = [] }
+        if let region = Self.debugStatusRegion { occlusions = [region] }
         #endif
         let pillFrame = pill.frame
         let row = makeTopGeometry(stripHeight: 0)
@@ -129,6 +130,7 @@ extension BrowserViewController {
                 ? row.rowTop...row.rowBottom
                 : min(pillFrame.minY, bounds.maxY - ChromeGeometry.pillHeight * 2)...bounds.maxY,
             stripBand: chromeOnTop ? row.stripTop...(row.stripTop + stripHeight) : nil,
+            statusCorner: duo.statusCorner,
             sidePaneOpen: sidePaneUI.isRequested
         )
     }

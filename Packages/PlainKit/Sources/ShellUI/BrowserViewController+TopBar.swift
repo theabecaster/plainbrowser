@@ -141,16 +141,24 @@ extension BrowserViewController {
         #endif
         let safe = view.safeAreaInsets
         let adapted = view.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))
+        let regions = view.reservedRegions(kind: .occlusion, options: .includeInactive)
+        let occlusions = regions.map(\.frame)
+        var corners = regions.map { StatusCorner.Region(frame: $0.frame, reserved: $0.frame.inset(by: $0.margins)) }
+        #if DEBUG
+        if let region = Self.debugStatusRegion { corners = [StatusCorner.Region(frame: region)] }
+        #endif
         let found = StatusCorner.read(
             width: view.bounds.width, safeTop: safe.top, safeLeft: safe.left, safeRight: safe.right,
             adaptedTop: adapted.top, adaptedLeft: adapted.left, adaptedRight: adapted.right,
-            occlusions: view.reservedRegions(kind: .occlusion, options: .includeInactive).map(\.frame)
+            occlusions: corners
         )
         duo.statusCornerSource = found?.source.rawValue ?? "none"
-        let reading = StatusZoneReading(size: view.bounds.size, safe: safe, adapted: adapted)
+        // The regions arrive after the first layout pass (and change with a fold), so they are
+        // part of what is compared.
+        let reading = StatusZoneReading(size: view.bounds.size, safe: safe, adapted: adapted, occlusions: occlusions)
         if reading != duo.lastStatusReading {
             duo.lastStatusReading = reading
-            logStatusZone(safe: safe, adapted: adapted, corner: found?.rect)
+            logStatusZone(safe: safe, adapted: adapted, regions: regions, corner: found)
         }
         return found?.rect
     }
@@ -197,27 +205,41 @@ extension BrowserViewController {
     #if DEBUG
     /// `-PlainStatusCorner x,y,width,height` (Debug builds): a status corner for the simulator,
     /// whose status bar spans the width.
-    static let debugStatusCorner: CGRect? = {
+    static let debugStatusCorner: CGRect? = debugRect("-PlainStatusCorner")
+
+    /// `-PlainStatusRegion x,y,width,height` (Debug builds): the status items' occlusion region,
+    /// as Device Hub's unfolded Duo reports it (landscape `807,0,144,82`), in place of the
+    /// regions the simulator's resizable window reports (the outer screen's), so captures there
+    /// run the same reading and lanes as the device.
+    static let debugStatusRegion: CGRect? = debugRect("-PlainStatusRegion")
+
+    private static func debugRect(_ flag: String) -> CGRect? {
         let arguments = ProcessInfo.processInfo.arguments
-        guard let index = arguments.firstIndex(of: "-PlainStatusCorner"), index + 1 < arguments.count else { return nil }
+        guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
         let values = arguments[index + 1].split(separator: ",").compactMap { Double($0) }
         guard values.count == 4 else { return nil }
         return CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
-    }()
+    }
     #endif
 
     /// Logs the safe area, both corner-adaptive guides and the occlusion regions (none of them
-    /// private) when the bounds or the guides change, so the device's numbers can be read back
-    /// from the console (`duo` category). Not per layout pass.
-    private func logStatusZone(safe: UIEdgeInsets, adapted: UIEdgeInsets, corner: CGRect?) {
+    /// private, each with whether it is active) when the bounds, the guides or the regions
+    /// change, so the device's numbers can be read back from the console (`duo` category, notice
+    /// level, so it is kept on the device). Not per layout pass.
+    private func logStatusZone(
+        safe: UIEdgeInsets, adapted: UIEdgeInsets, regions: [UIView.ReservedRegion],
+        corner: (rect: CGRect, source: StatusCorner.Source)?
+    ) {
         let vertical = view.edgeInsets(for: .safeArea(cornerAdaptation: .vertical))
         let margins = view.edgeInsets(for: .margins(cornerAdaptation: .horizontal))
-        let occlusions = view.reservedRegions(kind: .occlusion, options: .includeInactive).map(\.frame)
-        DuoUIState.logger.debug("""
+        let occlusions = regions.map { "\($0.frame) margins \($0.margins)\($0.isActive ? " active" : "")" }
+            .joined(separator: ", ")
+        let found = corner.map { "\($0.rect) from \($0.source.rawValue)" } ?? "none"
+        DuoUIState.logger.notice("""
             status zone: bounds \(String(describing: self.view.bounds.size), privacy: .public) \
             safe \(String(describing: safe), privacy: .public) horizontal \(String(describing: adapted), privacy: .public) \
             vertical \(String(describing: vertical), privacy: .public) margins \(String(describing: margins), privacy: .public) \
-            occlusions \(String(describing: occlusions), privacy: .public) corner \(String(describing: corner), privacy: .public)
+            occlusions [\(occlusions, privacy: .public)] corner \(found, privacy: .public)
             """)
     }
 
@@ -408,5 +430,6 @@ struct StatusZoneReading: Equatable {
     var size: CGSize
     var safe: UIEdgeInsets
     var adapted: UIEdgeInsets
+    var occlusions: [CGRect]
 }
 #endif

@@ -503,6 +503,14 @@ public enum FixedChoices {
     /// 8 before any 12-hour time. Was 64 (with a 12 pt gap: 23 pt short of the clock, which the
     /// owner saw as the buttons stopping too far from the status items).
     public static let statusItemsReach: Double = 57
+    /// How far inside the status items' own occlusion region their left edge is taken to be,
+    /// where the region's margins don't say more. The region pads the items for interactive
+    /// content: on the Duo's inner screen it starts at x 807 and the time at 831 (Device Hub's
+    /// simulator, landscape, matching the owner's device screenshot). 24 less 4 pt for a wider
+    /// time. Taking the region's edge itself left Tabs, Share and More 32 pt from the clock;
+    /// treating the region as a camera (and reaching 64 pt past it, the build the owner tried)
+    /// left them about 100 pt away, with the strip cut there too.
+    public static let statusRegionPadding: Double = 20
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375

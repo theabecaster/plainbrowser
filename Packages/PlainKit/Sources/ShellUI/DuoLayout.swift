@@ -36,6 +36,12 @@ struct DuoLayoutInput: Equatable {
     /// to use `chromeBand`. The strip sits under the status items (`TopChromeGeometry.stripTop`),
     /// so the camera beside the row is not in its way.
     var stripBand: ClosedRange<CGFloat>?
+    /// The status items' corner under a top bar (`StatusCorner`), nil elsewhere. The top bar keeps
+    /// clear of it itself (`TopChromeGeometry.rowClearance`, the strip under it), so the
+    /// occlusion regions inside it (the status items' own region, the camera they wrap) cut
+    /// neither lane: their frames pad the items for interactive content, and cutting the lane
+    /// there left Tabs, Share and More and the strip short of the corner (owner, on the device).
+    var statusCorner: CGRect?
     /// The user opened the side pane (Reader, Find, History next to the page) in this window.
     var sidePaneOpen = false
 
@@ -43,9 +49,11 @@ struct DuoLayoutInput: Equatable {
         pageArea: CGRect, isRegularWidth: Bool, isRegularHeight: Bool, tabLayout: TabLayout = FixedChoices.defaultTabLayout,
         requestedSidebar: SidebarState = .rail, paneCount: Int = 1, tabCount: Int = 2, focusedPane: Int = 0,
         division: CGRect? = nil, isDivisionActive: Bool = false, occlusions: [CGRect] = [],
-        chromeBand: ClosedRange<CGFloat> = 0...0, stripBand: ClosedRange<CGFloat>? = nil, sidePaneOpen: Bool = false
+        chromeBand: ClosedRange<CGFloat> = 0...0, stripBand: ClosedRange<CGFloat>? = nil,
+        statusCorner: CGRect? = nil, sidePaneOpen: Bool = false
     ) {
         self.stripBand = stripBand
+        self.statusCorner = statusCorner
         self.sidePaneOpen = sidePaneOpen
         self.pageArea = pageArea
         self.isRegularWidth = isRegularWidth
@@ -232,12 +240,14 @@ struct DuoLayout: Equatable {
             lane = Self.lane(lane, avoiding: fold.minX...fold.maxX)
         }
         var strip = lane
-        for region in input.occlusions where region.minY < input.chromeBand.upperBound
+        let corner = chromeOnTop ? input.statusCorner : nil
+        let occlusions = input.occlusions.filter { region in corner.map { !region.intersects($0) } ?? true }
+        for region in occlusions where region.minY < input.chromeBand.upperBound
             && region.maxY > input.chromeBand.lowerBound {
             lane = Self.lane(lane, avoiding: region.minX...region.maxX)
         }
         let stripBand = input.stripBand ?? input.chromeBand
-        for region in input.occlusions where region.minY < stripBand.upperBound && region.maxY > stripBand.lowerBound {
+        for region in occlusions where region.minY < stripBand.upperBound && region.maxY > stripBand.lowerBound {
             strip = Self.lane(strip, avoiding: region.minX...region.maxX)
         }
         chromeLane = lane

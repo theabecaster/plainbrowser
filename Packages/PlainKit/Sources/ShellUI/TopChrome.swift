@@ -44,8 +44,23 @@ enum StatusCorner {
         return nil
     }
 
+    /// An occlusion region as UIKit reports it (`UIView.ReservedRegion`): its frame, which
+    /// includes the margins it keeps around the element for interactive content, and the
+    /// element's own rect inside them (the frame less `margins`).
+    struct Region: Equatable, Sendable {
+        var frame: CGRect
+        var reserved: CGRect
+
+        init(frame: CGRect, reserved: CGRect? = nil) {
+            self.frame = frame
+            self.reserved = reserved ?? frame
+        }
+    }
+
     /// What the corner was read from, for the `duo` log.
     enum Source: String, Sendable {
+        /// The status items' own occlusion region (the Duo's inner screen, Device Hub's simulator).
+        case statusRegion
         /// The corner-adaptive guide alone.
         case guide
         /// The camera the status items wrap, plus `FixedChoices.statusItemsReach`.
@@ -54,22 +69,26 @@ enum StatusCorner {
         case guideAndCamera
     }
 
-    /// The corner from everything the system reports. The guide (`rect(width:safeTop:...)`) says
-    /// how far across the status items reach; the camera they wrap (`rect(aroundOcclusions:...)`)
-    /// says which row they sit on: the battery ring is drawn around it, the clock beside it (the
-    /// device: items at y 27–69, the camera's middle at 47.8). So with both on the same side the
-    /// corner takes the guide's left and right and the camera's top and bottom; a guide band
-    /// running from the screen's top to the safe area's (0–81) would put the row above the items
-    /// and keep the strip from running under them. With one of them, that one.
+    /// The corner from everything the system reports, in order:
+    /// 1. The status items' own occlusion region (`statusRegion(in:...)`): the most direct word.
+    /// 2. The guide (`rect(width:safeTop:...)`), which says how far across the status items reach;
+    ///    with a camera they wrap on the same side (`camera(in:...)`), the camera's row up and down:
+    ///    the battery ring is drawn around it, the clock beside it (the device: items at y 27–69,
+    ///    the camera's middle at 47.8), where a guide band from the screen's top to the safe
+    ///    area's (0–81) would put the row above the items.
+    /// 3. The camera alone.
     static func read(
         width: CGFloat, safeTop: CGFloat, safeLeft: CGFloat, safeRight: CGFloat,
-        adaptedTop: CGFloat, adaptedLeft: CGFloat, adaptedRight: CGFloat, occlusions: [CGRect]
+        adaptedTop: CGFloat, adaptedLeft: CGFloat, adaptedRight: CGFloat, occlusions: [Region]
     ) -> (rect: CGRect, source: Source)? {
+        if let region = statusRegion(in: occlusions, width: width, safeTop: safeTop) {
+            return (region, .statusRegion)
+        }
         let guide = rect(
             width: width, safeTop: safeTop, safeLeft: safeLeft, safeRight: safeRight,
             adaptedTop: adaptedTop, adaptedLeft: adaptedLeft, adaptedRight: adaptedRight
         )
-        let camera = rect(aroundOcclusions: occlusions, width: width, safeTop: safeTop)
+        let camera = camera(in: occlusions, width: width, safeTop: safeTop)
         switch (guide, camera) {
         case let (guide?, camera?) where (guide.midX > width / 2) == (camera.midX > width / 2):
             return (CGRect(x: guide.minX, y: camera.minY, width: guide.width, height: camera.height), .guideAndCamera)
@@ -82,28 +101,85 @@ enum StatusCorner {
         }
     }
 
-    /// The corner around a camera the status items wrap, where the guide reports none: an
-    /// occlusion region (`reservedRegions(kind: .occlusion, options: .includeInactive)`) inside the
-    /// top safe area, in the outer quarter of the width at either side. The Duo's inner screen
-    /// reports its camera so (37 pt at x 885–922, y 29–66 in landscape), its safe area's top
-    /// (81 pt) clears it, and the clock and battery ring sit around it. The corner reaches
-    /// `FixedChoices.statusItemsReach` past the camera toward the middle (the clock's left edge)
-    /// and is centered on the camera's row, at least a row high. Nil for anything else: a full-width
-    /// band (the outer screen's Dynamic Island) or a region below the safe area's top.
-    static func rect(aroundOcclusions regions: [CGRect], width: CGFloat, safeTop: CGFloat) -> CGRect? {
-        let reach = CGFloat(FixedChoices.statusItemsReach)
-        for region in regions where region.height > 0 && region.minY < safeTop && region.maxY <= safeTop + 0.5 {
-            let half = max(region.height, TopChromeGeometry.rowHeight) / 2
-            let top = max(0, region.midY - half)
-            let height = region.midY + half - top
-            if region.minX >= width * 0.75 {
-                return CGRect(x: region.minX - reach, y: top, width: width - region.minX + reach, height: height)
+    /// `read` with plain frames (no margins), for tests.
+    static func read(
+        width: CGFloat, safeTop: CGFloat, safeLeft: CGFloat, safeRight: CGFloat,
+        adaptedTop: CGFloat, adaptedLeft: CGFloat, adaptedRight: CGFloat, occlusions: [CGRect]
+    ) -> (rect: CGRect, source: Source)? {
+        read(
+            width: width, safeTop: safeTop, safeLeft: safeLeft, safeRight: safeRight, adaptedTop: adaptedTop,
+            adaptedLeft: adaptedLeft, adaptedRight: adaptedRight, occlusions: occlusions.map { Region(frame: $0) }
+        )
+    }
+
+    /// A region that can hold the status items: inside the top safe area, in the outer quarter
+    /// of the width at either side (true for the trailing side), nil for anything else: a
+    /// full-width band (the outer screen's Dynamic Island) or a region below the safe area's top.
+    private static func cornerSide(_ region: Region, width: CGFloat, safeTop: CGFloat) -> Bool? {
+        let frame = region.frame
+        guard frame.height > 0, frame.minY < safeTop, frame.maxY <= safeTop + 0.5 else { return nil }
+        if frame.minX >= width * 0.75 { return true }
+        if frame.maxX <= width * 0.25 { return false }
+        return nil
+    }
+
+    /// The row a corner element sits on: centered on it, at least a row high, never above the top.
+    private static func band(around rect: CGRect) -> (top: CGFloat, height: CGFloat) {
+        let half = max(rect.height, TopChromeGeometry.rowHeight) / 2
+        let top = max(0, rect.midY - half)
+        return (top, rect.midY + half - top)
+    }
+
+    /// The status items' own region: a corner region that reaches the screen's side edge. The
+    /// Duo's inner screen reports one (Device Hub's simulator, landscape: 807–951 x 0–82, the
+    /// safe area's height, active) around the time, the indicators and the battery ring, which
+    /// are drawn at 831–924 x 27–69, as on the device. The frame includes margins kept for
+    /// interactive content; the items start `FixedChoices.statusRegionPadding` inside it, or where
+    /// the region's own margins say, whichever is further in. The row is centered on the
+    /// region's reserved rect.
+    static func statusRegion(in regions: [Region], width: CGFloat, safeTop: CGFloat) -> CGRect? {
+        let padding = CGFloat(FixedChoices.statusRegionPadding)
+        for region in regions {
+            guard let trailing = cornerSide(region, width: width, safeTop: safeTop) else { continue }
+            let frame = region.frame
+            let band = band(around: region.reserved)
+            if trailing, frame.maxX >= width - 0.5 {
+                let left = min(max(region.reserved.minX, frame.minX + padding), width)
+                return CGRect(x: left, y: band.top, width: width - left, height: band.height)
             }
-            if region.maxX <= width * 0.25 {
-                return CGRect(x: 0, y: top, width: region.maxX + reach, height: height)
+            if !trailing, frame.minX <= 0.5 {
+                let right = max(min(region.reserved.maxX, frame.maxX - padding), 0)
+                return CGRect(x: 0, y: band.top, width: right, height: band.height)
             }
         }
         return nil
+    }
+
+    /// The corner around a camera the status items wrap: a corner region clear of the side
+    /// edge. The simulator's resizable window reports the Duo's inner camera so (37 pt at
+    /// x 885–922, y 29–66 in landscape), its safe area's top (81 pt) clears it, and the clock and
+    /// battery ring sit around it. The corner reaches `FixedChoices.statusItemsReach` past the
+    /// camera toward the middle (the clock's left edge) and is centered on the camera's row, at
+    /// least a row high.
+    static func camera(in regions: [Region], width: CGFloat, safeTop: CGFloat) -> CGRect? {
+        let reach = CGFloat(FixedChoices.statusItemsReach)
+        for region in regions {
+            guard let trailing = cornerSide(region, width: width, safeTop: safeTop) else { continue }
+            let camera = region.reserved
+            let band = band(around: camera)
+            if trailing {
+                return CGRect(x: camera.minX - reach, y: band.top, width: width - camera.minX + reach, height: band.height)
+            }
+            return CGRect(x: 0, y: band.top, width: camera.maxX + reach, height: band.height)
+        }
+        return nil
+    }
+
+    /// The corner from occlusion frames alone (no guide): the status items' region, else a
+    /// camera. For tests.
+    static func rect(aroundOcclusions frames: [CGRect], width: CGFloat, safeTop: CGFloat) -> CGRect? {
+        let regions = frames.map { Region(frame: $0) }
+        return statusRegion(in: regions, width: width, safeTop: safeTop) ?? camera(in: regions, width: width, safeTop: safeTop)
     }
 }
 

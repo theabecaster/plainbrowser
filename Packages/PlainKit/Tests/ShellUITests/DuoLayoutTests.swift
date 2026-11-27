@@ -458,143 +458,178 @@ struct TopChromeGeometryTests {
     }
 }
 
-/// The Duo's inner screen as the device has it, both orientations: the status items wrap the
-/// inner camera in the top-trailing corner (owner's screenshot, landscape, 3x: the time "11:08"
-/// at x 831.7–871.7, the indicators above it from 845.7, the battery ring 883–924, all within
-/// y 27–69; the camera as UIKit reports it, 884.67–921.67 x 29.33–66.33). Portrait's cluster is
-/// taken at the same place around the camera (602.67 in 669 pt, the simulator's report). Owner:
-/// "the tabs are getting cut. The tabs should go all the way to under the status bar icons. The
-/// tabs, share and options buttons can go all the way to the right as much as they can, spaced
-/// properly next to the status bar Wi-Fi and all the other indicators."
+/// The Duo's inner screen as the system reports it, both orientations. Device Hub's iPhone Duo
+/// simulator, unfolded, landscape (951x669, safe area top 82): one active occlusion region for
+/// the status items, x 807–951, y 0–82; the items themselves drawn at x 831–924, y 27–69 (time,
+/// indicators, battery ring), as on the owner's device screenshot (time at 831.7, ring 883–924).
+/// The region's margins were not read (UI scripting was unavailable on the test Macs), so both
+/// readings are checked: margins of zero (the frame is the rect) and margins that hug the items.
+/// Portrait (669x951) is taken as the same region at the same distance from the trailing edge.
+/// Owner: "the tabs are getting cut. The tabs should go all the way to under the status bar
+/// icons. The tabs, share and options buttons can go all the way to the right as much as they
+/// can, spaced properly next to the status bar Wi-Fi and all the other indicators."
 @MainActor
 struct DuoInnerStatusRowTests {
-    struct Screen: Sendable {
+    struct Screen: Sendable, CustomTestStringConvertible {
+        var name: String
         var size: CGSize
         var safeTop: CGFloat
-        var camera: CGRect
+        /// The status items' occlusion region (frame, with its margins).
+        var region: CGRect
         /// The status items' extent: time, indicators and battery ring.
         var items: CGRect
+        /// The region's margins hug the items (its reserved rect is `items`), else they are zero.
+        var hugging: Bool
+        var testDescription: String { "\(name)\(hugging ? ", margins hug the items" : ", no margins")" }
+
+        func with(hugging: Bool) -> Screen {
+            var copy = self
+            copy.hugging = hugging
+            return copy
+        }
     }
 
     nonisolated static let landscape = Screen(
-        size: CGSize(width: 951, height: 669), safeTop: 81,
-        camera: CGRect(x: 884.67, y: 29.33, width: 37, height: 37),
-        items: CGRect(x: 831.7, y: 27, width: 924 - 831.7, height: 42)
+        name: "landscape", size: CGSize(width: 951, height: 669), safeTop: 82,
+        region: CGRect(x: 807, y: 0, width: 144, height: 82),
+        items: CGRect(x: 831, y: 27, width: 93, height: 42), hugging: false
     )
     nonisolated static let portrait = Screen(
-        size: CGSize(width: 669, height: 951), safeTop: 82,
-        camera: CGRect(x: 602.67, y: 29.33, width: 37, height: 37),
-        items: CGRect(x: 602.67 - 53, y: 27, width: 924 - 831.7, height: 42)
+        name: "portrait", size: CGSize(width: 669, height: 951), safeTop: 82,
+        region: CGRect(x: 525, y: 0, width: 144, height: 82),
+        items: CGRect(x: 549, y: 27, width: 93, height: 42), hugging: false
     )
+    nonisolated static let screens = [
+        landscape, portrait, landscape.with(hugging: true), portrait.with(hugging: true),
+    ]
     static let strip = CGFloat(FixedChoices.tabStripHeight)
     /// Back and Forward; Tabs, Share and More (`ButtonBar.splitLeadingWidth`, `splitTrailingWidth`).
     static let capsules = (leading: CGFloat(88), trailing: CGFloat(132))
 
-    /// The corner as `readStatusCorner` finds it on the device: the guide equal to the safe area
-    /// (no corner of its own), the camera in the occlusion regions.
+    /// The corner as `readStatusCorner` finds it: the guide equal to the safe area (no corner of
+    /// its own, as the simulator reports), the status items' region in the occlusions.
     static func geometry(_ screen: Screen, strip: CGFloat = strip) throws -> TopChromeGeometry {
+        let region = StatusCorner.Region(frame: screen.region, reserved: screen.hugging ? screen.items : nil)
         let found = try #require(StatusCorner.read(
             width: screen.size.width, safeTop: screen.safeTop, safeLeft: 0, safeRight: 0,
-            adaptedTop: screen.safeTop, adaptedLeft: 0, adaptedRight: 0, occlusions: [screen.camera]
+            adaptedTop: screen.safeTop, adaptedLeft: 16, adaptedRight: 16, occlusions: [region]
         ))
-        #expect(found.source == .camera)
+        #expect(found.source == .statusRegion)
         return TopChromeGeometry(width: screen.size.width, safeTop: screen.safeTop, corner: found.rect, stripHeight: strip)
     }
 
-    /// The layout with the camera reported active, the row's and the strip's bands as the shell
-    /// passes them (`layoutInput`).
+    /// The layout with the region active, as the shell passes it (`layoutInput`).
     static func layout(_ screen: Screen, geometry: TopChromeGeometry) -> DuoLayout {
         DuoLayout(DuoLayoutInput(
             pageArea: CGRect(x: 0, y: screen.safeTop, width: screen.size.width, height: screen.size.height - screen.safeTop),
             isRegularWidth: true, isRegularHeight: true, tabLayout: .above, tabCount: 3,
             division: CGRect(x: screen.size.width / 2 - 20, y: 0, width: 40, height: screen.size.height),
-            occlusions: [screen.camera], chromeBand: geometry.rowTop...geometry.rowBottom,
-            stripBand: geometry.stripTop...(geometry.stripTop + strip)
+            occlusions: [screen.region], chromeBand: geometry.rowTop...geometry.rowBottom,
+            stripBand: geometry.stripTop...(geometry.stripTop + strip), statusCorner: geometry.corner
         ))
     }
 
-    @Test(arguments: [landscape, portrait])
+    @Test(arguments: screens)
     func stripSpansTheFullWidthUnderTheStatusItems(_ screen: Screen) throws {
         let bar = try Self.geometry(screen)
         let layout = Self.layout(screen, geometry: bar)
         #expect(layout.showsStrip)
-        // The camera cuts the row's lane, never the strip's: the strip sits under it.
-        #expect(layout.chromeLane.upperBound == screen.camera.minX)
+        // The status region cuts neither lane: the bar keeps clear of the corner itself.
+        #expect(layout.chromeLane == 0...screen.size.width)
         #expect(layout.stripLane == 0...screen.size.width)
         let strip = bar.stripFrame(lane: layout.stripLane)
         #expect(strip.maxX == screen.size.width - TopChromeGeometry.edgeMargin, "to the screen's trailing margin")
         #expect(strip.minX == TopChromeGeometry.edgeMargin)
         #expect(strip.minY > screen.items.maxY, "under the status icons, never beside them")
-        #expect(strip.minY > screen.camera.maxY)
         // On its way out it never rises over them either.
         for step in 0...20 {
             #expect(strip.minY + bar.stripTranslation(progress: CGFloat(step) / 10) > screen.items.maxY)
         }
     }
 
-    @Test(arguments: [landscape, portrait])
+    @Test(arguments: screens)
     func trailingCapsuleSitsSnugBesideTheStatusItems(_ screen: Screen) throws {
         let bar = try Self.geometry(screen)
         let layout = Self.layout(screen, geometry: bar)
         let row = bar.rowFrames(lane: layout.chromeLane, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
         let corner = try #require(bar.corner)
         // Its end: the status items' left edge less the gap.
-        #expect(abs(row.trailingCapsule.maxX - (corner.minX - TopChromeGeometry.cornerGap)) < 0.001)
+        #expect(row.trailingCapsule.maxX == corner.minX - TopChromeGeometry.cornerGap)
         let spacing = screen.items.minX - row.trailingCapsule.maxX
-        #expect(spacing >= 8 && spacing <= 12.5, "spaced like the bar's own gaps: \(spacing)")
+        #expect(spacing >= 8 && spacing <= 12, "spaced like the bar's own gaps: \(spacing)")
         // Nothing in the row overlaps the status items.
         for piece in [row.leadingCapsule, row.pill, row.trailingCapsule] {
             #expect(!piece.intersects(screen.items))
         }
-        // Centered on the status items' row.
-        #expect(abs(row.trailingCapsule.midY - screen.camera.midY) < 0.001)
+        // The address fills the room between the capsules (up to its cap), 6 pt from each, as
+        // near the lane's center as that leaves it.
+        #expect(abs(row.pill.maxX - (row.trailingCapsule.minX - ChromeGeometry.gap)) < 0.01)
+        #expect(row.pill.minX >= row.leadingCapsule.maxX + ChromeGeometry.gap)
+        #expect(row.pill.width <= CGFloat(FixedChoices.topBarPillMaxWidth))
     }
 
     @Test func landscapeNumbers() throws {
+        // No margins: the items' edge 20 pt inside the region (827); the capsule ends at 819,
+        // 12 pt before the time (was 731: the region read as a camera, 64 + 12 pt past it).
         let bar = try Self.geometry(Self.landscape)
-        let layout = Self.layout(Self.landscape, geometry: bar)
-        let row = bar.rowFrames(lane: layout.chromeLane, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
-        // Row 25.8–69.8; the trailing capsule 687.7–819.7 (was …808.7), 12 pt before "11:08".
-        #expect(abs(bar.rowTop - 25.83) < 0.01)
-        #expect(abs(row.trailingCapsule.maxX - 819.67) < 0.01)
-        // The address takes its full 560 pt between the capsules, as near the center as that
-        // leaves it (fill first, then center): 121.7–681.7, its end 6 pt before the capsule.
-        #expect(row.pill.width == CGFloat(FixedChoices.topBarPillMaxWidth))
-        #expect(abs(row.pill.maxX - (row.trailingCapsule.minX - ChromeGeometry.gap)) < 0.01)
-        #expect(row.pill.minX > row.leadingCapsule.maxX + ChromeGeometry.gap)
-        // The strip 12–939 at 73.8; the page's first line at 111.8.
-        #expect(abs(bar.stripTop - 73.83) < 0.01)
-        #expect(abs(bar.expandedInset - (73.83 + Self.strip + 4)) < 0.01)
+        let row = bar.rowFrames(lane: 0...951, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
+        #expect(row.trailingCapsule.maxX == 819)
+        #expect(bar.rowTop == 19, "centered on the region's 0–82")
+        // The address takes its full 560 pt (121–681), its end 6 pt before the capsule.
+        #expect(row.pill.width == 560 && row.pill.minX == 121)
+        // The strip 12–939 under the region (86); the page's first line at 124.
+        #expect(bar.stripTop == 86)
+        #expect(bar.expandedInset == 124)
+        // Margins that hug the items: the capsule at 823 (8 pt), the row on the items' row.
+        let hugging = try Self.geometry(Self.landscape.with(hugging: true))
+        let tight = hugging.rowFrames(lane: 0...951, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
+        #expect(tight.trailingCapsule.maxX == 823)
+        #expect(hugging.rowTop == 26 && hugging.stripTop == 74 && hugging.expandedInset == 112)
     }
 
     @Test func portraitNumbers() throws {
         let bar = try Self.geometry(Self.portrait)
-        let layout = Self.layout(Self.portrait, geometry: bar)
-        let row = bar.rowFrames(lane: layout.chromeLane, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
-        // The trailing capsule 405.7–537.7; the address fills between the capsules (106–399.7).
-        #expect(abs(row.trailingCapsule.maxX - 537.67) < 0.01)
-        #expect(abs(row.pill.minX - (row.leadingCapsule.maxX + ChromeGeometry.gap)) < 0.01)
-        #expect(abs(row.pill.maxX - (row.trailingCapsule.minX - ChromeGeometry.gap)) < 0.01)
-        #expect(bar.stripFrame(lane: layout.stripLane).maxX == 669 - TopChromeGeometry.edgeMargin)
+        let row = bar.rowFrames(lane: 0...669, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
+        // The capsule 405–537; the address fills between the capsules (106–399).
+        #expect(row.trailingCapsule.maxX == 537)
+        #expect(row.pill.minX == 106 && row.pill.maxX == 399)
+        #expect(bar.stripFrame(lane: 0...669).maxX == 657)
+    }
+
+    @Test func aCameraStillGivesTheCornerWhereNoStatusRegionIs() throws {
+        // The simulator's resizable window reports only the camera (37 pt, clear of the edge):
+        // the items reach `statusItemsReach` past it, the row centers on it.
+        let camera = CGRect(x: 884.67, y: 29.33, width: 37, height: 37)
+        let found = try #require(StatusCorner.read(
+            width: 951, safeTop: 81, safeLeft: 0, safeRight: 0, adaptedTop: 81, adaptedLeft: 0, adaptedRight: 0,
+            occlusions: [camera]
+        ))
+        #expect(found.source == .camera)
+        let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: found.rect, stripHeight: Self.strip)
+        #expect(abs(951 - bar.rowClearance.trailing - 819.67) < 0.01, "12 pt before the time at 831.7")
+        #expect(abs(bar.stripTop - 73.83) < 0.01)
+        // With the status region too, the region wins.
+        let both = try #require(StatusCorner.read(
+            width: 951, safeTop: 82, safeLeft: 0, safeRight: 0, adaptedTop: 82, adaptedLeft: 0, adaptedRight: 0,
+            occlusions: [camera, Self.landscape.region]
+        ))
+        #expect(both.source == .statusRegion && both.rect.minX == 827)
     }
 
     @Test func guideAndCameraTogether() throws {
         // A guide that reaches in from the trailing edge, down from the top edge (0–81), and the
-        // camera: across from the guide, up and down from the camera, so the row and the strip
-        // sit by the status items, not by the guide's band.
+        // camera: across from the guide, up and down from the camera.
+        let camera = CGRect(x: 884.67, y: 29.33, width: 37, height: 37)
         let found = try #require(StatusCorner.read(
             width: 951, safeTop: 81, safeLeft: 0, safeRight: 0, adaptedTop: 0, adaptedLeft: 0, adaptedRight: 120,
-            occlusions: [Self.landscape.camera]
+            occlusions: [camera]
         ))
         #expect(found.source == .guideAndCamera)
         #expect(found.rect.minX == 831 && found.rect.maxX == 951)
-        #expect(abs(found.rect.midY - Self.landscape.camera.midY) < 0.001)
-        let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: found.rect, stripHeight: Self.strip)
-        #expect(951 - bar.rowClearance.trailing == 831 - TopChromeGeometry.cornerGap)
-        #expect(abs(bar.stripTop - 73.83) < 0.01)
+        #expect(abs(found.rect.midY - camera.midY) < 0.001)
         // The guide alone: its band.
         let guide = try #require(StatusCorner.read(
-            width: 951, safeTop: 81, safeLeft: 0, safeRight: 0, adaptedTop: 0, adaptedLeft: 0, adaptedRight: 120, occlusions: []
+            width: 951, safeTop: 81, safeLeft: 0, safeRight: 0, adaptedTop: 0, adaptedLeft: 0, adaptedRight: 120, occlusions: [CGRect]()
         ))
         #expect(guide.source == .guide && guide.rect == CGRect(x: 831, y: 0, width: 120, height: 81))
         // A camera on the other side from the guide's corner is not combined.
@@ -603,6 +638,19 @@ struct DuoInnerStatusRowTests {
             occlusions: [CGRect(x: 30, y: 29, width: 37, height: 37)]
         ))
         #expect(apart.source == .guide)
+    }
+
+    @Test func otherOcclusionsStillCutTheLane() {
+        // Only regions inside the status corner are the top bar's to clear; anything else in the
+        // row's band still moves the lane, as before.
+        let layout = DuoLayout(DuoLayoutInput(
+            pageArea: CGRect(x: 0, y: 82, width: 951, height: 587), isRegularWidth: true, isRegularHeight: true,
+            tabLayout: .above, tabCount: 3, occlusions: [CGRect(x: 0, y: 0, width: 60, height: 82)],
+            chromeBand: 19...63, stripBand: 86...120, statusCorner: CGRect(x: 827, y: 0, width: 124, height: 82)
+        ))
+        #expect(layout.chromeLane == 60...951)
+        // The strip, under that region (86 > 82), is not in its way.
+        #expect(layout.stripLane == 0...951)
     }
 }
 
@@ -638,7 +686,7 @@ struct PhonesAndOuterScreenUnchangedTests {
             occlusions: [CGRect(x: 133, y: 0, width: 200, height: 62)]
         ) == nil)
         #expect(StatusCorner.read(
-            width: 375, safeTop: 20, safeLeft: 0, safeRight: 0, adaptedTop: 20, adaptedLeft: 0, adaptedRight: 0, occlusions: []
+            width: 375, safeTop: 20, safeLeft: 0, safeRight: 0, adaptedTop: 20, adaptedLeft: 0, adaptedRight: 0, occlusions: [CGRect]()
         ) == nil)
     }
 

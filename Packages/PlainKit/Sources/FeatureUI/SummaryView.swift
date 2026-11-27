@@ -287,20 +287,20 @@ private struct SummaryHeader: View {
     let onDone: () -> Void
 
     var body: some View {
-        ZStack {
+        // A hidden copy of Done on the leading side keeps the title centered at any text size,
+        // and the title takes whatever room is left before it truncates.
+        HStack(spacing: 8) {
+            done.hidden().accessibilityHidden(true)
+            Spacer(minLength: 0)
             Text(title)
                 .font(.system(.headline, design: .serif))
                 .foregroundStyle(Style.ink)
                 .lineLimit(1)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, 96)
-            HStack {
-                Spacer()
-                Button("Done", action: onDone)
-                    .buttonStyle(.glass)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-            }
+                .layoutPriority(1)
+            Spacer(minLength: 0)
+            done
         }
         .frame(minHeight: 44)
         .padding(.horizontal, 16)
@@ -309,6 +309,10 @@ private struct SummaryHeader: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Style.hairline).frame(height: 0.5)
         }
+    }
+
+    private var done: some View {
+        Button("Done", action: onDone).buttonStyle(.glass)
     }
 }
 

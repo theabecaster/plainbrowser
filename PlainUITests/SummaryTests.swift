@@ -76,6 +76,9 @@ final class SummaryTests: XCTestCase {
         shot("b4-done")
         app.swipeUp()
         shot("b5-sources")
+        // The title and Done stay pinned while the summary scrolls (the Duo's outer screen too).
+        XCTAssertTrue(app.buttons["Done"].isHittable, "Done stays on screen")
+        XCTAssertTrue(app.staticTexts["Browse for Me"].isHittable, "the title stays on screen")
 
         source.tap()
         XCTAssertTrue(app.buttons["addressPill"].waitForExistence(timeout: 5), "the source opened in a tab")

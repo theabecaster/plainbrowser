@@ -52,7 +52,10 @@ extension BrowserViewController {
     /// follow at once, the search sheet's row included.
     func summaryAvailabilityChanged() {
         updateButtons()
-        if isEditingAddress { updateBrowseForMe(query: pill.textField.text ?? "") }
+        guard isEditingAddress else { return }
+        // As `queryChanged` sees it: the page's own address, untouched, is not a query.
+        let text = pill.textField.text ?? ""
+        updateBrowseForMe(query: text == pageAddress?.absoluteString ? "" : text)
     }
 
     /// Summarize Page, in the page menu's row with Find and Reader.
@@ -107,9 +110,20 @@ extension BrowserViewController {
             summaryUI.run?.cancel()
             startRun(input, on: screen)
         }
+        // A search from a page opens a new tab (the address bar's second door), so the page stays
+        // and Back returns to it; from no page it loads where the search would have.
         screen.onSearchInstead = { [weak self] query in
             guard let self, let url = data.searchEngine.resultsURL(for: query) else { return }
-            closeSheet { [weak self] in self?.load(url, kind: .typed) }
+            let opener = currentTab.flatMap { session.tabs.isEmpty($0.id) ? nil : $0 }
+            let isPrivate = summaryUI.isPrivate
+            closeSheet { [weak self] in
+                guard let self else { return }
+                guard let opener, opener === currentTab else { return load(url, kind: .typed) }
+                let tab = session.tabs.newTab(isPrivate: isPrivate, opener: opener)
+                engineUI.typedVisitTabs.insert(tab.id)
+                tab.load(url)
+                show(tab)
+            }
         }
         summaryUI.screen = screen
         summaryUI.isPrivate = isPrivate

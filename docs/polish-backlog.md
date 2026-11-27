@@ -8,8 +8,7 @@ Newest feature last.
 - **Edge swipe in UI tests.** `allowsBackForwardNavigationGestures` is on and the swipe tracks
   under XCUITest, but a synthesized release never commits it, so the UI test checks Back and
   Forward through the buttons only. Check the swipe by hand on the Duo.
-- **Landscape iPhones.** The pill and the button bar take two rows (102 pt) in compact height.
-  Fold them into one row there.
+- **Landscape iPhones.** Done (UX audit leftovers): one bottom row in compact height.
 - **Duo inner screen.** The plan turns the vertical bar off in inner landscape (Safari's
   precedent); the shell follows `verticalBarEdge` everywhere for now (M3).
 - **Shell constants.** The pull-to-refresh threshold, collapse distance and compact pill scale live
@@ -52,7 +51,8 @@ Newest feature last.
 - **Hard edge look.** With the hard edge, page text still shows blurred below and beside the
   resting pill, and the edge's full-width hairline reads as a shelf behind the floating pill,
   mostly when collapsed. Try the soft style again on the device (it left text refracting through
-  the pill on the simulator), or a stronger glass tint. (Design review, round 3.)
+  the pill on the simulator), or a stronger glass tint. (Design review, round 3.) Done for legibility (UX audit leftovers): a soft paper glow under each glass control
+  (`ChromeScrim`).
 
 ## Tab model (lane M2a, 2026-11-26)
 
@@ -426,3 +426,16 @@ Newest feature last.
   narrower reader style for the pane. (Design review, round 1.)
 - **Device checks:** two windows side by side in Split View, a fold with two windows, the edge
   swipe against WebKit's swipe forward, and the pane's header beside the real status corner.
+
+## UX audit leftovers: shell and engine (2026-11-27)
+
+- **Glow over colored pages.** Over a saturated fixed footer (the blue test footer) the paper glow
+  reads as a soft halo around the capsules. Check on the Duo whether it wants to be smaller there.
+- **Landscape side bars.** In compact height the page is still pillarboxed with paper bars beside
+  the safe area (audit item 12); that is the page area's inset (top/inner insets lane).
+- **Back to the opener by the edge swipe** still slides the page over paper, then switches; the
+  button now shows the opener underneath. Give the swipe the same live opener under the page.
+- **Leading capsule in the one-row bar.** With Back only, the pill keeps its place, so a 50 pt
+  gap shows the page between the Back capsule and the pill (as in the top bar).
+- **HTTPS-first wait.** Not reproduced for IP addresses on the simulator; check a `.local` or
+  intranet name on the device to confirm WebKit no longer tries HTTPS there.

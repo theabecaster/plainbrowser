@@ -98,7 +98,7 @@ done
 for file in Packages/PlainKit/Sources/SystemSync/SpotlightIndex.swift Packages/PlainKit/Sources/SystemSync/SystemSync.swift \
     Packages/PlainKit/Sources/PlainShared/SharedFavorites.swift Packages/PlainKit/Sources/ShellUI/BrowserViewController+System.swift; do
   [[ -f $file ]] || continue
-  grep -vE '^ *//' $file | grep -q 'TestIsolation.isActive' \
+  grep -vE '^[[:space:]]*//' $file | grep -q 'TestIsolation.isActive' \
     || problems+="$file reaches the system without checking TestIsolation.isActive"
 done
 # The only App Shortcuts update is SystemSync.live's onChange (dropped in an isolated run): within

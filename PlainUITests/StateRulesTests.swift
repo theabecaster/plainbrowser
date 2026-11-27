@@ -291,7 +291,7 @@ final class StateRulesTests: XCTestCase {
         XCTAssertFalse(app.buttons["reopenTab"].waitForExistence(timeout: 1), "private tabs never come back")
     }
 
-    /// An empty private tab's shortcut leaves private browsing, so it says so: "Regular Tab".
+    /// An empty private tab's shortcut leaves private browsing, so it says so: "Leave Private".
     func testEmptyPrivateTabOffersARegularTab() throws {
         let app = try launch()
         closeSearch(app)
@@ -299,7 +299,7 @@ final class StateRulesTests: XCTestCase {
         closeSearch(app)
         let regular = app.buttons["start.regularTab"]
         XCTAssertTrue(regular.waitForExistence(timeout: 3))
-        XCTAssertEqual(regular.label, "Regular Tab")
+        XCTAssertEqual(regular.label, "Leave Private Browsing")
         XCTAssertFalse(app.buttons["start.privateTab"].exists, "already private")
     }
 
@@ -316,7 +316,7 @@ final class StateRulesTests: XCTestCase {
         let gallery = app.scrollViews["tabGallery"]
         XCTAssertTrue(gallery.waitForExistence(timeout: 3))
         XCTAssertTrue(waitForTabCount(gallery, 1), "opens on the private list, which has the tab")
-        XCTAssertEqual(app.buttons["galleryPrivate"].value as? String, "On")
+        XCTAssertTrue(app.buttons["galleryPrivate"].isSelected, "the Private side is the one shown")
     }
 
     /// While a page loads, the page menu offers Stop in Reload's place; stopped before it

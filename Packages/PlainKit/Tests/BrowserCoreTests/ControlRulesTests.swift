@@ -560,6 +560,28 @@ import Testing
         #expect(GalleryRules(Self.gallery(count: 3)).reopenToastAfterClose)
     }
 
+    /// Close All Private Tabs is where people expect to end private browsing, even with one card;
+    /// the regular list keeps its two-card rule.
+    @Test func galleryPrivateListOffersCloseAllWithOneCard() {
+        let rules = GalleryRules(Self.gallery(count: 1, isPrivate: true))
+        #expect(rules.closeAllTabs)
+        #expect(rules.more)
+        #expect(!GalleryRules(Self.gallery(count: 1)).closeAllTabs)
+        #expect(!GalleryRules(Self.gallery(count: 0, isPrivate: true)).closeAllTabs)
+    }
+
+    /// The tabs menu ends private browsing in one step once two private pages are open.
+    @Test func tabsMenuClosesAllPrivateTabsWithTwo() {
+        var state = Self.page()
+        state.isPrivate = true
+        state.listCount = 1
+        #expect(!ControlRules(state).menuCloseAllPrivateTabs, "Close Tab already ends it")
+        state.listCount = 2
+        #expect(ControlRules(state).menuCloseAllPrivateTabs)
+        state.isPrivate = false
+        #expect(!ControlRules(state).menuCloseAllPrivateTabs)
+    }
+
     @Test func galleryOpensOnAListWithCards() {
         #expect(GalleryRules.listToOpen(screenTabIsPrivate: false, regularCount: 2, privateCount: 1) == false)
         #expect(GalleryRules.listToOpen(screenTabIsPrivate: true, regularCount: 2, privateCount: 1) == true)

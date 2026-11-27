@@ -37,6 +37,8 @@ final class TabsUIState {
     let start = EmptyTabView()
     /// The start screen's shortcuts as last applied, so they are rebuilt only when they change.
     var startShortcuts: [StartShortcut]?
+    /// The private start screen is on screen: drawn dark, it wants the light status bar.
+    var prefersLightStatusBar = false
     /// A toast that waits while the gallery or a sheet is up (it could not act from there); the
     /// newest one shows when they close.
     var pendingToast: (() -> Void)?
@@ -456,8 +458,16 @@ extension BrowserViewController: GalleryHost {
         if showsStart, !isEditingAddress, start.isReceded { start.setReceded(false, animated: true) }
         if showsStart {
             applyStartShortcuts()
-            // An empty private tab says what it is; with profiles, the window's is named.
+            // An empty private tab says what it is, on the private dusk; with profiles, the
+            // window's is named.
+            start.setPrivate(currentTab?.isPrivate == true)
             updateStartScreenMessage()
+        }
+        // The clock and battery stay light over the dark private start screen.
+        let lightStatusBar = showsStart && start.isPrivate
+        if lightStatusBar != tabsUI.prefersLightStatusBar {
+            tabsUI.prefersLightStatusBar = lightStatusBar
+            setNeedsStatusBarAppearanceUpdate()
         }
         // Over a blank tab's web view, under the page-state message.
         if showsStart {
@@ -496,9 +506,12 @@ extension BrowserViewController: GalleryHost {
                     [weak self] in self?.openNewTab(private: true)
                 }
             case .regularTab:
-                // Only on an empty private tab: it leaves private browsing, so it says where it
-                // goes (state rules §3).
-                EmptyTabView.Shortcut(id: "start.regularTab", title: String(localized: "Regular Tab"), symbol: "plus") {
+                // An empty private tab: this turns it into a regular one, so it says where it
+                // goes (UX audit item 26), with the switcher's word for the other side.
+                EmptyTabView.Shortcut(
+                    id: "start.regularTab", title: String(localized: "Leave Private"),
+                    accessibilityLabel: String(localized: "Leave Private Browsing"), symbol: "hand.raised.slash"
+                ) {
                     [weak self] in self?.openNewTab(private: false)
                 }
             case .reopenClosedTab:

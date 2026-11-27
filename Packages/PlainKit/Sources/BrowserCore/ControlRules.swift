@@ -267,6 +267,9 @@ public struct ControlRules: Sendable, Equatable {
     public var menuArchivedTabs: Bool { state.hasArchived }
     /// Closing an empty tab does nothing useful; it goes away by itself.
     public var menuCloseTab: Bool { state.hasPage }
+    /// On a private tab with another private page open: ends private browsing in one step, as
+    /// Safari's and Chrome's Close All. With one, Close Tab already does it.
+    public var menuCloseAllPrivateTabs: Bool { state.isPrivate && state.listCount >= 2 }
 
     // MARK: The page menu (§4)
 
@@ -486,8 +489,9 @@ public struct GalleryRules: Sendable, Equatable {
     public var reopenClosedTab: Bool { state.hasClosed && !state.isPrivateList }
     public var archivedTabs: Bool { state.hasArchived && !state.isPrivateList }
 
-    /// With one card, its swipe or menu closes it.
-    public var closeAllTabs: Bool { state.closableCount >= 2 }
+    /// With one card, its swipe or menu closes it. The private list offers Close All Private Tabs
+    /// with any card: it is how people expect to end private browsing (Safari, Chrome).
+    public var closeAllTabs: Bool { state.closableCount >= (state.isPrivateList ? 1 : 2) }
 
     /// The profile switcher above the cards: only with a second profile to switch to, and never
     /// over private tabs, which belong to no profile's data.

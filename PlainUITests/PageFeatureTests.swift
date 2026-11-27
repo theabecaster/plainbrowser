@@ -15,8 +15,8 @@ final class PageFeatureTests: XCTestCase {
             try server.start()
             addTeardownBlock { [server] in server?.stop() }
         }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainTestTranslator", "-PlainTranslateHintShown", "YES"] + extra
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainTestTranslator", "-PlainTranslateHintShown", "YES"] + extra
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
         return app

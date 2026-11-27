@@ -17,7 +17,14 @@ Package tests alone: `cd Packages/PlainKit && swift test`.
 ## Test isolation
 
 Tests on the owner's device are isolated. Every UI, perf and capture launch goes through `XCUIApplication.isolated()`, which adds `-PlainInMemoryStore` (or a test adds `-PlainTestStore`), and the app honors these in Debug and Release (`TestIsolation` in BrowserCore). An isolated run uses a temporary database, tab state, thumbnails, downloads and TipKit store, a separate defaults suite, its own website data store (never the default one, so the owner's cookies and logins are never read or changed) and a private pasteboard. It never changes the Home Screen icon or adds to Photos. Only WebKit's compiled blocking lists stay shared: a cache built from the bundled lists, with no user data.
-`IsolatedApplication` refuses to launch without the argument and terminates the app if no `plainTestIsolation` marker shows. `scripts/test.sh` and `scripts/perf-gate.sh` run `scripts/lib/check-isolation.zsh` first and stop when any test could launch Plain another way, or when app code reaches owner state (standard defaults, general pasteboard, default website data, icon, Documents, scene state, Photos) outside the files that route it through `TestIsolation`.
+The system hooks are isolated too: an isolated run's App Group is a folder of its own
+(`AppGroup.containerURL`), and it never indexes into or clears Spotlight, reloads widgets, offers
+Handoff or updates the App Shortcuts' parameters (`SystemSync.live` gives it stand-ins, and
+`CoreSpotlightIndex`, `WidgetCenterReloader` and Handoff check `TestIsolation.isActive` again).
+The hosted unit tests (`PlainTests`) get `-PlainInMemoryStore` for their host app from
+`Smoke.xctestplan`, and stop if the host is not isolated. `SystemCaptureTests` runs on simulators
+only: it adds widgets to the Home Screen.
+`IsolatedApplication` refuses to launch without the argument and terminates the app if no `plainTestIsolation` marker shows. `scripts/test.sh` and `scripts/perf-gate.sh` run `scripts/lib/check-isolation.zsh` first and stop when any test could launch Plain another way, or when app code reaches owner state (standard defaults, general pasteboard, default website data, icon, Documents, scene state, Photos, Spotlight, widgets, App Group container and defaults, Handoff, App Shortcuts and donations) outside the files that route it through `TestIsolation`, or when a plan runs `PlainTests` without isolating the host.
 
 WebKit tests (`WebEngineTests`, `ContentBlockingTests`) need an iOS simulator; on macOS only their
 pure parts run. Run them on one of your own `plain-*` simulators:

@@ -53,7 +53,7 @@ reads the metrics with `xcrun xcresulttool get test-results metrics`, and append
 
 | Metric | Test | Budget (device) |
 |---|---|---|
-| `launchMs` | `testLaunch`: the `launch.firstFrame` interval, `main` to the first display-link callback after the first window is visible (its first frame committed, the main thread running again). Not `XCTApplicationLaunchMetric`: on iOS 27 it records nothing for Plain on the device and only in some simulator runs. Pre-`main` time is not in it. | target 300, fail ≥ 400 |
+| `launchMs` | `testLaunch`: the `launch.firstFrame` interval, `main` to the first display-link callback after the first window is visible (the turn that showed it is done, the main thread running again). Not `XCTApplicationLaunchMetric`: on iOS 27 it records nothing for Plain on the device and only in some simulator runs. Pre-`main` time is not in it. | target 300, fail ≥ 400 |
 | `searchFieldMs` | `testLaunchToSearchFieldReady`: the `launch` signpost interval | target 300, fail ≥ 400 |
 | `hitchMsPerS` | `testPageScrollHitches`: `XCTHitchMetric` while scrolling a Wikipedia article (needs network). Device only: the simulator reports no hitch data. | target 5, fail ≥ 10 |
 | `galleryMs` | `testGalleryOpen`: the `gallery.show` interval, ending when the page is within 0.5 pt of its card and moving less than 0.5 pt a frame (not at Core Animation's settle of the spring's tail) | target 650, fail ≥ 800 |

@@ -13,8 +13,8 @@ public enum Signposts {
     /// Interval from `main` entering to the search field becoming first responder.
     public static let launch: StaticString = "launch"
     /// Interval from `main` entering to the first display-link callback after the first window
-    /// became visible: the run loop turn that showed the window (and committed its first frame)
-    /// is done and the main thread runs the next frame's work. The perf gate's cold launch (`launchMs`): Apple's
+    /// became visible: the run loop turn that showed the window is done and the main thread runs
+    /// the next frame's work. The perf gate's cold launch (`launchMs`): Apple's
     /// XCTApplicationLaunchMetric records nothing for Plain on the device and only some runs on a
     /// simulator. Time before `main` (dyld, static initializers) is not in it.
     public static let launchFirstFrame: StaticString = "launch.firstFrame"

@@ -53,6 +53,17 @@ final class PerfTests: XCTestCase {
         app.launchArguments += ["-PlainTestStore", "-PlainResetStore"]
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 10))
+        // The search field shows before the database opens. Settings' Appearance row enables once
+        // the saved settings are read, so the store is created and migrated before the terminate.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        XCTAssertTrue(app.buttons["more"].waitForExistence(timeout: 3))
+        app.buttons["more"].tap()
+        let settings = app.buttons["Settings…"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Appearance'")).firstMatch
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: row)
+        XCTAssertEqual(XCTWaiter().wait(for: [enabled], timeout: 10), .completed, "the test store did not open")
         app.terminate()
     }
 

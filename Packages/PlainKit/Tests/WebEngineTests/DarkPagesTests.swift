@@ -306,6 +306,10 @@ struct DarkPagesTests {
         // Text over a light photograph keeps the site's dark color, so it stays readable on it.
         #expect(try await css("color", "#photo-tile-title") == "rgb(29, 29, 31)")
         #expect(try await css("color", "#photo-tile-text") == "rgb(29, 29, 31)")
+        // A picture that loads late rechecks the text around it; the icons there stay fixed.
+        _ = try await harness.evaluate("document.querySelector('#photo').dispatchEvent(new Event('load')); 1", in: tab)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(try await lum("fill", "#icon-truck path") > 0.4)
         // Pictures and emoji: nothing applied.
         #expect(try await css("filter", "#photo") == "none")
         #expect(try await css("filter", "#emoji") == "none")

@@ -1097,7 +1097,14 @@ extension DarkPages {
         seen.delete(el);
         info.delete(el);
         // Fixes below it were made against its old colors: they get another look too.
-        for (const d of el.querySelectorAll('[' + ATTR + ']')) { d.removeAttribute(ATTR); seen.delete(d); info.delete(d); }
+        for (const d of el.querySelectorAll('[' + ATTR + ']')) {
+          d.removeAttribute(ATTR);
+          seen.delete(d);
+          info.delete(d);
+          // Shapes are fixed from their SVG as a whole: that SVG gets the look.
+          const svg = d.closest('svg');
+          if (svg) seen.delete(svg);
+        }
         queue.unshift(el);
         stats.rechecked++;
       }

@@ -65,6 +65,9 @@ private struct StepView: View {
             .accessibilityHint("Ends the introduction")
         }
         .frame(height: IntroLayout.topRow)
+        // Inside the window, which stops at its widest on wide screens (the Duo's inner screen):
+        // spread over the whole width, the rings and Skip landed white on the paper.
+        .frame(maxWidth: IntroLayout.windowMaxWidth)
     }
 
     @ViewBuilder private var content: some View {

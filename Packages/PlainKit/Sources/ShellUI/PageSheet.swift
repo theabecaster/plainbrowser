@@ -402,7 +402,7 @@ final class PageSheetController: UIViewController {
     private static func caption(_ title: String) -> String {
         let captions = [
             "Find on Page": String(localized: "Find"), "Translate Page": String(localized: "Translate"),
-            "Show Original": String(localized: "Original"), "Show Reader": String(localized: "Reader"),
+            "Show Original": String(localized: "Translated"), "Show Reader": String(localized: "Reader"),
             "Hide Reader": String(localized: "Reader"),
             "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
             "Archived Tabs": String(localized: "Archive"), "Add to Favorites": String(localized: "Favorite"),

@@ -417,3 +417,22 @@ Newest feature last.
 - **Status items over a colored header.** On the inner screen the system's status items turn black
   over a red header at rest and while reading; check on the device that the switch doesn't flash
   during motion (design review, round 1).
+## Side pane and windows (2026-11-27)
+
+- **Find's first result can start with a heading number** ("…3 Papermaking"): context crosses
+  into the table of contents' numbering. Trim leading list numbers from the context. (Design
+  review, round 2.)
+- **History and Find search fields differ** in height and fill inside the pane; make them one
+  style. (Design review, round 2.)
+- **Book pose gutter:** the 40 pt fold gap between the page and the pane reads as a blank column;
+  try letting the pane's paper run to the page's edge with its controls kept off the fold.
+  (Design review, round 2.)
+- **Reader at 250 pt:** infobox tables scroll sideways (by design) and look clipped; the
+  publisher line, large title and accent rule take much of the first screen in the pane. A
+  narrower reader style for the pane. (Design review, round 1.)
+- **A gray area above the page under the top bar** (the page's own top under the floating glass)
+  shows beside the paper pane; it belongs to the top bar's no-band work. (Design review, round 1.)
+- **DuoTests `testSplitOpensFromThePageMenuFocusesByTouchAndCloses`** fails before and after this
+  work: it expects the pill over the focused pane, but the top bar now spans both panes.
+- **Device checks:** two windows side by side in Split View, a fold with two windows, the edge
+  swipe against WebKit's swipe forward, and the pane's header beside the real status corner.

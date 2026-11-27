@@ -360,3 +360,15 @@ Newest feature last.
 - **Footer step at a reveal.** A fixed page footer now moves up in the frame the bar starts back
   (one motion with the bar, not after it), but in one step: WebKit doesn't animate an inset change,
   and changing it per frame would relayout the page during the spring (engine rule 4).
+
+## Duo inner: no band at the top (2026-11-27)
+
+- **Header fill at rest.** On a site with a fixed or sticky header, WebKit paints the header's
+  color into the page's top inset behind the floating controls at rest (Safari does the same).
+  An inset of 0 at rest makes WebKit load pages with the first line under the row, so it stays;
+  the owner judges it on the device (docs/decisions.md, "No band at the top").
+- **Portrait strip, three tabs.** The selected tab ends tight against the strip's "+" and its
+  close button looks clipped where the strip stops beside the status corner (design review,
+  round 1). Not changed by this lane.
+- **Integration coverage.** Unit tests cover the inset values only; add UI checks for the hidden
+  edge effects and the split's other pane insets (code review, round 1).

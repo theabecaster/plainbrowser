@@ -1218,3 +1218,48 @@ empty." Research in docs/research/launch.md; rules in docs/state-rules.md, "Laun
   if any, behind the frost.
 - **Debug clock:** `-PlainAwayOffset <seconds>` runs the rules' clock ahead (Debug builds), so UI
   tests reach "4 hours away" without waiting.
+
+## Duo inner screen: the bar in the status row (2026-11-27)
+
+Owner, on the device (inner screen, landscape): "There's a huge bar on the top when I open the
+Duo." And: "I want the URL bar at the level next to those things [the clock and battery]. I don't
+want the wasted space on top." The device screenshot (951x669 pt): the top safe area is 81 pt, but
+the status items sit only in the top-trailing corner (x 828–928, y 24–69). The bar sat under that
+81 pt band on an opaque paper band, and the page started at 132 pt (20% of the screen). The
+simulator's 24 pt status bar had hidden this.
+
+- **Chosen: the row sits in the status zone, on the status items' row.** Back/Forward, the
+  address and Tabs/Share/More are centered on the corner's vertical middle, and the row's trailing
+  end stops 12 pt before the corner. Nothing above the row is Plain's: the page runs to the top
+  edge under the zone and the floating glass (no band, the owner's rule for the bottom pill).
+- **How the corner is found (no device geometry):** `UIView.edgeInsets(for:
+  .safeArea(cornerAdaptation: .horizontal))`, the iOS 26 guide for "bar-like content at the top of
+  a scene" beside a corner element (iPadOS's window controls). Where system UI keeps to a corner,
+  that guide's top is shorter than the safe area's and its leading or trailing inset is larger. The
+  corner is then the rect from that inset to the edge, from the guide's top down to the safe area's
+  top (`StatusCorner`). Where the guide equals the safe area (a full-width status bar: phones, the
+  simulator), there is no corner.
+- **Layout math (`TopChromeGeometry`, root view coordinates, panes start at the top edge):**
+  - In the zone: row center = corner.midY; rowTop = max(center − 22, corner.minY); the row ends
+    12 pt before the corner. Strip top = row bottom + 4. At rest the page's top inset = the row's
+    bottom + 4 (+ strip 34 + 4). Pill and hidden: the row's bottom (the page gets everything under
+    the status row; fixed headers stay clear of the clock).
+  - Device numbers (corner 828–928 x 24–69, safe top 81): row 24.5–68.5, page top at rest
+    72.5 pt (was 132), 110.5 pt with the strip (was 170), 68.5 pt while reading (was 81). Safari:
+    84 pt at rest.
+  - If the guide reports the corner from the screen's top (0–81), the row centers at 40.5 and the
+    page starts at 66.5 pt. Either way under Safari's 84.
+  - No corner (fallback): the row sits 2 pt under the safe area's top, as before, but still floats
+    over the page, which now runs under the status bar: page top = safe top + 50 (+ 38 strip).
+- **Reading state:** in the zone the address shrinks in place (70%) on the row, the buttons and
+  strip rise and fade; hidden lifts it off the top edge. No band appears in any state. Under a
+  short status bar the pill tucks under it as before.
+- **Portrait:** the same code. The guides say where the status items are; a corner there gets the
+  same row, a full-width status bar gets the fallback.
+- **Split:** one row spans both panes, as before, and keeps clear of the corner. Partly folded, the
+  row keeps to the focused pane's side of the fold and to the corner.
+- **Rail (Left, Right):** its top is the row's top where it is clear of the corner (the paper
+  column and the row start on one line), else the safe area's top.
+- **Diagnostics:** Debug builds log the safe area, both corner-adaptive guides and the occlusion
+  regions on every layout change (`duo` category), so the device numbers can be read back.
+  `-PlainStatusCorner x,y,w,h` (Debug) forces a corner on the simulator for captures.

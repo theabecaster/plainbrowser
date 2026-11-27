@@ -64,7 +64,7 @@ final class SidePaneTests: XCTestCase {
 
         // Find: a list of matches.
         app.segmentedControls["sidePane.picker"].buttons.element(boundBy: 1).tap()
-        let field = app.searchFields["sidePane.findField"]
+        let field = app.descendants(matching: .any)["sidePane.findField"]
         XCTAssertTrue(field.waitForExistence(timeout: 2))
         field.tap()
         field.typeText("paragraph")
@@ -95,7 +95,7 @@ final class SidePaneTests: XCTestCase {
         XCTAssertFalse(app.otherElements["historySheet"].exists)
         XCTAssertTrue(app.webViews.staticTexts["Page A"].exists, "the page stays on screen beside History")
         more(app, pick: "menu.find")
-        XCTAssertTrue(app.searchFields["sidePane.findField"].waitForExistence(timeout: 3), "Find on Page opens the pane's Find")
+        XCTAssertTrue(app.descendants(matching: .any)["sidePane.findField"].waitForExistence(timeout: 3), "Find on Page opens the pane's Find")
     }
 
     func testReaderShowsThePagesArticleBesideIt() throws {
@@ -109,17 +109,38 @@ final class SidePaneTests: XCTestCase {
     func testNewWindowOpensASecondSceneAndTheTabsMenuSwitches() throws {
         let app = try launch()
         go(app, to: "/a", heading: "Page A")
-        app.webViews.links["Go to B"].press(forDuration: 1.2)
-        let open = app.buttons["Open in New Window"]
+        // The tabs menu's New Window (the link menu's Open in New Window is the same request; its
+        // live preview keeps XCTest waiting for idle, so it is checked in LinkMenuRulesTests).
+        app.buttons["tabs"].firstMatch.press(forDuration: 1.0)
+        let open = app.buttons["menu.newWindow"]
         try XCTSkipUnless(open.waitForExistence(timeout: 3), "the system takes no new window here")
         open.tap()
-        // The new window shows B; the system puts it beside or over the first.
-        XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 10), "the new window opened the link")
-        wait({ app.windows.count >= 2 || app.buttons.matching(identifier: "addressPill").count >= 2 }, timeout: 5,
-             "a second window")
-        // The tabs menu lists the other window.
-        let tabs = app.buttons.matching(identifier: "tabs").firstMatch
-        tabs.press(forDuration: 1.0)
-        XCTAssertTrue(app.buttons["menu.window.0"].waitForExistence(timeout: 3), "the tabs menu lists the other window")
+        // The new window opens on search; the system puts it over the first (or beside it in
+        // Split View).
+        let field = app.textFields["searchField"]
+        wait({ field.exists && field.hasKeyboardFocus && !app.webViews.staticTexts["Page A"].exists }, timeout: 10,
+             "the new window opened on search")
+        field.typeText(server.address("/b") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 10), "the new window loads its own page")
+        keep(app, "new-window")
+        // More lists the other window (the tabs menu too, once this window has a second tab).
+        app.buttons["more"].firstMatch.tap()
+        let others = app.buttons["menu.otherWindows"]
+        XCTAssertTrue(others.waitForExistence(timeout: 3), "More lists the other windows")
+        others.tap()
+        let first = app.buttons["menu.window.0"]
+        XCTAssertTrue(first.waitForExistence(timeout: 3), "the first window is in the list")
+        keep(app, "other-windows-menu")
+        first.tap()
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10), "the first window came forward")
+        keep(app, "back-to-first-window")
+    }
+
+    /// A screenshot kept in the result bundle (captures for review).
+    private func keep(_ app: XCUIApplication, _ name: String) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
     }
 }

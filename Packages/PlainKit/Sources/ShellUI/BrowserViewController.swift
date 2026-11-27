@@ -1278,7 +1278,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         guard rules.shareAndCopy, let tab = currentTab, let url = pageAddress else {
             // An empty pane of a split can still be swapped or closed, and the side pane opened.
             let paneItems = paneMenuItems(for: nil, rules: rules) + sidePaneMenuItems(rules)
-            return [top] + (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
+            return [top] + otherWindowsMenu() + (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
         }
         var pageItems: [UIMenuElement] = []
         var reload: UIAction?
@@ -1370,7 +1370,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         placeItems += paneItems
         if !placeItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: placeItems)) }
-        return [top] + sections + [app]
+        return [top] + otherWindowsMenu() + sections + [app]
     }
 
     /// Shortens a page item to its one-line caption for a row of three ("Find on Page" reads

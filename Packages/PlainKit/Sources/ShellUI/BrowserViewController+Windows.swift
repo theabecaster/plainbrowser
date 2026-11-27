@@ -68,6 +68,29 @@ extension BrowserViewController {
         return items
     }
 
+    #if DEBUG
+    /// `-PlainNewWindow <url>` (Debug builds): asks for a new window with `url` once launch has
+    /// settled, for captures of two windows. Only the app's first scene asks.
+    public func debugNewWindow(_ address: String?) {
+        guard let address, let url = URL(string: address), Windows.others(than: session.tabs.windowID).isEmpty else { return }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            self?.openNewWindow(url, isPrivate: false)
+        }
+    }
+    #endif
+
+    /// More's way to the other windows, while there are any: one submenu, since the tabs menu
+    /// (where they also are) is out of reach while a window has a single tab and its Tabs slot
+    /// hides.
+    func otherWindowsMenu() -> [UIMenuElement] {
+        let others = windowMenuItems().filter { ($0 as? UIAction)?.accessibilityIdentifier != "menu.newWindow" }
+        guard !others.isEmpty else { return [] }
+        let menu = UIMenu(title: "Other Windows", image: UIImage(systemName: "macwindow.on.rectangle"), children: others)
+        menu.accessibilityIdentifier = "menu.otherWindows"
+        return [UIMenu(options: .displayInline, children: [menu])]
+    }
+
     /// The link menu's Open in New Window applies where a new window can open.
     public func canOpenInNewWindow(from tab: Tab) -> Bool { canOpenNewWindow }
 }

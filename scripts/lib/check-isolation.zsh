@@ -92,7 +92,9 @@ typeset -A allowed=(
   'CoreSpotlightIndex\(\)|[^A-Za-z]SystemSync\(' 'SystemSync/SystemSync.swift'
   'containerURL\(forSecurityApplicationGroupIdentifier' 'PlainShared/SharedFavorites.swift'
   'UserDefaults\(suiteName' 'BrowserCore/TestIsolation.swift|WebEngine/AppWebsiteData.swift'
-  'becomeCurrent\(|NSUserActivity\(' 'ShellUI/BrowserViewController\+System.swift'
+  'becomeCurrent\(' 'ShellUI/BrowserViewController\+System.swift'
+  # Windows only hands its activity to a new-window request; it never becomes current (Handoff).
+  'NSUserActivity\(' 'ShellUI/BrowserViewController\+System.swift|ShellUI/Windows.swift'
   'updateAppShortcutParameters|IntentDonationManager|\.donate\(' 'ShellUI/TabsMenuTip.swift|Plain/SceneDelegate.swift'
   # Profiles: each profile's website data store, and its history database, through the isolated run.
   'WKWebsiteDataStore\(forIdentifier|WKWebsiteDataStore\.remove\(forIdentifier|DataStoreIdentifiers' 'WebEngine/AppWebsiteData.swift'

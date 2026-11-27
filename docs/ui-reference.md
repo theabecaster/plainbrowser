@@ -6,16 +6,16 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - About five top-level rows, at most two levels deep, opened as a sheet with a single "Done" button.
 - Each row shows its current value, for example "Google", "Left" or "After 1 day".
-- Every row is a choice the user understands and would want to make. Plain's rows are: Search Engine, Tab Layout, Archive Tabs, App Icon, Clear History and Data, and About.
+- Every row is a choice the user understands and would want to make. Plain's rows are: Search Engine, Tab Layout, Archive Tabs, Appearance (System, Light, Dark), App Icon, Clear History and Data, and About.
 - Footers are one plain sentence that teaches, for example "Tabs you haven't opened in a day move to the archive."
 - Labels are Title Case nouns ("Search Engine", "Clear History and Data").
 - A row that doesn't apply on this screen stays, disabled, keeping its value, and its footer says why and what to use instead (Tab Layout on a narrow screen: "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs.").
 
-**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, haptics follow iOS, text follows Dynamic Type, and the archive default is 1 day.
+**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, haptics follow iOS, text follows Dynamic Type, the archive default is 1 day, Appearance starts on System, and dark pages is on.
 
 ## Options live on the object
 
-- **Page menu:** one menu from the URL pill. It holds Reload, Find on Page, Share, Copy Link, Desktop Site, Zoom, Turn Off Blocking on This Site, Open in Other Pane (Duo; Swap Panes and Close Pane while a split shows), and Add to Favorites. Items appear only when they apply. Destructive items go in their own last section.
+- **Page menu:** one menu from the URL pill. It holds Reload, Find on Page, Share, Copy Link, Desktop Site, Zoom, Turn Off Blocking on This Site, Turn Off Dark Pages for This Site (while Plain is dark and darkens the page), Open in Other Pane (Duo; Swap Panes and Close Pane while a split shows), and Add to Favorites. Items appear only when they apply. Destructive items go in their own last section.
 - **Context menus on links, tabs and favorites:** Open in New Tab, Open in Other Pane, Copy Link, Share, Close, Pin, Rename favorite.
 - **Swipe actions:** quick actions with no confirmation, for example close a tab or delete a history row.
 - **Confirmations:** only for destructive actions that affect a lot, for example Clear History and Data or Close All Tabs.

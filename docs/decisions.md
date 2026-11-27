@@ -699,3 +699,43 @@ Research and sources: `docs/research/sign-in.md`.
   launch they wait for the launch focus, so the search field never comes up over the page. While
   the first-run intro is up, the intro gives way unseen and shows again next launch: Apple
   requires the requested page, not an interstitial.
+
+## Appearance and dark pages (2026-11-26)
+
+Research and sources: docs/research/dark-mode.md.
+
+- **Appearance is a setting** (System, Light, Dark; default System): the owner asked for it, and
+  no single default fits someone who wants the browser darker or lighter than the phone. Every
+  other browser that offers it (Firefox, DuckDuckGo, Brave) has the same three choices.
+- **Windows, not views.** `AppAppearance` sets `overrideUserInterfaceStyle` on every window of
+  every scene (System is `.unspecified`), so sheets, menus, alerts, the keyboard and the intro
+  follow without code of their own. A change crossfades each window for 0.3 s; a window whose
+  colors do not change is not animated.
+- **A launch copy in user defaults.** The database (the one store of the setting) opens after the
+  first frame, so the last applied choice is also kept under `PlainAppearance` and read as the
+  scene connects. Without it a Dark user on a light phone would see a light first frame flip to
+  dark. The database value replaces the copy as soon as it is read.
+- **Web views get a trait override.** Pages follow their window's style live. A web view outside
+  a window ignores `overrideUserInterfaceStyle` (measured), so the pool sets
+  `traitOverrides.userInterfaceStyle` on each web view to the style the browser's window shows,
+  and background tabs load in the right colors.
+- **Dark pages is automatic, with a per-site switch** (`FixedChoices.darkPagesOn`). It runs only
+  while the app is dark, never on a page that declares a dark `color-scheme`, asks for
+  `only light`, has a readable `prefers-color-scheme: dark` rule, or already has a dark
+  background. "Turn Off Dark Pages for This Site" is remembered per site (`darkPagesOff` table,
+  in memory for private tabs) and applies without a reload.
+- **One root filter, not a style rewrite.** `invert(1) hue-rotate(180deg)` on `html`, the same
+  again on pictures, video, canvases, frames and background pictures. Chosen over Dark Reader's
+  dynamic mode for O(1) script cost, no cross-origin gaps, no mutation watching, live switching,
+  and computed styles left as the site wrote them (as in Safari's Adaptive Dark Mode, which is
+  private API on iOS 27). The trade is quality (dark parts of a light page turn light, emoji
+  flip) and a possible scroll cost only the device gate can see; Dark Reader (MIT) is the
+  fallback if it shows one.
+- **No flash.** A guard keeps the root black from document start while the page is judged; the
+  judgement runs in the first rendering update after the head's sheets load. The guard and the
+  darkening are constructed style sheets (`adoptedStyleSheets`), never DOM nodes, so hydrating
+  frameworks never see them. A darkened page's overscroll area is set dark
+  (`underPageBackgroundColor`).
+- **The site list is baked into the script.** A page must know at document start whether it is
+  off, and a user script cannot ask the app synchronously. The pool builds the script with the
+  list and swaps it in every controller when the list changes (rare), keeping the other scripts.

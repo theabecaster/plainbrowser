@@ -153,6 +153,9 @@ final class AppearanceTests: XCTestCase {
             let attachment = XCTAttachment(string: "\(label): \(stats.label)")
             attachment.lifetime = .keepAlways
             add(attachment)
+            // Back to the top, where the bar is expanded again.
+            for _ in 0..<6 { web.swipeDown(velocity: .fast) }
+            Thread.sleep(forTimeInterval: 1)
         }
         run("darkened")
         openPageMenu(app)

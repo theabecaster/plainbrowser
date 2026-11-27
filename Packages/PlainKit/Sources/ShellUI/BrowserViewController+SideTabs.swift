@@ -289,6 +289,23 @@ extension BrowserViewController {
             if let current = currentTab { openInOtherPane(current) }
         }
     }
+
+    /// Debug builds only (`-PlainPrivate`): an empty private tab once the session is up, or
+    /// `pages` in private tabs, for screenshots of private states where the UI can't be driven
+    /// (a resizable window standing in for the Duo's inner screen).
+    public func debugOpenPrivate(_ pages: [URL]) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard let self else { return }
+            endAddressEditing()
+            if pages.isEmpty { show(session.tabs.newTab(isPrivate: true)) }
+            for page in pages {
+                let tab = session.tabs.newTab(isPrivate: true)
+                show(tab)
+                tab.load(page)
+            }
+        }
+    }
     #endif
 }
 #endif

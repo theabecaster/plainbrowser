@@ -190,7 +190,7 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Item | Start | Loading | Loaded | Failed / offline | Crashed | Reader open | Notes |
 |---|---|---|---|---|---|---|---|
 | Reload | — | ≠ Stop, same place | shown | shown | shown | — | Safari puts Reload/Stop in one control. In the reader there is nothing to reload. |
-| Find on Page | — | shown | shown | — | — | shown (finds in the article) | Nothing to find on an error. |
+| Find on Page | — | shown | shown | — | — | shown (finds in the article) | Nothing to find on an error. Where the side pane can show (the inner screen), it opens the pane's Find (a list of matches beside the page); with the reader open, the find bar. |
 | Show / Hide Reader | — | — | when readerable | — | — | Hide Reader | Safari: "Show Reader (if available)". |
 | Save PDF to Files | — | — | on a PDF | — | — | — | |
 | Translate Page / Show Original | — | Show Original while translated | Translate Page when the page's language is one the user doesn't read and the device can translate it; Show Original while translated | — | — | — | Subtitled with the pair ("French to English"), "Translating…" while the first text is on its way. The tab keeps translating its next pages in that language until Show Original. Under the reader it would act out of sight. One toast the first time ever a foreign page shows, then only the menu. |
@@ -202,10 +202,12 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Turn Off / On Cookie Banner Blocking | — | http(s) | http(s) | — | — | — | In Site Settings. Applies by reloading. Private tabs: shown, kept for the private session only. Off for a site stops answering its banner; the cookie list's hiding follows the blocking switch. |
 | Turn Off / On Dark Pages for This Site | — | as Loaded | Only while Plain is dark: Turn Off while Plain darkens the page, Turn On while the user has it off for this site | — | — | — | Hidden in a light app (it would change nothing), on pages with their own dark design (nothing to turn off), on error pages and under the reader. Applies at once, no reload. Private tabs: shown, kept for the private session only. |
 | Add to / Remove from Favorites | — | — | recordable page | — | — | shown (the page's address) | A page that never loaded is not a favorite. |
-| Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). |
+| Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). Not while the side pane is open (it holds the second pane's place). |
+| Swap Panes, Close Pane | while a split shows | ← same | ← | ← | ← | ← | Not while the side pane covers the second pane. |
+| Show / Hide Side Pane | where the side pane can show | ← same | ← | ← | ← | ← | The top bar's screens only (the Duo's inner screen, both size classes regular). Hide while it is open. Start screen too: History is useful there. |
 | New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "New Tab": it turns this empty tab, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
 | Downloads | while any this session | ← same | ← | ← | ← | ← | Subtitle "1 in progress" while one runs. |
-| History, Edit Favorites, Settings | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. |
+| History, Edit Favorites, Settings | shown | shown | shown | shown | shown | shown | Dim only in the first moments while the database opens. History opens in the side pane where the pane can show, a sheet elsewhere. |
 
 ## 5. The tabs menu (long press on the tabs slot)
 
@@ -217,9 +219,25 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Show All Tabs | `others ≥ 1`, or a page on screen (with side tabs: `others ≥ 1`, as the sidebar already lists a lone tab) | Same predicate as the swipe up. |
 | Reopen Closed Tab | `closed` in the window's profile | The way back after a close, outside the gallery too. Another profile's close never comes back here. |
 | Archived Tabs | `archived` | Today the archive is reachable only from the gallery, so with no open tabs it cannot be reached. |
+| New Window | where a new window can open (both size classes regular and the app may have several scenes: the Duo's inner screen) | The system has no New Window button on iPhone; the outer screen takes no new windows. |
+| The other windows (one item each: the page it shows, its tab count) | another window exists (connected or in the app switcher) | iPhone has no window list (iPad's Show All Windows); a tap brings that window forward. |
 | Close Tab | `page` | Closing an empty tab does nothing useful; it goes away by itself. |
 
 ## 6. Other surfaces
+
+### Side pane (the inner screen)
+
+| Control | Rule | Why |
+|---|---|---|
+| The pane | Only where the top bar is (both size classes regular, page ≥ 640 pt). Folding to the outer screen hides it; unfolding brings it back. | Beside a phone-width page it would leave no page. |
+| Reader / Find / History picker | Always, in the pane's header | The pane's three places, one tap apart. |
+| Close (×) | Always | The pane closes from itself too, not only from More. |
+| Reader | The focused page's article; "This page has no article to read." when the page's check says no; "Open a page to read it here." on Start | One sentence, no dead end. |
+| Find | Field, count ("12 matches"), list; "Type to find on this page." before typing; "No matches" | Return goes to the next match. Marks come off when the pane closes or the section changes. |
+| History | The History screen without Done | The pane has its own close. |
+| Edge swipe from the trailing edge | Opens it where it can show and it is closed | Takes the edge from WebKit's swipe forward there; Forward stays in the top bar. |
+| Swipe toward the edge on the pane | Closes it | Same direction as it came in. |
+
 
 ### Search field (Editing mode)
 

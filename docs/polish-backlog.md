@@ -178,9 +178,8 @@ Newest feature last.
   landscape; M3 kept the one bottom pill and moved it over the focused pane (the brief: keep the
   existing chrome). Decide on the device whether the inner screen wants top pills. (Design
   review, round 1.)
-- **Open in New Window** needs one app-wide `TabStore` shared by scenes, and a fresh window for a
-  scene whose saved window is gone (today it takes the first window; one scene only). (Code
-  review, round 1.)
+- ~~**Open in New Window** needs one app-wide `TabStore` shared by scenes.~~ Done 2026-11-27
+  (docs/decisions.md, "Open in New Window: one tab store, a scene per window").
 - **Drop a tab on the other pane to split** (plan, side tabs) and drag a tab between panes are not
   built; Open in Other Pane covers it from the menus.
 - **Site icons in the rail.** Rows show a letter tile until Storage's favicons reach the shell.

@@ -629,7 +629,8 @@ Each entry: what was chosen, and why. Newest last.
   through the reserved regions (`updateViewConstraints`). Desktop or mobile stays the choice made
   at navigation start; a tab opened into a pane is attached before it loads, so the choice uses
   that pane's width.
-- **Per-window state.** Each scene keeps its `TabStore` window id and its sidebar state in
+- **Per-window state** (superseded 2026-11-27 by "Open in New Window: one tab store, a scene per
+  window"). Each scene keeps its `TabStore` window id and its sidebar state in
   `UISceneSession.userInfo`; `EngineTabs` acts on that window only. No multi-window UI yet
   (`UIApplicationSupportsMultipleScenes` is off), so a scene without a saved id, or whose window
   is gone, takes the first saved window: that is the one scene's tabs. "Open in New Window" will
@@ -1421,6 +1422,121 @@ routed to the lanes that own them.
 - **Start screen shortcuts use the page menu's captions** ("Reopen Tab", "Archive") in equal
   columns, full names for VoiceOver; an empty private tab's sentence says it is private ("A private
   tab: Plain keeps no history of it."), with no badge.
+## Duo inner screen: the side pane (2026-11-27)
+
+Plan, section 6, item 4: a supporting pane (~30%, 250 pt min) with the reader, find results and
+history next to the page. Research: `docs/research/duo-pane-windows.md`.
+
+- **Where:** only where the top bar is (`DuoLayout.sidePaneAvailable`: both size classes regular,
+  page ≥ 640 pt), the Duo's inner screen in both orientations and iPad-size windows. The outer
+  screen and phones keep the full-screen reader, the find bar and the History sheet; a fold to the
+  outer screen hides the pane and an unfold brings it back. Phones in landscape are compact in
+  height, so they never get it (the rule, not an exception).
+- **Its column:** the trailing end of the pages, `FixedChoices.sidePaneFraction` (30%) of their
+  width and at least `sidePaneMinimumWidth` (250 pt): 285 pt in inner landscape (page 666 pt,
+  still desktop width), 250 pt in inner portrait (page 419 pt, wider than the outer screen's 382).
+  It docks: the page narrows once, inside the pane's spring (one new frame per web view, as a
+  fold), and the top bar's lane, the strip and the toast keep to the page. A floating pane was
+  considered for portrait and dropped: 419 pt still reads as a phone page, and a pane over the
+  page hides what it serves.
+- **Why not the system's inspector column:** the shell is a custom container whose panes live in
+  a `UIArrangementViewController`, which must not sit inside a split view controller. The pane
+  follows the inspector's rules by hand (trailing column at regular width, nothing at compact).
+- **The crease:** flat, the crease is only a position and the 30% column sits clear of it.
+  Partly folded (book pose), the page takes the side before the fold and the pane the side after
+  it, so neither crosses it, as a split does; the top bar stays over the page.
+- **With a split:** a split needs two 375 pt panes, and 2 × 375 + 250 is wider than the inner
+  screen. The pane takes the second pane's place (that pane keeps its page out of sight, with no
+  relayout), the first pane is focused and is the page it serves; Swap, Close Pane and Open in
+  Other Pane wait until it closes. The sidebar stays a rail while the pane is open.
+- **With the status row:** the pane runs from the top edge like the page; its header sits under
+  the status items where they are over the column (the Duo's top-trailing clock and battery), and
+  on the top bar's row where nothing is in the way.
+- **Sections:** Reader (the focused page's article in a reader web view from the pool, the same
+  renderer as Show Reader; a link opens in the page), Find (a list of matches with the words
+  around them; a tap scrolls the page to the match and marks it; Return goes to the next) and
+  History (the History screen without Done; a row opens in the page). A segmented control picks
+  one; the pane remembers the last.
+- **Find runs in the page's process** (`PageFind`, the engine's content world): it walks visible
+  text block by block (a paragraph, a list item, a cell), so a phrase split by inline tags still
+  matches; a visually hidden screen-reader label does not. Matching is case-insensitive by Unicode
+  case folding on the text itself, so offsets never shift. Style and geometry are read only for
+  matches. It keeps a DOM range per match and stops at `FixedChoices.findResultLimit` (300; the
+  count then reads "More than 300 matches"); on a huge page it hands the page's main thread back
+  every `findChunkNodes` (2000) text nodes, and a newer query ends the older one there. The matches are marked with the CSS Custom Highlight API,
+  which draws without changing the page's DOM; the style is a constructed style sheet, which a
+  page's CSP does not block. Typing waits `FixedChoices.findDebounce` (150 ms). The system find
+  bar stays for phones and the reader.
+- **Reader waits in words:** "Looking for an article…" shows until the article is on screen;
+  hiding the pane or the section lets the reader web view go.
+- **Opening and closing:** More's Show / Hide Side Pane (the obvious control), the pane's ×,
+  History and Find on Page (which open it on their section where it can show), a swipe in from the
+  trailing edge (interactive: the pane follows the finger over the page, the page narrows on
+  release) and a swipe toward the edge on the pane. The edge swipe takes the trailing edge from
+  WebKit's swipe forward where the pane can open; the top bar's Forward button stays.
+- **Per window:** open or closed and the section are kept with the scene (`SceneState`).
+- **Perf:** nothing until first use; then one view controller and the shown section, each built
+  once. Opening sets two constants and lays out once; the reader web view exists only while the
+  Reader section shows an article. Find's search is one async call into the page per query.
+  Signposts: `sidePane.open`, `sidePane.close`, `sidePane.section`, `sidePane.find`.
+
+## Open in New Window: one tab store, a scene per window (2026-11-27)
+
+Plan, section 6, item 6. The Duo's inner screen takes several windows of one app the iPad way;
+its outer screen takes none, and iPhone has no system New Window button
+(`docs/research/duo-pane-windows.md`).
+
+- **Multiple scenes on** (`UIApplicationSupportsMultipleScenes`). Each window is a scene with its
+  own `BrowserSession` (web view pool, reader, the window's view of the tabs).
+- **App-wide stores** (`AppStores`, made once by the app): one `TabStore` for every window
+  (`AppTabs`), so two scenes never write the tab session over each other; the per-site choices
+  (desktop, zoom, dark pages, cookie banners) and the content blocker, so a choice made in one
+  window holds in the others; the database and each profile's history database, opened once for
+  every window. Each loads once, for the first window that starts. A window's own state stays
+  with its scene: its window id, the sidebar and the side pane (`UISceneSession.userInfo` through
+  `SceneState`), and its address bar data and sheets, since each window shows its own profile
+  ("Profiles, no tab groups"): a setting saved in one window reaches every window's address bar.
+  The system sync is the app's and follows the favorites of the profile of the window the user
+  moved to last. A profile deleted in one window closes its tabs and lets its website data store
+  go in every window.
+- **Which window a scene shows** (`AppTabs.claim`): its saved window; with none, the first
+  window no scene shows when it is the only scene (the app's first window after an update),
+  else a new empty window. A window asked for with Open in New Window or New Window always gets
+  a new empty one, and a saved window another open scene session names waits for that session.
+  A window that connected before the saved session loaded joins its
+  saved window at load, tabs opened meanwhile included. Windows no open scene names (their scene
+  was discarded while the app was not running) join the first scene's window, so no tab is left
+  unseen.
+- **Web views per window:** each scene keeps its own pool. A tab never moves between windows
+  (Open in New Window opens the link as a new tab there), so no web view crosses pools. Another
+  window's changes to the shared store (archive, reopen, a closed window) reach a window through
+  `AppTabs.didChange`, which drops engine tabs whose tab left the store.
+- **Where a new window can open** (`Windows.canOpenNew`): both size classes regular and the app
+  may have several scenes. The link menu's "Open in New Window" (a private tab's link opens
+  private there) and the tabs menu's "New Window" show only then; a refusal by the system plays
+  the "nothing there" haptic and a toast.
+- **Switching:** iPhone has no Show All Windows. The tabs menu lists the other windows (the page
+  each shows, its tab count), and so does More (Other Windows, a submenu), since a window with one
+  tab hides its Tabs button; a tap brings that window forward
+  (`activateSceneSession(for: .init(session:))`).
+- **Closing:** a window whose scene the system discards (closed for good in the app switcher)
+  gives its tabs to Reopen Closed Tab as one batch, while another window remains. When none
+  would remain (the whole app swiped away), the windows stay and the next scene takes them, so
+  quitting never closes tabs. Reopen Closed Tab prefers the window's own last close, and brings a
+  gone window's tabs back into the window that asked.
+- **Test isolation:** a scene made for Plain's new-window request during an isolated run is
+  marked in its session (the owner's own sessions, which the system reconnects for a test run, are
+  never marked); a normal launch destroys such sessions, so a window a test opened never comes back in the
+  owner's app. Sessions are read and destroyed only in `SceneState`
+  (`scripts/lib/check-isolation.zsh` enforces it).
+- **Settings reach every window:** a saved setting is applied to every window's address bar data
+  (`AppServices.settingsSaved`); each suggestion query carries the asking window's private state.
+- **Signposts:** the process's `launch` interval ends once, with the first window; a later
+  window's first screen is not a launch. `window.open`, `window.switch`.
+- **Not verified on the device:** two windows side by side and a fold with two windows were seen
+  only on the simulator. What the system does with a second window on fold is not published.
+- Supersedes M3's "Per-window state" note (one scene, the first saved window) and the polish
+  backlog's Open in New Window item.
 
 
 ## Profiles, no tab groups (2026-11-27)

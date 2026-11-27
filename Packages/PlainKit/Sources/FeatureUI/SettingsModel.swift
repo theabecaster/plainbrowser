@@ -247,7 +247,9 @@ enum Wording {
     static let favoritesFooter = "Tap a favorite to rename it."
     static let favoritesFailed = "Plain couldn't change your favorites. Try again."
 
-    static let tabLayoutFooter = "Where your tabs show on a wide screen. Swipe up from the address bar to see them all."
+    /// Shown only where a tab list fits, which has a top bar and no swipe up from the address bar:
+    /// the Tabs button shows them all.
+    static let tabLayoutFooter = "Where your tabs show on this wide screen. The Tabs button shows them all."
     static let tabLayoutUnavailableFooter = "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs."
     static let searchEngineFooter = "Searches from the address bar use this engine."
     static let customEngineFooter = "Paste a search results address with %s where the search words go."

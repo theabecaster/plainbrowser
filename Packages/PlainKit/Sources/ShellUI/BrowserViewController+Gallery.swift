@@ -367,7 +367,14 @@ extension BrowserViewController: GalleryHost {
         // Back on an idle start screen with the field closed (a load stopped before it
         // committed): the mark and its company return.
         if showsStart, !isEditingAddress, start.isReceded { start.setReceded(false, animated: true) }
-        if showsStart { applyStartShortcuts() }
+        if showsStart {
+            applyStartShortcuts()
+            // An empty private tab says what it is: the start screen otherwise looks the same as
+            // a regular one, with only the glass tinted (no badge, docs/ui-reference.md).
+            start.message = currentTab?.isPrivate == true
+                ? String(localized: "A private tab: Plain keeps no history of it.")
+                : String(localized: "Start with a search or an address.")
+        }
         // Over a blank tab's web view, under the page-state message.
         if showsStart {
             webContainer.bringSubviewToFront(start)
@@ -414,11 +421,19 @@ extension BrowserViewController: GalleryHost {
                     [weak self] in self?.openNewTab(private: false)
                 }
             case .reopenClosedTab:
-                EmptyTabView.Shortcut(id: "start.reopenClosedTab", title: String(localized: "Reopen Closed Tab"), symbol: "arrow.uturn.backward") {
+                // Captions as in the page menu's row ("Reopen Tab", "Archive"); the full names
+                // stay for VoiceOver.
+                EmptyTabView.Shortcut(
+                    id: "start.reopenClosedTab", title: String(localized: "Reopen Tab"),
+                    accessibilityLabel: String(localized: "Reopen Closed Tab"), symbol: "arrow.uturn.backward"
+                ) {
                     [weak self] in self?.reopenLastClosed(source: "start")
                 }
             case .archivedTabs:
-                EmptyTabView.Shortcut(id: "start.archivedTabs", title: String(localized: "Archived Tabs"), symbol: "archivebox") {
+                EmptyTabView.Shortcut(
+                    id: "start.archivedTabs", title: String(localized: "Archive"),
+                    accessibilityLabel: String(localized: "Archived Tabs"), symbol: "archivebox"
+                ) {
                     [weak self] in self?.showArchive()
                 }
             }

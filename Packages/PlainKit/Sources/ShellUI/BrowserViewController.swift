@@ -1452,8 +1452,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // A failed page shares the address that was tried.
         guard let url = pageAddress else { return }
         Signposts.signposter.emitEvent(Signposts.share)
+        // The page's title heads the sheet, as in Safari; a failed page has only the address tried.
+        let title = currentTab.flatMap { $0.loadError == nil && !$0.title.isEmpty ? $0.title : nil }
+        let item = PageShareItem(url: url, title: title)
         // Print and Save as PDF live here, where Safari and Chrome keep them (state rules §4).
-        let sheet = UIActivityViewController(activityItems: [url], applicationActivities: exportActivities(currentRules()))
+        let sheet = UIActivityViewController(activityItems: [item], applicationActivities: exportActivities(currentRules()))
         sheet.completionWithItemsHandler = { [weak self, weak sheet] type, completed, _, _ in
             guard completed, let type, let sheet else { return }
             self?.runExportActivity(type, after: sheet)

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Own Dark Design</title>
+<!-- A site with its own dark design: dark pages leaves it exactly as the site made it. -->
+<style>
+body { margin: 0; padding: 0 16px; background: #fff; color: #222; font: 17px/1.5 -apple-system, sans-serif; }
+.card { background: #f2f2f7; border-radius: 12px; padding: 12px; }
+@media (prefers-color-scheme: dark) {
+  body { background: #1b1430; color: #e9e3ff; }
+  .card { background: #2a2147; }
+  h1 { color: #c8b6ff; }
+}
+</style></head>
+<body><h1 id="title">Own Dark Design</h1>
+<p id="text">This site ships its own dark colors, so the browser leaves it alone.</p>
+<div class="card" id="card">A card in the site's own dark palette.</div>
+</body></html>

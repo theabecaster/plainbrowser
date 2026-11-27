@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product Store</title>
+<!-- A page built like apple.com: light by design, with black hero sections, dark cards on light
+     sections, gradients, CSS variables, inline styles, SVG icons, a colored logo, pictures and
+     emoji. Dark pages must keep the dark parts as they are and darken only the light ones. -->
+<style>
+:root { --surface: #fff; --ink: #1d1d1f; --muted: #6e6e73; --accent: #0066cc; --hairline: #d2d2d7; --tint-rgb: 232, 232, 237; }
+.theme-dark { --surface: #000; --ink: #f5f5f7; --muted: #86868b; --accent: #2997ff; }
+* { box-sizing: border-box; }
+html { background: #fff; }
+body { margin: 0; font: 17px/1.47 -apple-system, "SF Pro Text", Helvetica, sans-serif; color: #1d1d1f; background: #fff; }
+a { color: var(--accent); text-decoration: none; }
+.nav { position: sticky; top: 0; z-index: 5; display: flex; gap: 18px; align-items: center; padding: 10px 16px;
+  background: rgba(251, 251, 253, .8); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid rgba(0, 0, 0, .08); font-size: 12px; }
+.nav a { color: #1d1d1f; opacity: .8; }
+.nav svg { display: block; }
+.ribbon { background: #f5f5f7; text-align: center; font-size: 14px; padding: 12px 16px; color: #1d1d1f; }
+.hero { background: #000; color: #f5f5f7; text-align: center; padding: 48px 16px 40px; }
+.hero h1 { font-size: 44px; line-height: 1.07; margin: 0 0 6px; font-weight: 600; }
+.hero .sub { color: #86868b; font-size: 21px; margin: 0 0 14px; }
+.hero .glow { background: linear-gradient(90deg, #ff5f6d, #ffc371, #47c3ff); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; font-weight: 700; font-size: 28px; }
+.cta { display: inline-block; border-radius: 980px; padding: 10px 20px; font-size: 15px; margin: 0 6px; }
+.cta-primary { background: #0071e3; color: #fff; }
+.cta-secondary { color: #2997ff; border: 1px solid #2997ff; }
+.section-light { background: #f5f5f7; color: #1d1d1f; padding: 40px 16px; }
+.section-light h2 { font-size: 32px; margin: 0 0 8px; }
+.section-light .lede { color: #6e6e73; margin: 0 0 20px; }
+.grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+.tile { background: #fff; border-radius: 18px; padding: 22px; box-shadow: 0 4px 12px rgba(0, 0, 0, .06); border: 1px solid #e8e8ed; }
+.tile h3 { margin: 0 0 4px; font-size: 22px; }
+.tile p { margin: 0; color: #6e6e73; }
+.tile-dark { background: #1d1d1f; color: #f5f5f7; border-color: #1d1d1f; }
+.tile-dark p { color: #a1a1a6; }
+.tile-blue { background: #e8f1fc; }
+.tile-blue h3 { color: #0058b0; }
+.promo { background: linear-gradient(180deg, #ffffff 0%, #e8e8ed 100%); padding: 40px 16px; text-align: center; }
+.promo h2 { margin: 0 0 8px; }
+.vars { background: var(--surface); color: var(--ink); padding: 32px 16px; }
+.vars p { color: var(--muted); }
+.tinted { background: rgb(var(--tint-rgb)); padding: 16px; border-radius: 12px; }
+.icons { display: flex; gap: 18px; padding: 16px 0; }
+.icons figure { margin: 0; text-align: center; font-size: 12px; color: #1d1d1f; }
+.badge { display: inline-block; background: #ffd60a; color: #1d1d1f; border-radius: 6px; padding: 2px 8px; font-size: 13px; font-weight: 600; }
+.photo { width: 100%; border-radius: 18px; display: block; }
+.photo-tile { position: relative; height: 280px; overflow: hidden; text-align: center; background: #f5f5f7; }
+.photo-tile-copy { position: relative; z-index: 2; padding-top: 28px; }
+.photo-tile-copy h3 { color: #1d1d1f; font-size: 32px; margin: 0 0 4px; }
+.photo-tile-copy p { color: #1d1d1f; margin: 0; }
+.photo-tile-image { position: absolute; inset: 0; z-index: 1; }
+.photo-tile-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.footer { background: #f5f5f7; color: #6e6e73; font-size: 12px; padding: 20px 16px 40px; border-top: 1px solid var(--hairline); }
+.footer a { color: #424245; }
+.footer h4 { color: #1d1d1f; margin: 12px 0 4px; }
+</style>
+</head>
+<body>
+<nav class="nav">
+  <svg id="logo-mark" width="16" height="20" viewBox="0 0 16 20" aria-label="Store"><path fill="#1d1d1f" d="M8 4c2-3 5-3 5-3s0 3-2 4C9 6 8 4 8 4zm5 5c-2 0-3 1-5 1S5 9 3 9C1 9 0 11 0 13c0 4 3 7 5 7 1 0 2-1 3-1s2 1 3 1c2 0 4-3 5-5-2-1-3-3-3-6z"/></svg>
+  <a href="#store">Store</a><a href="#mac">Mac</a><a href="#ipad">iPad</a><a href="#phone">Phone</a><a href="#watch">Watch</a>
+  <svg id="search-icon" width="15" height="15" viewBox="0 0 15 15" aria-label="Search"><circle cx="6" cy="6" r="5" fill="none" stroke="#1d1d1f" stroke-width="1.5"/><path d="M10 10l4 4" stroke="#1d1d1f" stroke-width="1.5"/></svg>
+</nav>
+<div class="ribbon" id="ribbon">Get credit toward a new phone when you trade in an eligible device. <a href="#trade">Shop now</a></div>
+
+<section class="hero" id="hero">
+  <h1 id="hero-title">Phone Pro</h1>
+  <p class="sub" id="hero-sub">The ultimate phone. Now with a brighter display.</p>
+  <p class="glow" id="hero-glow">Hello, brilliance.</p>
+  <a class="cta cta-primary" id="hero-buy" href="#buy">Buy</a><a class="cta cta-secondary" id="hero-learn" href="#learn">Learn more</a>
+  <p style="margin-top:20px;font-size:40px" id="emoji">🍎📱✨</p>
+</section>
+
+<section class="section-light" id="light">
+  <h2 id="light-title">Why upgrade.</h2>
+  <p class="lede" id="light-lede">All the reasons to choose the newest model, side by side.</p>
+  <div class="grid">
+    <div class="tile" id="tile"><h3>Battery</h3><p id="tile-text">Up to 33 hours of video playback. <a href="#bat">Learn more</a></p></div>
+    <div class="tile tile-dark" id="tile-dark"><h3 id="tile-dark-title">Camera</h3><p id="tile-dark-text">A 48 MP main camera for super-high-resolution photos.</p></div>
+    <div class="tile tile-blue" id="tile-blue"><h3 id="tile-blue-title">Trade in</h3><p>Get credit when you trade in. <span class="badge" id="badge">New</span></p></div>
+  </div>
+  <div class="icons">
+    <figure><svg id="icon-truck" width="32" height="32" viewBox="0 0 32 32"><path fill="#1d1d1f" d="M2 8h18v14H2zM20 13h6l4 5v4H20z"/><circle cx="8" cy="24" r="3" fill="#1d1d1f"/><circle cx="24" cy="24" r="3" fill="#1d1d1f"/></svg>Free delivery</figure>
+    <figure><svg id="icon-chat" width="32" height="32" viewBox="0 0 32 32" fill="currentColor"><path d="M4 6h24v16H12l-6 5v-5H4z"/></svg>Ask a specialist</figure>
+    <figure><svg id="logo-color" width="32" height="32" viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="#ff2d55"/><stop offset="1" stop-color="#5856d6"/></linearGradient></defs><circle cx="16" cy="16" r="15" fill="url(#lg)"/></svg>Brand</figure>
+  </div>
+  <img class="photo" id="photo" alt="Product photo" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='240'><defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='%23f7f7f7'/><stop offset='1' stop-color='%23cfe3ff'/></linearGradient></defs><rect width='600' height='240' fill='url(%23g)'/><circle cx='300' cy='120' r='70' fill='%23ff9f0a'/></svg>">
+</section>
+
+<section class="hero" id="hero-2" style="padding-top:32px">
+  <h2 style="font-size:32px;margin:0 0 6px" id="hero2-title">Watch Ultra</h2>
+  <p class="sub" id="hero2-sub">Next-level adventure.</p>
+</section>
+
+<section class="promo" id="promo">
+  <h2 id="promo-title">Holiday gifts.</h2>
+  <p id="promo-text">Find something for everyone on your list. <a href="#gifts">Shop gifts</a></p>
+</section>
+
+<!-- Like apple.com's product tiles: dark text over a light photograph behind it. -->
+<section class="photo-tile" id="photo-tile">
+  <div class="photo-tile-copy"><h3 id="photo-tile-title">Phone Air</h3><p id="photo-tile-text">The thinnest phone ever.</p></div>
+  <div class="photo-tile-image"><img id="photo-tile-img" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='280'><defs><linearGradient id='t' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23f5f5f7'/><stop offset='1' stop-color='%23dfe6ee'/></linearGradient></defs><rect width='400' height='280' fill='url(%23t)'/><rect x='150' y='120' width='100' height='150' rx='16' fill='%23c9ccd3'/></svg>"></div>
+</section>
+
+<section class="vars" id="vars-light">
+  <h2 id="vars-light-title">Variables, light</h2>
+  <p id="vars-light-text">This block takes its colors from CSS variables.</p>
+  <div class="tinted" id="tinted">A tinted panel from an RGB variable.</div>
+</section>
+<section class="vars theme-dark" id="vars-dark">
+  <h2 id="vars-dark-title">Variables, dark</h2>
+  <p id="vars-dark-text">The same variables, redefined dark for this section.</p>
+</section>
+
+<section style="background:#fafafa;color:#333;padding:24px 16px;border-top:1px solid #e5e5e5" id="inline">
+  <h3 style="margin:0 0 6px" id="inline-title">Inline styles</h3>
+  <p style="color:#555" id="inline-text">Colors set in the element's style attribute.</p>
+</section>
+
+<footer class="footer" id="footer">
+  <p id="footer-text">More ways to shop: find a store near you. Or call 1-800-000-0000.</p>
+  <h4 id="footer-head">Shop and learn</h4>
+  <p><a href="#a">Store</a> · <a href="#b">Mac</a> · <a href="#c">iPad</a> · <a href="#d">Phone</a></p>
+  <p id="footer-legal">Copyright © 2026 Example Inc. All rights reserved.</p>
+</footer>
+</body></html>

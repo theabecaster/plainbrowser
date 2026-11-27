@@ -27,7 +27,7 @@ public enum BrowseForMe {
         public var engineName: String
         public var url: URL
         public var recipe: Recipe
-        /// The page builds its results with script (Google, Bing, Brave); DuckDuckGo's lite page
+        /// The page may build its results with script (Bing); DuckDuckGo's lite page
         /// is plain HTML, so it loads with JavaScript off.
         public var needsJavaScript: Bool
         /// The engine's own hosts: links to them are navigation, never results.
@@ -38,25 +38,22 @@ public enum BrowseForMe {
     /// `a.result-link`; sponsored rows carry `result-sponsored`, and ad links go through `y.js`.
     static let duckDuckGoLite = Recipe(links: "a.result-link", ads: ".result-sponsored")
 
-    /// The recipes for engines whose own results page Plain reads, by engine id.
+    /// The recipes for engines whose own results page Plain reads, by engine id. Checked against
+    /// the live pages in a hidden view (2026-11-27): Bing's titles are `h2`s inside the result's
+    /// link, and its links go straight to the sites. Not here, so their users get DuckDuckGo's
+    /// lite page (docs/research/browse-for-me.md): Google answers a hidden view with its "turn on
+    /// JavaScript" page and no results; Brave links its results through encrypted `/go/v1#…`
+    /// redirects that can't be read without following them.
     static let recipes: [String: (recipe: Recipe, hosts: [String])] = [
-        SearchEngine.google.id: (
-            Recipe(links: "#search a:has(h3), #rso a:has(h3)", ads: "#tads, #tadsb, #bottomads, [data-text-ad]"),
-            ["google.com", "google."]
-        ),
         SearchEngine.bing.id: (
-            Recipe(links: "#b_results > li.b_algo h2 a", ads: ".b_ad, .b_adTop, .b_adBottom"),
+            Recipe(links: "#b_results > li.b_algo a:has(h2)", ads: ".b_ad, .b_adTop, .b_adBottom"),
             ["bing.com", "microsoft.com"]
-        ),
-        SearchEngine.brave.id: (
-            Recipe(links: "#results .snippet[data-type=\"web\"] a:has(.title), #results .snippet[data-type=\"web\"] > a",
-                   ads: "[data-type=\"ad\"], .ad, #ad-banner"),
-            ["brave.com"]
         ),
     ]
 
     /// The results pages to try for `query`, in order: the user's engine when Plain has a recipe
-    /// for it, then DuckDuckGo's lite page. DuckDuckGo's own engine goes straight to its lite page.
+    /// for it (Bing), then DuckDuckGo's lite page. Every other engine, DuckDuckGo's own included,
+    /// goes straight to the lite page.
     public static func resultsPages(for query: String, engine: SearchEngine) -> [ResultsPage] {
         var pages: [ResultsPage] = []
         if let (recipe, hosts) = recipes[engine.id], let url = engine.resultsURL(for: query) {

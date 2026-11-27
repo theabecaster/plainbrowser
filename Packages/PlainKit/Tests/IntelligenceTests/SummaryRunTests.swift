@@ -107,11 +107,11 @@ import Testing
     @Test func offlineAndEmptyResultsHaveTheirOwnWords() async {
         let offline = ScriptedBrowsing(resultsDelay: .milliseconds(1))
         offline.resultsError = URLError(.notConnectedToInternet)
-        let (run, recorder) = browse(engine: .google, browsing: offline)
+        let (run, recorder) = browse(engine: .bing, browsing: offline)
         run.start()
         await run.finished()
-        // Google first, then DuckDuckGo's lite page, then the failure.
-        #expect(recorder.stages == [.searching(engine: "Google"), .searching(engine: "DuckDuckGo"), .failed(.offline)])
+        // Bing first, then DuckDuckGo's lite page, then the failure.
+        #expect(recorder.stages == [.searching(engine: "Bing"), .searching(engine: "DuckDuckGo"), .failed(.offline)])
 
         let blocked = ScriptedBrowsing(resultsDelay: .milliseconds(1))
         blocked.resultsError = BrowseReadError.blocked

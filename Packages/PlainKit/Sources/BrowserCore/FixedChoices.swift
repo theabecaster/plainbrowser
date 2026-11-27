@@ -598,7 +598,7 @@ public enum FixedChoices {
     /// Source pages load with their JavaScript off: an article's text is in its HTML, the page's
     /// own scripts (ads, analytics, trackers) never run, nothing they would send leaves the phone,
     /// and each hidden page costs a fraction of the memory. Reader runs in its own world either
-    /// way. Results pages that build their list with script (Google, Bing, Brave) keep it on.
+    /// way. A results page that may build its list with script (Bing) keeps it on.
     public static let browseSourcesWithoutJavaScript = true
     /// Tokens kept for the instructions, the answer's schema and a margin (measured: about 520
     /// for both with the schema in the prompt).

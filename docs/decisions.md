@@ -832,12 +832,14 @@ Research and sources: docs/research/dark-mode.md.
 ## Browse for Me result source
 
 - **Search results page in a hidden tab, no API key.** DuckDuckGo's lite page is the default because it is stable and light; the user's chosen engine is used when its page parses. Free, works for every tester, and needs no server. Trade-off: a page redesign can break parsing, so the parser is tested against saved pages. Brave Search API stays a later opt-in. (Owner's choice, 2026-11-26.)
-- **How "when its page parses" works (2026-11-27):** Plain has a recipe (CSS selectors for the
-  results and for ad containers) for Google, Bing and Brave. For those, the user's engine is read
+- **How "when its page parses" works (2026-11-27):** checked live in a hidden view. Bing's page
+  parses (a recipe of CSS selectors for its results and ad containers), so Bing users get Bing
   first and DuckDuckGo lite second; a page with no organic result, a challenge ("unusual
-  traffic") or a 4 s timeout falls through. DuckDuckGo users and engines without a results page
-  Plain can read (Kagi without a login, Perplexity, ChatGPT, a custom engine) go straight to lite.
-  The lite parser is tested against a saved lite page (`IntelligenceTests/Fixtures`).
+  traffic") or a 4 s timeout falls through. Google's does not: a hidden view gets its "turn on
+  JavaScript" page with no results. Brave's results link through encrypted `/go/v1#…` redirects.
+  So Google, Brave and every other engine (Kagi, Perplexity, ChatGPT, a custom engine) use
+  DuckDuckGo lite, and the progress line says "Searching DuckDuckGo…". The lite parser is tested
+  against a saved lite page (`IntelligenceTests/Fixtures`).
 
 ## On-device AI: Browse for Me and Summarize Page (2026-11-27)
 

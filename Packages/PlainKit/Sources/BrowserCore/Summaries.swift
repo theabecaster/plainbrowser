@@ -111,8 +111,9 @@ public struct SummaryDraft: Sendable, Equatable {
                 let text = trim(point.text)
                 guard !text.isEmpty else { continue }
                 var seen = Set<Int>()
+                // In order, so "1, 3, 4" reads as a list and never as a ranking the model made.
                 let sources = cites && sourceCount > 0
-                    ? point.sources.filter { (1...sourceCount).contains($0) && seen.insert($0).inserted }
+                    ? point.sources.filter { (1...sourceCount).contains($0) && seen.insert($0).inserted }.sorted()
                     : []
                 cleaned.points.append(Point(text: text, sources: sources))
             }

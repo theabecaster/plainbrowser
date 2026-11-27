@@ -144,6 +144,27 @@ final class SummaryTests: XCTestCase {
         shot("u2-menu")
     }
 
+    /// Browse for Me end to end: the user's engine (Google), the live web and Apple's model (on a
+    /// simulator, the Mac's). Captures only, on request (`TEST_RUNNER_PLAIN_CAPTURE=1`): it needs
+    /// the network and Apple Intelligence.
+    func testCaptureBrowseForMeLive() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let app = try launch([])
+        app.textFields["searchField"].typeText("how do ocean tides work")
+        let row = app.buttons["browseForMe"]
+        guard row.waitForExistence(timeout: 5) else { throw XCTSkip("Apple Intelligence isn't available here") }
+        row.tap()
+        Thread.sleep(forTimeInterval: 2.5)
+        shot("live1-reading")
+        XCTAssertTrue(app.otherElements["summaryText"].firstMatch.waitForExistence(timeout: 40))
+        Thread.sleep(forTimeInterval: 1.5)
+        shot("live2-writing")
+        XCTAssertTrue(app.otherElements["summarySources"].firstMatch.waitForExistence(timeout: 60))
+        shot("live3-done")
+        app.swipeUp()
+        shot("live4-sources")
+    }
+
     private func shot(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name

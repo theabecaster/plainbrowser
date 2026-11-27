@@ -136,7 +136,8 @@ From the iOS 27.2 SDK interface unless linked.
   - Selectors are from [ddgs](https://github.com/deedy5/ddgs) and
     [SearchAI](https://github.com/jpjacobpadilla/SearchAI).
 - **Google:**
-  - It requires JavaScript (since 2025-01), which the hidden view runs.
+  - It requires JavaScript (since 2025-01). In a hidden view it still showed only its "turn on
+    JavaScript" page (measured 2026-11-27), so Plain doesn't read it.
   - Results are links holding an `h3` inside `#search` / `#rso`; ads sit in `#tads`, `#tadsb` and
     `[data-text-ad]`.
   - `/url?q=` redirects appear on the basic page; a captcha goes to `/sorry/`.
@@ -164,9 +165,16 @@ From the iOS 27.2 SDK interface unless linked.
   The answer is read again whenever Plain becomes active.
   A one-time explanation would need a place to show, and every place would be a button that
   can't work (state rules, principle 1).
-- **Results source:** the user's engine when Plain has a recipe for its page (Google, Bing,
-  Brave), then DuckDuckGo lite. DuckDuckGo users, and engines without results pages (Perplexity,
-  ChatGPT, Kagi without a login, custom), go straight to lite. See docs/decisions.md.
+- **Results source:** the user's engine when its page parses in a hidden view, then DuckDuckGo
+  lite. Checked live on 2026-11-27 (simulator, a hidden view with JavaScript on):
+  - **Bing:** 8 organic links (`li.b_algo a:has(h2)`; the `h2` sits inside the link).
+  - **Google:** the "turn on JavaScript" page and an empty body, even after the load event, so
+    Google users get lite.
+  - **Brave:** 20 web results, but every link was an encrypted `search.brave.com/go/v1#…`
+    redirect, so Brave users get lite.
+  - **DuckDuckGo lite:** 8 links, 7 sites after the filters.
+  - Everyone else (DuckDuckGo, Perplexity, ChatGPT, Kagi without a login, custom engines) goes
+    straight to lite. See docs/decisions.md.
 - **Organic results:**
   - Ads and ad redirects are skipped, and so are the engine's own pages.
   - Sites without article text are skipped: video, social, login walls.

@@ -9,17 +9,17 @@ import Testing
 
     // MARK: Results pages
 
-    @Test func googleUsersGetGoogleThenDuckDuckGoLite() throws {
-        let pages = BrowseForMe.resultsPages(for: "swift & ui", engine: .google)
-        #expect(pages.map(\.engineName) == ["Google", "DuckDuckGo"])
-        #expect(pages[0].url.absoluteString == "https://www.google.com/search?q=swift%20%26%20ui")
+    @Test func bingUsersGetBingThenDuckDuckGoLite() throws {
+        let pages = BrowseForMe.resultsPages(for: "swift & ui", engine: .bing)
+        #expect(pages.map(\.engineName) == ["Bing", "DuckDuckGo"])
+        #expect(pages[0].url.absoluteString == "https://www.bing.com/search?q=swift%20%26%20ui")
         #expect(pages[0].needsJavaScript)
         #expect(pages[1].url.absoluteString == "https://lite.duckduckgo.com/lite/?q=swift%20%26%20ui")
         #expect(!pages[1].needsJavaScript)
     }
 
     @Test func duckDuckGoAndEnginesWithoutARecipeUseTheLitePage() {
-        for engine in [SearchEngine.duckDuckGo, .kagi, .perplexity, .chatGPT, .yahoo] {
+        for engine in [SearchEngine.google, .brave, .duckDuckGo, .kagi, .perplexity, .chatGPT, .yahoo] {
             let pages = BrowseForMe.resultsPages(for: "q", engine: engine)
             #expect(pages.map(\.engineName) == ["DuckDuckGo"], "\(engine.name)")
         }
@@ -142,7 +142,7 @@ import Testing
         let cleaned = draft.cleaned(sourceCount: 3)
         #expect(cleaned.title == "Title")
         #expect(cleaned.sections.count == 1)
-        #expect(cleaned.sections[0].points == [.init(text: "A point.", sources: [2, 1])])
+        #expect(cleaned.sections[0].points == [.init(text: "A point.", sources: [1, 2])])
         // A page's own summary cites nothing; Browse for Me with one page read still cites it.
         #expect(draft.cleaned(sourceCount: 1, cites: false).sections[0].points[0].sources == [])
         #expect(draft.cleaned(sourceCount: 1).sections[0].points[0].sources == [1])

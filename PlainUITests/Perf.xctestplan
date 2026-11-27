@@ -31,7 +31,8 @@
         "PerfTests\/testGalleryTabOpen()",
         "PerfTests\/testNewTabToSearchField()",
         "PerfTests\/testMemoryWithTenTabs()",
-        "PerfTests\/testHeavyPageScrollHitches()"
+        "PerfTests\/testHeavyPageScrollHitches()",
+        "PerfTests\/testSummaryStart()"
       ],
       "target" : {
         "containerPath" : "container:Plain.xcodeproj",

@@ -64,8 +64,10 @@ scripts/matrix.sh --quick --local                   # on this Mac anyway
   `summary.txt`, without the result bundles. A host without ImageMagick makes no sheets; the Mac
   that pulls the results makes them.
 - Device Hub needs the host's logged-in GUI session and Accessibility access for whatever runs
-  `osascript` there (over ssh, `sshd`). Without it the Duo's inner rows use the resizable window,
-  and `summary.txt` says so.
+  `osascript` there (over ssh, `sshd`). Without it ("osascript is not allowed assistive access",
+  in `<row>/duo-fold.log`) the Duo's closed rows keep the simulator's default fold (closed), the
+  inner rows use the resizable window, and `summary.txt` says so. Granting it takes the host's
+  System Settings (Privacy & Security > Accessibility), from its screen or Screen Sharing.
 - Clean up when you finish: delete your `plain-*` simulators on the host (the matrix deletes its
   own) and remove the lane (`remote_clean <host> <lane>`, or `ssh <host> 'rm -rf
   ~/plain-lanes/<lane>'`).
@@ -204,8 +206,9 @@ Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit`, `-PlainTabLayout abov
 without driving the UI. `-PlainSeedFavorites` and `-PlainSeedHistory` fill an isolated store for
 screenshots of the focused address bar (`FocusCaptureTests`, with `TEST_RUNNER_PLAIN_CAPTURE=1`;
 `TEST_RUNNER_PLAIN_CAPTURE_FAVORITES=1` and `TEST_RUNNER_PLAIN_CAPTURE_HISTORY=1` pick the seeds).
-On an open Duo `XCUIScreen.main` is the outer screen; the inner one is in `XCUIScreen.screens`
-(the largest, 2853x2007 px), which the capture tests shoot. For frames between shots, record the
+On a Duo `XCUIScreen.main` is the outer screen; `XCUIScreen.screens` can list both screens,
+and the one that is off is black. The capture tests shoot every screen (the inner one is 2853x2007
+px). For frames between shots, record the
 inner display with `simctl io <sim> recordVideo --display=<id>` while the capture runs. Device Hub can't be driven while the Mac is locked. Then a resizable
 window stands in for the inner screen: launch the app, run `xcrun devicectl device appResize start
 --device <sim> --preferred-size 951x669` (or `669x951`) and capture `simctl io <sim> screenshot

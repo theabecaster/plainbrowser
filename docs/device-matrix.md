@@ -73,11 +73,17 @@ scripts/matrix.sh --full                                        # every row, bef
 - When Device Hub can't be driven (the Mac is locked, or the terminal has no Accessibility
   access), the Duo's inner rows run in the resizable window at the inner screen's size instead
   (`devicectl device appResize`, with `-PlainIgnoreOcclusions`), and `summary.txt` says so. That
-  window is not the Duo: no fold and no vertical bar. `--resizable` forces it.
+  window is not the Duo: no fold and no vertical bar. `--resizable` forces it. There the largest
+  screen is the whole Resizable display (2560x1440 pt) with the window in its top left corner;
+  the sheets step cuts the shots to the window. Known gaps (2026-11-27): a session sometimes never
+  takes the app (the shots are then the outer screen, and `summary.txt` says so), and when it
+  does, `FocusCaptureTests` stops at step 5: a tap on the pill opens no search in that window.
 - With `PLAIN_TEST_HOST` set (or `--host <name>`) the matrix runs on that test Mac and the results
   come back to `--out`; see "Test Macs" in `docs/development.md`.
-- The open Duo's inner screen is in `XCUIScreen.screens` (the largest), so the captures shoot it;
-  the outer screen is dark then.
+- `XCUIScreen.screens` can list both of the Duo's screens, and the one that is off is
+  black. `CaptureTests` attaches the largest, `FocusCaptureTests` every one; the sheets step keeps
+  the largest screen that shows something. `scripts/matrix.sh --sheets-only --out <dir>` remakes
+  the sheets of an earlier run.
 - Timing (2026-11-27, a loaded Mac, the quick capture test): about a minute and a half for each
   iPhone row and the Duo's outer screen. The inner screen is slower: XCUITest waits 60 s for the
   app to go idle before each step there ("App animations complete notification not received").

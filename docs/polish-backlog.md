@@ -444,5 +444,9 @@ Newest feature last.
   progress creep (`ProgressBar`) and the link preview's sizing (`LinkMenuRules`) live beside
   their code, like the other shell constants in `ChromeModel`; move any that count as product
   decisions to `FixedChoices` (code review, rounds 1 and 2).
+- **Duo inner screen, by hand.** Checked on the resizable-window stand-in only (Device Hub
+  could not be driven on the test Mac): the top bar's ground, a local page, the refused page. The
+  link preview, Back to the opener and the empty sheets were checked on the outer screen, the
+  iPhone 17e, 17 and 17 Pro Max. Check them unfolded on the Duo.
 - **HTTPS-first wait.** Not reproduced for IP addresses on the simulator; check a `.local` or
   intranet name on the device to confirm WebKit no longer tries HTTPS there.

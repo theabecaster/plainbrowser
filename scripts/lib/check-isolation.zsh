@@ -37,6 +37,8 @@ done < <(code_matching 'launchArguments *(=[^=]|\.remove|\.insert|\[)' \
 
 grep -q 'override func launch()' PlainUITests/SmokeTests.swift \
   || problems+="IsolatedApplication.launch() (the launch-time isolation check) is missing"
+grep -q 'override func open(_ url: URL)' PlainUITests/SmokeTests.swift \
+  || problems+="IsolatedApplication.open(_:) (the isolation check for a launch from a link) is missing"
 
 isolation=Packages/PlainKit/Sources/BrowserCore/TestIsolation.swift
 if [[ ! -f $isolation ]]; then

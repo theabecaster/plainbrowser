@@ -279,13 +279,15 @@ final class PerfTests: XCTestCase {
             link.tap()
             // "Paint <ms> <how> <tap>": the tap's time makes each report new, so a page kept from
             // the iteration before can't answer for this one.
+            // Only Paint Timing's own entry counts ("fcp"); the page's animation-frame stand-in
+            // ("raf") measures something else, and leaves the iteration without a value.
             let painted = NSPredicate(format: "label MATCHES %@ AND label != %@", "Paint [0-9.]+ [a-z]+ [0-9]+", previous)
             let report = app.webViews.staticTexts.matching(painted).firstMatch
             XCTAssertTrue(report.waitForExistence(timeout: 10), "the target page reported no paint")
             previous = report.label
-            print("[plain-measure] link paint: \(previous)")
             let words = previous.split(separator: " ")
-            metric.record(words.count == 4 ? Double(words[1]) : nil)
+            XCTAssertEqual(words.count == 4 ? words[2] : "", "fcp", "no first contentful paint entry: \(previous)")
+            metric.record(words.count == 4 && words[2] == "fcp" ? Double(words[1]) : nil)
             let back = app.webViews.links["Back to Paint Start"]
             XCTAssertTrue(back.waitForExistence(timeout: 5))
             back.tap()
@@ -357,9 +359,10 @@ final class PerfTests: XCTestCase {
         }
     }
 
-    /// The app's memory with ten tabs (local pages), at its peak while the gallery shows all ten
-    /// cards (XCTMemoryMetric's peak physical footprint over the block). The pages' own memory is
-    /// in WebKit's processes, not counted here.
+    /// The app's memory with ten tabs (local pages): XCTMemoryMetric's absolute physical footprint
+    /// at the end of each block, after the gallery showed all ten cards (the gate reads it; its
+    /// peak over the block is reported too). The pages' own memory is in WebKit's processes, not
+    /// counted here.
     func testMemoryWithTenTabs() throws {
         let server = try TestServer()
         try server.start()
@@ -447,7 +450,7 @@ final class PerfTests: XCTestCase {
         let settings = app.buttons["menu.settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 3))
         settings.tap()
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Appearance'")).firstMatch
+        let row = app.buttons["settings.appearance"]
         XCTAssertTrue(row.waitForExistence(timeout: 3), "Appearance is in Settings")
         // The row waits for the saved settings.
         let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: row)

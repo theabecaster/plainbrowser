@@ -96,31 +96,38 @@ if [[ ! -d $result ]]; then
   exit 1
 fi
 
-# "<median> <rsd>" of a metric's iterations in a result bundle, in the budget's units (ms, ms/s,
-# MB); "— —" when it recorded nothing. RSD is the sample standard deviation over the mean, in %.
-measure() {  # $1 metric, $2 result bundle
-  local raw
-  raw=$(xcrun xcresulttool get test-results metrics --path $2)
-  jq -r --arg t "$(budget $1 test)" --argjson k "$(budget $1 scale)" "
+# A result bundle's metrics as JSON; an empty list when it can't be read.
+metrics_json() { xcrun xcresulttool get test-results metrics --path $1 2>/dev/null || print -r -- '[]'; }
+
+# "<median> <rsd>" of a metric's iterations, in the budget's units (ms, ms/s, MB); "— —" when it
+# recorded nothing or could not be read. RSD is the sample standard deviation over the mean, in %.
+measure() {  # $1 metric, $2 the bundle's metrics JSON
+  local out
+  out=$(jq -r --arg t "$(budget $1 test)" --argjson k "$(budget $1 scale)" "
     [.[] | select(.testIdentifier | startswith(\$t)) | .testRuns[].metrics[] | select($(budget $1 filter))][0].measurements
     | if . == null or length == 0 then \"— —\"
       else (map(. * \$k) | sort) as \$s | (\$s | length) as \$n | (\$s | add / \$n) as \$mean
         | (if \$n < 2 or \$mean == 0 then 0
            else ((\$s | map((. - \$mean) * (. - \$mean)) | add) / (\$n - 1) | sqrt) / \$mean * 100 end) as \$rsd
-        | \"\(\$s[\$n / 2 | floor] * 10 | round / 10) \(\$rsd | round)\" end" <<<"$raw"
+        | \"\(\$s[\$n / 2 | floor] * 10 | round / 10) \(\$rsd * 10 | round / 10)\" end" <<<"$2" 2>/dev/null) || out="— —"
+  [[ $out == <->(|.<->)\ <->(|.<->) ]] || out="— —"
+  print -r -- $out
 }
+failures=()
 typeset -A value rsd
+json=$(metrics_json $result)
 for m in $METRICS; do
-  read -r v r <<<"$(measure $m $result)"
+  read -r v r <<<"$(measure $m $json)"
   value[$m]=$v; rsd[$m]=$r
 done
 
-# Device: a test whose metric spread more than rsdLimit runs once more, and its rerun counts.
+# Device: a test whose metric spread more than rsdLimit runs once more, and its rerun counts. A
+# rerun that measures nothing fails the gate rather than keeping the noisy value.
 if [[ $MODE == device ]]; then
   rsd_limit=$(jq -r '.ratchet.rsdLimit * 100' $BUDGETS)
   typeset -U noisy_tests=()
   for m in $METRICS; do
-    [[ ${rsd[$m]} == <-> ]] && (( ${rsd[$m]} > rsd_limit )) && noisy_tests+=$(budget $m test)
+    [[ ${value[$m]} != "—" ]] && (( ${rsd[$m]} > rsd_limit )) && noisy_tests+=$(budget $m test)
   done
   if (( ${#noisy_tests} )); then
     echo "== rerunning (RSD over ${rsd_limit}%): ${(j:, :)noisy_tests}"
@@ -128,14 +135,16 @@ if [[ $MODE == device ]]; then
     for t in $noisy_tests; do only+=(-only-testing:PlainUITests/${t%\(\)}); done
     rerun=build/perf/$stamp-$MODE-rerun.xcresult
     run_tests test-without-building $rerun build/perf/$stamp-rerun.log $only || tests_ok=0
-    if [[ -d $rerun ]]; then
-      for m in $METRICS; do
-        (( ${noisy_tests[(Ie)$(budget $m test)]} )) || continue
-        read -r v r <<<"$(measure $m $rerun)"
-        [[ $v == "—" ]] && continue
+    if [[ -d $rerun ]]; then json=$(metrics_json $rerun); else json='[]'; fi
+    for m in $METRICS; do
+      (( ${noisy_tests[(Ie)$(budget $m test)]} )) || continue
+      read -r v r <<<"$(measure $m $json)"
+      if [[ $v == "—" ]]; then
+        failures+="$m: the rerun recorded no measurement (log: build/perf/$stamp-rerun.log)"
+      else
         value[$m]=$v; rsd[$m]=$r
-      done
-    fi
+      fi
+    done
   fi
 fi
 
@@ -173,7 +182,6 @@ else
   done
 fi
 
-failures=()
 (( tests_ok )) || failures+="tests failed (log: build/perf/$stamp.log)"
 sim_tolerance=$(jq -r .simRegressionTolerance $BUDGETS)
 ratchet_tolerance=$(jq -r .ratchet.tolerance $BUDGETS)
@@ -181,7 +189,7 @@ for m in $METRICS; do
   v=${value[$m]}
   label=$(budget $m label)
   line=$(printf '%-44s %8s' "$label" "$v")
-  [[ $v != "—" ]] && line+=$(printf '  RSD %3s%%' ${rsd[$m]})
+  [[ $v != "—" ]] && line+=$(printf '  RSD %4s%%' ${rsd[$m]})
   if [[ $v == "—" && $MODE == sim && $(budget $m deviceOnly) == true ]]; then
     # XCTHitchMetric reports nothing on a simulator (Xcode 27.2); the device measures it.
     value[$m]="n/a"

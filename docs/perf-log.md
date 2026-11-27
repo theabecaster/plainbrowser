@@ -20,7 +20,7 @@ under the focused field (`urlBar.ready`, ms), suggest = one keystroke until its 
 show (`search.suggestions`, ms), link paint = a link tap until the next local page's first
 contentful paint, measured by the pages (ms), gallery tab = a gallery card tapped until its page
 rests (`gallery.openTab`, ms), new tab = New Tab until the keyboard rests under its field
-(`tab.newReady`, ms), memory = the app's peak footprint with ten tabs while the gallery shows them
+(`tab.newReady`, ms), memory = the app's footprint with ten tabs, after the gallery showed them
 (MB; WebKit's processes not counted), heavy hitch = hitch ratio scrolling a large page darkened by
 dark pages (ms/s, device only). Older rows have the result where these columns begin. The gate
 reads columns by header name, and its ratchet compares device rows against the best of the last 5

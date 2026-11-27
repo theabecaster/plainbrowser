@@ -6,13 +6,13 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Suggestions flicker while typing:** the list should update smoothly between keystrokes. (Suggestions lane.)
 
-- **Tabs button with one tab:** show the Tabs button (not "+") and open the switcher like the swipe-up does. (One-button lane.)
-
 
 - **Sign-in like Safari:** passkeys on sites that support them, and saved passwords from the Passwords app and every password manager on the phone (1Password, Bitwarden and others), as easily as in Safari. Both need Apple's web-browser entitlement; the request is ready for the owner to submit. Until it lands, sites are steered to password sign-in and a failed passkey attempt says why. Done when the entitlement ships and the device checks in `docs/research/sign-in.md` pass. (Sign-in lane.)
 
 
 ## Done
+
+- **Tabs button with one tab:** with a single page the tabs button is the normal Tabs button, and a tap opens the switcher the swipe up opens (the page's card and a New Tab card), with the same motion. Its long press is unchanged; the start screen alone still has no tabs button. New Tab stays on the switcher's +, its New Tab card, More and the tabs menu. (dev, one-button lane.)
 
 - **New Tab card content drifts:** fixed; the + and label stay at the card's center. (dev, next build.)
 
@@ -20,7 +20,7 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Paper texture:** faint fibre and grain on the start screen, search, tab cards, sidebar and strip, reader and intro; flat under Increase Contrast. (dev, next build.)
 
-- **Swipe up with one tab:** dragging the bar up (or Show All Tabs) with a single page opens the switcher with the same page-to-card motion: the card rests centered and a paper New Tab card grows in beside it; the tabs button's tap stays "+". On the start screen alone the swipe still bumps. (dev, one-tab lane.)
+- **Swipe up with one tab:** dragging the bar up (or Show All Tabs) with a single page opens the switcher with the same page-to-card motion: the card rests centered and a paper New Tab card grows in beside it; the tabs button's tap stayed "+" (now Tabs, see "Tabs button with one tab"). On the start screen alone the swipe still bumps. (dev, one-tab lane.)
 
 - **Appearance:** Settings > Appearance (System by default, Light, Dark), saved and applied to every window with a crossfade; sites with a dark design follow it, and while Plain is dark, pages without one are darkened like Safari's Adaptive Dark Mode, with "Turn Off Dark Pages for This Site" in the page menu. (dev, next build.)
 

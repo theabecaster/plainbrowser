@@ -17,8 +17,8 @@ extension BrowserViewController {
             && currentRules().acceptsBarGestures
     }
 
-    /// The tabs slot (docs/state-rules.md §3): the gallery with another tab to switch to, a new tab
-    /// with one page tab. Pressed while the gallery is up, it goes back to the page.
+    /// The tabs slot (docs/state-rules.md §3): the gallery whenever it has a card, one page tab
+    /// included, as the swipe up. Pressed while the gallery is up, it goes back to the page.
     func tabsButtonTapped() {
         // With side tabs, the button shows and hides the sidebar; the gallery stays in the menu.
         if !isShowingGallery, toggleSidebar() { return }
@@ -33,7 +33,6 @@ extension BrowserViewController {
         switch currentRules().tabsSlot {
         case .tabs:
             if presentGallery(source: "button") != nil || isShowingGallery { tabsUI.tip.galleryOpenedByTap() }
-        case .newTab: openNewTab(private: currentTab?.isPrivate ?? false)
         case .hidden: Haptic.nothingThere.play()
         }
     }

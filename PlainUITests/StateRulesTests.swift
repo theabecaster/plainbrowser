@@ -115,27 +115,33 @@ final class StateRulesTests: XCTestCase {
         XCTAssertTrue(app.buttons["more.newPrivateTab"].waitForExistence(timeout: 3))
     }
 
-    /// One page tab: the slot is "+" (a tap opens a second tab); with two it is Tabs.
-    func testOneTabTabsButtonIsNewTab() throws {
+    /// One page tab: the slot is Tabs, and a tap opens the switcher the swipe up opens, with the
+    /// page's card and a New Tab card beside it; that card adds the second tab.
+    func testOneTabTabsButtonOpensTheSwitcher() throws {
         let app = try launch()
         go(app, to: "/a")
         waitForPage(app, "Page A")
         let tabs = app.buttons["tabs"]
         XCTAssertTrue(tabs.waitForExistence(timeout: 2))
-        XCTAssertEqual(tabs.label, "New Tab")
+        XCTAssertEqual(tabs.label, "Tabs")
         // Forward hides in place until there is somewhere forward; the Duo's vertical bar dims it.
         let forward = app.buttons["forward"]
         XCTAssertFalse(forward.exists && forward.isEnabled, "Forward does nothing yet")
         XCTAssertTrue(app.buttons["back"].exists, "Back stays, dimmed")
 
         tabs.tap()
+        let gallery = app.scrollViews["tabGallery"]
+        XCTAssertTrue(gallery.waitForExistence(timeout: 3), "the tap reaches the switcher with one tab")
+        XCTAssertTrue(waitForTabCount(gallery, 1))
+        let newTabCard = app.descendants(matching: .any)["galleryNewTabCard"]
+        XCTAssertTrue(newTabCard.waitForExistence(timeout: 2), "a New Tab card beside the lone card")
+        newTabCard.tap()
         let field = app.textFields["searchField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 2) && field.hasKeyboardFocus, "the + opens a new tab's search field")
+        XCTAssertTrue(field.waitForExistence(timeout: 2) && field.hasKeyboardFocus, "the New Tab card opens a new tab's search field")
         go(app, to: "/b")
         waitForPage(app, "Page B")
         XCTAssertEqual(app.buttons["tabs"].label, "Tabs")
         app.buttons["tabs"].tap()
-        let gallery = app.scrollViews["tabGallery"]
         XCTAssertTrue(gallery.waitForExistence(timeout: 3))
         XCTAssertTrue(waitForTabCount(gallery, 2))
     }
@@ -222,7 +228,10 @@ final class StateRulesTests: XCTestCase {
         // Opening Page A leaves the empty tab, which goes away for good.
         gallery.descendants(matching: .any).matching(identifier: "tabCard").firstMatch.tap()
         waitForPage(app, "Page A")
-        XCTAssertEqual(app.buttons["tabs"].label, "New Tab", "one page tab left: the empty one was dropped")
+        XCTAssertTrue(gallery.waitForNonExistence(timeout: 3))
+        app.buttons["tabs"].tap()
+        XCTAssertTrue(gallery.waitForExistence(timeout: 3))
+        XCTAssertTrue(waitForTabCount(gallery, 1), "one page tab left: the empty one was dropped")
     }
 
     /// Closing a private tab never offers a regular Reopen, and closing the last private tab goes

@@ -121,9 +121,9 @@ import Testing
         #expect(!rules.menuNewPrivateTab)
     }
 
-    @Test func onePageNoOthersTapsNewTabAndSwipesToTheSwitcher() {
+    @Test func onePageNoOthersTapsAndSwipesToTheSwitcher() {
         let rules = ControlRules(Self.page())
-        #expect(rules.tabsSlot == .newTab, "the tap stays the quick new tab")
+        #expect(rules.tabsSlot == .tabs, "the tap opens the switcher, as the swipe up does")
         #expect(rules.galleryHasCards)
         #expect(rules.swipeUpOpensGallery, "one card and a New Tab card")
         #expect(rules.menuShowAllTabs, "same predicate as the swipe up")
@@ -137,6 +137,15 @@ import Testing
         #expect(rules.menuCloseTab)
         #expect(rules.menuNewTab && rules.menuNewPrivateTab)
         #expect(rules.startShortcuts.isEmpty)
+    }
+
+    @Test func theTabsTapAndTheSwipeUpShareOnePredicate() {
+        let states = [Self.firstRun, Self.emptyTab(), Self.emptyTab(others: 2), Self.page(),
+                      Self.page(isPrivate: true), Self.page(others: 2)]
+        for state in states {
+            let rules = ControlRules(state)
+            #expect((rules.tabsSlot == .tabs) == rules.swipeUpOpensGallery)
+        }
     }
 
     @Test func backDimsAndForwardHidesInPlace() {
@@ -172,7 +181,7 @@ import Testing
 
     @Test func privateOnlyIsLikeOnePage() {
         let rules = ControlRules(Self.page(isPrivate: true))
-        #expect(rules.tabsSlot == .newTab)
+        #expect(rules.tabsSlot == .tabs)
         #expect(rules.swipeUpOpensGallery)
         #expect(rules.menuShowAllTabs)
         #expect(!rules.blockingToggle, "the allow-list is saved to disk")

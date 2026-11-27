@@ -117,8 +117,8 @@ and compile to nothing on macOS.
   `ControlRules` answers: each bar button shown, dimmed or hidden in place (`ButtonBar.setVisibility`),
   the tabs slot's face, the page and tabs menus' items, the gestures and the start screen's
   shortcuts. The gallery does the same with `GalleryRules`. No view decides visibility itself.
-- **Tabs button.** Three faces (docs/state-rules.md §3): Tabs opens the gallery, "+" with one page
-  tab opens a new one, hidden on the start screen with nothing else open. A long press is the tabs
+- **Tabs button.** Two faces (docs/state-rules.md §3): Tabs opens the gallery whenever it has a
+  card (one page tab included), hidden on the start screen with nothing else open. A long press is the tabs
   menu: New Tab, New Private Tab, Previous / Next Tab ("Or swipe the address bar"), Show All Tabs
   ("Or swipe up from the address bar"), Reopen Closed Tab, Archived Tabs, Close Tab (with a Reopen
   toast). A one-time TipKit tip teaches the long press (`TabsMenuTip`); More carries the same

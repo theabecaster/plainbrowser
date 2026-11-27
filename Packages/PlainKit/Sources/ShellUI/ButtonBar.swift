@@ -141,13 +141,9 @@ final class ButtonBar: UIView {
         if besideWidth.constant != width { besideWidth.constant = width }
     }
 
-    /// A button's symbol and label (the tabs slot's faces: Tabs or New Tab).
-    func setFace(of kind: PageButton, symbol: String, title: String, value: String?) {
-        let button = button(kind)
-        button.accessibilityValue = value
-        guard button.accessibilityLabel != title else { return }
-        button.accessibilityLabel = title
-        button.configuration?.image = UIImage(systemName: symbol)
+    /// What VoiceOver reads as a button's value (the tabs slot: how many tabs are open).
+    func setAccessibilityValue(_ value: String?, for kind: PageButton) {
+        button(kind).accessibilityValue = value
     }
 
     /// The glass tint: Paper, or the quiet private tint while a private tab is on screen.

@@ -100,7 +100,7 @@ extension BrowserViewController {
             if item.isHidden == applied.isVisible { item.isHidden = !applied.isVisible }
             if item.isEnabled != applied.isEnabled { item.isEnabled = applied.isEnabled }
         }
-        applyTabsFace(rules.tabsSlot)
+        applyTabsFace()
         duo.sidebar?.setNewTabShown(rules.menuNewTab)
         if !tabsUI.start.isHidden { applyStartShortcuts() }
         applyToolbarItems()
@@ -117,20 +117,12 @@ extension BrowserViewController {
         setToolbarItems(items, animated: true)
     }
 
-    /// The tabs slot's face: Tabs, or New Tab with one page tab. The long press is the tabs menu
-    /// whatever it shows. VoiceOver hears how many tabs are open (no badge).
-    private func applyTabsFace(_ face: TabsSlotFace) {
-        let isNewTab = face == .newTab
-        let symbol = isNewTab ? "plus" : PageButton.tabs.symbol
-        let title = isNewTab ? String(localized: "New Tab") : PageButton.tabs.title
+    /// The tabs slot's face: always Tabs where it shows; the long press is the tabs menu.
+    /// VoiceOver hears how many tabs are open (no badge).
+    private func applyTabsFace() {
         let open = rules.state.others + (rules.state.hasPage ? 1 : 0)
         let value = open == 1 ? String(localized: "1 tab") : String(localized: "\(open) tabs")
-        buttonBar.setFace(of: .tabs, symbol: symbol, title: title, value: value)
-        if let item = barItems[.tabs], item.title != title {
-            item.image = UIImage(systemName: symbol)
-            item.title = title
-            item.accessibilityLabel = title
-        }
+        buttonBar.setAccessibilityValue(value, for: .tabs)
         barItems[.tabs]?.accessibilityValue = value
     }
 }

@@ -84,6 +84,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         fade.translatesAutoresizingMaskIntoConstraints = false
         fadeMask.startPoint = CGPoint(x: 0, y: 0.5)
         fadeMask.endPoint = CGPoint(x: 1, y: 0.5)
+        // Solid until the first layout says which edges fade: a gradient with no colors hides all.
+        fadeMask.colors = [UIColor.black.cgColor, UIColor.black.cgColor]
         fade.layer.mask = fadeMask
         view.addSubview(fade)
         fade.addSubview(collectionView)
@@ -150,6 +152,9 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
             fadeMask.frame = fade.bounds
             CATransaction.commit()
             updateFade(force: true)
+        } else {
+            // The tabs' width may have changed (a tab opened or closed).
+            updateFade(force: false)
         }
         // The first layout with tabs: the focused one comes into view (a strip built while the
         // twentieth tab is on screen shows it, not the first).
@@ -167,7 +172,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     /// Fades an edge only while tabs continue past it. Changes the mask's colors only when an
     /// edge flips, not per scroll frame.
     private func updateFade(force: Bool) {
-        let width = collectionView.bounds.width
+        let width = fade.bounds.width
         guard width > 0 else { return }
         let offset = collectionView.contentOffset.x
         let edges = (leading: offset > 1, trailing: offset + width < collectionView.contentSize.width - 1)

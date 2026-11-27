@@ -1460,7 +1460,7 @@ comes from memory, so it is on screen in the frame the keyboard starts. Rows, in
 | Favorites strip (directly above the field) | At least one favorite (private tabs too) | Unchanged. |
 | Recently visited (up to 4) | Regular tab; history has pages other than this one and the favorites | Arc's "context" row; Safari's Frequently Visited. Newest first, one row per page. |
 | Recently closed (up to 2) | Regular tab; the closed stack has a batch | Reopens that batch in place (`reopenClosed`). |
-| One sentence | None of the above (first run) | "Search, or enter an address. Pages you visit and your favorites show up here." |
+| One sentence (top) | Nothing kept yet: no recent, closed or unread pages and no favorites, and no copied link (first run; not on the start screen, which has its own) | "Pages you visit and your favorites show up here." |
 
 Private tabs show no history and no closed tabs: only this page, a copied link and favorites.
 When typing starts, the same rows machinery takes over: a recent page that is also a suggestion

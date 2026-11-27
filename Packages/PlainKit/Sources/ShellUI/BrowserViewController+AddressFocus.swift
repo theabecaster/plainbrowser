@@ -66,10 +66,13 @@ extension BrowserViewController {
             .prefix(FixedChoices.focusRecentPages)
         items += recent.map { SheetItem.recent(url: $0.url, title: $0.title) }
         items += closed
-        // The start screen's own sentence keeps an empty start company; elsewhere one sentence.
+        // First run, nothing kept yet: one sentence says what will show here, above the page's own
+        // row (the start screen has its own sentence).
         let showsStart = tab.map { session.tabs.isEmpty($0.id) } ?? true
-        if items.isEmpty, focusUI.content.favorites.isEmpty, !showsStart {
-            items.append(.hint(String(localized: "Search, or enter an address. Pages you visit and your favorites show up here.")))
+        let keepsNothing = recent.isEmpty && closed.isEmpty && focusUI.content.favorites.isEmpty
+            && focusUI.content.unread.isEmpty
+        if keepsNothing, !showsStart, focusUI.copiedLink.offer(excluding: page) == nil {
+            items.append(.hint(String(localized: "Pages you visit and your favorites show up here.")))
         }
         return items
     }

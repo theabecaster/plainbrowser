@@ -165,6 +165,18 @@ final class SummaryTests: XCTestCase {
         shot("live4-sources")
     }
 
+    /// The page menu's row on a readerable page in another language: Find, Reader, Summarize and
+    /// Translate. Captures only, on request.
+    func testCaptureMenuRowOfFour() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let app = try launch(["-PlainTestSummaries", "-PlainTestTranslator", "-PlainTranslateHintShown", "YES"])
+        go(app, to: "/french-article", heading: "La page tranquille")
+        Thread.sleep(forTimeInterval: 1.5)
+        openPageMenu(app)
+        XCTAssertTrue(app.buttons["menu.summarize"].waitForExistence(timeout: 3))
+        shot("m1-row-of-four")
+    }
+
     private func shot(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name

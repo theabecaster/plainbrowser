@@ -936,7 +936,9 @@ public final class TabGalleryViewController: UIViewController {
 
     /// Cards on screen in tab order, for VoiceOver.
     func accessibilityCards() -> [UIView] {
-        cards.compactMap { id, card in slots[id].map { ($0, card) } }.sorted { $0.0 < $1.0 }.map(\.1)
+        let ordered = cards.compactMap { id, card in slots[id].map { ($0, card) } }.sorted { $0.0 < $1.0 }.map(\.1)
+        // Each card's × follows it, so VoiceOver reads "Close <title>" as its own button.
+        return ordered.flatMap { card -> [UIView] in card.closeButton.isHidden ? [card] : [card, card.closeButton] }
     }
 
     /// A three-finger swipe moves a screenful of cards.

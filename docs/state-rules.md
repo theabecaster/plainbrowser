@@ -337,6 +337,7 @@ has dark art; Night, Coral and Paper look the same in both.
 | Cards | Every tab in the list; never an empty tab (principle 7) | |
 | Lone card | When the shown list has exactly one card: it rests centered (cascade and grid); New Tab is the "+" in the bar under it. No New Tab card (removed 2026-11-27, owner: "there's already a simple button under all the tabs, so just remove the fake tab that says New Tab"). | The app switcher with one app shows one centered card; the "+" is always in the bar. |
 | Swipe a card up | Closes it; Reopen toast for regular tabs | |
+| Close button (×) on a card | Every card whose title row is fully showing (grid, Duo inner columns, and the front card of the cascade); hidden on a card the next one covers. Private cards wear the private plate. | Owner, 2026-11-27: "tabs should have a close button besides the close gesture too." Same close as the swipe and the menu: same motion, same Reopen toast. The gesture stays the fast way; the button is the discoverable one. |
 | Closing the last card in the shown list | First match: the tab on screen still exists (it is in the other list) → the gallery opens it; the other list has tabs → the gallery switches to it; else → the search field. Never an empty gallery. The Reopen toast shows wherever this lands. | Arc: never an empty switcher. |
 | Private toggle | Always | The entrance to private browsing. |
 | New Tab "+" | When the shown list has tabs. In an empty list the empty state's button is the one New Tab (principle 8). | |

@@ -136,6 +136,28 @@ final class TabsTests: XCTestCase {
         XCTAssertTrue(waitForTabCount(gallery, 1), "a short, quick flick up closes the tab")
     }
 
+    /// Each card has a × as well as the flick: a tap closes that tab alone, and the flick still
+    /// works on the cards that are left.
+    func testCardCloseButtonClosesThatTabOnlyAndTheFlickStillWorks() throws {
+        let app = try launch()
+        openTabs(app, [("/a", "Page A"), ("/b", "Page B"), ("/c", "Page C")])
+        let gallery = openGallery(app)
+        XCTAssertTrue(waitForTabCount(gallery, 3))
+
+        let close = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close Plain Test B")).firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 2), "the card has a Close button")
+        close.tap()
+        XCTAssertTrue(waitForTabCount(gallery, 2), "the × closes the tab")
+        XCTAssertFalse(card(gallery, "Plain Test B").waitForExistence(timeout: 1), "the tapped card is the one that went")
+        XCTAssertTrue(card(gallery, "Plain Test C").exists)
+
+        gallery.swipeRight(velocity: .fast)
+        let first = card(gallery, "Plain Test A")
+        XCTAssertTrue(first.waitForExistence(timeout: 2))
+        first.swipeUp(velocity: .fast)
+        XCTAssertTrue(waitForTabCount(gallery, 1), "the flick closes a card too")
+    }
+
     func testSwipingTheAddressBarSwitchesTabs() throws {
         let app = try launch()
         openTabs(app, [("/a", "Page A"), ("/b", "Page B")])

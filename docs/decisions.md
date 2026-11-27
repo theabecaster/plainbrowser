@@ -2450,3 +2450,6 @@ designed) and the test fails. Command-L depends on the browser being in the resp
 UI test runs it missed two opens right after a page load. XCUITest's Escape never reached the
 field in the simulator, so Escape is unverified there; Command-period closes.
 
+## A close button on every tab card (2026-11-27)
+
+The owner asked for a close button besides the swipe. Each card gets a × in its title row's trailing corner: a 24 pt plate inside a 44 pt target, drawn without a glass view (one per card would cost every scroll frame). It calls the card's existing close hook, so the motion, haptic, signpost and Reopen toast are the swipe's own. It lives in the card's body, outside the masked title row, so the mask never clips it; a card the next one covers hides it.

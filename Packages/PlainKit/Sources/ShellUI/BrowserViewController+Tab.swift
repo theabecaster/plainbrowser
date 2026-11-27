@@ -108,6 +108,9 @@ extension BrowserViewController {
                 keepPreview(of: current, beside: tab)
                 session.pool.detach(current)
                 forgetAttachment(of: current.id)
+            } else {
+                // It stays on screen in the other pane, which keeps the expanded bar's reserve.
+                applyOtherPaneInsets(to: current)
             }
         }
         self.currentTab = tab

@@ -114,7 +114,7 @@ forums or bug threads. Safari, Arc Search and Orion are closed source, so their 
 Three resting states: **expanded → pill → hidden**.
 
 1. **Expanded to pill**, as before: 1:1 with the finger over 56 pt, then a snap on release.
-2. **Pill to hidden**: keep reading and the pill sinks below the bottom edge and fades
+2. **Pill to hidden**: keep reading and the pill sinks below the bottom edge, 12 pt past it so the spring's tail runs off screen, as its text fades (Liquid Glass ignores alpha, so the glass leaves by moving)
    (`Motion.toolbarHide`, `.smooth(0.35)`, a calmer exit than the snap). It happens once the page
    has travelled 120 pt past the pill since the bar was last out, in one drag, over several or
    while coasting. A flick whose coast will carry the reader that far goes straight from wherever

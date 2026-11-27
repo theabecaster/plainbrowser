@@ -1030,8 +1030,8 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
 ## Scroll chrome: expanded, pill, hidden (2026-11-27)
 
 - **Chosen:** three resting states. Scrolling down takes the bar to the pill 1:1 as before; reading
-  on (120 pt past the pill, or a flick projected that far) sinks the pill below the edge and fades
-  it (`Motion.toolbarHide`, `.smooth(0.35)`); a clear move up (24 pt, or 8 pt at 0.3 pt/ms), a tap
+  on (120 pt past the pill, or a flick projected that far) sinks the pill past the bottom edge as its text fades
+  (`Motion.toolbarHide`, `.smooth(0.35)`); a clear move up (24 pt, or 8 pt at 0.3 pt/ms), a tap
   on the bottom edge, a status bar tap, the page's end, the top or a new page brings the whole bar
   back (`.smooth(0.25)`). Research and sources: docs/research/scroll-chrome.md; rules:
   docs/state-rules.md, "Chrome while reading".

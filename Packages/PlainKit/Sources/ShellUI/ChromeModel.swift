@@ -61,6 +61,9 @@ struct ChromeGeometry: Equatable {
     /// The shortest bottom-edge strip that brings a hidden bar back, where there is no home
     /// indicator (iPhone SE). With one, the strip is the home-indicator zone itself.
     static let revealEdgeMinimum: CGFloat = 16
+    /// How far past the bottom edge the hidden pill's top ends: the spring's slow tail then runs
+    /// off screen, and no sliver of glass lingers at the edge (glass ignores the fade).
+    static let hiddenClearance: CGFloat = 12
 
     /// The bottom of the resting chrome: the button bar's bottom, or the pill's.
     var restBottom: CGFloat {
@@ -95,7 +98,7 @@ struct ChromeGeometry: Equatable {
         let scale = 1 - (1 - Self.compactScale) * p
         let bottom = pillRestBottom + (collapsedBottom - pillRestBottom) * p
         let restCenter = pillRestBottom - Self.pillHeight / 2
-        let sink = (viewHeight - collapsedTop) * min(max(progress - 1, 0), 1)
+        let sink = (viewHeight - collapsedTop + Self.hiddenClearance) * min(max(progress - 1, 0), 1)
         return (bottom - Self.pillHeight * scale / 2 - restCenter + sink, scale)
     }
 

@@ -83,7 +83,10 @@ struct ChromeGeometryTests {
             let move = geometry.pillTransform(progress: 2)
             let restCenter = geometry.pillRestBottom - ChromeGeometry.pillHeight / 2
             let top = restCenter + move.translationY - ChromeGeometry.pillHeight * move.scale / 2
-            #expect(abs(top - geometry.viewHeight) < 0.001)
+            #expect(abs(top - geometry.viewHeight - ChromeGeometry.hiddenClearance) < 0.001)
+            // Off screen well before the spring's tail: by 85% of the way.
+            let early = geometry.pillTransform(progress: 1.85)
+            #expect(restCenter + early.translationY - ChromeGeometry.pillHeight * early.scale / 2 > geometry.viewHeight)
             #expect(move.scale == ChromeGeometry.compactScale)
         }
         #expect(ChromeGeometry.pillAlpha(progress: 1) == 1)

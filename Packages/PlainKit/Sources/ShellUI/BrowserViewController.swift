@@ -873,8 +873,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// The page is long enough for the bar to hide: at least two screens, so the hidden bar has
     /// a page to give back, and the page's end (where the bar returns) is not already in sight.
-    private func pageAllowsHiding(_ scrollView: UIScrollView, top: CGFloat, bottom: CGFloat) -> Bool {
-        rules.chromeMayHide && bottom - top >= scrollView.bounds.height
+    /// Measured on the content, not the scroll range, which the resting bar's inset changes.
+    private func pageAllowsHiding(_ scrollView: UIScrollView) -> Bool {
+        rules.chromeMayHide && scrollView.contentSize.height >= 2 * scrollView.bounds.height
     }
 
     /// The offset at which the page's end reaches the screen's bottom edge: from there on the bar
@@ -1010,7 +1011,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Only the user's scrolling moves the bar: a page's own scroll, a zoom or the rise at the
         // end (`applyPendingInset`) leave it alone.
         guard tracking || scrollView.isDecelerating else { return }
-        let mayHide = pageAllowsHiding(scrollView, top: top, bottom: bottom)
+        let mayHide = pageAllowsHiding(scrollView)
         // A hidden bar on a page that became too short (or a state that no longer allows it) comes
         // back; a page that barely scrolls keeps its bar.
         if collapse.rest == .hidden, !mayHide { return revealChrome(.shortPage) }
@@ -1065,7 +1066,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             let nearEnd = pageEnd(scrollView) - collapse.distance
             rest = collapse.settleTarget(
                 velocity: velocity.y, coast: coastEnd - offset,
-                canHide: pageAllowsHiding(scrollView, top: top, bottom: bottom),
+                canHide: pageAllowsHiding(scrollView),
                 coastReachesEnd: coastEnd >= nearEnd, atEnd: offset >= nearEnd
             )
         }

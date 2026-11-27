@@ -71,7 +71,7 @@ import WebKit
         let type: String
         switch (url.host(), url.path()) {
         case ("reader", "/paper-day.png"), ("reader", "/paper-night.png"):
-            // Made once per sheet, off the main thread; answered unless WebKit stopped the task.
+            // Made per request, off the main thread; answered unless WebKit stopped the task.
             let sheet: PaperTexture.Sheet = url.path() == "/paper-day.png" ? .day : .night
             let id = ObjectIdentifier(urlSchemeTask)
             running.insert(id)

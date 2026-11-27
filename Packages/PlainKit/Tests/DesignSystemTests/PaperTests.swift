@@ -9,6 +9,8 @@ import XCTest
 @MainActor
 final class PaperTests: XCTestCase {
     private func waitForTile(_ traits: UITraitCollection) async throws {
+        // Under Reduce Transparency Paper stays flat, so no tile ever shows.
+        try XCTSkipIf(UIAccessibility.isReduceTransparencyEnabled, "Reduce Transparency keeps Paper flat")
         let deadline = ContinuousClock.now + .seconds(5)
         while Paper.resolved(for: traits).cgColor.pattern == nil {
             guard ContinuousClock.now < deadline else { return XCTFail("the tile never arrived") }

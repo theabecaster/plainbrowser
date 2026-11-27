@@ -749,11 +749,11 @@ Research and sources: docs/research/dark-mode.md.
   page tiles the same pixels as a CSS `background-image`.
 - **Recipe:** a 256 px tile (about 85 pt at 3x), three layers on a torus so tiles meet without a
   seam, added to the base in 8-bit levels: *formation* (value noise on 16 and 8 px lattices,
-  σ 0.7 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 1.0) and *fibres* (115 short,
-  tapered, nearly straight strands, peak 2–5 levels, mostly darker, 30 % lighter). Night paper on
-  Deep Lagoon is half as strong (σ 0.35 / 0.5) with mostly lighter strands. Day shadows move blue
-  most (warm); night highlights move blue most (a cool sheen). A ±1 level triangular dither hides
-  8-bit steps. The sheet averages to `Palette.background`, so it still matches the launch screen.
+  σ 0.45 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 1.0) and *fibres* (121 short,
+  tapered, nearly straight strands on a jittered grid so none cluster, peak 1–3 levels, 60 % darker,
+  40 % lighter). Night paper on Deep Lagoon is about half as strong (σ 0.25 / 0.5), with mostly
+  lighter strands. Day shadows move blue most (warm); night highlights move blue most (a cool
+  sheen). A ±1 level triangular dither hides 8-bit steps. The sheet averages to `Palette.background`, so it still matches the launch screen.
   Tests hold it there: mean within 0.5 levels, 99.9 % of pixels within 9 (day) / 5 (night) levels,
   no seam step larger than any step inside the tile.
 - **Why these numbers:** grain guides put "material, not dirt" at roughly 2.5–12 % noise opacity

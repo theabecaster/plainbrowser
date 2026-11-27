@@ -43,11 +43,11 @@ public nonisolated enum PaperTexture {
 
         static let day = Recipe(
             base: (255, 246, 230), channel: (0.85, 1.0, 1.2),
-            formation: 0.7, tooth: 1.0, fibres: 115, fibreStrength: -5.0 ... -2.2, fibreContrary: 0.3
+            formation: 0.45, tooth: 1.0, fibres: 121, fibreStrength: -3.2 ... -1.2, fibreContrary: 0.4
         )
         static let night = Recipe(
             base: (10, 33, 51), channel: (0.75, 0.9, 1.0),
-            formation: 0.35, tooth: 0.5, fibres: 102, fibreStrength: 1.2 ... 2.6, fibreContrary: 0.25
+            formation: 0.25, tooth: 0.5, fibres: 100, fibreStrength: 1.2 ... 2.6, fibreContrary: 0.25
         )
     }
 
@@ -137,8 +137,13 @@ public nonisolated enum PaperTexture {
     private static func fibreField(_ recipe: Recipe, _ random: inout SplitMix) -> [Double] {
         let n = side
         var field = [Double](repeating: 0, count: n * n)
-        for _ in 0 ..< recipe.fibres {
-            var x = random.unit() * Double(n), y = random.unit() * Double(n)
+        // Strands start on a jittered grid, not at random: even spacing leaves no cluster for the
+        // eye to find again one tile over.
+        let grid = Int(Double(recipe.fibres).squareRoot().rounded(.up))
+        let cell = Double(n) / Double(grid)
+        for index in 0 ..< recipe.fibres {
+            var x = (Double(index % grid) + random.unit()) * cell
+            var y = (Double(index / grid) + random.unit()) * cell
             var angle = random.unit() * 2 * .pi
             // Mostly short strands, a few long ones: 12 to 64 pixels, weighted toward short.
             let length = 12 + 52 * pow(random.unit(), 2)

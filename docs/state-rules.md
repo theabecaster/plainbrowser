@@ -299,7 +299,7 @@ above still says what it shows, and the splash only covers it.
 
 | Situation | Splash | Why |
 |---|---|---|
-| Cold launch from the Home Screen or the app switcher (the app was not running) | Plays: the icon's world from the first frame, then the dive (0.66 s) | The owner: "for the startup." |
+| Cold launch from the Home Screen or the app switcher (the app was not running) | Plays: the icon's world from the first frame, then the dive (0.66 s); on a search-first launch the keyboard rises as the dive lands | The owner: "for the startup." |
 | First run | Plays; the dive opens onto the intro | The intro comes after the splash. |
 | Cold launch by a link from another app, a widget, a shortcut, a Spotlight result or Handoff | None | A link always wins: the page comes first. |
 | Return from the background (the app still running), however long away | None | Not a startup; the user is where they left off. |

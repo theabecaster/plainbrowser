@@ -243,8 +243,8 @@ nonisolated struct SplashArt: Sendable {
 ///   lies under the ring's band and under the flap, never in sight;
 /// - the hole's depth: what makes the opening read as a hole whatever shows through it. The
 ///   splash is a sheet with some thickness lying over the app, lit from the top left: it shades
-///   what is under it (a soft shadow inside the opening, deepest under the top-left edge, and a
-///   little dimming all over), and the cut edge catches the light (a thin rim, brightest on the
+///   what is under it (a soft shadow inside the opening, under the top-left edge), and the cut
+///   edge catches the light (a thin rim, brightest on the
 ///   far side). One bitmap, drawn once; it scales with the hole.
 nonisolated struct SplashIrisArt: Sendable {
     let field: SplashBitmap
@@ -259,10 +259,11 @@ nonisolated struct SplashIrisArt: Sendable {
     static let fieldHoleRadius = (StemGeometry.inner + StemGeometry.outer) / 2
     static let fieldHoleCut = (SplashGeometry.flapReach + StemGeometry.creaseDistance) / 2 + 7
 
-    /// Dimming over the whole opening: the app sits below the sheet, out of the light.
-    static let ambient: CGFloat = 0.12
+    /// Dimming over the whole opening: barely any. More made the page look like it sat behind
+    /// dirty glass; the shadow under the edge is what gives the depth.
+    static let ambient: CGFloat = 0.03
     /// The sheet's shadow on the app, cast down and right, away from the light (points).
-    static let shadowAlpha: CGFloat = 0.5
+    static let shadowAlpha: CGFloat = 0.42
     static let shadowBlur: CGFloat = 6
     static let shadowOffset = CGSize(width: 2.2, height: 3)
     /// The rim's width in points, and its strength on the edges facing away from the light and

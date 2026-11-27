@@ -1989,13 +1989,16 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
 - **The dive (0.66 s): into the P's counter.** The counter is the ring's window less the part
   the icon's coral fold lies over, a circle with a bite out of its top right. Three things
   happen, each with a reason:
-  1. *The dawn clears* (0–0.16 s): the dawn in the window comes a little nearer and fades. The
+  1. *The dawn clears* (0–0.12 s): the dawn in the window comes a little nearer and fades. The
      mark's window is "a window onto the web"; now it is one, and the app is behind it.
-  2. *The window's cut edge rolls back* (0.02–0.34 s), underside up: the icon's fold, all the
-     way round. The fold line moves 12 pt out from the edge and the paper inside it wraps round
-     a 2.6 pt roll and lies back over the ring, showing the paper's underside in the fold's own
-     color (coral; Lagoon blue for Coral). Under the fold that is already there the edge stays
-     down, and the roll tapers to nothing over twenty degrees on either side. This is Plain's
+  2. *The window's cut edge turns back* (0.02–0.26 s), underside up: the icon's fold, all the
+     way round. The fold line moves 8 pt out from the edge and the paper inside it wraps round
+     a small roll (1.8 pt, flattening as the camera closes in) and lies back over the ring,
+     showing the paper's underside in the fold's own color (coral; Lagoon blue for Coral). It
+     is kept narrow, a third of the ring's band, so the icon's own fold stays the one strong
+     accent (design review: a thicker roll read as an inflated tube). Under the fold that is
+     already there the edge stays down, and the roll tapers to nothing over thirty-four degrees
+     on either side. This is Plain's
      own touch: the brand's one gesture (Brand/identity.md: "its edge folds once as the first
      page loads"), it says the sheet is paper with a back, and the rolled rim is a real lit edge
      that marks the opening against any page, a cream page under the Paper icon included.
@@ -2005,8 +2008,8 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
      phone, 11x on the Duo's inner screen), evenly in log scale with an eased exponent, so it
      opens gently, rushes through the edges and lands. The rim, nearer the eye, grows a little
      faster (perspective, eye at 500 pt). The app settles from 1.08x to its size as it is
-     uncovered. The sheet's shadow lies in the opening (a little dimming, deeper under the
-     top-left edge) until the hole is half open.
+     uncovered. The sheet's shadow lies in the opening, under its top-left edge only, until
+     the hole is half open (no dimming over the whole opening: it read as dirty glass).
   Total from first movement to the app filling the screen: 0.66 s. It starts 0.55 s after the
   process started (`splashMinimumTime`), or 0.3 s after the first frame if that is later.
 - **Pteron's techniques, not its effect.** From Pteron's sticker peel
@@ -2045,8 +2048,8 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
 - **The keyboard waits for the dive.** On a search-first launch the field is first responder
   under the splash, but iOS draws the keyboard above every window an app has (checked on the
   simulator: a window at alert level sits under it), so it would lie over the icon's world.
-  The field gets an empty input view until 0.36 s into the dive (`splashKeyboardAt`), then the
-  keyboard rises as the last of the sheet leaves; a touch brings it at once
+  The field gets an empty input view until 0.6 s into the dive (`splashKeyboardAt`), then the
+  keyboard rises as the dive lands; a touch brings it at once
   (`holdLaunchKeyboard`, `releaseLaunchKeyboard`). Focus itself, and so the `launch`
   interval, is unchanged.
 - **What the launch numbers mean with a splash.** `launch.firstFrame` is still `main` to the

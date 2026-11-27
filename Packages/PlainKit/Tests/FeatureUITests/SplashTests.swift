@@ -291,9 +291,9 @@ import Testing
         func depthPixel(_ p: CGPoint) -> Int {
             iris.depth.pixel(x: Int((p.x - iris.depthRect.minX) * k), y: Int((p.y - iris.depthRect.minY) * k)).a
         }
-        // Dimmed in the middle, darker under the top-left edge, clear on the sheet.
+        // Almost clear in the middle, shaded under the top-left edge, clear on the sheet.
         let middle = depthPixel(layout.pivot)
-        #expect(middle > 18 && middle < 110, "\(middle)")
+        #expect(middle < 40, "\(middle)")
         let r = layout.holeRadius
         let underEdge = depthPixel(CGPoint(x: layout.center.x - (r - 2.5) * 0.7071, y: layout.center.y - (r - 2.5) * 0.7071))
         #expect(underEdge > middle + 20, "\(underEdge) vs \(middle)")

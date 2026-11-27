@@ -35,32 +35,36 @@ nonisolated struct SplashUniforms {
 
 /// The dive's choreography, in seconds after it starts. Pure math: no Metal, no views.
 ///
-/// 0.00–0.16  the dawn in the window comes a little nearer and clears: the app is behind it
-/// 0.02–0.34  the window's cut edge lifts and rolls back, underside up (the icon's fold, all
+/// 0.00–0.12  the dawn in the window comes a little nearer and clears: the app is behind it
+/// 0.02–0.26  the window's cut edge lifts and turns back, underside up (the icon's fold, all
 ///            the way round, except under the fold that is already there)
 /// 0.10–0.66  the camera goes through: the opening grows around its pivot until it has cleared
 ///            the screen, and the app settles from a little large to its size
 /// 0.00–0.38  the sheet's shadow lies in the opening, then lifts as the app comes up into the light
 nonisolated struct SplashTimeline: Sendable {
     static let duration = FixedChoices.splashDive
-    static let dawnClear = 0.16
+    static let dawnClear = 0.12
     static let curlStart = 0.02
-    static let curlEnd = 0.34
+    static let curlEnd = 0.26
     static let diveStart = 0.10
     static let depthIn = 0.10
     static let depthOut = diveStart + (duration - diveStart) * 0.5
     /// How much nearer the dawn comes as it clears.
     static let dawnZoom: Float = 0.3
     /// How far the fold line travels out from the window's edge, the roll's radius as it starts
-    /// and ends, and how far round the rim wraps (points; degrees). About half the ring's band:
-    /// the rim reads as the icon's fold, and the ring stays a ring.
-    static let foldReach: Float = 12
-    static let roll: (from: Float, to: Float) = (1.2, 2.6)
-    static let wrap: (from: Float, to: Float) = (100, 165)
+    /// and ends, and how far round the rim wraps (points; degrees). A third of the ring's band:
+    /// a narrow turned edge, so the icon's own fold stays the mark's one strong accent.
+    static let foldReach: Float = 8
+    static let roll: (from: Float, to: Float) = (1.0, 1.8)
+    static let wrap: (from: Float, to: Float) = (100, 172)
+    /// The roll flattens as the camera closes in: its radius falls with the zoom to this power,
+    /// so at ten times the size the turned edge is flat paper lying back, not a tube.
+    static let rollFlattening: Float = 0.6
     /// Eye distance in points: the rim rises toward the viewer as it passes.
     static let eye: Float = 500
-    /// The rim's shadow on the sheet beside it, as strong as the icon's flap shadow.
-    static let lipShadow: Float = 0.34
+    /// The rim's shadow on the sheet beside it: lighter than the icon's flap shadow, it is a
+    /// smaller fold.
+    static let lipShadow: Float = 0.24
     /// The sheet's shadow in the opening (points), as the Core Animation iris draws it.
     static let depthOffset = SIMD2<Float>(Float(SplashIrisArt.shadowOffset.width), Float(SplashIrisArt.shadowOffset.height))
     static let depthBlur = Float(SplashIrisArt.shadowBlur)
@@ -112,8 +116,9 @@ nonisolated struct SplashTimeline: Sendable {
         let k = Self.clamp((time - Self.curlStart) / (Self.curlEnd - Self.curlStart))
         let progress = Float(1 - pow(1 - k, 3))
         let amount = still ? 0 : Float(Self.smooth((time - Self.curlStart) / 0.06))
+        let zoom = still ? 1 : Float(Self.zoom(at: time, end: Double(layout.zoomEnd)))
         let p = r0 + Self.foldReach * progress
-        let roll = Self.roll.from + (Self.roll.to - Self.roll.from) * progress
+        let roll = (Self.roll.from + (Self.roll.to - Self.roll.from) * progress) / pow(zoom, Self.rollFlattening)
         let wrap = (Self.wrap.from + (Self.wrap.to - Self.wrap.from) * progress) * .pi / 180
         // Where the rolled rim's free edge has got to, seen from above.
         let rolled = p - r0
@@ -123,7 +128,6 @@ nonisolated struct SplashTimeline: Sendable {
         let lift = min(phi, .pi / 2)
         let opening = r0 + amount * (p - roll * sin(lift) - r0)
 
-        let zoom = still ? 1 : Float(Self.zoom(at: time, end: Double(layout.zoomEnd)))
         func color(_ c: SplashColor) -> SIMD4<Float> { SIMD4(Float(c.r), Float(c.g), Float(c.b), Float(c.a)) }
         return SplashUniforms(
             view: SIMD4(Float(layout.size.width / 2), Float(layout.size.height / 2), Float(layout.size.width), Float(layout.size.height)),

@@ -151,7 +151,7 @@ fragment float4 sheet_fragment(SheetOut in [[stage_in]], bool front [[front_faci
     float3 b = k < 0.18 ? mix(u.back0.rgb, u.back1.rgb, k / 0.18)
              : k < 0.6 ? mix(u.back1.rgb, u.back2.rgb, (k - 0.18) / 0.42)
              : mix(u.back2.rgb, u.back3.rgb, (k - 0.6) / 0.4);
-    return float4(b * min(lit, 1.12) * cover, cover);
+    return float4(b * min(lit, 1.04) * cover, cover);
 }
 
 struct HoleOut {
@@ -177,11 +177,12 @@ fragment float4 hole_fragment(HoleOut in [[stage_in]], texture2d<float> dawn [[t
     float2 vuv = (u.hole.xy + q / u.shade.y - u.vtile.xy) / u.vtile.zw;
     float4 v = dawn.sample(smooth, vuv, level(0.0)) * u.shade.x;
     // The sheet's shadow on what is behind it: light comes through the opening and lands down
-    // and right of it, so the shade is deepest under the top-left edge. Some dimming all over.
+    // and right of it, so the shade lies under the top-left edge only. No dimming elsewhere:
+    // a veil over the whole opening made the page look like it sat behind dirty glass.
     float2 qs = q - u.depth.xy;
     float blur = u.depth.z;
     float lit = smoothstep(-0.5 * blur, 0.5 * blur, u.depth.w - length(qs)) * (1.0 - flapCover(qs, u, blur));
-    float dim = u.shade.z * (1.0 - 0.88 * (1.0 - 0.5 * (1.0 - lit)));
+    float dim = u.shade.z * 0.42 * (1.0 - lit);
     return float4(v.rgb, v.a + (1.0 - v.a) * dim);
 }
 """

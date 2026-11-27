@@ -122,7 +122,8 @@ public final class SystemAccessMonitor {
     public func refresh() {
         reading?.cancel()
         let overrides = overrides
-        let cellular = cellularData
+        // Core Telephony's answer is a cached value: read here, so only a plain value crosses over.
+        let cellular = cellularData?.restrictedState
         reading = Task { [weak self] in
             let read = await Self.read(cellular: cellular)
             guard let self, !Task.isCancelled else { return }
@@ -134,7 +135,7 @@ public final class SystemAccessMonitor {
     }
 
     @concurrent
-    nonisolated private static func read(cellular: CTCellularData?) async -> [SystemFeature: SystemAccess] {
+    nonisolated private static func read(cellular: CTCellularDataRestrictedState?) async -> [SystemFeature: SystemAccess] {
         var result: [SystemFeature: SystemAccess] = [:]
         result[.camera] = map(AVCaptureDevice.authorizationStatus(for: .video))
         result[.microphone] = map(AVCaptureDevice.authorizationStatus(for: .audio))
@@ -145,7 +146,7 @@ public final class SystemAccessMonitor {
             result[.location] = map(CLLocationManager().authorizationStatus)
         }
         result[.photos] = WebViewPool.photosAccess()
-        switch cellular?.restrictedState {
+        switch cellular {
         case .restricted?: result[.cellular] = .denied
         case .notRestricted?: result[.cellular] = .allowed
         default: result[.cellular] = .notDetermined

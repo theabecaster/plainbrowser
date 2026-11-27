@@ -19,13 +19,13 @@ extension BrowserViewController {
             // Save Image is the user's own action: it is always answered, here with why.
             guard let notice = SystemAccessRules.photosNotice(monitor.access(.photos)) else { return }
             Haptic.nothingThere.play()
-            show(notice)
+            showNotice(notice)
             return
         }
         let access = { monitor.access($0) }
         guard let notice = SystemAccessRules.notice(for: features, access: access),
               engineUI.accessNotices.shouldShow(features, site: site, access: access) else { return }
-        show(notice)
+        showNotice(notice)
     }
 
     public func pool(_ pool: WebViewPool, systemAccessDidChange features: Set<SystemFeature>) {
@@ -43,7 +43,7 @@ extension BrowserViewController {
     // MARK: Showing
 
     /// The line as a toast over the chrome, with Settings when Plain's page there can help.
-    func show(_ notice: SystemAccessNotice) {
+    func showNotice(_ notice: SystemAccessNotice) {
         Signposts.signposter.emitEvent(Signposts.systemAccessNotice, "\(notice.message, privacy: .public)")
         showToastWhenFree { [weak self] in
             guard let self else { return }

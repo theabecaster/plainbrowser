@@ -27,7 +27,12 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     private var startOffset: CGFloat = 0
     private var recognizers: [UIPanGestureRecognizer] = []
 
-    private enum Mode { case none, tabs, gallery }
+    private enum Mode { case none, tabs, gallery, bump }
+    /// A gesture with nothing to do: the page follows the finger a little on this axis, rubber-
+    /// banded, and springs back with the "nothing there" haptic (state rules, principle 4).
+    private var bumpVertical = false
+    /// The rules when the finger came down: one read of the tab list per gesture, not per frame.
+    private var gestureRules: ControlRules?
 
     /// One swipe from a tab toward a neighbour, kept while the page settles so a finger can grab it.
     private final class Swipe {
@@ -74,7 +79,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         let velocity = pan.velocity(in: view)
         if abs(velocity.x) > abs(velocity.y) {
             // Tab switching belongs to the pill; the glass bar takes the swipe up only.
-            return view === browser.pill && (browser.currentTab != nil || swipe != nil)
+            return view === browser.pill
         }
         // Up only, and not while a sideways swipe is settling.
         return velocity.y < 0 && swipe == nil
@@ -86,25 +91,38 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         let velocity = pan.velocity(in: view)
         switch pan.state {
         case .began:
+            // One condition per gesture, from the state rules: the swipe up opens the gallery only
+            // with another tab to switch to, a sideways swipe moves only with a tab on screen.
+            let rules = browser.currentRules()
+            gestureRules = rules
             if abs(velocity.x) > abs(velocity.y) || swipe != nil {
-                beginTabSwipe()
-            } else {
+                if rules.barSwipeSwitchesTabs || swipe != nil {
+                    beginTabSwipe()
+                } else {
+                    beginBump(vertical: false)
+                }
+            } else if rules.swipeUpOpensGallery {
                 mode = .gallery
                 galleryTransition = browser.presentGallery(source: "swipe", interactive: true)
+            } else {
+                beginBump(vertical: true)
             }
         case .changed:
             switch mode {
             case .tabs: track(startOffset + translation.x)
             case .gallery: trackGallery(translation)
+            case .bump: trackBump(translation)
             case .none: break
             }
         case .ended, .cancelled, .failed:
             switch mode {
             case .tabs: release(velocity: pan.state == .ended ? velocity.x : 0)
             case .gallery: releaseGallery(velocity: pan.state == .ended ? velocity : .zero)
+            case .bump: releaseBump()
             case .none: break
             }
             mode = .none
+            gestureRules = nil
         default:
             break
         }
@@ -124,6 +142,33 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         galleryTransition = nil
         let opens = transition.release(velocity: velocity) == .gallery
         browser.setChromeHiddenForGallery(opens, animated: true)
+    }
+
+    // MARK: Nothing there: the bump
+
+    private func beginBump(vertical: Bool) {
+        mode = .bump
+        bumpVertical = vertical
+        Haptic.nothingThere.prepare()
+    }
+
+    /// The page lifts (or slides) a few points with heavy resistance, never far.
+    private func trackBump(_ translation: CGPoint) {
+        guard let browser else { return }
+        let travel = bumpVertical ? min(translation.y, 0) : translation.x
+        let limit: CGFloat = 24
+        let banded = limit * (1 - 1 / (abs(travel) / limit * 0.5 + 1)) * (travel < 0 ? -1 : 1)
+        browser.webContainer.transform = bumpVertical
+            ? CGAffineTransform(translationX: 0, y: banded)
+            : CGAffineTransform(translationX: banded, y: 0)
+    }
+
+    private func releaseBump() {
+        guard let browser else { return }
+        Haptic.nothingThere.play()
+        Signposts.signposter.emitEvent(Signposts.tabSwipeEnd, "bump")
+        let container = browser.webContainer
+        Motion.animate(Motion.tabSwitch) { container.transform = .identity }
     }
 
     // MARK: Sideways: tabs
@@ -216,7 +261,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
                 swipe.preview.addSubview(picture(for: id, size: swipe.preview.bounds.size))
             }
             browser.pill.beginHostSlide(to: tab.url)
-        } else if side > 0 {
+        } else if side > 0, (gestureRules ?? browser.currentRules()).offersNewTabCard {
+            // Past the last tab, from a page only: past an empty tab it would make a second one.
             swipe.isNewTabCard = true
             swipe.preview.addSubview(NewTabCard(frame: swipe.preview.bounds))
             browser.pill.beginHostSlide(to: nil)
@@ -314,6 +360,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)
             signposter.emitEvent(Signposts.tabSwipeEnd, "newTab")
         } else {
+            // Rubber-banded against nothing: the "nothing there" haptic, as for any no-op gesture.
+            if swipe.side != 0, swipe.neighbour == nil, !swipe.isNewTabCard { Haptic.nothingThere.play() }
             reset(swipe, browser: browser, detachingNeighbour: true)
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)
             signposter.emitEvent(Signposts.tabSwipeEnd, "stayed")

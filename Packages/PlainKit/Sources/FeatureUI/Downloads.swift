@@ -117,40 +117,18 @@ struct DownloadRow<Item: DownloadListItem>: View {
     var body: some View {
         let file = item.fileURL
         HStack(spacing: 12) {
-            Button {
-                if let file { open(file) }
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: symbol)
-                        .font(.title2)
-                        .foregroundStyle(file == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Style.accent))
-                        .frame(width: 32)
-                    VStack(alignment: .leading, spacing: 4) {
-                        // An ended download with no file (failed, cancelled) reads as inactive,
-                        // but stays legible: secondary, not the disabled dimming.
-                        Text(item.filename)
-                            .foregroundStyle(file == nil && !item.isInProgress ? .secondary : .primary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        if item.isInProgress {
-                            // Progress changes many times a second; redraw twice a second, only
-                            // while this row is running.
-                            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    ProgressView(value: fraction)
-                                        .tint(Style.accent)
-                                    status
-                                }
-                            }
-                        } else {
-                            status
-                        }
-                    }
-                    Spacer(minLength: 0)
+            // Only a finished row is a button (Quick Look): a running, failed or cancelled one has
+            // no file to open (docs/state-rules.md §6, Downloads).
+            if let file {
+                Button {
+                    open(file)
+                } label: {
+                    rowContent
                 }
-                .contentShape(.rect)
+                .tint(.primary)
+            } else {
+                rowContent
             }
-            .tint(.primary)
             if item.isInProgress {
                 Button("Cancel Download", systemImage: "xmark.circle.fill") { item.cancel() }
                     .labelStyle(.iconOnly)
@@ -170,6 +148,40 @@ struct DownloadRow<Item: DownloadListItem>: View {
                 Button("Cancel Download", systemImage: "xmark", role: .destructive) { item.cancel() }
             }
         }
+    }
+
+    /// The symbol, name and status, with progress while it runs.
+    private var rowContent: some View {
+        let file = item.fileURL
+        return HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.title2)
+                .foregroundStyle(file == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(Style.accent))
+                .frame(width: 32)
+            VStack(alignment: .leading, spacing: 4) {
+                // An ended download with no file (failed, cancelled) reads as inactive,
+                // but stays legible: secondary, not the disabled dimming.
+                Text(item.filename)
+                    .foregroundStyle(file == nil && !item.isInProgress ? .secondary : .primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if item.isInProgress {
+                    // Progress changes many times a second; redraw twice a second, only
+                    // while this row is running.
+                    TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                        VStack(alignment: .leading, spacing: 4) {
+                            ProgressView(value: fraction)
+                                .tint(Style.accent)
+                            status
+                        }
+                    }
+                } else {
+                    status
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(.rect)
     }
 
     private var status: some View {

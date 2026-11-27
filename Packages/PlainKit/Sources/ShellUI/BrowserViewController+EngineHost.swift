@@ -27,7 +27,10 @@ extension BrowserViewController: EngineHost {
 
     public func pool(_ pool: WebViewPool, tabKeepsCrashing tab: Tab) {
         engineUI.crashedTabs.insert(tab.id)
-        if tab === self.currentTab { updatePageState() }
+        if tab === self.currentTab {
+            updatePageState()
+            updateButtons()
+        }
     }
 
     public func pool(_ pool: WebViewPool, shouldResubmitFormIn tab: Tab) async -> Bool {

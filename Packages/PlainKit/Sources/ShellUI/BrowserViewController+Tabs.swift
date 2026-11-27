@@ -14,9 +14,11 @@ extension BrowserViewController {
     /// and nothing covers it.
     var acceptsBarGestures: Bool {
         !isEditingAddress && !isShowingGallery && presentedViewController == nil && !isChromeCollapsed
+            && currentRules().acceptsBarGestures
     }
 
-    /// The tabs button: the gallery. Pressed while the gallery is up, it goes back to the page.
+    /// The tabs slot (docs/state-rules.md §3): the gallery with another tab to switch to, a new tab
+    /// with one page tab. Pressed while the gallery is up, it goes back to the page.
     func tabsButtonTapped() {
         // With side tabs, the button shows and hides the sidebar; the gallery stays in the menu.
         if !isShowingGallery, toggleSidebar() { return }
@@ -28,7 +30,12 @@ extension BrowserViewController {
             }
             return
         }
-        presentGallery(source: "button")
+        switch currentRules().tabsSlot {
+        case .tabs:
+            if presentGallery(source: "button") != nil || isShowingGallery { tabsUI.tip.galleryOpenedByTap() }
+        case .newTab: openNewTab(private: currentTab?.isPrivate ?? false)
+        case .hidden: Haptic.nothingThere.play()
+        }
     }
 
     /// The tabs button's menu (a long press), built when it opens. Every bar gesture has its item
@@ -41,39 +48,56 @@ extension BrowserViewController {
         ])
     }
 
+    /// The tabs menu, item by item from `ControlRules` (docs/state-rules.md §5).
     private func tabsMenuElements() -> [UIMenuElement] {
-        let newTab = UIAction(title: "New Tab", image: UIImage(systemName: "plus")) { [weak self] _ in
-            self?.openNewTab(private: false)
+        TabsMenuTip.menuOpened()
+        let rules = currentRules()
+        var opening: [UIMenuElement] = []
+        if rules.menuNewTab {
+            let newTab = UIAction(title: "New Tab", image: UIImage(systemName: "plus")) { [weak self] _ in
+                self?.openNewTab(private: false)
+            }
+            newTab.accessibilityIdentifier = "menu.newTab"
+            opening.append(newTab)
         }
-        newTab.accessibilityIdentifier = "menu.newTab"
-        let newPrivate = UIAction(title: "New Private Tab", image: UIImage(systemName: "hand.raised")) { [weak self] _ in
-            self?.openNewTab(private: true)
+        if rules.menuNewPrivateTab {
+            let newPrivate = UIAction(title: "New Private Tab", image: UIImage(systemName: "hand.raised")) { [weak self] _ in
+                self?.openNewTab(private: true)
+            }
+            newPrivate.accessibilityIdentifier = "menu.newPrivateTab"
+            opening.append(newPrivate)
         }
-        newPrivate.accessibilityIdentifier = "menu.newPrivateTab"
         var moves: [UIMenuElement] = []
-        if let tab = currentTab {
-            let neighbours = session.tabs.neighbours(of: tab.id)
-            let next = UIAction(
-                title: "Next Tab", subtitle: "Or swipe the address bar left", image: UIImage(systemName: "chevron.forward.square"),
-                attributes: neighbours.next == nil ? .disabled : []
-            ) { [weak self] _ in self?.tabsUI.swipe.switchTab(side: 1) }
-            next.accessibilityIdentifier = "menu.nextTab"
+        if rules.menuPreviousTab.isVisible {
             let previous = UIAction(
                 title: "Previous Tab", subtitle: "Or swipe the address bar right", image: UIImage(systemName: "chevron.backward.square"),
-                attributes: neighbours.previous == nil ? .disabled : []
+                attributes: rules.menuPreviousTab.isEnabled ? [] : .disabled
             ) { [weak self] _ in self?.tabsUI.swipe.switchTab(side: -1) }
             previous.accessibilityIdentifier = "menu.previousTab"
-            moves = [previous, next]
+            moves.append(previous)
         }
-        let all = UIAction(
-            title: "Show All Tabs", subtitle: "Or swipe up from the address bar", image: UIImage(systemName: "square.grid.2x2")
-        ) { [weak self] _ in self?.presentGallery(source: "menu") }
-        all.accessibilityIdentifier = "menu.allTabs"
-        var sections: [UIMenuElement] = [
-            UIMenu(options: .displayInline, children: [newTab, newPrivate]),
-            UIMenu(options: .displayInline, children: moves + [all]),
-        ]
-        if let tab = currentTab {
+        if rules.menuNextTab.isVisible {
+            let next = UIAction(
+                title: "Next Tab", subtitle: "Or swipe the address bar left", image: UIImage(systemName: "chevron.forward.square"),
+                attributes: rules.menuNextTab.isEnabled ? [] : .disabled
+            ) { [weak self] _ in self?.tabsUI.swipe.switchTab(side: 1) }
+            next.accessibilityIdentifier = "menu.nextTab"
+            moves.append(next)
+        }
+        if rules.menuShowAllTabs {
+            let all = UIAction(
+                title: "Show All Tabs", subtitle: "Or swipe up from the address bar", image: UIImage(systemName: "square.grid.2x2")
+            ) { [weak self] _ in self?.presentGallery(source: "menu") }
+            all.accessibilityIdentifier = "menu.allTabs"
+            moves.append(all)
+        }
+        var later: [UIMenuElement] = []
+        if rules.menuReopenClosedTab { later.append(reopenClosedTabAction()) }
+        if rules.menuArchivedTabs { later.append(archivedTabsAction()) }
+        var sections = [opening, moves, later].filter { !$0.isEmpty }.map {
+            UIMenu(options: .displayInline, children: $0) as UIMenuElement
+        }
+        if rules.menuCloseTab, let tab = currentTab {
             let close = UIAction(title: "Close Tab", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
                 self?.closeTab(tab, offerReopen: true)
             }
@@ -83,9 +107,55 @@ extension BrowserViewController {
         return sections
     }
 
-    /// New Tab and New Private Tab: an empty tab, straight to the search field.
+    /// The tabs menu's other items for More's top section, in every state where they apply
+    /// (docs/state-rules.md §4): one visible tap away, not only behind the long press.
+    func tabItemsForMore(_ rules: ControlRules) -> [UIMenuElement] {
+        let opensPrivate = rules.moreNewTabOpensPrivate
+        let newTab = UIAction(
+            title: opensPrivate ? "New Private Tab" : "New Tab", image: UIImage(systemName: opensPrivate ? "hand.raised" : "plus")
+        ) { [weak self] _ in
+            self?.openNewTab(private: opensPrivate)
+        }
+        newTab.accessibilityIdentifier = opensPrivate ? "more.newPrivateTab" : "more.newTab"
+        var items: [UIMenuElement] = [newTab]
+        if rules.moreReopenClosedTab { items.append(reopenClosedTabAction(identifier: "more.reopenClosedTab")) }
+        if rules.moreArchivedTabs { items.append(archivedTabsAction(identifier: "more.archivedTabs")) }
+        return items
+    }
+
+    private func reopenClosedTabAction(identifier: String = "menu.reopenClosedTab") -> UIAction {
+        let action = UIAction(title: "Reopen Closed Tab", image: UIImage(systemName: "arrow.uturn.backward")) { [weak self] _ in
+            self?.reopenLastClosed(source: "menu")
+        }
+        action.accessibilityIdentifier = identifier
+        return action
+    }
+
+    private func archivedTabsAction(identifier: String = "menu.archivedTabs") -> UIAction {
+        let action = UIAction(title: "Archived Tabs", image: UIImage(systemName: "archivebox")) { [weak self] _ in
+            self?.showArchive()
+        }
+        action.accessibilityIdentifier = identifier
+        if !sheets.isReady { action.attributes = .disabled }
+        return action
+    }
+
+    /// Reopen Closed Tab from a menu or the start screen: the last closed batch, on screen.
+    func reopenLastClosed(source: StaticString) {
+        let ids = session.tabs.reopenLastClosed()
+        guard !ids.isEmpty, let tab = session.tabs.selected else { return Haptic.nothingThere.play() }
+        endAddressEditing()
+        show(tab)
+    }
+
+    /// New Tab and New Private Tab: an empty tab, straight to the search field. An empty tab of the
+    /// same kind already on screen is reused, so empty tabs never pile up (state rules, principle 7).
     func openNewTab(private isPrivate: Bool) {
         if isShowingGallery { dismissGalleryFading() }
+        if let current = currentTab, current.isPrivate == isPrivate, session.tabs.isEmpty(current.id) {
+            beginAddressEditing()
+            return
+        }
         let tab = session.tabs.newTab(isPrivate: isPrivate)
         show(tab)
         beginAddressEditing()
@@ -168,9 +238,11 @@ extension BrowserViewController {
         }
     }
 
-    /// The Archive screen, from the gallery's menu. Restoring a tab closes it and opens the tab
-    /// from the gallery; a swipe deletes one for good.
+    /// The Archive screen, from the gallery's menu, the tabs menu, More or the start screen.
+    /// Restoring a tab closes it and opens the tab (from the gallery when it is up); a swipe
+    /// deletes one for good.
     func showArchive() {
+        if isEditingAddress { endAddressEditing() }
         let footer = (data.archiveAfter ?? FixedChoices.defaultArchiveAfter).footer
         let archive = sheets.archive(
             footer: footer,
@@ -196,13 +268,18 @@ extension BrowserViewController {
 
     // MARK: Toast
 
-    /// Offers Reopen Tab after a tab closes outside the gallery (the gallery has its own toast).
-    func offerReopen() {
-        tabsUI.toast.show("Tab closed", button: "Reopen") { [weak self] in
+    /// Offers Reopen after a close outside the gallery, or one that left it (the gallery has its
+    /// own toast). Reopen brings back exactly `batch`, the close it was made for, and follows the
+    /// user: it shows over the page or the search field.
+    func offerReopen(_ batch: UUID, message: String = String(localized: "Tab closed")) {
+        tabsUI.toast.show(message, button: "Reopen") { [weak self] in
             guard let self else { return }
             Signposts.signposter.emitEvent(Signposts.tabReopen, "toast")
-            session.tabs.reopenLastClosed()
-            if let tab = session.tabs.selected { show(tab) }
+            guard !session.tabs.reopenClosed(batch).isEmpty, let tab = session.tabs.selected else {
+                return Haptic.nothingThere.play()
+            }
+            endAddressEditing()
+            show(tab)
         }
     }
 }

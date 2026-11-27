@@ -261,7 +261,8 @@ final class CaptureTests: XCTestCase {
         app.buttons["galleryPrivate"].tap()
         pause(1.2)
         shot("t4-private-empty")
-        app.buttons["galleryNewTab"].tap()
+        // An empty list has one New Tab: the empty state's button (state rules, principle 8).
+        app.buttons["emptyNewTab"].tap()
         pause(1)
         field.typeText("en.wikipedia.org/wiki/Private_browsing\n")
         pause(4)
@@ -306,6 +307,99 @@ final class CaptureTests: XCTestCase {
         shot("t10-downloads")
         app.navigationBars.buttons["Done"].tap()
         pause(1)
+    }
+
+    /// The bar in each main state of docs/state-rules.md: first run, the start screen, one page,
+    /// several tabs, loading and private; plus the More and tabs menus.
+    func testCaptureStateRules() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication()
+        // An archive from the start, so the start screen and More show Archived Tabs.
+        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedArchive"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        pause(1)
+        shot("s1-first-run")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        pause(1)
+        shot("s2-start")
+        app.buttons["more"].tap()
+        pause(1)
+        shot("s2b-start-more")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        pause(0.8)
+
+        app.buttons["addressPill"].tap()
+        field.typeText(server.address("/a") + "\n")
+        pause(2)
+        shot("s3-one-page")
+        // The start screen while typing: before (empty field) and after (a query with rows).
+        app.buttons["tabs"].tap()
+        pause(1.2)
+        shot("s7a-start-typing-before")
+        field.typeText("Plain Test")
+        pause(1.5)
+        shot("s7b-start-typing-after")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        pause(1)
+        // Back to the page: the empty tab goes away when left.
+        app.buttons["addressPill"].swipeRight(velocity: .fast)
+        pause(1.5)
+        app.buttons["tabs"].press(forDuration: 1)
+        pause(1)
+        shot("s3b-one-page-tabs-menu")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        field.typeText(server.address("/b") + "\n")
+        pause(2)
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        field.typeText(server.address("/c") + "\n")
+        pause(2)
+        shot("s4-several-tabs")
+        app.buttons["more"].tap()
+        pause(1)
+        shot("s4b-several-tabs-more")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        pause(0.8)
+
+        app.buttons["addressPill"].tap()
+        field.typeText(server.address("/slow") + "\n")
+        pause(1.5)
+        shot("s5-loading")
+        pause(8)
+
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Private Tab'")).firstMatch.tap()
+        field.typeText(server.address("/b") + "\n")
+        pause(2)
+        shot("s6-private")
+
+        // Something closed: the start screen offers it back, with the archive.
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        pause(0.8)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        pause(0.8)
+        app.buttons["addressPill"].swipeRight(velocity: .fast)
+        pause(1.5)
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Close Tab'")).firstMatch.tap()
+        pause(1)
+        app.buttons["more"].tap()
+        pause(1)
+        shot("s8a-more-with-closed")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        pause(0.8)
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        pause(0.8)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        pause(1.2)
+        shot("s8b-start-with-closed")
     }
 
     private func pause(_ seconds: TimeInterval) {

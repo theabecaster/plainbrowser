@@ -22,6 +22,30 @@ public final class EmptyTabView: UIView {
     /// The main button was tapped.
     public var onAction: (() -> Void)?
 
+    /// The search field is open (Editing mode): the main button and the shortcuts step aside, as
+    /// they do for the keyboard, even when a hardware keyboard keeps the software one down.
+    public var isSearchFieldActive = false {
+        didSet {
+            guard isSearchFieldActive != oldValue else { return }
+            applyButton()
+        }
+    }
+
+    /// A small shortcut under the main button: a private tab, Reopen Closed Tab, Archived Tabs.
+    public struct Shortcut {
+        public let id: String
+        public let title: String
+        public let symbol: String
+        public let action: () -> Void
+
+        public init(id: String, title: String, symbol: String, action: @escaping () -> Void) {
+            self.id = id
+            self.title = title
+            self.symbol = symbol
+            self.action = action
+        }
+    }
+
     /// Room kept free above the keyboard (or the bottom edge) for the controls that sit there: the
     /// search field and the favorites strip.
     public var bottomReserve: CGFloat = 0 {
@@ -31,6 +55,8 @@ public final class EmptyTabView: UIView {
     public let mark = MarkView()
     private let label = UILabel()
     private let button = UIButton(type: .system)
+    /// The shortcuts, side by side; like the main button, only while the keyboard is down.
+    private let shortcutRow = UIStackView()
     private let stack = UIStackView()
     private let region = UILayoutGuide()
     private var reserve: NSLayoutConstraint!
@@ -54,6 +80,10 @@ public final class EmptyTabView: UIView {
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: EmptyTabView, _) in view.applyGlow() }
         mark.isSpinnable = true
         mark.translatesAutoresizingMaskIntoConstraints = false
+        mark.isAccessibilityElement = true
+        mark.accessibilityTraits = .image
+        mark.accessibilityLabel = "Plain"
+        mark.accessibilityIdentifier = "startMark"
 
         label.text = String(localized: "Start with a search or an address.")
         label.font = UIFont.preferredFont(forTextStyle: .body)
@@ -74,7 +104,11 @@ public final class EmptyTabView: UIView {
         stack.alignment = .center
         stack.spacing = Spacing.l
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for view in [mark, label, button] { stack.addArrangedSubview(view) }
+        shortcutRow.axis = .horizontal
+        shortcutRow.alignment = .top
+        shortcutRow.spacing = Spacing.s
+        shortcutRow.accessibilityIdentifier = "startShortcuts"
+        for view in [mark, label, button, shortcutRow] { stack.addArrangedSubview(view) }
         stack.setCustomSpacing(Spacing.xl, after: mark)
         addSubview(stack)
         addLayoutGuide(region)
@@ -104,13 +138,71 @@ public final class EmptyTabView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Replaces the shortcuts under the main button: only the ones that apply (the shell decides,
+    /// from docs/state-rules.md). Each is a symbol over a short caption, quiet next to the main
+    /// button, at least a full tap target.
+    public func setShortcuts(_ shortcuts: [Shortcut]) {
+        shortcutRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for shortcut in shortcuts {
+            var configuration = UIButton.Configuration.plain()
+            configuration.image = UIImage(systemName: shortcut.symbol)
+            configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
+            configuration.imagePlacement = .top
+            configuration.imagePadding = Spacing.xs
+            configuration.title = shortcut.title
+            configuration.titleAlignment = .center
+            configuration.baseForegroundColor = Palette.textSecondary
+            configuration.imageColorTransformer = UIConfigurationColorTransformer { _ in Palette.accent }
+            configuration.contentInsets = .init(top: Spacing.s, leading: Spacing.s, bottom: Spacing.s, trailing: Spacing.s)
+            configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                var attributes = attributes
+                attributes.font = UIFont.preferredFont(forTextStyle: .footnote)
+                return attributes
+            }
+            let item = UIButton(configuration: configuration)
+            item.accessibilityIdentifier = shortcut.id
+            item.titleLabel?.numberOfLines = 2
+            item.addAction(UIAction { _ in shortcut.action() }, for: .primaryActionTriggered)
+            item.widthAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget).isActive = true
+            item.widthAnchor.constraint(lessThanOrEqualToConstant: 108).isActive = true
+            item.heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget).isActive = true
+            shortcutRow.addArrangedSubview(item)
+        }
+        shortcutRow.isHidden = shortcuts.isEmpty
+    }
+
+    /// Steps the mark, the sentence and the shortcuts back while suggestions take the space (they
+    /// fade, shrink a little and drift up with the shell's snappy spring), or brings them back.
+    /// Reduce Motion: a plain crossfade. Receded, they take no touches.
+    public func setReceded(_ receded: Bool, animated: Bool) {
+        guard receded != isReceded else { return }
+        isReceded = receded
+        stack.isUserInteractionEnabled = !receded
+        stack.accessibilityElementsHidden = receded
+        let changes = {
+            self.stack.alpha = receded ? 0 : 1
+            self.stack.transform = receded && !Motion.prefersCrossfade
+                ? CGAffineTransform(translationX: 0, y: -Spacing.l).scaledBy(x: 0.94, y: 0.94)
+                : .identity
+        }
+        guard animated, window != nil else {
+            UIView.performWithoutAnimation(changes)
+            return
+        }
+        Motion.animate(Motion.reflow, crossfading: self, changes: changes)
+    }
+
+    /// The mark and its company stepped back for typed suggestions.
+    public private(set) var isReceded = false
+
     /// A card that sits under the sentence, above the search field (a "Set as Default Browser"
     /// offer, say). One at most; nil removes it.
     public func setAccessory(_ view: UIView?) {
         accessory?.removeFromSuperview()
         accessory = view
         guard let view else { return }
-        stack.insertArrangedSubview(view, at: stack.arrangedSubviews.count - 1)
+        // Above the main button (the shortcuts stay last, under it).
+        stack.insertArrangedSubview(view, at: stack.arrangedSubviews.firstIndex(of: button) ?? stack.arrangedSubviews.count)
         stack.setCustomSpacing(Spacing.xl, after: label)
     }
 
@@ -140,9 +232,16 @@ public final class EmptyTabView: UIView {
 
     private func applyButton() {
         button.configuration?.title = buttonTitle
-        let hidden = buttonTitle == nil || keyboardUp
-        guard button.alpha != (hidden ? 0 : 1) else { return }
-        Motion.animate(Motion.quick) { self.button.alpha = hidden ? 0 : 1 }
+        let aside = keyboardUp || isSearchFieldActive
+        let hidden = buttonTitle == nil || aside
+        // The shortcuts follow the field too: while it is open, the search sheet takes the touches.
+        shortcutRow.isUserInteractionEnabled = !aside
+        shortcutRow.accessibilityElementsHidden = aside
+        guard button.alpha != (hidden ? 0 : 1) || shortcutRow.alpha != (aside ? 0 : 1) else { return }
+        Motion.animate(Motion.quick) {
+            self.button.alpha = hidden ? 0 : 1
+            self.shortcutRow.alpha = aside ? 0 : 1
+        }
         button.isUserInteractionEnabled = !hidden
     }
 }

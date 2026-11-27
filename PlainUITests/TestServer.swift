@@ -76,9 +76,13 @@ final class TestServer: @unchecked Sendable {
             \r
 
             """
-            connection.send(content: Data((header + body).utf8), completion: .contentProcessed { _ in
-                connection.cancel()
-            })
+            // `/slow` answers after a few seconds: a page that stays loading (Stop, the progress bar).
+            let delay: Double = path.hasPrefix("/slow") ? 8 : 0
+            self.queue.asyncAfter(deadline: .now() + delay) {
+                connection.send(content: Data((header + body).utf8), completion: .contentProcessed { _ in
+                    connection.cancel()
+                })
+            }
         }
     }
 
@@ -135,6 +139,8 @@ final class TestServer: @unchecked Sendable {
                 + paragraphs.joined() + "<p>Next, <a href=\"/b\">read page B</a>.</p></article>"
                 + "<footer><p>Footer links and other chrome.</p></footer>"
             return ("200 OK", html("The Quiet Page", body))
+        case "/slow":
+            return ("200 OK", html("Plain Slow", "<h1>Slow Page</h1>"))
         case "/motion":
             return ("200 OK", html("Plain Motion", """
                 <h1 id="state">Motion</h1>

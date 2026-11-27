@@ -210,6 +210,19 @@ public final class TabStore {
         saveSession()
     }
 
+    /// Removes a tab without a trace: no recently closed batch, nothing to reopen. For an empty tab
+    /// the user left (docs/state-rules.md, principle 7: empty tabs are never left behind). A pane
+    /// that showed it is filled as for `close`, or left on the start page with `refillingPane: false`
+    /// (the gallery opened over the empty tab: nothing else is on screen yet).
+    public func discard(_ id: TabID, refillingPane: Bool = true) {
+        guard let windowID = windowOfTab[id], let index = windowIndex(windowID), let entry = tabs[id] else { return }
+        let shownIn = windows[index].panes.indices.filter { windows[index].panes[$0] == id }
+        remove(id, windowIndex: index)
+        if !refillingPane { for pane in shownIn { windows[index].panes[pane] = nil } }
+        clearOpeners(of: [id])
+        if !entry.isPrivate { saveSession() }
+    }
+
     /// Close All Tabs: every regular tab of the window except pinned ones (or every private tab),
     /// as one batch that Reopen Closed Tab brings back. Panes that showed them show the start page.
     public func closeAllTabs(in window: WindowID, private isPrivate: Bool = false) {
@@ -326,7 +339,16 @@ public final class TabStore {
     /// Returns the reopened ids in order.
     @discardableResult
     public func reopenLastClosed() -> [TabID] {
-        guard let batch = recentlyClosed.popLast() else { return [] }
+        guard let batch = recentlyClosed.last else { return [] }
+        return reopenClosed(batch.id)
+    }
+
+    /// Reopens one closed batch, as `reopenLastClosed` does, wherever it is in the stack: a Reopen
+    /// offer brings back exactly the close it was made for. Nothing when that batch is gone.
+    @discardableResult
+    public func reopenClosed(_ batchID: UUID) -> [TabID] {
+        guard let position = recentlyClosed.lastIndex(where: { $0.id == batchID }) else { return [] }
+        let batch = recentlyClosed.remove(at: position)
         let date = now()
         var reopened: [TabID] = []
         var toShow: [ClosedTab] = []

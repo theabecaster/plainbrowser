@@ -27,6 +27,15 @@ final class TabsUIState {
     var isArchiving = false
     /// What an empty tab shows: the mark above the search field (TabGalleryUI's `EmptyTabView`).
     let start = EmptyTabView()
+    /// The start screen's shortcuts as last applied, so they are rebuilt only when they change.
+    var startShortcuts: [StartShortcut]?
+    /// A toast that waits while the gallery or a sheet is up (it could not act from there); the
+    /// newest one shows when they close.
+    var pendingToast: (() -> Void)?
+    /// The one-time hint for the tabs slot's long press.
+    let tip = TabsTipPresenter()
+    /// The edge swipe back that closes a link-opened tab on its first page.
+    let openerSwipe = OpenerEdgeSwipe()
 }
 
 // MARK: - The tab gallery
@@ -41,14 +50,24 @@ extension BrowserViewController: GalleryHost {
     @discardableResult
     func presentGallery(source: StaticString, interactive: Bool = false) -> TabGalleryTransition? {
         guard !isShowingGallery, presentedViewController == nil else { return nil }
-        let tabs = galleryTabs()
-        tabs.setShowingPrivateTabs(currentTab?.isPrivate ?? false)
-        // No tabs at all: there is nothing to switch to, so the search field (like Arc, never an
-        // empty switcher; docs/ui-reference.md).
-        guard !tabs.tabs.isEmpty || tabs.isShowingPrivateTabs else {
-            if !isEditingAddress { beginAddressEditing() }
-            return nil
+        // Reachable only with another tab to switch to (state rules §3): the tap, the swipe up and
+        // Show All Tabs share this one condition, and the gallery never opens empty.
+        guard currentRules().swipeUpOpensGallery,
+              let showsPrivate = GalleryRules.listToOpen(
+                  screenTabIsPrivate: currentTab?.isPrivate,
+                  regularCount: session.tabs.pageEntries(private: false).count,
+                  privateCount: session.tabs.pageEntries(private: true).count
+              )
+        else { return nil }
+        // Leaving an empty tab for the gallery drops it (principle 7): the start screen waits under
+        // the cards, with nothing selected.
+        if let tab = currentTab, session.tabs.isEmpty(tab.id) {
+            clearPage()
+            engineUI.typedVisitTabs.remove(tab.id)
+            session.tabs.discard(tab.id, refillingPane: false)
         }
+        let tabs = galleryTabs()
+        tabs.setShowingPrivateTabs(showsPrivate)
         Signposts.signposter.emitEvent(Signposts.galleryOpen, "\(source)")
         if isEditingAddress { endAddressEditing() }
         tabsUI.toast.hide(animated: false)
@@ -65,10 +84,11 @@ extension BrowserViewController: GalleryHost {
         tabsUI.gallery = gallery
         // The gallery has its own bar: the system's vertical bar (Duo) empties rather than hides,
         // so its column keeps its width and nothing under the gallery lays out again.
-        setToolbarItems([], animated: true)
+        applyToolbarItems()
         updateButtons()
 
-        guard let tab = currentTab, tab.isPrivate == tabs.isShowingPrivateTabs,
+        // The page zooms into its card; an empty tab has no card, so the gallery fades in.
+        guard let tab = currentTab, tab.isPrivate == tabs.isShowingPrivateTabs, !session.tabs.isEmpty(tab.id),
               let snapshot = webContainer.snapshotView(afterScreenUpdates: false)
         else {
             gallery.view.alpha = 0
@@ -148,10 +168,12 @@ extension BrowserViewController: GalleryHost {
         gallery.view.removeFromSuperview()
         gallery.removeFromParent()
         tabsUI.gallery = nil
-        setToolbarItems(PageButton.allCases.compactMap { barItems[$0] }, animated: true)
+        applyToolbarItems()
         setChromeHiddenForGallery(false, animated: false)
         updateButtons()
         updatePageState()
+        showPendingToast()
+        tabsUI.tip.showIfPossible(in: self)
     }
 
     /// Ends a running transition where it was heading, without running its end (the caller
@@ -228,41 +250,95 @@ extension BrowserViewController: GalleryHost {
     }
 
     func galleryNewTab(private isPrivate: Bool) -> TabID {
-        let tab = session.tabs.newTab(isPrivate: isPrivate)
-        show(tab)
+        // An empty tab of the same kind on screen is the new tab (state rules, principle 7).
+        let tab: Tab
+        if let current = currentTab, current.isPrivate == isPrivate, session.tabs.isEmpty(current.id) {
+            tab = current
+        } else {
+            tab = session.tabs.newTab(isPrivate: isPrivate)
+            show(tab)
+        }
         // Straight to the search field: it rises over the fading gallery.
         dismissGalleryFading()
         beginAddressEditing()
         return tab.id
     }
 
-    func galleryReopenClosedTab() -> TabID? {
-        let ids = session.tabs.reopenLastClosed()
+    /// Reopen Closed Tab from the gallery's menu (`batch` nil: the last close) or its toast (the
+    /// close it was offered for). Reopened tabs are regular: the gallery shows that list.
+    func galleryReopen(batch: UUID?) -> TabID? {
+        let ids = batch.map { session.tabs.reopenClosed($0) } ?? session.tabs.reopenLastClosed()
+        guard !ids.isEmpty else {
+            Haptic.nothingThere.play()
+            return nil
+        }
+        tabsUI.galleryTabs?.setShowingPrivateTabs(false)
         if let selected = session.tabs.selected { show(selected) }
         return ids.first
     }
 
-    var galleryCanShowArchive: Bool { sheets.isReady }
+    var galleryLastClosedBatch: UUID? { session.tabs.lastClosedBatchID }
+
+    var galleryCanShowArchive: Bool { sheets.isReady && session.tabs.hasArchivedTabs }
+
+    /// The empty space was tapped with no card of the tab on screen in the list (an empty tab, or
+    /// the other list): back to that tab as it is.
+    func galleryReturnToPage() {
+        dismissGalleryFading()
+    }
 
     func galleryShowArchive() {
         showArchive()
     }
 
-    /// The gallery's list is empty after a close. Private tabs all gone with regular ones left:
-    /// back to the regular list. Otherwise straight to the search field (docs/ui-reference.md:
-    /// no empty screen after the last tab).
+    /// The gallery's list is empty after a close (state rules §6), first match: the tab on screen
+    /// still exists → it opens; the other list has tabs → the gallery switches to it; else the
+    /// search field. Never an empty gallery. A regular close's Reopen follows wherever this lands.
     private func galleryLastTabClosed() {
-        if let tabs = tabsUI.galleryTabs, tabs.isShowingPrivateTabs, !session.tabs.entries(private: false).isEmpty {
-            tabs.setShowingPrivateTabs(false)
-            tabsUI.gallery?.reloadTabs(animated: false)
-            return
-        }
-        dismissGalleryFading()
-        if let selected = session.tabs.selected {
-            show(selected)
-        } else {
+        guard let tabs = tabsUI.galleryTabs, let gallery = tabsUI.gallery else { return }
+        let wasPrivate = tabs.isShowingPrivateTabs
+        let batch = wasPrivate ? nil : session.tabs.lastClosedBatchID
+        let screenTabOpen = currentTab.map { session.tabs.entry($0.id) != nil } ?? false
+        let otherCount = session.tabs.pageEntries(private: !wasPrivate).count
+        switch GalleryRules.afterLastCard(screenTabStillOpen: screenTabOpen, otherListCount: otherCount) {
+        case .openScreenTab:
+            if let current = currentTab, !session.tabs.isEmpty(current.id) {
+                tabs.setShowingPrivateTabs(current.isPrivate)
+                gallery.reloadTabs(animated: false)
+                galleryOpenTab(current.id)
+            } else {
+                dismissGalleryFading()
+            }
+            if let batch { offerReopen(batch) }
+        case .switchList:
+            tabs.setShowingPrivateTabs(!wasPrivate)
+            gallery.reloadTabs(animated: false)
+            if let batch {
+                tabs.offerReopen(batch)
+                gallery.showReopenToast()
+            }
+        case .search:
+            dismissGalleryFading()
             beginAddressEditing()
+            if let batch { offerReopen(batch) }
         }
+    }
+
+    // MARK: Toasts that wait
+
+    /// Shows a toast now, or when the gallery or a sheet closes (a toast over them could not act).
+    func showToastWhenFree(_ show: @escaping () -> Void) {
+        if isShowingGallery || presentedViewController != nil {
+            tabsUI.pendingToast = show
+        } else {
+            show()
+        }
+    }
+
+    func showPendingToast() {
+        guard !isShowingGallery, presentedViewController == nil, let show = tabsUI.pendingToast else { return }
+        tabsUI.pendingToast = nil
+        show()
     }
 
     // MARK: The start screen
@@ -283,24 +359,77 @@ extension BrowserViewController: GalleryHost {
             start.onAction = { [weak self] in self?.beginAddressEditing() }
             webContainer.addSubview(start)
         }
-        let showsStart = currentTab.map { $0.url == nil && !$0.isLoading } ?? true
+        let showsStart = currentTab.map { session.tabs.isEmpty($0.id) } ?? true
         start.isHidden = !showsStart
+        // Back on an idle start screen with the field closed (a load stopped before it
+        // committed): the mark and its company return.
+        if showsStart, !isEditingAddress, start.isReceded { start.setReceded(false, animated: true) }
+        if showsStart { applyStartShortcuts() }
         // Over a blank tab's web view, under the page-state message.
         if showsStart {
             webContainer.bringSubviewToFront(start)
             webContainer.bringSubviewToFront(engineUI.pageState)
         }
-        sheet.backgroundColor = showsStart ? .clear : Palette.background
+        sheet.backgroundColor = showsStart && !start.isReceded ? .clear : Palette.background
+    }
+
+    /// The start screen while typing (state rules §3): with a query, the mark and its shortcuts
+    /// recede and the sheet takes the paper behind the suggestions; cleared, they come back.
+    func updateStartForTyping(query: String) {
+        var state = rules.state
+        state.isEditing = isEditingAddress
+        state.hasQuery = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let recedes = ControlRules(state).startScreenRecedes
+        let start = tabsUI.start
+        guard recedes != start.isReceded else { return }
+        // The field closed because a page is on its way: the start screen leaves with it rather
+        // than bringing the mark back for a moment. The next empty field brings it back.
+        if !recedes, !isEditingAddress, let tab = currentTab,
+           !session.tabs.isEmpty(tab.id) || engineUI.typedVisitTabs.contains(tab.id) { return }
+        start.setReceded(recedes, animated: true)
+        guard !start.isHidden else { return }
+        let paper: UIColor = recedes ? Palette.background : .clear
+        Motion.animate(Motion.reflow, crossfading: sheet) { self.sheet.backgroundColor = paper }
+    }
+
+    /// The start screen's shortcuts under the mark (state rules §3): a private tab always, Reopen
+    /// Closed Tab and Archived Tabs when they lead somewhere.
+    func applyStartShortcuts() {
+        let shortcuts = rules.startShortcuts
+        guard shortcuts != tabsUI.startShortcuts else { return }
+        tabsUI.startShortcuts = shortcuts
+        tabsUI.start.setShortcuts(shortcuts.map { shortcut in
+            switch shortcut {
+            case .privateTab:
+                EmptyTabView.Shortcut(id: "start.privateTab", title: String(localized: "Private Tab"), symbol: "hand.raised") {
+                    [weak self] in self?.openNewTab(private: true)
+                }
+            case .regularTab:
+                EmptyTabView.Shortcut(id: "start.newTab", title: String(localized: "New Tab"), symbol: "plus") {
+                    [weak self] in self?.openNewTab(private: false)
+                }
+            case .reopenClosedTab:
+                EmptyTabView.Shortcut(id: "start.reopenClosedTab", title: String(localized: "Reopen Closed Tab"), symbol: "arrow.uturn.backward") {
+                    [weak self] in self?.reopenLastClosed(source: "start")
+                }
+            case .archivedTabs:
+                EmptyTabView.Shortcut(id: "start.archivedTabs", title: String(localized: "Archived Tabs"), symbol: "archivebox") {
+                    [weak self] in self?.showArchive()
+                }
+            }
+        })
     }
 
     /// The tabs changed outside the gallery (a title, a thumbnail, the archive): it shows them.
     func tabsDidChange() {
+        // The rules first: the sidebar's New Tab reads them.
+        updateButtons()
         tabsUI.gallery?.reloadTabs(animated: false)
         duo.sidebar?.reloadTabs()
         duo.strip?.reloadTabs()
         // A tab closed or archived elsewhere may have left the other pane.
         syncPanes()
-        updateButtons()
+        updateStartScreen()
     }
 
     var galleryCanOpenInOtherPane: Bool { canSplit }

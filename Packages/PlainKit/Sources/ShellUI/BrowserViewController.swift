@@ -63,6 +63,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let tabsUI = TabsUIState()
     /// The page menu's last Add to / Remove from Favorites answer, for rebuilding the open menu.
     var lastFavoriteAnswer: Bool?
+    /// docs/state-rules.md for the state last applied (`updateButtons`), for hot paths such as
+    /// pull to refresh that must not walk the tab list on every scroll callback.
+    var rules = ControlRules(ChromeState())
 
     // Layout.
     private var pillOnBar: NSLayoutConstraint!
@@ -165,6 +168,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
         tabsUI.swipe.browser = self
         tabsUI.swipe.install(on: [pill, buttonBar])
+        tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
         session.pool.onMemoryWarning = { [weak self] in
             self?.tabsUI.previews = [:]
@@ -291,7 +295,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 button.addAction(action, for: .primaryActionTriggered)
                 button.menu = tabsMenu()
                 button.showsMenuAsPrimaryAction = false
+                // The same top-to-bottom order wherever the menu opens: Close Tab last, on its own.
+                button.preferredMenuElementOrder = .fixed
                 item = UIBarButtonItem(primaryAction: action, menu: tabsMenu())
+                item.preferredMenuElementOrder = .fixed
             case .share:
                 button.addAction(UIAction { [weak self, weak button] _ in
                     guard let button else { return }
@@ -338,6 +345,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         if changed { updatePillRestConstraint() }
         view.setNeedsLayout()
+        // The rules depend on the bar (the vertical bar dims instead of hiding).
+        if changed { updateButtons() }
     }
 
     private func updatePillRestConstraint() {
@@ -452,6 +461,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func textFieldDidEndEditing(_ textField: UITextField) {
         suggestionTask?.cancel()
         data.cancelSuggestions()
+        updateStartForTyping(query: "")
         applyEditingLayout(false, animated: true)
     }
 
@@ -477,6 +487,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // empty field, until the user types.
         let isCurrentAddress = !query.isEmpty && query == currentTab?.url?.absoluteString
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
+        updateStartForTyping(query: query)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             sheet.show([])
             return
@@ -559,6 +570,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
         isEditingAddress = editing
         guard changed || !animated else { return }
+        // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
+        // screen's button and shortcuts step aside for the field.
+        updateButtons()
+        tabsUI.start.isSearchFieldActive = editing
         if editing {
             sheet.isHidden = false
             settleCollapse(at: 0, animated: false)
@@ -603,24 +618,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     // MARK: Buttons
-
-    func updateButtons() {
-        let hasPage = currentTab?.url != nil
-        // Under the gallery the page's own buttons rest; Tabs goes back to the page.
-        let onPage = !isShowingGallery
-        let enabled: [PageButton: Bool] = [
-            .back: onPage && canGoBack,
-            .forward: onPage && !isShowingReader && (currentTab?.canGoForward ?? false),
-            .tabs: true,
-            .share: onPage && hasPage,
-            // More always opens: History and Settings apply with or without a page.
-            .more: onPage,
-        ]
-        for (kind, isEnabled) in enabled {
-            buttonBar.button(kind).isEnabled = isEnabled
-            barItems[kind]?.isEnabled = isEnabled
-        }
-    }
 
     /// Tells WebKit what the chrome covers (docs/plan.md, engine rule 4). The bottom inset is the
     /// chrome at rest: expanded or collapsed, as `pageInset` says. It changes when a snap ends or
@@ -850,6 +847,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     // MARK: Pull to refresh
 
     private func trackPull(_ distance: CGFloat) {
+        // Off on Start, in the reader and on error pages, whose own button reloads (state rules §3).
+        guard rules.pullToRefresh else { return }
         if distance > 0 { pullIndicator.follow(pull: distance, threshold: PullToRefreshTracker.threshold) }
         if distance > PullToRefreshTracker.threshold / 2 { Haptic.selection.prepare() }
         switch pullTracker.pulled(distance) {
@@ -892,7 +891,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIDeferredMenuElement.uncached { [weak self] completion in
                 Signposts.signposter.emitEvent(Signposts.pageMenu)
                 guard let self else { return completion([]) }
-                guard let url = self.currentTab?.url, LiveAddressBarData.isRecordable(url) else {
+                guard let url = self.currentTab?.url, LiveAddressBarData.isRecordable(url), self.currentRules().favorite else {
                     self.lastFavoriteAnswer = nil
                     return completion(self.pageMenuElements(isFavorite: nil, source: source))
                 }
@@ -929,18 +928,44 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             for item in [history, favorites, settings] { item.attributes = .disabled }
         }
         let app = UIMenu(options: .displayInline, children: downloadsMenuItems() + [history, favorites, settings])
-        guard let tab = currentTab, let url = tab.url else {
+        // Every item below follows docs/state-rules.md §4 through ControlRules: items that never
+        // apply to this page are left out, Stop takes Reload's place while loading.
+        let rules = currentRules()
+        // The tabs items first: New Private Tab, Reopen Closed Tab, Archived Tabs where they apply.
+        let top = UIMenu(options: .displayInline, children: tabItemsForMore(rules))
+        guard rules.shareAndCopy, let tab = currentTab, let url = pageAddress else {
             // An empty pane of a split can still be swapped or closed.
-            let paneItems = paneMenuItems(for: nil)
-            return (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
+            let paneItems = paneMenuItems(for: nil, rules: rules)
+            return [top] + (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
         }
-        let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
-            Signposts.signposter.emitEvent(Signposts.reload)
-            self?.reloadPage()
+        var pageItems: [UIMenuElement] = []
+        switch rules.reload {
+        case .reload:
+            let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+                Signposts.signposter.emitEvent(Signposts.reload)
+                self?.reloadPage()
+            }
+            reload.accessibilityIdentifier = "menu.reload"
+            pageItems.append(reload)
+        case .stop:
+            let stop = UIAction(title: "Stop", image: UIImage(systemName: "xmark")) { [weak tab] _ in
+                Signposts.signposter.emitEvent(Signposts.reload, "stop")
+                tab?.stopLoading()
+            }
+            stop.accessibilityIdentifier = "menu.stop"
+            pageItems.append(stop)
+        case .hidden:
+            break
         }
-        let find = UIAction(title: "Find on Page", image: UIImage(systemName: "doc.text.magnifyingglass")) { [weak self] _ in
-            self?.findOnPage()
+        if rules.findOnPage {
+            let find = UIAction(title: "Find on Page", image: UIImage(systemName: "doc.text.magnifyingglass")) { [weak self] _ in
+                self?.findOnPage()
+            }
+            find.accessibilityIdentifier = "menu.find"
+            pageItems.append(find)
         }
+        pageItems += readerMenuItems(rules.reader)
+        if rules.savePDF { pageItems += pdfMenuItems(for: tab) }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
             guard let self else { return }
             let source: (any UIPopoverPresentationControllerSourceItem)? =
@@ -952,8 +977,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIPasteboard.general.url = url
             Haptic.success.play()
         }
-        var siteItems = siteMenuItems(for: tab, url: url) + paneMenuItems(for: tab)
-        if let isFavorite {
+        var siteItems = siteMenuItems(for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle)
+            + paneMenuItems(for: tab, rules: rules)
+        if rules.favorite, let isFavorite {
             let title = tab.title
             let favorite = UIAction(
                 title: isFavorite ? "Remove from Favorites" : "Add to Favorites",
@@ -964,13 +990,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             favorite.accessibilityIdentifier = "menu.favorite"
             siteItems.append(favorite)
         }
-        return [
-            UIMenu(options: .displayInline, children: [reload, find] + readerMenuItems(for: tab) + pdfMenuItems(for: tab)),
-            UIMenu(options: .displayInline, children: [share, copy]),
-            zoomMenu(for: tab, source: source),
-            UIMenu(options: .displayInline, children: siteItems),
-            app,
-        ]
+        var sections: [UIMenuElement] = []
+        if !pageItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: pageItems)) }
+        sections.append(UIMenu(options: .displayInline, children: [share, copy]))
+        if rules.zoom { sections.append(zoomMenu(for: tab, source: source)) }
+        if !siteItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: siteItems)) }
+        return [top] + sections + [app]
     }
 
     private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
@@ -1031,10 +1056,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         guard presentedViewController != nil else { return }
         let closed = sheetClosed
         sheetClosed = nil
-        dismiss(animated: true) {
+        dismiss(animated: true) { [weak self] in
             completion?()
             closed?()
+            self?.sheetDidClose()
         }
+    }
+
+    /// A sheet is gone: a toast that waited shows, the tabs tip may show, the archive may have
+    /// changed.
+    private func sheetDidClose() {
+        showPendingToast()
+        tabsUI.tip.showIfPossible(in: self)
+        session.tabs.refreshArchiveState()
     }
 
     /// The sheet was swiped down.
@@ -1042,10 +1076,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let closed = sheetClosed
         sheetClosed = nil
         closed?()
+        sheetDidClose()
     }
 
     private func share(from source: (any UIPopoverPresentationControllerSourceItem)?) {
-        guard let url = currentTab?.url else { return }
+        // A failed page shares the address that was tried.
+        guard let url = pageAddress else { return }
         Signposts.signposter.emitEvent(Signposts.share)
         let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         sheet.popoverPresentationController?.sourceItem = source ?? pill

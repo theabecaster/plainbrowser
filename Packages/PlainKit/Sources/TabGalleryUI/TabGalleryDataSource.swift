@@ -13,11 +13,15 @@ public struct TabGalleryItem: Hashable, Sendable, Identifiable {
     public var thumbnailRevision: Int
     /// Bumps when the tab's site icon arrives or changes.
     public var faviconRevision: Int
+    /// Pinned tabs stay through Close All Tabs.
+    public var isPinned: Bool
 
     public init(
-        id: UUID, title: String, url: URL?, isPrivate: Bool = false, thumbnailRevision: Int = 0, faviconRevision: Int = 0
+        id: UUID, title: String, url: URL?, isPrivate: Bool = false, thumbnailRevision: Int = 0, faviconRevision: Int = 0,
+        isPinned: Bool = false
     ) {
         self.id = id
+        self.isPinned = isPinned
         self.title = title
         self.url = url
         self.isPrivate = isPrivate
@@ -89,6 +93,11 @@ public protocol TabGalleryDataSource: AnyObject {
     var canShowArchive: Bool { get }
     /// "Archived Tabs" from the gallery menu: the shell presents the archive.
     func showArchive()
+    /// The empty space was tapped while the tab on screen is not a card in the list (an empty tab,
+    /// or a tab of the other list): the shell goes back to it as it is.
+    func returnToPage()
+    /// The Reopen toast after a close: brings back exactly that close, if it still can.
+    @discardableResult func reopenOfferedTab() -> UUID?
 }
 
 extension TabGalleryDataSource {
@@ -99,5 +108,7 @@ extension TabGalleryDataSource {
     public func setShowingPrivateTabs(_ isPrivate: Bool) {}
     public var canShowArchive: Bool { false }
     public func showArchive() {}
+    public func returnToPage() {}
+    @discardableResult public func reopenOfferedTab() -> UUID? { reopenClosedTab() }
 }
 #endif

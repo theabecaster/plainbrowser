@@ -135,6 +135,36 @@ final class RecordingPersistence: TabPersistence {
 
     // MARK: Recently closed
 
+    @Test func discardLeavesNothingToReopen() {
+        let store = makeStore()
+        let window = store.windows[0].id
+        let a = store.open(url("a"))
+        let empty = store.open()
+        store.select(a)
+        store.discard(empty)
+        #expect(store.windows[0].tabIDs == [a])
+        #expect(store.recentlyClosed.isEmpty)
+        #expect(store.selectedTabID(in: window) == a)
+        #expect(persistence.lastSession?.tabs.map(\.id) == [a])
+        // Left on the start page: nothing takes the pane.
+        let other = store.open()
+        store.discard(other, refillingPane: false)
+        #expect(store.selectedTabID(in: window) == nil)
+        #expect(store.windows[0].tabIDs == [a])
+    }
+
+    @Test func reopenClosedBringsBackExactlyThatBatch() {
+        let store = makeStore()
+        let a = store.open(url("a")), b = store.open(url("b")), c = store.open(url("c"))
+        store.close(a)
+        let first = store.recentlyClosed.last!.id
+        store.close(b)
+        #expect(store.reopenClosed(first) == [a])
+        #expect(store.recentlyClosed.count == 1)
+        #expect(store.reopenClosed(first).isEmpty, "a batch comes back once")
+        #expect(store.windows[0].tabIDs == [a, c])
+    }
+
     @Test func reopenRestoresPositionAndSelection() {
         let store = makeStore()
         let window = store.windows[0].id

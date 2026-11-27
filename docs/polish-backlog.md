@@ -220,3 +220,29 @@ Newest feature last.
 - **Above and Right on the device.** Both were built after the Mac locked: unit-tested
   (`DuoLayoutTests`) and UI-tested only as far as the simulator allowed; check the strip's look
   and the Right sidebar's drag on the inner screen.
+## State rules (state lane, 2026-11-26)
+
+- **Find on Page and the bar.** Bar gestures stop while the find bar is open, but the page's bar
+  is not replaced by it (§7, §8 "Find open"); the keyboard covers it today. Hide the bar while
+  Find is open. (Code review, round 1.)
+- **Book pose.** Pills and toasts avoiding the fold (§8 "Book pose") are the M3 layout's, not
+  `ControlRules`'; check them on the device with the state rules in mind.
+- **Sheet failure states.** History, Archive and Favorites show OK on a failed read, not Try
+  Again, and History's Clear is enabled with an empty history while a search is typed (§6,
+  Sheets; pre-existing, not in the gaps list). (Code review, round 1.)
+- **The pill on a failed page** shows the last committed address, not the one that was tried;
+  Share and Copy already use the tried address. (Code review, round 1.)
+- **Fixed choices.** The tabs tip's trigger (2 gallery opens) and display count, the bump's
+  travel and the edge swipe's commit distance live in their files; move them to `FixedChoices`
+  when that file is free of other lanes' edits. (Code review, round 1.)
+- **The bar on the start screen.** With nothing open, the full-width glass bar holds only More at
+  its right end. Start is its own mode, so the bar may change shape: a compact More capsule, as the
+  Duo's vertical bar shows it, would read better. (Design review, round 1.)
+- **Long page menu.** With every item that applies, More on a page runs past the screen and
+  History is cut at the bottom edge; the system menu scrolls, but nothing says so. Consider moving
+  the app section (Downloads, History, Edit Favorites, Settings) into a submenu. (Design review,
+  round 1.)
+- **Start screen recede values.** The 94 % scale and the drift live in `EmptyTabView.setReceded`;
+  move them to `Motion` with the other motion values. (Code review, round 3.)
+- **Signposts.** New Tab reusing an empty tab emits no `tab.open`; the tip's display and
+  retirement emit none. (Code review, round 1.)

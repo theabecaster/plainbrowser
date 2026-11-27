@@ -70,6 +70,7 @@ extension BrowserViewController {
             guard let self else { return }
             if let restored, self.currentTab == nil { self.show(restored) }
             self.tabsDidChange()
+            self.tabsUI.tip.start(in: self)
             // Idle tabs move to the archive once both the saved tabs and the settings are in.
             self.archiveIdleTabs()
         }
@@ -89,6 +90,10 @@ extension BrowserViewController {
     func show(_ tab: Tab) {
         guard self.currentTab !== tab else { return }
         tabsUI.swipe.cancel()
+        // An empty tab exists only while it is on screen: leaving it drops it (state rules,
+        // principle 7), once the new tab has the pane.
+        let leftEmpty = currentTab.flatMap { session.tabs.isEmpty($0.id) ? $0 : nil }
+        defer { if let leftEmpty { dropEmptyTab(leftEmpty) } }
         let focusBefore = session.tabs.focusedPane
         // The store decides the pane first: the outgoing tab stays attached if it is still shown.
         session.tabs.select(tab)
@@ -148,6 +153,15 @@ extension BrowserViewController {
         syncPanes()
     }
 
+    /// Removes an empty tab the user left, with no Reopen: it never shows as a card or neighbour.
+    func dropEmptyTab(_ tab: Tab) {
+        // A split's other pane may still show it (focus moved): it is still on screen.
+        guard tab !== currentTab, session.tabs.isEmpty(tab.id), !isShownInOtherPane(tab.id) else { return }
+        engineUI.crashedTabs.remove(tab.id)
+        engineUI.typedVisitTabs.remove(tab.id)
+        session.tabs.discard(tab.id)
+    }
+
     /// Takes the page off screen with no tab in its place (the tab on screen is closing, or the
     /// pane shows the start page). A tab still shown in a split's other pane stays attached there.
     func clearPage() {
@@ -173,19 +187,29 @@ extension BrowserViewController {
         updatePageState()
     }
 
-    /// Closes `tab` and shows the next one (its opener for a popup). With no tab left, the search
-    /// field opens, as after the last tab closes (docs/ui-reference.md). `offerReopen` shows the
-    /// Reopen toast (a close from the tabs menu).
+    /// Closes `tab` and shows the next one (its opener for a popup). The last private tab gives the
+    /// screen back to the regular tab seen last. With no tab left, the search field opens, as after
+    /// the last tab closes (docs/ui-reference.md). `offerReopen` shows the Reopen toast (a close
+    /// from the tabs menu) when the close can be undone; it shows over the search field too.
     func closeTab(_ tab: Tab, offerReopen: Bool = false) {
         let wasShown = tab === self.currentTab
         if wasShown { clearPage() }
         engineUI.crashedTabs.remove(tab.id)
         engineUI.typedVisitTabs.remove(tab.id)
+        let batchBefore = session.tabs.lastClosedBatchID
         session.tabs.close(tab.id)
-        if offerReopen, !tab.isPrivate { self.offerReopen() }
-        guard wasShown else { return }
+        // Only a close that made a batch can be undone (a private tab never does).
+        if offerReopen, let batch = session.tabs.lastClosedBatchID, batch != batchBefore {
+            self.offerReopen(batch)
+        } else if offerReopen {
+            // An earlier offer must not read as this close's undo.
+            tabsUI.toast.hide(animated: true)
+        }
+        guard wasShown else { return updateButtons() }
         if let next = session.tabs.selected {
             show(next)
+        } else if tab.isPrivate, let regular = session.tabs.mostRecent(private: false) {
+            show(session.tabs.tab(regular))
         } else {
             beginAddressEditing()
         }
@@ -309,9 +333,9 @@ extension BrowserViewController {
     // MARK: Page menu items
 
     /// Desktop Site and blocking for this site, both remembered per site and applied by reloading.
-    func siteMenuItems(for tab: Tab, url: URL) -> [UIMenuElement] {
-        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", let host = url.host()
-        else { return [] }
+    /// `desktop` and `blocking` are the state rules' answer for the page (§4).
+    func siteMenuItems(for tab: Tab, url: URL, desktop showsDesktop: Bool, blocking showsBlocking: Bool) -> [UIMenuElement] {
+        guard showsDesktop, let host = url.host() else { return [] }
         let isDesktop = tab.contentMode == .desktop
         let desktop = UIAction(
             title: "Desktop Site", image: UIImage(systemName: "desktopcomputer"), state: isDesktop ? .on : .off
@@ -320,9 +344,10 @@ extension BrowserViewController {
             tab?.setContentModeOverride(isDesktop ? .mobile : .desktop)
         }
         desktop.accessibilityIdentifier = "menu.desktopSite"
-        // The blocking allow-list is saved to disk: a private tab must not add its site to it.
-        // Private tabs follow the regular choice instead (polish backlog: a private-only toggle).
-        guard !tab.isPrivate else { return [desktop] }
+        // The blocking allow-list is saved to disk: a private tab must not add its site to it
+        // (the rules leave the toggle out there). Private tabs follow the regular choice instead
+        // (polish backlog: a private-only toggle).
+        guard showsBlocking else { return [desktop] }
 
         let blocking = session.isBlockingEnabled(for: url)
         let toggle = UIAction(
@@ -337,17 +362,19 @@ extension BrowserViewController {
     }
 
     /// Show Reader only when the page's readerable check said yes; Hide Reader while it shows.
-    func readerMenuItems(for tab: Tab) -> [UIMenuElement] {
-        if isShowingReader {
+    func readerMenuItems(_ item: ReaderItem) -> [UIMenuElement] {
+        switch item {
+        case .hidden:
+            return []
+        case .hide:
             let hide = UIAction(title: "Hide Reader", image: UIImage(systemName: "doc.plaintext")) { [weak self] _ in
                 Signposts.signposter.emitEvent(Signposts.readerToggle, "hide")
                 self?.closeReader(animated: true)
             }
             hide.accessibilityIdentifier = "menu.reader"
             return [hide]
-        }
-        guard let page = session.pool.webView(for: tab), session.reader.isAvailable(in: page) == true else {
-            return []
+        case .show:
+            break
         }
         let show = UIAction(title: "Show Reader", image: UIImage(systemName: "doc.plaintext")) { [weak self] _ in
             Signposts.signposter.emitEvent(Signposts.readerToggle, "show")

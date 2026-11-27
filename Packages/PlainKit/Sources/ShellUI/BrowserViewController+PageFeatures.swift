@@ -75,10 +75,14 @@ extension BrowserViewController {
         return [save]
     }
 
-    /// Downloads, in the app section while there are any this session.
+    /// Downloads, in the app section while there are any this session; "1 in progress" while one
+    /// runs, so a download that started says so before it ends.
     func downloadsMenuItems() -> [UIMenuElement] {
-        guard !session.pool.downloads.downloads.isEmpty else { return [] }
-        let item = UIAction(title: "Downloads", image: UIImage(systemName: "arrow.down.circle")) { [weak self] _ in
+        let downloads = session.pool.downloads.downloads
+        guard currentRules().downloads else { return [] }
+        let running = downloads.count { $0.state == .inProgress }
+        let subtitle = running == 0 ? nil : String(localized: "\(running) in progress")
+        let item = UIAction(title: "Downloads", subtitle: subtitle, image: UIImage(systemName: "arrow.down.circle")) { [weak self] _ in
             self?.showDownloads()
         }
         item.accessibilityIdentifier = "menu.downloads"
@@ -96,17 +100,20 @@ extension BrowserViewController {
         Haptic.tap.play()
     }
 
-    /// A short toast instead of an alert: the file is in Downloads, one tap away.
+    /// A short toast instead of an alert: the file is in Downloads, one tap away. While the
+    /// gallery or a sheet is up the newest one waits, since Show could not open Downloads there.
     public func downloadDidEnd(_ download: Download) {
         switch download.state {
         case .finished:
-            tabsUI.toast.show("\(download.filename) downloaded", button: "Show") { [weak self] in
-                self?.showDownloads()
+            let message = "\(download.filename) downloaded"
+            showToastWhenFree { [weak self] in
+                self?.tabsUI.toast.show(message, button: "Show") { [weak self] in self?.showDownloads() }
             }
         case .failed:
             Haptic.nothingThere.play()
-            tabsUI.toast.show("\(download.filename) didn't download", button: "Show") { [weak self] in
-                self?.showDownloads()
+            let message = "\(download.filename) didn't download"
+            showToastWhenFree { [weak self] in
+                self?.tabsUI.toast.show(message, button: "Show") { [weak self] in self?.showDownloads() }
             }
         case .inProgress, .cancelled:
             break

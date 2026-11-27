@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import UIKit
 
@@ -87,6 +88,32 @@ final class ButtonBar: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     func button(_ kind: PageButton) -> UIButton { buttons[kind]! }
+
+    /// Shows, dims or hides a button in place (docs/state-rules.md, principle 5). A hidden button
+    /// keeps its slot, so the others never move under the thumb, and leaves the accessibility tree.
+    func setVisibility(_ visibility: ControlVisibility, for kind: PageButton) {
+        let button = button(kind)
+        button.isEnabled = visibility.isEnabled
+        let alpha: CGFloat = visibility.isVisible ? 1 : 0
+        button.isUserInteractionEnabled = visibility.isVisible
+        button.accessibilityElementsHidden = !visibility.isVisible
+        button.isAccessibilityElement = visibility.isVisible
+        guard button.alpha != alpha else { return }
+        if window == nil || UIView.inheritedAnimationDuration > 0 {
+            button.alpha = alpha
+        } else {
+            Motion.animate(Motion.quick) { button.alpha = alpha }
+        }
+    }
+
+    /// A button's symbol and label (the tabs slot's faces: Tabs or New Tab).
+    func setFace(of kind: PageButton, symbol: String, title: String, value: String?) {
+        let button = button(kind)
+        button.accessibilityValue = value
+        guard button.accessibilityLabel != title else { return }
+        button.accessibilityLabel = title
+        button.configuration?.image = UIImage(systemName: symbol)
+    }
 
     /// The glass tint: Paper, or the quiet private tint while a private tab is on screen.
     func setPrivate(_ isPrivate: Bool) {

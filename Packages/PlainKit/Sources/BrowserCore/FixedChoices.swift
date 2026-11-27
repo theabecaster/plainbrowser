@@ -568,6 +568,21 @@ public enum FixedChoices {
     /// Past the budget with nothing read, Plain waits this much longer for the first page before
     /// saying none could be read.
     public static let browseFirstSourceGrace = Duration.seconds(3)
+    /// No replacement for a skipped source starts this close to the end of the read budget: it
+    /// would not finish in time, and would only cost a page load.
+    public static let browseReplacementCutoff = Duration.seconds(1)
+    /// A results page whose list comes from script and is still empty when its HTML has parsed
+    /// gets this long more, until its load event, before Plain reads it again.
+    public static let browseResultsScriptWait = Duration.seconds(2)
+    /// How often a hidden page is asked whether its HTML has parsed. Each answer is immediate (no
+    /// promise a navigation could leave hanging); 50 ms is under the time a parse takes.
+    public static let hiddenPageReadyPoll = Duration.milliseconds(50)
+    /// Links read from a results page at most: far more than the eight results kept, enough to
+    /// get past ads and the engine's own links.
+    public static let browseResultsLinksRead = 40
+    /// Summarize Page reads the page's text within this time; a page that takes longer (a script
+    /// stuck in WebKit) says it has no text instead of leaving "Writing…" up.
+    public static let summaryPageReadTimeout = Duration.seconds(5)
     /// A source with less readable text than this (characters) is a page without an article:
     /// a login wall, a video, an app shell. It is skipped.
     public static let browseMinimumText = 400

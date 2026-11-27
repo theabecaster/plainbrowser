@@ -174,7 +174,7 @@ import Testing
         let text = ReaderText(title: "Tides", text: paragraphs.joined(separator: "\n\n"), url: URL(string: "https://sea.example/tides"))
         let recorder = Recorder()
         let run = SummaryRun(
-            .page(text, title: "Tides", url: URL(string: "https://sea.example/tides")!), model: model
+            .page(title: "Tides", url: URL(string: "https://sea.example/tides")!) { text }, model: model
         ) { recorder.reports.append($0) }
         run.start()
         await run.finished()
@@ -191,6 +191,37 @@ import Testing
         #expect(last.sources.isEmpty)
         // A page's own summary cites nothing.
         #expect(last.draft.sections.flatMap(\.points).allSatisfy { $0.sources.isEmpty })
+    }
+
+    @Test func aPageThatNeverAnswersSaysItHasNoText() async throws {
+        let recorder = Recorder()
+        var budgets = Self.budgets
+        budgets.pageRead = .milliseconds(200)
+        let clock = ContinuousClock()
+        let start = clock.now
+        let run = SummaryRun(
+            .page(title: "Stuck", url: URL(string: "https://stuck.example")!) {
+                try await Task.sleep(for: .seconds(600))
+                return nil
+            },
+            model: ScriptedSummaryModel(), budgets: budgets
+        ) { recorder.reports.append($0) }
+        run.start()
+        await run.finished()
+        #expect(recorder.reports.last?.stage == .failed(.pageUnreadable))
+        #expect(clock.now - start < .seconds(2))
+    }
+
+    @Test func aBrowseWithOnePageReadStillCitesIt() async throws {
+        let browsing = ScriptedBrowsing(resultsDelay: .milliseconds(10), pageDelay: .milliseconds(20))
+        browsing.emptyHosts = Set(ScriptedBrowsing.links.compactMap { URL(string: $0.href)?.host() }).subtracting(["handbook.example"])
+        let (run, recorder) = browse(model: ScriptedSummaryModel(pace: .milliseconds(1)), browsing: browsing)
+        run.start()
+        await run.finished()
+        let last = try #require(recorder.reports.last)
+        #expect(last.stage == .done)
+        #expect(last.citedSources.map(\.site) == ["handbook.example"])
+        #expect(last.draft.sections.flatMap(\.points).allSatisfy { $0.sources == [1] })
     }
 
     // MARK: Prompt

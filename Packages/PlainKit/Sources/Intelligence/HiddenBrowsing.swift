@@ -38,7 +38,7 @@ import WebKit
             var links = try await Self.links(in: webView, recipe: page.recipe)
             // A list the page builds with script may come after its HTML: wait for the load.
             if links.isEmpty, page.needsJavaScript {
-                await load.waitForFinish(upTo: .seconds(2))
+                await load.waitForFinish(upTo: FixedChoices.browseResultsScriptWait)
                 links = try await Self.links(in: webView, recipe: page.recipe)
             }
             return links
@@ -98,10 +98,11 @@ import WebKit
               const heading = a.querySelector('h3, h2, .title');
               const title = (heading ? heading.textContent : a.textContent) || "";
               out.push({ href: a.href, title: title.trim().slice(0, 300), isAd: !!(ads && a.closest(ads)) });
-              if (out.length >= 40) break;
+              if (out.length >= max) break;
             }
             return JSON.stringify(out);
-            """, arguments: ["links": recipe.links, "ads": recipe.ads], in: nil, contentWorld: world)
+            """, arguments: ["links": recipe.links, "ads": recipe.ads, "max": FixedChoices.browseResultsLinksRead],
+            in: nil, contentWorld: world)
         guard let json = value as? String else { return [] }
         return try await decode(json)
     }
@@ -124,6 +125,8 @@ import WebKit
     private var finishWaiters: [CheckedContinuation<Void, Never>] = []
     private var didFinish = false
     private var refused = false
+    /// `cancel()` ran: the load is over and nothing starts again.
+    private var isCancelled = false
 
     init(webView: WKWebView) {
         self.webView = webView
@@ -133,6 +136,8 @@ import WebKit
 
     /// Loads `url` and returns once its document has parsed.
     func loadUntilReady(_ url: URL) async throws {
+        try Task.checkCancellation()
+        guard !isCancelled else { throw CancellationError() }
         try await withCheckedThrowingContinuation { continuation in
             committed = continuation
             webView.load(URLRequest(url: url))
@@ -140,18 +145,18 @@ import WebKit
         // The document exists from the commit; poll until it has parsed. Each poll answers at
         // once (no promise that a navigation could leave hanging), and the caller's budget and
         // cancellation bound the wait.
-        while !Task.isCancelled {
+        while !Task.isCancelled, !isCancelled {
             let state = try? await webView.evaluateJavaScript("document.readyState", in: nil, contentWorld: .defaultClient)
             if let state = state as? String, state != "loading" { return }
             if didFinish { return }
-            try await Task.sleep(for: .milliseconds(50))
+            try await Task.sleep(for: FixedChoices.hiddenPageReadyPoll)
         }
         throw CancellationError()
     }
 
     /// Waits for the page's load event, at most `limit`.
     func waitForFinish(upTo limit: Duration) async {
-        guard !didFinish else { return }
+        guard !didFinish, !isCancelled else { return }
         let timeout = Task { @MainActor [weak self] in
             try? await Task.sleep(for: limit)
             self?.resumeFinishWaiters()
@@ -162,6 +167,7 @@ import WebKit
 
     /// Stops the page and fails a load still waiting.
     func cancel() {
+        isCancelled = true
         webView.navigationDelegate = nil
         webView.stopLoading()
         resumeCommit(throwing: CancellationError())

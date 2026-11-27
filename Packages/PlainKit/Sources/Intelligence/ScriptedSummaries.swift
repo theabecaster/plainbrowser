@@ -83,7 +83,7 @@ import Reader
         let title: String
         switch request.subject {
         case .search(let query): title = "What to know about \(query)"
-        case .page(let title_, _): title = title_
+        case .page(let pageTitle, _): title = pageTitle
         }
         return SummaryDraft(title: title, sections: [
             .init(heading: "The short answer", points: [

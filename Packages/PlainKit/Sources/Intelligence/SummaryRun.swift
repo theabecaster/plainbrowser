@@ -29,14 +29,16 @@ public struct SummaryBudgets: Sendable {
     public var results: Duration
     public var reading: Duration
     public var firstSourceGrace: Duration
+    public var pageRead: Duration
 
     public init(
         results: Duration = FixedChoices.browseResultsTimeout, reading: Duration = FixedChoices.browseReadBudget,
-        firstSourceGrace: Duration = FixedChoices.browseFirstSourceGrace
+        firstSourceGrace: Duration = FixedChoices.browseFirstSourceGrace, pageRead: Duration = FixedChoices.summaryPageReadTimeout
     ) {
         self.results = results
         self.reading = reading
         self.firstSourceGrace = firstSourceGrace
+        self.pageRead = pageRead
     }
 }
 
@@ -50,7 +52,9 @@ public struct SummaryBudgets: Sendable {
 @MainActor public final class SummaryRun {
     public enum Input: Sendable {
         case search(String, engine: SearchEngine)
-        case page(ReaderText, title: String, url: URL)
+        /// Summarize Page: `read` gets the page's text (`ReaderExtractor.text`), within
+        /// `FixedChoices.summaryPageReadTimeout`.
+        case page(title: String, url: URL, read: @MainActor @Sendable () async throws -> ReaderText?)
     }
 
     private let input: Input
@@ -78,7 +82,7 @@ public struct SummaryBudgets: Sendable {
         switch input {
         case .search(let query, let engine):
             progress = SummaryProgress(subject: .search(query), stage: .searching(engine: engine.name))
-        case .page(_, let title, let url):
+        case .page(let title, let url, _):
             progress = SummaryProgress(subject: .page(title: title, url: url), stage: .writing)
         }
     }
@@ -119,7 +123,12 @@ public struct SummaryBudgets: Sendable {
             guard !read.isEmpty else { return finish(.failed(.nothingReadable)) }
             update { $0.stage = .writing }
             await write(SummaryRequest(subject: progress.subject, sources: read))
-        case .page(let text, let title, let url):
+        case .page(let title, let url, let read):
+            let text = try? await Self.within(budgets.pageRead) { try await read() }
+            guard !Task.isCancelled else { return }
+            guard let text = text ?? nil, text.text.count >= FixedChoices.browseMinimumText else {
+                return finish(.failed(.pageUnreadable))
+            }
             let source = SourceText(number: 1, title: title, site: BrowseForMe.siteName(url), text: text.text)
             await write(SummaryRequest(subject: progress.subject, sources: [source]), condense: true)
         }
@@ -173,7 +182,7 @@ public struct SummaryBudgets: Sendable {
         }
         let clock = ContinuousClock()
         let deadline = clock.now + budgets.reading
-        let replaceBefore = deadline - .seconds(1)
+        let replaceBefore = deadline - FixedChoices.browseReplacementCutoff
         let minimum = FixedChoices.browseMinimumText
         let limit = FixedChoices.summaryMaxPageText
         let graceTimer = -2, budgetTimer = -1
@@ -280,7 +289,7 @@ public struct SummaryBudgets: Sendable {
             do {
                 for try await draft in model.write(fitted) {
                     guard !Task.isCancelled else { break }
-                    let cleaned = draft.cleaned(sourceCount: request.sources.count)
+                    let cleaned = draft.cleaned(sourceCount: request.sources.count, cites: SummaryKind(request.subject) == .browse)
                     if !firstWordsShown, !cleaned.isEmpty, let signpost {
                         signposter.endInterval(Signposts.summaryFirstWords, signpost.firstWords)
                         firstWordsShown = true

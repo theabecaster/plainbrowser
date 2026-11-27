@@ -143,8 +143,9 @@ import Testing
         #expect(cleaned.title == "Title")
         #expect(cleaned.sections.count == 1)
         #expect(cleaned.sections[0].points == [.init(text: "A point.", sources: [2, 1])])
-        // A page's own summary cites nothing.
-        #expect(draft.cleaned(sourceCount: 1).sections[0].points[0].sources == [])
+        // A page's own summary cites nothing; Browse for Me with one page read still cites it.
+        #expect(draft.cleaned(sourceCount: 1, cites: false).sections[0].points[0].sources == [])
+        #expect(draft.cleaned(sourceCount: 1).sections[0].points[0].sources == [1])
     }
 
     @Test func failuresSayWhatHappenedInPlainWords() {

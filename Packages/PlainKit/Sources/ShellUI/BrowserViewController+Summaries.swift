@@ -21,8 +21,6 @@ final class SummaryUIState {
     /// page brings the summary back.
     var keepsRun = false
     weak var returnTab: WebEngine.Tab?
-    /// Summarize Page reading the page's text, before the run starts.
-    var extraction: Task<Void, Never>?
 }
 
 // MARK: - Browse for Me and Summarize Page
@@ -83,20 +81,13 @@ extension BrowserViewController {
         guard let screen = presentSummary(
             SummaryProgress(subject: .page(title: title, url: url), stage: .writing), isPrivate: tab.isPrivate
         ) else { return }
-        summaryUI.extraction = Task { [weak self] in
-            let text = try? await ReaderExtractor.text(in: page, limit: FixedChoices.summaryMaxPageText)
-            guard let self, !Task.isCancelled, summaryUI.screen === screen else { return }
-            summaryUI.extraction = nil
-            guard let text, text.text.count >= FixedChoices.browseMinimumText else {
-                var progress = screen.progress
-                progress.stage = .failed(.pageUnreadable)
-                screen.apply(progress)
-                return
-            }
-            let input = SummaryRun.Input.page(text, title: title, url: url)
-            summaryUI.input = input
-            startRun(input, on: screen)
+        // Weak: a page closed meanwhile has no text to give.
+        let input = SummaryRun.Input.page(title: title, url: url) { [weak page] in
+            guard let page else { return nil }
+            return try await ReaderExtractor.text(in: page, limit: FixedChoices.summaryMaxPageText)
         }
+        summaryUI.input = input
+        startRun(input, on: screen)
     }
 
     /// Shows the summary sheet with its first state and wires its actions, or nil when another
@@ -151,8 +142,6 @@ extension BrowserViewController {
     }
 
     func cancelSummary() {
-        summaryUI.extraction?.cancel()
-        summaryUI.extraction = nil
         summaryUI.run?.cancel()
         summaryUI.run = nil
         summaryUI.screen = nil

@@ -198,6 +198,7 @@ public struct SummaryView: View {
         }
         .padding(.horizontal, 14)
         .background(Style.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("summaryReading")
     }
 
@@ -226,6 +227,7 @@ public struct SummaryView: View {
             }
         }
         .textSelection(.enabled)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("summaryText")
     }
 
@@ -247,6 +249,7 @@ public struct SummaryView: View {
             .padding(.horizontal, 14)
             .background(Style.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("summarySources")
     }
 
@@ -366,7 +369,8 @@ private struct PointRow: View {
     private var accessibilityText: String {
         let names = point.sources.compactMap { number in sources.first { $0.number == number }?.site }
         guard !names.isEmpty else { return point.text }
-        return point.text + ". " + String(localized: "Sources: \(names.joined(separator: ", "))")
+        let end = point.text.last.map { ".!?".contains($0) } == true ? " " : ". "
+        return point.text + end + String(localized: "Sources: \(names.joined(separator: ", "))")
     }
 }
 

@@ -68,7 +68,7 @@ public final class FoundationSummaryModel: SummaryModel {
             let body = try await model.tokenCount(for: Prompt(prompt))
             return instructions + schema + body
         } catch {
-            logger.error("token count failed: \(String(describing: error), privacy: .public)")
+            logger.error("token count failed: \(String(describing: type(of: error)), privacy: .public)")
             return nil
         }
     }
@@ -92,8 +92,9 @@ public final class FoundationSummaryModel: SummaryModel {
                 } catch is CancellationError {
                     continuation.finish(throwing: CancellationError())
                 } catch {
-                    logger.error("summary failed: \(String(describing: error), privacy: .public)")
-                    continuation.finish(throwing: Self.map(error))
+                    let mapped = Self.map(error)
+                    logger.error("summary failed: \(String(describing: mapped), privacy: .public)")
+                    continuation.finish(throwing: mapped)
                 }
             }
             continuation.onTermination = { _ in task.cancel() }

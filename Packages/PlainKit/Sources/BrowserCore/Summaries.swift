@@ -99,9 +99,10 @@ public struct SummaryDraft: Sendable, Equatable {
     }
 
     /// The draft with citations the sources can answer for: numbers outside `1...sourceCount`
-    /// dropped, each number once, and none at all for a single source (a page's own summary cites
-    /// nothing). Whitespace trimmed; empty points and sections without points or heading dropped.
-    public func cleaned(sourceCount: Int) -> SummaryDraft {
+    /// dropped, each number once, and none at all when `cites` is false (a page's own summary
+    /// cites nothing). Whitespace trimmed; empty points and sections without points or heading
+    /// dropped.
+    public func cleaned(sourceCount: Int, cites: Bool = true) -> SummaryDraft {
         func trim(_ text: String) -> String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
         var result = SummaryDraft(title: trim(title))
         for section in sections {
@@ -110,7 +111,7 @@ public struct SummaryDraft: Sendable, Equatable {
                 let text = trim(point.text)
                 guard !text.isEmpty else { continue }
                 var seen = Set<Int>()
-                let sources = sourceCount > 1
+                let sources = cites && sourceCount > 0
                     ? point.sources.filter { (1...sourceCount).contains($0) && seen.insert($0).inserted }
                     : []
                 cleaned.points.append(Point(text: text, sources: sources))

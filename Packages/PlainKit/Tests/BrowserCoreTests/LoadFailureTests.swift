@@ -27,5 +27,8 @@ import Testing
         )
         #expect(wrapped == .notAnswering)
         #expect(LoadFailure(domain: "WebKitErrorDomain", code: 101) == .other)
+        // WebKit refuses restricted ports (9, 25, ...) itself.
+        #expect(LoadFailure(domain: "WebKitErrorDomain", code: 103) == .blockedPort)
+        #expect(LoadFailure(domain: "WebKitErrorDomain", code: 103).message == "Plain doesn't open pages on this port.")
     }
 }

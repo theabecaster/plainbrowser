@@ -339,3 +339,6 @@ Newest feature last.
   `.toolbarVisibility(.visible, for: .navigationBar)` doesn't keep it. Swipe down still closes the
   sheet and scrolling back up brings the bar. Design review called it blocking; check on the device
   whether the vertical bar is meant to take the items there.
+- **Footer step at a reveal.** A fixed page footer now moves up in the frame the bar starts back
+  (one motion with the bar, not after it), but in one step: WebKit doesn't animate an inset change,
+  and changing it per frame would relayout the page during the spring (engine rule 4).

@@ -10,6 +10,7 @@ Xcode 27.2+, XcodeGen (`brew install xcodegen`) and `jq`. Every script runs from
 | `scripts/test.sh` | `swift test` for PlainKit on macOS, then the Smoke test plan on the `plain-duo` (iPhone Duo) and `plain-17` (iPhone 17) simulators. It creates them when missing and deletes them afterwards; `KEEP_SIMS=1` keeps them. `PLAIN_SIM_PREFIX=plain-x` renames them (`plain-x-duo`, `plain-x-17`) so parallel runs don't share simulators. |
 | `scripts/perf-gate.sh` | The perf tests (Perf test plan, Release). Simulator by default; `--device` for the phone. Appends a row to `docs/perf-log.md`. See below. |
 | `scripts/install-duo.sh [--no-launch] [build]` | Release build for the device as "Plain Dev" (`dev.abrahamgonzalez.plainbrowser.dev`), installed beside the TestFlight app, never over it, then launch. `perf-gate.sh --device` uses the same id. Best effort: an install that fails (phone locked or unreachable) prints a note and exits 0; launch is skipped on a locked phone. `--no-launch` installs only. |
+| `scripts/matrix.sh [--quick\|--full] [--rows <ids>] [--out <dir>] [--host <name>\|--local] [-only-testing:<test>]` | The device matrix (`docs/device-matrix.md`): the capture tests, and the UI tests you name, on one `plain-matrix-<row>` simulator per screen class and setting, one at a time; a contact sheet per screen in `<out>/sheets/`. Runs on the test Mac (`PLAIN_TEST_HOST`) when one is set; see "Test Macs". |
 | `scripts/shot.sh <name>` | Screenshots every active display of the device into `build/shots/<name>-<display>.png`. |
 
 Package tests alone: `cd Packages/PlainKit && swift test`.
@@ -37,6 +38,48 @@ xcodebuild test -scheme PlainKit-Package -destination id=<udid> -only-testing:We
 
 They serve pages from a local HTTP server on 127.0.0.1 and print timings as `[plain-measure]`
 lines.
+
+## Test Macs
+
+Simulator builds and tests can run on a test Mac instead of this one, so the owner can keep working
+here. Set `PLAIN_TEST_HOST` to its ssh host name in `scripts/local.env` (gitignored; never commit a
+machine name) or the environment. `scripts/matrix.sh` then runs there and brings the results back:
+
+```sh
+scripts/matrix.sh --quick --out build/matrix        # on PLAIN_TEST_HOST when set
+scripts/matrix.sh --quick --host <name>             # this run only
+scripts/matrix.sh --quick --host auto:<name>        # this Mac's shared slot if free, else <name>
+scripts/matrix.sh --quick --host local              # wait for this Mac's shared slot
+scripts/matrix.sh --quick --local                   # on this Mac, outside the slot (avoid)
+```
+
+`scripts/lib/remote.zsh` does the work:
+
+- This Mac (`local`, or `auto:<name>` while it is free) has one job slot shared by every lane:
+  `/usr/bin/lockf /tmp/plain-local.lock`, run with `nice -n 10`, in the checkout itself. After the
+  job the matrix removes its build output (`build/sim`, `build/build.log`) and its simulators.
+  `auto:` falls back to the test Mac at once when the slot is taken.
+
+- It copies the checkout to `<host>:~/plain-lanes/<lane>` with rsync (no `.git`, no build output,
+  no `local.env`), adds the gitignored signing config from the main checkout, and commits a
+  snapshot there, since the scripts call git. The lane is `PLAIN_LANE`, or the checkout's folder
+  name, so parallel worktrees don't share a folder.
+- It runs the command in a login shell (for Homebrew's PATH) in one of the host's two job slots
+  (`/usr/bin/lockf` on `/tmp/plain-sim-1.lock` and `/tmp/plain-sim-2.lock`): a free slot if there
+  is one, else it waits for slot 1. Expect to queue behind other lanes.
+- `scripts/matrix.sh` pulls `build/matrix-out` back into `--out`: shots, sheets, logs and
+  `summary.txt`, without the result bundles. A host without ImageMagick makes no sheets; the Mac
+  that pulls the results makes them.
+- Device Hub needs the host's logged-in GUI session and Accessibility access for whatever runs
+  `osascript` there (over ssh, `sshd`). Without it ("osascript is not allowed assistive access",
+  in `<row>/duo-fold.log`) the Duo's closed rows keep the simulator's default fold (closed), the
+  inner rows use the resizable window, and `summary.txt` says so. Granting it takes the host's
+  System Settings (Privacy & Security > Accessibility), from its screen or Screen Sharing.
+- Clean up when you finish: delete your `plain-*` simulators on the host (the matrix deletes its
+  own) and remove the lane (`remote_clean <host> <lane>`, or `ssh <host> 'rm -rf
+  ~/plain-lanes/<lane>'`).
+
+The test Macs need Xcode with the iOS 27.2 runtimes (and the Duo's), XcodeGen and jq.
 
 ## Device setup
 
@@ -170,8 +213,10 @@ Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit`, `-PlainTabLayout abov
 without driving the UI. `-PlainSeedFavorites` and `-PlainSeedHistory` fill an isolated store for
 screenshots of the focused address bar (`FocusCaptureTests`, with `TEST_RUNNER_PLAIN_CAPTURE=1`;
 `TEST_RUNNER_PLAIN_CAPTURE_FAVORITES=1` and `TEST_RUNNER_PLAIN_CAPTURE_HISTORY=1` pick the seeds).
-XCUITest sees only the outer screen of an open Duo: record the inner one with `simctl io <sim>
-recordVideo --display=<id>` (the 2007x2853 one) while the capture runs. Device Hub can't be driven while the Mac is locked. Then a resizable
+On a Duo `XCUIScreen.main` is the outer screen; `XCUIScreen.screens` can list both screens,
+and the one that is off is black. The capture tests shoot every screen (the inner one is 2853x2007
+px). For frames between shots, record the
+inner display with `simctl io <sim> recordVideo --display=<id>` while the capture runs. Device Hub can't be driven while the Mac is locked. Then a resizable
 window stands in for the inner screen: launch the app, run `xcrun devicectl device appResize start
 --device <sim> --preferred-size 951x669` (or `669x951`) and capture `simctl io <sim> screenshot
 --display=Resizable`; add `-PlainIgnoreOcclusions`, since that window still reports the outer

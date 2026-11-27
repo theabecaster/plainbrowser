@@ -8,7 +8,7 @@ Plain is an iOS web browser built for speed and feel. It has a UIKit shell, uses
 - `Packages/PlainKit`: all code, split into modules. The app target is a thin wrapper.
 - `Brand/`: app icon (Icon Composer `.icon`) and color identity.
 - `scripts/`: build, test, install, screenshot and perf gate. See `docs/development.md`.
-- `docs/`: `architecture.md` (modules and data flow), `decisions.md` (what was chosen and why), `feedback.md` (owner feedback from testing, open and done), `development.md` (commands and device setup), `perf-log.md` (perf numbers per merge), `research/notes.md` (verified API facts), `research/design-audit.md` (comparison with reference browsers), `ui-reference.md` (interface rules: settings, menus, chrome, wording), `state-rules.md` (which control shows in which state).
+- `docs/`: `architecture.md` (modules and data flow), `decisions.md` (what was chosen and why), `feedback.md` (owner feedback from testing, open and done), `development.md` (commands and device setup), `perf-log.md` (perf numbers per merge), `research/notes.md` (verified API facts), `research/design-audit.md` (comparison with reference browsers), `ui-reference.md` (interface rules: settings, menus, chrome, wording), `state-rules.md` (which control shows in which state), `device-matrix.md` (the screens every UI change is checked on).
 
 ## Rules
 
@@ -21,6 +21,7 @@ Plain is an iOS web browser built for speed and feel. It has a UIKit shell, uses
 - **Every user-visible interaction gets a signpost** in `PerfSignposts`.
 - **No frameworks for architecture.** No TCA, DI, coordinator or reactive libraries. Use plain types, initializer injection, `@Observable` and async/await. Every dependency needs a reason in `docs/decisions.md`.
 - **UIKit for the hot paths:** shell, web views, tab gallery, gestures, transitions. SwiftUI is for low-frequency screens only.
+- **Every screen we support.** Every UI change runs `scripts/matrix.sh --quick` for the screens it touches before it is handed back, and the lead reads the contact sheets. The full matrix runs before each TestFlight release when the machine allows. See `docs/device-matrix.md`.
 - **Layout comes from size classes and view bounds.** Never use `UIScreen.main`, device model or orientation.
 - **Simulators:** create your own, named `plain-*`, and never touch other simulators.
 - **Clean up when you finish.** Shut down and delete the simulators you created. Remove build output, test results, traces and screenshots you made. Remove your worktrees and merged branches. Leave the repo, its folders and the machine clean and ready for the next person.

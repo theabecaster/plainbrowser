@@ -37,7 +37,7 @@ final class ReaderPresenter: NSObject, WKNavigationDelegate {
         Paper.apply(to: webView)
         Paper.apply(to: webView.scrollView)
         webView.scrollView.alwaysBounceVertical = true
-        webView.scrollView.bottomEdgeEffect.isHidden = true
+        webView.scrollView.hideChromeEdgeEffects()
         webView.scrollView.delegate = scrollDelegate
         webView.accessibilityIdentifier = "readerView"
         webView.alpha = 0

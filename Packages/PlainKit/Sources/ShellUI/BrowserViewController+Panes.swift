@@ -199,6 +199,7 @@ extension BrowserViewController {
             guard let wanted else { continue }
             let tab = session.tabs.tab(wanted)
             session.pool.attach(tab, to: self.panes.slots[index].container)
+            session.pool.scrollView(for: tab)?.hideChromeEdgeEffects()
             record(wanted, inSlot: index)
             applyOtherPaneInsets(to: tab)
         }

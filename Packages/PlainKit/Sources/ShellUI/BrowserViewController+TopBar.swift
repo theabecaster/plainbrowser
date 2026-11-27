@@ -251,9 +251,6 @@ extension BrowserViewController {
         if top.pillBetweenButtons.first?.isActive != between {
             between ? NSLayoutConstraint.activate(top.pillBetweenButtons) : NSLayoutConstraint.deactivate(top.pillBetweenButtons)
         }
-        // The page's text fades under whichever edge the chrome is on.
-        let edge: UIRectEdge = pillOnTop || barOnTop ? .top : .bottom
-        for effect in pageEdgeEffects where effect.edge != edge { effect.edge = edge }
     }
 
     /// The layout switched between the top bar and the bottom row (a fold, an unfold, a rotation

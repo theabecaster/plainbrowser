@@ -76,9 +76,6 @@ extension BrowserViewController {
             strip.view.heightAnchor.constraint(equalToConstant: layout.stripHeight),
         ])
         duo.top.stripClearance = [clearLeading, clearTrailing]
-        let edgeEffect = UIScrollEdgeElementContainerInteraction()
-        edgeEffect.edge = .top
-        strip.view.addInteraction(edgeEffect)
         strip.didMove(toParent: self)
         duo.strip = strip
         duo.top.stripTop = top

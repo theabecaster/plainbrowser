@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Dark pages wash out text on mixed light/dark sites like apple.com — make it Safari-quality:** "There is text that looks kind of white — if that's us switching the page's color theme, it's doing a terrible job." (Dark pages lane.)
+
 - **Launch with tabs feels empty:** open to the last tab (or a search with the last tab behind it), like Arc but smoother. (Launch lane.)
 
 

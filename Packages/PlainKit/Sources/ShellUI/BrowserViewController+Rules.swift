@@ -122,7 +122,7 @@ extension BrowserViewController {
     private func applyTabsFace() {
         let open = rules.state.others + (rules.state.hasPage ? 1 : 0)
         let value = open == 1 ? String(localized: "1 tab") : String(localized: "\(open) tabs")
-        buttonBar.setFace(of: .tabs, symbol: PageButton.tabs.symbol, title: PageButton.tabs.title, value: value)
+        buttonBar.setAccessibilityValue(value, for: .tabs)
         barItems[.tabs]?.accessibilityValue = value
     }
 }

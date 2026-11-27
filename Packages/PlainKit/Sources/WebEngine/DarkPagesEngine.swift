@@ -606,11 +606,13 @@ extension DarkPages {
                 if (!stats.unreadable++ && built) rewalk();
               });
     };
-    // What tells a changed sheet: its rule count, media, and the size of its first and last
-    // rules (a sheet replaced whole, a <style> given new text).
+    // What tells a changed sheet: its rule count, media, and the shape of its first and last
+    // rules (a sheet replaced whole, a <style> given new text). Cheap reads only: never the
+    // cssText of a block rule, which serializes everything inside it.
+    const shape = (r) => r.type === 1 ? r.selectorText.length + '.' + r.style.length : r.type + '.' + (r.cssRules ? r.cssRules.length : 0);
     const signature = (s, rules) => {
       const n = rules.length;
-      return n + '|' + (s.media ? s.media.mediaText : '') + '|' + (n ? rules[0].cssText.length + ':' + rules[n - 1].cssText.length : '')
+      return n + '|' + (s.media ? s.media.mediaText : '') + '|' + (n ? shape(rules[0]) + ':' + shape(rules[n - 1]) : '')
         + '|' + (s.ownerNode && s.ownerNode.localName === 'style' ? s.ownerNode.textContent.length : '');
     };
     const pageSheets = () => {
@@ -1167,7 +1169,13 @@ extension DarkPages {
               if (wait <= 0) { classRechecks.set(t, now()); changedElements.add(t); }
               else if (!trailingRecheck.has(t)) {
                 trailingRecheck.add(t);
-                setTimeout(() => { trailingRecheck.delete(t); classRechecks.set(t, now()); changedElements.add(t); later(); }, wait);
+                setTimeout(() => {
+                  trailingRecheck.delete(t);
+                  if (!enabled || !t.isConnected) return;
+                  classRechecks.set(t, now());
+                  changedElements.add(t);
+                  later();
+                }, wait);
               }
             }
           }

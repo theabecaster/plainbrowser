@@ -152,7 +152,9 @@ final class SystemAccessTests: XCTestCase {
         row.tap()
         XCTAssertTrue(app.otherElements["summaryScreen"].firstMatch.waitForExistence(timeout: 5))
         XCUIDevice.shared.press(.home)
-        Thread.sleep(forTimeInterval: 1.5)
+        let left = app.wait(for: .runningBackgroundSuspended, timeout: 8) || app.state == .runningBackground
+        XCTAssertTrue(left, "Plain went to the background")
+        Thread.sleep(forTimeInterval: 1)
         app.activate()
         let failure = app.staticTexts["summaryFailure"]
         XCTAssertTrue(failure.waitForExistence(timeout: 5))

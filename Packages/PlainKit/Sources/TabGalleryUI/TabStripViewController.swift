@@ -28,7 +28,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     private let fade = UIView()
     private let fadeMask = CAGradientLayer()
     private var fadedEdges: (leading: Bool, trailing: Bool) = (false, false)
-    private static let fadeLength: CGFloat = 24
+    private static let fadeLength: CGFloat = 40
     /// The focused tab has not been scrolled into view since the strip was laid out.
     private var needsFocusScroll = true
 

@@ -45,20 +45,31 @@ and compile to nothing on macOS.
    around `BrowserViewController`, one `BrowserSession` and one `LiveAddressBarData`. It starts
    opening the database in a task off the main thread; the address bar, the sheets and the
    session's stores all wait on that one task.
-3. `BrowserViewController.viewIsAppearing` makes the search field first responder before the
-   first frame commits. It emits `launch.searchFieldReady`; the app ends `launch`.
+   Before that it reads the window's `LaunchHint` (user defaults, `LaunchMemory`) and picks the
+   opening screen with `LaunchRules.opening`; with a last tab it starts decoding the tab's saved
+   picture off the main thread (`LaunchPicture`) and hands the `LaunchPlan` to the browser.
+3. `BrowserViewController.viewIsAppearing`, before the first frame commits: with no last tab it
+   makes the search field first responder (`launch.searchFieldReady`); with one it puts the
+   picture over the page container (waiting at most 40 ms for the decode, `launch.pictureWait`)
+   with the bar resting and following the hint, or, after 4 hours away, the search field over it
+   with the frost (`+Launch`). The app ends `launch` (message: the opening screen).
 4. After the first frame commits (a display link's first callback), `BrowserSession.start()`
    warms one offscreen `WKWebView`, which starts the WebContent and Networking processes, then,
    off the main thread: the remembered Desktop Site choices, the reader check's source, the rule
    lists (`ContentBlocker.prepare()`, compiled only on a miss) and the last session's tab
-   (`EngineTabs.restoreLastTab()`: `loadTabSession`, then `TabStore(session:persistence:)`,
    (`EngineTabs.restoreSession()`: `loadTabSession`, then `TabStore(session:persistence:)`; every
    saved tab is in the list, none has a web view; `launch.restoreTab`). The selected tab is made
    with `pool.makeSavedTab`, which reads its state file off main when it first attaches. Then, at
    background priority, state files and thumbnails no row names are deleted (`pruneFiles`).
-5. Search stays first: the field keeps focus. The restored tab is attached under the search sheet
-   (it gets the warm web view and restores history, scroll and sessionStorage), so closing the
-   sheet shows the page; a submitted address loads in it, on top of its history.
+5. The restored tab is attached under the picture or the search sheet (it gets the warm web view
+   and restores history, scroll and sessionStorage). The picture fades once the page has loaded
+   (`launch.pictureHandoff`). Under a fresh search, closing the sheet shows the page and a
+   submitted address opens a new tab; under a plain launch search (no picture), the restored tab
+   shows through the frost the same way.
+6. Leaving: `sceneWillResignActive` asks the browser to remember the page on screen
+   (`rememberForLaunch`: a 2x snapshot, encoded and written off the main thread, and the hint);
+   `sceneWillEnterForeground` hands the time away to `appDidReturn`, which opens a fresh search
+   after 4 hours (`LaunchRules.onReturn`).
 
 ### The address bar
 
@@ -174,7 +185,11 @@ exactly what the app emits.
 
 | Name | Kind | From → to |
 |---|---|---|
-| `launch` | interval | `main` → search field first responder |
+| `launch` | interval | `main` → first screen ready: search field first responder, or the last tab's picture and resting bar (message: opening screen) |
+| `launch.pictureDecode` / `launch.pictureWait` | interval | the last tab's picture decoding off main from scene connect / the first frame waiting for it (only when not ready) |
+| `launch.pictureHandoff` | interval | restored page attached under the picture → picture faded ("loaded", "timedOut", "failed", "dropped") |
+| `launch.pictureSave` | interval | the picture encoded and written off main when the app resigns active |
+| `launch.freshSearch` | event | a fresh search opened over the last tab ("launch" or "return") |
 | `launch.searchFieldReady` | event | search field first responder |
 | `nav.commit` | interval | provisional navigation start → commit |
 | `nav.finish` | interval | provisional navigation start → finish or failure |

@@ -10,10 +10,13 @@ import WebKit
 /// The browser's root screen: the page, the URL pill at the bottom, the page's buttons, and the
 /// search sheet the pill grows into.
 ///
-/// Launch order (docs/plan.md, "Engine rules"):
-/// 1. The first frame shows the search sheet with the field already first responder, keyboard up.
+/// Launch order (docs/plan.md, "Engine rules"; docs/state-rules.md, "Launch and return"):
+/// 1. The first frame shows what `LaunchPlan` says: with no tab, the search sheet with the field
+///    already first responder, keyboard up; with a last tab, its picture and the resting bar; after
+///    a long time away, a fresh search over that picture (`+Launch`).
 /// 2. After that frame, the pool warms one offscreen web view with `about:blank`
-///    (`BrowserSession.start()`), and the last session's tab, if any, comes back under the sheet.
+///    (`BrowserSession.start()`), and the last session's tab, if any, comes back under the picture
+///    or the sheet; the picture fades once its live page has loaded.
 /// 3. The first submitted address goes to that tab, or to a new one that gets the warm web view.
 ///
 /// The tab on screen and its page state live in `+Tab`, the engine's questions (dialogs, sign-in,
@@ -29,7 +32,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let session: BrowserSession
     let data: any AddressBarData
     let sheets: FeatureSheets
-    private let onSearchFieldReady: () -> Void
+    private let onLaunchReady: () -> Void
 
     /// The page panes: one, or two in a split on the Duo's inner screen (`+Panes`).
     let panes = PanesController()
@@ -64,6 +67,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let engineUI = EngineUIState()
     /// The gallery, the bar swipe, neighbour previews and the toast.
     let tabsUI = TabsUIState()
+    /// What launch opened to: the last tab's picture and the fresh search's frost (`+Launch`).
+    let launchUI = LaunchUIState()
     /// The page menu's last Add to / Remove from Favorites answer, for rebuilding the open menu.
     var lastFavoriteAnswer: Bool?
     /// docs/state-rules.md for the state last applied (`updateButtons`), for hot paths such as
@@ -118,16 +123,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     ///   - session: the web view pool, tabs, content blocking and reader mode.
     ///   - data: history, favorites, settings and engine suggestions for the address bar.
     ///   - sheets: Settings, History and the favorites editor.
-    ///   - onSearchFieldReady: called once, when the field first becomes first responder.
+    ///   - launch: what the first frame opens to (`LaunchRules.opening`).
+    ///   - onLaunchReady: called once, when the first screen is ready: the field first responder,
+    ///     or the last tab's picture and resting bar in place.
     public init(
-        session: BrowserSession, data: any AddressBarData, sheets: FeatureSheets,
-        onSearchFieldReady: @escaping () -> Void
+        session: BrowserSession, data: any AddressBarData, sheets: FeatureSheets, launch: LaunchPlan = .search,
+        onLaunchReady: @escaping () -> Void
     ) {
         self.session = session
         self.data = data
         self.sheets = sheets
-        self.onSearchFieldReady = onSearchFieldReady
+        self.onLaunchReady = onLaunchReady
         super.init(nibName: nil, bundle: nil)
+        launchUI.plan = launch
         session.pool.host = self
         (session.translator as? AppleTranslator)?.presenter = self
     }
@@ -153,6 +161,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             chromeGlass.contentView.addSubview(subview)
         }
         installPanes()
+        prepareLaunch()
         for (effect, control) in zip(pageEdgeEffects, [pill, buttonBar] as [UIView]) {
             effect.edge = .bottom
             control.addInteraction(effect)
@@ -168,13 +177,18 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.onPick = { [weak self] pick in self?.open(pick) }
         sheet.onDismiss = { [weak self] in self?.endEditing() }
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
+        // A swipe down closes the search, as a sheet closes (Arc Search's way back to the tab).
+        let swipeDown = UISwipeGestureRecognizer(target: self, action: #selector(sheetSwipedDown))
+        swipeDown.direction = .down
+        sheet.addGestureRecognizer(swipeDown)
 
         buildButtons()
         updateButtons()
         layOut()
         updateBarMode()
-        // The first frame is the search sheet, focused (viewIsAppearing makes it first responder).
-        applyEditingLayout(true, animated: false)
+        // The first frame is the search sheet, focused (viewIsAppearing makes it first responder),
+        // or the last tab with the bar resting (`LaunchPlan`).
+        applyEditingLayout(launchOpensSearch, animated: false)
 
         var traits: [UITrait] = [UITraitHorizontalSizeClass.self, UITraitVerticalSizeClass.self]
         traits += UITraitCollection.systemTraitsAffectingVerticalBarEdge
@@ -512,10 +526,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         super.viewIsAppearing(animated)
         // The view is in the window now, so it can take first responder before the first frame
         // is committed.
-        guard !didFocusAtLaunch, pill.beginEditing() else { return }
+        guard !didFocusAtLaunch else { return }
+        if launchOpensSearch {
+            guard pill.beginEditing() else { return }
+            Signposts.signposter.emitEvent(Signposts.searchFieldReady)
+        }
         didFocusAtLaunch = true
-        Signposts.signposter.emitEvent(Signposts.searchFieldReady)
-        onSearchFieldReady()
+        showLaunchPicture()
+        onLaunchReady()
     }
 
     override public func viewDidAppear(_ animated: Bool) {
@@ -651,6 +669,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         Signposts.signposter.endInterval(Signposts.addressSubmit, state, "picked")
     }
 
+    @objc private func sheetSwipedDown() {
+        endAddressEditing()
+    }
+
     /// Closes the search sheet: the layout switches first, so the pill rides the keyboard down.
     private func endEditing() {
         applyEditingLayout(false, animated: true)
@@ -687,6 +709,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     func applyEditingLayout(_ editing: Bool, animated: Bool) {
         let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
         isEditingAddress = editing
+        // A fresh search lasts as long as its field: closing it uncovers the page.
+        if !editing { launchUI.isFreshSearch = false }
+        let frostAlpha: CGFloat = editing && launchUI.isFreshSearch ? 1 : 0
         guard changed || !animated else { return }
         // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
         // screen's button and shortcuts step aside for the field.
@@ -704,6 +729,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self.sheet.alpha = editing ? 1 : 0
             self.sheet.content.transform = editing ? .identity : CGAffineTransform(translationX: 0, y: Spacing.l)
             self.buttonBar.alpha = editing ? 0 : ChromeGeometry.barAlpha(progress: self.collapse.progress)
+            self.launchUI.frost.alpha = frostAlpha
         }
         guard animated else {
             UIView.performWithoutAnimation {
@@ -725,7 +751,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Loads `url` in the tab on screen. `.typed` when the address bar asked for it: that visit
     /// then weighs more in ranking.
     func load(_ url: URL, kind: VisitKind = .link) {
-        let tab = self.currentTab ?? openNewTab()
+        // A new address replaces the page the launch picture shows.
+        dropLaunchCover(animated: true)
+        let tab = tabForSubmittedAddress()
         if kind == .typed {
             engineUI.typedVisitTabs.insert(tab.id)
         } else {
@@ -983,6 +1011,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         guard scrollView === pageScrollView else { return }
+        // The page is moving under the launch picture: the live page takes over now.
+        dropLaunchCover(animated: true)
         riseFromEnd = nil
         // A drag during a snap between expanded and the pill takes the bar from where it is on
         // screen, with no jump. Hiding and coming back are not the finger's: they finish, and the
@@ -1155,6 +1185,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private func goForward() {
         guard let tab = currentTab, !isShowingReader, tab.canGoForward else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navForward)
+        dropLaunchCover(animated: true)
         tab.goForward()
     }
 

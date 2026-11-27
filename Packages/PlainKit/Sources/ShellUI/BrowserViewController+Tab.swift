@@ -50,6 +50,7 @@ extension BrowserViewController {
 
     func performBack() {
         guard let tab = currentTab else { return }
+        dropLaunchCover(animated: true)
         if isShowingReader {
             closeReader(animated: true)
         } else if tab.canGoBack {
@@ -72,6 +73,7 @@ extension BrowserViewController {
             let restored = await session.start()
             guard let self else { return }
             if let restored, self.currentTab == nil { self.show(restored) }
+            self.launchSessionRestored(restored)
             self.tabsDidChange()
             self.tabsUI.tip.start(in: self)
             // Idle tabs move to the archive once both the saved tabs and the settings are in.
@@ -118,8 +120,10 @@ extension BrowserViewController {
         // A typed load that ended while the tab was off screen left its marker behind.
         if !tab.isLoading { engineUI.typedVisitTabs.remove(tab.id) }
         if session.tabs.focusedPane != focusBefore { focusDidChange() }
+        if tab.id != launchUI.plan.hint?.tabID { dropLaunchCover(animated: false) }
         session.pool.attach(tab, to: webContainer)
         record(tab.id, inSlot: session.tabs.focusedPane)
+        keepLaunchCoverOnTop()
         webContainer.bringSubviewToFront(engineUI.pageState)
         if let scrollView = session.pool.scrollView(for: tab) {
             scrollView.delegate = self
@@ -174,6 +178,7 @@ extension BrowserViewController {
     /// pane shows the start page). A tab still shown in a split's other pane stays attached there.
     func clearPage() {
         tabsUI.swipe.cancel()
+        dropLaunchCover(animated: false)
         if let current = currentTab {
             closeReader(animated: false)
             engineUI.observation?.cancel()
@@ -325,6 +330,7 @@ extension BrowserViewController {
     // MARK: Page commands
 
     func reloadPage() {
+        dropLaunchCover(animated: true)
         if isShowingReader {
             engineUI.reader.webView?.reload()
         } else {

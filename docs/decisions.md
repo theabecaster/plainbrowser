@@ -1156,3 +1156,65 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   probe. A OneTrust banner is still rejected: 1.24–1.31 s after the load started before, 1.26–1.32
   s after (the page found at DOMContentLoaded; the engine's own wait for the banner dominates). A
   banner a script adds after load, and a site rule's page, are covered by tests.
+
+## Launch: the last tab first (2026-11-27)
+
+Owner: "When I open Plain and I have tabs open, open to the last one, not a new-tab thing — or
+maybe do that, but with the last tab in the back … It seems weird how it works right now, like
+empty." Research in docs/research/launch.md; rules in docs/state-rules.md, "Launch and return".
+
+- **The rule:** with a last tab, open to it, exactly as it was, bar resting, no keyboard (Safari;
+  Chrome and Firefox under 4 hours). After 4 hours away (`FixedChoices.freshSearchAfter`, Chrome's
+  and Firefox's tested line), a fresh search over it, keyboard up, the tab behind a paper veil,
+  swipe down or tap outside to get back (Arc Search's sheet over the tab). No tabs: search first,
+  as before. The same rule on a return from the background (the app still running). No setting:
+  one time line covers "where was I" and "new errand".
+- **Never empty:** the first frame paints the last tab's picture at full size, not paper. The
+  database and the web view come back only after that frame, so the screen cannot wait for them:
+  when the app resigns active, the shell takes a 2x full-width snapshot of the page
+  (`WebViewPool.snapshot(of:width:)`, the bar swipe's preview size; the card thumbnail is the
+  fallback) and writes it off the main thread beside the thumbnails
+  (`Thumbnails/Launch/<window>-<save>.jpg`, a new name per save), then publishes a small
+  `LaunchHint` naming it (tab id, address, Back/Forward, tab count, security, time) in user
+  defaults, per window and per store, only once the write succeeded: a hint never names another
+  page's picture. Every save and clear bumps a generation, so a snapshot that comes back late
+  never undoes a newer save or a clear; the write runs inside `BackgroundWork` (ends exactly once,
+  also when the system's time runs out). A window that left with no page stores an empty marker,
+  so it opens to search rather than to another window's page; a scene the system made new (the
+  app swiped away in the switcher) has no window id: as the app's only scene it takes the hint any
+  window left last and restores that same window, so picture and page agree; a further new scene
+  starts with search. Launch still checks the hint against the tab the session selects.
+  A test store has its own keys, cleared by `-PlainResetStore`; the in-memory store keeps none.
+  No picture at all (the page did not answer and no card thumbnail exists): no hint, search first.
+- **Off the main thread:** the scene reads the hint (user defaults are already in memory) and
+  starts decoding the picture on a background task before it builds the browser
+  (`LaunchPicture`, `preparingForDisplay()` at the picture's own size). The first frame takes it
+  if ready, else waits at most `FixedChoices.launchPictureWait` (40 ms) for the decode already
+  running, else fades it in when it lands. The wait is a deliberate bounded exception to "main is
+  for UI only": three frames of waiting under the launch screen beat a frame of bare paper; the
+  decode finished before the first frame in every simulator run (`launch.pictureWait` never fired;
+  see docs/perf-log.md).
+- **No flash:** the picture sits over the page container, takes no touches, and stays above the
+  restored web view until its page has loaded and had 100 ms to paint and restore its scroll, at
+  most 3 s from the moment the picture went up (`launchPictureMaxHold`, enforced by its own timer
+  even while the saved session is still being read), then crossfades out
+  (`Motion.quick`). A drag on the page, a switch to another tab, a new address, Back, Forward or
+  Reload uncovers it at once. Until the saved session is read, the bar follows the hint
+  (`placeholderState`), so its buttons and address are already the restored page's and nothing
+  moves. An HTTPS page that has not committed yet has no security verdict (`.none`) rather than
+  "Not Secure": the restored page's address arrives before its load, which flashed "Not Secure —"
+  in the resting bar for a few frames.
+- **Fresh search opens a new tab:** a search from the fresh search over a page goes to a new tab
+  (Chrome's New Tab Page), private if the page was, so the page the user came back to stays as it
+  was in the tab list. A
+  search from the pill on a page still loads in that tab.
+- **The frost is a paper veil:** 70% paper over the page, no blur (`FrostView`). The system
+  materials blurred the page past recognition (design review); the veil keeps its headings and
+  layout readable as "the tab is still there" while the empty field and keyboard lead.
+- **Swipe down closes the search field** everywhere, not only over a last tab: the sheet behaves
+  like a sheet (Arc Search), and a tap outside still works.
+- **Not kept:** private pages (never on disk), a split (two panes restore differently from one
+  picture) and the reader (it does not restore). Those launch into search with the restored tab,
+  if any, behind the frost.
+- **Debug clock:** `-PlainAwayOffset <seconds>` runs the rules' clock ahead (Debug builds), so UI
+  tests reach "4 hours away" without waiting.

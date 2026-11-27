@@ -17,7 +17,7 @@ final class TabsTests: XCTestCase {
         let app = XCUIApplication.isolated()
         app.launchArguments += arguments
         app.launch()
-        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.waitForFirstScreen())
         return app
     }
 
@@ -132,16 +132,14 @@ final class TabsTests: XCTestCase {
         var app = try launch(["-PlainTestStore", "-PlainResetStore"])
         openTabs(app, [("/a", "Page A"), ("/b", "Page B"), ("/c", "Page C")])
         // Leaving the app writes the tab list and every tab's state.
-        XCUIDevice.shared.press(.home)
+        XCUIApplication.leaveForAnotherApp()
         Thread.sleep(forTimeInterval: 2)
         app.terminate()
 
         app = try launch(["-PlainTestStore"])
-        // Search first; the selected tab is back under the sheet.
-        XCTAssertTrue(app.textFields["searchField"].hasKeyboardFocus)
-        Thread.sleep(forTimeInterval: 1)
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        // The selected tab, as it was: its page, the bar resting, no keyboard.
         waitForPage(app, "Page C")
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
         let gallery = openGallery(app)
         XCTAssertTrue(waitForTabCount(gallery, 3), "\(String(describing: gallery.value)) came back, not 3 tabs")
         // A tab that was never on screen this launch opens with its page.

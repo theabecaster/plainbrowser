@@ -361,7 +361,8 @@ extension BrowserViewController: GalleryHost {
             start.onAction = { [weak self] in self?.beginAddressEditing() }
             webContainer.addSubview(start)
         }
-        let showsStart = currentTab.map { session.tabs.isEmpty($0.id) } ?? true
+        // The last tab's picture stands in for its page until the restored session is in.
+        let showsStart = currentTab.map { session.tabs.isEmpty($0.id) } ?? (launchUI.placeholder == nil)
         start.isHidden = !showsStart
         // Back on an idle start screen with the field closed (a load stopped before it
         // committed): the mark and its company return.
@@ -372,7 +373,9 @@ extension BrowserViewController: GalleryHost {
             webContainer.bringSubviewToFront(start)
             webContainer.bringSubviewToFront(engineUI.pageState)
         }
-        sheet.backgroundColor = showsStart && !start.isReceded ? .clear : Paper.background
+        // A fresh search over a page is clear too: the page shows through the frost.
+        let clear = (showsStart && !start.isReceded) || (launchUI.isFreshSearch && !showsStart)
+        sheet.backgroundColor = clear ? .clear : Paper.background
     }
 
     /// The start screen while typing (state rules §3): with a query, the mark and its shortcuts

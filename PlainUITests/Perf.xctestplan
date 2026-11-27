@@ -21,6 +21,7 @@
       "selectedTests" : [
         "PerfTests\/testLaunch()",
         "PerfTests\/testLaunchToSearchFieldReady()",
+        "PerfTests\/testLaunchToLastTab()",
         "PerfTests\/testPageScrollHitches()",
         "PerfTests\/testGalleryOpen()",
         "PerfTests\/testBarSwipe()"

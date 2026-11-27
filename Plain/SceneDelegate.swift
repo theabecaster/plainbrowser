@@ -37,6 +37,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private weak var browser: BrowserViewController?
     /// Web links other apps opened before the browser was built.
     private var pendingLinks: [URL] = []
+    /// When the scene last went to the background: a long absence opens a fresh search on return.
+    private var leftAt: Date?
+    private var currentMemory: LaunchMemory?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -89,14 +92,19 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let window = UIWindow(windowScene: windowScene)
         // Settings > Appearance from the first frame (the database is read later).
         AppAppearance.prepare(window)
+        let savedWindow = Self.savedWindowID(of: windowScene.session)
+        // First, so the last tab's picture decodes off the main thread while the browser is built.
+        let launch = launchPlan(for: savedWindow)
         self.session = BrowserSession(
             database: { [database] in await database.value },
             tabStates: TabStateStore(directory: self.options.tabStateDirectory),
-            windowID: Self.savedWindowID(of: windowScene.session),
+            // A scene the system made new shows the window whose page the first frame shows.
+            windowID: savedWindow ?? launch.hint?.windowID,
             thumbnailDirectory: self.options.thumbnailDirectory
         )
-        let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) { [weak self] in
-            Signposts.signposter.endInterval(Signposts.launch, launchInterval)
+        let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets, launch: launch) {
+            [weak self] in
+            Signposts.signposter.endInterval(Signposts.launch, launchInterval, "\(String(describing: launch.opening))")
             // Links that launched the app open once the launch focus is done, so the search
             // field never comes up over their page.
             self?.openPendingLinks()
@@ -128,6 +136,39 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             sidebar: value(after: "-PlainSidebar")
         )
         #endif
+    }
+
+    // MARK: Launch and return (docs/state-rules.md, "Launch and return")
+
+    /// What this window remembers for the next launch, in `TestIsolation.defaults` (an isolated
+    /// run's own suite, emptied by an in-memory run and by `-PlainResetStore`). One per window, so
+    /// its picture writes stay in order.
+    private func launchMemory(for windowID: UUID?) -> LaunchMemory {
+        if let memory = currentMemory, memory.windowID == windowID { return memory }
+        let memory = LaunchMemory(directory: options.launchDirectory, windowID: windowID)
+        currentMemory = memory
+        return memory
+    }
+
+    /// The first frame's screen: search with no last tab or with a link to open; else the last tab,
+    /// or a fresh search over it after a long time away. Its picture starts decoding now.
+    /// A scene without a window id (the system made it new) takes the page any window left last
+    /// only when it is the app's one scene, and then restores that window (`showBrowser`), so the
+    /// picture and the restored tab agree; a further new scene starts with search.
+    private func launchPlan(for windowID: UUID?) -> LaunchPlan {
+        let onlyScene = UIApplication.shared.connectedScenes.count <= 1
+        let memory = launchMemory(for: windowID)
+        guard pendingLinks.isEmpty, windowID != nil || onlyScene, let hint = memory.hint,
+              // A known window that never left a hint gets no other window's page.
+              windowID == nil || hint.windowID == windowID else { return .search }
+        let opening = LaunchRules.opening(hint: hint, now: options.now)
+        return LaunchPlan(opening: opening, hint: hint, picture: memory.startDecodingPicture(for: hint))
+    }
+
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        guard let leftAt, let browser else { return }
+        self.leftAt = nil
+        browser.appDidReturn(awayFrom: leftAt, now: options.now)
     }
 
     // MARK: Links from other apps
@@ -175,6 +216,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Final once the saved tabs are in; written each time so the next launch finds it.
         guard let session else { return }
         SceneState.set(session.windowID.uuidString, forKey: Self.windowIDKey, in: scene.session)
+        // The page on screen and its picture, for the next launch's first frame.
+        browser?.rememberForLaunch(in: launchMemory(for: session.windowID))
     }
 
     /// The scene's window id (`SceneState`: never the owner's scene state in an isolated run).
@@ -185,6 +228,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidEnterBackground(_ scene: UIScene) {
         // Nothing to save while the intro is up: the browser (and its engine) is not built yet.
         guard browserShown else { return }
+        leftAt = Date()
         let data = addressBarData
         Task { await data.flush() }
         // The pool saves every tab's page state on its own (willResignActive); this writes the
@@ -249,11 +293,17 @@ private nonisolated struct LaunchOptions: Sendable {
     /// tests start each launch from an empty session this way, on disk like the real store. The
     /// reset only ever touches that temporary folder.
     let resetStore: Bool
+    /// `-PlainAwayOffset <seconds>`: the clock the launch and return rules read runs this far
+    /// ahead, so UI tests reach "a long time away" without waiting. Debug builds only.
+    var awayOffset: TimeInterval = 0
 
     init(arguments: [String]) {
         #if DEBUG
         seedFavorites = arguments.contains("-PlainSeedFavorites")
         seedArchive = arguments.contains("-PlainSeedArchive")
+        if let index = arguments.firstIndex(of: "-PlainAwayOffset"), arguments.indices.contains(index + 1) {
+            awayOffset = TimeInterval(arguments[index + 1]) ?? 0
+        }
         #endif
         inMemory = TestIsolation.mode == .inMemory
         resetStore = TestIsolation.resetRequested
@@ -267,6 +317,16 @@ private nonisolated struct LaunchOptions: Sendable {
     /// Where tabs' history, scroll and sessionStorage are saved for relaunch, next to the database.
     /// A path only: nothing touches the disk until the first save.
     var tabStateDirectory: URL { directory.appending(path: "TabState", directoryHint: .isDirectory) }
+
+    /// The time the launch and return rules use (`-PlainAwayOffset` moves it ahead).
+    var now: Date { Date().addingTimeInterval(awayOffset) }
+
+    /// Where each window's launch picture lives: beside the thumbnails, in a folder of its own
+    /// (thumbnail pruning only looks at the top level).
+    var launchDirectory: URL {
+        let thumbnails = thumbnailDirectory ?? URL.cachesDirectory.appending(path: "Thumbnails", directoryHint: .isDirectory)
+        return thumbnails.appending(path: "Launch", directoryHint: .isDirectory)
+    }
 
     /// Thumbnails next to a test database (nil: the pool's Caches/Thumbnails). Launch prunes
     /// thumbnails that no tab in the database names, so a test store must never share the user's.

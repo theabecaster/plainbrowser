@@ -22,9 +22,10 @@ final class PerfTests: XCTestCase {
         return options
     }
 
-    /// Cold launch: from `main` to the first display-link callback after the window is visible
-    /// (the `launch.firstFrame` interval). Not XCTApplicationLaunchMetric: on iOS 27 it records nothing
-    /// for Plain on the device and only in some runs on a simulator.
+    /// Cold launch with no tab (search first): from `main` to the first display-link callback after
+    /// the window is visible (the `launch.firstFrame` interval). Not XCTApplicationLaunchMetric: on
+    /// iOS 27 it records nothing for Plain on the device and only in some runs on a simulator. The
+    /// test store holds no tab (`prepareLaunchStore`), so it stays a search-first launch.
     func testLaunch() {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launchFirstFrame)
@@ -35,7 +36,7 @@ final class PerfTests: XCTestCase {
         }
     }
 
-    /// From `main` to the search field becoming first responder (the `launch` interval).
+    /// From `main` to the search field becoming first responder (the `launch` interval), no tab.
     func testLaunchToSearchFieldReady() {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launch)
@@ -43,6 +44,40 @@ final class PerfTests: XCTestCase {
         prepareLaunchStore()
         measure(metrics: [metric], options: options) {
             Self.launchOnDiskStore().launch()
+        }
+    }
+
+    private static func emptyStoreApp() -> XCUIApplication {
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestStore", "-PlainResetStore"]
+        return app
+    }
+
+    /// Cold launch with a last tab: from `main` to the first frame with the tab's picture and the
+    /// resting bar on it (`launch.firstFrame`; the picture's decode, and any wait for it, is
+    /// inside). The tab is left once in a fresh test store; each iteration relaunches into it.
+    func testLaunchToLastTab() throws {
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let setup = Self.emptyStoreApp()
+        setup.launch()
+        let field = setup.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/long") + "\n")
+        XCTAssertTrue(setup.webViews.staticTexts["Long Read"].waitForExistence(timeout: 10))
+        // Leaving the app keeps the page and its picture for the next launch.
+        XCUIApplication.leaveForAnotherApp()
+        Thread.sleep(forTimeInterval: 3)
+        setup.terminate()
+
+        let metric = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launchFirstFrame)
+        )
+        measure(metrics: [metric], options: options) {
+            let app = XCUIApplication.introSeen()
+            app.launchArguments += ["-PlainTestStore"]
+            app.launch()
         }
     }
 

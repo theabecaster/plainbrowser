@@ -101,6 +101,11 @@ final class TestServer: @unchecked Sendable {
             return ("200 OK", html("Plain Test B", "<h1>Page B</h1>"))
         case "/c":
             return ("200 OK", html("Plain Test C", "<h1>Page C</h1><p>A third page, for tab switching.</p>"))
+        case "/launch":
+            // A page in one strong color, so a screenshot tells it from Plain's paper at a glance
+            // (the launch tests: the last tab's picture must be on the very first screen).
+            return ("200 OK", html("Plain Launch", "<style>html,body{background:#2973FF;color:#fff;min-height:100%}</style>"
+                + "<h1>Launch Page</h1><p>The last tab, back from the first frame.</p>"))
         case "/files":
             return ("200 OK", html("Plain Files", "<h1>Files</h1><p><a href=\"/file.txt\">Download notes</a></p>"))
         case "/file.txt":

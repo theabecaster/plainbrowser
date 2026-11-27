@@ -222,7 +222,29 @@ Favorites and Settings are one row of three, so the whole menu fits the Duo's ou
 | Start screen behind | Shown on Start while the field is empty (the sheet is clear) | The mark keeps the empty field company. |
 | Start screen while typing | With a query, the mark, sentence and shortcuts recede (fade, shrink to 94 %, drift up, with the snappy 0.3 spring; Reduce Motion: a crossfade) and the sheet takes the paper; cleared, or the field closed, they come back | Suggestion rows never draw over the mark (owner, 2026-11-26). The rows sit on the paper token themselves, so they read even mid-transition, in light and dark. |
 | Remote suggestions | Off in private tabs | FixedChoices. |
-| Tap outside the field | Closes the field. On a fresh launch this shows the start screen, never a blank page. | |
+| Tap outside the field, or swipe down on the sheet | Closes the field. On a fresh launch with no tab this shows the start screen, never a blank page; over a last tab it shows the tab. | Arc Search's swipe down back to the tab. |
+| Fresh search over a page | The sheet is clear and the page shows through a paper veil (70% paper, no blur); the field starts empty with favorites; a submitted search opens a new tab, so the page stays as it was. Lasts until the field closes. | The tab is visibly still there, one swipe away (owner, 2026-11-27). |
+
+### Launch and return
+
+What Plain opens to (`BrowserCore/LaunchRules.swift`; research in docs/research/launch.md). "Away"
+is the time since the app last left the foreground; "long" is `FixedChoices.freshSearchAfter`
+(4 hours, Chrome's and Firefox's line).
+
+| Situation | Opens to | Why |
+|---|---|---|
+| Cold launch, no tab (first run, all closed) | Search, keyboard up, start screen behind | Nothing to go back to. |
+| Cold launch, a last tab, away < 4 h | **The last tab**: its saved picture at full size on the first frame, the bar resting with the tab's address and buttons, no keyboard. The live page restores under the picture, which fades once the page has loaded (at most 3 s); a drag uncovers it at once. | Safari, Chrome and Firefox reopen the page being read; the first frame never looks empty. |
+| Cold launch, a last tab, away ≥ 4 h | **Fresh search over the last tab**: keyboard up, empty field, the tab's picture behind a paper veil. Swipe down or tap outside: the tab, as it was. | Arc Search's sheet over the tab; Chrome's new tab after 4 hours. |
+| Cold launch, a link from another app | The link's page | A link always wins. |
+| Cold launch, the last screen was private, a split, the reader or the start screen | Search, keyboard up; the restored tab, if any, shows through the frost behind it | No picture is kept of private pages; a split or the reader restores differently from its picture. |
+| Return from the background, away < 4 h | Exactly where the user left off | |
+| Return, away ≥ 4 h, a page on screen | Fresh search over the page | As cold launch. |
+| Return, away ≥ 4 h, the start screen | Search, keyboard up | |
+| Return, away ≥ 4 h, but the gallery, a sheet or the field is open, or the page plays media, is fullscreen or downloads | Exactly where the user left off | The user is in the middle of something (Chrome leaves its tab grid alone too). |
+
+While the picture stands in (before the saved session is read), the bar follows the saved tab:
+its address, Back and Forward, the tabs slot; nothing in the bar moves when the live page arrives.
 
 ### Tab gallery (Gallery mode, reachable with a card to show: `others ≥ 1`, or a page on screen)
 
@@ -298,6 +320,7 @@ combines its base state with the rows that modify it (for example, private + loa
 | State | Back | Fwd | Tabs slot | Share | More | Swipe up | Bar swipe | New Tab card | Pull to refresh | Progress | Start screen |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | First run (no tabs, keyboard up) | — | — | — | — | — | off | off | — | off | — | ✓ (behind the field) |
+| Launch with a last tab, picture standing in | as the saved tab | as the saved tab | as the saved tab | ✓ | ✓ | waits for the tab | waits for the tab | — | off | — | — |
 | First run, field closed | — | — | — | — | ✓ (New Private Tab on top) | ≠ bump | ≠ rubber-band | — | off | — | ✓, Search button, Private Tab shortcut |
 | No tabs, some closed or archived | — | — | — | — | ✓ (Reopen Closed Tab, Archived Tabs on top) | ≠ bump | ≠ rubber-band | — | off | — | ✓ + shortcuts |
 | One empty tab, others ≥ 1 | — | — | Tabs | — | ✓ | gallery | neighbours | — | off | — | ✓ |
@@ -346,7 +369,7 @@ Notes:
 | Safari: swiping past the last tab on the address bar opens a new tab. | [iPhone Life](https://iphonelife.com/content/quickest-way-to-open-new-tab-safari-your-iphone) (secondhand) | Kept, behind a card (plan, section 5), and only from a page. |
 | Safari: recently closed tabs from a long press on New Tab in the overview; Close All from a long press on Done; tabs button long press has New Tab, New Private Tab, Close This Tab, Close All. | [Apple: Open and close tabs](https://support.apple.com/guide/iphone/open-and-close-tabs-iph489b9313f/ios), [Gadget Hacks](https://ios.gadgethacks.com/how-to/iphone-safari-gestures-productivity/) (secondhand) | Plain's tabs menu holds the same, plus Reopen and Archive. |
 | Arc Search: the switcher button bottom-left, a menu bottom-right with "vestigial back and forward buttons", Favorite, Refresh, Zoom, Desktop Site. Back is mainly the edge swipe; swiping back on a tab's first page archives the tab. | [TidBITS](https://tidbits.com/2024/02/15/arc-gains-instant-links-tab-grouping-and-arc-search-iphone-app/), [MacStories](https://www.macstories.net/reviews/arc-search-for-iphone/) (secondhand), [Arc release notes](https://resources.arc.net/hc/en-us/articles/23528454620311) | Plain keeps a real Back button and never archives on Back (plan, section 5). |
-| Arc Search launches into search with the keyboard up; a setting covers "reactivating the app with no open tabs". With no tabs the switcher cannot be reached. | [TechCrunch](https://techcrunch.com/2024/01/28/arcs-new-iphone-browser-wants-to-be-your-search-companion), [Arc release notes](https://resources.arc.net/hc/en-us/articles/23528454620311), docs/research/arc-tab-switcher.md | No tabs means the start screen, never an empty switcher. |
+| Arc Search launches into search with the keyboard up, over the last tab, which a swipe down on the sheet reveals; a setting covers "reactivating the app with no open tabs". With no tabs the switcher cannot be reached. Safari reopens the last tab; Chrome and Firefox open a start page after 4 hours away (docs/research/launch.md). | [TechCrunch](https://techcrunch.com/2024/01/28/arcs-new-iphone-browser-wants-to-be-your-search-companion), [Arc release notes](https://resources.arc.net/hc/en-us/articles/23528454620311), docs/research/arc-tab-switcher.md, docs/research/launch.md | No tabs means the start screen, never an empty switcher. With tabs: the last tab, or after 4 hours a fresh search over it (§6, "Launch and return"). |
 | HIG, context menus: "Hide unavailable menu items, don't dim them." HIG, menus: "Show people when a menu item is unavailable … appears dimmed." | [HIG: Context menus](https://developer.apple.com/design/human-interface-guidelines/context-menus), [HIG: Menus](https://developer.apple.com/design/human-interface-guidelines/menus) | Principle 6: hide what does not apply, dim what is at a limit. |
 | HIG, tab bars: "Don't disable or hide tab bar buttons … makes your app's interface appear unstable." HIG, toolbars: a toolbar "can't be the only place that presents a command." | [HIG: Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars), [HIG: Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars) | Plain's bar is a toolbar, not a tab bar, so it may change by mode. Positions stay fixed (slots kept), and every bar command is also in a menu. |
 

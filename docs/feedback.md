@@ -4,15 +4,13 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
-- **Launch with tabs feels empty:** open to the last tab (or a search with the last tab behind it), like Arc but smoother. (Launch lane.)
-
-
 - **Sign-in like Safari:** passkeys on sites that support them, and saved passwords from the Passwords app and every password manager on the phone (1Password, Bitwarden and others), as easily as in Safari. Both need Apple's web-browser entitlement; the request is ready for the owner to submit. Until it lands, sites are steered to password sign-in and a failed passkey attempt says why. Done when the entitlement ships and the device checks in `docs/research/sign-in.md` pass. (Sign-in lane.)
 
 
 ## Done
 
 - **Dark pages wash out text on mixed light/dark sites like apple.com — make it Safari-quality:** dark pages now works like Safari's Adaptive Dark Mode, color by color instead of inverting the whole page: light backgrounds turn dark and dark text turns light, keeping their hue, while black heroes, dark cards and the white text on them stay exactly as the site made them. Pictures, video, emoji, brand colors and colored logos are never changed; text over a photo keeps the site's color; every text on apple.com, AP News and Hacker News measures at least 4.5:1. (dev, dark pages lane.)
+- **Launch with tabs feels empty:** Plain opens to the last tab, exactly as it was: its page is on screen from the very first frame (a picture saved when the app left, swapped for the live page once it has loaded, with no flash), the bar resting, no keyboard. After 4 hours away (Chrome's and Firefox's line) it opens a fresh search instead, keyboard up, with the last tab visible behind a paper veil; swipe down or tap outside to get back to it, and a search from there opens a new tab. Returning within 4 hours changes nothing. With no tabs, search first as before. (dev, launch lane.)
 
 - **URL bar should get out of the way while reading:** keep reading past the pill and the bar sinks away, leaving the whole page; a move up, a tap on the bottom edge or the status bar, the page's end, a new page, Find or a page's keyboard brings it back whole. Never hidden while a page loads, on error pages or with VoiceOver. On the Duo's inner screen the top bar's tucked address rises away the same way. (dev, scroll chrome lane.)
 

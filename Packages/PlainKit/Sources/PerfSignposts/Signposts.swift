@@ -10,7 +10,8 @@ public enum Signposts {
 
     public static let signposter = OSSignposter(subsystem: subsystem, category: category)
 
-    /// Interval from `main` entering to the search field becoming first responder.
+    /// Interval from `main` entering to the first screen ready: the search field first responder,
+    /// or the last tab's picture and resting bar in place (message: the opening screen).
     public static let launch: StaticString = "launch"
     /// Interval from `main` entering to the first display-link callback after the first window
     /// became visible: the run loop turn that showed the window is done and the main thread runs
@@ -157,6 +158,19 @@ public enum Signposts {
     /// Interval: after the first frame, reading the last session's tab and handing it to the
     /// page (its page then restores under `tab.restore`).
     public static let launchRestoreTab: StaticString = "launch.restoreTab"
+    /// Interval: decoding the last tab's launch picture off the main thread, from the scene
+    /// connecting (message: "decoded" or "none").
+    public static let launchPictureDecode: StaticString = "launch.pictureDecode"
+    /// Interval: the first frame waiting for that decode to finish (message: "ready" or
+    /// "timedOut"); absent when it was already done.
+    public static let launchPictureWait: StaticString = "launch.pictureWait"
+    /// Interval: encoding and writing the launch picture off the main thread.
+    public static let launchPictureSave: StaticString = "launch.pictureSave"
+    /// Interval: the last tab's restored page shown under its picture, until the picture has
+    /// faded and the live page is uncovered (message: "loaded", "timedOut" or "dropped").
+    public static let launchPictureHandoff: StaticString = "launch.pictureHandoff"
+    /// Event: a fresh search opened over the last tab (message: "launch" or "return").
+    public static let freshSearch: StaticString = "launch.freshSearch"
 
     // MARK: Tabs (TabStore). The shell emits these around its `TabStore` calls.
 

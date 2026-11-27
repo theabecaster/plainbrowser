@@ -17,7 +17,7 @@ final class EngineTests: XCTestCase {
         let app = XCUIApplication.isolated()
         app.launchArguments += arguments
         app.launch()
-        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.waitForFirstScreen())
         return app
     }
 
@@ -74,17 +74,14 @@ final class EngineTests: XCTestCase {
         waitForPage(app, "Page B")
         XCTAssertTrue(app.buttons["back"].isEnabled)
         // Leaving the app saves every tab (the engine also saves a second after each load).
-        XCUIDevice.shared.press(.home)
+        XCUIApplication.leaveForAnotherApp()
         Thread.sleep(forTimeInterval: 2)
         app.terminate()
 
         app = try launch(["-PlainTestStore"])
-        // Search first: the field is focused, and the last page comes back under it. (Its text is
-        // checked after the sheet closes: WebKit doesn't always expose a covered page's text.)
-        XCTAssertTrue(app.textFields["searchField"].hasKeyboardFocus)
-        Thread.sleep(forTimeInterval: 1)
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        // The last page, as it was: the bar resting, no keyboard.
         waitForPage(app, "Page B")
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
         let restoredPill = app.buttons["addressPill"]
         XCTAssertTrue(restoredPill.waitForExistence(timeout: 2))
         XCTAssertEqual(restoredPill.value as? String, "http://" + server.address("/b"))

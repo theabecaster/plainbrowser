@@ -21,7 +21,9 @@ public protocol AddressBarData: AnyObject {
     var searchEngine: SearchEngine { get }
     /// Suggestions for `query`, delivered through `update`: local pages first (fast), then again
     /// with the engine's suggestions merged in. Stops quietly when the calling task is cancelled.
-    func suggestions(for query: String, update: @escaping ([AddressBarSuggestion]) -> Void) async
+    /// `isPrivate`: the asking window's tab is private (no remote suggestions), passed with each
+    /// query because the data is the app's and several windows ask.
+    func suggestions(for query: String, isPrivate: Bool, update: @escaping ([AddressBarSuggestion]) -> Void) async
     /// Stops any engine request still running (the address bar closed).
     func cancelSuggestions()
     /// Favorites, in the user's order.
@@ -187,8 +189,13 @@ public final class LiveAddressBarData: AddressBarData {
     /// 2. The engine's answer, when it differs. If it has not come by the end of the hold, the
     ///    held rows go first, then the answer follows whenever it arrives.
     public func suggestions(for query: String, update: @escaping ([AddressBarSuggestion]) -> Void) async {
+        await suggestions(for: query, isPrivate: isPrivate, update: update)
+    }
+
+    public func suggestions(
+        for query: String, isPrivate: Bool, update: @escaping ([AddressBarSuggestion]) -> Void
+    ) async {
         let engine = searchEngine
-        let isPrivate = isPrivate
         let client = client
         // The database and the cache are read together, so the first list already has both.
         async let cachedAnswer = client.cachedSuggestions(for: query, engine: engine, isPrivate: isPrivate)

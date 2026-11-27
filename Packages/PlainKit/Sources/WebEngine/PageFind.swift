@@ -44,7 +44,10 @@ public enum PageFind {
     ) async -> PageFindResult {
         await withCheckedContinuation { continuation in
             webView.callAsyncJavaScript(
-                findSource, arguments: ["query": query, "limit": limit, "context": FixedChoices.findResultContext],
+                findSource, arguments: [
+                    "query": query, "limit": limit, "context": FixedChoices.findResultContext,
+                    "chunk": FixedChoices.findChunkNodes,
+                ],
                 in: nil, in: UserScripts.world
             ) { result in
                 guard let reply = (try? result.get()) as? [String: Any] else { return continuation.resume(returning: .none) }
@@ -99,13 +102,19 @@ public enum PageFind {
 
     static let findSource = """
         \(styleSource)
+        // A newer search (or a clear) ends this one at its next pause.
+        const generation = (globalThis.__plainFindGeneration || 0) + 1;
+        globalThis.__plainFindGeneration = generation;
         const state = globalThis.__plainFind = { ranges: [] };
         if (highlights) { highlights.delete('plain-find'); highlights.delete('plain-find-current'); }
-        const needle = String(query).trim().toLocaleLowerCase();
+        const needle = String(query).trim();
         if (!needle || !document.body) return { matches: [], more: false };
+        // Case-insensitive by Unicode simple case folding: the indices stay the text's own.
+        const pattern = new RegExp(needle.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'giu');
         const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA', 'SELECT', 'OPTION']);
         const blocks = 'p,li,td,th,h1,h2,h3,h4,h5,h6,blockquote,figcaption,dd,dt,pre,article,section,div,body';
         const shown = new Map();
+        // Style and geometry are read only for matches, never for every text node.
         const isShown = (element) => {
           if (shown.has(element)) return shown.get(element);
           const rect = element.getClientRects()[0];
@@ -128,23 +137,24 @@ public enum PageFind {
         const flush = () => {
           if (!group || more) return;
           const text = group.text;
-          const lower = text.toLocaleLowerCase();
-          if (lower.length !== text.length) return;
-          let at = lower.indexOf(needle);
-          while (at >= 0) {
-            if (matches.length >= limit) { more = true; return; }
+          pattern.lastIndex = 0;
+          for (let found = pattern.exec(text); found; found = pattern.exec(text)) {
+            const at = found.index;
+            const length = found[0].length;
+            if (length === 0) { pattern.lastIndex += 1; continue; }
             const [startNode, startOffset] = position(at, false);
-            const [endNode, endOffset] = position(at + needle.length, true);
+            if (!isShown(startNode.parentElement)) continue;
+            if (matches.length >= limit) { more = true; return; }
+            const [endNode, endOffset] = position(at + length, true);
             const range = document.createRange();
             range.setStart(startNode, startOffset);
             range.setEnd(endNode, endOffset);
             state.ranges.push(range);
             matches.push({
               before: clip(text.slice(Math.max(0, at - context), at)).trimStart(),
-              match: text.slice(at, at + needle.length),
-              after: clip(text.slice(at + needle.length, at + needle.length + context * 2)).trimEnd(),
+              match: text.slice(at, at + length),
+              after: clip(text.slice(at + length, at + length + context * 2)).trimEnd(),
             });
-            at = lower.indexOf(needle, at + needle.length);
           }
         };
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
@@ -154,9 +164,15 @@ public enum PageFind {
             return node.nodeValue ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
           },
         });
+        let visited = 0;
         for (let node = walker.nextNode(); node && !more; node = walker.nextNode()) {
+          // A huge page yields to the page now and then, and stops if a newer search began.
+          visited += 1;
+          if (visited % chunk === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            if (globalThis.__plainFindGeneration !== generation) return { matches: [], more: false, cancelled: true };
+          }
           const parent = node.parentElement;
-          if (!isShown(parent)) continue;
           const block = parent.closest(blocks) || parent;
           if (!group || group.block !== block) {
             flush();
@@ -167,6 +183,7 @@ public enum PageFind {
           group.text += node.nodeValue;
         }
         flush();
+        if (globalThis.__plainFindGeneration !== generation) return { matches: [], more: false, cancelled: true };
         if (highlights && state.ranges.length && globalThis.Highlight) {
           ensureStyle();
           highlights.set('plain-find', new Highlight(...state.ranges));
@@ -190,6 +207,7 @@ public enum PageFind {
         """
 
     static let clearSource = """
+        globalThis.__plainFindGeneration = (globalThis.__plainFindGeneration || 0) + 1;
         globalThis.__plainFind = { ranges: [] };
         if (globalThis.CSS && CSS.highlights) {
           CSS.highlights.delete('plain-find');

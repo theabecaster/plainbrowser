@@ -334,6 +334,8 @@ extension BrowserViewController {
                     guard let self else { return }
                     sidePaneUI.isAnimating = false
                     sidePaneUI.dragColumn = nil
+                    // The swipe built the section to show it: it lets go of what it holds.
+                    controller.paneWillHide()
                     controller.view.transform = .identity
                     if let layout = duo.layout { applySidePaneLayout(layout) }
                 })

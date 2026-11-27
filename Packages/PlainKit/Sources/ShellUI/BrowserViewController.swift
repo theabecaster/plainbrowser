@@ -641,10 +641,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let interval = signposter.beginInterval(Signposts.suggestionsShown)
         // The address bar's data is the app's: each query carries this window's private state, so
         // another window's tab never decides whether a private query leaves the device.
-        data.isPrivate = pill.isPrivateTint
+        let isPrivate = pill.isPrivateTint
         suggestionTask = Task { [weak self, data] in
             var shown = false
-            await data.suggestions(for: query) { suggestions in
+            await data.suggestions(for: query, isPrivate: isPrivate) { suggestions in
                 guard let self, !Task.isCancelled else { return }
                 self.sheet.show(suggestions)
                 if !shown {

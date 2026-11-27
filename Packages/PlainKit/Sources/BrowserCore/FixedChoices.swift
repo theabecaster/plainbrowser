@@ -473,6 +473,10 @@ public enum FixedChoices {
     /// Find in the side pane waits this long after a keystroke before it searches, so typing a
     /// word searches once, not per letter.
     public static let findDebounce: Duration = .milliseconds(150)
+    /// Find in the side pane walks this many text nodes between pauses that hand the page's main
+    /// thread back (a few milliseconds of walking on a phone), so a huge page keeps scrolling and a
+    /// newer query stops the older one at the next pause.
+    public static let findChunkNodes = 2000
     /// The edge swipe opens the side pane past this share of its width, as the sidebar's drag
     /// settles past a third: less is a touch that strayed in from the edge.
     public static let sidePaneOpenFraction = 1.0 / 3

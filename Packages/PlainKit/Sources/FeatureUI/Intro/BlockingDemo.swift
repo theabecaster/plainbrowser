@@ -20,6 +20,7 @@ struct BlockingDemo: View {
     @State private var trackersBlocked = false
     @State private var autoPlay: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let trackerCount = 9
 
@@ -29,7 +30,7 @@ struct BlockingDemo: View {
                 // Under Reduce Motion nothing moves: the whole page crossfades between states.
                 .id(reduceMotion ? AnyHashable(model.blockingOn) : AnyHashable("page"))
                 .transition(.opacity)
-                .frame(maxWidth: 360, maxHeight: .infinity)
+                .frame(maxWidth: 360, maxHeight: 440)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(model.blockingOn
                     ? "Sample page with blocking on: just the article."
@@ -39,8 +40,8 @@ struct BlockingDemo: View {
                 .padding(.top, -26)
                 .padding(.horizontal, 10)
             Text(model.blockingOn ? "Plain blocks these for you, on every site." : "The same page without blocking.")
-                .font(.subheadline.weight(.medium))
-                .opacity(0.85)
+                .font(.subheadline)
+                .opacity(0.72)
                 .multilineTextAlignment(.center)
                 .padding(.top, 12)
                 .contentTransition(.opacity)
@@ -66,8 +67,17 @@ struct BlockingDemo: View {
                 }
             }
             .overlay(alignment: .bottom) { overlays }
-            .clipShape(.rect(cornerRadius: 26, style: .continuous))
-            .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
+            // At night the white page is dimmed a little, so it does not glare on the night paper.
+            .overlay { Color.black.opacity(colorScheme == .dark ? 0.1 : 0).allowsHitTesting(false) }
+            .clipShape(.rect(cornerRadius: 20, style: .continuous))
+            // A sheet on the paper: a hairline edge and a soft shadow, as the feature cards.
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color(uiColor: BrandArt.ink).opacity(0.08), lineWidth: 1)
+            }
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.shadow(.drop(color: Color(uiColor: Palette.floatingShadow).opacity(0.16), radius: 18, y: 8)))
+            }
             .environment(\.colorScheme, .light)
     }
 
@@ -93,7 +103,7 @@ struct BlockingDemo: View {
                     .contentTransition(.numericText())
             }
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color(uiColor: BrandArt.ink))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(trackersBlocked ? IntroStyle.mint : IntroStyle.coral, in: .capsule)
@@ -235,12 +245,13 @@ struct BlockingDemo: View {
 
     private var toggleRow: some View {
         Toggle(isOn: Binding(get: { model.blockingOn }, set: { flip(to: $0, byUser: true) })) {
-            Text("Block Ads and Trackers").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+            Text("Block Ads and Trackers").font(.subheadline.weight(.semibold)).foregroundStyle(IntroStyle.text)
         }
-        .tint(IntroStyle.coral)
+        .tint(IntroStyle.lagoon)
         .padding(.horizontal, 16)
         .frame(minHeight: 52)
-        .background(Color(uiColor: BrandArt.ink).opacity(0.92), in: .rect(cornerRadius: 16, style: .continuous))
+        // The demo's one control floats over the page, so it is Liquid Glass.
+        .glassEffect(.regular.tint(Color(uiColor: Palette.glassTint)), in: .rect(cornerRadius: 18, style: .continuous))
         .accessibilityIdentifier("introBlockingToggle")
     }
 

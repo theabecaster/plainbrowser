@@ -5,7 +5,7 @@ import PerfSignposts
 import SwiftUI
 import UIKit
 
-/// The first-run intro: the Stem mark assembles on a dawn field, then the steps (promise, what's
+/// The first-run intro: the Stem mark assembles on paper and the dawn opens behind it, then the steps (promise, what's
 /// inside, icon, blocking demo, and the default-browser step when its prompts are on). Finishing
 /// or skipping dissolves it into the search field. See docs/research/intro.md.
 ///
@@ -20,12 +20,14 @@ public final class IntroViewController: UIViewController {
         defaultBrowserStep: DefaultBrowserPrompts.isEnabled(),
         icon: AppIcons.current
     )
-    private let backdrop = IntroBackdrop(mood: .splash)
-    private let mark = StemMarkView()
+    private let dawn = DawnView()
+    private let mark = StemMarkView(shadowed: true)
     private lazy var steps = UIHostingController(rootView: IntroStepsView(model: model))
     private enum MarkPlace { case splash, promise, gone }
     private var markPlace = MarkPlace.splash
     private var splashInterval: OSSignpostIntervalState?
+    /// The bounds and safe area the dawn was last laid out for.
+    private var laidOut: (CGRect, CGRect)?
     private var didStart = false
     private var isSplashing = false
     private let splashTap = UITapGestureRecognizer()
@@ -39,12 +41,16 @@ public final class IntroViewController: UIViewController {
 
     override public func viewDidLoad() {
         super.viewDidLoad()
-        // The launch screen's color, so the first frame matches it and the field fades in over it.
+        // The paper is the launch screen's color, so the launch hands over without a change.
         view.backgroundColor = Palette.background
         view.accessibilityIdentifier = "intro"
-        backdrop.frame = view.bounds
-        backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.addSubview(backdrop)
+        let ground = IntroPaper.makeGround()
+        ground.frame = view.bounds
+        ground.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(ground)
+        dawn.frame = view.bounds
+        dawn.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(dawn)
 
         addChild(steps)
         steps.view.backgroundColor = .clear
@@ -68,15 +74,22 @@ public final class IntroViewController: UIViewController {
 
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        let safe = view.safeAreaLayoutGuide.layoutFrame
+        if model.safeHeight != safe.height { model.safeHeight = safe.height }
         layoutMark()
+        // A new size (the Duo unfolding, a rotation) moves the dawn with it, at once.
+        if laidOut.map({ $0.0 != view.bounds || $0.1 != safe }) ?? true {
+            laidOut = (view.bounds, safe)
+            if let step = model.step { dawn.apply(scene(step)) }
+        }
     }
 
-    /// The first frame is the launch color alone: no mark yet, the field transparent.
+    /// The first frame is the launch color alone: no mark yet, no dawn.
     override public func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
         guard !didStart else { return }
         mark.isHidden = true
-        backdrop.alpha = 0
+        dawn.alpha = 0
     }
 
     override public func viewDidAppear(_ animated: Bool) {
@@ -95,18 +108,14 @@ public final class IntroViewController: UIViewController {
         playSplash()
     }
 
-    override public var preferredStatusBarStyle: UIStatusBarStyle {
-        model.step == .defaultBrowser ? .darkContent : .lightContent
-    }
+    override public var preferredStatusBarStyle: UIStatusBarStyle { .default }
 
     // MARK: Splash
 
     private func playSplash() {
         isSplashing = true
         splashInterval = Signposts.signposter.beginAnimationInterval(Signposts.introSplash)
-        // The field fades in over the launch color while the mark starts drawing.
         mark.isHidden = false
-        UIView.animate(withDuration: Motion.prefersCrossfade ? Motion.crossfadeDuration : 0.22) { self.backdrop.alpha = 1 }
         mark.assemble(onLanded: { Haptic.tap.play() }, completion: { [weak self] in self?.splashEnded() })
     }
 
@@ -128,24 +137,42 @@ public final class IntroViewController: UIViewController {
 
     // MARK: Steps
 
+    private func scene(_ step: IntroModel.Step) -> DawnView.Scene {
+        IntroLayout.scene(step, safe: view.safeAreaLayoutGuide.layoutFrame)
+    }
+
     private func stepChanged(to step: IntroModel.Step?) {
+        if dawn.scene == nil, let step {
+            openDawn(on: step)
+        } else if let step {
+            dawn.apply(scene(step), animation: IntroMotion.dawnStep)
+        }
         switch step {
         case .promise: moveMark(to: .promise)
         default: moveMark(to: .gone)
         }
-        let mood: IntroBackdrop.Mood = switch step {
-        case .promise: .promise
-        case .inside: .inside
-        case .icon: .icons
-        case .blocking: .blocking
-        case .defaultBrowser: .paper
-        case nil: backdrop.mood
-        }
-        backdrop.setMood(mood)
-        UIView.animate(withDuration: 0.3) { self.setNeedsStatusBarAppearanceUpdate() }
         if step != nil {
             UIAccessibility.post(notification: .screenChanged, argument: nil)
         }
+    }
+
+    /// The signature moment: the dawn opens out of the mark, growing from the ring's own window into
+    /// the page's while the mark settles on its sill.
+    private func openDawn(on step: IntroModel.Step) {
+        let target = scene(step)
+        if Motion.prefersCrossfade {
+            dawn.apply(target)
+            UIView.animate(withDuration: Motion.crossfadeDuration) { self.dawn.alpha = 1 }
+            return
+        }
+        var start = target
+        let circle = mark.windowRect(in: view)
+        start.frame = circle
+        start.cornerRadius = circle.width / 2
+        start.rise = 0
+        dawn.apply(start)
+        dawn.alpha = 1
+        dawn.apply(target, animation: IntroMotion.dawn)
     }
 
     private func moveMark(to place: MarkPlace) {
@@ -165,8 +192,8 @@ public final class IntroViewController: UIViewController {
             }
             return
         }
-        // Up into the promise step's header: a long, soft spring.
-        Motion.animate(.spring(duration: 0.7, bounce: 0), crossfading: view) {
+        // Onto the promise step's place, on the same spring as the dawn opening behind it.
+        Motion.animate(IntroMotion.dawn, crossfading: view) {
             self.layoutMark()
         }
     }
@@ -180,8 +207,7 @@ public final class IntroViewController: UIViewController {
             let side = min(min(safe.width, safe.height) * 0.46, 220)
             target = CGRect(x: safe.midX - side / 2, y: safe.midY - side / 2 - 20, width: side, height: side)
         case .promise:
-            let side = IntroLayout.promiseMarkSize
-            target = CGRect(x: safe.midX - side / 2, y: safe.minY + IntroLayout.promiseMarkTop, width: side, height: side)
+            target = IntroLayout.promiseMark(safe: safe)
         case .gone:
             return
         }
@@ -212,11 +238,27 @@ public final class IntroViewController: UIViewController {
         let reduce = Motion.prefersCrossfade
         UIView.animate(withDuration: reduce ? Motion.crossfadeDuration : 0.5, delay: 0, options: [.curveEaseInOut]) {
             self.view.alpha = 0
-            if !reduce { self.backdrop.transform = CGAffineTransform(scaleX: 1.06, y: 1.06) }
+            if !reduce { self.dawn.transform = CGAffineTransform(scaleX: 1.06, y: 1.06) }
         } completion: { _ in
             Signposts.signposter.endInterval(Signposts.introFinish, interval)
             completion()
         }
     }
+}
+
+/// The intro's paper in one place: the ground under every step and the fill of its sheets (the
+/// feature cards). A shared paper texture, when DesignSystem has one, is applied here and nowhere
+/// else in the intro.
+enum IntroPaper {
+    /// The ground under the dawn and the steps.
+    static func makeGround() -> UIView {
+        let ground = UIView()
+        ground.backgroundColor = Palette.background
+        ground.isUserInteractionEnabled = false
+        return ground
+    }
+
+    /// A sheet of paper lying on the ground.
+    static let sheet = Palette.surface
 }
 #endif

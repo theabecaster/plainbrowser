@@ -11,9 +11,9 @@ final class ShellTests: XCTestCase {
         server = try TestServer()
         try server.start()
         addTeardownBlock { [server] in server?.stop() }
-        let app = XCUIApplication()
+        let app = XCUIApplication.isolated()
         // A fresh, empty database: no history from earlier runs.
-        app.launchArguments = ["-PlainInMemoryStore"]
+        app.launchArguments += ["-PlainInMemoryStore"]
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
         return app

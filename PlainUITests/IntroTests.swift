@@ -9,8 +9,8 @@ final class IntroTests: XCTestCase {
     }
 
     private func launch(_ extra: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainShowIntro"] + extra
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro"] + extra
         app.launch()
         return app
     }
@@ -92,7 +92,7 @@ final class IntroTests: XCTestCase {
 
         // Seen: the next plain launch (no test arguments at all) goes straight to the search field.
         app.terminate()
-        let again = XCUIApplication()
+        let again = XCUIApplication.isolated()
         again.launchArguments = []
         again.launch()
         assertSearchFieldFocused(again)
@@ -109,8 +109,8 @@ final class IntroTests: XCTestCase {
     }
 
     func testDefaultBrowserCardPreview() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainPreviewEmptyTabCard"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainPreviewEmptyTabCard"]
         app.launch()
         XCTAssertTrue(app.buttons["defaultBrowserCardButton"].waitForExistence(timeout: 5))
         app.buttons["defaultBrowserCardClose"].tap()
@@ -135,8 +135,8 @@ final class IntroCaptureTests: XCTestCase {
 
     func testCaptureIntro() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainForceDefaultBrowserPrompts"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainForceDefaultBrowserPrompts"]
         app.launch()
         pause(0.5)
         shot("0-splash", app)
@@ -180,8 +180,8 @@ final class IntroCaptureTests: XCTestCase {
 
     func testCaptureEmptyTabCard() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainPreviewEmptyTabCard"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainPreviewEmptyTabCard"]
         app.launch()
         XCTAssertTrue(app.buttons["defaultBrowserCardButton"].waitForExistence(timeout: 5))
         pause(1.0)

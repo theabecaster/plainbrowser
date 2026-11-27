@@ -13,8 +13,8 @@ final class AppearanceTests: XCTestCase {
             try server.start()
             addTeardownBlock { [server] in server?.stop() }
         }
-        let app = XCUIApplication()
-        app.launchArguments = arguments
+        let app = XCUIApplication.isolated()
+        app.launchArguments += arguments
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
         return app

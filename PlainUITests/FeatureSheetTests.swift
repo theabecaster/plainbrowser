@@ -12,8 +12,8 @@ final class FeatureSheetTests: XCTestCase {
         server = try TestServer()
         try server.start()
         addTeardownBlock { [server] in server?.stop() }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore"]
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
         return app

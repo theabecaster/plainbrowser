@@ -12,8 +12,8 @@ final class CaptureTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFavorites"]
         app.launch()
 
         let field = app.textFields["searchField"]
@@ -75,8 +75,8 @@ final class CaptureTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFavorites"]
         app.launch()
 
         let field = app.textFields["searchField"]
@@ -131,8 +131,8 @@ final class CaptureTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore"]
         app.launch()
 
         let field = app.textFields["searchField"]
@@ -160,8 +160,8 @@ final class CaptureTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFavorites"]
         app.launch()
 
         let field = app.textFields["searchField"]
@@ -187,7 +187,7 @@ final class CaptureTests: XCTestCase {
         // The permission prompt: WebKit asks only on secure pages and the simulator has no camera,
         // so a debug launch argument shows the camera prompt over a page.
         app.terminate()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainPreviewPermissionPrompt"]
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainPreviewPermissionPrompt"]
         app.launch()
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText(server.address("/b") + "\n")
@@ -211,8 +211,8 @@ final class CaptureTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites", "-PlainSeedArchive"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFavorites", "-PlainSeedArchive"]
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -317,8 +317,8 @@ final class CaptureTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFavorites"]
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -367,9 +367,9 @@ final class CaptureTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = XCUIApplication()
+        let app = XCUIApplication.isolated()
         // An archive from the start, so the start screen and More show Archived Tabs.
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedArchive"]
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedArchive"]
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -463,15 +463,15 @@ final class CaptureTests: XCTestCase {
         defer { server.stop() }
         do {
             let name = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_TAG"] ?? "light"
-            let intro = XCUIApplication()
+            let intro = XCUIApplication.isolated()
             intro.launchArguments = ["-PlainInMemoryStore", "-PlainShowIntro"]
             intro.launch()
             pause(3)
             shot("p0-intro-\(name)")
             intro.terminate()
 
-            let app = XCUIApplication()
-            app.launchArguments = ["-PlainInMemoryStore"]
+            let app = XCUIApplication.isolated()
+            app.launchArguments += ["-PlainInMemoryStore"]
             app.launch()
             let field = app.textFields["searchField"]
             XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -526,8 +526,8 @@ final class CaptureTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFavorites"]
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))

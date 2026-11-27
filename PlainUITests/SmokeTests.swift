@@ -35,8 +35,18 @@ extension XCUIApplication {
     /// The app as a returning user launches it: the first-run intro already seen. The argument
     /// sets the same user default the intro writes (argument domain), in Release builds too.
     static func introSeen() -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-PlainIntroSeen", "YES"]
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainIntroSeen", "YES"]
+        return app
+    }
+
+    /// Plain with a throwaway database and tab state, so a UI test never touches the device
+    /// owner's real tabs, history or settings. `-PlainTestStore` (a temporary on-disk store)
+    /// takes precedence where a test needs relaunch persistence.
+    static func isolated() -> XCUIApplication {
+        // `XCUIApplication.init()` itself, not this factory.
+        let app = XCUIApplication(bundleIdentifier: "dev.abrahamgonzalez.plainbrowser")
+        app.launchArguments = ["-PlainInMemoryStore"]
         return app
     }
 }

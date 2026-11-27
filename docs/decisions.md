@@ -830,9 +830,13 @@ Research and sources: docs/research/dark-mode.md.
   6–10 pt rule, as for the system menus): matching it would mean drawing every card by hand.
 - **Ink caveat:** the sheet's ink foreground replaces the system's footer gray and a button's
   tint, so footers, values (`ValueLabel`), Clear History and Use Custom Engine name their color.
-- **Search field:** History's and Archive's floating search field gets the system's hard bottom
-  scroll edge (`.scrollEdgeEffectStyle(.hard, for: .bottom)`), so rows fade under it instead of
-  showing through its glass on paper.
+- **Search field:** History's and Archive's search sits at the top, under the title, and
+  scrolls away with the rows (`.searchable(placement: .navigationBarDrawer(displayMode:
+  .automatic))`; pull down to bring it back), as in Safari's history. The system's floating bottom
+  field showed a ghost of the row behind its glass on paper, even with a hard bottom scroll edge
+  (follow-ups, 2026-11-27; lead's call). `.always` was tried: on iOS 27 the sheet's bar hides as the
+  list scrolls and the kept field floats over the rows as glass, with the same ghost. The list's
+  top scroll edge is hard, so rows under the bar fade out.
 - **Duo outer screen:** the bar's leading button moves to the side column there, which left the
   system title off center ("Downloads"); the serif title is a `.principal` item, which the bar
   centers.

@@ -270,11 +270,6 @@ Newest feature last.
 
 ## Sheets on paper (2026-11-26)
 
-- **History's floating search field.** With the hard bottom scroll edge, rows fade under the glass
-  field, but a ghost of the row behind its upper edge still shows (light and dark, iPhone 17). It
-  is the system's bottom search glass; a clean backdrop means moving the field to the top
-  (`.searchable(placement: .navigationBarDrawer(displayMode: .always))`), which changes where
-  search lives in History and Archive. A call for the owner. (Design review, round 2.)
 - **Supporting text in dark.** Raised to 76 % paper (90 % with Increase Contrast) and readable,
   but the reviewer still finds footers, addresses and times subdued at night. Check on the Duo
   before going higher, which flattens the hierarchy. (Design review, round 2.)

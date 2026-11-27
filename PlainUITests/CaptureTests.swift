@@ -714,6 +714,67 @@ final class CaptureTests: XCTestCase {
         menuShot("menu-3-readerable-foreign-reopen")
     }
 
+    /// History and Archived Tabs with search under the title: at rest, with rows scrolled under the
+    /// field, and searching.
+    func testCaptureHistorySearch() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainSeedArchive"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 20))
+        let pages = [("/a", "Page A"), ("/b", "Page B"), ("/c", "Page C"), ("/article", "The Quiet Page"),
+                     ("/long", "Long Read"), ("/footer", "Footer Page"), ("/french", "Le marché du samedi"),
+                     ("/files", "Files"), ("/count", "Load 1"), ("/light-site", "Light Only"), ("/french-article", "La page tranquille")]
+        for (path, heading) in pages {
+            if !(field.exists && field.hasKeyboardFocus) { app.buttons["addressPill"].tap() }
+            field.typeText(server.address(path) + "\n")
+            _ = app.webViews.staticTexts[heading].waitForExistence(timeout: 10)
+        }
+        pause(1.5)
+        app.buttons["more"].tap()
+        XCTAssertTrue(app.buttons["menu.history"].waitForExistence(timeout: 3))
+        app.buttons["menu.history"].tap()
+        pause(1.5)
+        shot("h1-history")
+        let search = app.searchFields.firstMatch
+        if search.waitForExistence(timeout: 2) {
+            search.tap()
+            search.typeText("Page")
+            pause(1.5)
+            shot("h2-history-searching")
+            // Out of search (its close button).
+            let close = app.buttons.matching(NSPredicate(format: "label IN {'Cancel', 'Close', 'close'}")).firstMatch
+            if close.exists { close.tap() }
+            pause(1)
+        }
+        // Rows scrolled a little way (the field scrolls away under the title), then further.
+        let list = app.collectionViews.firstMatch
+        list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)),
+                   withVelocity: .slow, thenHoldForDuration: 0.5)
+        pause(1.5)
+        shot("h3-history-scrolled")
+        app.swipeUp(velocity: .slow)
+        pause(1.5)
+        shot("h4-history-scrolled-more")
+        app.swipeDown(velocity: .fast)
+        pause(0.5)
+        let done = app.buttons["Done"].firstMatch
+        if done.exists { done.tap() } else { app.swipeDown(velocity: .fast) }
+        pause(1.5)
+        app.buttons["more"].tap()
+        let archive = app.buttons["more.archivedTabs"]
+        if archive.waitForExistence(timeout: 3) {
+            archive.tap()
+            pause(1.5)
+            shot("h5-archive")
+        }
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

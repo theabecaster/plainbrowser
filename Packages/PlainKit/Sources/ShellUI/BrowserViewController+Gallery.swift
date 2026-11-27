@@ -16,6 +16,8 @@ final class TabsUIState {
     var spareGallery: TabGalleryViewController?
     /// A spare gallery build is waiting for an idle moment.
     var isPrewarmScheduled = false
+    /// The saved tabs are in and the first frame is long gone: idle work may start.
+    var isLaunchDone = false
     /// The page ↔ card transition running now, if any.
     var galleryTransition: TabGalleryTransition?
     /// Bumped whenever a running transition is replaced or dropped, so its late completion is
@@ -151,7 +153,7 @@ extension BrowserViewController: GalleryHost {
     /// main thread). Waits a second and for the default run loop mode, so it never lands in a
     /// scroll or a gesture.
     func scheduleGalleryPrewarm() {
-        guard tabsUI.spareGallery == nil, !isShowingGallery, !tabsUI.isPrewarmScheduled,
+        guard tabsUI.isLaunchDone, tabsUI.spareGallery == nil, !isShowingGallery, !tabsUI.isPrewarmScheduled,
               wantsSpareGallery else { return }
         tabsUI.isPrewarmScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in

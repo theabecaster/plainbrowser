@@ -1,3 +1,4 @@
+import DesignSystem
 import Foundation
 import os
 import PerfSignposts
@@ -15,6 +16,8 @@ import WebKit
     private var pages: [String: Data] = [:]
     private var pageOrder: [String] = []
     private var stylesheet: Data?
+    /// Paper tile requests still waiting for their tile; WebKit may stop one meanwhile.
+    private var running: Set<ObjectIdentifier> = []
     /// The latest `show` per web view. An older call that finishes later never loads.
     private var latestShow: [ObjectIdentifier: UUID] = [:]
 
@@ -67,6 +70,17 @@ import WebKit
         let body: Data?
         let type: String
         switch (url.host(), url.path()) {
+        case ("reader", "/paper-day.png"), ("reader", "/paper-night.png"):
+            // Made per request, off the main thread; answered unless WebKit stopped the task.
+            let sheet: PaperTexture.Sheet = url.path() == "/paper-day.png" ? .day : .night
+            let id = ObjectIdentifier(urlSchemeTask)
+            running.insert(id)
+            Task {
+                let tile = try? await ReaderResources.paperTile(sheet)
+                guard running.remove(id) != nil else { return }
+                respond(to: urlSchemeTask, url: url, body: tile, type: "image/png")
+            }
+            return
         case ("reader", "/reader.css"):
             body = stylesheet
             type = "text/css; charset=utf-8"
@@ -77,6 +91,14 @@ import WebKit
             body = nil
             type = ""
         }
+        respond(to: urlSchemeTask, url: url, body: body, type: type)
+    }
+
+    public func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {
+        running.remove(ObjectIdentifier(urlSchemeTask))
+    }
+
+    private func respond(to urlSchemeTask: any WKURLSchemeTask, url: URL, body: Data?, type: String) {
         guard let body else {
             urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
             return
@@ -90,6 +112,4 @@ import WebKit
         urlSchemeTask.didReceive(body)
         urlSchemeTask.didFinish()
     }
-
-    public func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {}
 }

@@ -123,7 +123,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     override public func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = Palette.background
+        Paper.apply(to: view)
         view.tintColor = Palette.accent
         defer { updateStartScreen() }
 

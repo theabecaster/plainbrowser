@@ -36,7 +36,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = Palette.background
+        Paper.apply(to: self)
         accessibilityIdentifier = "searchSheet"
 
         content.translatesAutoresizingMaskIntoConstraints = false
@@ -50,7 +50,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         rowsStack.spacing = 0
         // The rows sit on the paper token wherever they show: readable over the start screen's
         // mark even while it recedes (docs/state-rules.md §6, start screen while typing).
-        rowsStack.backgroundColor = Palette.background
+        Paper.apply(to: rowsStack)
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
         rowsClip.addSubview(rowsStack)
         for index in 0..<FixedChoices.maxAddressBarSuggestions {

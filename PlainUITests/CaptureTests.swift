@@ -453,6 +453,71 @@ final class CaptureTests: XCTestCase {
         shot("s8b-start-with-closed")
     }
 
+    /// The Paper surfaces: the intro, the start screen (keyboard up and down), the reader view,
+    /// Settings and the gallery. Set the simulator's appearance first (`xcrun simctl ui <udid>
+    /// appearance dark`); `PLAIN_CAPTURE_TAG` names the shots (light, dark).
+    func testCapturePaper() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        do {
+            let name = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_TAG"] ?? "light"
+            let intro = XCUIApplication()
+            intro.launchArguments = ["-PlainInMemoryStore", "-PlainShowIntro"]
+            intro.launch()
+            pause(3)
+            shot("p0-intro-\(name)")
+            intro.terminate()
+
+            let app = XCUIApplication()
+            app.launchArguments = ["-PlainInMemoryStore"]
+            app.launch()
+            let field = app.textFields["searchField"]
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            pause(1.5)
+            shot("p1-start-\(name)")
+
+            field.typeText(server.address("/article") + "\n")
+            XCTAssertTrue(app.webViews.staticTexts["The Quiet Page"].waitForExistence(timeout: 10))
+            pause(1.5)
+            app.buttons["more"].tap()
+            let reader = app.buttons["Show Reader"]
+            if reader.waitForExistence(timeout: 3) {
+                reader.tap()
+                XCTAssertTrue(app.webViews["readerView"].waitForExistence(timeout: 5))
+                pause(1.5)
+                shot("p2-reader-\(name)")
+                app.buttons["back"].tap()
+                pause(1)
+            }
+
+            app.buttons["more"].tap()
+            app.buttons["Settings…"].tap()
+            pause(1.5)
+            shot("p3-settings-\(name)")
+            app.navigationBars.buttons["Done"].tap()
+            pause(1)
+
+            // A new tab beside the page: its start screen with the keyboard down, then the gallery
+            // (an empty tab leaves it, docs/state-rules.md). The tabs button sits under the keyboard.
+            app.buttons["tabs"].press(forDuration: 1)
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+            pause(1)
+            let start = app.otherElements["emptyTab"]
+            if start.exists { start.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap() }
+            pause(1)
+            shot("p4-start-keyboard-down-\(name)")
+            if app.buttons["tabs"].waitForExistence(timeout: 2), app.buttons["tabs"].isHittable {
+                app.buttons["tabs"].tap()
+            } else {
+                app.buttons["addressPill"].swipeUp(velocity: .fast)
+            }
+            pause(1.5)
+            shot("p5-gallery-\(name)")
+        }
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

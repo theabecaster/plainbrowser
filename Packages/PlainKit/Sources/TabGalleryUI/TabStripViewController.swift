@@ -35,7 +35,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
 
     override public func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = Palette.background
+        Paper.apply(to: view)
         view.accessibilityIdentifier = "tabStrip"
 
         let layout = UICollectionViewFlowLayout()

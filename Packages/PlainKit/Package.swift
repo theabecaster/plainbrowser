@@ -41,7 +41,8 @@ let package = Package(
 
         // Leaves.
         .target(name: "PerfSignposts"),
-        .target(name: "DesignSystem", swiftSettings: mainActorByDefault),
+        // PerfSignposts: the paper tile's generation shows up in Instruments.
+        .target(name: "DesignSystem", dependencies: ["PerfSignposts"], swiftSettings: mainActorByDefault),
 
         // Layer 2: the web engine and what plugs into it.
         .target(
@@ -58,7 +59,8 @@ let package = Package(
         ),
         .target(
             name: "Reader",
-            dependencies: ["Storage", "BrowserCore", "PerfSignposts"],
+            // DesignSystem: the paper tile under the reader page (PaperTexture, no UIKit).
+            dependencies: ["Storage", "BrowserCore", "PerfSignposts", "DesignSystem"],
             // Mozilla Readability 0.6.0 (Apache-2.0), the reader page template and its stylesheet.
             resources: [.copy("Resources/Reader")]
         ),
@@ -92,6 +94,8 @@ let package = Package(
         ),
 
         .testTarget(name: "BrowserCoreTests", dependencies: ["BrowserCore"]),
+        // The paper texture's generator: seamless, faint, centered on the Paper colors.
+        .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
         .testTarget(name: "FeatureUITests", dependencies: ["FeatureUI", "Storage", "BrowserCore"]),
         .testTarget(name: "StorageTests", dependencies: ["Storage", .product(name: "GRDB", package: "GRDB.swift")]),
         // WebKit tests; they run on an iOS simulator (xcodebuild) and are empty on macOS.

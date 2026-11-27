@@ -73,7 +73,7 @@ public final class EmptyTabView: UIView {
         accessibilityIdentifier = "emptyTab"
         // Opaque: an empty tab's blank web view is under it. Paper warming toward Lagoon at the
         // bottom, a quiet dawn behind the mark.
-        backgroundColor = Palette.background
+        Paper.apply(to: self)
         glow.locations = [0.35, 1]
         layer.addSublayer(glow)
         applyGlow()

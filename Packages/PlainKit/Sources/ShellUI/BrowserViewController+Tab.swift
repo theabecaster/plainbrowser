@@ -225,7 +225,7 @@ extension BrowserViewController {
             self.buttonBar.setPrivate(isPrivate)
             self.tabsUI.toast.setPrivate(isPrivate)
             // The strip under the status bar too, so the whole screen says private, quietly.
-            self.view.backgroundColor = isPrivate ? Palette.privateBackground : Palette.background
+            self.view.backgroundColor = isPrivate ? Palette.privateBackground : Paper.background
         }
     }
 

@@ -10,9 +10,10 @@ public struct ReaderRenderer: Sendable {
     public static let scheme = "plain-reader"
 
     /// The page's content security policy: no scripts, no frames, styles only from the reader
-    /// scheme. Article images and video may still load from the web.
+    /// scheme (with the paper tile under the page). Article images and video may still load from
+    /// the web.
     static let contentSecurityPolicy =
-        "default-src 'none'; style-src \(scheme):; img-src https: http: data:; media-src https: http:; "
+        "default-src 'none'; style-src \(scheme):; img-src \(scheme): https: http: data:; media-src https: http:; "
         + "base-uri 'none'; form-action 'none'"
 
     public init() {}

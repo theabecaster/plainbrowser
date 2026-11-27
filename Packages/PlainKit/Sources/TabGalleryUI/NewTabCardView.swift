@@ -114,7 +114,7 @@ final class NewTabCardView: UIView {
         // gallery around it is always dark.
         let pageTraits = window?.windowScene?.traitCollection ?? traitCollection
         let dark = pageTraits.userInterfaceStyle == .dark
-        paper.backgroundColor = (isPrivate ? Palette.privateBackground : Palette.background).resolvedColor(with: pageTraits)
+        paper.backgroundColor = isPrivate ? Palette.privateBackground.resolvedColor(with: pageTraits) : Paper.resolved(for: pageTraits)
         label.textColor = Palette.textSecondary.resolvedColor(with: pageTraits)
         paper.layer.borderWidth = dark ? 1 : 0
         paper.layer.borderColor = UIColor.separator.resolvedColor(with: pageTraits).cgColor

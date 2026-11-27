@@ -64,6 +64,16 @@ import WebKit
         #expect((checks[2] as? Int ?? 0) > 0)
         #expect(checks[3] as? Int == 1)
         #expect(!webView.configuration.defaultWebpagePreferences.allowsContentJavaScript)
+
+        // The paper tile comes from the scheme too, at 256 px, and sits under the page.
+        let paper = try await webView.callAsyncJavaScript("""
+            const image = new Image();
+            image.src = 'plain-reader://reader/paper-day.png';
+            await image.decode();
+            return [image.naturalWidth, getComputedStyle(document.documentElement).backgroundImage];
+            """, contentWorld: .page) as? [Any] ?? []
+        #expect(paper.first as? Int == 256, "paper tile: \(paper)")
+        #expect((paper.last as? String)?.contains("paper-") == true, "paper under the page: \(paper)")
     }
 
     /// A cancelled show loads nothing; the next one loads.
@@ -96,11 +106,14 @@ import WebKit
         guard let folder = ProcessInfo.processInfo.environment["READER_SHOTS_DIR"] else { return }
         let base = URL(fileURLWithPath: folder)
         try await ReaderResources.stylesheet().write(to: base.appending(path: "reader.css"))
+        try await ReaderResources.paperTile(.day).write(to: base.appending(path: "paper-day.png"))
+        try await ReaderResources.paperTile(.night).write(to: base.appending(path: "paper-night.png"))
         for name in ["ars-1", "v8-blog", "dropbox-blog", "wikipedia"] {
             let article = try #require(try await extract(name))
             let page = try await ReaderRenderer().page(for: article)
                 .replacingOccurrences(of: "\(ReaderRenderer.scheme)://reader/reader.css", with: "reader.css")
                 .replacingOccurrences(of: "style-src \(ReaderRenderer.scheme):", with: "style-src 'self'")
+                .replacingOccurrences(of: "img-src \(ReaderRenderer.scheme):", with: "img-src 'self'")
             try Data(page.utf8).write(to: base.appending(path: "\(name).html"))
         }
     }

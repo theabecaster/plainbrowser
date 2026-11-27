@@ -226,9 +226,20 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         blankMark.isHidden = !isBlankTab
         imageView.isHidden = isBlankTab
         // A new tab's card shows its start screen as the tab shows it: in the window's own
-        // appearance, not the gallery's always-dark one.
-        let pageTraits = window?.windowScene?.traitCollection ?? traitCollection
-        thumbnailContainer.backgroundColor = isBlankTab ? Palette.background.resolvedColor(with: pageTraits) : Palette.surface
+        // appearance (the Appearance setting's override, else the system's), not the gallery's
+        // always-dark one.
+        let windowStyle = window?.overrideUserInterfaceStyle ?? .unspecified
+        let pageStyle = windowStyle != .unspecified
+            ? windowStyle : (window?.windowScene?.traitCollection ?? traitCollection).userInterfaceStyle
+        if isBlankTab {
+            // Paper follows the page's appearance through the override, and stays current
+            // (the tile arriving, Increase Contrast) like every other Paper surface.
+            thumbnailContainer.overrideUserInterfaceStyle = pageStyle
+            Paper.apply(to: thumbnailContainer)
+        } else {
+            thumbnailContainer.overrideUserInterfaceStyle = .unspecified
+            thumbnailContainer.backgroundColor = Palette.surface
+        }
         placeholderIcon.isHidden = isBlankTab || imageView.image != nil
         if imageView.image == nil {
             placeholderIcon.image = faviconView.image ?? UIImage(systemName: "globe")

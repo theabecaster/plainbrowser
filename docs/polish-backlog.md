@@ -220,6 +220,7 @@ Newest feature last.
 - **Above and Right on the device.** Both were built after the Mac locked: unit-tested
   (`DuoLayoutTests`) and UI-tested only as far as the simulator allowed; check the strip's look
   and the Right sidebar's drag on the inner screen.
+
 ## State rules (state lane, 2026-11-26)
 
 - **Find on Page and the bar.** Bar gestures stop while the find bar is open, but the page's bar
@@ -292,3 +293,21 @@ Newest feature last.
 - **New Tab card fade reversal.** Back to one card within the 0.15 s fade-out (a reopen then a
   close), the card restarts its grow-in from nothing instead of from where the fade had it.
   (Code review, round 2.)
+
+## Paper texture (2026-11-26)
+
+- **Reader and Reduce Transparency.** The app's Paper surfaces go flat under Reduce Transparency,
+  but WebKit has no `prefers-reduced-transparency`, so the reader page keeps its texture. Bridge the
+  setting into the reader (a class on the root, or a flat stylesheet), including changes while it
+  is open. (Code review, round 1.)
+- **Sheets on paper.** Settings, History, Favorites, Archive and Downloads keep the system grouped
+  list look. Hiding the list background in `FeatureSheets.sheet` alone leaves white rows on a white
+  sheet, so paper there needs `PaperBackground()` inside each screen's `NavigationStack` and a row
+  color that suits Deep Lagoon. A design call for the owner.
+- **Duo start screen wash.** The start screen's bottom wash (`EmptyTabView`'s glow) ends at the
+  start screen's edge, so on the Duo it stops in a hard vertical line at the vertical bar's lane.
+  Pre-existing; extend the wash under the lane or fade it out before the edge. (Design review,
+  round 1.)
+- **Render-pass check on the device.** The simulator test checks the layer gets a pattern color
+  with no contents, mask, shadow or rasterizing. Confirm no offscreen pass with Instruments' Core
+  Animation instrument on the Duo during the device perf gate.

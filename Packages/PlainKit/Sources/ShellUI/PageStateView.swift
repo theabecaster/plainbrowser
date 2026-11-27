@@ -19,7 +19,7 @@ final class PageStateView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = Palette.background
+        Paper.apply(to: self)
         accessibilityIdentifier = "pageState"
         isHidden = true
 

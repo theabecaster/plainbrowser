@@ -189,7 +189,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         startOffset = 0
         let swipe = Swipe(current: current)
         swipe.preview.clipsToBounds = true
-        swipe.preview.backgroundColor = Palette.background
+        Paper.apply(to: swipe.preview)
         swipe.preview.bounds = browser.webContainer.bounds
         swipe.preview.center = browser.webContainer.center
         browser.pageClip.insertSubview(swipe.preview, aboveSubview: browser.webContainer)
@@ -284,7 +284,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     /// neighbours, pinned to the top; the background where there is none.
     private func picture(for id: TabID, size: CGSize) -> UIView {
         let view = UIView(frame: CGRect(origin: .zero, size: size))
-        view.backgroundColor = Palette.background
+        Paper.apply(to: view)
         guard let browser else { return view }
         if let image = browser.tabsUI.previews[id] ?? browser.session.pool.thumbnails.cachedThumbnail(for: id),
            image.size.width > 0 {
@@ -410,7 +410,7 @@ private final class NewTabCard: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        backgroundColor = Palette.background
+        Paper.apply(to: self)
         let symbol = UIImageView(image: UIImage(systemName: "plus.circle", withConfiguration: UIImage.SymbolConfiguration(textStyle: .largeTitle)))
         symbol.tintColor = Palette.accent
         let label = UILabel()

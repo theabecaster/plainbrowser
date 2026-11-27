@@ -117,7 +117,8 @@ enum StatusCorner {
     /// full-width band (the outer screen's Dynamic Island) or a region below the safe area's top.
     private static func cornerSide(_ region: Region, width: CGFloat, safeTop: CGFloat) -> Bool? {
         let frame = region.frame
-        guard frame.height > 0, frame.minY < safeTop, frame.maxY <= safeTop + 0.5 else { return nil }
+        // Up to 2 pt past the safe area's top is rounding (the Duo reports 81 or 82).
+        guard frame.height > 0, frame.minY < safeTop, frame.maxY <= safeTop + 2 else { return nil }
         if frame.minX >= width * 0.75 { return true }
         if frame.maxX <= width * 0.25 { return false }
         return nil
@@ -217,12 +218,8 @@ struct TopChromeGeometry: Equatable {
     /// Between the screen's (the lane's) edges and the capsules, the pill and the strip:
     /// `Spacing.m`.
     static let edgeMargin: CGFloat = 12
-    /// Between the row's end and the status items' left edge (the clock): the glass sits snug
-    /// beside them without touching, as the system spaces its own indicators. Was 12 on top of a
-    /// 64 pt reach, which left the Tabs, Share and More capsule about 23 pt short of the clock on
-    /// the device (owner: "spaced properly next to the status bar Wi-Fi and all the other
-    /// indicators").
-    static let cornerGap: CGFloat = 8
+    /// Between the row's end and the status items' left edge (`FixedChoices.statusItemsGap`).
+    static var cornerGap: CGFloat { CGFloat(FixedChoices.statusItemsGap) }
     /// The collapsed pill's size relative to the expanded one.
     static var compactScale: CGFloat { CGFloat(FixedChoices.topBarCollapsedScale) }
 

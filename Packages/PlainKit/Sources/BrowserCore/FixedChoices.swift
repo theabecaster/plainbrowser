@@ -499,7 +499,7 @@ public enum FixedChoices {
     /// starts at x 831.7 pt, 53 pt before the camera (884.7), the battery ring wraps the camera
     /// (883–924) and the indicators above the time start further right (845.7). Plus 4 pt for a
     /// wider time ("10:58", "12:00": the 1s are the narrow digits). The top bar's trailing capsule
-    /// then ends `TopChromeGeometry.cornerGap` (8 pt) before that: 12 pt before "11:08", at least
+    /// then ends `statusItemsGap` (8 pt) before that: 12 pt before "11:08", at least
     /// 8 before any 12-hour time. Was 64 (with a 12 pt gap: 23 pt short of the clock, which the
     /// owner saw as the buttons stopping too far from the status items).
     public static let statusItemsReach: Double = 57
@@ -511,6 +511,13 @@ public enum FixedChoices {
     /// treating the region as a camera (and reaching 64 pt past it, the build the owner tried)
     /// left them about 100 pt away, with the strip cut there too.
     public static let statusRegionPadding: Double = 20
+    /// Between the top bar's end (Tabs, Share and More) and the status items' left edge (the
+    /// clock) on the Duo's inner screen: the glass sits snug beside them without touching, at the
+    /// bar's own spacing (its capsules sit 6 pt from the address). Was 12 on top of a 64 pt
+    /// reach past the status region, which left the capsule about 100 pt short of the clock on
+    /// the device (owner: "spaced properly next to the status bar Wi-Fi and all the other
+    /// indicators").
+    public static let statusItemsGap: Double = 8
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375

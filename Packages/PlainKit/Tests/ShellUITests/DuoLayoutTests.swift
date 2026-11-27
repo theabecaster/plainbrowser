@@ -640,6 +640,22 @@ struct DuoInnerStatusRowTests {
         #expect(apart.source == .guide)
     }
 
+    @Test func aSafeAreaAPointShortOfTheRegionStillFindsIt() throws {
+        // The device's safe area may read 81 against the region's 82: still the status region,
+        // and still not in the lanes' way.
+        let found = try #require(StatusCorner.read(
+            width: 951, safeTop: 81, safeLeft: 0, safeRight: 0, adaptedTop: 81, adaptedLeft: 0, adaptedRight: 0,
+            occlusions: [Self.landscape.region]
+        ))
+        #expect(found.source == .statusRegion && found.rect.minX == 827)
+        let layout = DuoLayout(DuoLayoutInput(
+            pageArea: CGRect(x: 0, y: 81, width: 951, height: 588), isRegularWidth: true, isRegularHeight: true,
+            tabLayout: .above, tabCount: 3, occlusions: [Self.landscape.region],
+            chromeBand: 19...63, stripBand: 86...120, statusCorner: found.rect
+        ))
+        #expect(layout.chromeLane == 0...951 && layout.stripLane == 0...951)
+    }
+
     @Test func otherOcclusionsStillCutTheLane() {
         // Only regions inside the status corner are the top bar's to clear; anything else in the
         // row's band still moves the lane, as before.
@@ -651,6 +667,15 @@ struct DuoInnerStatusRowTests {
         #expect(layout.chromeLane == 60...951)
         // The strip, under that region (86 > 82), is not in its way.
         #expect(layout.stripLane == 0...951)
+        // A region that meets the corner but reaches below the status zone into the strip's
+        // band still cuts the strip's lane (Codex review, round 1).
+        let below = DuoLayout(DuoLayoutInput(
+            pageArea: CGRect(x: 0, y: 82, width: 951, height: 587), isRegularWidth: true, isRegularHeight: true,
+            tabLayout: .above, tabCount: 3, occlusions: [CGRect(x: 800, y: 60, width: 151, height: 64)],
+            chromeBand: 19...63, stripBand: 86...120, statusCorner: CGRect(x: 827, y: 0, width: 124, height: 82)
+        ))
+        #expect(below.stripLane == 0...800)
+        #expect(below.chromeLane == 0...800)
     }
 }
 

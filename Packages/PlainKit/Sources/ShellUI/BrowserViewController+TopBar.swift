@@ -142,7 +142,6 @@ extension BrowserViewController {
         let safe = view.safeAreaInsets
         let adapted = view.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))
         let regions = view.reservedRegions(kind: .occlusion, options: .includeInactive)
-        let occlusions = regions.map(\.frame)
         var corners = regions.map { StatusCorner.Region(frame: $0.frame, reserved: $0.frame.inset(by: $0.margins)) }
         #if DEBUG
         if let region = Self.debugStatusRegion { corners = [StatusCorner.Region(frame: region)] }
@@ -155,7 +154,7 @@ extension BrowserViewController {
         duo.statusCornerSource = found?.source.rawValue ?? "none"
         // The regions arrive after the first layout pass (and change with a fold), so they are
         // part of what is compared.
-        let reading = StatusZoneReading(size: view.bounds.size, safe: safe, adapted: adapted, occlusions: occlusions)
+        let reading = StatusZoneReading(size: view.bounds.size, safe: safe, adapted: adapted, occlusions: regions)
         if reading != duo.lastStatusReading {
             duo.lastStatusReading = reading
             logStatusZone(safe: safe, adapted: adapted, regions: regions, corner: found)
@@ -430,6 +429,7 @@ struct StatusZoneReading: Equatable {
     var size: CGSize
     var safe: UIEdgeInsets
     var adapted: UIEdgeInsets
-    var occlusions: [CGRect]
+    /// Frames, margins and whether each is active: a change to any can move the corner.
+    var occlusions: [UIView.ReservedRegion]
 }
 #endif

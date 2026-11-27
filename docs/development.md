@@ -57,9 +57,9 @@ scripts/matrix.sh --quick --local                   # on this Mac anyway
   no `local.env`), adds the gitignored signing config from the main checkout, and commits a
   snapshot there, since the scripts call git. The lane is `PLAIN_LANE`, or the checkout's folder
   name, so parallel worktrees don't share a folder.
-- It runs the command in a login shell (for Homebrew's PATH) under `/usr/bin/lockf
-  /tmp/plain-sim.lock`, so the host runs one simulator job at a time. Expect to queue behind
-  other lanes.
+- It runs the command in a login shell (for Homebrew's PATH) in one of the host's two job slots
+  (`/usr/bin/lockf` on `/tmp/plain-sim-1.lock` and `/tmp/plain-sim-2.lock`): a free slot if there
+  is one, else it waits for slot 1. Expect to queue behind other lanes.
 - `scripts/matrix.sh` pulls `build/matrix-out` back into `--out`: shots, sheets, logs and
   `summary.txt`, without the result bundles. A host without ImageMagick makes no sheets; the Mac
   that pulls the results makes them.

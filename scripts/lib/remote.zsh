@@ -4,7 +4,7 @@
 # The host comes from PLAIN_TEST_HOST (the environment, or the gitignored scripts/local.env); it
 # is an ssh host name, never written in the repo. Each checkout gets its own lane on the host,
 # ~/plain-lanes/<lane> (PLAIN_LANE, default this checkout's folder name), and every command runs
-# under the host's simulator lock (/tmp/plain-sim.lock), so one simulator job runs there at a time.
+# under one of the host's two job slots (/tmp/plain-sim-1.lock, /tmp/plain-sim-2.lock).
 
 # The default test host, or nothing.
 remote_default_host() {
@@ -35,12 +35,14 @@ remote_sync() {
   ssh $host "cd ~/plain-lanes/$lane && { [ -d .git ] || git init -q; git add -A >/dev/null 2>&1; git -c user.email=lane@local -c user.name=lane commit -qm snapshot >/dev/null 2>&1 || true; }"
 }
 
-# Syncs, then runs <command> in the lane under the host's simulator lock, in a login shell (for
-# Homebrew's PATH). Returns the command's exit status.
+# Syncs, then runs <command> in the lane in a free job slot, else waits for slot 1, in a login
+# shell (for Homebrew's PATH). Returns the command's exit status. `lockf -t 0` exits 75 when the
+# slot is taken.
 remote_run() {
-  local host=$1 lane=$2 cmd=$3
+  local host=$1 lane=$2 cmd=$3 q
   remote_sync $host $lane
-  ssh $host "cd ~/plain-lanes/$lane && /usr/bin/lockf -k /tmp/plain-sim.lock zsh -lc ${(q)cmd}"
+  q=${(q)cmd}
+  ssh $host "cd ~/plain-lanes/$lane && for s in 1 2; do /usr/bin/lockf -s -t 0 -k /tmp/plain-sim-\$s.lock zsh -lc $q; r=\$?; [ \$r -ne 75 ] && exit \$r; done; /usr/bin/lockf -k /tmp/plain-sim-1.lock zsh -lc $q"
 }
 
 # Copies <path> from the lane to <dest> here; extra arguments go to rsync.

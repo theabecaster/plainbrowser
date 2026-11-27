@@ -25,6 +25,13 @@
         "identifier" : "7E2C5837224225F691EC81FA",
         "name" : "PlainUITests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:Plain.xcodeproj",
+        "identifier" : "7B51DDAF25B0FF598C63FE8E",
+        "name" : "PlainTests"
+      }
     }
   ],
   "version" : 1

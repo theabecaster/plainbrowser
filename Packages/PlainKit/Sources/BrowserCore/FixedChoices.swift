@@ -428,4 +428,22 @@ public enum FixedChoices {
     /// A short toast (Reopen Tab after a close, a finished download) stays this long: time to
     /// read a few words and reach the button, gone before it is in the way. Same as the gallery's.
     public static let toastDuration = Duration.seconds(4)
+
+    // MARK: System integration (docs/research/system-integration.md)
+
+    /// Spotlight gets favorites only. Favorites are pages the user chose to keep at hand, so
+    /// finding them from the Home Screen is expected; history is everything they read, which
+    /// nobody expects in system search (Safari keeps it out too), and Clear History would have
+    /// to chase it. Private tabs reach nothing outside the app.
+    public static let spotlightIndexesHistory = false
+    /// The page on screen is offered to the user's other devices (Handoff), except in a private
+    /// tab: a private page leaves no trace, on this phone or another.
+    public static let handoffInPrivateTabs = false
+    /// Search from Shortcuts, Siri and the widget uses the engine chosen in Settings, with no
+    /// per-shortcut engine: one choice, made once.
+    public static let intentsUseSettingsEngine = true
+    /// The Spotlight and widget sync starts this long after launch, at background priority, so it
+    /// never competes with the first frame or the first page load. Favorites rarely change; a
+    /// few seconds late costs nothing.
+    public static let systemSyncLaunchDelay = Duration.seconds(5)
 }

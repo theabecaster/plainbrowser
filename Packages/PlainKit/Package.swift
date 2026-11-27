@@ -24,6 +24,11 @@ let package = Package(
         .library(name: "PerfSignposts", targets: ["PerfSignposts"]),
         // The app opens the database at launch (off the main thread) and hands it to the shell.
         .library(name: "Storage", targets: ["Storage"]),
+        // System integration (v0.2): links, commands and the shared favorites (app, intents and
+        // the widget extension), the Spotlight and widget sync (app), the widgets' views (extension).
+        .library(name: "PlainShared", targets: ["PlainShared"]),
+        .library(name: "SystemSync", targets: ["SystemSync"]),
+        .library(name: "WidgetUI", targets: ["WidgetUI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.12.0"),
@@ -41,6 +46,9 @@ let package = Package(
 
         // Leaves.
         .target(name: "PerfSignposts"),
+        // Foundation only, so the widget extension links it without the rest: Plain's links and
+        // commands, the App Group and the favorites file the app shares with the widgets.
+        .target(name: "PlainShared"),
         // PerfSignposts: the paper tile's generation shows up in Instruments.
         .target(name: "DesignSystem", dependencies: ["PerfSignposts"], swiftSettings: mainActorByDefault),
 
@@ -66,6 +74,10 @@ let package = Package(
             resources: [.copy("Resources/Reader")]
         ),
 
+        // The system's copies of the favorites (Spotlight, the App Group file, widget timelines)
+        // and the activities the system hands back. Engine layer: it reads Storage, never the UI.
+        .target(name: "SystemSync", dependencies: ["Storage", "PlainShared"]),
+
         // Layer 3: UI.
         .target(
             name: "ShellUI",
@@ -77,6 +89,8 @@ let package = Package(
                 // The tab gallery: the shell implements its data source over TabStore and runs its
                 // open and close transitions.
                 "TabGalleryUI",
+                // The commands App Intents, widgets and Handoff send to the browser.
+                "PlainShared",
             ],
             swiftSettings: mainActorByDefault
         ),
@@ -94,7 +108,13 @@ let package = Package(
             swiftSettings: mainActorByDefault
         ),
 
+        // The widget extension's views (iOS only; empty on macOS). DesignSystem: the brand colors.
+        .target(name: "WidgetUI", dependencies: ["PlainShared", "DesignSystem"]),
+
         .testTarget(name: "BrowserCoreTests", dependencies: ["BrowserCore"]),
+        // Links, the shared favorites file, the Spotlight sync with a fake index (macOS), and the
+        // widget's timeline and rendered faces (iOS simulator, xcodebuild).
+        .testTarget(name: "SystemIntegrationTests", dependencies: ["PlainShared", "SystemSync", "Storage", "WidgetUI"]),
         // The paper texture's generator: seamless, faint, centered on the Paper colors.
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
         .testTarget(name: "FeatureUITests", dependencies: ["FeatureUI", "Storage", "BrowserCore"]),

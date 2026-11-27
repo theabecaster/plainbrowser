@@ -75,6 +75,7 @@ extension BrowserViewController {
             if let restored, self.currentTab == nil { self.show(restored) }
             self.launchSessionRestored(restored)
             self.tabsDidChange()
+            self.sessionDidLoadForCommands()
             self.tabsUI.tip.start(in: self)
             // Idle tabs move to the archive once both the saved tabs and the settings are in.
             self.archiveIdleTabs()
@@ -192,6 +193,7 @@ extension BrowserViewController {
             }
         }
         currentTab = nil
+        updateHandoff(page: nil, title: "", isPrivate: false)
         pill.display(url: nil)
         pill.progressBar.finish()
         setPrivateChrome(false)
@@ -271,6 +273,7 @@ extension BrowserViewController {
         if old != nil, old?.canTranslate == false, new.canTranslate { offerTranslationOnce() }
         updateButtons()
         updatePageState()
+        updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
     }
 
     // MARK: Page state (crash, error, form waiting)

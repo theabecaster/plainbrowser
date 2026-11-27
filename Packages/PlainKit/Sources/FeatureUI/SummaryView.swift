@@ -170,8 +170,9 @@ public struct SummaryView: View {
         switch progress.stage {
         case .searching(let engine): return String(localized: "Searching \(engine)…")
         case .reading:
-            let reading = progress.sources.filter { $0.state == .reading || $0.state == .waiting }.count
-            return reading == 1 ? String(localized: "Reading 1 page…") : String(localized: "Reading \(reading) pages…")
+            // What is left, as the rows show what is done or skipped.
+            let left = progress.sources.filter { $0.state == .reading || $0.state == .waiting }.count
+            return left == 1 ? String(localized: "Reading, 1 page left…") : String(localized: "Reading, \(left) pages left…")
         case .writing:
             switch progress.subject {
             case .search:
@@ -206,12 +207,6 @@ public struct SummaryView: View {
 
     private var summary: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if !progress.draft.title.isEmpty, case .search = progress.subject {
-                Text(progress.draft.title)
-                    .font(.system(.title3, design: .serif).weight(.semibold))
-                    .foregroundStyle(Style.ink)
-                    .accessibilityAddTraits(.isHeader)
-            }
             ForEach(Array(progress.draft.sections.enumerated()), id: \.offset) { _, section in
                 VStack(alignment: .leading, spacing: 8) {
                     if !section.heading.isEmpty {
@@ -309,7 +304,7 @@ private struct ReadingRow: View {
             stateView
         }
         .padding(.vertical, 10)
-        .opacity(source.state == .skipped ? 0.55 : 1)
+        .opacity(source.state == .skipped ? 0.72 : 1)
         .accessibilityElement(children: .combine)
         .accessibilityValue(stateLabel)
     }

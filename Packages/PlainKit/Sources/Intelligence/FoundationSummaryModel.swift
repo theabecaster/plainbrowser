@@ -103,7 +103,6 @@ public final class FoundationSummaryModel: SummaryModel {
 
     static func draft(_ partial: GeneratedSummary.PartiallyGenerated) -> SummaryDraft {
         SummaryDraft(
-            title: partial.title ?? "",
             sections: (partial.sections ?? []).map { section in
                 SummaryDraft.Section(
                     heading: section.heading ?? "",
@@ -128,12 +127,12 @@ public final class FoundationSummaryModel: SummaryModel {
     }
 }
 
-/// The answer's shape. Properties generate in this order, so the title shows first and each
-/// point's citations right after its text. Names are short: the schema is part of the prompt.
+/// The answer's shape. Properties generate in this order, so each heading shows before its points
+/// and each point's citations right after its text. No title: the screen's headline is the search
+/// or the page's title, and the first bullet comes sooner without one. Names are short: the schema
+/// is part of the prompt.
 @available(iOS 27, macOS 27, *)
 @Generable struct GeneratedSummary {
-    @Guide(description: "A title for the answer, at most 8 words")
-    var title: String
     @Guide(description: "Sections, most useful first", .count(1...4))
     var sections: [GeneratedSection]
 }

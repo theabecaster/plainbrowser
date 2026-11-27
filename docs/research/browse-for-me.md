@@ -202,7 +202,9 @@ From the iOS 27.2 SDK interface unless linked.
   - A context error retries once with half the room.
   - Summarize Page condenses a long page to one pass: the opening (60%) plus paragraphs spread
     over the rest. Apple's chunked recipe would delay the first words by one model pass per chunk.
-- **Answer shape:** `title`, then `sections` (1 to 4), each with a `heading` and `points` (1 to 4).
+- **Answer shape:** `sections` (1 to 4), each with a `heading` and `points` (1 to 4). No
+  generated title: the search or the page's title is the headline, and the first bullet comes
+  sooner without one (design review, 2026-11-27).
   Each point is `text` then `sources` (numbers).
   - Citations are cleaned: numbers outside the sources and repeats are dropped, and a page's own
     summary cites nothing.

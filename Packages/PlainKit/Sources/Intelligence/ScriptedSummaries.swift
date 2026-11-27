@@ -45,11 +45,6 @@ import Reader
             let task = Task { @MainActor in
                 do {
                     var draft = SummaryDraft()
-                    for word in script.title.split(separator: " ") {
-                        draft.title += (draft.title.isEmpty ? "" : " ") + word
-                        continuation.yield(draft)
-                        try await Task.sleep(for: pace)
-                    }
                     for (sectionIndex, section) in script.sections.enumerated() {
                         draft.sections.append(SummaryDraft.Section(heading: section.heading))
                         continuation.yield(draft)

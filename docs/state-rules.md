@@ -158,20 +158,23 @@ page shorter than two screens (the end, where the bar comes back, is already nea
 The inset changes once per motion, never per frame (docs/plan.md, engine rule 4): when the bar
 comes back (to the pill or expanded from further down) it changes as the motion starts, so a fixed
 footer moves up in the frame the bar starts rising and the bar slides in under it; when the bar
-goes away it changes as the motion ends, so the footer never sits under a bar still on screen. The
-same holds for the top bar on the Duo's inner screen. Under Reduce Motion, hiding and revealing are a
-crossfade.
+goes away it changes as the motion ends, so the footer never sits under a bar still on screen.
+The top bar on the Duo's inner screen changes no inset at all (below). Under Reduce Motion, hiding
+and revealing are a crossfade.
 
 **Duo inner screen (top bar).** The same three states drive the top bar. Where the status items
 keep to a corner (the Duo's inner screen) the row sits on their row, clear of the corner, and the
 page runs to the top edge: Expanded is the row (Back/Forward, the pill, Tabs/Share/More) and the
-strip, page inset = their bottom; Pill shrinks the address in place on the row, buttons and strip
-faded; Hidden lifts it off the top edge. Pill and Hidden give the page the whole screen: the page
-and any fixed header run to the top edge under the status items (top inset 0). In no state does
-a band, backing or scroll edge effect of Plain's sit at the top, only the floating glass (owner,
-2026-11-27: "I don't like that bar that stays there"). Under a full-width status bar the row sits under it, Pill tucks the address
-under the status bar, and Hidden leaves only the status bar. Same triggers and the same
-never-hidden list.
+strip, and a fresh page's first line starts under them; Pill shrinks the address in place on the
+row, buttons and strip faded; Hidden lifts it off the top edge. The page's top inset is the same in
+every state (`obscuredContentInsets.top` 0): the bar floats over the page, so the page and any
+fixed header run to the top edge under the status items, a collapse or reveal moves nothing in
+the page, and WebKit fills no band of a header's color behind the controls. In no state does a
+band, backing or scroll edge effect sit at the top, only the floating glass (owner, 2026-11-27:
+"I don't like that bar that stays there", "that bar needs to be removed"). Under a full-width
+status bar the row sits under it, the page's top inset is the status bar in every state, Pill
+tucks the address under the status bar, and Hidden leaves only the status bar. Same triggers and
+the same never-hidden list.
 
 ## 4. The page menu (More, and a long press on the pill)
 

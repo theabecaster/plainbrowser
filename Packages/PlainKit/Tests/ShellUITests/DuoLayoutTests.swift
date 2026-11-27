@@ -335,35 +335,33 @@ struct TopChromeGeometryTests {
         let strip = Self.device(strip: Self.strip)
         #expect(strip.stripTop == 72.5)
         #expect(strip.expandedInset == 72.5 + Self.strip + 4)
-        #expect(bar.hiddenInset < bar.expandedInset, "WebKit wants the largest viewport inset strictly larger")
+        #expect(bar.obscuredInset < bar.expandedInset, "WebKit wants the largest viewport inset strictly larger")
         // 10.8% of the screen at rest (Safari 12.6%), 16.5% with the strip.
         #expect(bar.chromeShare(of: Self.landscape, collapsed: false) < 0.11)
         #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.17)
         #expect(bar.chromeShare(of: Self.landscape, collapsed: true) < 0.11)
     }
 
-    @Test func deviceReadingLeavesNoBandAtTheTop() {
-        // Owner, on the device: "when I scroll ... the bar stays." While reading, the page's top
-        // inset is 0 in the status zone, with or without the strip, so WebKit places a fixed
-        // header at the top edge and extends no header color into a band above it; the page runs
-        // under the status items, as Safari's full-screen reading does.
-        for bar in [Self.device(), Self.device(strip: Self.strip)] {
-            #expect(bar.obscuredInset(rest: .hidden) == 0)
-            #expect(bar.obscuredInset(rest: .pill) == 0, "the shrunken address floats alone over the page")
-            #expect(bar.chromeShare(of: Self.landscape, collapsed: true) == 0)
-            // At rest the page's first line still starts under the controls.
-            #expect(bar.obscuredInset(rest: .expanded) == bar.expandedBottom)
-            #expect(bar.obscuredInset(rest: .expanded) > bar.obscuredInset(rest: .hidden))
-        }
-        #expect(Self.device().obscuredInset(rest: .expanded) == 72.5)
-        // Portrait, beside a corner: the same.
+    @Test func deviceLeavesNoBandAtTheTopInAnyState() {
+        // Owner, on the device: "The bar under the URL text field is still there when the text
+        // field is present, and the transition to the no-bar state is terrible." In the status
+        // zone the page's obscured top inset is 0 in every state, with or without the strip, so
+        // WebKit fills no band of a fixed header's color behind the controls at rest, and a
+        // collapse or a reveal changes nothing in the page (no jump). The page's first line at
+        // rest still starts under the controls: that is the scroll range's start.
         let portrait = TopChromeGeometry(
             width: 669, safeTop: 81, corner: CGRect(x: 546, y: 24, width: 100, height: 45), stripHeight: 0
         )
-        #expect(portrait.obscuredInset(rest: .hidden) == 0 && portrait.obscuredInset(rest: .pill) == 0)
-        // Under a full-width status bar (no corner: iPad-size windows) the page still keeps clear
-        // of the status bar.
-        #expect(Self.simulator().obscuredInset(rest: .hidden) == Self.simulator().safeTop)
+        for bar in [Self.device(), Self.device(strip: Self.strip), portrait] {
+            #expect(bar.obscuredInset == 0)
+            #expect(bar.chromeShare(of: Self.landscape, collapsed: true) == 0)
+            #expect(bar.expandedInset == bar.expandedBottom)
+            #expect(bar.expandedInset > bar.obscuredInset, "WebKit wants the largest viewport inset strictly larger")
+        }
+        #expect(Self.device().expandedInset == 72.5)
+        // Under a full-width status bar (no corner: iPad-size windows) the page keeps clear of the
+        // status bar in every state, and of nothing more.
+        #expect(Self.simulator().obscuredInset == Self.simulator().safeTop)
     }
 
     @Test func deviceCollapseShrinksTheAddressInPlaceThenLiftsItOff() {
@@ -402,7 +400,7 @@ struct TopChromeGeometryTests {
         ))
         let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: 0)
         #expect(bar.rowTop == 18.5)
-        #expect(bar.hiddenInset == 0, "while reading the page runs to the top edge")
+        #expect(bar.obscuredInset == 0, "the page runs to the top edge under the floating bar")
         #expect(bar.expandedInset == 81)
         #expect(bar.expandedInset <= 84)
         #expect(951 - bar.rowClearance.trailing == 816 - TopChromeGeometry.cornerGap)
@@ -434,7 +432,6 @@ struct TopChromeGeometryTests {
         let strip = Self.simulator(strip: Self.strip)
         #expect(strip.stripTop == 74)
         #expect(strip.expandedInset == 74 + Self.strip + 4)
-        #expect(strip.collapsedInset == bar.collapsedInset, "collapsed, only the address is left")
     }
 
     @Test func fullWidthStatusBarTucksThePillUnderIt() {
@@ -442,9 +439,9 @@ struct TopChromeGeometryTests {
         let collapsed = bar.pillTransform(progress: 1)
         let center = bar.rowTop + TopChromeGeometry.rowHeight / 2 + collapsed.translationY
         #expect(abs(center - bar.collapsedPillHeight / 2 - 24) < 0.001, "the collapsed pill's top meets the status bar")
-        #expect(bar.obscuredInset(rest: .hidden) == 24)
-        #expect(bar.obscuredInset(rest: .pill) == bar.collapsedInset)
-        #expect(bar.hiddenInset < bar.collapsedInset && bar.collapsedInset < bar.expandedInset)
+        // The page keeps clear of the status bar in every state; the bar floats over it.
+        #expect(bar.obscuredInset == 24)
+        #expect(bar.obscuredInset < bar.expandedInset)
     }
 
     @Test func portraitUsesTheSameRules() {

@@ -32,9 +32,6 @@ final class TopBarLayout {
     /// The row keeps clear of the status items' corner: its distance from each edge.
     var leadingClearance: [NSLayoutConstraint] = []
     var trailingClearance: [NSLayoutConstraint] = []
-    /// The panes start at the root view's top under a top bar (the page runs under the status zone
-    /// and the floating bar), and under the status bar otherwise (`DuoUIState.panesTop`).
-    var panesTopEdge: NSLayoutConstraint!
     /// The strip's distance from the leading and trailing edges, past the status corner where it
     /// starts beside it (`TopChromeGeometry.stripClearance`); empty without a strip.
     var stripClearance: [NSLayoutConstraint] = []
@@ -74,7 +71,6 @@ extension BrowserViewController {
         top.sheetOverPill = sheet.content.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s)
         top.sheetLow = sheet.content.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -Spacing.s)
         top.pullIndicatorTop = pullIndicator.topAnchor.constraint(equalTo: panes.view.topAnchor, constant: Spacing.s)
-        top.panesTopEdge = panes.view.topAnchor.constraint(equalTo: view.topAnchor)
 
         // As wide as the room between the capsules allows (up to its cap), then as near the
         // lane's center as that leaves it: beside the status corner the row is lopsided, and a
@@ -167,21 +163,10 @@ extension BrowserViewController {
         )
     }
 
-    /// Places the row, the strip and the sidebar for `geometry`, and moves the panes to the root
-    /// view's top under a top bar. Constants only, set before the layout pass that uses them.
+    /// Places the row, the strip and the sidebar for `geometry`. Constants only, set before the
+    /// layout pass that uses them.
     func applyTopBarPlacement(_ geometry: TopChromeGeometry?, layout: DuoLayout) {
         let top = duo.top
-        let onTop = geometry != nil
-        if top.panesTopEdge.isActive != onTop {
-            // The outgoing one lets go first, so the two never pin the panes together.
-            if onTop {
-                duo.panesTop.isActive = false
-                top.panesTopEdge.isActive = true
-            } else {
-                top.panesTopEdge.isActive = false
-                duo.panesTop.isActive = true
-            }
-        }
         placeSidebarRows(geometry, layout: layout)
         guard let geometry else { return }
         Self.set(top.pillTop, geometry.rowTop)
@@ -311,20 +296,17 @@ extension BrowserViewController {
         }
     }
 
-    /// The page's top inset follows the bar's resting state; the viewport insets span collapsed to
-    /// expanded, so CSS `svh`/`lvh` stay put while the bar moves.
-    func applyTopBarInsets(_ geometry: TopChromeGeometry, rest: ChromeRest) {
-        let obscured = UIEdgeInsets(top: geometry.obscuredInset(rest: rest), left: 0, bottom: pageBottomInset, right: 0)
-        let minimum = UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: pageBottomInset, right: 0)
-        let maximum = UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0)
-        if let tab = currentTab {
-            session.pool.setInsets(for: tab, obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
-            setPageTopStart(geometry.expandedInset, for: session.pool.scrollView(for: tab))
-            // Nothing of Plain's rests at the bottom; the page and its fixed footers stop above the home indicator.
-            session.pool.scrollView(for: tab)?.followObscuredBottom(pageBottomInset)
-        }
-        engineUI.reader.setInsets(obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
+    /// The page's insets under the top bar. They never follow the bar's resting state: the
+    /// obscured top is the status items' strip in every state (`TopChromeGeometry.obscuredInset`),
+    /// so a collapse or a reveal changes nothing in the page and nothing in it can jump. The
+    /// viewport insets span that to the expanded bar, so CSS `svh`/`lvh` stay put. They change
+    /// only with the layout (a fold, a rotation, the strip coming or going).
+    func applyTopBarInsets(_ geometry: TopChromeGeometry) {
+        if let tab = currentTab { applyTopBarInsets(geometry, to: tab) }
+        let insets = topBarInsets(geometry)
+        engineUI.reader.setInsets(obscured: insets.obscured, minimumViewport: insets.minimum, maximumViewport: insets.maximum)
         setPageTopStart(geometry.expandedInset, for: engineUI.reader.webView?.scrollView)
+        engineUI.reader.webView?.scrollView.showStatusEdgeEffect(false)
         engineUI.reader.webView?.scrollView.followObscuredBottom(pageBottomInset)
         duo.top.pullIndicatorTop.constant = geometry.expandedInset + Spacing.s
         for slot in self.panes.slots { slot.setRingTopInset(geometry.expandedInset) }
@@ -332,23 +314,27 @@ extension BrowserViewController {
         let panes = session.tabs.panes
         for index in shownPanes where index != session.tabs.focusedPane {
             if let id = panes[index], let tab = session.tabs.existingTab(id) {
-                applyOtherPaneTopInsets(to: tab, geometry: geometry, rest: rest)
+                applyTopBarInsets(geometry, to: tab)
             }
         }
     }
 
-    /// The other pane of a split under the top bar: the one bar spans both panes, so it follows the
-    /// same resting state as the focused one (`rest`). While reading its top inset is then 0 too,
-    /// and no header-colored band stays above it; a focus switch still never relayouts either page.
-    func applyOtherPaneTopInsets(to tab: Tab, geometry: TopChromeGeometry, rest: ChromeRest) {
-        session.pool.setInsets(
-            for: tab,
-            obscured: UIEdgeInsets(top: geometry.obscuredInset(rest: rest), left: 0, bottom: pageBottomInset, right: 0),
-            minimumViewport: UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: pageBottomInset, right: 0),
-            maximumViewport: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0)
-        )
-        setPageTopStart(geometry.expandedInset, for: session.pool.scrollView(for: tab))
-        session.pool.scrollView(for: tab)?.followObscuredBottom(pageBottomInset)
+    /// `tab`'s page insets under the top bar, the focused page's or a split's other pane's: the one
+    /// bar spans both panes, so both get the same, and a focus switch relayouts neither.
+    func applyTopBarInsets(_ geometry: TopChromeGeometry, to tab: Tab) {
+        let insets = topBarInsets(geometry)
+        session.pool.setInsets(for: tab, obscured: insets.obscured, minimumViewport: insets.minimum, maximumViewport: insets.maximum)
+        let scrollView = session.pool.scrollView(for: tab)
+        setPageTopStart(geometry.expandedInset, for: scrollView)
+        scrollView?.showStatusEdgeEffect(false)
+        // Nothing of Plain's rests at the bottom; the page and its fixed footers stop above the home indicator.
+        scrollView?.followObscuredBottom(pageBottomInset)
+    }
+
+    private func topBarInsets(_ geometry: TopChromeGeometry) -> (obscured: UIEdgeInsets, minimum: UIEdgeInsets, maximum: UIEdgeInsets) {
+        (UIEdgeInsets(top: geometry.obscuredInset, left: 0, bottom: pageBottomInset, right: 0),
+         UIEdgeInsets(top: geometry.obscuredInset, left: 0, bottom: pageBottomInset, right: 0),
+         UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0))
     }
 
     /// Where a page's top rests: under the expanded top bar, so its first lines show below it and

@@ -1198,7 +1198,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIDeferredMenuElement.uncached { [weak self] completion in
                 Signposts.signposter.emitEvent(Signposts.pageMenu)
                 guard let self else { return completion([]) }
-                guard let url = self.currentTab?.url, LiveAddressBarData.isRecordable(url), self.currentRules().favorite else {
+                // The address the items act on (`pageAddress`): under a saved copy over a failed
+                // load, that is the page that failed, not the one the tab last showed.
+                guard let url = self.pageAddress, LiveAddressBarData.isRecordable(url), self.currentRules().favorite else {
                     self.lastPageMarks = nil
                     return completion(self.pageMenuElements(marks: nil, source: source))
                 }
@@ -1207,7 +1209,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 Task { [weak self, data] in
                     let marks = await data.pageMarks(for: url)
                     guard let self else { return completion([]) }
-                    let answer = self.currentTab?.url == url ? marks : nil
+                    let answer = self.pageAddress == url ? marks : nil
                     self.lastPageMarks = answer
                     completion(self.pageMenuElements(marks: answer, source: source))
                 }
@@ -1423,8 +1425,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let title = tab.title
         Haptic.success.prepare()
         Task { [weak self, session, data] in
+            // The article must be this address's: the page under a saved copy can be another one,
+            // and the page may navigate before or while the extraction runs.
             var article: ReaderArticle?
-            if let page { article = try? await session.reader.article(in: page) }
+            if let page, page.url == url {
+                article = try? await session.reader.article(in: page)
+                if page.url != url || article?.url.map({ AddressBarSuggestions.addressKey($0) != AddressBarSuggestions.addressKey(url) }) == true {
+                    article = nil
+                }
+            }
             let saved = await Self.savedPage(url: url, title: title, article: article)
             let ok = await data.saveForLater(saved)
             if saved.copy == nil {
@@ -1433,7 +1442,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 signposter.endInterval(Signposts.readingListSave, state, "copy")
             }
             if ok { Haptic.success.play() } else { Haptic.nothingThere.play() }
-            if ok, self?.currentTab?.url == url { self?.lastPageMarks?.isSaved = true }
+            if ok, self?.pageAddress == url { self?.lastPageMarks?.isSaved = true }
         }
     }
 
@@ -1455,7 +1464,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         Task { [weak self, data] in
             if await data.removeFromReadingList(url: url) {
                 Haptic.success.play()
-                if self?.currentTab?.url == url { self?.lastPageMarks?.isSaved = false }
+                if self?.pageAddress == url { self?.lastPageMarks?.isSaved = false }
             } else {
                 Haptic.nothingThere.play()
             }

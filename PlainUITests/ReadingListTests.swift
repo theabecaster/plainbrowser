@@ -126,6 +126,12 @@ final class ReadingListTests: XCTestCase {
         XCTAssertTrue(reader.waitForExistence(timeout: 10), "the saved copy opens in the reader")
         XCTAssertTrue(reader.staticTexts["The Quiet Page"].waitForExistence(timeout: 5))
         shot("r5-offline-copy")
+        // The menu acts on the saved page, not on Page A still under the error.
+        openPageMenu(app)
+        let item = app.buttons["menu.readLater"]
+        XCTAssertTrue(item.waitForExistence(timeout: 3))
+        XCTAssertEqual(item.label, "Remove from Reading List")
+        shot("r6-offline-menu")
     }
 
     private func shot(_ name: String) {

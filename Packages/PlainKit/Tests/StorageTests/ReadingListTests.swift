@@ -1,5 +1,6 @@
 import BrowserCore
 import Foundation
+import GRDB
 @testable import Storage
 import Testing
 
@@ -111,14 +112,25 @@ import Testing
         #expect(merged.first == .page(url: URL(string: "https://slow.example/tides")!, title: "Tides, Slowly", isFavorite: false, isSaved: true))
     }
 
-    @Test func migrationAddsTheReadingListToAnExistingDatabase() async throws {
-        // Every migration runs in order on an empty database; the reading list's tables exist after.
-        let database = try AppDatabase.inMemory()
-        let tables = try await database.writer.read { db in
-            try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE name LIKE 'readingList%' ORDER BY name")
+    @Test func migrationAddsTheReadingListToAnExistingDatabase() throws {
+        // A database as v0.1 left it (every migration before the reading list), with a favorite
+        // and a visit in it.
+        let queue = try DatabaseQueue()
+        try AppDatabase.migrator.migrate(queue, upTo: "v8.cookieBannersOff")
+        try queue.write { db in
+            try db.execute(sql: "INSERT INTO favorite (url, title, position) VALUES ('https://a.example/', 'A', 0)")
+            try db.execute(sql: "INSERT INTO historyVisit (url, title, visitedAt, kind) VALUES ('https://a.example/', 'A', '2026-11-01 10:00:00.000', 0)")
         }
-        #expect(tables.contains("readingListItem"))
-        #expect(tables.contains("readingListCopy"))
-        #expect(tables.contains("readingListSearch"))
+        try AppDatabase.migrator.migrate(queue)
+        let (tables, favorites, visits) = try queue.read { db in
+            (
+                try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE name LIKE 'readingList%'"),
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM favorite"),
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM historyVisit")
+            )
+        }
+        #expect(Set(["readingListItem", "readingListCopy", "readingListSearch"]).isSubset(of: Set(tables)))
+        #expect(favorites == 1, "favorites are kept")
+        #expect(visits == 1, "history is kept")
     }
 }

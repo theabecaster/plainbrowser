@@ -490,16 +490,16 @@ extension BrowserViewController {
     /// reader copy, if the reading list has one, opens over the error, as if the user had opened
     /// the reader. Back or Hide Reader returns to the error and its Try Again.
     func openSavedCopy(of url: URL) {
-        guard let tab = currentTab, !isShowingReader else { return }
+        guard let tab = currentTab, !isShowingReader, let failure = tab.loadError else { return }
         let signposter = Signposts.signposter
         let state = signposter.beginInterval(Signposts.readingListOfflineCopy)
         engineUI.readerTask?.cancel()
         engineUI.readerTask = Task { [weak self, data] in
             defer { signposter.endInterval(Signposts.readingListOfflineCopy, state) }
             guard let copy = await data.savedCopy(for: url), let article = await Self.decodeArticle(copy) else { return }
-            // Still the same failed page: a new load or another tab makes the copy moot.
-            guard let self, !Task.isCancelled, self.currentTab === tab, !tab.isLoading,
-                  tab.loadError?.url == url || (tab.loadError != nil && tab.url == url)
+            // Still the same failure: a new load (even one that failed another way, such as a
+            // certificate warning that must stay in front) or another tab makes the copy moot.
+            guard let self, !Task.isCancelled, self.currentTab === tab, !tab.isLoading, tab.loadError == failure
             else { return }
             await self.presentReader(article, over: tab)
         }

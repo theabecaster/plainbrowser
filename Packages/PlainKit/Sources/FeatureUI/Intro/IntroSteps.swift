@@ -332,29 +332,45 @@ private struct BrowseForMeStep: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
-            DisplayText(lead: "Let Plain ", emphasis: "browse", trail: " for you")
-                .padding(.top, 10)
-                .entrance(1)
-            BrowseForMeDemo(model: model)
-                .padding(.top, 18)
-                .entrance(2)
-            status
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360, minHeight: 22)
-                .padding(.top, 12)
-                .entrance(3)
-            // The headline keeps the blocking step's place, and nothing above the buttons moves
-            // when they change.
-            Spacer(minLength: 0)
+        // Centered between the window and the buttons: the demo has a fixed height, so on a tall
+        // screen the room goes above and below it. Where it can't fit (the largest text sizes)
+        // the step scrolls, like the inside step, so the line is never cut.
+        ViewThatFits(in: .vertical) {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                parts
+                Spacer(minLength: 0)
+            }
+            ScrollView {
+                VStack(spacing: 0) { parts }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 8)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.hidden)
         }
+    }
+
+    @ViewBuilder private var parts: some View {
+        DisplayText(lead: "Let Plain ", emphasis: "browse", trail: " for you")
+            .padding(.top, 10)
+            .entrance(1)
+        BrowseForMeDemo(model: model)
+            .padding(.top, 18)
+            .entrance(2)
+        status
+            .font(.subheadline)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 360, minHeight: 22)
+            .padding(.top, 12)
+            .entrance(3)
     }
 
     @ViewBuilder private var status: some View {
         switch model.browseForMe {
         case .turnOn:
-            Text("Find it in Settings, under Apple Intelligence & Siri.")
+            Text("In Settings › Apple Intelligence & Siri.")
                 .opacity(0.72)
                 .accessibilityIdentifier("introAITurnOnLine")
         case .gettingReady:

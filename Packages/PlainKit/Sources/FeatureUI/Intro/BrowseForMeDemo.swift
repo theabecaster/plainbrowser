@@ -110,7 +110,9 @@ struct BrowseForMeDemo: View {
                         if index < sourcesRead {
                             Text("\(index + 1)")
                                 .font(.system(size: 10, weight: .bold).monospacedDigit())
-                                .foregroundStyle(.white)
+                                // The sheet's own color: white by day, night blue on the lighter
+                                // night Lagoon.
+                                .foregroundStyle(Color(uiColor: IntroPaper.sheet))
                                 .frame(width: 15, height: 15)
                                 .background(Color(uiColor: Palette.accentOnPaper), in: .circle)
                                 .transition(.scale(scale: 0.5).combined(with: .opacity))

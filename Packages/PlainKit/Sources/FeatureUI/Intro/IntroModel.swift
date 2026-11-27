@@ -85,7 +85,21 @@ final class IntroModel {
     /// The splash ended: show the first step.
     func start() {
         guard step == nil, !didFinish else { return }
-        go(to: steps.first)
+        go(to: Self.debugStart(in: steps) ?? steps.first)
+    }
+
+    /// Debug, isolated runs only: `-PlainIntroStart <step>` opens the intro on that step, for
+    /// captures driven without UI tests (the Duo's inner screen as a resizable window).
+    private static func debugStart(in steps: [Step]) -> Step? {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        guard TestIsolation.mode(for: arguments) != .off, let index = arguments.firstIndex(of: "-PlainIntroStart"),
+              index + 1 < arguments.count, let step = Step(rawValue: arguments[index + 1]), steps.contains(step)
+        else { return nil }
+        return step
+        #else
+        return nil
+        #endif
     }
 
     func next() {

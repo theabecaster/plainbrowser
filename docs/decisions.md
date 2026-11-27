@@ -712,7 +712,7 @@ Show it only where needed, elegantly; follow what credible research says."
   part holds its place from the first frame, so nothing moves while it plays. One line under it,
   by state:
   - available: "Written on your iPhone, with every source cited." Next. Nothing to do.
-  - Apple Intelligence off: "Find it in Settings, under Apple Intelligence & Siri." and Turn On
+  - Apple Intelligence off: "In Settings › Apple Intelligence & Siri." and Turn On
     Apple Intelligence, with Not Now under it. Neither blocks: Skip and Not Now always go on.
   - model downloading: a download mark and "Apple Intelligence is getting ready…", with Next.
   - device not eligible, or a language the model doesn't read: no step at all.

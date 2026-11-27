@@ -199,6 +199,7 @@ public final class TabGalleryViewController: UIViewController {
         }
         setThumbnailHidden(for: nil)
         setHeaderFade(1)
+        setBackdropFade(1)
         didFocusSelection = false
         reloadTabs(animated: false)
         view.setNeedsLayout()
@@ -887,6 +888,13 @@ public final class TabGalleryViewController: UIViewController {
     func setHeaderFade(_ fade: CGFloat) {
         headerFade = fade
         for card in cards.values { card.setHeaderFade(fade) }
+    }
+
+    /// How much of the blurred backdrop shows, 0...1: a transition brings it in and out with the
+    /// zoom.
+    func setBackdropFade(_ fade: CGFloat) {
+        let alpha = min(max(fade, 0), 1)
+        if backdrop.alpha != alpha { backdrop.alpha = alpha }
     }
 
     /// The views a transition zooms and fades: the cards, then the floating controls.

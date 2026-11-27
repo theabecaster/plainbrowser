@@ -229,6 +229,8 @@ extension BrowserViewController: GalleryHost {
         switch end {
         case .gallery:
             setChromeHiddenForGallery(true, animated: false)
+            // Turned back to the gallery mid-way: the page's buttons leave again.
+            applyToolbarItems()
         case .page:
             removeGallery()
         }
@@ -295,6 +297,7 @@ extension BrowserViewController: GalleryHost {
         view.bringSubviewToFront(tabsUI.toast)
         tabsUI.galleryTransition = transition
         transition.run()
+        applyToolbarItems()
     }
 
     /// The page as its card shows it, sized like the page and pinned to its top: the transition's

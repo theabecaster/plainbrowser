@@ -279,6 +279,7 @@ public final class TabGalleryTransition {
             // The card shows under the fading page, so there is no gap.
             gallery.setThumbnailHidden(for: nil)
             gallery.setHeaderFade(1)
+            gallery.setBackdropFade(1)
             return
         }
         let frame = CGRect(
@@ -314,6 +315,10 @@ public final class TabGalleryTransition {
         let zoomFade = min(1, max(0, (progress - 0.6) / 0.4))
         let liftFade = min(1, max(0, 1 + offset.y / Self.liftFadeDistance))
         gallery.setHeaderFade(zoomFade * liftFade)
+        // The blurred backdrop comes and goes with the zoom, over the third of the way nearest
+        // the page (where the moving page still covers most of what is under it): no dark edge
+        // is left beside a page that has landed, and the page under never shows through for long.
+        gallery.setBackdropFade(t * 3)
     }
 
     private static let ringKey = "selectionRing"
@@ -389,6 +394,7 @@ public final class TabGalleryTransition {
         }
         gallery.setThumbnailHidden(for: nil)
         gallery.setHeaderFade(1)
+        gallery.setBackdropFade(1)
         endSignpost()
         completion(end)
     }

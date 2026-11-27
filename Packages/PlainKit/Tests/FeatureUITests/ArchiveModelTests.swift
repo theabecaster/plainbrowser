@@ -58,6 +58,9 @@ struct ArchiveModelTests {
         await model.load()
         #expect(!model.loadFailed)
         #expect(model.rows.count == 1)
+        await archive.failNextReadCall()
+        await model.load()
+        #expect(model.rows.isEmpty, "stale rows don't stay under the failure")
     }
 
     @Test func restoreAndDeleteLeaveTheListAndReachTheShell() async {

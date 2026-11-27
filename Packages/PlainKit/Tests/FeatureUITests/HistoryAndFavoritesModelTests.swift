@@ -190,6 +190,12 @@ actor GatedHistory: HistoryStoring {
         #expect(model.loadFailed)
         #expect(model.isLoaded)
         #expect(model.errorMessage == nil, "a failed read is shown in place, not as an alert")
+        #expect(model.hasHistory, "a failed read doesn't prove history is empty")
+        await model.load()
+        #expect(!model.loadFailed)
+        await store.failNextReadCall()
+        await model.load()
+        #expect(model.days.isEmpty, "stale rows don't stay under the failure")
         await model.load()
         #expect(!model.loadFailed, "Try Again clears it")
         #expect(model.days.flatMap(\.rows).count == 5)
@@ -213,6 +219,16 @@ actor GatedHistory: HistoryStoring {
 
         await model.clear(.all)
         #expect(!model.hasHistory)
+    }
+
+    @Test func clearDimsWhenASearchedDeleteEmptiesHistory() async throws {
+        let store = FakeHistory([Self.visit(1, "a.example", "Alpha", hoursAgo: 0.5)])
+        let model = makeModel(store)
+        await model.load()
+        model.query = "Alpha"
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        await model.delete(model.days[0].rows[0])
+        #expect(!model.hasHistory, "the last visit went while a search was typed")
     }
 
     @Test func failedDeleteReloadsAndShowsAMessage() async {
@@ -323,13 +339,14 @@ actor GatedHistory: HistoryStoring {
     }
 
     @Test func failedReadShowsTryAgainNotTheEmptyState() async {
-        let model = FavoritesModel(store: UnreadableFavorites())
+        let store = FlakyFavorites(database: database)
+        let model = FavoritesModel(store: store)
         await model.load()
         #expect(model.loadFailed)
         #expect(model.errorMessage == nil)
-        let readable = FavoritesModel(store: database)
-        await readable.load()
-        #expect(!readable.loadFailed)
+        await model.load()
+        #expect(!model.loadFailed, "Try Again clears it")
+        #expect(titles(model) == ["A", "B", "C", "D", "E"])
     }
 
     @Test func failedWriteReloadsFromTheStore() async throws {
@@ -355,9 +372,15 @@ struct SlowFavorites: FavoritesStoring {
     func moveFavorite(id: Int64, to index: Int) async throws { try await database.moveFavorite(id: id, to: index) }
 }
 
-/// Favorites that can't be read.
-struct UnreadableFavorites: FavoritesStoring {
-    func favorites() async throws -> [Favorite] { throw URLError(.cannotOpenFile) }
+/// Favorites whose first read fails.
+actor FlakyFavorites: FavoritesStoring {
+    let database: AppDatabase
+    private var failed = false
+    init(database: AppDatabase) { self.database = database }
+    func favorites() async throws -> [Favorite] {
+        if !failed { failed = true; throw URLError(.cannotOpenFile) }
+        return try await database.favorites()
+    }
     func renameFavorite(id: Int64, title: String) async throws {}
     func removeFavorite(id: Int64) async throws {}
     func moveFavorite(id: Int64, to index: Int) async throws {}

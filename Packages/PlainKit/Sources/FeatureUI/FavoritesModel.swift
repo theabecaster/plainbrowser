@@ -33,6 +33,8 @@ public final class FavoritesModel {
             if edits == editsAtStart { favorites = stored }
             loadFailed = false
         } catch {
+            // The list from an earlier read would be stale under the failure; it replaces it.
+            if edits == editsAtStart { favorites = [] }
             loadFailed = true
         }
         isLoaded = true

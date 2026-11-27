@@ -122,6 +122,8 @@ public final class ArchiveModel {
             loadFailed = false
         } catch {
             guard current == generation, !(error is CancellationError) else { return }
+            // Rows from an earlier read would be stale under the failure; it replaces them.
+            rows = []
             loadFailed = true
         }
         isLoaded = true

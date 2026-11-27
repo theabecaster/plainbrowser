@@ -172,10 +172,13 @@ struct SearchEngineView: View {
                         .submitLabel(.done)
                         .focused($fieldFocused)
                         .onSubmit { if model.useCustomTemplate() { fieldFocused = false } }
+                    let noTemplate = model.customTemplate.trimmingCharacters(in: .whitespaces).isEmpty
                     Button("Use Custom Engine") {
                         if model.useCustomTemplate() { fieldFocused = false }
                     }
-                    .disabled(model.customTemplate.trimmingCharacters(in: .whitespaces).isEmpty)
+                    // An action in the accent: the sheet's ink would otherwise take the button's tint.
+                    .foregroundStyle(noTemplate ? Style.inkSecondary : Style.accent)
+                    .disabled(noTemplate)
                 } header: {
                     Text("Custom")
                 } footer: {

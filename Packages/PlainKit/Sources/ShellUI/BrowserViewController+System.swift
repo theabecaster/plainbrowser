@@ -32,6 +32,11 @@ extension BrowserViewController {
             if !reusable { _ = openNewTab() }
             load(url, kind: .typed)
         case .showTabs:
+            // On a cold launch the saved tabs come in after the first frame; the switcher waits.
+            guard session.tabs.isSessionLoaded else {
+                showTabsAwaitingSession = true
+                return
+            }
             guard !isShowingGallery else { return }
             endAddressEditing()
             // With nothing to switch to, the gallery has no cards and stays shut: the search
@@ -40,6 +45,13 @@ extension BrowserViewController {
         case .open:
             break
         }
+    }
+
+    /// The saved tabs are in: a Show Tabs that waited for them runs now.
+    func sessionDidLoadForCommands() {
+        guard showTabsAwaitingSession else { return }
+        showTabsAwaitingSession = false
+        perform(.showTabs)
     }
 }
 

@@ -83,6 +83,26 @@ final class SystemTests: XCTestCase {
         XCTAssertTrue(app.scrollViews["tabGallery"].waitForExistence(timeout: 5))
     }
 
+    /// Siri's Show Tabs launching Plain cold: the switcher waits for the saved tabs, then opens.
+    func testShowTabsOnAColdLaunchWaitsForTheSavedTabs() {
+        var app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestStore", "-PlainResetStore"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/a") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
+        // Leaving the app writes the tab list.
+        XCUIDevice.shared.press(.home)
+        Thread.sleep(forTimeInterval: 2)
+        app.terminate()
+
+        app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestStore"]
+        open(app, link("tabs"), cold: true)
+        XCTAssertTrue(app.scrollViews["tabGallery"].waitForExistence(timeout: 10))
+    }
+
     private func waitFor(_ timeout: TimeInterval = 5, _ condition: () -> Bool) -> Bool {
         let end = Date().addingTimeInterval(timeout)
         while Date() < end {

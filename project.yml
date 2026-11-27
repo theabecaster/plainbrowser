@@ -112,6 +112,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abrahamgonzalez.plainbrowser.tests
         GENERATE_INFOPLIST_FILE: YES
+      configs:
+        # @testable needs a Debug app. The perf gate builds the scheme's tests in Release, where
+        # this bundle compiles empty (the Smoke plan runs it in Debug).
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: "*"
   # UI smoke tests and the launch/hitch perf tests the perf gate runs on the device.
   PlainUITests:
     type: bundle.ui-testing

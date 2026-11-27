@@ -63,6 +63,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let tabsUI = TabsUIState()
     /// The page menu's last Add to / Remove from Favorites answer, for rebuilding the open menu.
     var lastFavoriteAnswer: Bool?
+    /// Show Tabs asked for before the saved tabs were in (a cold launch from Siri); it runs once
+    /// they are (`+System`).
+    var showTabsAwaitingSession = false
     /// docs/state-rules.md for the state last applied (`updateButtons`), for hot paths such as
     /// pull to refresh that must not walk the tab list on every scroll callback.
     var rules = ControlRules(ChromeState())

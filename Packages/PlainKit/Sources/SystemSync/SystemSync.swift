@@ -27,25 +27,38 @@ public struct WidgetCenterReloader: WidgetReloading {
 /// Only favorites leave the app: history stays out of Spotlight (`FixedChoices.spotlightIndexesHistory`)
 /// and private tabs never reach any of this. Everything runs off the main thread, at background
 /// priority, after launch.
+///
+/// Operations run one at a time, in order, each to its end (an actor alone would interleave them
+/// at every `await`), so a clear can never put back a favorite a later change removed.
 public actor SystemSync {
     private let makeFile: @Sendable () -> SharedFavoritesFile?
+    private let makeIndexed: @Sendable () -> SharedFavoritesFile?
     /// Found on first use, on the actor: looking up the App Group folder asks the system.
     private lazy var file: SharedFavoritesFile? = makeFile()
+    /// What Spotlight holds, written only after it took the list, so a failed index is retried
+    /// on the next change or launch instead of being taken for done.
+    private lazy var indexedFile: SharedFavoritesFile? = makeIndexed()
     private let index: any SpotlightIndexing
     private let widgets: any WidgetReloading
     private let onChange: @Sendable () -> Void
     private let log = Logger(subsystem: "dev.abrahamgonzalez.plainbrowser", category: "system")
-    /// What the system copies hold now; nil until the first value was applied.
-    private var current: [SharedFavorite]?
+    /// What the shared file and Spotlight hold now; nil until first read.
+    private var shared: [SharedFavorite]?
+    private var indexed: [SharedFavorite]?
+    /// The operation running or last queued; the next waits for it.
+    private var last: Task<Void, Never>?
 
     /// - Parameters:
     ///   - file: the App Group file; nil where the group is not available (then only Spotlight).
+    ///   - indexed: where the list Spotlight last took is remembered (next to `file`).
     ///   - onChange: after each change was written (the app updates its App Shortcuts' parameters).
     public init(
-        file: @autoclosure @escaping @Sendable () -> SharedFavoritesFile?, index: any SpotlightIndexing,
-        widgets: any WidgetReloading, onChange: @escaping @Sendable () -> Void = {}
+        file: @autoclosure @escaping @Sendable () -> SharedFavoritesFile?,
+        indexed: @autoclosure @escaping @Sendable () -> SharedFavoritesFile? = nil,
+        index: any SpotlightIndexing, widgets: any WidgetReloading, onChange: @escaping @Sendable () -> Void = {}
     ) {
         makeFile = file
+        makeIndexed = indexed
         self.index = index
         self.widgets = widgets
         self.onChange = onChange
@@ -58,35 +71,63 @@ public actor SystemSync {
         }
     }
 
-    /// Writes `favorites` everywhere when they differ from what the system has. On launch the
-    /// file from last time is the reference, so an unchanged list costs one small read.
+    /// Writes `favorites` wherever they differ from what is there. On launch the files from last
+    /// time are the reference, so an unchanged list costs two small reads.
     func apply(_ favorites: [SharedFavorite]) async {
-        if current == nil, let file { current = file.read() }
-        if current == favorites { return }
-        do {
-            try await index.replace(favorites.map(SpotlightItem.init), inDomain: SpotlightItem.favoritesDomain)
-        } catch {
-            log.error("Spotlight index failed: \(error.localizedDescription, privacy: .public)")
-        }
-        do {
-            try file?.write(favorites)
-        } catch {
-            log.error("Shared favorites write failed: \(error.localizedDescription, privacy: .public)")
-        }
-        current = favorites
-        widgets.reloadWidgets()
-        onChange()
+        await serially { await self.write(favorites) }
     }
 
     /// Clear History and Data: everything Plain gave Spotlight and iOS goes. Favorites stay in
     /// Plain (the clear keeps them), so they are indexed again right after.
     public func browsingDataCleared() async {
+        await serially { await self.clearIndex() }
+    }
+
+    private func serially(_ operation: @escaping @Sendable () async -> Void) async {
+        let previous = last
+        let task = Task {
+            await previous?.value
+            await operation()
+        }
+        last = task
+        await task.value
+    }
+
+    private func write(_ favorites: [SharedFavorite]) async {
+        if shared == nil { shared = file?.read() }
+        if indexed == nil { indexed = indexedFile?.read() }
+        if shared != favorites {
+            do {
+                try file?.write(favorites)
+            } catch {
+                log.error("Shared favorites write failed: \(error.localizedDescription, privacy: .public)")
+            }
+            shared = favorites
+            widgets.reloadWidgets()
+            onChange()
+        }
+        if indexed != favorites { await reindex(favorites) }
+    }
+
+    private func clearIndex() async {
         do {
             try await index.deleteAll()
-            let favorites = current ?? file?.read() ?? []
-            try await index.replace(favorites.map(SpotlightItem.init), inDomain: SpotlightItem.favoritesDomain)
         } catch {
             log.error("Spotlight clear failed: \(error.localizedDescription, privacy: .public)")
+        }
+        indexed = nil
+        try? indexedFile.map { try FileManager.default.removeItem(at: $0.url) }
+        await reindex(shared ?? file?.read() ?? [])
+    }
+
+    private func reindex(_ favorites: [SharedFavorite]) async {
+        do {
+            try await index.replace(favorites.map(SpotlightItem.init), inDomain: SpotlightItem.favoritesDomain)
+            indexed = favorites
+            try indexedFile?.write(favorites)
+        } catch {
+            indexed = nil
+            log.error("Spotlight index failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

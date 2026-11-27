@@ -73,6 +73,7 @@ extension BrowserViewController {
             guard let self else { return }
             if let restored, self.currentTab == nil { self.show(restored) }
             self.tabsDidChange()
+            self.sessionDidLoadForCommands()
             self.tabsUI.tip.start(in: self)
             // Idle tabs move to the archive once both the saved tabs and the settings are in.
             self.archiveIdleTabs()

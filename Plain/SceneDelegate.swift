@@ -42,8 +42,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var pendingCommands: [PlainCommand] = []
     /// The address bar has the saved search engine, so a search goes to the right engine.
     private var addressBarReady = false
-    /// Spotlight, the App Group file and widget timelines, following the favorites.
+    /// Spotlight, the App Group file and widget timelines, following the favorites; the task
+    /// that follows them, cancelled with the scene.
     private var systemSync: SystemSync?
+    private var systemSyncTask: Task<Void, Never>?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -234,17 +236,27 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func startSystemSync(_ database: AppDatabase) {
         guard systemSync == nil else { return }
         let sync = SystemSync(
-            file: SharedFavoritesFile.shared, index: CoreSpotlightIndex(), widgets: WidgetCenterReloader()
+            file: SharedFavoritesFile.shared,
+            indexed: AppGroup.containerURL.map { SharedFavoritesFile(url: $0.appending(path: "spotlight.json")) },
+            index: CoreSpotlightIndex(), widgets: WidgetCenterReloader()
         ) {
             // "Open <favorite> in Plain" learns the new names.
             PlainShortcuts.updateAppShortcutParameters()
         }
         systemSync = sync
         sheets.didClearBrowsingData = { await sync.browsingDataCleared() }
-        Task.detached(priority: .background) {
+        systemSyncTask = Task.detached(priority: .background) {
             try? await Task.sleep(for: FixedChoices.systemSyncLaunchDelay)
+            guard !Task.isCancelled else { return }
             await sync.follow(database)
         }
+    }
+
+    /// The scene is gone: intents wait in the inbox for the next one, and the sync stops.
+    func sceneDidDisconnect(_ scene: UIScene) {
+        CommandInbox.shared.handler = nil
+        systemSyncTask?.cancel()
+        systemSyncTask = nil
     }
 }
 

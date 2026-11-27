@@ -884,5 +884,5 @@ Research and sources: docs/research/dark-mode.md.
   never eligible for search or prediction. Receiving waits for the web-browser entitlement: iOS
   sends web pages only to the default browser.
 - **Perf cost:** nothing new runs before the first frame except setting the inbox's handler. The
-  sync starts 5 s after the database opens, at background priority; an unchanged list costs one
-  small file read. The extension adds about 2.5 MB (Debug) to the app bundle.
+  sync starts 5 s after the database opens, at background priority; an unchanged list costs two
+  small file reads. The extension adds about 2.5 MB (Debug) to the app bundle.

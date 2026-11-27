@@ -37,9 +37,9 @@ public struct SearchWidgetView: View {
 /// Small: the dawn window over a search field. The whole widget opens the search field.
 struct SmallSearch: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             DawnWindow()
-            SearchField(label: "Search", height: 36)
+            SearchField(label: "Search", height: 40)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Search in Plain")
@@ -61,25 +61,26 @@ struct MediumSearch: View {
             if favorites.isEmpty {
                 DawnWindow()
             } else {
-                HStack(alignment: .top, spacing: 4) {
-                    ForEach(favorites) { favorite in
-                        Link(destination: PlainLink.url(for: .open(favorite.url))) {
-                            FavoriteDisc(favorite: favorite)
+                // Four equal slots; fewer favorites keep the slot width and sit centered.
+                GeometryReader { geometry in
+                    let slot = geometry.size.width / CGFloat(SearchWidgetContent.favoriteSlots)
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(favorites) { favorite in
+                            Link(destination: PlainLink.url(for: .open(favorite.url))) {
+                                FavoriteDisc(favorite: favorite)
+                            }
+                            .frame(width: slot)
                         }
-                        .frame(maxWidth: .infinity)
                     }
-                    // Keep fewer favorites at the same size and spacing as four.
-                    ForEach(favorites.count ..< SearchWidgetContent.favoriteSlots, id: \.self) { _ in
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
-                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
-                .frame(maxHeight: .infinity, alignment: .center)
             }
         }
     }
 }
 
-/// The address field, as the app's resting pill draws it: a paper capsule with a Lagoon glass.
+/// The address field as the app's resting pill draws it: a plain capsule with a Lagoon glass. No
+/// focus rim: the widget can't take typing, it opens the field that can.
 struct SearchField: View {
     let label: LocalizedStringKey
     let height: CGFloat
@@ -89,7 +90,7 @@ struct SearchField: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(mode == .fullColor ? AnyShapeStyle(Color(Palette.accent)) : AnyShapeStyle(.primary))
+                .foregroundStyle(mode == .fullColor ? AnyShapeStyle(Color(Palette.accentOnGlass)) : AnyShapeStyle(.primary))
                 .widgetAccentable()
             Text(label)
                 .font(.subheadline)
@@ -103,18 +104,11 @@ struct SearchField: View {
         .background {
             if mode == .fullColor {
                 Capsule().fill(Color(Palette.surface))
-                    .overlay(Capsule().strokeBorder(rim, lineWidth: 1))
+                    .overlay(Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 1))
             } else {
                 Capsule().fill(.primary.opacity(0.14))
             }
         }
-    }
-
-    /// The focus rim's mint to Lagoon, faint: the field is one tap from focus.
-    private var rim: LinearGradient {
-        LinearGradient(
-            colors: Palette.focusRim.map { Color($0).opacity(0.55) }, startPoint: .leading, endPoint: .trailing
-        )
     }
 }
 
@@ -127,7 +121,7 @@ struct FavoriteDisc: View {
         VStack(spacing: 5) {
             Text(favorite.monogram)
                 .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(mode == .fullColor ? AnyShapeStyle(Color(Palette.accent)) : AnyShapeStyle(.primary))
+                .foregroundStyle(mode == .fullColor ? AnyShapeStyle(Color(Palette.accentOnGlass)) : AnyShapeStyle(.primary))
                 .widgetAccentable()
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(mode == .fullColor ? AnyShapeStyle(Color(Palette.surface)) : AnyShapeStyle(.primary.opacity(0.14))))
@@ -155,7 +149,8 @@ struct DawnWindow: View {
             // The rim drops about an eighth of the window's height at the edges, whatever its
             // width, so a wide window never shows sky under the planet's corners.
             let planet = CGSize(width: size.width * 2.4, height: size.height * 2.64)
-            let sun = min(size.width, size.height) * 0.5
+            // A wide, shallow window gets a larger sun, so it still reads as the mark's dawn.
+            let sun = min(size.width * 0.5, size.height * 0.62)
             ZStack {
                 if mode == .fullColor {
                     LinearGradient(colors: BrandArt.dawnSky.map(Color.init), startPoint: .top, endPoint: .bottom)
@@ -191,13 +186,10 @@ struct DawnWindow: View {
     }
 }
 
-/// Paper, warming toward Lagoon at the bottom like the start screen.
+/// Paper (Deep Lagoon when dark), flat: the dawn window carries the color.
 struct WidgetPaper: View {
     var body: some View {
-        ZStack {
-            Color(Palette.background)
-            LinearGradient(colors: [.clear, Color(Palette.startGlow)], startPoint: .center, endPoint: .bottom)
-        }
+        Color(Palette.background)
     }
 }
 
@@ -220,8 +212,8 @@ struct AccessoryRectangular: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 20, weight: .semibold))
             VStack(alignment: .leading, spacing: 0) {
-                Text("Plain").font(.headline).widgetAccentable()
-                Text("Search the web").font(.caption).foregroundStyle(.secondary)
+                Text("Search").font(.headline).widgetAccentable()
+                Text("Plain").font(.caption)
             }
             Spacer(minLength: 0)
         }

@@ -173,7 +173,9 @@ docs/research/system-integration.md has the API facts and choices.
 3. **Favorites leave the app one way.** `SystemSync` follows the favorites table through a GRDB
    `ValueObservation` (`AppDatabase.favoritesChanges`), so no writer calls it. Each change writes
    the App Group file, replaces Plain's Spotlight domain, reloads widget timelines and updates the
-   App Shortcuts' parameters. An unchanged list on launch costs one small file read. It starts
+   App Shortcuts' parameters. Operations run one at a time, to the end, in order. What Spotlight
+   took is remembered apart (`spotlight.json`, written only on success), so a failed index is
+   retried. An unchanged list on launch costs two small file reads. It starts
    `FixedChoices.systemSyncLaunchDelay` after the database opens, at background priority.
 4. **Clear History and Data** ends with `FeatureSheets.didClearBrowsingData`: Spotlight is
    emptied (and iOS's saved activities), then the favorites, which the clear keeps, go back.

@@ -50,9 +50,10 @@ extension BrowserViewController: GalleryHost {
     @discardableResult
     func presentGallery(source: StaticString, interactive: Bool = false) -> TabGalleryTransition? {
         guard !isShowingGallery, presentedViewController == nil else { return nil }
-        // Reachable only with another tab to switch to (state rules §3): the tap, the swipe up and
-        // Show All Tabs share this one condition, and the gallery never opens empty.
-        guard currentRules().swipeUpOpensGallery,
+        // Reachable only with a card to show (state rules §3): another tab, or the page on screen
+        // beside a New Tab card. The swipe up and Show All Tabs share this one condition, and the
+        // gallery never opens empty.
+        guard currentRules().galleryHasCards,
               let showsPrivate = GalleryRules.listToOpen(
                   screenTabIsPrivate: currentTab?.isPrivate,
                   regularCount: session.tabs.pageEntries(private: false).count,

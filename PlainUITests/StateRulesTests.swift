@@ -96,10 +96,6 @@ final class StateRulesTests: XCTestCase {
         XCTAssertFalse(forward.exists && forward.isEnabled, "Forward does nothing yet")
         XCTAssertTrue(app.buttons["back"].exists, "Back stays, dimmed")
 
-        // A swipe up with one tab bumps: no one-card gallery.
-        app.buttons["addressPill"].swipeUp(velocity: .fast)
-        XCTAssertFalse(app.scrollViews["tabGallery"].waitForExistence(timeout: 1))
-
         tabs.tap()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 2) && field.hasKeyboardFocus, "the + opens a new tab's search field")
@@ -110,6 +106,61 @@ final class StateRulesTests: XCTestCase {
         let gallery = app.scrollViews["tabGallery"]
         XCTAssertTrue(gallery.waitForExistence(timeout: 3))
         XCTAssertTrue(waitForTabCount(gallery, 2))
+    }
+
+    /// One page tab: the swipe up opens the switcher with its card and a New Tab card beside it;
+    /// the New Tab card opens a second tab's search field.
+    func testOneTabSwipeUpShowsItsCardAndANewTabCard() throws {
+        let app = try launch()
+        go(app, to: "/a")
+        waitForPage(app, "Page A")
+        app.buttons["addressPill"].swipeUp(velocity: .fast)
+        let gallery = app.scrollViews["tabGallery"]
+        XCTAssertTrue(gallery.waitForExistence(timeout: 3), "the swipe up reaches the switcher with one tab")
+        XCTAssertTrue(waitForTabCount(gallery, 1))
+        let newTabCard = app.descendants(matching: .any)["galleryNewTabCard"]
+        XCTAssertTrue(newTabCard.waitForExistence(timeout: 2), "a New Tab card beside the lone card")
+        XCTAssertTrue(app.buttons["galleryNewTab"].exists, "the bar keeps its +")
+        XCTAssertTrue(app.buttons["galleryDone"].exists)
+
+        // Done goes back to the page; Show All Tabs opens the same switcher.
+        app.buttons["galleryDone"].tap()
+        waitForPage(app, "Page A")
+        XCTAssertTrue(gallery.waitForNonExistence(timeout: 3))
+        tabsMenu(app, pick: "Show All Tabs")
+        XCTAssertTrue(gallery.waitForExistence(timeout: 3))
+        XCTAssertTrue(newTabCard.waitForExistence(timeout: 2))
+
+        newTabCard.tap()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2) && field.hasKeyboardFocus, "the New Tab card opens a new tab's search field")
+        XCTAssertTrue(gallery.waitForNonExistence(timeout: 3))
+        go(app, to: "/b")
+        waitForPage(app, "Page B")
+        XCTAssertEqual(app.buttons["tabs"].label, "Tabs", "two tabs now")
+    }
+
+    /// One page tab: swiping its card up closes it and lands in the search field, never an empty
+    /// switcher. With an empty tab alone, the swipe up bumps.
+    func testOneTabCardSwipedAwayGoesToSearch() throws {
+        let app = try launch()
+        go(app, to: "/a")
+        waitForPage(app, "Page A")
+        app.buttons["addressPill"].swipeUp(velocity: .fast)
+        let gallery = app.scrollViews["tabGallery"]
+        XCTAssertTrue(gallery.waitForExistence(timeout: 3))
+        let card = gallery.descendants(matching: .any).matching(identifier: "tabCard").firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 2))
+        card.swipeUp(velocity: .fast)
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 3) && field.hasKeyboardFocus, "straight to search")
+        XCTAssertTrue(gallery.waitForNonExistence(timeout: 3))
+
+        // The start screen alone has nothing to show: the swipe up bumps.
+        closeSearch(app)
+        XCTAssertFalse(app.buttons["tabs"].exists)
+        app.buttons["addressPill"].swipeUp(velocity: .fast)
+        XCTAssertFalse(gallery.waitForExistence(timeout: 1))
     }
 
     /// New Tab on an empty tab reuses it, and leaving an empty tab drops it: no blank cards.

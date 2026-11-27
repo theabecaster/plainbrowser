@@ -23,7 +23,9 @@ the state of the app."
    are ones the user asked for (an empty private list, a search with no results), and each is one
    sentence and one main button (docs/ui-reference.md).
 3. **One predicate per action.** A button, its gesture and its menu item share one condition, so
-   they never disagree. The tabs button, the swipe up and Show All Tabs all follow `others ≥ 1`.
+   they never disagree. The swipe up and Show All Tabs both open the switcher whenever it has a
+   card to show (`others ≥ 1`, or a page on screen). The tabs button's tap is Tabs only with
+   `others ≥ 1`; with one page tab it is "+" (§3).
 4. **The same gesture always means the same thing.** When a gesture has nothing to do, it
    rubber-bands and plays the "nothing there" haptic. It never does something else instead
    (today a swipe up with no tabs opens search; that changes).
@@ -45,8 +47,10 @@ the state of the app."
    lands on one.
 8. **At most one New Tab button on screen, and none on an empty tab.** The new-tab affordances
    are: the tabs slot as "+" when there is one tab, the gallery's "+", the card past the last tab
-   (a gesture), and the tabs menu. No two of the buttons show at once. A menu item that repeats
-   the button it opened from is fine.
+   (a gesture), the New Tab card beside a lone card in the gallery, and the tabs menu. No two of
+   the buttons show at once. The two cards are places, where the next tab would sit, not buttons:
+   the one-card gallery shows its card next to the bar's "+", which keeps the bar's shape. A menu
+   item that repeats the button it opened from is fine.
 
 Sources behind these choices are in section 9.
 
@@ -73,7 +77,7 @@ press means the same thing whatever it shows.
 | State | Face | Tap | Why |
 |---|---|---|---|
 | `others ≥ 1` | Tabs (`square.on.square`) | Gallery | There is somewhere to switch to. |
-| `others = 0`, `page` | New Tab (`plus`) | New tab, search field up | A one-card switcher is a dead end (owner). The one useful tab action is a second tab. Same slot, so no new button. |
+| `others = 0`, `page` | New Tab (`plus`) | New tab, search field up | The one useful tap is a second tab: Arc Search keeps its "+" beside the switcher button for the same reason, and Plain has one slot, so with one tab it is the "+". The switcher, with this tab's card and a New Tab card, is the swipe up and Show All Tabs (owner, 2026-11-26). |
 | `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) stay in More (section 4) and show as shortcuts on the start screen, so none of them is ever out of reach. |
 | Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. The sidebar's New Tab follows principle 8 (hidden on an empty tab). |
 
@@ -94,9 +98,13 @@ press means the same thing whatever it shows.
   More, a user who never sees the tip loses nothing. Tips are off under UI tests and perf runs
   (`-Plain…` launch arguments).
 - **No count badge.** docs/ui-reference.md says no badges. VoiceOver reads "3 tabs" as the value.
-- **The swipe up from the bar follows the same rule.** With `others ≥ 1` it opens the gallery.
-  Otherwise the page lifts a few points, rubber-bands back and plays "nothing there". It never
-  opens search: the search field is one tap on the pill, and the swipe must keep one meaning.
+- **The swipe up from the bar always means the switcher.** It opens the gallery whenever the
+  gallery has a card: another tab, or the page on screen (owner, 2026-11-26: "Allow users to drag
+  the URL bar up when there's only one tab"). With one page tab the page shrinks into its card,
+  centered as in the app switcher, and a paper New Tab card grows in beside it (§6). Only on an
+  empty tab with nothing else open (or no tab) does the page lift a few points, rubber-band back
+  and play "nothing there". It never opens search: the search field is one tap on the pill, and
+  the swipe must keep one meaning.
 
 ### Every bar control
 
@@ -146,7 +154,7 @@ Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen.
 | New Tab | Hidden when the tab on screen is an empty regular tab | It would reuse the tab already on screen. |
 | New Private Tab | Hidden when the tab on screen is an empty private tab | Same. |
 | Previous Tab / Next Tab | Shown when `list` has 2 or more tabs; each dims at its end | A pair, so it keeps its shape. Subtitles name the swipe. |
-| Show All Tabs | `others ≥ 1` | Same predicate as the tap and the swipe up. |
+| Show All Tabs | `others ≥ 1`, or a page on screen (with side tabs: `others ≥ 1`, as the sidebar already lists a lone tab) | Same predicate as the swipe up. |
 | Reopen Closed Tab | `closed` | The way back after a close, outside the gallery too. Today only the gallery and the toast have it. |
 | Archived Tabs | `archived` | Today the archive is reachable only from the gallery, so with no open tabs it cannot be reached. |
 | Close Tab | `page` | Closing an empty tab does nothing useful; it goes away by itself. |
@@ -166,12 +174,13 @@ Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen.
 | Remote suggestions | Off in private tabs | FixedChoices. |
 | Tap outside the field | Closes the field. On a fresh launch this shows the start screen, never a blank page. | |
 
-### Tab gallery (Gallery mode, reachable only with `others ≥ 1`)
+### Tab gallery (Gallery mode, reachable with a card to show: `others ≥ 1`, or a page on screen)
 
 | Control | Rule | Why |
 |---|---|---|
 | List shown first | Decided after an empty tab on screen is dropped: the list of the tab on screen if it still has tabs, else the other list. | Never open on an empty list when the other one has tabs (an empty regular tab with private pages open opens the private list, and the reverse). |
 | Cards | Every tab in the list; never an empty tab (principle 7) | |
+| New Tab card | When the shown list has exactly one card: a paper card in the slot after it, "+" and "New Tab", in the window's appearance (the private paper in the private list). The lone card rests centered (cascade) or the pair sits centered on the fold (grid). A tap opens a new tab with the search field. It grows in after the page lands on its card, and fades when a second card arrives or the last one closes. | Owner: one tab shows the switcher with a clear way to add a tab. The app switcher with one app shows one centered card; Arc and Safari offer "+" in the switcher. The card makes the next step visible without leaving the gallery half empty. |
 | Swipe a card up | Closes it; Reopen toast for regular tabs | |
 | Closing the last card in the shown list | First match: the tab on screen still exists (it is in the other list) → the gallery opens it; the other list has tabs → the gallery switches to it; else → the search field. Never an empty gallery. The Reopen toast shows wherever this lands. | Arc: never an empty switcher. |
 | Private toggle | Always | The entrance to private browsing. |
@@ -241,9 +250,9 @@ combines its base state with the rows that modify it (for example, private + loa
 | First run, field closed | — | — | — | — | ✓ (New Private Tab on top) | ≠ bump | ≠ rubber-band | — | off | — | ✓, Search button, Private Tab shortcut |
 | No tabs, some closed or archived | — | — | — | — | ✓ (Reopen Closed Tab, Archived Tabs on top) | ≠ bump | ≠ rubber-band | — | off | — | ✓ + shortcuts |
 | One empty tab, others ≥ 1 | — | — | Tabs | — | ✓ | gallery | neighbours | — | off | — | ✓ |
-| One page, no others | ✓ / dim | — / ✓ | ≠ "+" | ✓ | ✓ | ≠ bump | ≠ rubber-band | ✓ | ✓ | while loading | — |
+| One page, no others | ✓ / dim | — / ✓ | ≠ "+" (long press: Show All Tabs) | ✓ | ✓ | gallery (its card + New Tab card) | ≠ rubber-band | ✓ | ✓ | while loading | — |
 | Several tabs | ✓ / dim | — / ✓ | Tabs | ✓ | ✓ | gallery | neighbours | when last | ✓ | while loading | — |
-| Private only (one private page) | ✓ / dim | — / ✓ | ≠ "+" (private) | ✓ | ✓ | ≠ bump | ≠ rubber-band | ✓ (private) | ✓ | while loading | — |
+| Private only (one private page) | ✓ / dim | — / ✓ | ≠ "+" (private) | ✓ | ✓ | gallery (its card + New Tab card) | ≠ rubber-band | ✓ (private) | ✓ | while loading | — |
 | Private + regular | ✓ / dim | — / ✓ | Tabs | ✓ | ✓ | gallery (this list) | within this list | when last in this list | ✓ | while loading | — |
 | Page loading | ✓ / dim | — / ✓ | as above | ✓ | ✓, Stop | as above | as above | as above | ✓ | ✓ | — |
 | Page failed / offline | ✓ / dim | — / ✓ | as above | ✓ | ✓, reduced (§4) | as above | as above | as above | off (Try Again) | — | — |
@@ -302,7 +311,9 @@ the ones the state lane closed (2026-11-26); line numbers are from the audit, be
    page tab, hidden on Start with nothing else.
 2. **Fixed.** `ShellUI/BrowserViewController+Gallery.swift:48` and `ShellUI/TabSwipe.swift:80` — a tap or a
    swipe up with one tab opens a one-card gallery; with no tabs both open the search field → both
-   follow `others ≥ 1`; otherwise the "+" tap (button) or the bump (swipe).
+   follow `others ≥ 1`; otherwise the "+" tap (button) or the bump (swipe). Revised 2026-11-26
+   (owner): with one page tab the swipe up and Show All Tabs open the gallery with the card and a
+   New Tab card (§3, §6); the tap stays "+", and the bump is left for an empty tab alone.
 3. **Fixed.** `TabGalleryUI/TabGalleryViewController.swift:610` with `ShellUI/GalleryTabs.swift:81` — closing
    a private card shows the Reopen toast, and its Reopen brings back the last closed *regular*
    batch (or does nothing) → the toast shows only when the close made a batch, and reopens that
@@ -372,3 +383,8 @@ the ones the state lane closed (2026-11-26); line numbers are from the audit, be
     closes.
 25. **Fixed.** `ShellUI/BrowserViewController+PageFeatures.swift:95-97` — a download start plays a haptic
     and nothing else until it ends → Downloads item says "1 in progress" while one runs.
+26. **Fixed (one-tab lane).** `ShellUI/BrowserViewController+Panes.swift:231` — a touch on an empty pane
+    opened the search field at touch-down, even on the start screen's own controls, so with no tab
+    open (first run, iPhone) the search sheet took the tap from Private Tab, Reopen Closed Tab and
+    Archived Tabs, and private tabs could not be reached from the start screen → a touch on a
+    control (or the spinnable mark) is the control's; only the start screen's paper opens search.

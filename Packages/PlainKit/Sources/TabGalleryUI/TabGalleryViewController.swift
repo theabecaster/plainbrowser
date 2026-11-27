@@ -64,6 +64,15 @@ public final class TabGalleryViewController: UIViewController {
     private var departing: [ObjectIdentifier: (card: TabCardView, screenX: CGFloat)] = [:]
 
     private let bottomBar = GalleryBottomBar()
+    /// The paper New Tab card beside a lone card (docs/state-rules.md §6), in the slot after it.
+    private let newTabCard = NewTabCardView()
+    private(set) var showsNewTabCard = false
+    /// A page ↔ card zoom is running: the New Tab card waits, then grows in once the page has
+    /// landed on its card (it would cover the moving page's edge otherwise).
+    private var holdsNewTabCard = false
+    private var newTabCardLeaving = false
+    /// The New Tab card's key in `CardMotion`, for its grow-in.
+    private static let newTabCardID = UUID()
     private let toast = ReopenToast()
     private let emptyView = GalleryEmptyView()
     private var scrollInterval: OSSignpostIntervalState?
@@ -118,6 +127,10 @@ public final class TabGalleryViewController: UIViewController {
         self.backgroundSwipe = backgroundSwipe
 
         motion.onFrame = { [weak self] in self?.layoutCards() }
+
+        newTabCard.isHidden = true
+        newTabCard.onTap = { [weak self] in self?.newTab() }
+        scroll.addSubview(newTabCard)
 
         emptyView.button.addAction(UIAction { [weak self] _ in self?.newTab() }, for: .primaryActionTriggered)
         root.addSubview(emptyView)
@@ -185,7 +198,8 @@ public final class TabGalleryViewController: UIViewController {
             safeTop: safe.top, safeLeft: safe.left, safeBottom: safe.bottom, safeRight: safe.right,
             isCompactWidth: traitCollection.horizontalSizeClass != .regular,
             titleLineHeight: TabCardView.titleFont(for: traitCollection).lineHeight,
-            bottomChrome: max(0, bounds.height - safe.bottom - bottomBar.frame.minY)
+            bottomChrome: max(0, bounds.height - safe.bottom - bottomBar.frame.minY),
+            centeredRow: showsNewTabCard ? slotCount : 0
         )
         if next != metrics { apply(next) }
         if !didFocusSelection, bounds.width > 0 {
@@ -211,8 +225,11 @@ public final class TabGalleryViewController: UIViewController {
         }
     }
 
+    /// Resting places: every card, and the New Tab card when it shows.
+    private var slotCount: Int { order.count + (showsNewTabCard ? 1 : 0) }
+
     private func updateContentSize() {
-        let size = CGSize(width: metrics.contentWidth(for: order.count), height: max(1, metrics.height))
+        let size = CGSize(width: metrics.contentWidth(for: slotCount), height: max(1, metrics.height))
         if scrollView.contentSize != size { scrollView.contentSize = size }
     }
 
@@ -221,12 +238,12 @@ public final class TabGalleryViewController: UIViewController {
         guard !order.isEmpty else { return 0 }
         let stop = Int((scrollView.contentOffset.x / metrics.snapUnit).rounded())
         let slot = metrics.style == .cascade ? stop : stop * metrics.cardsPerPage
-        return min(max(slot, 0), order.count - 1)
+        return min(max(slot, 0), slotCount - 1)
     }
 
     /// Jumps or scrolls to `offset`, stopping any scroll in flight.
     private func scroll(to offset: CGFloat, animated: Bool) {
-        let clamped = min(max(offset, 0), metrics.maxOffset(for: order.count))
+        let clamped = min(max(offset, 0), metrics.maxOffset(for: slotCount))
         snapTarget = nil
         // Under Reduce Motion a jump the user did not drive lands at once.
         scrollView.setContentOffset(CGPoint(x: clamped, y: 0), animated: animated && !Motion.prefersCrossfade)
@@ -270,7 +287,7 @@ public final class TabGalleryViewController: UIViewController {
                 // The part of the card not under the next one, and on screen.
                 let left = placement.center.x - halfWidth
                 var right = min(placement.center.x + halfWidth, metrics.width - metrics.safeRight)
-                if index + 1 < order.count {
+                if index + 1 < slotCount {
                     let next = metrics.placement(slot: slot + 1, offset: offset)
                     right = min(right, next.center.x - metrics.cardWidth * next.scale / 2)
                 }
@@ -299,7 +316,66 @@ public final class TabGalleryViewController: UIViewController {
             let x = contentX + leaving.screenX
             if leaving.card.center.x != x { leaving.card.center.x = x }
         }
+        placeNewTabCard(offset: offset, contentX: contentX)
         if let range { warm(around: range) }
+    }
+
+    /// The New Tab card in the slot after the last card, placed like a card. When it stops
+    /// applying (a second card arrived, the last one closed) it fades rather than vanishing.
+    private func placeNewTabCard(offset: CGFloat, contentX: CGFloat) {
+        guard showsNewTabCard else {
+            if !newTabCard.isHidden, !newTabCardLeaving {
+                newTabCardLeaving = true
+                newTabCard.isUserInteractionEnabled = false
+                Motion.animate(Motion.quick, changes: { self.newTabCard.alpha = 0 }) { [weak self] in
+                    guard let self else { return }
+                    newTabCardLeaving = false
+                    if !showsNewTabCard { newTabCard.isHidden = true }
+                }
+            }
+            return
+        }
+        if newTabCardLeaving {
+            // Back to one card while it was fading out: it stays, from where the fade had it.
+            newTabCardLeaving = false
+            if let fading = newTabCard.layer.presentation() { newTabCard.alpha = CGFloat(fading.opacity) }
+            newTabCard.layer.removeAllAnimations()
+        }
+        let slot = CGFloat(order.count)
+        let placement = metrics.placement(slot: slot, offset: offset)
+        let appear = holdsNewTabCard ? 0 : motion.appearance(Self.newTabCardID)
+        let scale = placement.scale * (0.92 + 0.08 * appear)
+        newTabCard.setSize(metrics.cardSize, headerHeight: metrics.headerHeight)
+        newTabCard.isHidden = false
+        let center = CGPoint(x: (placement.center.x + contentX).rounded(toScale: 3), y: placement.center.y)
+        if newTabCard.center != center { newTabCard.center = center }
+        let transform = scale == 1 ? CGAffineTransform.identity : CGAffineTransform(scaleX: scale, y: scale)
+        if newTabCard.transform != transform { newTabCard.transform = transform }
+        if newTabCard.alpha != appear { newTabCard.alpha = appear }
+        if newTabCard.layer.zPosition != slot { newTabCard.layer.zPosition = slot }
+        // Its words sit in the middle of the part on screen: the strip that peeks in, or the card.
+        let halfWidth = metrics.cardWidth * scale / 2
+        let left = placement.center.x - halfWidth
+        let shownLeft = max(left, metrics.safeLeft), shownRight = min(placement.center.x + halfWidth, metrics.width - metrics.safeRight)
+        newTabCard.setVisibleSpan(minX: (shownLeft - left) / scale, maxX: (max(shownLeft, shownRight) - left) / scale)
+        newTabCard.isUserInteractionEnabled = appear > 0.5
+    }
+
+    /// Holds the New Tab card back while a page ↔ card zoom runs, and grows it in when the page
+    /// has landed in the gallery (`grows`). Leaving for a page (`fades`), it fades as the zoom starts.
+    public func setNewTabCardHeld(_ held: Bool, grows: Bool = false, fades: Bool = false) {
+        guard held != holdsNewTabCard else { return }
+        holdsNewTabCard = held
+        if held {
+            guard fades, showsNewTabCard, !newTabCard.isHidden else { return layoutCards() }
+            Motion.animate(Motion.quick) { self.layoutCards() }
+            return
+        }
+        if grows, showsNewTabCard {
+            motion.grow(Self.newTabCardID)
+            motion.run(in: view)
+        }
+        layoutCards()
     }
 
     private func dequeueCard(for id: UUID) -> TabCardView {
@@ -382,10 +458,17 @@ public final class TabGalleryViewController: UIViewController {
         items = nextItems
         slots = nextSlots
         selectedID = dataSource.selectedTabID
+        let showedNewTabCard = showsNewTabCard
+        showsNewTabCard = GalleryRules(galleryState).newTabCard
+        let centeredRow = showsNewTabCard ? slotCount : 0
+        // The grid's lone pair sits centered: going to or from it moves every card at once, so
+        // the change crossfades instead of sliding from slot to slot.
+        let regrids = animated && metrics.style == .grid && metrics.centeredRow != centeredRow
+        metrics.centeredRow = centeredRow
 
         let oldOffset = scrollView.contentOffset.x
         updateContentSize()
-        let maxOffset = metrics.maxOffset(for: order.count)
+        let maxOffset = metrics.maxOffset(for: slotCount)
         let moves = animated && !Motion.prefersCrossfade && metrics.width > 0
 
         // Cards whose tab left the list: they rise away when animated (a close from elsewhere).
@@ -408,6 +491,8 @@ public final class TabGalleryViewController: UIViewController {
                     motion.grow(id)
                 }
             }
+            // Down to one card: the New Tab card grows in beside it.
+            if showsNewTabCard, !showedNewTabCard { motion.grow(Self.newTabCardID) }
             if oldOffset > maxOffset {
                 // The content got shorter under the scroll position: the cards stay where they
                 // are and ease into the new resting place.
@@ -430,7 +515,8 @@ public final class TabGalleryViewController: UIViewController {
             Signposts.signposter.endInterval(Signposts.galleryReload, state)
             completion?()
         }
-        if animated, Motion.prefersCrossfade {
+        if animated, Motion.prefersCrossfade || regrids {
+            if regrids { motion.reset() }
             Motion.crossfade(scrollView, changes: { self.layoutCards() }, completion: finish)
         } else {
             layoutCards()
@@ -470,6 +556,7 @@ public final class TabGalleryViewController: UIViewController {
             backdrop.contentView.backgroundColor = dim
             bottomBar.setPrivate(isPrivate)
             emptyView.setPrivate(isPrivate)
+            newTabCard.setPrivate(isPrivate)
         }
         let isEmpty = items.isEmpty
         // VoiceOver hears how many tabs there are, cards off screen included.
@@ -798,9 +885,10 @@ public final class TabGalleryViewController: UIViewController {
 
     // MARK: VoiceOver
 
-    /// Cards on screen in tab order, for VoiceOver.
-    func accessibilityCards() -> [TabCardView] {
-        cards.compactMap { id, card in slots[id].map { ($0, card) } }.sorted { $0.0 < $1.0 }.map(\.1)
+    /// Cards on screen in tab order, then the New Tab card, for VoiceOver.
+    func accessibilityCards() -> [UIView] {
+        let tabs: [UIView] = cards.compactMap { id, card in slots[id].map { ($0, card) } }.sorted { $0.0 < $1.0 }.map(\.1)
+        return showsNewTabCard && !holdsNewTabCard ? tabs + [newTabCard] : tabs
     }
 
     /// A three-finger swipe moves a screenful of cards.
@@ -808,13 +896,14 @@ public final class TabGalleryViewController: UIViewController {
         guard !order.isEmpty else { return false }
         let perScreen = metrics.style == .cascade ? 2 : metrics.cardsPerPage
         let current = focusedSlot()
-        let next = min(max(current + (forward ? perScreen : -perScreen), 0), order.count - 1)
-        let target = min(metrics.restingOffset(for: next), metrics.maxOffset(for: order.count))
+        let next = min(max(current + (forward ? perScreen : -perScreen), 0), slotCount - 1)
+        let target = min(metrics.restingOffset(for: next), metrics.maxOffset(for: slotCount))
         // The last grid page can be part full: moving within it is no scroll.
         guard abs(target - scrollView.contentOffset.x) > 0.5 else { return false }
         scroll(to: target, animated: false)
         layoutCards()
-        UIAccessibility.post(notification: .pageScrolled, argument: "Tab \(next + 1) of \(order.count)")
+        let announcement = next >= order.count ? String(localized: "New Tab") : "Tab \(next + 1) of \(order.count)"
+        UIAccessibility.post(notification: .pageScrolled, argument: announcement)
         return true
     }
 }
@@ -868,7 +957,7 @@ extension TabGalleryViewController: UIScrollViewDelegate {
         _ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>
     ) {
         let target = metrics.snappedOffset(
-            projected: targetContentOffset.pointee.x, current: dragStartOffset, velocity: velocity.x, count: order.count
+            projected: targetContentOffset.pointee.x, current: dragStartOffset, velocity: velocity.x, count: slotCount
         )
         targetContentOffset.pointee.x = target
         snapTarget = target
@@ -975,7 +1064,7 @@ extension TabGalleryViewController: UIContextMenuInteractionDelegate {
 /// What the scroll view asks the gallery for.
 @MainActor
 protocol GalleryAccessibilityProvider: AnyObject {
-    func accessibilityCards() -> [TabCardView]
+    func accessibilityCards() -> [UIView]
     func accessibilityScroll(forward: Bool) -> Bool
 }
 
@@ -1000,7 +1089,7 @@ final class GalleryScrollView: UIScrollView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard isUserInteractionEnabled, !isHidden, alpha > 0.01, self.point(inside: point, with: event) else { return nil }
         var best: (z: CGFloat, view: UIView)?
-        for case let card as TabCardView in subviews where !card.isHidden && card.isUserInteractionEnabled {
+        for card in subviews where (card is TabCardView || card is NewTabCardView) && !card.isHidden && card.isUserInteractionEnabled {
             let local = card.convert(point, from: self)
             guard let hit = card.hitTest(local, with: event) else { continue }
             if best == nil || card.layer.zPosition > best!.z { best = (card.layer.zPosition, hit) }

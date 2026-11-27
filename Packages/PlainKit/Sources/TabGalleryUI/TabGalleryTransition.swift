@@ -67,6 +67,9 @@ public final class TabGalleryTransition {
         cardFrame = gallery.thumbnailFrame(for: tabID, in: container)
             ?? CGRect(x: pageFrame.midX - 1, y: pageFrame.midY - 1, width: 2, height: 2)
         gallery.setThumbnailHidden(for: tabID)
+        // The New Tab card beside a lone card would cover the moving page's edge; it waits and
+        // grows in once the page has landed. A crossfade moves nothing, so it stays.
+        if !Motion.prefersCrossfade { gallery.setNewTabCardHeld(true, fades: start == .gallery) }
 
         wrapper.clipsToBounds = true
         wrapper.layer.cornerCurve = .continuous
@@ -231,7 +234,10 @@ public final class TabGalleryTransition {
                 .concatenating(CGAffineTransform(translationX: offset.x, y: offset.y))
             cards.alpha = 1
         }
-        for view in content.dropFirst() { view.alpha = min(1, max(0, progress)) }
+        // The gallery's bar comes in over the second half, after the page's bar has faded out over
+        // the first (the shell's `setChromeGalleryProgress`): two sets of controls never share the
+        // bottom of the screen.
+        for view in content.dropFirst() { view.alpha = min(1, max(0, (progress - 0.5) * 2)) }
         // Titles stay out of the status bar while the cards are zoomed in, or lifted by the finger
         // (a swipe up holds the card high): they fade in over the last part of the way down.
         let zoomFade = min(1, max(0, (progress - 0.6) / 0.4))
@@ -302,6 +308,7 @@ public final class TabGalleryTransition {
         }
         gallery.setThumbnailHidden(for: nil)
         gallery.setHeaderFade(1)
+        gallery.setNewTabCardHeld(false, grows: end == .gallery)
         Signposts.signposter.endInterval(signpostName, signpostState)
         completion(end)
     }

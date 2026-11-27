@@ -309,6 +309,57 @@ final class CaptureTests: XCTestCase {
         pause(1)
     }
 
+    /// One page tab into the switcher: a slow swipe up held mid-way (for the recording's frames),
+    /// the lone card with its New Tab card, the New Tab card scrolled into focus, then Show All
+    /// Tabs and the New Tab card's tap.
+    func testCaptureOneTab() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication()
+        app.launchArguments = ["-PlainInMemoryStore", "-PlainSeedFavorites"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/long") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Long Read"].waitForExistence(timeout: 10))
+        pause(2.5)
+        shot("o1-page")
+
+        // The swipe up held at three heights, so the recording shows the page part way into its
+        // card (a continuous drag drops frames in the simulator's recorder). The first is short of
+        // the commit and goes back to the page; the others land in the switcher.
+        let pill = app.buttons["addressPill"]
+        for (index, height) in [0.8, 0.7, 0.6].enumerated() {
+            pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
+                forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: height)),
+                withVelocity: .slow, thenHoldForDuration: 1.2
+            )
+            pause(1.5)
+            if index > 0, app.buttons["galleryDone"].exists, index < 2 {
+                app.buttons["galleryDone"].tap()
+                pause(1.5)
+            }
+        }
+        shot("o2-switcher")
+        let gallery = app.scrollViews["tabGallery"]
+        gallery.swipeLeft(velocity: .slow)
+        pause(1.2)
+        shot("o3-newtab-focused")
+        gallery.swipeRight(velocity: .slow)
+        pause(1.2)
+        app.buttons["galleryDone"].tap()
+        pause(1.5)
+
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Show All Tabs'")).firstMatch.tap()
+        pause(1.5)
+        app.descendants(matching: .any)["galleryNewTabCard"].tap()
+        pause(1.5)
+        shot("o4-newtab-search")
+    }
+
     /// The bar in each main state of docs/state-rules.md: first run, the start screen, one page,
     /// several tabs, loading and private; plus the More and tabs menus.
     func testCaptureStateRules() throws {

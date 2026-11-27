@@ -31,8 +31,10 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - Every control earns its place in the current state. The full matrix, with the reason for every
   cell and the open gaps, is `docs/state-rules.md`.
-- A button, its gesture and its menu item follow one condition. The tabs button, the swipe up and
-  Show All Tabs show only when there is another tab to switch to; with one tab the slot is New Tab.
+- A button, its gesture and its menu item follow one condition. The swipe up and Show All Tabs
+  open the switcher whenever it has a card: another tab, or the page on screen (with one tab, its
+  card and a New Tab card). The tabs button is Tabs with another tab to switch to; with one tab the
+  slot is New Tab. An empty tab alone has nothing to show: the swipe bumps.
 - A long press is never the only way to an item: New Private Tab, Reopen Closed Tab and Archived
   Tabs are also in More, and on the start screen.
 - A gesture with nothing to do rubber-bands with the "nothing there" haptic. It never does

@@ -141,6 +141,42 @@ They agree with the Arc measurements. Apple has not published its own numbers. *
 - A new tab's card in the gallery is the start screen in small (the mark on paper), never a blank
   white card. The private gallery's empty state keeps its sentence and button, with the mark above.
 
+**One tab (2026-11-26)**
+
+The owner asked that a swipe up with one tab open the switcher, with a way to add a tab or just
+see the one. What the references do:
+- **Arc Search** has no one-tab exception. Its bar keeps a tab-stack button (bottom left, a tap or
+  a swipe up opens the switcher) next to a separate "+" that starts a search, which a long press
+  turns into voice search. The switcher is reachable with any tab open, and the "+" is always the
+  quick way to a new page. **[C]** [TidBITS], [MacStories], [Arc blog], [9to5Mac voice search]
+  How the switcher lays out a single card is not described anywhere. From its model (oldest left,
+  newest right, the selected tab in the focus), one card rests in the focus, centered. **[I]**
+- **The iOS app switcher**: swipe up from the bottom and hold opens it with any number of apps;
+  each app is a card, tap opens it, swipe up quits it. **[C]** [Apple: Switch apps] With one app
+  open, that card rests in the middle, alone; the way out is a tap on the empty space or a swipe
+  up (home). It offers no "new app" card. **[I]** (no source names the one-app case).
+- **Safari** shows its tab overview with one tab too (the grid with one preview); New Tab is the
+  "+" in the overview's bar, and a long press on it lists recently closed tabs. **[C]** [Apple:
+  Open and close tabs] Swiping the address bar left past the last tab opens a new tab. **[C]**
+  [iPhone Life] Not found: Safari's exact one-tab layout on iOS 26.
+
+What Plain takes from this:
+- The swipe up always means the switcher when there is a card, as in Arc and the app switcher;
+  only an empty start screen alone bumps (nothing to show). Show All Tabs follows it.
+- The page shrinks into its card with the same interactive motion as with many tabs, and the card
+  rests centered, as the app switcher's lone card does: no left-aligned cascade.
+- A paper **New Tab card** sits in the slot after the card, where the next tab would go, at the
+  cascade's next-card place (0.78 card widths over, on top, peeking in from the right edge), or
+  beside it on the fold in the Duo's grid. It looks like the card past the last tab in the bar
+  swipe ("+" and "New Tab" toward its leading edge, so it reads while it peeks) on the paper of a
+  new tab's own card. It is where Safari's swipe past the last tab and Arc's "+" lead, made
+  visible, so the one-card switcher never looks half empty. It grows in after the page lands on
+  its card (while the page moves it would cover the page's edge), and scrolls into the focus like
+  a card. The bar keeps "+" and Done.
+- The tabs button's tap stays "+" with one tab: Arc keeps its "+" beside the switcher button
+  because a new page is the common next step, and Plain has one slot. The switcher is one swipe
+  (or the long-press menu) away.
+
 **Other**
 - Long-press a card: its menu (Open in Other Pane, Copy Link, Share, Close Tab "Or swipe the card
   up"). Move the finger and the card lifts to be dragged to a new place; the cards make room with
@@ -156,6 +192,11 @@ They agree with the Arc measurements. Apple has not published its own numbers. *
 - [TidBITS] https://tidbits.com/2024/02/15/arc-gains-instant-links-tab-grouping-and-arc-search-iphone-app/
 - [Arc hidden features] https://arc.net/blog/arc-search-hidden-features
 - [App Store] https://apps.apple.com/us/app/arc-search-modern-ai-browser/id6472513080 (screenshot "No more 100+ tab chaos")
+- [Arc blog] https://arc.net/blog/arc-search-hidden-features ("press and hold the + icon", "swipe up on the little tab stack")
+- [9to5Mac voice search] https://9to5mac.com/2024/05/02/arc-search-adds-widgets-voice-search/
+- [Apple: Switch apps] https://support.apple.com/en-us/118408
+- [Apple: Open and close tabs] https://support.apple.com/guide/iphone/open-and-close-tabs-iph489b9313f/ios
+- [iPhone Life] https://iphonelife.com/content/quickest-way-to-open-new-tab-safari-your-iphone
 - [WWDC18 803] https://developer.apple.com/videos/play/wwdc2018/803/
 - [fluid-interfaces] https://github.com/nathangitter/fluid-interfaces
 - [Rubber band] https://gist.github.com/originell/6961057, https://www.holko.pl/2014/07/06/inertia-bouncing-rubber-banding-uikit-dynamics/

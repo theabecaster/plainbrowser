@@ -1419,3 +1419,69 @@ routed to the lanes that own them.
 - **Start screen shortcuts use the page menu's captions** ("Reopen Tab", "Archive") in equal
   columns, full names for VoiceOver; an empty private tab's sentence says it is private ("A private
   tab: Plain keeps no history of it."), with no badge.
+
+
+## Profiles, no tab groups (2026-11-27)
+
+Research: docs/research/groups-profiles.md.
+
+- **Profiles only.** A profile is its own open tabs, archive, recently closed tabs, history,
+  favorites, typed-input learning, and its own website data store (cookies, logins, caches, site
+  storage). Settings, per-site choices (zoom, Desktop Site, blocking, permissions), downloads and
+  private tabs belong to the app. **No tab groups:** tabs archive themselves after a day, so the
+  list stays short, and groups are where Safari's iPhone confusion and "lost tabs" come from. Two
+  logins to one site is the need people state, and only a separate store meets it.
+- **Personal is the first profile and keeps everything Plain had** (`Profile.defaultID`, fixed):
+  the default website data store and the main database. It can be renamed, never deleted.
+  Nothing changes for someone who never makes a second profile: no switcher, no extra database
+  opens, the warm web view stays Personal's.
+- **Each other profile's website data store is named by an identifier**
+  (`WKWebsiteDataStore(forIdentifier:)`, iOS 17), the profile's id, made with its first web view
+  (`AppWebsiteData.store(forProfile:)`). A tab's popups and links use its configuration, so they
+  stay in its profile. Link previews, the reader and Copy Image's cookies use the tab's store.
+- **Each other profile's history and favorites live in a database of their own**
+  (`Profiles/<id>/Plain.sqlite`, `ProfileDataLocation`), same schema, opened off the main thread
+  the first time the window shows one of its tabs. Why not a profile column: history is unique
+  by address and its full-text index is synced to it, so a column would mean rebuilding those
+  tables and a filter in every query; a folder per profile makes deletion complete by
+  construction. Tabs, the archive and the profile list stay in the main database (migration
+  `v9.profiles`; every older row is Personal's), so `TabStore` remains the one owner of tabs.
+- **The window's profile is the profile of the tab on screen.** `TabWindow.tabIDs` holds every
+  profile's tabs in order; `tabs(in:profile:)` reads one profile's. Showing a regular tab moves the
+  window to its profile; new tabs, the bar swipe, Close All Tabs, Reopen Closed Tab, the archive
+  and the start screen follow the window's profile. Closing a tab never shows another profile's
+  page in its place. A split may show two profiles side by side (each web view has its own
+  store); a visit is recorded in its own tab's profile.
+- **Switched from the tab switcher.** With a second profile, a capsule over the cards names the
+  profile listed ("Work ⌄"); its menu lists the profiles (the shown one checked), New Profile,
+  Rename Profile and Delete Profile. Picking one lists its tabs, like the private toggle: nothing
+  else changes until a card or New Tab is opened there. Until then New Profile is in the gallery's
+  More menu. The switcher's room stays reserved while the private list shows, so the cards never
+  jump. Not in Settings: options live on the thing they act on (docs/ui-reference.md), and
+  Safari's Settings detour is the friction reviewers name.
+- **No surprises:** the start screen says "Start with a search or an address in Work." once
+  there are two profiles; an empty profile list says "Tabs in Work show up here, with Work's own
+  logins and history."; the gallery opens on the window's profile (or, with nothing there, the
+  profile used last). **Delete asks once** and counts what goes: "This deletes 3 open tabs,
+  archived tabs, history, favorites, website logins and site data in Work. This can't be undone."
+  Delete Profile sits alone in the menu's last section. Then its tabs close without a Reopen (their data is gone), its history database and
+  its website data store are deleted after its web views are released. WebKit refuses to remove a
+  store still in use, so the removal is tried again a moment later and, failing that, at the next
+  launch (`removeLeftoverProfileData`); a profile folder left by a crash goes at launch too.
+- **Private tabs stay one mode for every profile**: one list and one in-memory store. The
+  switcher hides over them; deleting a profile leaves them open.
+- **Limits (FixedChoices):** six profiles (the menu fits the Duo's outer screen), names up to 24
+  characters, unique ignoring case.
+- **Test isolation:** an isolated run maps each profile to a fresh store identifier recorded
+  with the run's own store and removed with it (`IsolatedStores`); profile databases live in the
+  run's temporary folder or in memory. `check-isolation.zsh` allows the identifier APIs only in
+  `AppWebsiteData` and checks the mapping.
+- **Widgets, Spotlight and Shortcuts follow the window's profile.** `SystemSync` follows the
+  favorites of the window's profile's database, switching when the window moves to another
+  profile, so the Search widget, Spotlight and "Open <favorite>" offer the favorites you see above
+  the keyboard. Their commands (search, open a link or a favorite) and links from other apps open
+  in the window's profile, as a typed address would. Handoff sends the page on screen, whichever
+  profile it is in; private tabs never.
+- **Perf:** nothing on the launch path for one profile. A second profile's database opens once
+  per launch, off the main thread (`profile.dataOpen`); its store is made with its first web
+  view. Rules cost one extra pass over the window's tabs only while two profiles exist.

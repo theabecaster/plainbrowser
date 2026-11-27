@@ -22,6 +22,7 @@ enum Schema {
     static let sitePageZoom = "sitePageZoom"
     static let darkPagesOff = "darkPagesOff"
     static let cookieBannersOff = "cookieBannersOff"
+    static let profile = "profile"
 
     static func register(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1.history") { db in
@@ -221,6 +222,24 @@ enum Schema {
         migrator.registerMigration("v8.cookieBannersOff") { db in
             try db.create(table: cookieBannersOff) { t in
                 t.primaryKey("site", .text)
+            }
+        }
+
+        // Profiles (docs/decisions.md, "Profiles, no tab groups"): the list, and each tab's,
+        // closed tab's and window's profile. Every row written before belongs to Personal, the
+        // fixed first profile. A profile's history and favorites live in a database of their own
+        // (`ProfileDataLocation`); Personal's stay in this one.
+        migrator.registerMigration("v9.profiles") { db in
+            try db.create(table: profile) { t in
+                t.primaryKey("id", .text)
+                t.column("name", .text).notNull()
+                t.column("position", .integer).notNull()
+            }
+            let personal = Profile.defaultID.uuidString
+            for table in [tab, closedTab, tabWindow] {
+                try db.alter(table: table) { t in
+                    t.add(column: "profileID", .text).notNull().defaults(to: personal)
+                }
             }
         }
     }

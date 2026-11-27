@@ -26,6 +26,8 @@ public final class BrowserSession {
     private let pageZooms: StorageSitePageZoomStore
     private let darkPages: StorageSiteDarkPagesStore
     private let database: DatabaseProvider
+    /// Each profile's history database (Personal's is the main one).
+    public let profileData: ProfileDatabases
     private var started = false
 
     /// - Parameters:
@@ -36,11 +38,14 @@ public final class BrowserSession {
     ///     scene comes back to its own tabs and panes; nil for a new scene.
     ///   - thumbnailDirectory: where tab thumbnails live; nil for Caches/Thumbnails. A test store
     ///     passes its own, since launch prunes thumbnails no tab in the database names.
+    ///   - profileData: where profiles other than Personal keep their history; nil keeps it in
+    ///     memory.
     public init(
         database: @escaping DatabaseProvider, tabStates: TabStateStore?, windowID: UUID? = nil,
-        thumbnailDirectory: URL? = nil
+        thumbnailDirectory: URL? = nil, profileData: ProfileDataLocation = ProfileDataLocation(directory: nil)
     ) {
         self.database = database
+        self.profileData = ProfileDatabases(main: database, location: profileData)
         contentModes = StorageSiteContentModeStore(database: database)
         pageZooms = StorageSitePageZoomStore(database: database)
         darkPages = StorageSiteDarkPagesStore(database: database)
@@ -94,8 +99,16 @@ public final class BrowserSession {
         _ = await (modes, zooms, scripts, cookieSites, cookieEngine)
         cookieBanners.storedSitesDidLoad()
         if await darkSites { pool.darkPagesSitesDidChange() }
-        // Files of tabs gone for good, at background priority once launch has settled.
-        Task(priority: .background) { [tabs] in await tabs.pruneFiles() }
+        // Files of tabs gone for good, at background priority once launch has settled, and the data
+        // of a profile whose deletion the app could not finish.
+        Task(priority: .background) { [tabs, profileData] in
+            await tabs.pruneFiles()
+            if tabs.areProfilesKnown {
+                // The live list is read when each cleanup decides, never a snapshot from before.
+                await profileData.removeLeftovers { tabs.profiles.map(\.id) }
+                await AppWebsiteData.removeLeftoverProfileData(keeping: tabs.profiles.map(\.id))
+            }
+        }
         // A restored page loads only with its rules attached: lookups of compiled lists take
         // about 1 ms, and an update keeps the previous lists attached while it compiles.
         if restored != nil { await blocker.firstRulesAttached() }

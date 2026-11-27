@@ -216,6 +216,17 @@ public enum Signposts {
     public static let archiveShow: StaticString = "archive.show"
     /// Event: private browsing turned on or off in the gallery.
     public static let privateMode: StaticString = "tab.privateMode"
+    /// Event: the gallery switched to another profile's tabs from its profile switcher.
+    public static let profileShow: StaticString = "profile.show"
+    /// Event: a profile was made, from the gallery's More menu or the switcher.
+    public static let profileCreate: StaticString = "profile.create"
+    /// Event: a profile was renamed.
+    public static let profileRename: StaticString = "profile.rename"
+    /// Event: a profile and everything in it were deleted.
+    public static let profileDelete: StaticString = "profile.delete"
+    /// Interval: a profile's history database opening, off the main thread, the first time the
+    /// window shows one of its tabs in a launch.
+    public static let profileDataOpen: StaticString = "profile.dataOpen"
     /// Event: a short toast over the chrome (Reopen Tab after a close, a finished download).
     public static let toast: StaticString = "toast.show"
 

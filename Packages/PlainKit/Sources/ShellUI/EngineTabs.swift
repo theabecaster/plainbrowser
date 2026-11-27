@@ -38,6 +38,9 @@ final class EngineTabs {
     private var changeScheduled = false
     /// The saved session is in the store (after `restoreSession()`).
     private(set) var isSessionLoaded = false
+    /// The saved profile list was read (not a failed read standing in as empty), so data of
+    /// profiles missing from it really belongs to deleted ones.
+    private(set) var areProfilesKnown = false
     /// The archive holds at least one tab (read off the main thread; `refreshArchiveState()`).
     private(set) var hasArchivedTabs = false
 
@@ -71,9 +74,70 @@ final class EngineTabs {
         selectedID.map(tab)
     }
 
-    /// The window's tabs in order: regular or private.
-    func entries(private isPrivate: Bool) -> [TabEntry] {
-        store.tabs(in: window, private: isPrivate)
+    /// The window's tabs in order: one profile's regular tabs (the window's unless `profile` names
+    /// another), or the private ones.
+    func entries(private isPrivate: Bool, profile: ProfileID? = nil) -> [TabEntry] {
+        store.tabs(in: window, private: isPrivate, profile: profile)
+    }
+
+    // MARK: Profiles
+
+    /// Every profile, Personal first.
+    var profiles: [Profile] { store.profiles }
+
+    /// The window's profile: the tab on screen's, or the last one shown.
+    var activeProfile: ProfileID { store.profileID(of: window) }
+
+    /// Page tabs of the window's other profiles: the switcher can reach them.
+    var otherProfilesTabCount: Int {
+        guard profiles.count > 1, let window = store.window(windowID) else { return 0 }
+        let active = activeProfile
+        return window.tabIDs.count { id in store.tabs[id].map { $0.profileID != active } == true && !isEmpty(id) }
+    }
+
+    /// The other profile whose page tab was on screen last; nil when no other profile has one.
+    var profileWithLatestTab: ProfileID? {
+        guard profiles.count > 1, let window = store.window(windowID) else { return nil }
+        let active = activeProfile
+        return window.tabIDs.compactMap { store.tabs[$0] }
+            .filter { $0.profileID != active && !isEmpty($0.id) }
+            .max { $0.lastActiveAt < $1.lastActiveAt }?.profileID
+    }
+
+    /// Called once per main run loop turn after the window's profile changed (a tab of another
+    /// profile was shown, or the profile was deleted): the shell switches history, favorites and
+    /// the archive to it.
+    var onProfileChange: ((ProfileID) -> Void)?
+    private var reportedProfile = Profile.defaultID
+
+    @discardableResult
+    func addProfile(named name: String) -> ProfileID? {
+        let id = store.addProfile(named: name)
+        scheduleChange()
+        return id
+    }
+
+    @discardableResult
+    func renameProfile(_ id: ProfileID, to name: String) -> Bool {
+        defer { scheduleChange() }
+        return store.renameProfile(id, to: name)
+    }
+
+    /// Deletes a profile: its tabs close for good (state files and thumbnails too), its archive
+    /// and recently closed tabs go, and its website data store is let go. The caller removes the
+    /// store's data and the profile's history database.
+    func deleteProfile(_ id: ProfileID) {
+        Signposts.signposter.emitEvent(Signposts.profileDelete)
+        for tab in store.deleteProfile(id) {
+            watches.removeValue(forKey: tab)?.cancel()
+            if let engineTab = engineTabs.removeValue(forKey: tab) {
+                pool.close(engineTab, keepingSavedState: false)
+            }
+        }
+        pool.forgetProfile(id)
+        checkProfile()
+        refreshArchiveState()
+        scheduleChange()
     }
 
     func entry(_ id: TabID) -> TabEntry? {
@@ -89,12 +153,14 @@ final class EngineTabs {
     /// neighbours.
     func neighbours(of id: TabID) -> (previous: TabID?, next: TabID?) {
         guard let entry = store.tabs[id] else { return (nil, nil) }
-        let list = entries(private: entry.isPrivate).map(\.id).filter { $0 == id || !excludedFromNeighbours.contains($0) }
+        let list = entries(private: entry.isPrivate, profile: entry.profileID).map(\.id)
+            .filter { $0 == id || !excludedFromNeighbours.contains($0) }
         guard let index = list.firstIndex(of: id) else { return (nil, nil) }
         return (index > 0 ? list[index - 1] : nil, index + 1 < list.count ? list[index + 1] : nil)
     }
 
-    var canReopenClosedTab: Bool { !store.recentlyClosed.isEmpty }
+    /// Reopen Closed Tab has a close of the window's profile to bring back.
+    var canReopenClosedTab: Bool { store.lastClosedBatch(in: activeProfile) != nil }
 
     /// The newest batch on the recently closed stack: what a Reopen offer made right after a close
     /// brings back.
@@ -109,9 +175,10 @@ final class EngineTabs {
         return store.tabs[id]?.url == nil
     }
 
-    /// The window's tabs in order, regular or private, without empty tabs: the gallery's cards.
-    func pageEntries(private isPrivate: Bool) -> [TabEntry] {
-        entries(private: isPrivate).filter { !isEmpty($0.id) }
+    /// The window's tabs in order, regular (of `profile`, else the window's) or private, without
+    /// empty tabs: the gallery's cards.
+    func pageEntries(private isPrivate: Bool, profile: ProfileID? = nil) -> [TabEntry] {
+        entries(private: isPrivate, profile: profile).filter { !isEmpty($0.id) }
     }
 
     /// Open tabs besides `id`, regular and private together, empty tabs left out (the rules'
@@ -135,12 +202,13 @@ final class EngineTabs {
         if let tab = engineTabs[id] { return tab }
         let entry = store.tabs[id]
         let tab: Tab
+        let profile = entry?.profileID ?? activeProfile
         if let entry, entry.isPrivate {
-            tab = pool.makeTab(id: id, isPrivate: true)
+            tab = pool.makeTab(id: id, isPrivate: true, profile: profile)
         } else if let url = entry?.url {
-            tab = pool.makeSavedTab(id: id, url: url, title: entry?.title ?? "")
+            tab = pool.makeSavedTab(id: id, url: url, title: entry?.title ?? "", profile: profile)
         } else {
-            tab = pool.makeTab(id: id)
+            tab = pool.makeTab(id: id, profile: profile)
         }
         adopt(tab)
         return tab
@@ -149,15 +217,20 @@ final class EngineTabs {
     // MARK: Changing
 
     /// A new tab at the end of its list (or after `opener`), shown in the focused pane unless
-    /// `inBackground`. It has no web view until it is shown or loads something.
+    /// `inBackground`, in the opener's profile, else `profile`, else the window's. It has no web
+    /// view until it is shown or loads something.
     @discardableResult
-    func newTab(url: URL? = nil, isPrivate: Bool = false, opener: Tab? = nil, inBackground: Bool = false) -> Tab {
+    func newTab(
+        url: URL? = nil, isPrivate: Bool = false, opener: Tab? = nil, inBackground: Bool = false, profile: ProfileID? = nil
+    ) -> Tab {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.tabOpen, id: signposter.makeSignpostID(), "\(inBackground ? "background" : "shown")")
         defer { signposter.endInterval(Signposts.tabOpen, interval) }
         let id = store.open(
-            url, in: window, opener: opener?.id, inBackground: inBackground, isPrivate: isPrivate || opener?.isPrivate == true
+            url, in: window, opener: opener?.id, inBackground: inBackground, isPrivate: isPrivate || opener?.isPrivate == true,
+            profile: profile
         )
+        checkProfile()
         return tab(id)
     }
 
@@ -168,6 +241,7 @@ final class EngineTabs {
         defer { signposter.endInterval(Signposts.tabOpen, interval) }
         adopt(child)
         store.open(child.url, in: window, opener: opener.id, isPrivate: child.isPrivate, id: child.id)
+        checkProfile()
     }
 
     func select(_ tab: Tab) {
@@ -176,6 +250,7 @@ final class EngineTabs {
         let interval = signposter.beginInterval(Signposts.tabSelect, id: signposter.makeSignpostID())
         defer { signposter.endInterval(Signposts.tabSelect, interval) }
         store.select(tab.id)
+        checkProfile()
     }
 
     // MARK: Panes
@@ -183,21 +258,25 @@ final class EngineTabs {
     /// Shows `id` in `pane` (a tab already in the other pane trades places), focusing that pane.
     func show(_ id: TabID, inPane pane: Int) {
         store.select(id, pane: pane)
+        checkProfile()
     }
 
     /// Splits the window, `id` in the new pane, focused; the first pane keeps a tab of its own
     /// (TabStore's rule). No-op when already split.
     func split(showing id: TabID?) {
         store.split(window, showing: id)
+        checkProfile()
     }
 
     /// Closes `pane`; its tab stays open. The other pane is focused.
     func closePane(_ pane: Int) {
         store.closePane(pane, in: window)
+        checkProfile()
     }
 
     func focusPane(_ pane: Int) {
         store.focusPane(pane, in: window)
+        checkProfile()
     }
 
     func swapPanes() {
@@ -226,26 +305,28 @@ final class EngineTabs {
 
     /// Close All Tabs: every regular tab except pinned ones, or every private tab, as one batch that
     /// Reopen Closed Tab brings back (private tabs never come back).
-    func closeAll(private isPrivate: Bool) {
+    func closeAll(private isPrivate: Bool, profile: ProfileID? = nil) {
         Signposts.signposter.emitEvent(Signposts.tabCloseAll, "\(isPrivate ? "private" : "regular")")
-        let before = Set(entries(private: isPrivate).map(\.id))
-        store.closeAllTabs(in: window, private: isPrivate)
-        let after = Set(entries(private: isPrivate).map(\.id))
+        let before = Set(entries(private: isPrivate, profile: profile).map(\.id))
+        store.closeAllTabs(in: window, private: isPrivate, profile: profile)
+        let after = Set(entries(private: isPrivate, profile: profile).map(\.id))
         for id in before.subtracting(after) { drop(id) }
         if isPrivate { endPrivateSessionIfEmpty() }
     }
 
-    /// Reopens the last closed batch; the store shows it. Returns its ids.
+    /// Reopens the window's profile's last closed batch; the store shows it. Returns its ids.
     @discardableResult
     func reopenLastClosed() -> [TabID] {
         Signposts.signposter.emitEvent(Signposts.tabReopen)
-        return store.reopenLastClosed()
+        defer { checkProfile() }
+        return store.reopenLastClosed(in: activeProfile)
     }
 
     /// Reopens exactly the batch a Reopen offer was made for; nothing if it is gone.
     @discardableResult
     func reopenClosed(_ batchID: UUID) -> [TabID] {
         Signposts.signposter.emitEvent(Signposts.tabReopen)
+        defer { checkProfile() }
         return store.reopenClosed(batchID)
     }
 
@@ -258,7 +339,10 @@ final class EngineTabs {
     @discardableResult
     func restoreArchived(_ archived: ArchivedTab) -> Tab {
         Signposts.signposter.emitEvent(Signposts.tabUnarchive)
-        defer { refreshArchiveState() }
+        defer {
+            checkProfile()
+            refreshArchiveState()
+        }
         return tab(store.restoreArchived(archived.entry, in: window))
     }
 
@@ -267,13 +351,14 @@ final class EngineTabs {
         refreshArchiveState()
     }
 
-    /// Reads whether the archive holds anything, off the main thread (one indexed count, after the
-    /// pending tab writes), so Archived Tabs shows only when it leads somewhere.
+    /// Reads whether the window's profile's archive holds anything, off the main thread (one
+    /// count, after the pending tab writes), so Archived Tabs shows only when it leads somewhere.
     func refreshArchiveState() {
+        let profile = activeProfile
         Task { [weak self, database] in
             guard let database = await database() else { return }
-            let count = (try? await database.archivedTabCount()) ?? 0
-            guard let self, hasArchivedTabs != (count > 0) else { return }
+            let count = (try? await database.archivedTabCount(profile: profile)) ?? 0
+            guard let self, activeProfile == profile, hasArchivedTabs != (count > 0) else { return }
             hasArchivedTabs = count > 0
             scheduleChange()
         }
@@ -301,6 +386,14 @@ final class EngineTabs {
         await store.flush()
     }
 
+    /// Whether the database no longer lists `profile`: its deletion is written. A write that gave
+    /// up (`TabSessionWriter` retries, then drops) leaves it listed, so its data must stay.
+    func isProfileDeletionSaved(_ profile: ProfileID) async -> Bool {
+        await store.flush()
+        guard let database = await database(), let saved = try? await database.loadTabSession() else { return false }
+        return !saved.profiles.contains { $0.id == profile }
+    }
+
     // MARK: Restore
 
     /// Loads the saved session off the main thread and gives the store its persistence. Every
@@ -311,7 +404,9 @@ final class EngineTabs {
         let interval = signposter.beginInterval(Signposts.launchRestoreTab)
         defer { signposter.endInterval(Signposts.launchRestoreTab, interval) }
         guard let database = await database() else { return nil }
-        let saved = (try? await database.loadTabSession()) ?? .empty
+        let loaded = try? await database.loadTabSession()
+        let saved = loaded ?? .empty
+        areProfilesKnown = loaded != nil
         let mine = store
         let myWindow = windowID
         let openedMeanwhile = !mine.tabs.isEmpty
@@ -343,6 +438,7 @@ final class EngineTabs {
             store.select(id)
         }
         isSessionLoaded = true
+        checkProfile()
         refreshArchiveState()
         scheduleChange()
         guard !openedMeanwhile, let id = selectedID, store.tabs[id]?.url != nil else { return nil }
@@ -415,6 +511,16 @@ final class EngineTabs {
             changeScheduled = false
             onChange?()
         }
+    }
+
+    /// Tells the shell when the window's profile changed. Called after every change that shows a
+    /// tab (only showing a tab, or deleting a profile, changes it), so it costs one comparison.
+    private func checkProfile() {
+        let profile = activeProfile
+        guard profile != reportedProfile else { return }
+        reportedProfile = profile
+        refreshArchiveState()
+        onProfileChange?(profile)
     }
 }
 

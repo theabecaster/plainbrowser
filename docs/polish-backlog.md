@@ -390,3 +390,14 @@ Newest feature last.
   ("Private Tab", "Reopen Tab", "Downloads") fits with no scroll.
 - **Zoom row's 100%** still reads as disabled: a `UIAction` title can't be drawn in secondary
   text, and an enabled 100% would be a button that does nothing.
+
+
+## Profiles (v0.2, 2026-11-27)
+
+- **Another profile's archive from the switcher.** Archived Tabs shows the window's profile's
+  archive, so it is offered only on that profile's list; a profile whose tabs were all archived
+  needs a tab opened there first. Count each profile's archive and present the shown one's.
+- **A split showing two profiles records each visit in its own profile**, but the favorites and
+  suggestions follow the focused pane. Check on the Duo that this reads as expected.
+- **Device checks:** that WebKit removes a deleted profile's store on the first try with real
+  pages, and the cost of a second profile's first web view (its store's Networking session).

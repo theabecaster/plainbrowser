@@ -21,6 +21,8 @@ public final class TabStore {
     public private(set) var tabs: [TabID: TabEntry]
     /// Oldest first; `reopenLastClosed` takes the last.
     public private(set) var recentlyClosed: [ClosedTabBatch]
+    /// Profiles in the switcher's order, Personal first. There is always at least Personal.
+    public private(set) var profiles: [Profile]
 
     /// The engine's answer to "must this tab stay open?": playing media, in picture in picture or
     /// fullscreen, capturing camera or microphone, or downloading. Such tabs are never archived.
@@ -38,9 +40,13 @@ public final class TabStore {
     ) {
         self.persistence = persistence
         self.now = now
+        let profiles = Self.normalizedProfiles(session.profiles)
+        let known = Set(profiles.map(\.id))
         var entries: [TabID: TabEntry] = [:]
         entries.reserveCapacity(session.tabs.count)
-        for entry in session.tabs where !entry.isPrivate {
+        // A tab of a profile that is gone never comes back, not even in another profile: its
+        // pages belonged to that profile's logins.
+        for entry in session.tabs where !entry.isPrivate && known.contains(entry.profileID) {
             entries[entry.id] = entry
         }
         var placed: [TabID: WindowID] = [:]
@@ -56,7 +62,8 @@ public final class TabStore {
             let panes = stored.panes.prefix(FixedChoices.maxPanesPerWindow).map { id in
                 id.flatMap { placed[$0] == stored.id ? $0 : nil }
             }
-            windows.append(TabWindow(id: stored.id, tabIDs: ids, panes: panes, focusedPane: stored.focusedPane))
+            let profile = known.contains(stored.profileID) ? stored.profileID : Profile.defaultID
+            windows.append(TabWindow(id: stored.id, tabIDs: ids, panes: panes, focusedPane: stored.focusedPane, profileID: profile))
         }
         if windows.isEmpty { windows.append(TabWindow()) }
         // Tabs no window lists (an older database, or a damaged one) join the first window.
@@ -78,7 +85,8 @@ public final class TabStore {
         self.windows = windows
         tabs = entries
         windowOfTab = placed
-        recentlyClosed = Array(session.recentlyClosed.suffix(FixedChoices.recentlyClosedLimit))
+        self.profiles = profiles
+        recentlyClosed = Array(Self.batches(session.recentlyClosed, keeping: known).suffix(FixedChoices.recentlyClosedLimit))
     }
 
     // MARK: Reading
@@ -92,10 +100,22 @@ public final class TabStore {
         windowOfTab[tab]
     }
 
-    /// A window's tabs in order: its regular tabs, or its private ones.
-    public func tabs(in window: WindowID, private isPrivate: Bool = false) -> [TabEntry] {
+    /// A window's tabs in order: the regular tabs of one profile (the window's own unless
+    /// `profile` names another), or its private tabs, which are one list for every profile.
+    public func tabs(in window: WindowID, private isPrivate: Bool = false, profile: ProfileID? = nil) -> [TabEntry] {
         guard let window = self.window(window) else { return [] }
-        return (isPrivate ? window.privateTabIDs : window.tabIDs).compactMap { tabs[$0] }
+        if isPrivate { return window.privateTabIDs.compactMap { tabs[$0] } }
+        let profile = profile ?? window.profileID
+        return window.tabIDs.compactMap { id in tabs[id].flatMap { $0.profileID == profile ? $0 : nil } }
+    }
+
+    /// The window's profile: new tabs open in it and the gallery opens on its tabs.
+    public func profileID(of window: WindowID) -> ProfileID {
+        self.window(window)?.profileID ?? Profile.defaultID
+    }
+
+    public func profile(_ id: ProfileID) -> Profile? {
+        profiles.first { $0.id == id }
     }
 
     /// The tab in the window's focused pane.
@@ -147,10 +167,12 @@ public final class TabStore {
     /// - Other tabs go at the end of the window's list.
     /// - In the foreground it shows in `pane` (default: the focused pane).
     /// - `id` is for a tab the engine already made (a popup); new tabs get a fresh one.
+    /// - It belongs to its opener's profile, else `profile`, else the window's.
     @discardableResult
     public func open(
         _ url: URL? = nil, title: String? = nil, in window: WindowID? = nil, opener: TabID? = nil,
-        inBackground: Bool = false, isPrivate: Bool = false, pane: Int? = nil, id: TabID = TabID()
+        inBackground: Bool = false, isPrivate: Bool = false, pane: Int? = nil, profile: ProfileID? = nil,
+        id: TabID = TabID()
     ) -> TabID {
         let openerEntry = opener.flatMap { tabs[$0] }
         let isPrivate = isPrivate || openerEntry?.isPrivate == true
@@ -159,8 +181,12 @@ public final class TabStore {
             ?? windows[0].id
         let index = windowIndex(windowID)!
         let date = now()
+        let profileID = openerEntry?.profileID
+            ?? profile.flatMap { self.profile($0)?.id }
+            ?? windows[index].profileID
         let entry = TabEntry(
-            id: id, url: url, title: title, openerID: openerEntry?.id, isPrivate: isPrivate, createdAt: date
+            id: id, url: url, title: title, openerID: openerEntry?.id, isPrivate: isPrivate, profileID: profileID,
+            createdAt: date
         )
         tabs[entry.id] = entry
         windowOfTab[entry.id] = windowID
@@ -223,13 +249,15 @@ public final class TabStore {
         if !entry.isPrivate { saveSession() }
     }
 
-    /// Close All Tabs: every regular tab of the window except pinned ones (or every private tab),
-    /// as one batch that Reopen Closed Tab brings back. Panes that showed them show the start page.
-    public func closeAllTabs(in window: WindowID, private isPrivate: Bool = false) {
+    /// Close All Tabs: every regular tab of one profile (the window's unless `profile` names
+    /// another) except pinned ones, or every private tab, as one batch that Reopen Closed Tab
+    /// brings back. Panes that showed them show the start page.
+    public func closeAllTabs(in window: WindowID, private isPrivate: Bool = false, profile: ProfileID? = nil) {
         guard let index = windowIndex(window) else { return }
         let ids = isPrivate
             ? windows[index].privateTabIDs
-            : windows[index].tabIDs.filter { !(FixedChoices.closeAllKeepsPinnedTabs && tabs[$0]?.isPinned == true) }
+            : tabs(in: window, profile: profile).map(\.id)
+                .filter { !(FixedChoices.closeAllKeepsPinnedTabs && tabs[$0]?.isPinned == true) }
         guard !ids.isEmpty else { return }
         let gone = Set(ids)
         let emptied = windows[index].panes.indices.filter { windows[index].panes[$0].map(gone.contains) == true }
@@ -238,24 +266,122 @@ public final class TabStore {
         saveSession()
     }
 
-    /// Moves a tab within its list. Pinned tabs stay before unpinned ones.
+    /// Moves a tab within its list (its profile's tabs, or the private ones), so it sits at
+    /// `destination` in that list. Pinned tabs stay before unpinned ones.
     public func move(_ id: TabID, to destination: Int) {
         guard let windowID = windowOfTab[id], let index = windowIndex(windowID), let entry = tabs[id] else { return }
-        func reorder(_ list: inout [TabID], pinnedBound: Bool) {
-            guard let from = list.firstIndex(of: id) else { return }
-            list.remove(at: from)
-            var to = min(max(0, destination), list.count)
-            if pinnedBound {
-                let pinned = pinnedCount(list)
-                to = entry.isPinned ? min(to, pinned) : max(to, pinned)
-            }
-            list.insert(id, at: to)
-        }
-        if entry.isPrivate {
-            reorder(&windows[index].privateTabIDs, pinnedBound: false)
-        } else {
-            reorder(&windows[index].tabIDs, pinnedBound: true)
+        if !entry.isPrivate {
+            // One profile's tabs move among their own places in the window's list; the other
+            // profiles' tabs keep theirs.
+            let all = windows[index].tabIDs
+            let places = all.indices.filter { tabs[all[$0]]?.profileID == entry.profileID }
+            var mine = places.map { all[$0] }
+            reorder(&mine, id: id, entry: entry, destination: destination, pinnedBound: true)
+            var merged = all
+            for (place, tab) in zip(places, mine) { merged[place] = tab }
+            windows[index].tabIDs = merged
             saveSession()
+            return
+        }
+        reorder(&windows[index].privateTabIDs, id: id, entry: entry, destination: destination, pinnedBound: false)
+    }
+
+    private func reorder(_ list: inout [TabID], id: TabID, entry: TabEntry, destination: Int, pinnedBound: Bool) {
+        guard let from = list.firstIndex(of: id) else { return }
+        list.remove(at: from)
+        var to = min(max(0, destination), list.count)
+        if pinnedBound {
+            let pinned = pinnedCount(list)
+            to = entry.isPinned ? min(to, pinned) : max(to, pinned)
+        }
+        list.insert(id, at: to)
+    }
+
+    // MARK: Profiles
+
+    /// Whether `name` (cleaned) is another profile's name already, ignoring case.
+    public func isProfileNameTaken(_ name: String, besides id: ProfileID? = nil) -> Bool {
+        guard let clean = Profile.cleanName(name) else { return false }
+        return profiles.contains { $0.id != id && $0.name.compare(clean, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+    }
+
+    /// Whether another profile fits (`FixedChoices.maxProfiles`).
+    public var canAddProfile: Bool { profiles.count < FixedChoices.maxProfiles }
+
+    /// Adds a profile at the end of the list and returns its id; nil when the name is empty or
+    /// taken, or no more fit. It starts with no tabs; nothing switches to it.
+    @discardableResult
+    public func addProfile(named name: String) -> ProfileID? {
+        guard canAddProfile, let clean = Profile.cleanName(name), !isProfileNameTaken(clean) else { return nil }
+        let profile = Profile(name: clean)
+        profiles.append(profile)
+        saveSession()
+        return profile.id
+    }
+
+    /// Renames a profile. Returns false when the name is empty or another profile's.
+    @discardableResult
+    public func renameProfile(_ id: ProfileID, to name: String) -> Bool {
+        guard let index = profiles.firstIndex(where: { $0.id == id }), let clean = Profile.cleanName(name),
+              !isProfileNameTaken(clean, besides: id) else { return false }
+        guard profiles[index].name != clean else { return true }
+        profiles[index].name = clean
+        saveSession()
+        return true
+    }
+
+    /// Deletes a profile and every tab of it: open ones (no recently closed batch: their data is
+    /// gone), recently closed ones and archived ones. Personal can't be deleted. Windows on the
+    /// profile move to Personal, and a pane that showed one of its tabs shows Personal's most
+    /// recent tab, else the start page. Private tabs stay. Returns the open tabs removed, so
+    /// the engine can drop them.
+    @discardableResult
+    public func deleteProfile(_ id: ProfileID) -> [TabID] {
+        guard id != Profile.defaultID, profiles.contains(where: { $0.id == id }) else { return [] }
+        var removed: [TabID] = []
+        for index in windows.indices {
+            // Private tabs stay: they use the private session's store, never the profile's.
+            let doomed = windows[index].tabIDs.filter { tabs[$0]?.profileID == id }
+            let gone = Set(doomed)
+            let emptied = windows[index].panes.indices.filter { windows[index].panes[$0].map(gone.contains) == true }
+            for tab in doomed { remove(tab, windowIndex: index) }
+            removed += doomed
+            if windows[index].profileID == id { windows[index].profileID = Profile.defaultID }
+            // Panes the deletion emptied show Personal's latest tab, else the start page.
+            for pane in emptied where windows[index].panes[pane] == nil {
+                let shown = Set(windows[index].panes.compactMap { $0 })
+                let latest = tabs(in: windows[index].id, profile: Profile.defaultID)
+                    .filter { !shown.contains($0.id) }
+                    .max { $0.lastActiveAt < $1.lastActiveAt }
+                windows[index].panes[pane] = latest?.id
+            }
+        }
+        clearOpeners(of: Set(removed))
+        recentlyClosed = Self.batches(recentlyClosed, keeping: Set(profiles.map(\.id)).subtracting([id]))
+        profiles.removeAll { $0.id == id }
+        persistence?.enqueue(.deleteProfile(id))
+        saveSession()
+        return removed
+    }
+
+    /// The newest recently closed batch of `profile`: what Reopen Closed Tab brings back there.
+    public func lastClosedBatch(in profile: ProfileID) -> ClosedTabBatch? {
+        recentlyClosed.last { $0.tabs.first?.entry.profileID == profile }
+    }
+
+    /// Personal first, then the others once each, in their saved order.
+    private static func normalizedProfiles(_ saved: [Profile]) -> [Profile] {
+        var seen: Set<ProfileID> = [Profile.defaultID]
+        let personal = saved.first { $0.isDefault } ?? .personal
+        return [personal] + saved.filter { seen.insert($0.id).inserted }
+    }
+
+    /// `batches` with only the tabs of `profiles`; a batch left empty goes.
+    private static func batches(_ batches: [ClosedTabBatch], keeping profiles: Set<ProfileID>) -> [ClosedTabBatch] {
+        batches.compactMap { batch in
+            var batch = batch
+            batch.tabs.removeAll { !profiles.contains($0.entry.profileID) }
+            return batch.tabs.isEmpty ? nil : batch
         }
     }
 
@@ -313,14 +439,21 @@ public final class TabStore {
         if let id = windows[index].panes[pane] { touch(id) }
         windows[index].panes.remove(at: pane)
         windows[index].focusedPane = 0
+        // The remaining pane's tab decides the window's profile.
+        if let id = windows[index].panes[0], let entry = tabs[id], !entry.isPrivate {
+            windows[index].profileID = entry.profileID
+        }
         saveSession()
     }
 
-    /// The pane touched last; shared bar buttons act on it.
+    /// The pane touched last; shared bar buttons act on it, and its tab's profile is the window's.
     public func focusPane(_ pane: Int, in window: WindowID) {
         guard let index = windowIndex(window), windows[index].panes.indices.contains(pane),
               windows[index].focusedPane != pane else { return }
         windows[index].focusedPane = pane
+        if let id = windows[index].panes[pane], let entry = tabs[id], !entry.isPrivate {
+            windows[index].profileID = entry.profileID
+        }
         saveSession()
     }
 
@@ -334,12 +467,12 @@ public final class TabStore {
 
     // MARK: Recently closed
 
-    /// Reopens the last closed batch where it was: after the tab that preceded it when that is
-    /// still open, else at its old index. Tabs that were on screen show again, else the first.
-    /// Returns the reopened ids in order.
+    /// Reopens the last closed batch (of `profile`, when given) where it was: after the tab that
+    /// preceded it when that is still open, else at its old index. Tabs that were on screen show
+    /// again, else the first. Returns the reopened ids in order.
     @discardableResult
-    public func reopenLastClosed() -> [TabID] {
-        guard let batch = recentlyClosed.last else { return [] }
+    public func reopenLastClosed(in profile: ProfileID? = nil) -> [TabID] {
+        guard let batch = profile.map(lastClosedBatch(in:)) ?? recentlyClosed.last else { return [] }
         return reopenClosed(batch.id)
     }
 
@@ -443,9 +576,11 @@ public final class TabStore {
         }
         let windowID = window.flatMap { windowIndex($0) != nil ? $0 : nil } ?? windows[0].id
         let index = windowIndex(windowID)!
+        // Its own profile's tab again; one deleted meanwhile has no archive left to restore from.
+        let profileID = profile(archived.profileID)?.id ?? windows[index].profileID
         let entry = TabEntry(
-            id: archived.id, url: archived.url, title: archived.title, createdAt: archived.createdAt,
-            lastActiveAt: now(), thumbnail: archived.thumbnail
+            id: archived.id, url: archived.url, title: archived.title, profileID: profileID,
+            createdAt: archived.createdAt, lastActiveAt: now(), thumbnail: archived.thumbnail
         )
         tabs[entry.id] = entry
         windowOfTab[entry.id] = windowID
@@ -481,11 +616,12 @@ public final class TabStore {
                 WindowSession(
                     id: window.id, tabIDs: window.tabIDs,
                     panes: window.panes.map { id in id.flatMap { tabs[$0]?.isPrivate == false ? $0 : nil } },
-                    focusedPane: window.focusedPane
+                    focusedPane: window.focusedPane, profileID: window.profileID
                 )
             },
             tabs: windows.flatMap(\.tabIDs).compactMap { tabs[$0] },
-            recentlyClosed: recentlyClosed
+            recentlyClosed: recentlyClosed,
+            profiles: profiles
         )
     }
 
@@ -543,15 +679,18 @@ public final class TabStore {
                     let isPrivate = tabs[id]?.isPrivate == true
                     let list = isPrivate ? window.privateTabIDs : window.tabIDs
                     windows[index].panes[current] = replacement(
-                        nearIndex: list.firstIndex(of: id), in: window, opener: nil, isPrivate: isPrivate
+                        nearIndex: list.firstIndex(of: id), in: window, opener: nil, isPrivate: isPrivate,
+                        profile: tabs[id]?.profileID ?? window.profileID
                     )
                     windows[index].focusedPane = target
+                    if let entry = tabs[id], !entry.isPrivate { windows[index].profileID = entry.profileID }
                     touch(id)
                     return
                 }
                 window.panes.swapAt(current, target)
             }
             window.focusedPane = target
+            if let entry = tabs[id], !entry.isPrivate { window.profileID = entry.profileID }
             windows[index] = window
             touch(id)
             return
@@ -559,6 +698,7 @@ public final class TabStore {
         if let old = window.panes[target] { touch(old) }
         window.panes[target] = id
         window.focusedPane = target
+        if let entry = tabs[id], !entry.isPrivate { window.profileID = entry.profileID }
         windows[index] = window
         touch(id)
     }
@@ -577,7 +717,8 @@ public final class TabStore {
         for pane in window.panes.indices where window.panes[pane] == id {
             window.panes[pane] = nil
             window.panes[pane] = replacement(
-                nearIndex: position, in: window, opener: entry.openerID, isPrivate: entry.isPrivate
+                nearIndex: position, in: window, opener: entry.openerID, isPrivate: entry.isPrivate,
+                profile: entry.profileID
             )
         }
         windows[index] = window
@@ -586,18 +727,21 @@ public final class TabStore {
     }
 
     /// The tab a pane shows after its tab goes away: the closing tab's opener, else the tab now at
-    /// its index, else earlier ones; never one already in another pane.
-    private func replacement(nearIndex position: Int?, in window: TabWindow, opener: TabID?, isPrivate: Bool) -> TabID? {
+    /// its index, else earlier ones; never one already in another pane, and for a regular tab
+    /// only one of the same profile (another profile's page would sign in as someone else).
+    private func replacement(
+        nearIndex position: Int?, in window: TabWindow, opener: TabID?, isPrivate: Bool, profile: ProfileID
+    ) -> TabID? {
         let shown = Set(window.panes.compactMap { $0 })
         let list = isPrivate ? window.privateTabIDs : window.tabIDs
-        if FixedChoices.closingChildSelectsOpener, let opener,
-           list.contains(opener), !shown.contains(opener) {
+        let fits = { (id: TabID) in !shown.contains(id) && (isPrivate || self.tabs[id]?.profileID == profile) }
+        if FixedChoices.closingChildSelectsOpener, let opener, list.contains(opener), fits(opener) {
             return opener
         }
         guard let position else { return nil }
         let start = min(position, list.count)
-        if let next = list[start...].first(where: { !shown.contains($0) }) { return next }
-        return list[..<start].last { !shown.contains($0) }
+        if let next = list[start...].first(where: fits) { return next }
+        return list[..<start].last(where: fits)
     }
 
     /// Tabs opened by a closed tab no longer have an opener to return to.

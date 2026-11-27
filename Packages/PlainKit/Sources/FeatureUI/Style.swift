@@ -101,6 +101,9 @@ struct PaperEmptyState: View {
     let message: String
     let systemImage: String
     var footer: String?
+    /// The sentence with a symbol in it (the More button, as the bar draws it), shown in place of
+    /// `message`, which VoiceOver then reads.
+    var symbolMessage: Text?
 
     var body: some View {
         VStack(spacing: Spacing.s) {
@@ -109,9 +112,10 @@ struct PaperEmptyState: View {
                 .foregroundStyle(Style.inkSecondary)
                 .accessibilityHidden(true)
                 .padding(.bottom, Spacing.xs)
-            Text(message)
+            (symbolMessage ?? Text(message))
                 .font(.body)
                 .foregroundStyle(Style.inkSecondary)
+                .accessibilityLabel(message)
             if let footer {
                 Text(footer)
                     .font(.footnote)
@@ -124,6 +128,15 @@ struct PaperEmptyState: View {
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("sheetEmptyState")
     }
+}
+
+/// The empty states that point at the page sheet show its button, More, as the bar draws it:
+/// a first-time user knows the button by its picture, and nothing on screen is called "the page
+/// menu".
+extension Wording {
+    private static var more: Image { Image(systemName: "line.3.horizontal.circle") }
+    static var favoritesEmptySymbol: Text { Text("Tap \(more) on a page, then Favorite.") }
+    static var readingListEmptySymbol: Text { Text("Tap \(more) on a page, then Read Later.") }
 }
 
 /// A read that failed, in place of the list: one sentence and Try Again (docs/state-rules.md §6,

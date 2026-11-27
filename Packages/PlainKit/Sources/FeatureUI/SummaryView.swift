@@ -320,7 +320,7 @@ private struct SummaryHeader: View {
     }
 
     private var done: some View {
-        Button("Done", action: onDone).buttonStyle(.glass)
+        Button("Done", action: onDone).buttonStyle(.glass).foregroundStyle(Style.accent)
     }
 }
 

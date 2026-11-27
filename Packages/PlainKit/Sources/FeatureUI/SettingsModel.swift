@@ -256,11 +256,13 @@ enum Wording {
     static let archiveReadFailed = "Plain couldn't load your archived tabs."
     static let favoritesReadFailed = "Plain couldn't load your favorites."
     static let historyEditFailed = "Plain couldn't change your history. Try again."
-    static let favoritesFooter = "Tap a favorite to rename it."
+    /// The words of the empty states that show More's symbol (Style.swift); VoiceOver reads these.
+    static let favoritesEmpty = "Tap More on a page, then Favorite."
+    static let readingListEmpty = "Tap More on a page, then Read Later."
+    static let favoritesFooter = "Tap a favorite to rename it. To open one, tap the address bar."
     static let favoritesFailed = "Plain couldn't change your favorites. Try again."
     static let readingListReadFailed = "Plain couldn't load your reading list."
     static let readingListEditFailed = "Plain couldn't change your reading list. Try again."
-    static let readingListEmpty = "Save pages to read later from the page menu."
 
     /// Shown only where a tab list fits, which has a top bar and no swipe up from the address bar:
     /// the Tabs button shows them all.

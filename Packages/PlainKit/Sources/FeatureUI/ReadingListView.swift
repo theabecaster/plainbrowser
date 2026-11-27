@@ -39,7 +39,7 @@ public struct ReadingListView: View {
                     ReadFailedView(message: Wording.readingListReadFailed, systemImage: "eyeglasses") { await model.load() }
                 } else if model.isLoaded, model.isEmpty {
                     if model.query.isEmpty {
-                        PaperEmptyState(message: Wording.readingListEmpty, systemImage: "eyeglasses")
+                        PaperEmptyState(message: Wording.readingListEmpty, systemImage: "eyeglasses", symbolMessage: Wording.readingListEmptySymbol)
                     } else {
                         ContentUnavailableView.search(text: model.query)
                     }

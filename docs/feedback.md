@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Suggestions flicker while typing:** the list should update smoothly between keystrokes. (Suggestions lane.)
+
 - **Tabs button with one tab:** show the Tabs button (not "+") and open the switcher like the swipe-up does. (One-button lane.)
 
 

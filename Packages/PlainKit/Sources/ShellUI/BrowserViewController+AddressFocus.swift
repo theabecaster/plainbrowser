@@ -17,6 +17,9 @@ final class AddressFocusState {
     /// Copy button while it still shows that address. Otherwise a search over a page opens a new
     /// tab (`LaunchUIState.isFreshSearch`).
     var isEditingPage = false
+    /// What the user typed last (without an inline completion), so a completion is offered only
+    /// while typing forward, never after Delete.
+    var lastTyped = ""
 }
 
 // MARK: - The focused field's content
@@ -73,8 +76,18 @@ extension BrowserViewController {
             guard let self, !Task.isCancelled, content != self.focusUI.content else { return }
             self.focusUI.content = content
             self.sheet.setFavorites(content.favorites)
-            if self.isEditingAddress { self.queryChanged() }
+            self.refreshFocusRowsIfShown()
         }
+    }
+
+    /// Updates the rows the field shows before typing, if it shows them now (never a typed
+    /// query's suggestions, which would replay its completion).
+    func refreshFocusRowsIfShown() {
+        guard isEditingAddress else { return }
+        let text = pill.textField.text ?? ""
+        let untouched = text.isEmpty || text == pageAddress?.absoluteString
+        guard untouched || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        queryChanged()
     }
 
     /// A page was recorded in history (regular tabs only): it leads the recent pages at once,
@@ -94,11 +107,32 @@ extension BrowserViewController {
 
     /// The pasteboard may hold a new link: check it (no paste alert) and update an open field.
     func refreshCopiedLink() {
-        focusUI.copiedLink.onChange = { [weak self] in
-            guard let self, self.isEditingAddress else { return }
-            self.queryChanged()
-        }
+        focusUI.copiedLink.onChange = { [weak self] in self?.refreshFocusRowsIfShown() }
         focusUI.copiedLink.refresh()
+    }
+
+    // MARK: Inline completion
+
+    /// Completes the typed text in the field to the top page's address, the rest selected (Arc,
+    /// Safari): typing on replaces it, Delete removes it, Return goes there. Only while typing
+    /// forward at the end of the field, never over marked text or a search with spaces, and only
+    /// from the first (local) list, so the field never changes under the thumb a second time.
+    func completeInline(_ typed: String, with suggestions: [AddressBarSuggestion]) {
+        let field = pill.textField
+        guard field.text == typed, field.markedTextRange == nil, !typed.contains(" "),
+              let end = field.selectedTextRange?.end, field.offset(from: end, to: field.endOfDocument) == 0,
+              case .page(let url, _, _) = suggestions.first
+        else { return }
+        // Hosts only, as Arc does: a path is where a typed address and a visited one part ways.
+        let address = SuggestionRow.displayAddress(url)
+        let target = address.split(separator: "/", maxSplits: 1).first.map(String.init) ?? address
+        guard !typed.contains("/"), target.count > typed.count, target.lowercased().hasPrefix(typed.lowercased())
+        else { return }
+        let rest = String(target.dropFirst(typed.count))
+        field.text = typed + rest
+        if let start = field.position(from: field.beginningOfDocument, offset: typed.count) {
+            field.selectedTextRange = field.textRange(from: start, to: field.endOfDocument)
+        }
     }
 
     // MARK: Picks

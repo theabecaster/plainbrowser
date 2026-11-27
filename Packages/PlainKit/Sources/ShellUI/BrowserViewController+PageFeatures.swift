@@ -13,58 +13,33 @@ import WebKit
 extension Download: DownloadListItem {}
 extension DownloadCoordinator: DownloadListSource {}
 
-/// Where a page menu opens. The zoom row keeps the menu open where the shell can update the open
-/// menu (the pill's and the glass bar's); the system's vertical bar can't, so there it closes.
-enum PageMenuSource {
-    case pill, button, barItem
-
-    var keepsMenuOpen: Bool { self != .barItem }
-}
-
 // MARK: - Page features: zoom, PDF, downloads
 
 extension BrowserViewController {
-    /// Zoom as one inline row: − (Zoom Out), the percentage (back to 100%), + (Zoom In)
-    /// (docs/ui-reference.md, page menu). Remembered per site by the engine.
-    func zoomMenu(for tab: Tab, source: PageMenuSource) -> UIMenu {
-        let keep: UIMenuElement.Attributes = source.keepsMenuOpen ? .keepsMenuPresented : []
+    /// Zoom as one row of the page sheet: − (Zoom Out), the percentage (back to 100%), + (Zoom
+    /// In) (docs/ui-reference.md, page menu). Remembered per site by the engine. The sheet stays
+    /// up and shows the new percentage after each step.
+    func zoomActions(for tab: Tab) -> [UIAction] {
         let zoomOut = UIAction(
-            title: "Zoom Out", image: UIImage(systemName: "minus"),
-            attributes: tab.canZoomOut ? keep : [.disabled]
-        ) { [weak self, weak tab] _ in
+            title: "Zoom Out", image: UIImage(systemName: "minus"), attributes: tab.canZoomOut ? [] : [.disabled]
+        ) { [weak tab] _ in
             tab?.zoomOut()
-            self?.refreshOpenPageMenu(source: source)
         }
         zoomOut.accessibilityIdentifier = "menu.zoomOut"
         let percent = UIAction(
-            title: "\(tab.zoomPercent)%", attributes: tab.zoomPercent == 100 ? [.disabled] : keep
-        ) { [weak self, weak tab] _ in
+            title: "\(tab.zoomPercent)%", attributes: tab.zoomPercent == 100 ? [.disabled] : []
+        ) { [weak tab] _ in
             tab?.resetZoom()
-            self?.refreshOpenPageMenu(source: source)
         }
         percent.accessibilityIdentifier = "menu.zoomReset"
         percent.accessibilityLabel = "Zoom \(tab.zoomPercent)%, Actual Size"
         let zoomIn = UIAction(
-            title: "Zoom In", image: UIImage(systemName: "plus"),
-            attributes: tab.canZoomIn ? keep : [.disabled]
-        ) { [weak self, weak tab] _ in
+            title: "Zoom In", image: UIImage(systemName: "plus"), attributes: tab.canZoomIn ? [] : [.disabled]
+        ) { [weak tab] _ in
             tab?.zoomIn()
-            self?.refreshOpenPageMenu(source: source)
         }
         zoomIn.accessibilityIdentifier = "menu.zoomIn"
-        let row = UIMenu(title: "", options: .displayInline, children: [zoomOut, percent, zoomIn])
-        row.preferredElementSize = .small
-        return row
-    }
-
-    /// After a zoom step, the open menu shows the new percentage.
-    private func refreshOpenPageMenu(source: PageMenuSource) {
-        let menu = UIMenu(children: pageMenuElements(isFavorite: lastFavoriteAnswer, source: source))
-        switch source {
-        case .pill: pill.updateVisibleMenu(menu)
-        case .button: buttonBar.button(.more).contextMenuInteraction?.updateVisibleMenu { _ in menu }
-        case .barItem: break
-        }
+        return [zoomOut, percent, zoomIn]
     }
 
     /// Save PDF to Files, only on a PDF page.

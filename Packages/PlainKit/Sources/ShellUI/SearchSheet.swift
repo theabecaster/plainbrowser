@@ -58,7 +58,7 @@ enum SheetItem: Hashable {
 /// - Reduce Motion: the whole list crossfades at once.
 final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// The sheet's content. The owner pins its bottom above the pill and its sides to the margins.
-    let content = UIView()
+    let content = LayoutReportingView()
     var onPick: (SearchPick) -> Void = { _ in }
     /// A tap on the sheet outside any row: close the sheet.
     var onDismiss: () -> Void = {}
@@ -101,6 +101,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         accessibilityIdentifier = "searchSheet"
 
         content.translatesAutoresizingMaskIntoConstraints = false
+        content.onLayout = { [weak self] in self?.layOutRows() }
         addSubview(content)
 
         // Under everything: the card the rows, the favorites and the field sit on.
@@ -167,11 +168,19 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        layOutRows()
+    }
+
+    /// Fits the rows and the card to the space above the field. Runs when the sheet lays out and
+    /// when its content does: the content moves with the field (the keyboard, a fold) without the
+    /// sheet itself laying out, and the card must follow the rows exactly.
+    private func layOutRows() {
         rowsClip.layoutIfNeeded()
         // The plate covers the whole sheet, so its paper lines up with the sheet's.
         let plateFrame = content.convert(bounds, from: self)
         if plate.frame != plateFrame {
-            UIView.performWithoutAnimation { plate.frame = plateFrame }
+            // Inside whatever animation moves the content (the keyboard), so the card moves with it.
+            plate.frame = plateFrame
         }
         guard !isApplying else { return }
         // The space can change under the rows (keyboard, fold): only whole rows show.
@@ -179,7 +188,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             let fits = fits(row)
             if row.fits != fits { setFits(fits, row) }
         }
-        UIView.performWithoutAnimation { plateMask.frame = rowsArea(favorites: favoritesShown) }
+        plateMask.frame = rowsArea(favorites: favoritesShown)
     }
 
     /// Shows `suggestions`, best first, the first one nearest the field. Applied once per run
@@ -544,7 +553,10 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// sit on one paper card over the veiled page (Arc's sheet, with the field where the thumb
     /// is). Zero with nothing to show.
     private func rowsArea(favorites: Bool) -> CGRect {
-        var top = shownRows.filter(\.fits).map { clipFrame(of: $0).minY }.min().map { plate.convert(CGPoint(x: 0, y: $0), from: rowsClip).y }
+        // From the geometry itself (a whole row inside the clip), not the rows' `fits` flags, which
+        // a layout pass may not have caught up with yet.
+        var top = shownRows.map { clipFrame(of: $0).minY }.filter { $0 >= -0.5 }.min()
+            .map { plate.convert(CGPoint(x: 0, y: $0), from: rowsClip).y }
         if favorites {
             let strip = plate.convert(favoritesStrip.frame, from: content).minY
             top = min(top ?? strip, strip)
@@ -557,6 +569,16 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             x: width.minX - Spacing.s, y: cardTop, width: width.width + 2 * Spacing.s,
             height: max(0, plate.bounds.maxY - cardTop)
         )
+    }
+}
+
+/// A view that says when it has laid out its subviews.
+final class LayoutReportingView: UIView {
+    var onLayout: () -> Void = {}
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout()
     }
 }
 

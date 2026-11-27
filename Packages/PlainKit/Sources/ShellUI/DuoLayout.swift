@@ -76,8 +76,9 @@ struct DuoLayout: Equatable {
     /// `FixedChoices.sideTabsMinimumPageWidth` wide. Elsewhere the app switcher is the only tab
     /// list (the Settings row says so).
     var tabLayoutAvailable: Bool
-    /// The layout in effect: the setting, or Above where a sidebar would leave the page too narrow
-    /// (inner portrait); nil where Tab Layout does not apply.
+    /// The layout in effect: the setting, or Above where even the sidebar's rail would leave the
+    /// page too narrow (`FixedChoices.sidebarRailMinimumPageWidth`); nil where Tab Layout does not
+    /// apply. The Duo's inner screen keeps Left and Right in both orientations.
     var tabLayout: TabLayout?
     /// The sidebar is on screen (Left or Right in effect).
     var showsSidebar: Bool
@@ -98,6 +99,10 @@ struct DuoLayout: Equatable {
     var sidebarDockWidth: CGFloat
     /// Expanded floats over the page: docked, it would leave the page under the minimum width.
     var sidebarFloats: Bool
+    /// Expanded, the sidebar opens over the top bar's leading end too (the inner screen's
+    /// portrait): beside it the bar would have less than `FixedChoices.topBarMinimumLane`. True
+    /// whatever state the sidebar is in now, so the host can raise it before it widens.
+    var expandedSidebarCoversChrome: Bool
     /// The strip's height. It floats under the top bar, over the pages, and hides with the bar.
     var stripHeight: CGFloat
     /// A split can show here (regular both ways, each pane at least the minimum width).
@@ -140,7 +145,7 @@ struct DuoLayout: Equatable {
         let rail = SidebarState.rail.width
         let minimumPage = CGFloat(FixedChoices.sideTabsMinimumPageWidth)
         tabLayoutAvailable = regular && area.width >= minimumPage
-        let sidebarFits = regular && area.width - rail >= minimumPage
+        let sidebarFits = regular && area.width - rail >= CGFloat(FixedChoices.sidebarRailMinimumPageWidth)
         if !tabLayoutAvailable {
             tabLayout = nil
         } else if input.tabLayout.isSidebar && !sidebarFits {
@@ -162,17 +167,23 @@ struct DuoLayout: Equatable {
         splitAvailable = regular && widthForPanes >= 2 * minimumPane
         splitShown = splitAvailable && input.paneCount > 1
 
+        let expandedWidth = SidebarState.expanded.width
         if showsSidebar {
             widestSidebar = splitShown || input.isDivisionActive || (chromeOnTop && input.sidePaneOpen) ? .rail : .expanded
             sidebar = min(input.requestedSidebar, widestSidebar)
-            let expandedLeavesRoom = area.width - SidebarState.expanded.width >= minimumPage
+            let expandedLeavesRoom = area.width - expandedWidth >= minimumPage
             sidebarFloats = sidebar == .expanded && !expandedLeavesRoom
             sidebarDockWidth = sidebarFloats ? rail : sidebar.width
+            // Floating, it takes its width from the bar's lane; where that leaves the bar too
+            // little it opens over the bar instead.
+            expandedSidebarCoversChrome = chromeOnTop && !expandedLeavesRoom
+                && area.width - expandedWidth < CGFloat(FixedChoices.topBarMinimumLane)
         } else {
             widestSidebar = .hidden
             sidebar = .hidden
             sidebarFloats = false
             sidebarDockWidth = 0
+            expandedSidebarCoversChrome = false
         }
 
         // The strip floats with the top bar; only a docked sidebar and the side pane move the pages.
@@ -228,9 +239,10 @@ struct DuoLayout: Equatable {
         // folded, the panes sit either side of the fold and the bar keeps to the focused one.
         let spansPanes = chromeOnTop && !(splitShown && input.isDivisionActive) && !sidePaneCoversSecondPane
         var lane = spansPanes ? panes.minX...panes.maxX : focusedPaneFrame.minX...focusedPaneFrame.maxX
-        // Expanded floating over the page: the pill stays clear of it.
-        if sidebarFloats {
-            let width = SidebarState.expanded.width
+        // Expanded floating over the page: the pill stays clear of it, unless the sidebar opens
+        // over the bar (`expandedSidebarCoversChrome`).
+        if sidebarFloats, !expandedSidebarCoversChrome {
+            let width = expandedWidth
             let covered = sidebarOnRight ? (area.maxX - width)...area.maxX : area.minX...(area.minX + width)
             lane = Self.lane(lane, avoiding: covered)
         }

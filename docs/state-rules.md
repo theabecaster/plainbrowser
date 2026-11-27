@@ -432,7 +432,7 @@ combines its base state with the rows that modify it (for example, private + loa
 | Duo inner (top bar), single pane | as Duo outer | | | | | off (no swipe up from a top bar; Tabs and the strip are at hand) | pill, sideways | | | | |
 | Tab Layout Above, two or more tabs | | | | | | | | | | | the strip shows under the top bar; one tab: no strip (nothing to switch to) |
 | Duo split | per focused pane | | | | | | | | | | Open in Other Pane shown; Close Tab acts on the focused pane |
-| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | |
+| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | the sidebar shows in landscape and portrait; see "The sidebar" below |
 | Book pose | as the pane's state; pills and toasts avoid the fold | | | | | | | | | | |
 | Phone landscape (compact height) | as Page; no side tabs | | | | | | | | | | |
 
@@ -444,6 +444,25 @@ Notes:
 - "bump": the page lifts slightly, rubber-bands back and plays the "nothing there" haptic.
 - A popup or link-opened tab on its first page: Back is enabled and closes the tab, returning to
   its opener. The edge swipe back does the same, so button and gesture agree.
+
+### The sidebar (Tab Layout Left or Right)
+
+Where it shows: wherever Tab Layout applies and the rail leaves a page of at least 600 pt
+(`DuoLayout`): the Duo's inner screen in landscape and in portrait. A narrower window shows the
+strip and keeps the setting.
+
+| Control | Shows when | Why |
+|---|---|---|
+| The rail (site icons) | Left or Right in effect, unless the Tabs button hid it | The tab list. One tab still shows: its tile says where you are, and New Tab is above it. |
+| New Tab (first row) | per principle 8: hidden on an empty tab | The same rule as every New Tab. A long press offers New Private Tab. |
+| Show Titles / Hide Titles (last row) | the rail may widen: not during a split, a book pose or with the side pane open | Where Expanded can't rest, a control that does nothing would be noise. A drag on the sidebar does the same. |
+| Titles and close buttons | Expanded | The rail has room for the tile only; there Close Tab is in the tab's menu (and VoiceOver's actions). |
+| Private section (hand, then "Private") | at least one private tab | Private tabs are listed after the regular ones on the dusk tint, never mixed in. |
+| The mark on a tab | the focused pane shows it (Lagoon tint and ring); a split's other pane shows it (outline) | One strong mark: the tab the bar acts on. |
+| Expanded as a drawer | portrait: over the page and the bar's leading end; a tab picked, a touch on the page or the address field closes it | No page or bar fits beside 260 pt there. Landscape docks it beside the page. |
+
+A site icon replaces the tab's letter once the site has one; a site without an icon keeps the
+letter (docs/decisions.md, "Site icons"). Private tabs' icons are never stored.
 
 ## 9. What Safari and Arc Search do
 

@@ -46,6 +46,10 @@ public final class FeatureSheets {
     public var settingsSaved: ((BrowserSettings) -> Void)?
 
     private func runClearHook() async {
+        // The stored site icons are gone: every window's lists go back to letters.
+        #if os(iOS)
+        NotificationCenter.default.post(name: FaviconService.storedIconsCleared, object: nil)
+        #endif
         await didClearBrowsingData()
     }
 

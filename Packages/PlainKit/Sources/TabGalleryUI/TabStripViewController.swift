@@ -16,7 +16,7 @@ import UIKit
 public final class TabStripViewController: UIViewController, UICollectionViewDelegate,
     UICollectionViewDragDelegate, UICollectionViewDropDelegate {
     private let dataSource: any SideTabsDataSource
-    private var collectionView: UICollectionView!
+    private(set) var collectionView: UICollectionView!
     private var diffable: UICollectionViewDiffableDataSource<Int, UUID>!
     private let newTabButton = UIButton(type: .system)
     private var items: [UUID: TabGalleryItem] = [:]
@@ -127,7 +127,9 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         diffable = UICollectionViewDiffableDataSource<Int, UUID>(collectionView: collectionView) { [weak self] collectionView, indexPath, id in
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: TabStripCell.reuseID, for: indexPath)
             if let self, let cell = cell as? TabStripCell, let item = items[id] {
-                cell.configure(item: item, isFocused: id == focusedID, isInOtherPane: id == otherID && id != focusedID)
+                cell.configure(
+                    item: item, isFocused: id == focusedID, isInOtherPane: id == otherID && id != focusedID, icons: dataSource
+                )
                 cell.onClose = { [weak self] in self?.close(id) }
             }
             return cell
@@ -313,30 +315,22 @@ final class TabStripCell: UICollectionViewCell {
     var onClose: (() -> Void)?
 
     private let highlight = UIView()
-    private let tile = UIView()
-    private let letter = UILabel()
-    private let symbol = UIImageView()
+    private let tile = SiteIconView(side: TabStripCell.tileSize, iconSide: TabStripCell.iconSize, radius: Radius.small)
     private let titleLabel = UILabel()
     private let closeButton = UIButton(type: .system)
     private var isInOtherPane = false
-    private static let tileSize: CGFloat = 20
+    private var isFocused = false
+    /// The tab the cell shows: a change of its mark animates only for the same tab.
+    private var shownID: UUID?
+    private static let tileSize: CGFloat = 22
+    private static let iconSize: CGFloat = 16
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         highlight.layer.cornerRadius = Radius.large
         highlight.layer.cornerCurve = .continuous
         contentView.addSubview(highlight)
-        tile.layer.cornerRadius = Radius.small
-        tile.layer.cornerCurve = .continuous
         contentView.addSubview(tile)
-        letter.font = UIFont.preferredFont(forTextStyle: .caption1).withSize(13)
-        letter.textAlignment = .center
-        letter.textColor = Palette.textSecondary
-        tile.addSubview(letter)
-        symbol.contentMode = .center
-        symbol.tintColor = Palette.textSecondary
-        symbol.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption1)
-        tile.addSubview(symbol)
         titleLabel.font = UIFont.preferredFont(forTextStyle: .footnote)
         titleLabel.textColor = Palette.textPrimary
         titleLabel.lineBreakMode = .byTruncatingTail
@@ -357,19 +351,31 @@ final class TabStripCell: UICollectionViewCell {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    func configure(item: TabGalleryItem, isFocused: Bool, isInOtherPane: Bool) {
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        shownID = nil
+    }
+
+    func configure(item: TabGalleryItem, isFocused: Bool, isInOtherPane: Bool, icons: any SideTabsDataSource) {
+        let sameTab = shownID == item.id
+        shownID = item.id
         titleLabel.text = item.compactTitle
-        if let first = SideTabCell.siteName(of: item.host)?.first {
-            letter.text = String(first).uppercased()
-            symbol.image = nil
-        } else {
-            letter.text = nil
-            symbol.image = UIImage(systemName: item.isPrivate ? "hand.raised" : "globe")
+        titleLabel.font = UIFont.preferredFont(forTextStyle: .footnote).withWeight(isFocused ? .semibold : .regular)
+        tile.show(item, from: icons)
+        let changes = {
+            // On the strip's glass only the focused tab is a lifted card, ringed in Lagoon; the
+            // others are their icon and title (a private tab on its dusk tint).
+            self.highlight.backgroundColor = isFocused ? Palette.surface : (item.isPrivate ? Palette.privateBackground : .clear)
+            self.highlight.layer.borderWidth = isFocused ? 1.5 : (isInOtherPane ? 1 : 0)
+            self.closeButton.alpha = isFocused ? 1 : 0
         }
-        tile.backgroundColor = item.isPrivate ? Palette.privateBackground : Palette.surface
-        // On the strip's glass only the focused tab is a lifted card; the others are its text.
-        highlight.backgroundColor = isFocused ? Palette.surface : (item.isPrivate ? Palette.privateBackground : .clear)
-        highlight.layer.borderWidth = isFocused ? 1 : (isInOtherPane ? 1 : 0)
+        // The card fades from the tab left to the tab chosen; nothing moves.
+        if sameTab, isFocused != self.isFocused, window != nil {
+            Motion.animate(Motion.quick, changes: changes)
+        } else {
+            UIView.performWithoutAnimation(changes)
+        }
+        self.isFocused = isFocused
         self.isInOtherPane = isInOtherPane
         resolveBorder()
         closeButton.isHidden = !isFocused
@@ -398,8 +404,6 @@ final class TabStripCell: UICollectionViewCell {
         highlight.frame = visible
         let size = Self.tileSize
         tile.frame = CGRect(x: Spacing.s, y: (bounds.height - size) / 2, width: size, height: size)
-        letter.frame = tile.bounds
-        symbol.frame = tile.bounds
         let closeWidth: CGFloat = closeButton.isHidden ? 0 : Metrics.tapTarget
         closeButton.frame = CGRect(x: bounds.width - closeWidth, y: 0, width: closeWidth, height: bounds.height)
         let titleX = tile.frame.maxX + Spacing.s

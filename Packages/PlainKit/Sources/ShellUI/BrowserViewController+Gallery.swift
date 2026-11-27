@@ -16,6 +16,8 @@ final class TabsUIState {
     var spareGallery: TabGalleryViewController?
     /// A spare gallery build is waiting for an idle moment.
     var isPrewarmScheduled = false
+    /// Site icons arrived this turn: the lists read their tabs once, next turn.
+    var isIconReloadScheduled = false
     /// The saved tabs are in and the first frame is long gone: idle work may start.
     var isLaunchDone = false
     /// The page ↔ card transition running now, if any.
@@ -525,6 +527,21 @@ extension BrowserViewController: GalleryHost {
                 }
             }
         })
+    }
+
+    /// Site icons arrived (often several at once, as restored pages finish): the sidebar, the
+    /// strip and the gallery read their tabs again once, on the next turn. Rows whose icon did
+    /// not change are left alone (their item is equal).
+    func siteIconsDidChange() {
+        guard !tabsUI.isIconReloadScheduled else { return }
+        tabsUI.isIconReloadScheduled = true
+        Task { [weak self] in
+            guard let self else { return }
+            tabsUI.isIconReloadScheduled = false
+            tabsUI.gallery?.reloadTabs(animated: false)
+            duo.sidebar?.reloadTabs()
+            duo.strip?.reloadTabs()
+        }
     }
 
     /// The tabs changed outside the gallery (a title, a thumbnail, the archive): it shows them.

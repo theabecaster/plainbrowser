@@ -60,18 +60,58 @@ struct DuoLayoutTests {
         #expect(above.paneFrames == [Self.innerLandscape])
     }
 
-    @Test func innerPortraitHasNoSplitAndShowsTheStripForASidebar() {
-        // 669 pt wide: the rail would leave 617 pt, under the 640 pt minimum, and two panes would
-        // be 334 pt each. The strip fits, so Left and Right show it there.
-        for setting in [TabLayout.left, .right, .above] {
+    @Test func innerPortraitKeepsTheSidebarAsARail() {
+        // 669 pt wide: the rail leaves a 617 pt page, so Left and Right stay what they are in
+        // landscape (the owner: "in portrait the sidebar disappears"). Two panes would be 334 pt
+        // each, so no split.
+        for (setting, onRight) in [(TabLayout.left, false), (.right, true)] {
             let portrait = inner(layout: setting, panes: 2, area: Self.innerPortrait)
             #expect(portrait.tabLayoutAvailable)
-            #expect(portrait.tabLayout == .above)
-            #expect(portrait.showsStrip && !portrait.showsSidebar)
+            #expect(portrait.tabLayout == setting)
+            #expect(portrait.showsSidebar && !portrait.showsStrip)
+            #expect(portrait.sidebarOnRight == onRight)
+            #expect(portrait.sidebar == .rail)
+            #expect(portrait.sidebarDockWidth == Self.rail)
+            #expect(portrait.paneFrames == [CGRect(
+                x: onRight ? 0 : Self.rail, y: Self.statusBar, width: 669 - Self.rail, height: 951 - Self.statusBar
+            )])
+            #expect(portrait.paneFrames[0].width >= CGFloat(FixedChoices.sidebarRailMinimumPageWidth))
+            #expect(!portrait.splitAvailable)
         }
-        let portrait = inner(layout: .left, panes: 2, area: Self.innerPortrait)
-        #expect(!portrait.splitAvailable)
-        #expect(portrait.paneFrames.count == 1)
+        let above = inner(layout: .above, panes: 2, area: Self.innerPortrait)
+        #expect(above.tabLayout == .above)
+        #expect(above.showsStrip && !above.showsSidebar)
+        #expect(above.paneFrames.count == 1)
+    }
+
+    @Test func portraitExpandedOpensOverThePageAndTheBar() {
+        // 669 - 260 = 409 pt: no page fits beside Expanded and no bar either, so it floats over
+        // both; the page keeps the rail's width and the bar its lane.
+        for (setting, onRight) in [(TabLayout.left, false), (.right, true)] {
+            let rail = inner(layout: setting, sidebar: .rail, area: Self.innerPortrait)
+            #expect(rail.widestSidebar == .expanded)
+            #expect(!rail.sidebarFloats)
+            #expect(rail.expandedSidebarCoversChrome, "known before it widens, so the host can raise it first")
+            let expanded = inner(layout: setting, sidebar: .expanded, area: Self.innerPortrait)
+            #expect(expanded.sidebar == .expanded)
+            #expect(expanded.sidebarFloats)
+            #expect(expanded.expandedSidebarCoversChrome)
+            #expect(expanded.sidebarDockWidth == Self.rail)
+            #expect(expanded.paneFrames == rail.paneFrames, "the page never resizes for the drawer")
+            #expect(expanded.chromeLane == rail.chromeLane, "the bar keeps its lane under the drawer")
+            #expect(expanded.chromeLane == (onRight ? 0...(669 - Self.rail) : Self.rail...669))
+        }
+        // Landscape docks Expanded: nothing is covered.
+        #expect(!inner(layout: .left, sidebar: .expanded).expandedSidebarCoversChrome)
+        #expect(!inner(layout: .above, area: Self.innerPortrait).expandedSidebarCoversChrome)
+    }
+
+    @Test func aWindowTooNarrowForTheRailShowsTheStrip() {
+        // 640 pt: Tab Layout applies, but the rail would leave 588 pt.
+        let narrow = inner(layout: .left, area: CGRect(x: 0, y: 24, width: 640, height: 900))
+        #expect(narrow.tabLayoutAvailable)
+        #expect(narrow.tabLayout == .above)
+        #expect(narrow.showsStrip && !narrow.showsSidebar)
     }
 
     @Test func theStripShowsFromTheSecondTab() {

@@ -468,3 +468,17 @@ Newest feature last.
   background the app, so Save Image and the summary-ends test skip there.
 - **Clear History and Data keeps site permissions** (docs/privacy.md says site settings are
   deleted with it); pre-existing, found while reading the code.
+||||||| parent of 8710666 (Site icons: fetched once per site off the main thread, stored per profile, memory only for private tabs; the sidebar becomes a rail of icons that widens to titles and stays in portrait)
+## Duo inner sidebar and site icons (2026-11-27)
+
+- **Favorites above the keyboard and the widgets still show letters.** The favorites strip can
+  take `FaviconService` icons (Personal's scope) once the address-focus work has landed; the
+  widgets need the icon written into the shared favorites file.
+- **Pinned tabs in the rail:** no control pins a tab yet; when one does, pinned tabs go first as
+  tiles without a close button (Arc's top grid).
+- **Drag a tab onto the other pane** to split (plan, section 6): the rows reorder within their
+  list only.
+- **Device checks:** the rail's first row against the real status corner with Right in landscape
+  and both sides in portrait; the drawer over the bar in portrait; 120 Hz while scrolling 50
+  tabs (Instruments, `favicon.decode` off the main thread); a fold and an unfold with the rail
+  showing; icons after a relaunch without network.

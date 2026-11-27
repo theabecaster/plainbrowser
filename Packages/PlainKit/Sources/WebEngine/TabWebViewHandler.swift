@@ -145,6 +145,8 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         updateSecurity(of: webView)
         endRestore()
         if let tab, let pool, let slot = pool.slot(for: tab) { pool.scheduleSave(slot) }
+        // The site's icon, once per site (`FaviconService`): a dictionary lookup otherwise.
+        if let tab, let pool { pool.favicons.pageDidFinish(webView, tab: tab) }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {

@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import Foundation
+import WebEngine
 
 /// What the side tabs sidebar needs from the tabs. The shell implements it over `TabStore`; the
 /// sidebar never owns tab state (AGENTS.md, one owner per piece of state). After an action the
@@ -17,6 +18,12 @@ public protocol SideTabsDataSource: AnyObject {
     var otherPaneTabID: UUID? { get }
     /// A split can show (the Duo's inner screen): rows offer Open in Other Pane.
     var canOpenInOtherPane: Bool { get }
+
+    /// The tab's site icon at `pixelSize` square if it is decoded in memory now: assigned at once,
+    /// so a row never shows its letter first.
+    func cachedIcon(for item: TabGalleryItem, pixelSize: Int) -> SiteIcon?
+    /// The tab's site icon, read and decoded off the main thread; nil when the site has none.
+    func icon(for item: TabGalleryItem, pixelSize: Int) async -> SiteIcon?
 
     func selectTab(_ id: UUID)
     func closeTab(_ id: UUID)

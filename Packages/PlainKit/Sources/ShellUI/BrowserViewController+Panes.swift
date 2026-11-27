@@ -40,6 +40,8 @@ final class DuoUIState {
     var lastShownSidebar: SidebarState = .rail
     /// A finger is resizing the sidebar; its width when the drag began.
     var isDraggingSidebar = false
+    /// The sidebar sits above the chrome (Expanded over the top bar, `raiseSidebarOverChrome`).
+    var isSidebarOverChrome = false
     var sidebarDragStart: CGFloat = 0
     var sidebarInterval: OSSignpostIntervalState?
     /// Settings > Tab Layout, once the saved settings are read.

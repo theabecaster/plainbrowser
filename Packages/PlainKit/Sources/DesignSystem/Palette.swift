@@ -84,6 +84,17 @@ public enum Palette {
     /// A row or button under the finger.
     public static let pressed = UIColor(light: UIColor(rgb: 0x2973FF, alpha: 0.10), dark: UIColor(rgb: 0x2973FF, alpha: 0.22))
 
+    // MARK: Site icons
+
+    /// The tile under a site icon that is one dark shape on a clear ground (a black logo): white
+    /// by day, and still light at night, where the shape would be lost on Deep Lagoon.
+    public static let iconTileForDarkMark = UIColor(light: .white, dark: UIColor(rgb: 0xDCE5EC))
+    /// The tile under a site icon that is one light shape on a clear ground (a white logo): dark
+    /// by day too, where the shape would be lost on white.
+    public static let iconTileForLightMark = UIColor(light: UIColor(rgb: 0x16344A), dark: UIColor(rgb: 0x16344A))
+    /// The hairline around a site icon's tile, so a white icon keeps its edge on white.
+    public static let iconTileEdge = UIColor(light: UIColor(rgb: 0x0A2133, alpha: 0.10), dark: UIColor(rgb: 0xFFF6E6, alpha: 0.12))
+
     // MARK: Text and symbols
 
     /// Body text and symbols. The system's label color, so contrast settings apply.

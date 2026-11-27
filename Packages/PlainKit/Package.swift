@@ -138,7 +138,7 @@ let package = Package(
         .testTarget(name: "ShellUITests", dependencies: ["ShellUI", "FeatureUI", "BrowserCore", "Storage", "TabGalleryUI"]),
         // The gallery's geometry and flick rules run on macOS; its UIKit behavior and the 100-tab
         // scroll perf test run on an iOS simulator (xcodebuild), like the WebKit tests.
-        .testTarget(name: "TabGalleryUITests", dependencies: ["TabGalleryUI", "DesignSystem", "PerfSignposts"]),
+        .testTarget(name: "TabGalleryUITests", dependencies: ["TabGalleryUI", "WebEngine", "DesignSystem", "PerfSignposts"]),
         // The summary pipeline with a scripted model and pages (macOS); the hidden views reading
         // saved results pages and articles from a local server (iOS simulator, xcodebuild).
         .testTarget(

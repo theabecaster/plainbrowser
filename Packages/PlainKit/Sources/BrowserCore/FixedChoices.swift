@@ -10,8 +10,8 @@ public enum FixedChoices {
     public static let defaultSearchEngine = SearchEngine.google
     /// Tabs above the page, as Safari does on the Duo's inner screen: the strip sits under the
     /// top bar, shows only with two or more tabs, costs 34 pt and leaves the page its full width.
-    /// It looks the same in landscape and portrait (a sidebar does not fit beside a portrait
-    /// page), and it hides with the bar while reading.
+    /// It hides with the bar while reading. Left and Right show a rail of site icons instead, in
+    /// both orientations (`sidebarRailMinimumPageWidth`).
     public static let defaultTabLayout = TabLayout.above
     /// A week keeps the tabs you come back to across a few days at hand and still clears the
     /// clutter without asking (owner's choice, 2026-11-27; a day archived tabs people still wanted).
@@ -426,6 +426,54 @@ public enum FixedChoices {
     /// Site icons not refreshed in this long belong to sites no longer visited; a visit fetches
     /// the icon again.
     public static let faviconMaxAge: TimeInterval = 90 * 24 * 3600
+    /// A stored icon is fetched again on a visit once it is this old, so a site's new icon shows
+    /// within two weeks and a site still visited never reaches `faviconMaxAge`.
+    public static let faviconRefreshAge: TimeInterval = 14 * 24 * 3600
+    /// A site that gave no icon is asked again after this long (kept in memory only, so also on
+    /// the next launch).
+    public static let faviconRetryAge: TimeInterval = 24 * 3600
+    /// The side, in pixels, a tab's tile shows a site icon at: 20 pt at 3x. Icons are picked for
+    /// it (`FaviconRules.ranked`) and decoded at exactly the size a view shows.
+    public static let faviconPixelSize = 60
+    /// Icons are stored no larger than this, as PNG: the largest tile (28 pt at 3x) with room to
+    /// spare, a few kilobytes a site.
+    public static let faviconStoredPixelSize = 96
+    /// An icon download stops past this size: real icons are a few kilobytes, a multi-size .ico
+    /// a few hundred.
+    public static let faviconMaxBytes = 768 * 1024
+    /// How many of a page's icons are tried before giving up (`/favicon.ico` is always the last).
+    public static let faviconAttempts = 4
+    /// An icon request gives up after this long; the tile keeps the site's letter.
+    public static let faviconTimeout: TimeInterval = 8
+    /// Decoded icons kept in memory: about 300 at 60 px. The rest decode again from the database,
+    /// off the main thread.
+    public static let faviconMemoryBytes = 4 * 1024 * 1024
+    /// Private tabs' icons live in memory only, for this many sites at most.
+    public static let faviconPrivateSites = 64
+    /// A stored icon is fetched again on a visit once it is this old, so a site's new icon shows
+    /// within two weeks and a site still visited never reaches `faviconMaxAge`.
+    public static let faviconRefreshAge: TimeInterval = 14 * 24 * 3600
+    /// A site that gave no icon is asked again after this long (kept in memory only, so also on
+    /// the next launch).
+    public static let faviconRetryAge: TimeInterval = 24 * 3600
+    /// The side, in pixels, a tab's tile shows a site icon at: 20 pt at 3x. Icons are picked for
+    /// it (`FaviconRules.ranked`) and decoded at exactly the size a view shows.
+    public static let faviconPixelSize = 60
+    /// Icons are stored no larger than this, as PNG: the largest tile (24 pt at 3x) with room to
+    /// spare, a few kilobytes a site.
+    public static let faviconStoredPixelSize = 96
+    /// An icon download stops past this size: real icons are a few kilobytes, a multi-size .ico
+    /// a few hundred.
+    public static let faviconMaxBytes = 768 * 1024
+    /// How many of a page's icons are tried before giving up (`/favicon.ico` is always the last).
+    public static let faviconAttempts = 4
+    /// An icon request gives up after this long; the tile keeps the site's letter.
+    public static let faviconTimeout: TimeInterval = 8
+    /// Decoded icons kept in memory: about 300 at 60 px. The rest decode again from the database,
+    /// off the main thread.
+    public static let faviconMemoryBytes = 4 * 1024 * 1024
+    /// Private tabs' icons live in memory only, for this many sites at most.
+    public static let faviconPrivateSites = 64
     /// Daily maintenance (pruning, FTS and SQLite `optimize`) runs at most this often.
     public static let maintenanceInterval: TimeInterval = 24 * 3600
     /// After a clear, compaction (VACUUM) waits this long, so Clear History and Data (history,
@@ -509,6 +557,15 @@ public enum FixedChoices {
     /// on the window. Below it a phone-width page beside a sidebar reads as cramped, and sites
     /// switch to their mobile layout anyway.
     public static let sideTabsMinimumPageWidth: Double = 640
+    /// The narrowest page the sidebar's rail may leave. Lower than `sideTabsMinimumPageWidth`, so
+    /// the rail stays in the inner screen's portrait (669 pt: a 617 pt page beside it, still a
+    /// desktop-width page) and Left or Right means the same thing in both orientations. Only the
+    /// rail docks there; Expanded floats.
+    public static let sidebarRailMinimumPageWidth: Double = 600
+    /// The narrowest lane the top bar keeps beside a floating expanded sidebar. With less (the
+    /// inner screen's portrait would leave 409 pt, and the status corner takes more) the sidebar
+    /// opens over the bar's leading end instead, as a drawer does, until a tab is picked.
+    public static let topBarMinimumLane: Double = 520
     /// The sidebar's rail: site tiles only, one 44 pt target plus a 4 pt margin each side, close
     /// to Safari's vertical-tab strip. It is forced while a split shows or the screen is partly
     /// folded, where a wider sidebar would squeeze the pages.

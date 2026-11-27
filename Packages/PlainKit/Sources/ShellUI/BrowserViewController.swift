@@ -226,6 +226,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        // A site's icon arrived: the lists that show it read their tabs again (once per turn).
+        session.pool.favicons.onChange = { [weak self] _ in self?.siteIconsDidChange() }
         wireProfiles()
         // Which private sites were told a feature is off ends with the private session.
         session.privateSessionDidEnd = { [weak self] in self?.engineUI.privateAccessNotices = SystemAccessNoticeMemory() }
@@ -771,6 +773,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
+        // The drawer over the bar steps back: the field and its rows take the screen.
+        collapseFloatingSidebar()
         focusUI.isEditingPage = false
         pill.setCopyShown(false)
         pill.textField.text = pageAddress?.absoluteString ?? ""

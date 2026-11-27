@@ -25,10 +25,30 @@ extension BrowserViewController {
             ? (duo.sidebarTrailing, duo.sidebarLeading) : (duo.sidebarLeading, duo.sidebarTrailing)
         unpin?.isActive = false
         pin?.isActive = true
+        sidebar.canShowTitles = layout.widestSidebar == .expanded
         guard !duo.isDraggingSidebar else { return }
         duo.sidebarWidth?.constant = layout.sidebar.width
+        // The rows' selection mark and titles follow the width (inside a spring, with it).
+        sidebar.visibleWidth = layout.sidebar.width
         sidebar.showsTitles = layout.sidebar == .expanded
         sidebar.view.isHidden = layout.sidebar == .hidden
+        // Open over the bar (the inner screen's portrait): above the chrome before it widens. It
+        // goes back under once it rests narrower (`setSidebar`'s completion), never mid-spring.
+        if layout.sidebarFloats, layout.expandedSidebarCoversChrome { raiseSidebarOverChrome(true) }
+        else if duo.sidebarInterval == nil { raiseSidebarOverChrome(false) }
+    }
+
+    /// The expanded sidebar opens over the top bar where the bar has no room beside it
+    /// (`DuoLayout.expandedSidebarCoversChrome`): it then sits above the chrome, so its rows take
+    /// the touches there. Otherwise it sits just over the pages, under the strip and the chrome.
+    func raiseSidebarOverChrome(_ raised: Bool) {
+        guard let sidebar = duo.sidebar, duo.isSidebarOverChrome != raised else { return }
+        duo.isSidebarOverChrome = raised
+        if raised {
+            view.insertSubview(sidebar.view, aboveSubview: chromeGlass)
+        } else {
+            view.insertSubview(sidebar.view, aboveSubview: panes.view)
+        }
     }
 
     /// The strip follows the layout: under the top bar, across the pages, where Above is in effect
@@ -87,7 +107,8 @@ extension BrowserViewController {
 
     /// The topmost of the page area's views (panes, strip, sidebar): the gallery goes above it.
     var pageAreaTopView: UIView {
-        [panes.view, duo.sidebar?.view, duo.strip?.view].compactMap { $0 }.last ?? panes.view
+        // A sidebar raised over the chrome is no part of the page area's stack.
+        [panes.view, duo.isSidebarOverChrome ? nil : duo.sidebar?.view, duo.strip?.view].compactMap { $0 }.last ?? panes.view
     }
 
     @discardableResult
@@ -98,6 +119,11 @@ extension BrowserViewController {
         let sidebar = SideTabsViewController(dataSource: source)
         sidebar.onResize = { [weak self] phase, travel, velocity in
             self?.sidebarResized(phase, travel: travel, velocity: velocity)
+        }
+        sidebar.onToggleTitles = { [weak self] in
+            guard let self, let layout = duo.layout else { return }
+            Haptic.selection.play()
+            setSidebar(layout.sidebar == .expanded ? .rail : .expanded, flicked: false)
         }
         addChild(sidebar)
         sidebar.view.translatesAutoresizingMaskIntoConstraints = false
@@ -132,6 +158,7 @@ extension BrowserViewController {
         duo.sidebarLeading = nil
         duo.sidebarTrailing = nil
         duo.isDraggingSidebar = false
+        duo.isSidebarOverChrome = false
     }
 
     /// The tab a split's other pane shows, when the split is on screen.
@@ -191,6 +218,8 @@ extension BrowserViewController {
             guard let self, duo.sidebarInterval === interval else { return }
             duo.sidebarInterval = nil
             duo.sidebar?.view.isHidden = duo.layout?.sidebar == .hidden
+            // At rest narrower than Expanded, it is back under the chrome.
+            if duo.layout?.sidebarFloats != true { raiseSidebarOverChrome(false) }
             let rested = duo.layout?.sidebar.rawValue ?? "hidden"
             signposter.endInterval(Signposts.sidebarState, interval, "\(rested)")
         })
@@ -206,12 +235,16 @@ extension BrowserViewController {
         case .began:
             duo.isDraggingSidebar = true
             duo.sidebarDragStart = widthConstraint.constant
+            // Where it will open over the bar, it is over it from the first point of the drag.
+            if layout.expandedSidebarCoversChrome, layout.widestSidebar == .expanded { raiseSidebarOverChrome(true) }
         case .changed:
             // A Right sidebar widens toward the page, to the left.
             let width = drag.trackedWidth(duo.sidebarDragStart + (layout.sidebarOnRight ? -travel : travel))
             widthConstraint.constant = width
-            duo.sidebar?.showsTitles = width > SidebarState.rail.width + Spacing.xl
-            UIView.animate(Motion.sidebarTrack) { self.view.layoutIfNeeded() }
+            UIView.animate(Motion.sidebarTrack) {
+                self.duo.sidebar?.visibleWidth = width
+                self.view.layoutIfNeeded()
+            }
         case .ended:
             duo.isDraggingSidebar = false
             let width = widthConstraint.constant
@@ -251,11 +284,52 @@ extension BrowserViewController {
     private static let sidebarStateKey = "plain.sidebarState"
 
     #if DEBUG
-    /// Debug builds only (the app's `-PlainOpen`, `-PlainSplit`, `-PlainTabLayout`,
-    /// `-PlainSidebar` launch arguments): opens pages once the session is up, optionally in a
-    /// split, and sets Tab Layout and the sidebar's state (not saved), for screenshots of Duo states.
-    public func debugSetUp(open pages: [URL], split: Bool, tabLayout: String?, sidebar: String?) {
-        guard !pages.isEmpty || sidebar != nil || tabLayout != nil else { return }
+    /// Debug builds only (`-PlainSidebarWalk <seconds>`): after `delay`, walks the tab list through
+    /// its motions with pauses, for a screen recording of the inner screen (XCUITest can't drive
+    /// it there): titles in and out, a tab picked, a tab opened and closed, the sidebar hidden
+    /// and back.
+    public func debugSidebarWalk(after delay: Double) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            func pause() async { try? await Task.sleep(for: .seconds(1.6)) }
+            guard let self else { return }
+            if duo.layout?.showsSidebar == true {
+                setSidebar(.expanded, flicked: false)
+                await pause()
+                setSidebar(.rail, flicked: false)
+                await pause()
+            }
+            let tabs = session.tabs.galleryItems(private: false)
+            if tabs.count > 1 {
+                sideTabsSelect(tabs[1].id)
+                tabsDidChange()
+                await pause()
+                sideTabsSelect(tabs[0].id)
+                tabsDidChange()
+                await pause()
+            }
+            let added = session.tabs.newTab()
+            show(added)
+            added.load(URL(string: "https://example.org")!)
+            await pause()
+            await pause()
+            galleryCloseTab(added.id)
+            tabsDidChange()
+            await pause()
+            if toggleSidebar() {
+                await pause()
+                _ = toggleSidebar()
+            }
+        }
+    }
+
+    /// Debug builds only (the app's `-PlainOpen`, `-PlainOpenPrivate`, `-PlainSplit`,
+    /// `-PlainTabLayout`, `-PlainSidebar` launch arguments): opens pages once the session is up
+    /// (then private ones), optionally in a split, and sets Tab Layout and the sidebar's state
+    /// (not saved), for screenshots of Duo states. More than four pages open one at a time, each
+    /// waiting for the one before to finish, so every tab has its title and its site's icon.
+    public func debugSetUp(open pages: [URL], privatePages: [URL] = [], split: Bool, tabLayout: String?, sidebar: String?) {
+        guard !pages.isEmpty || !privatePages.isEmpty || sidebar != nil || tabLayout != nil else { return }
         Task { [weak self] in
             // After launch's restore, so the pages are not merged into it.
             try? await Task.sleep(for: .seconds(1.5))
@@ -273,12 +347,18 @@ extension BrowserViewController {
                 if state != .hidden { duo.lastShownSidebar = state }
                 view.setNeedsLayout()
             }
-            guard !pages.isEmpty else { return }
+            guard !pages.isEmpty || !privatePages.isEmpty else { return }
             endAddressEditing()
-            for page in pages {
-                let tab = session.tabs.newTab()
+            let paced = pages.count + privatePages.count > 4
+            for (page, isPrivate) in pages.map({ ($0, false) }) + privatePages.map({ ($0, true) }) {
+                let tab = session.tabs.newTab(isPrivate: isPrivate)
                 show(tab)
                 tab.load(page)
+                guard paced else { continue }
+                try? await Task.sleep(for: .milliseconds(400))
+                for _ in 0..<50 where tab.isLoading {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
             }
             guard split else { return }
             // A window made wide after launch (a resizable window standing in for the inner

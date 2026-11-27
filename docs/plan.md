@@ -184,6 +184,9 @@ Motion principles: springs with no bounce by default; bounce only when a flick w
 | Back to the opener | Back on a link-opened tab's first page closes the tab: a snapshot of its page slides off toward the trailing edge (where Back sends a page) over the live opener, which slides in from 30% behind it, as a navigation pop; input is never blocked; Reduce Motion: a 0.2 s crossfade | `.spring(duration: 0.35, bounce: 0)` | none |
 | Link preview | `UIContextMenuInteraction`; the live preview is capped (`LinkMenuRules.previewSize`) so the whole menu fits under it, or beside it in compact height | system | system |
 | Fold / unfold | none custom; system bounds change | — | none |
+| Sidebar: rail ↔ titles | the column's edge moves (a drag follows the finger 1:1, rubber-bands past the widest state); titles fade in over the first half of the way and the selection mark stretches with the edge; rows are never laid out again, the page gets one new frame. Portrait: it opens as a drawer over the page and the bar | `.spring(duration: 0.35, bounce: 0)`, bounce 0.12 after a flick > 600 pt/s; rests on the state nearest the width projected 0.18 s ahead | selection on Show Titles |
+| Tab picked in the sidebar or strip | the Lagoon mark fades out on the tab left and in on the tab chosen; nothing slides | `.snappy(0.15)` | none |
+| Site icon arrives | fades in over the tab's letter where it stands; an icon already in memory is there with the row | 0.2 s crossfade | none |
 
 Chrome: the pill and the button bar share one Liquid Glass container (`UIGlassContainerEffect`) with no extra layer shadow, plus the system scroll edge effect on the page edge under them.
 

@@ -2353,3 +2353,99 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
   the splash is the flat art with its own soft shadows) and the tinted and clear icon
   appearances (the app cannot read which one the Home Screen uses; the splash shows the
   colorway's own art).
+||||||| parent of 8710666 (Site icons: fetched once per site off the main thread, stored per profile, memory only for private tabs; the sidebar becomes a rail of icons that widens to titles and stays in portrait)
+## Duo inner screen: the sidebar, in both orientations (2026-11-27)
+
+Owner, on the Duo: "The Duo inner screen sidebars need some love and proper design, and I think we
+can use web favicons instead of URL initials [...] more elegant and premium, with proper
+transition animations. Right now in portrait the sidebar disappears."
+
+- **Looked at:** Safari 27.3's Vertical Tabs (a left strip, icons by default, dragged wider for
+  titles; reviewers: "icon-only tabs are hard to tell apart", `docs/research/safari-duo.md`),
+  iPadOS Safari's sidebar (a list of titled rows with close buttons, a button to show and hide
+  it, costs width) and Arc's (favicon tiles on top, titled rows, the tab on screen a lifted
+  card, New Tab as the first row, the page a card beside it).
+- **Chosen: one column, two widths.** A 52 pt rail of site icons on 32 pt tiles; the same rows
+  at 260 pt show the title and a close button. Top to bottom: New Tab on the top bar's row
+  (Lagoon plus on a tinted tile; a long press offers New Private Tab), the tabs, private tabs
+  under a hand, and Show Titles at the bottom edge, clear of the home indicator. Every tile
+  stands in one column and every label starts on one line, so the rail is the left 52 pt of
+  the wide list and nothing rearranges between them. Paper, a hairline to the page, no glass:
+  the column is docked beside the page, and glass is for what floats (ui-reference).
+- **Three ways to widen, one way each to close and add:** drag the sidebar sideways (it follows
+  the finger, as before), tap Show Titles (Hide Titles when wide), or ask for the tab's menu.
+  Safari's drag alone is not discoverable; the bottom row is the "clear control". Close is the
+  row's button when titles show, the tab's menu and VoiceOver's action in the rail. No pin
+  control: nothing in the app pins a tab yet (state-rules, gap 21), so the rail draws none.
+- **The tab on screen is Lagoon:** a tinted card (`Palette.pressed`) ringed in
+  `Palette.accentOnGlass`, around the tile in the rail and across the row when wide. A split's
+  other pane keeps its quiet outline. The mark's width follows the sidebar's edge, so the clip
+  never cuts it; choosing another tab fades the mark out there and in here (`Motion.quick`),
+  nothing slides.
+- **Portrait keeps the sidebar.** It used to fall back to the strip there: 669 − 52 = 617 pt of
+  page, under the 640 pt side-tabs minimum. The rail now docks down to a 600 pt page
+  (`FixedChoices.sidebarRailMinimumPageWidth`): 617 pt is still a desktop-width page, and Left
+  or Right means the same thing after a rotation, which is what the setting promises. Expanded
+  cannot dock there (409 pt of page), and the top bar cannot shrink beside it (409 pt less the
+  status corner leaves no address), so in portrait it opens as a drawer over the page and the
+  bar's leading end, with a shadow, above the chrome so its rows take the touches
+  (`DuoLayout.expandedSidebarCoversChrome`, `FixedChoices.topBarMinimumLane` 520 pt). A tab
+  picked, a touch on the page or the address field closes it. The page and the bar keep their
+  frames under it. Landscape docks Expanded (691 pt of page). Not chosen: the strip in portrait
+  (the complaint), a floating rail over the page (covers the page's own edge), no Expanded in
+  portrait (titles would need a rotation).
+- **Motion** (rows of the motion table added in docs/plan.md): the widths spring with
+  `Motion.sidebarSettle` (0.35 s, bounce only after a flick) and follow a finger 1:1; the
+  titles fade in over the first half of the way and the mark stretches with the edge, both
+  inside the same spring. Rows are laid out once at 260 pt and clipped, so a resize lays no row
+  out again; the page gets its new frame once, inside the spring. A tab opening or closing is
+  the list's own insert and delete; an icon that arrives after its row fades in over the letter
+  (0.2 s), and one already in memory is there with the row. A rotation or an unfold is the
+  system's bounds change: the rail is in the same place before and after. Reduce Motion: the
+  width change is a crossfade of the whole view, the mark and the icon appear without a fade.
+- **Perf:** rows scrolling in assign a ready bitmap (`SiteIconView`), never read or decode; the
+  drawer changes no frame but its own. Measured on the simulator, 50 tabs at 4000 pt/s in 120 Hz
+  steps: see `docs/perf-log.md` notes and `SideTabsViewTests`.
+
+## Site icons (2026-11-27)
+
+Tabs showed the first letter of their host. They show the site's own icon now, everywhere tabs
+are listed: the sidebar, the strip and the switcher's cards.
+
+- **Fetched once per site** (`WebEngine/FaviconService`). When a main-frame load finishes, a
+  dictionary lookup decides: a site seen this launch costs nothing. Otherwise the profile's
+  database is asked; an icon stored within 14 days ends it. Else the page is asked once for its
+  `<link rel="icon">` and `apple-touch-icon` links (one `callAsyncJavaScript` in the engine's
+  content world; nothing is injected into pages), the best is downloaded, and `/favicon.ico` is
+  the last try. Best is the smallest that is at least 60 px (20 pt at 3x), then the touch icon,
+  then smaller ones; at most four tries, 768 KB and 8 s each. A site with no icon is asked
+  again after a day. SVG icons are skipped (ImageIO draws none), and an HTTPS page's icon must
+  be HTTPS.
+- **Off the main thread:** the download (an ephemeral `URLSession` with no cookies, no cache
+  and no credentials, so the request says nothing about the person), the scaling to at most
+  96 px and PNG encoding (ImageIO), the database, and every decode. The main thread asks the
+  page and assigns bitmaps. Signposts: `favicon.fetch`, `favicon.decode`.
+- **Decoded at the size shown.** A view asks for its own pixel size (`iconSide × displayScale`);
+  the service decodes with ImageIO's thumbnail path into a bitmap of exactly that size and
+  keeps it in an `NSCache` (4 MB, about 300 icons; dropped on a memory warning). Rows asking
+  for the same icon share one decode.
+- **Stored per profile.** Each profile's icons live in that profile's own database (the
+  `favicon` table every profile database has, keyed by host), so one profile's list of visited
+  sites never shows in another's file, Clear History and Data clears them all, and deleting a
+  profile deletes its icons with its history. Maintenance drops icons not refreshed in 90 days.
+- **Private tabs: memory only**, at most 64 sites, in a cache of their own, gone when the last
+  private tab closes. Nothing of a private tab reaches a database, and a regular tab's row
+  never shows an icon only a private tab fetched.
+- **The tile.** Every tab has the same lifted tile whatever its icon, so a rail of mixed icons
+  keeps one rhythm. The icon's pixels decide the tile once, off the main thread: an opaque icon
+  or a colorful shape sits on the surface color; one dark shape on a clear ground (a black
+  logo) keeps a light tile at night, one light shape a dark tile by day
+  (`SiteIconStyle`, `Palette.iconTileForDarkMark`). The switcher's cards have no tile, so there
+  the shape comes drawn on a light rounded one. Sites without an icon keep their letter, now in
+  New York on the same tile.
+- **Not chosen:** a favicon service on a server (a third party would learn every site), WebKit's
+  private icon database, `LPMetadataProvider` (a second full page load per site), an injected
+  user script on every page (work on every page for something needed once per site).
+- **Not built here:** icons on the favorites above the keyboard and in the widgets. The
+  favorites strip belongs to the address-focus work in flight; the widgets read a shared file.
+  Both are in the polish backlog.

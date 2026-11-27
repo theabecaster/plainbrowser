@@ -361,6 +361,16 @@ public enum Signposts {
     public static let tabDiscard: StaticString = "tab.discard"
     /// Interval of a tab thumbnail snapshot, until WebKit returns the image.
     public static let tabSnapshot: StaticString = "tab.snapshot"
+    /// Interval: fetching a site's icon, from the page's answer to the icon stored (or none
+    /// found). Off the main thread but for the page's answer. The message is "stored" or "none".
+    public static let faviconFetch: StaticString = "favicon.fetch"
+    /// Interval: decoding a stored icon at a view's size, off the main thread.
+    public static let faviconDecode: StaticString = "favicon.decode"
+    /// Interval: fetching a site's icon, from the page's answer to the icon stored (or none
+    /// found). Off the main thread but for the page's answer. The message is "stored" or "none".
+    public static let faviconFetch: StaticString = "favicon.fetch"
+    /// Interval: decoding a stored icon at a view's size, off the main thread.
+    public static let faviconDecode: StaticString = "favicon.decode"
     /// Interval from the engine asking the shell (dialog, sign-in, certificate warning, permission,
     /// external app, universal link) to the answer. The kind is the interval's message.
     public static let enginePrompt: StaticString = "engine.prompt"

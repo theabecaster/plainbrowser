@@ -259,7 +259,7 @@ final class ClarityCaptureTests: XCTestCase {
         go(app, "/a", "Page A")
         go(app, "/long", "Long Read")
         pause(1)
-        app.buttons["addressPill"].tap()
+        tap(app.buttons["addressPill"], or: nil)
         pause(1.2)
         shot("address-01-focus-on-page")
         let field = app.textFields["searchField"]
@@ -277,7 +277,7 @@ final class ClarityCaptureTests: XCTestCase {
         closeField(app)
 
         // The page's own address, with Copy in the field; then the copied link offered elsewhere.
-        app.buttons["addressPill"].tap()
+        tap(app.buttons["addressPill"], or: nil)
         if tap(app.buttons["focus.currentPage"], or: nil) {
             pause(1)
             shot("address-05-edit-own-address")
@@ -285,7 +285,7 @@ final class ClarityCaptureTests: XCTestCase {
         }
         closeField(app)
         go(app, "/b", "Page B")
-        app.buttons["addressPill"].tap()
+        tap(app.buttons["addressPill"], or: nil)
         pause(1.2)
         shot("address-07-copied-link-offered")
         closeField(app)
@@ -300,7 +300,7 @@ final class ClarityCaptureTests: XCTestCase {
         let app = launch(["-PlainSeedArchive"])
         go(app, "/a", "Page A")
         guard app.buttons["tabs"].waitForExistence(timeout: 3) else { return }
-        app.buttons["tabs"].tap()
+        tap(app.buttons["tabs"], or: nil)
         pause(1.5)
         shot("tabs-01-gallery-one")
         tapFirst(app, ["galleryDone"])
@@ -324,7 +324,7 @@ final class ClarityCaptureTests: XCTestCase {
             pill.swipeLeft(velocity: .fast)
             pause(1.2)
         }
-        app.buttons["tabs"].tap()
+        tap(app.buttons["tabs"], or: nil)
         pause(1.5)
         shot("tabs-05-gallery")
         if tap(app.buttons["galleryMenu"], or: nil) {
@@ -375,11 +375,11 @@ final class ClarityCaptureTests: XCTestCase {
                 openSheet(app)
                 shot("tabs-12-private-sheet")
                 dismissSheet(app)
-                app.buttons["addressPill"].tap()
+                tap(app.buttons["addressPill"], or: nil)
                 pause(1.2)
                 shot("tabs-13-private-focus")
                 closeField(app)
-                app.buttons["tabs"].tap()
+                tap(app.buttons["tabs"], or: nil)
                 pause(1.5)
                 shot("tabs-14-private-gallery")
                 tapFirst(app, ["galleryPrivate"])
@@ -395,7 +395,7 @@ final class ClarityCaptureTests: XCTestCase {
         let app = launch()
         go(app, "/a", "Page A")
         guard app.buttons["tabs"].waitForExistence(timeout: 3) else { return }
-        app.buttons["tabs"].tap()
+        tap(app.buttons["tabs"], or: nil)
         pause(1.2)
         guard tap(app.buttons["galleryMenu"], or: nil) else { return }
         pause(0.8)
@@ -428,7 +428,7 @@ final class ClarityCaptureTests: XCTestCase {
             go(app, "/b", "Page B")
             pause(1)
             shot("profiles-08-work-page")
-            app.buttons["tabs"].tap()
+            tap(app.buttons["tabs"], or: nil)
             pause(1.5)
             shot("profiles-09-work-gallery")
             if tap(app.buttons["galleryProfile"], or: nil) {

@@ -205,7 +205,9 @@ final class PageSheetController: UIViewController {
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .title2)
         configuration.imagePlacement = .top
         configuration.imagePadding = Spacing.s
-        configuration.attributedTitle = AttributedString(Self.caption(action.title), attributes: AttributeContainer([
+        // While the first translated text is on its way the tile says so ("Translating…").
+        let caption = (isOn ? action.subtitle : nil) ?? Self.caption(action.title)
+        configuration.attributedTitle = AttributedString(caption, attributes: AttributeContainer([
             .font: UIFont.preferredFont(forTextStyle: .footnote),
             .foregroundColor: isOn ? Palette.accentOnPaper : Palette.inkSecondary,
         ]))

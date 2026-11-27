@@ -4,12 +4,13 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
-- **New Tab card content drifts:** the + and "New Tab" label slide inside the switcher's New Tab card; they should stay fixed and move only with the card. (Polish lane.)
 
 - **Sign-in like Safari:** passkeys on sites that support them, and saved passwords from the Passwords app and every password manager on the phone (1Password, Bitwarden and others), as easily as in Safari. Both need Apple's web-browser entitlement; the request is ready for the owner to submit. Until it lands, sites are steered to password sign-in and a failed passkey attempt says why. Done when the entitlement ships and the device checks in `docs/research/sign-in.md` pass. (Sign-in lane.)
 
 
 ## Done
+
+- **New Tab card content drifts:** fixed; the + and label stay at the card's center. (dev, next build.)
 
 - **Paper texture:** faint fibre and grain on the start screen, search, tab cards, sidebar and strip, reader and intro; flat under Increase Contrast. Settings-style sheets keep the system list look for now. (dev, next build.)
 

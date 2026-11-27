@@ -1252,15 +1252,15 @@ simulator's 24 pt status bar had hidden this.
 - **Layout math (`TopChromeGeometry`, root view coordinates, panes start at the top edge):**
   - In the zone: row center = corner.midY; rowTop = max(center − 22, corner.minY); the row ends
     12 pt before the corner. Strip top = row bottom + 4. At rest the page's top inset = the row's
-    bottom + 4 (+ strip 34 + 4), and never above the corner's bottom. Pill and hidden: the row's
-    bottom or the corner's, whichever is lower (the page gets everything under the status row;
-    fixed headers stay clear of the clock).
+    bottom + 4 (+ strip 34 + 4), and never above the corner's bottom: the scroll range's start.
+    The obscured inset WebKit sees is 0 in every state (see "No band at the top" below; was this
+    value at rest and the row's or the corner's bottom, 69 pt, while reading).
   - Device numbers, status items as measured (828–928 x 24–69, safe top 81): row 24.5–68.5, page
-    top at rest 72.5 pt (was 132), 110.5 pt with the strip (was 170), 69 pt while reading (was
-    81). Safari: 84 pt at rest.
+    top at rest 72.5 pt (was 132), 110.5 pt with the strip (was 170), 0 while reading (was 81,
+    then 69). Safari: 84 pt at rest.
   - From the camera (source 2): row 25.8–69.8 around the camera's 47.8, the row's end at 808.7
     (the clock starts at 828), page at 73.8 pt.
-  - From a guide corner spanning the zone (0–81): row 18.5–62.5, page at 82 pt (the corner's
+  - From a guide corner spanning the zone (0–81): row 18.5–62.5, page at 81 pt (the corner's
     bottom), 104.5 pt with the strip, which then keeps clear of the corner like the row.
   - No corner (fallback): the row sits 2 pt under the safe area's top, as before, but floats over
     the page, which runs under the status bar: page top = safe top + 50 (+ 38 strip).
@@ -1273,13 +1273,48 @@ simulator's 24 pt status bar had hidden this.
   centering): beside the corner the row is lopsided, and a centered pill shrank to a stub in the
   669 pt portrait window. Where nothing is in the way it is still capped at 560 pt and centered.
 - **Reading state:** in the zone the address shrinks in place (70%) on the row, the buttons and
-  strip rise and fade; hidden lifts it off the top edge. No band appears in any state. Under a
-  short status bar the pill tucks under it as before.
+  strip rise and fade; hidden lifts it off the top edge. Under a short status bar the pill tucks
+  under it as before.
+- **No band at the top in any state (2026-11-27, follow-up).** Owner, on the device with this build: "when
+  I scroll, the text field and buttons hide properly but the bar stays … I don't like that bar
+  that stays there. Do we even need it at all? When the text field and buttons are showing I
+  think it might look fine without that bar, so let's get rid of it all." The band was the page's
+  own top inset: Pill and
+  Hidden kept `obscuredContentInsets.top` at the status row's bottom (69 pt), and WebKit, which
+  "adjusts how fixed and sticky elements are rendered near edges with non-zero obscured insets"
+  (WKWebView.h), placed a fixed header at 69 pt and filled the 69 pt above it with the header's
+  color; on pages without one, the iOS 26 top scroll edge effect blurred and dimmed the same
+  strip. Nothing of Plain's served the reader there: the controls had gone.
+  - **Chosen: in the status zone the page's obscured top inset is 0 in every state**
+    (`TopChromeGeometry.obscuredInset(rest:)`). Reading (Pill, Hidden), the page and its fixed
+    header run to the top edge under the status items, as Safari's full-screen reading does; the
+    shrunken address floats alone over it. The status items' own legibility is the system's. At
+    rest only the floating glass is over the page: the first line still starts under the row
+    because the scroll range starts there (`contentInset.top` = `expandedInset`, 72.5 pt, never
+    above the corner's bottom), not because of an obscured inset. A first version kept 72.5 pt at
+    rest; WebKit then filled the area above a sticky header with its color, a full-width band
+    behind the controls (Codex design review, round 1: blocking). **Cost, accepted:** revealed
+    over a page read part way down, the controls float over a fixed header (and an in-page
+    anchor lands under the row), as the glass floats over the page everywhere else. Under a
+    full-width status bar (no corner) the inset follows the rest as before. A split's other pane
+    gets the same (it kept the expanded inset, and so the band; Codex code review).
+  - **No scroll edge effect on the page or the reader, top or bottom**
+    (`UIScrollView.hideChromeEdgeEffects`), on every attached page, the split's other pane and the
+    reader. The bottom one was already off (the page runs under the pill); the chrome's
+    `UIScrollEdgeElementContainerInteraction`s (pill, buttons, strip) fed only these hidden
+    effects and are gone. The glass's own dense tint keeps the controls readable.
+  - **Rail:** the sidebar's column (paper, separator, shadow) runs from the top edge. Where the
+    status zone beside it is empty (Left, with the status items in the trailing corner), its first
+    row (New Tab) sits on the top bar's row, so no empty paper stands above it; beside the status
+    corner (Right) its rows start under the safe area. Before, its separator and shadow stopped at
+    81 pt and the root view's paper showed above it.
+  - Phones and the outer screen are unchanged: their pages start under the status bar, where no
+    top edge effect showed, and their bottom inset rules are `ChromeGeometry`'s.
 - **Portrait:** the same code; the guides and regions say where the status items are.
 - **Split:** one row spans both panes, as before, and keeps clear of the corner. Partly folded, the
   row keeps to the focused pane's side of the fold and to the corner.
-- **Rail (Left, Right):** stays under the safe area's top. The root view's paper shows above it,
-  the same paper as the rail, so the column reads as one from the top edge.
+- **Rail (Left, Right):** its tabs start under the safe area's top; the column itself runs from
+  the top edge ("No band at the top" above), so it reads as one from there.
 - **The strip** spans the lane under the row where it starts below the corner (72.5 > 69 on the
   device); where it would start beside it, it stops where the row does (`stripClearance`). Under
   the corner it rises on its way out only to the corner's bottom while it fades, so it never

@@ -124,17 +124,17 @@ final class SystemAccessTests: XCTestCase {
         shot("s1-site-settings")
     }
 
-    /// Save Image while Photos is off for Plain. Needs the simulator's Photos switch off
-    /// (`xcrun simctl privacy <udid> revoke photos-add <bundle id>`): the runner says so with
-    /// `TEST_RUNNER_PLAIN_PHOTOS_DENIED=1`.
+    /// Save Image while Photos is off for Plain (`-PlainSystemAccess photos=denied`; on the device,
+    /// Settings > Plain > Photos > None). The simulator's synthesized long press doesn't always open
+    /// WebKit's link menu: then the test skips, and the line itself is covered by
+    /// `SystemAccessTests.photos` in BrowserCoreTests.
     func testSaveImageWithPhotosOff() throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_PHOTOS_DENIED"] == "1", "needs Photos revoked")
-        let app = try launch()
+        let app = try launch(["-PlainSystemAccess", "photos=denied"])
         go(app, to: "/photo", heading: "Photo")
         Thread.sleep(forTimeInterval: 1)
         app.webViews.links.firstMatch.press(forDuration: 1.2)
         let save = app.buttons["Save Image"]
-        XCTAssertTrue(save.waitForExistence(timeout: 4))
+        guard save.waitForExistence(timeout: 6) else { throw XCTSkip("the link menu didn't open on this simulator") }
         save.tap()
         XCTAssertTrue(app.staticTexts["Saving to Photos is off for Plain"].waitForExistence(timeout: 4))
         XCTAssertEqual(app.buttons["toastButton"].label, "Settings")

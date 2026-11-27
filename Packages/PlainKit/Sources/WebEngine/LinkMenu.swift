@@ -207,7 +207,7 @@ extension WebViewPool {
                 if item == .saveImage {
                     let photos = await Self.photosAccessOffMain()
                     self.systemAccess.record(.photos, photos)
-                    if photos.isBlocked {
+                    if self.systemAccess.access(.photos).isBlocked {
                         if let tab { self.host?.tab(tab, wasDenied: [.photos], forSite: "") }
                         return
                     }

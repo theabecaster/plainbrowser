@@ -161,6 +161,18 @@ public enum FixedChoices {
     public static let darkPagesColoredSVGChroma = 0.25
     /// Shapes read per inline SVG for that check: a logo shows its colors in its first few shapes.
     public static let darkPagesSVGShapesChecked = 24
+    /// A black-and-white logo picture (a dark mark on a transparent ground) is inverted on a
+    /// darkened page, as Safari does, when it is at most this big on the page (CSS pixels): a
+    /// wordmark or an icon, never a photo or an illustration.
+    public static let darkPagesLogoMaxWidth = 640
+    public static let darkPagesLogoMaxHeight = 240
+    /// Pictures read per page for that check, each from a copy this many pixels across: a page
+    /// has a few logos, and 64 pixels show whether a mark is grey on clear in well under 1 ms.
+    public static let darkPagesLogosRead = 16
+    public static let darkPagesLogoSample = 64
+    /// How far the mark is inverted: black lands near the darkened text's light grey, not on
+    /// pure white, which would glare next to it.
+    public static let darkPagesLogoInvert = 0.92
     /// Content and style sheets a page adds after load are darkened in batches at most this many
     /// milliseconds apart, so an infinite-scroll page costs one pass per burst, not one per node.
     /// While the page is still loading, batches run every frame instead.

@@ -40,6 +40,9 @@ extension DarkPages {
         const MIN_CONTRAST = \(FixedChoices.darkPagesMinimumContrast);
         const FIRST_MS = \(FixedChoices.darkPagesFirstFrameBudget), SLICE_MS = \(FixedChoices.darkPagesSliceBudget);
         const SVG_CHROMA = \(FixedChoices.darkPagesColoredSVGChroma), SVG_SHAPES = \(FixedChoices.darkPagesSVGShapesChecked);
+        const LOGO_MAX_W = \(FixedChoices.darkPagesLogoMaxWidth), LOGO_MAX_H = \(FixedChoices.darkPagesLogoMaxHeight);
+        const LOGO_READS = \(FixedChoices.darkPagesLogosRead), LOGO_SAMPLE = \(FixedChoices.darkPagesLogoSample);
+        const LOGO_INVERT = \(FixedChoices.darkPagesLogoInvert);
         const WATCH_DELAY = \(FixedChoices.darkPagesWatchDelay), SHEET_CHECK = \(FixedChoices.darkPagesSheetCheckInterval);
         """
     }
@@ -49,13 +52,14 @@ extension DarkPages {
     const site = location.hostname.toLowerCase().replace(/^www\./, '');
     const ATTR = 'data-plain-dark';
     const dark = matchMedia('(prefers-color-scheme: dark)');
-    let off = OFF_SITES.has(site);
+    // In a same-origin frame the top page's engine (TOP) decides: its site's switch and verdict.
+    let off = TOP ? TOP.off : OFF_SITES.has(site);
     let verdict = null;   // 'darken' or 'native' once judged; null while the page is still loading
     let settled = false;  // judged for good after the page's load event
     let posted = '';
     const now = () => performance.now();
     const stats = { judgeMs: 0, rewriteMs: 0, patchMs: 0, rules: 0, emitted: 0, patched: 0, contrastFixed: 0,
-      icons: 0, lifted: 0, checked: 0, chained: 0, rechecked: 0, flushes: 0, slices: 0, styleMs: 0, onPicture: 0, fetched: 0, unreadable: 0, firstDark: -1, dcl: -1, firstPatchDone: -1 };
+      icons: 0, shadowRoots: 0, logos: 0, logosRead: 0, logoMs: 0, logoMax: 0, lifted: 0, checked: 0, chained: 0, rechecked: 0, flushes: 0, slices: 0, styleMs: 0, onPicture: 0, fetched: 0, unreadable: 0, firstDark: -1, dcl: -1, firstPatchDone: -1 };
     // Script time on the page (outermost calls only), and per part.
     let cost = 0;
     let depth = 0;
@@ -615,10 +619,22 @@ extension DarkPages {
       return n + '|' + (s.media ? s.media.mediaText : '') + '|' + (n ? shape(rules[0]) + ':' + shape(rules[n - 1]) : '')
         + '|' + (s.ownerNode && s.ownerNode.localName === 'style' ? s.ownerNode.textContent.length : '');
     };
-    const pageSheets = () => {
+    // The page's sheets in one scope: the document, or an open shadow root (web components keep
+    // their styles there, out of the document's reach).
+    const pageSheets = (scope = document) => {
       const list = [];
-      for (const s of document.styleSheets) if (!s.disabled) list.push(s);
-      for (const s of document.adoptedStyleSheets) if (!ours.has(s) && !s.disabled) list.push(s);
+      for (const s of scope.styleSheets) if (!s.disabled) list.push(s);
+      for (const s of scope.adoptedStyleSheets) if (!ours.has(s) && !s.disabled) list.push(s);
+      return list;
+    };
+    // Open shadow roots found on the page, each with its twins in its sheets' order. Plain's
+    // patch sheet goes into each too, so element fixes reach inside.
+    const shadowRoots = new Map(); // root -> [twin sheets]
+    const scopes = () => {
+      const list = [document];
+      for (const root of shadowRoots.keys()) {
+        if (root.host.isConnected) list.push(root); else shadowRoots.delete(root);
+      }
       return list;
     };
     const twinFor = (s, rules) => {
@@ -641,22 +657,36 @@ extension DarkPages {
     // round again (twice at most: aliases of aliases).
     // `budget` (ms) bounds the work after the first frame: sheets past it wait for the next
     // batch, one sheet at a time (a sheet is rewritten whole).
-    const syncSheets = (budget = Infinity) => {
-      const deadline = now() + budget;
-      const list = pageSheets();
-      const html = document.documentElement;
-      if (html && html.style.length) declarations(html.style, { base: null, unknown: null }, true);
+    // The twins of one scope's sheets, new and changed ones rewritten: [sheet, twin, rules].
+    const syncScope = (scope, deadline, done) => {
       const live = [];
-      for (const s of list) {
+      for (const s of pageSheets(scope)) {
         const rules = rulesOf(s);
         if (!rules) continue;
         let twin = twins.get(s);
-        if (!twin || twin.signature !== signature(s, rules)) {
+        // A sheet shared by many shadow roots (one per component class) is rewritten once.
+        if (!done.has(s) && (!twin || twin.signature !== signature(s, rules))) {
           if (now() > deadline) { sheetsDirty = true; later(); if (twin) live.push([s, twin, rules]); continue; }
           twin = twinFor(s, rules);
         }
+        done.add(s);
         live.push([s, twin, rules]);
       }
+      return live;
+    };
+    const syncSheets = (budget = Infinity, only = null) => {
+      const deadline = now() + budget;
+      const html = document.documentElement;
+      if (!only && html && html.style.length) declarations(html.style, { base: null, unknown: null }, true);
+      const done = new Set();
+      const all = [];
+      const perScope = [];
+      for (const scope of only ? [only] : scopes()) {
+        const live = syncScope(scope, deadline, done);
+        perScope.push([scope, live]);
+        all.push(...live);
+      }
+      const live = all;
       for (let round = 0; round < 2; round++) {
         let again = false;
         for (const [s, twin, rules] of live) {
@@ -670,36 +700,67 @@ extension DarkPages {
         }
         if (!again) break;
       }
+      for (const [scope, list] of perScope) {
+        const sheets = list.map(([, twin]) => twin.sheet);
+        if (scope === document) order = sheets; else shadowRoots.set(scope, sheets);
+      }
+      if (only) { adoptScope(only); return; }
       const keep = new Set(live.map(([s]) => s));
       for (const s of [...twins.keys()]) if (!keep.has(s)) twins.delete(s);
-      order = live.map(([, twin]) => twin.sheet);
       adopt();
     };
     const sheetsChanged = () => {
-      const list = pageSheets();
-      let count = 0;
-      for (const s of list) {
-        const known = s.href && fetched.get(s.href);
-        let rules = null;
-        try { rules = s.cssRules; } catch (e) {}
-        if (!rules && known) rules = known.state === 'done' ? known.sheet.cssRules : null;
-        if (!rules) { if (s.href && !known) return true; continue; }
-        count++;
-        const twin = twins.get(s);
-        if (!twin || twin.signature !== signature(s, rules)) return true;
+      for (const scope of scopes()) {
+        let count = 0;
+        for (const s of pageSheets(scope)) {
+          const known = s.href && fetched.get(s.href);
+          let rules = null;
+          try { rules = s.cssRules; } catch (e) {}
+          if (!rules && known) rules = known.state === 'done' ? known.sheet.cssRules : null;
+          if (!rules) { if (s.href && !known) return true; continue; }
+          count++;
+          const twin = twins.get(s);
+          if (!twin || twin.signature !== signature(s, rules)) return true;
+        }
+        if (count !== (scope === document ? order : shadowRoots.get(scope)).length) return true;
       }
-      return count !== order.length;
+      return false;
     };
     // Plain's sheets sit after the page's own, in a fixed order; puts them back if the page
     // replaced its adopted style sheets.
     let adopted = false;
-    const adopt = () => {
-      const want = [base, ...order, patch, guard];
-      const list = document.adoptedStyleSheets;
+    const adoptScope = (scope) => {
+      const want = scope === document ? [base, ...order, patch, guard] : [...(shadowRoots.get(scope) || []), patch];
+      const list = scope.adoptedStyleSheets;
       const tail = list.slice(list.length - want.length);
       if (tail.length === want.length && tail.every((s, i) => s === want[i])) return;
-      document.adoptedStyleSheets = [...list.filter((s) => !ours.has(s)), ...want];
+      scope.adoptedStyleSheets = [...list.filter((s) => !ours.has(s)), ...want];
+    };
+    const adopt = () => {
+      for (const scope of scopes()) adoptScope(scope);
       adopted = true;
+    };
+    // A shadow root met on the walk: its sheets get twins now, before its elements are read,
+    // and its changes are watched like the document's.
+    const addRoot = (root) => {
+      shadowRoots.set(root, []);
+      timed(() => syncSheets(Infinity, root), 'rewriteMs');
+      if (observer) observer.observe(root, OBSERVED);
+      stats.shadowRoots++;
+    };
+    // Custom elements whose shadow root may come later (defined after they were walked).
+    const pendingHosts = new Set();
+    const checkHosts = () => {
+      for (const host of pendingHosts) {
+        if (!host.isConnected) { pendingHosts.delete(host); continue; }
+        const root = host.shadowRoot;
+        if (!root) continue;
+        pendingHosts.delete(host);
+        if (shadowRoots.has(root) || !info.has(host)) continue;
+        addRoot(root);
+        queue.push(root);
+      }
+      if (queue.length) pump();
     };
     let rewalkNeeded = false;
     const setEnabled = (on) => {
@@ -763,6 +824,8 @@ extension DarkPages {
     // whether a picture is behind it }) and returns its own, or null to skip its subtree.
     const check = (el, up) => {
       const tag = el.localName;
+      if (tag === 'img') { if (up.darkened && !up.image) logo(el, up.bg, null); return null; }
+      if (tag === 'picture') return up;
       if (SKIP.has(tag)) return null;
       if (tag === 'svg') { icon(el, up); return null; }
       stats.checked++;
@@ -812,6 +875,13 @@ extension DarkPages {
         // A picture is what the text sits on when it is the background, not a small icon on a
         // colored box.
         if (picture.includes('url(') && (!(own && own[3] > 0.9) || /cover|contain/.test(cs.backgroundSize))) image = true;
+        // A logo drawn as the background of an empty box (its name hidden off the box).
+        if (!(own && own[3] > 0) && up.darkened && !up.image && !el.firstElementChild
+            && (!hasText(el) || parseFloat(cs.textIndent) < -500 || parseFloat(cs.fontSize) === 0)) {
+          const urls = picture.match(/url\(/g);
+          const m = /url\(\s*(['"]?)([^'")]+)\1\s*\)/.exec(picture);
+          if (m && urls.length === 1 && !picture.includes('gradient(')) logo(el, up.bg, m[2]);
+        }
       }
       let color = parseColor(cs.color);
       if (color) {
@@ -975,6 +1045,115 @@ extension DarkPages {
       if (marks.size) stats.icons++;
     };
 
+    // MARK: Black-and-white logos
+
+    // Safari inverts simple black-and-white logos after a histogram check; so does Plain, for the
+    // pictures it can read: a mark in greys only (no color), dark, on a transparent ground, that
+    // would vanish on the darkened page (under 3:1 against what is behind it). Read off a small
+    // copy (LOGO_SAMPLE pixels across) once per address, the page's own picture first; another
+    // origin's is read again with CORS, which most image servers allow. Photos and colored logos
+    // never qualify; a picture Plain can't read stays as made.
+    const logoVerdicts = new Map(); // address -> the mark's color when it is one, else false
+    const logoWaiting = new WeakSet();
+    const logoQueue = [];
+    let logoRunning = false;
+    const logo = (el, bg, address) => {
+      logoQueue.push([el, bg, address]);
+      if (!logoRunning) runLogos();
+    };
+    const runLogos = async () => {
+      logoRunning = true;
+      while (logoQueue.length) {
+        const [el, bg, address] = logoQueue.shift();
+        if (!enabled || !el.isConnected) continue;
+        try { await judgeLogo(el, bg, address); } catch (e) {}
+      }
+      logoRunning = false;
+    };
+    const judgeLogo = async (el, bg, address) => {
+      const img = address ? null : el;
+      if (img && (!img.complete || !img.naturalWidth)) {
+        // Not loaded yet (lazy, or still on its way): looked at once it is.
+        if (!logoWaiting.has(img)) {
+          logoWaiting.add(img);
+          img.addEventListener('load', () => { logoWaiting.delete(img); if (enabled && img.isConnected) logo(img, bg, null); }, { once: true });
+        }
+        return;
+      }
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8 || r.width > LOGO_MAX_W || r.height > LOGO_MAX_H) return;
+      let src;
+      try { src = address ? new URL(address, document.baseURI).href : (img.currentSrc || img.src); } catch (e) { return; }
+      if (!src) return;
+      let ink = logoVerdicts.get(src);
+      if (ink === undefined) {
+        if (stats.logosRead >= LOGO_READS) return;
+        stats.logosRead++;
+        ink = await readLogo(img, src, r);
+        logoVerdicts.set(src, ink);
+      }
+      if (!ink || !enabled || !el.isConnected || contrast(ink, bg) >= 3) return;
+      writes.push([el, token('filter:invert(' + LOGO_INVERT + ') !important')]);
+      timed(write);
+      stats.logos++;
+    };
+    // One picture read per idle period: a read never holds a frame.
+    const idleTime = () => new Promise((resolve) => idle(resolve));
+    let logoCanvas = null;
+    const pixels = (source, w, h) => {
+      const t = now();
+      try {
+        if (!logoCanvas) logoCanvas = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true });
+        const g = logoCanvas;
+        g.canvas.width = w; g.canvas.height = h;
+        g.drawImage(source, 0, 0, w, h);
+        return g.getImageData(0, 0, w, h).data; // throws for a picture another origin won't share
+      } finally { const t2 = now() - t; stats.logoMs += t2; stats.logoMax = Math.max(stats.logoMax, t2); cost += t2; }
+    };
+    const readLogo = async (img, src, rect) => {
+      const sample = (nw, nh) => {
+        if (!nw || !nh) { nw = rect.width; nh = rect.height; }
+        const k = Math.min(1, LOGO_SAMPLE / Math.max(nw, nh));
+        return [Math.max(1, Math.round(nw * k)), Math.max(1, Math.round(nh * k))];
+      };
+      let data = null;
+      if (img) {
+        // Decoded off the main thread first, so the draw below only scales it.
+        try { await img.decode(); } catch (e) {}
+        await idleTime();
+        try { data = pixels(img, ...sample(img.naturalWidth, img.naturalHeight)); } catch (e) {}
+      }
+      if (!data) {
+        const copy = new Image();
+        let other = false;
+        try { other = !/^(data|blob):/.test(src) && new URL(src).origin !== location.origin; } catch (e) {}
+        if (other) copy.crossOrigin = 'anonymous';
+        copy.src = src;
+        try { await copy.decode(); } catch (e) { return false; }
+        await idleTime();
+        try { data = pixels(copy, ...sample(copy.naturalWidth, copy.naturalHeight)); } catch (e) { return false; }
+      }
+      return markColor(data);
+    };
+    // The color of a black-and-white mark on a transparent ground, or false: at least 15% of the
+    // picture see-through, the rest greys (under 4% colored) with little white in it.
+    const markColor = (data) => {
+      let total = 0, clear = 0, solid = 0, colored = 0, light = 0, r = 0, g = 0, b = 0, w = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        total++;
+        const a = data[i + 3];
+        if (a < 26) { clear++; continue; }
+        solid++;
+        const R = data[i], G = data[i + 1], B = data[i + 2];
+        if (a > 128 && Math.max(R, G, B) - Math.min(R, G, B) > 40) colored++;
+        if (R + G + B > 600) light++;
+        const k = a / 255;
+        r += R * k; g += G * k; b += B * k; w += k;
+      }
+      if (clear < total * 0.15 || solid < total * 0.02 || colored > solid * 0.04 || light > solid * 0.15) return false;
+      return [r / w / 255, g / w / 255, b / w / 255, 1];
+    };
+
     // The walk over the document: top first, in budgets, then idle slices; new content queued.
     const info = new WeakMap();
     const above = new WeakMap(); // backgrounds behind elements never checked (ancestors of added content)
@@ -982,8 +1161,10 @@ extension DarkPages {
     let queue = [];
     let walk = null; // { root, el }
     const rootInfo = { bg: PAGE_BG, image: false, owner: null, darkened: true };
+    // The parent in the composed tree: a shadow tree's top elements sit on their host.
+    const parentOf = (el) => el.parentElement || (el.parentNode && el.parentNode.host) || null;
     const infoAbove = (el) => {
-      const parent = el.parentElement;
+      const parent = parentOf(el);
       if (!parent) return rootInfo;
       const known = info.get(parent) || above.get(parent);
       if (known) return known;
@@ -991,7 +1172,7 @@ extension DarkPages {
       // ancestor already known. Remembered, so its siblings don't walk the chain again.
       const chain = [];
       let result = rootInfo;
-      for (let p = parent; p; p = p.parentElement) {
+      for (let p = parent; p; p = parentOf(p)) {
         const k = info.get(p) || above.get(p);
         if (k) { result = k; break; }
         chain.unshift(p);
@@ -1018,14 +1199,28 @@ extension DarkPages {
       }
       return result;
     };
+    // The next element in document order, through open shadow roots: a host's shadow tree
+    // first, then its own children (the ones its slots show).
     const following = (el, root, descend) => {
-      if (descend && el.firstElementChild) return el.firstElementChild;
+      if (descend) {
+        const shadow = el.shadowRoot;
+        if (shadow && shadowRoots.has(shadow) && shadow.firstElementChild) return shadow.firstElementChild;
+        if (el.firstElementChild) return el.firstElementChild;
+      }
       while (el && el !== root) {
         if (el.nextElementSibling) return el.nextElementSibling;
-        el = el.parentElement;
+        const parent = el.parentElement;
+        if (parent) { el = parent; continue; }
+        const scope = el.parentNode;
+        if (!scope || scope === root || !scope.host) return null;
+        // Out of a shadow tree: on to the host's own children.
+        if (scope.host.firstElementChild) return scope.host.firstElementChild;
+        el = scope.host;
       }
       return null;
     };
+    // Where a walk starts: an element, or a shadow root's first element.
+    const startOf = (root) => root.nodeType === 11 ? root.firstElementChild : root;
     // Works until `deadline`; true when nothing is left.
     const step = (deadline) => {
       let n = 0;
@@ -1033,17 +1228,26 @@ extension DarkPages {
         if (!walk) {
           const root = queue.shift();
           if (!root) return true;
-          if (!root.isConnected) continue;
-          walk = { root, el: root };
+          if (!root.isConnected || !startOf(root)) continue;
+          walk = { root, el: startOf(root) };
         }
         let el = walk.el;
-        if (!el.isConnected) { walk.el = walk.root; if (!walk.root.isConnected) { walk = null; } continue; }
+        if (!el.isConnected) {
+          walk.el = walk.root.isConnected ? startOf(walk.root) : null;
+          if (!walk.el) walk = null;
+          continue;
+        }
         while (el) {
           let descend = true;
           if (!seen.has(el)) {
             seen.add(el);
             const mine = check(el, infoAbove(el));
-            if (mine) info.set(el, mine); else descend = false;
+            if (mine) {
+              info.set(el, mine);
+              const shadow = el.shadowRoot;
+              if (shadow) { if (!shadowRoots.has(shadow)) addRoot(shadow); }
+              else if (el.localName.includes('-') && pendingHosts.size < 2000) pendingHosts.add(el);
+            } else descend = false;
           } else if (!info.has(el)) descend = false;
           el = following(el, walk.root, descend);
           if (++n % 16 === 0 && now() > deadline) { if (el) { walk.el = el; return false; } }
@@ -1076,6 +1280,10 @@ extension DarkPages {
 
     // Content and style sheets a page adds or changes, in batches.
     let observer = null;
+    const OBSERVED = {
+      childList: true, subtree: true, characterData: true, attributes: true,
+      attributeFilter: ['style', 'class', 'bgcolor', 'color', 'fill', 'stroke', 'media', 'disabled', 'rel'],
+    };
     let addedRoots = [];
     const changedElements = new Set();
     const inlineSeen = new WeakMap();
@@ -1129,6 +1337,7 @@ extension DarkPages {
       }
       changedElements.clear();
       if (addedRoots.length) { queue.push(...addedRoots); addedRoots = []; }
+      if (pendingHosts.size) checkHosts();
       // The elements wait for idle time: by then WebKit has restyled the page for its next frame
       // (new twins included), so reading styles costs the engine nothing extra.
       if (queue.length || walk) pump();
@@ -1182,10 +1391,8 @@ extension DarkPages {
         }
         later();
       });
-      observer.observe(document.documentElement, {
-        childList: true, subtree: true, characterData: true, attributes: true,
-        attributeFilter: ['style', 'class', 'bgcolor', 'color', 'fill', 'stroke', 'media', 'disabled', 'rel'],
-      });
+      observer.observe(document.documentElement, OBSERVED);
+      for (const root of shadowRoots.keys()) observer.observe(root, OBSERVED);
       // A style sheet's load event doesn't bubble; captured here, it brings the sheet in at once.
       // A picture that loads late (lazy images) may now lie under text checked before it had a
       // size: that text gets another look.
@@ -1223,6 +1430,7 @@ extension DarkPages {
         }
         last = Date.now();
         timed(() => { adopt(); if (sheetsChanged()) syncSheets(2 * SLICE_MS); }, 'rewriteMs');
+        if (pendingHosts.size) timed(checkHosts);
       };
       addEventListener('scroll', check, { passive: true, capture: true });
       addEventListener('pointerdown', check, { passive: true, capture: true });
@@ -1233,7 +1441,7 @@ extension DarkPages {
     // The state for the app's page menu, and whether this page has dark pages off: the app
     // corrects a page that kept an old choice (one restored from the back-forward cache).
     const post = (state, force) => {
-      if (state === posted && !force) return;
+      if (TOP || (state === posted && !force)) return;
       posted = state;
       try { webkit.messageHandlers.\#(DarkPages.handlerName).postMessage({ state, off }); } catch (e) {}
     };
@@ -1332,13 +1540,23 @@ extension DarkPages {
       pump();
       watch();
       keep();
+      // Custom elements defined late attach their shadow roots after the walk met them.
+      const hostChecks = () => { for (const t of [300, 1500, 4000]) setTimeout(() => { if (enabled && pendingHosts.size) timed(checkHosts); }, t); };
+      if (document.readyState === 'complete') hostChecks(); else addEventListener('load', hostChecks, { once: true });
     };
 
     // Applies the current choice: darkened, the guard while judging, or nothing.
+    // A frame follows the top page: nothing while the top is off or has a design of its own,
+    // the guard while the top is still being judged.
+    const parentState = () => {
+      if (!TOP) return 'darken';
+      try { return TOP.state; } catch (e) { return 'native'; }
+    };
     const render = () => {
-      const active = dark.matches && !off;
+      const parent = parentState();
+      const active = dark.matches && !off && parent !== 'native' && parent !== 'off';
       if (active || adopted) adopt();
-      if (active && verdict === null) {
+      if (active && (verdict === null || parent === null)) {
         guard.disabled = false;
         setEnabled(false);
       } else {
@@ -1356,8 +1574,25 @@ extension DarkPages {
           if (verdict === 'native') for (const el of document.querySelectorAll('[' + ATTR + ']')) el.removeAttribute(ATTR);
         }
       }
+      if (TOP) return;
       post(!dark.matches ? 'inactive' : off ? '\#(DarkPagesState.offForSite.rawValue)'
         : verdict === 'darken' ? 'darkened' : verdict === 'native' ? 'native' : 'inactive');
+      // Same-origin frames follow; frames that were there before the page turned dark get the
+      // engine now.
+      for (const [doc, follow] of followers) {
+        if (!doc.defaultView) { followers.delete(doc); continue; }
+        try { follow(); } catch (e) { followers.delete(doc); }
+      }
+      if (active && verdict !== 'native') askFrames();
+    };
+    const followers = new Map(); // a frame's document -> its engine's follow()
+    const askFrames = () => {
+      for (const f of document.getElementsByTagName('iframe')) {
+        try {
+          const w = f.contentWindow;
+          if (w && w.__plainDarkFrame && !w.__plainDarkPages) w.__plainDarkFrame();
+        } catch (e) {}
+      }
     };
 
     // Judges once the page can be judged: a body, and every style sheet in the head loaded
@@ -1424,6 +1659,12 @@ extension DarkPages {
     });
     globalThis.__plainDarkPages = {
       setOff(value) { if (off !== value) { off = value; refresh(); } else { post(posted, true); } },
+      // For same-origin frames: the page's switch, its state ('off', null while judging,
+      // 'darken' or 'native'), whether a new frame should ask for the engine, and following.
+      get off() { return off; },
+      get state() { return !dark.matches || off ? 'off' : verdict; },
+      get framesWanted() { return dark.matches && !off && verdict !== 'native'; },
+      follow(doc, fn) { followers.set(doc, fn); },
       get cost() { return cost; },
       get stats() { return Object.assign({ cost, tokens: tokenCount, twins: order.length, enabled }, stats); },
       // The engine's perf test: the judgement, every sheet rewritten and every element checked
@@ -1478,6 +1719,12 @@ extension DarkPages {
       },
     };
     dark.addEventListener('change', refresh);
+    if (TOP) {
+      // The frame's own guard (frameScript) gives way to the engine's in this same task.
+      const early = globalThis.__plainDarkFrameGuard;
+      if (early) { document.adoptedStyleSheets = document.adoptedStyleSheets.filter((s) => s !== early); globalThis.__plainDarkFrameGuard = null; }
+      TOP.follow(document, () => { if (TOP.off !== off) { off = TOP.off; refresh(); } else render(); });
+    }
     document.addEventListener('DOMContentLoaded', () => { stats.dcl = now(); decide(document.readyState === 'complete'); });
     addEventListener('load', () => { settled = false; decide(true); });
     addEventListener('pageshow', (e) => { if (e.persisted) post(posted, true); });

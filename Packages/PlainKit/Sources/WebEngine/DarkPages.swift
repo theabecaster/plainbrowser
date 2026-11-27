@@ -108,16 +108,59 @@ enum DarkPages {
     static func source(offSites: Set<String>) -> String {
         let sites = offSites.sorted().map(jsString).joined(separator: ",")
         guard FixedChoices.darkPagesOn else { return marker }
+        // In a frame (put there by `frameScript`'s request) the engine runs only when the top
+        // page's engine is reachable: a frame of the same origin, in the same world. It follows
+        // the top page's choice (TOP).
         return """
             \(marker)
             (() => {
-              if (window !== window.top || !/^https?:$/.test(location.protocol)) return;
+              if (!/^https?:$/.test(location.protocol) || globalThis.__plainDarkPages) return;
+              let TOP = null;
+              if (window !== window.top) {
+                try { TOP = window.top.__plainDarkPages || null; } catch (e) {}
+                if (!TOP) return;
+              }
               const OFF_SITES = new Set([\(sites)]);
               \(engineConstants)
               \(engineBody)
             })();
             """
     }
+
+    /// Same-origin frames (an article's embedded page, a comment thread, a widget) are darkened
+    /// with the page. Every frame gets this one-line check at document start, not the engine: a
+    /// frame of another origin can't reach the top page and stops at once, so ad and video frames
+    /// cost nothing. A frame that can asks the app for the engine (`frameRequest`), and holds its
+    /// background dark meanwhile while the top page is dark or still being judged. The top page
+    /// asks again for frames that were there before it turned dark.
+    static let frameScript = WKUserScript(
+        source: """
+            // Plain dark frames
+            (() => {
+              if (window === window.top || !/^https?:$/.test(location.protocol)) return;
+              let top = null;
+              try { top = window.top.__plainDarkPages || null; } catch (e) {}
+              if (!top) return;
+              let asked = false;
+              const ask = () => {
+                if (asked || globalThis.__plainDarkPages) return;
+                asked = true;
+                try { webkit.messageHandlers.\(handlerName).postMessage({ \(frameRequest): true }); } catch (e) {}
+              };
+              globalThis.__plainDarkFrame = ask;
+              if (!top.framesWanted) return;
+              const guard = new CSSStyleSheet();
+              guard.replaceSync('html, body { background-color: rgb(24, 24, 24) !important; }');
+              document.adoptedStyleSheets = [...document.adoptedStyleSheets, guard];
+              globalThis.__plainDarkFrameGuard = guard;
+              ask();
+            })();
+            """,
+        injectionTime: .atDocumentStart, forMainFrameOnly: false, in: UserScripts.world
+    )
+
+    /// The key of a frame's request for the engine.
+    static let frameRequest = "frame"
 
     private static func jsString(_ text: String) -> String {
         let escaped = text.unicodeScalars.map { scalar -> String in

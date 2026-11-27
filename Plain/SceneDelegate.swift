@@ -91,7 +91,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.session = BrowserSession(
             database: { [database] in await database.value },
             tabStates: TabStateStore(directory: self.options.tabStateDirectory),
-            windowID: savedWindow
+            windowID: savedWindow,
+            thumbnailDirectory: self.options.thumbnailDirectory
         )
         let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets) { [weak self] in
             Signposts.signposter.endInterval(Signposts.launch, launchInterval)
@@ -267,6 +268,12 @@ private nonisolated struct LaunchOptions: Sendable {
     /// Where tabs' history, scroll and sessionStorage are saved for relaunch, next to the database.
     /// A path only: nothing touches the disk until the first save.
     var tabStateDirectory: URL { directory.appending(path: "TabState", directoryHint: .isDirectory) }
+
+    /// Thumbnails next to a test database (nil: the pool's Caches/Thumbnails). Launch prunes
+    /// thumbnails that no tab in the database names, so a test store must never share the user's.
+    var thumbnailDirectory: URL? {
+        testStore || inMemory ? directory.appending(path: "Thumbnails", directoryHint: .isDirectory) : nil
+    }
 
     @concurrent func makeDatabase() async throws -> AppDatabase {
         if inMemory, !testStore { return try AppDatabase.inMemory() }

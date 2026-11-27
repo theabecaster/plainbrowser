@@ -481,7 +481,8 @@ Each entry: what was chosen, and why. Newest last.
 - **Perf cost:** a bar swipe start attaches at most one web view (about 1.5 ms) or adds one image
   view; a tab switch adds one WebKit snapshot of the page leaving (2x, kept only for the two
   neighbours, about 5 MB each decoded). The gallery is built when opened and released when it
-  closes. Engine-tab watches are one Observation per tab with an engine tab.
+  closes (superseded 2026-11-27: one gallery is kept ready, see "Gallery open and bar swipe
+  speed"). Engine-tab watches are one Observation per tab with an engine tab.
 
 ## Tab gallery: the app-switcher cascade on a plain scroll view (2026-11-26)
 
@@ -1661,3 +1662,60 @@ bar above every page. Research: docs/research/inset-fill.md.
   before, a red band filled 0–72.5 behind the controls at rest and the header jumped to the top
   edge in one frame at collapse; after, nothing above the header at rest, the header rides with
   the page, a fresh load and Back show the first line under the controls from the first frame.
+## Tab cards follow the finger (2026-11-27)
+
+- **Chosen:** a gallery card is lifted by `LiftGestureRecognizer`, not a `UIPanGestureRecognizer`.
+  It measures the finger from touch-down and decides the axis after 6 pt: within 60° of straight up
+  lifts the card, flatter fails at once so the gallery scrolls (`CardSwipe.isLift`, shared with the
+  scroll view and the empty-space swipe, so exactly one of them takes a move). The card's offset is
+  the finger's travel, set directly each touch event, with the 6–12 pt before the lock paid back over
+  the next 12 pt (no jump on the first frame, exactly under the finger after). Why: the owner found
+  dragging a tab hard, "not like Arc or the iPhone app switcher at all". Measured on the simulator
+  (docs/research/tab-drag-feel.md): before, the card moved only after 70 pt of finger travel and
+  rested at 49 pt under a 90 pt drag (a pan begins after its hysteresis and counts from there, and an
+  `interactiveSpring` trailed it further), and a short flick never moved it. Now it moves after the
+  lock and rests at 90 pt under 90 pt; a short flick closes.
+- **Release:** a flick faster than 500 pt/s up closes (was 800: a light flick fell short), as does a
+  projection (0.99) past 40% of the card's height. A card that stays springs back with the release
+  velocity, and a closing card flies on with it, both frame by frame on a `SpringDriver`, so a
+  finger can catch either mid-flight from where it is on screen. The throw no longer continues a
+  tracking animation (there is none now).
+- **No resisting card.** The owner also asked that a card that cannot be dismissed resist a lift
+  and spring back, with no words; then asked for the New Tab card to go. Gallery items are never
+  pinned (nothing pins a tab), so no card is left that cannot close and the resisting lift was not
+  built. If one comes back: UIScrollView's rubber band toward ~80 pt, a slight shrink, one soft
+  "nothing there" bump, spring back (docs/research/tab-drag-feel.md).
+- **Kept:** horizontal swipes scroll the cards; a tap opens; the long press keeps the menu and the
+  drag to reorder (their interactions stay on the card's body).
+
+## The switcher has no New Tab card (2026-11-27)
+
+- **Chosen:** removed the paper New Tab card that sat beside a lone card (and its grow-in, hold
+  during the zoom, VoiceOver entry and the grid's centered pair). With one tab the card rests
+  centered, in the cascade and in the grid, and New Tab is the "+" in the bar under the cards.
+  Why: the owner, "I don't like the New Tab thing in the tab switcher. Get rid of it; there's
+  already a simple button under all the tabs." The app switcher with one app shows one card.
+- **Kept:** the bar swipe's New Tab card past the last tab (`TabSwipe`): a different gesture
+  outside the switcher, not what the owner named.
+
+## Gallery open and bar swipe speed (2026-11-27)
+
+- **The device gate missed both targets on spring tails, not stalls** (gallery 680 ms, swipe
+  526 ms; breakdown in docs/research/perf-gallery-swipe.md). The gallery's critically damped
+  0.42 s spring needs 0.58–0.66 s to come within half a point; the swipe's 0.35 s / 0.12 spring
+  overshoots 2–3 pt on the Duo's 951 pt inner page and creeps back for ~0.2 s.
+- **Springs retuned, same pace:** the gallery zoom is `.spring(0.42, bounce 0.06)` (damping 0.94:
+  the same first half, the last points sooner, overshoot under 0.2 pt) and the bar swipe
+  `Spring(0.30, bounce 0.08)` (damping 0.92: 95% of the way as fast as before, overshoot under
+  half a point on any width, at rest in ~0.3 s). Critically damped was tried on paper and is
+  slower to rest. Motion table updated with the reasons.
+- **The settle rule is unchanged.** `gallery.show` and `tab.swipeSettle` still end when the motion
+  is within 0.5 pt of its target and moving less than 0.5 pt a frame; the motion ends sooner, the
+  metric does not end earlier. The gallery's settle watch now samples at 120 Hz.
+- **One gallery kept ready.** Built at idle (a second after the tab list changes, in the default
+  run loop mode) as a hidden child laid out at the page's size, cards placed and pictures decoded
+  off the main thread; closing hides it; opening calls `prepareToShow()` (a diff, no new views).
+  Before, every tap built the view controller, blur and cards on the main thread (8–66 ms before
+  the zoom could start) and neighbouring cards' pictures arrived a few frames late. Cost: the
+  gallery's views and its decoded thumbnails (cache-limited) stay in memory; a memory warning drops
+  them. Not built with side tabs (the sidebar is the switcher).

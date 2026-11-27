@@ -10,6 +10,12 @@ import WebEngine
 /// swipe, swipe previews and the toast. One stored property on `BrowserViewController`.
 final class TabsUIState {
     var gallery: TabGalleryViewController?
+    /// The gallery kept ready while it is not up: a hidden child, laid out at the page's size with
+    /// its cards built and their pictures decoded, so opening it shows them on the first frame
+    /// (docs/research/perf-gallery-swipe.md). Dropped on a memory warning.
+    var spareGallery: TabGalleryViewController?
+    /// A spare gallery build is waiting for an idle moment.
+    var isPrewarmScheduled = false
     /// The page ↔ card transition running now, if any.
     var galleryTransition: TabGalleryTransition?
     /// Bumped whenever a running transition is replaced or dropped, so its late completion is
@@ -50,9 +56,9 @@ extension BrowserViewController: GalleryHost {
     @discardableResult
     func presentGallery(source: StaticString, interactive: Bool = false) -> TabGalleryTransition? {
         guard !isShowingGallery, presentedViewController == nil else { return nil }
-        // Reachable only with a card to show (state rules §3): another tab, or the page on screen
-        // beside a New Tab card. The swipe up and Show All Tabs share this one condition, and the
-        // gallery never opens empty.
+        // Reachable only with a card to show (state rules §3): another tab, or the page on screen.
+        // The swipe up and Show All Tabs share this one condition, and the gallery never opens
+        // empty.
         // The window's profile's list, or with none there (and no private tabs) the latest list of
         // another profile: the switcher then says whose it is.
         let profile = session.tabs.pageEntries(private: false).isEmpty && session.tabs.pageEntries(private: true).isEmpty
@@ -78,16 +84,13 @@ extension BrowserViewController: GalleryHost {
         Signposts.signposter.emitEvent(Signposts.galleryOpen, "\(source)")
         if isEditingAddress { endAddressEditing() }
         tabsUI.toast.hide(animated: false)
-        let gallery = TabGalleryViewController(dataSource: tabs)
-        gallery.onLastTabClosed = { [weak self] in self?.galleryLastTabClosed() }
-        addChild(gallery)
-        gallery.view.frame = view.bounds
-        gallery.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        gallery.view.accessibilityViewIsModal = true
+        let gallery = tabsUI.spareGallery ?? makeGallery(tabs)
+        tabsUI.spareGallery = nil
         // Over the page, under the chrome (which fades as the gallery's own bar arrives) and the
         // search sheet (a new tab from the gallery opens it).
         view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
-        gallery.didMove(toParent: self)
+        gallery.prepareToShow()
+        gallery.view.isHidden = false
         tabsUI.gallery = gallery
         // The gallery has its own bar: the system's vertical bar (Duo) empties rather than hides,
         // so its column keeps its width and nothing under the gallery lays out again.
@@ -122,6 +125,58 @@ extension BrowserViewController: GalleryHost {
             setChromeHiddenForGallery(true, animated: true)
         }
         return transition
+    }
+
+    /// A new gallery, a child of the browser with its view in the hierarchy, hidden.
+    private func makeGallery(_ tabs: GalleryTabs) -> TabGalleryViewController {
+        let gallery = TabGalleryViewController(dataSource: tabs)
+        gallery.onLastTabClosed = { [weak self] in self?.galleryLastTabClosed() }
+        addChild(gallery)
+        gallery.view.frame = view.bounds
+        gallery.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        gallery.view.accessibilityViewIsModal = true
+        gallery.view.isHidden = true
+        view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
+        gallery.didMove(toParent: self)
+        return gallery
+    }
+
+    /// Builds the spare gallery once the app is idle, when the switcher has cards and none is
+    /// ready: its view, its cards for the tabs on screen and their pictures (decoded off the
+    /// main thread). Waits a second and for the default run loop mode, so it never lands in a
+    /// scroll or a gesture.
+    func scheduleGalleryPrewarm() {
+        guard tabsUI.spareGallery == nil, !isShowingGallery, !tabsUI.isPrewarmScheduled,
+              wantsSpareGallery else { return }
+        tabsUI.isPrewarmScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            RunLoop.main.perform(inModes: [.default]) { [weak self] in
+                MainActor.assumeIsolated { self?.prewarmGallery() }
+            }
+        }
+    }
+
+    private func prewarmGallery() {
+        tabsUI.isPrewarmScheduled = false
+        guard tabsUI.spareGallery == nil, !isShowingGallery, presentedViewController == nil, wantsSpareGallery else { return }
+        let gallery = makeGallery(galleryTabs())
+        gallery.prepareToShow()
+        tabsUI.spareGallery = gallery
+    }
+
+    /// The switcher can open (it has a card) and is the gallery, not the sidebar.
+    private var wantsSpareGallery: Bool {
+        let rules = currentRules()
+        return rules.galleryHasCards && !rules.state.sideTabs
+    }
+
+    /// Drops the spare gallery (a memory warning).
+    func dropSpareGallery() {
+        guard let spare = tabsUI.spareGallery else { return }
+        tabsUI.spareGallery = nil
+        spare.willMove(toParent: nil)
+        spare.view.removeFromSuperview()
+        spare.removeFromParent()
     }
 
     /// The gallery data source, made once.
@@ -173,10 +228,11 @@ extension BrowserViewController: GalleryHost {
     private func removeGallery() {
         guard let gallery = tabsUI.gallery else { return }
         dropGalleryTransition()
-        gallery.willMove(toParent: nil)
-        gallery.view.removeFromSuperview()
-        gallery.removeFromParent()
+        // Kept, hidden, as the next opening's gallery: its cards and decoded pictures stay.
+        gallery.view.isHidden = true
+        gallery.view.alpha = 1
         tabsUI.gallery = nil
+        tabsUI.spareGallery = gallery
         applyToolbarItems()
         setChromeHiddenForGallery(false, animated: false)
         updateButtons()
@@ -452,6 +508,7 @@ extension BrowserViewController: GalleryHost {
     func tabsDidChange() {
         // The rules first: the sidebar's New Tab reads them.
         updateButtons()
+        scheduleGalleryPrewarm()
         updatePageTabCount()
         tabsUI.gallery?.reloadTabs(animated: false)
         duo.sidebar?.reloadTabs()

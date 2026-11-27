@@ -218,6 +218,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         session.pool.onMemoryWarning = { [weak self] in
             self?.tabsUI.previews = [:]
             self?.tabsUI.fullPreviews = []
+            self?.dropSpareGallery()
         }
         NotificationCenter.default.addObserver(
             self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil

@@ -82,7 +82,11 @@ public struct SummaryView: View {
     private var progress: SummaryProgress { model.progress }
 
     public var body: some View {
-        NavigationStack {
+        // The title and Done are pinned above the scroll view, not in a navigation bar: on the
+        // Duo's outer screen (compact height) a sheet's bar scrolled away with the summary and
+        // took Done with it (design review, 2026-11-27).
+        VStack(spacing: 0) {
+            SummaryHeader(title: sheetTitle, onDone: model.onDone)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
@@ -97,9 +101,7 @@ public struct SummaryView: View {
                 .frame(maxWidth: .infinity)
                 .animation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy(duration: 0.3), value: structure)
             }
-            .paperSheet()
-            .sheetTitle(sheetTitle)
-            .toolbar { DoneButton(onDone: model.onDone) }
+            .scrollContentBackground(.hidden)
             .environment(\.openURL, OpenURLAction { url in
                 guard let number = SummaryLinks.citation(url), let source = progress.source(numbered: number) else {
                     return .discarded
@@ -108,6 +110,7 @@ public struct SummaryView: View {
                 return .handled
             })
         }
+        .paperSheet()
         .accessibilityIdentifier("summaryScreen")
     }
 
@@ -274,6 +277,38 @@ public struct SummaryView: View {
             }
         }
         .padding(.top, 4)
+    }
+}
+
+/// The sheet's header: its serif title centered, as every sheet's, and the one Done at the end.
+/// Opaque paper, outside the scroll view, so it stays put and the text never shows through it.
+private struct SummaryHeader: View {
+    let title: String
+    let onDone: () -> Void
+
+    var body: some View {
+        ZStack {
+            Text(title)
+                .font(.system(.headline, design: .serif))
+                .foregroundStyle(Style.ink)
+                .lineLimit(1)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, 96)
+            HStack {
+                Spacer()
+                Button("Done", action: onDone)
+                    .buttonStyle(.glass)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            }
+        }
+        .frame(minHeight: 44)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Style.hairline).frame(height: 0.5)
+        }
     }
 }
 

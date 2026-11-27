@@ -32,8 +32,12 @@ extension BrowserViewController {
         return false
     }
 
-    /// Browse for Me's row above the field, by the rules: its place while the model can run, the
-    /// row itself while the text would search. Cheap (no pass over the tabs): it runs per keystroke.
+    /// Browse for Me's row above the field, by the rules: its place while something is typed and
+    /// the model can run, the row itself while the text would search. Before typing, the focused
+    /// field's own rows (the page, a copied link, recents) sit right on the field with no gap; the
+    /// place opens with the first keystroke, when the list changes anyway, and then stays put
+    /// whether the text reads as a search or an address, so the suggestions never move while
+    /// typing. Cheap (no pass over the tabs): it runs per keystroke.
     func updateBrowseForMe(query: String) {
         var state = ChromeState()
         state.isEditing = true
@@ -41,7 +45,7 @@ extension BrowserViewController {
         state.queryIsSearch = Self.isSearch(query)
         let rules = ControlRules(state)
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        sheet.setBrowseForMe(reserved: state.isAIAvailable, query: rules.browseForMe ? trimmed : nil)
+        sheet.setBrowseForMe(reserved: state.isAIAvailable && !trimmed.isEmpty, query: rules.browseForMe ? trimmed : nil)
     }
 
     /// The model's answer changed (Apple Intelligence turned on, the model ready): the entries

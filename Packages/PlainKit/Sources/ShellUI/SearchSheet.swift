@@ -241,10 +241,11 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         2 + FixedChoices.focusReadingList + FixedChoices.focusRecentPages + FixedChoices.focusClosedTabs
     )
 
-    /// Browse for Me's place above the field (`reserved`: the on-device model can run) and the
-    /// query it would browse for, or nil while the text is an address or empty (the row fades out
-    /// in place). The place changes only when the sheet opens, so the suggestions never move
-    /// while typing (docs/state-rules.md §1, principle 5).
+    /// Browse for Me's place above the field (`reserved`: something is typed and the on-device
+    /// model can run) and the query it would browse for, or nil while the text is an address (the
+    /// row fades out in place). The place opens with the first keystroke, when the focused rows
+    /// give way to suggestions anyway, and stays while typing, so the suggestions never move
+    /// (docs/state-rules.md §1, principle 5).
     func setBrowseForMe(reserved: Bool, query: String?) {
         if rowsOverBrowse.isActive != reserved {
             rowsOnContent.isActive = !reserved

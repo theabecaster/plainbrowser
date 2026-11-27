@@ -671,8 +671,8 @@ final class CaptureTests: XCTestCase {
     /// first line under them), read part way (the pill, then hidden), revealed mid-page, back at
     /// the top, and back from another page. Each step follows a 2 s still, so a screen recording
     /// made alongside (`simctl io recordVideo`) gives a frame strip of every collapse and reveal.
-    /// On the unfolded Duo `XCUIScreen.main` is the outer screen, so record the inner display
-    /// (`--display=<id>`); the attachments then only mark each step's time in the log. Pass the
+    /// On the unfolded Duo the shots are the inner screen (the largest); a recording of the inner
+    /// display (`--display=<id>`) gives the frames between them. Pass the
     /// device's status corner with `TEST_RUNNER_PLAIN_STATUS_CORNER=828,24,100,45` there.
     func testCaptureBarOverHeaders() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
@@ -838,8 +838,12 @@ final class CaptureTests: XCTestCase {
         Thread.sleep(forTimeInterval: seconds)
     }
 
+    /// The largest screen: the Duo's inner screen when it is open (the outer one is dark then),
+    /// the only screen elsewhere.
     private func shot(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        let shots = XCUIScreen.screens.map { $0.screenshot() }
+        let screenshot = shots.max { $0.image.size.width * $0.image.size.height < $1.image.size.width * $1.image.size.height }
+        let attachment = XCTAttachment(screenshot: screenshot ?? XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)

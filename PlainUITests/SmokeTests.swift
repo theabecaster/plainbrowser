@@ -67,6 +67,7 @@ final class IsolatedApplication: XCUIApplication {
 
     override func launch() {
         guard isolationRequested else { return }
+        applyMatrixRow()
         super.launch()
         checkIsolated()
     }
@@ -75,8 +76,23 @@ final class IsolatedApplication: XCUIApplication {
     /// before and after.
     override func open(_ url: URL) {
         guard isolationRequested else { return }
+        applyMatrixRow()
         super.open(url)
         checkIsolated()
+    }
+
+    /// The device matrix row (scripts/matrix.sh, docs/device-matrix.md): extra launch arguments
+    /// from `PLAIN_MATRIX_ARGS` (appended, never replacing the isolation argument) and the
+    /// orientation from `PLAIN_MATRIX_ORIENTATION` (`landscape` or `portrait`). Unset: nothing.
+    private func applyMatrixRow() {
+        let environment = ProcessInfo.processInfo.environment
+        let extra = (environment["PLAIN_MATRIX_ARGS"] ?? "").split(separator: " ").map(String.init)
+        if !extra.isEmpty, !launchArguments.contains(extra[0]) { launchArguments += extra }
+        switch environment["PLAIN_MATRIX_ORIENTATION"] {
+        case "landscape": XCUIDevice.shared.orientation = .landscapeLeft
+        case "portrait": XCUIDevice.shared.orientation = .portrait
+        default: break
+        }
     }
 
     private var isolationRequested: Bool {

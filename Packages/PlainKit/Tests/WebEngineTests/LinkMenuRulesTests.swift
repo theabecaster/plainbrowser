@@ -7,6 +7,33 @@ import Testing
     let web = URL(string: "https://example.com/page")!
     let image = URL(string: "https://example.com/a.png")!
 
+    /// The whole menu fits under the preview: iPhone 17, the Duo's outer screen, an iPhone SE, and
+    /// the largest text; beside it in compact height.
+    @Test func previewLeavesRoomForTheWholeMenu() {
+        let screens: [(CGSize, CGFloat, CGFloat)] = [
+            (CGSize(width: 402, height: 874), 62, 34), (CGSize(width: 466, height: 678), 20, 20),
+            (CGSize(width: 375, height: 667), 20, 0),
+        ]
+        for (window, top, bottom) in screens {
+            for rowHeight in [LinkMenuRules.menuRowHeight, 64] {
+                let size = LinkMenuRules.previewSize(
+                    window: window, safeTop: top, safeBottom: bottom, rows: 5, sections: 3, rowHeight: rowHeight,
+                    menuBeside: false
+                )
+                let menu = 5 * rowHeight + 2 * LinkMenuRules.previewSectionGap
+                #expect(top + 16 + size.height + 16 + menu <= window.height - bottom, "\(window) at \(rowHeight) pt rows")
+                #expect(size.width <= window.width - 32)
+                #expect(size.height >= LinkMenuRules.previewMinimumHeight)
+            }
+        }
+        let landscape = LinkMenuRules.previewSize(
+            window: CGSize(width: 874, height: 402), safeTop: 0, safeBottom: 21, rows: 5, sections: 3,
+            rowHeight: LinkMenuRules.menuRowHeight, menuBeside: true
+        )
+        #expect(landscape.height <= 402 - 21 - 32)
+        #expect(landscape.width <= 874 / 2)
+    }
+
     @Test func webLinkSections() {
         let sections = LinkMenuRules.sections(
             for: LinkElement(linkURL: web, imageURL: nil), canOpenInOtherPane: false, canSaveImages: true

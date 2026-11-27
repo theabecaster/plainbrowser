@@ -80,6 +80,24 @@ final class IsolatedApplication: XCUIApplication {
 }
 
 @MainActor
+extension XCUIApplication {
+    /// Sends Plain to the background by bringing Settings forward: the app resigns active and
+    /// leaves the foreground, which saves its tabs and its launch picture. The Home button does not
+    /// do this on the iPhone Duo simulator (Plain stays active there).
+    static func leaveForAnotherApp() {
+        XCUIApplication(bundleIdentifier: "com.apple.Preferences").activate()
+    }
+
+    /// Launch is done: the search field is up (search first) or the pill rests over the last tab.
+    func waitForFirstScreen(timeout: TimeInterval = 5) -> Bool {
+        let field = textFields["searchField"]
+        let pill = buttons["addressPill"]
+        let up = NSPredicate { _, _ in field.exists || pill.exists }
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: up, object: nil)], timeout: timeout) == .completed
+    }
+}
+
+@MainActor
 extension XCUIElement {
     var hasKeyboardFocus: Bool {
         (value(forKey: "hasKeyboardFocus") as? Bool) ?? false

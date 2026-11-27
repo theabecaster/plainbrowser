@@ -104,9 +104,9 @@ public final class BrowserSession {
         Task(priority: .background) { [tabs, profileData] in
             await tabs.pruneFiles()
             if tabs.areProfilesKnown {
-                let profiles = tabs.profiles.map(\.id)
-                await profileData.removeLeftovers(keeping: profiles)
-                await AppWebsiteData.removeLeftoverProfileData(keeping: profiles)
+                // The live list is read when each cleanup decides, never a snapshot from before.
+                await profileData.removeLeftovers { tabs.profiles.map(\.id) }
+                await AppWebsiteData.removeLeftoverProfileData(keeping: tabs.profiles.map(\.id))
             }
         }
         // A restored page loads only with its rules attached: lookups of compiled lists take

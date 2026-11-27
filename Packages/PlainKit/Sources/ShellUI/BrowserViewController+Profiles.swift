@@ -166,7 +166,9 @@ extension BrowserViewController {
         // database and its website data store, off the main thread. The store is removed only
         // after its web views are gone (just closed).
         Task { [data, session] in
-            await session.saveTabs()
+            // Not written (the disk refused): the data stays, and the profile comes back with it
+            // at the next launch rather than coming back empty.
+            guard await session.tabs.isProfileDeletionSaved(id) else { return }
             await data.forgetProfile(id)
             await session.profileData.remove(id)
             await AppWebsiteData.removeProfileData(id)

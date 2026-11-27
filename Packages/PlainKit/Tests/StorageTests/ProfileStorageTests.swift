@@ -92,8 +92,10 @@ import Testing
         let folder = try #require(location.folder(for: work))
         #expect(FileManager.default.fileExists(atPath: folder.path))
 
-        await location.removeAll(except: [work])
-        #expect(!FileManager.default.fileExists(atPath: location.folder(for: gone)!.path), "a half-done deletion is finished")
+        #expect(Set(await location.storedProfiles()) == [work, gone])
+        await location.remove(gone)
+        #expect(!FileManager.default.fileExists(atPath: location.folder(for: gone)!.path))
+        #expect(await location.storedProfiles() == [work])
         #expect(FileManager.default.fileExists(atPath: folder.path))
         await location.remove(work)
         #expect(!FileManager.default.fileExists(atPath: folder.path))

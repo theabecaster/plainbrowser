@@ -386,6 +386,14 @@ final class EngineTabs {
         await store.flush()
     }
 
+    /// Whether the database no longer lists `profile`: its deletion is written. A write that gave
+    /// up (`TabSessionWriter` retries, then drops) leaves it listed, so its data must stay.
+    func isProfileDeletionSaved(_ profile: ProfileID) async -> Bool {
+        await store.flush()
+        guard let database = await database(), let saved = try? await database.loadTabSession() else { return false }
+        return !saved.profiles.contains { $0.id == profile }
+    }
+
     // MARK: Restore
 
     /// Loads the saved session off the main thread and gives the store its persistence. Every

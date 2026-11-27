@@ -39,16 +39,13 @@ public struct ProfileDataLocation: Sendable {
         try? FileManager.default.removeItem(at: folder)
     }
 
-    /// Deletes the data of every profile not in `profiles`: a deletion the app could not finish
-    /// (it was killed in between). Run after the profile list is read.
+    /// The profiles that have data on disk. The caller removes those no longer in its profile
+    /// list (a deletion the app could not finish), checking the list after this returns.
     @concurrent
-    public func removeAll(except profiles: Set<ProfileID>) async {
+    public func storedProfiles() async -> [ProfileID] {
         guard let root = directory?.appending(path: "Profiles", directoryHint: .isDirectory),
               let folders = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
-        else { return }
-        for folder in folders {
-            guard let id = UUID(uuidString: folder.lastPathComponent), !profiles.contains(id) else { continue }
-            try? FileManager.default.removeItem(at: folder)
-        }
+        else { return [] }
+        return folders.compactMap { UUID(uuidString: $0.lastPathComponent) }
     }
 }

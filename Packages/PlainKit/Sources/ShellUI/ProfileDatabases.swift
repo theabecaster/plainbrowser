@@ -59,8 +59,13 @@ public final class ProfileDatabases {
         await location.remove(id)
     }
 
-    /// Deletes data of profiles no longer in the list (a deletion the app could not finish).
-    func removeLeftovers(keeping profiles: [ProfileID]) async {
-        await location.removeAll(except: Set(profiles))
+    /// Deletes data of profiles no longer in the list (a deletion the app could not finish). The
+    /// list is read after the folders are found, so a profile made meanwhile keeps its data.
+    func removeLeftovers(keeping profiles: () -> [ProfileID]) async {
+        let stored = await location.storedProfiles()
+        let live = Set(profiles())
+        for id in stored where !live.contains(id) && opened[id] == nil {
+            await location.remove(id)
+        }
     }
 }

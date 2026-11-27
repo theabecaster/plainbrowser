@@ -363,7 +363,9 @@ extension BrowserViewController {
     private func setChromeHiddenForFind(_ hidden: Bool) {
         let content = chromeGlass.contentView
         content.isUserInteractionEnabled = !hidden
-        content.accessibilityElementsHidden = hidden
+        // On each control too: the glass container exposes its controls to accessibility past
+        // its content view.
+        for control in [pill, buttonBar] as [UIView] { control.accessibilityElementsHidden = hidden }
         let alpha: CGFloat = hidden ? 0 : 1
         guard content.alpha != alpha else { return }
         Motion.animate(Motion.quick) { content.alpha = alpha }

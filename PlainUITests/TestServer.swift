@@ -18,6 +18,8 @@ import Network
 /// - `/article`: a readerable article (Reader), with a link to `/b`.
 /// - `/location`: asks for the location (a permission prompt).
 /// - `/motion`: a button that asks for motion sensors (a permission prompt after a tap).
+/// - `/camera`: asks for the camera and microphone as it loads (a video call's first page).
+/// - `/photo`: a picture (`/sunset.svg`) to long-press for Save Image.
 /// - `/login`: a sign-in form with the `autocomplete` hints AutoFill reads.
 /// - `/passkey`: "Sign In with a Passkey", which asks for a passkey; the heading says how it ended.
 /// - `/french`: a page in French (`lang="fr"`) whose sentences the app's test translator knows.
@@ -75,7 +77,8 @@ final class TestServer: @unchecked Sendable {
                 .first { $0.lowercased().hasPrefix("user-agent:") }.map(String.init) ?? ""
             let (status, body) = self.page(for: path, userAgent: agent)
             let isFile = path.hasPrefix("/file.txt")
-            let type = path.hasSuffix(".js") ? "application/javascript" : (isFile ? "text/plain" : "text/html; charset=utf-8")
+            let type = path.hasSuffix(".js") ? "application/javascript"
+                : path.hasSuffix(".svg") ? "image/svg+xml" : (isFile ? "text/plain" : "text/html; charset=utf-8")
             // A download: the browser saves it instead of showing it.
             let disposition = isFile ? "Content-Disposition: attachment; filename=\"plain-notes.txt\"\r\n" : ""
             let header = """
@@ -293,6 +296,27 @@ final class TestServer: @unchecked Sendable {
                     .catch(e => { document.getElementById('state').textContent = 'Motion error'; });
                 ">Use Motion</button></p>
                 """))
+        case "/camera":
+            return ("200 OK", html("Plain Camera", """
+                <h1 id="state">Calling</h1>
+                <script>
+                const state = (text) => { document.getElementById('state').textContent = text; };
+                try {
+                  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                    .then(() => state('Camera allowed'), () => state('Camera denied'));
+                } catch (e) { state('Camera denied'); }
+                </script>
+                """))
+        case "/photo":
+            return ("200 OK", html("Plain Photo", """
+                <h1>Photo</h1>
+                <img src="/sunset.svg" alt="Sunset" style="width:100%;height:260px;border-radius:8px">
+                """))
+        case "/sunset.svg":
+            return ("200 OK", """
+                <svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="300" height="200" fill="#ff9a3c"/>\
+                <circle cx="220" cy="70" r="30" fill="#fff3b0"/></svg>
+                """)
         case "/location":
             return ("200 OK", html("Plain Location", """
                 <h1 id="state">Asking</h1>

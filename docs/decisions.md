@@ -784,9 +784,9 @@ Research and sources: docs/research/dark-mode.md.
   `prefers-contrast: more`) and Reduce Transparency drop the texture to the flat color. WebKit has
   no `prefers-reduced-transparency` ([caniuse](https://caniuse.com/wf-prefers-reduced-transparency)),
   so the reader follows Increase Contrast only (polish backlog).
-- **Not on:** web content, glass controls, the private-tab surfaces (their dusk violet stays flat),
-  the system-styled sheets (Settings, History, Favorites, Archive, Downloads keep the grouped list
-  look) or anything that moves on its own. The texture never animates.
+- **Not on:** web content, glass controls, the private-tab surfaces (their dusk violet stays flat)
+  or anything that moves on its own. The texture never animates. The sheets got it later ("Sheets
+  on paper", below).
 - **Perf cost (simulator, machine load 350–850, so noisy):** perf gate before → after: launch
   4056 → 3648 ms, main → field 619 → 596 ms, gallery 1491 → 1484 ms. Gallery scroll of 100 tabs
   with 25 new-tab cards, main-thread work p95: 1.7–3.7 ms flat, 1.9–2.6 ms on paper. Start-screen
@@ -795,3 +795,42 @@ Research and sources: docs/research/dark-mode.md.
 ## Browse for Me result source
 
 - **Search results page in a hidden tab, no API key.** DuckDuckGo's lite page is the default because it is stable and light; the user's chosen engine is used when its page parses. Free, works for every tester, and needs no server. Trade-off: a page redesign can break parsing, so the parser is tested against saved pages. Brave Search API stays a later opt-in. (Owner's choice, 2026-11-26.)
+
+## Sheets on paper (2026-11-26)
+
+- **Chosen:** the owner asked for Settings, History, Favorites, Archive and Downloads "on paper,
+  simple, in our own identity". Every FeatureUI sheet (Settings with Search Engine, App Icon and
+  About; History; Favorites; Archived Tabs; Downloads) now sits on the textured Paper ground
+  (`PaperBackground()`, day cream / night lagoon). Rows stay grouped, on flat paper cards a hair
+  lighter than the ground (`Palette.paperCard`: `#FFFBF4` by day, `#11293D` by night) with ink
+  hairlines (`Palette.paperHairline`). Text is ink (`Palette.ink`), supporting text the ink's
+  secondary step (`Palette.inkSecondary`, 4.5:1 or better on ground and card), actions and
+  checkmarks Lagoon a step deeper on paper (`Palette.accentOnPaper`: `#2366F0` by day, 4.7:1 on
+  the card; `#8DB6FF` by night), destructive the system red. Titles are New York like the intro's
+  headlines; body text stays SF. About shows the name in the intro's display line with its coral
+  fold.
+- **Rejected: plain rows on the ground.** Without cards, History's days and Settings' footers would
+  run together, and swipe actions would have no edge to slide from. Grouped cards read as
+  sheets of paper on paper, the intro's look, and are one rule for every sheet.
+- **Native, restyled:** the screens stay `List`s with their own swipe actions, search, edit mode,
+  reorder, menus, Dynamic Type and VoiceOver. Only `.scrollContentBackground(.hidden)`, the ground
+  behind, `.listRowBackground`, `.listRowSeparatorTint` and the title change (`paperSheet()`,
+  `paperRows()`, `sheetTitle(_:)` in `FeatureUI/Style.swift`). The serif title is a `.principal`
+  toolbar item, capped at accessibility1 like the system title; `navigationTitle` stays for the
+  back button and VoiceOver. The system's large grouped-list radius stays (an exception to the
+  6–10 pt rule, as for the system menus): matching it would mean drawing every card by hand.
+- **Ink caveat:** the sheet's ink foreground replaces the system's footer gray and a button's
+  tint, so footers, values (`ValueLabel`), Clear History and Use Custom Engine name their color.
+- **Accessibility:** Increase Contrast drops the texture (as everywhere), lifts the cards to white
+  / `#1A3850`, and strengthens hairlines (38–42 %) and supporting text (82 %). Reduce
+  Transparency drops the texture. The cards are opaque either way.
+- **Performance:** the texture is the ground's pattern color only; a row is one opaque color, no
+  layer, texture, shadow or mask. 1,000-row History scroll on the iPhone 17 simulator (Release,
+  main-thread CPU per frame while the list tracks or decelerates, 3 runs of 36 fast swipes, the
+  simulator draws at 60 Hz): before 1.57 / 1.80 / 1.96 ms, after 1.66 / 1.78 / 1.72 ms; worst
+  frame 12.8–22.2 ms before, 12.8–14.5 ms after. Under 2 ms a frame leaves most of the 8.3 ms a
+  120 Hz frame allows.
+- **Read failures** (state rules §6, Sheets): History, Archived Tabs and Favorites show one
+  sentence and Try Again in place of the list when a read fails, never the empty state and never
+  stale rows. History's Clear dims only when history itself is empty: a search that finds nothing
+  reads one visit to know.

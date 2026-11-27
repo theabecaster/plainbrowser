@@ -2487,7 +2487,8 @@ modes: two visual cues, named modes, a labelled exit).
 - **Close All Private Tabs** is in the switcher's More menu whenever the private list has a card
   (the regular list keeps its two-card rule), and in the tabs menu on a private page with
   another private page open. Its confirmation counts them; nothing comes back. Afterwards the
-  regular tab seen last shows, else the search field.
+  switcher moves to the regular list (never an empty switcher; the switch lands on Tabs), and
+  the tabs menu shows the regular tab seen last, else the search field.
 - **The change of mode is one quick material change**, no new motion: the chrome's tint and
   style change in `Motion.quick`; the switcher's cards, backdrop and switch cross-fade as the
   private toggle did. Nothing is laid out again on a mode change besides the pill's text and,

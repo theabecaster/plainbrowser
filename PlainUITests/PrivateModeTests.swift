@@ -159,9 +159,15 @@ final class PrivateModeTests: XCTestCase {
         let confirm = app.buttons["Close All 2 Private Tabs"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 3))
         confirm.tap()
+        // Never an empty switcher: it moves to the regular list, the switch on Tabs.
+        XCTAssertTrue(waitForSelected(app.buttons["galleryRegular"]), "the regular list, out of private")
+        XCTAssertEqual(app.buttons["galleryPrivate"].value as? String, "0 tabs", "no private tab left")
+        XCTAssertFalse(app.buttons["reopenTab"].exists, "private tabs never come back")
+        let card = gallery.descendants(matching: .any).matching(identifier: "tabCard").firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 2))
+        card.tap()
         waitForPage(app, "Page A")
         XCTAssertEqual(app.buttons["addressPill"].label, "Address")
-        XCTAssertFalse(app.buttons["reopenTab"].exists, "private tabs never come back")
     }
 
     /// The tabs menu on a private page ends private browsing in one step with two or more open.

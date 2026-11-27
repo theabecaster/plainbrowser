@@ -231,6 +231,15 @@ actor GatedHistory: HistoryStoring {
         #expect(!model.hasHistory, "the last visit went while a search was typed")
     }
 
+    @Test func clearDimsWhenTodaysClearEmptiesHistoryUnderASearch() async throws {
+        let model = makeModel(FakeHistory([Self.visit(1, "a.example", "Alpha", hoursAgo: 0.5)]))
+        await model.load()
+        model.query = "Alpha"
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        await model.clear(.today)
+        #expect(!model.hasHistory)
+    }
+
     @Test func failedDeleteReloadsAndShowsAMessage() async {
         let store = FakeHistory(Self.sample)
         let model = makeModel(store)
@@ -349,6 +358,17 @@ actor GatedHistory: HistoryStoring {
         #expect(titles(model) == ["A", "B", "C", "D", "E"])
     }
 
+    @Test func failedReloadReplacesTheListShown() async {
+        let store = FlakyFavorites(database: database, failFirst: false)
+        let model = FavoritesModel(store: store)
+        await model.load()
+        #expect(titles(model).count == 5)
+        await store.failNextRead()
+        await model.load()
+        #expect(model.loadFailed)
+        #expect(model.favorites.isEmpty, "stale favorites don't stay under the failure")
+    }
+
     @Test func failedWriteReloadsFromTheStore() async throws {
         let model = FavoritesModel(store: FailingFavorites(database: database))
         await model.load()
@@ -372,13 +392,17 @@ struct SlowFavorites: FavoritesStoring {
     func moveFavorite(id: Int64, to index: Int) async throws { try await database.moveFavorite(id: id, to: index) }
 }
 
-/// Favorites whose first read fails.
+/// Favorites whose next read fails (the first one, unless told otherwise).
 actor FlakyFavorites: FavoritesStoring {
     let database: AppDatabase
-    private var failed = false
-    init(database: AppDatabase) { self.database = database }
+    private var failNext: Bool
+    init(database: AppDatabase, failFirst: Bool = true) {
+        self.database = database
+        failNext = failFirst
+    }
+    func failNextRead() { failNext = true }
     func favorites() async throws -> [Favorite] {
-        if !failed { failed = true; throw URLError(.cannotOpenFile) }
+        if failNext { failNext = false; throw URLError(.cannotOpenFile) }
         return try await database.favorites()
     }
     func renameFavorite(id: Int64, title: String) async throws {}

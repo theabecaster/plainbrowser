@@ -828,8 +828,9 @@ Research and sources: docs/research/dark-mode.md.
   layer, texture, shadow or mask. 1,000-row History scroll on the iPhone 17 simulator (Release,
   main-thread CPU per frame while the list tracks or decelerates, 3 runs of 36 fast swipes, the
   simulator draws at 60 Hz): before 1.57 / 1.80 / 1.96 ms, after 1.66 / 1.78 / 1.72 ms; worst
-  frame 12.8–22.2 ms before, 12.8–14.5 ms after. Under 2 ms a frame leaves most of the 8.3 ms a
-  120 Hz frame allows.
+  frame 12.8–22.2 ms before, 12.8–14.5 ms after. The paper adds nothing measurable; the
+  simulator can't show 120 Hz headroom, so the device perf gate and Instruments on the Duo are the
+  check for that.
 - **Read failures** (state rules §6, Sheets): History, Archived Tabs and Favorites show one
   sentence and Try Again in place of the list when a read fails, never the empty state and never
   stale rows. History's Clear dims only when history itself is empty: a search that finds nothing

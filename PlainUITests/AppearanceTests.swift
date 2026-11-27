@@ -167,6 +167,35 @@ final class AppearanceTests: XCTestCase {
         chooseAppearance(app, "System")
     }
 
+    /// The device number for dark pages: `XCTHitchMetric` while scrolling the light-only page,
+    /// darkened and with dark pages off (one `measure` per test). The simulator reports no hitch
+    /// data. Runs on request (`TEST_RUNNER_PLAIN_DARK_PERF=1`), on the device by the lead.
+    func testScrollHitchesDarkened() throws { try measureScrollHitches(darkPagesOff: false) }
+    func testScrollHitchesDarkPagesOff() throws { try measureScrollHitches(darkPagesOff: true) }
+
+    private func measureScrollHitches(darkPagesOff: Bool) throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_DARK_PERF"] == "1", "perf runs on request only")
+        let app = try launch()
+        chooseAppearance(app, "Dark")
+        go(app, to: "/light-site", heading: "Light Only")
+        if darkPagesOff {
+            openPageMenu(app)
+            app.buttons["Turn Off Dark Pages for This Site"].tap()
+        }
+        Thread.sleep(forTimeInterval: 1)
+        let web = app.webViews.firstMatch
+        let options = XCTMeasureOptions()
+        options.iterationCount = 5
+        options.invocationOptions = [.manuallyStop]
+        measure(metrics: [XCTHitchMetric(application: app), XCTOSSignpostMetric.scrollingAndDecelerationMetric], options: options) {
+            web.swipeUp(velocity: .fast)
+            stopMeasuring()
+            web.swipeDown(velocity: .fast)
+        }
+        for _ in 0..<4 { web.swipeDown(velocity: .fast) }
+        chooseAppearance(app, "System")
+    }
+
     /// Screenshots for review: Settings with Appearance, the app light and dark, a site with its
     /// own dark design, a light-only site darkened, and the same with dark pages off. Runs on
     /// request: `TEST_RUNNER_PLAIN_CAPTURE=1`.

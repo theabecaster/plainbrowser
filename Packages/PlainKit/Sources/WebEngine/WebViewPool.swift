@@ -627,6 +627,15 @@ public final class WebViewPool {
         darkPagesSitesDidChange()
     }
 
+    /// A page reports whether its script has dark pages off. A page kept from before the user
+    /// changed the site's choice (the back-forward cache) gets the current choice.
+    func reconcileDarkPages(pageIsOff: Bool, in tab: Tab) {
+        guard let site = NavigationRules.siteKey(for: tab.url), let webView = slots[tab.id]?.webView else { return }
+        let off = (tab.isPrivate ? privateDarkPages() : darkPages).offSites.contains(site)
+        guard off != pageIsOff else { return }
+        webView.evaluateJavaScript(DarkPages.setOffSource(off), in: nil, in: UserScripts.world) { _ in }
+    }
+
     func setContentModeOverride(_ mode: ContentMode?, for tab: Tab) {
         guard let site = NavigationRules.siteKey(for: tab.url) else { return }
         // A choice that matches what the pane would pick anyway is no override: the site goes back
@@ -1355,9 +1364,12 @@ extension WebViewPool {
                 return
             }
             if message.name == DarkPages.handlerName {
-                guard message.frameInfo.isMainFrame, let raw = message.body as? String,
-                      let state = DarkPagesState(rawValue: raw) else { return }
+                guard message.frameInfo.isMainFrame, let body = message.body as? [String: Any],
+                      let raw = body["state"] as? String, let state = DarkPagesState(rawValue: raw) else { return }
                 slot?.receiveDarkPagesState(state)
+                if let tab = slot?.tab, let off = body["off"] as? Bool {
+                    tab.pool?.reconcileDarkPages(pageIsOff: off, in: tab)
+                }
                 return
             }
             guard let body = message.body as? [String: Any], let id = body["id"] as? String else { return }

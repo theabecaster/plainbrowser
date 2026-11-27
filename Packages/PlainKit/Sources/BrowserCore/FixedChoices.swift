@@ -105,6 +105,15 @@ public enum FixedChoices {
     /// About a long article's worth; past it, background pictures may show inverted, which is the
     /// cost of never spending more than a few milliseconds per page.
     public static let darkPagesMaxElementsScanned = 4_000
+    /// An inline SVG with a fill or stroke at least this colorful (0 grey, 1 a pure hue) is a
+    /// logo or an illustration and keeps its colors; one in greys is an icon that flips with the
+    /// text so it stays visible. 0.25 keeps brand colors and leaves near-greys to flip.
+    public static let darkPagesColoredSVGChroma = 0.25
+    /// Shapes read per inline SVG for that check: a logo shows its colors in its first few shapes.
+    public static let darkPagesSVGShapesChecked = 24
+    /// After load, content a page adds is checked for background pictures in batches this many
+    /// milliseconds apart, so an infinite-scroll page costs one pass per burst, not one per node.
+    public static let darkPagesWatchDelay = 250
 
     // MARK: Address bar
 

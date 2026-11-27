@@ -31,6 +31,7 @@ struct DarkPagesTests {
         <picture id=pic><img id=inner src="\(svg)"></picture>
         <div id=bg class=hero>hero</div><div id=inline style="background-image: url('\(svg)')">inline</div>
         <canvas id=cv width=10 height=10></canvas><svg id=icon width=10 height=10><rect width=10 height=10/></svg>
+        <svg id=logo width=10 height=10><circle cx=5 cy=5 r=5 fill="#e33"/></svg>
         """
 
     /// A large light-only page: 3,000 paragraphs, 4,000 style rules and 300 background pictures.
@@ -63,6 +64,21 @@ struct DarkPagesTests {
         case "/dark.css":
             return .data(Data("@media (prefers-color-scheme: dark){body{background:#000;color:#fff}}".utf8), type: "text/css")
         case "/big": return .html(bigPage)
+        case "/late-dark":
+            // Light while the head loads, dark once a sheet at the end of the body arrives.
+            return .html(page(style: "", body: "<p>late</p><link rel=stylesheet href='/late.css'>"))
+        case "/late.css":
+            return .data(Data("body{background:#111;color:#eee}".utf8), type: "text/css")
+        case "/oklch-dark": return .html(page(style: "body{background:oklch(0.2 0.02 260);color:#eee}", body: "<p>ok</p>"))
+        case "/p3-dark": return .html(page(style: "body{background:color(display-p3 0.1 0.1 0.12);color:#eee}", body: "<p>p3</p>"))
+        case "/adopted-dark":
+            return .html(page(style: base, body: """
+                <p>adopted</p><script>const s = new CSSStyleSheet();
+                s.replaceSync('@media (prefers-color-scheme: dark){body{color:#eee}}');
+                document.adoptedStyleSheets = [...document.adoptedStyleSheets, s];</script>
+                """))
+        case "/imported-dark":
+            return .html(page(style: "@import url('/dark.css'); " + base, body: "<p>imported</p>"))
         default: return Pages.route(request)
         }
     }
@@ -96,8 +112,10 @@ struct DarkPagesTests {
         }
         // Inside a picture that already got the filter back: none of its own.
         #expect(try await style("filter", of: "#inner", in: tab, harness: harness) == "none")
-        // An inline icon is drawn like text: it flips with the page.
+        // An inline icon in greys is drawn like text: it flips with the page. A colored one is a
+        // logo and keeps its colors.
         #expect(try await style("filter", of: "#icon", in: tab, harness: harness) == "none")
+        #expect(try await style("filter", of: "#logo", in: tab, harness: harness).contains("invert"))
         // Before the first paint the page was already dark: the guard, or the darkening itself.
         let early = try #require(try await harness.evaluate("window.__early", in: tab) as? [String: String])
         report("dark pages early root: \(early)")
@@ -117,7 +135,10 @@ struct DarkPagesTests {
         try await waitUntil("darkened") { tab.darkPages == .darkened }
     }
 
-    @Test(arguments: ["/dark-media", "/dark-meta", "/dark-property", "/only-light", "/already-dark", "/dark-sheet"])
+    @Test(arguments: [
+        "/dark-media", "/dark-meta", "/dark-property", "/only-light", "/already-dark", "/dark-sheet", "/late-dark",
+        "/oklch-dark", "/p3-dark", "/adopted-dark", "/imported-dark",
+    ])
     func pagesWithTheirOwnDarkDesignAreLeftAlone(path: String) async throws {
         let harness = try await makeHarness(style: .dark)
         defer { harness.cleanUp() }
@@ -152,6 +173,61 @@ struct DarkPagesTests {
         harness.pool.interfaceStyle = .light
         try await waitUntil("light again") { tab.darkPages == .inactive }
         #expect(try await style("filter", of: "html", in: tab, harness: harness) == "none")
+    }
+
+    @Test func eachSwitchToDarkJudgesThePageAsItIsNow() async throws {
+        let harness = try await makeHarness(style: .dark)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/light", in: tab)
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        harness.window.overrideUserInterfaceStyle = .light
+        harness.pool.interfaceStyle = .light
+        try await waitUntil("light") { tab.darkPages == .inactive }
+        _ = try await harness.evaluate("document.body.style.background = '#101010'; 1", in: tab)
+        harness.window.overrideUserInterfaceStyle = .dark
+        harness.pool.interfaceStyle = .dark
+        try await waitUntil("judged again") { tab.darkPages == .native }
+        #expect(try await style("filter", of: "html", in: tab, harness: harness) == "none")
+    }
+
+    @Test func darkeningComesBackWhenThePageReplacesItsAdoptedSheets() async throws {
+        let harness = try await makeHarness(style: .dark)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/light", in: tab)
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        try await Task.sleep(for: .milliseconds(100))
+        _ = try await harness.evaluate(
+            "document.adoptedStyleSheets = []; document.body.appendChild(document.createElement('p')); 1", in: tab
+        )
+        #expect(try await style("filter", of: "html", in: tab, harness: harness) == "none")
+        let deadline = ContinuousClock.now + .seconds(3)
+        var filter = ""
+        while ContinuousClock.now < deadline {
+            filter = try await style("filter", of: "html", in: tab, harness: harness)
+            if filter.contains("invert") { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(filter.contains("invert"))
+    }
+
+    @Test func aPageWithAnOldChoiceGetsTheSitesCurrentOne() async throws {
+        let store = InMemorySiteDarkPagesStore()
+        let harness = try await makeHarness(style: .dark, darkPages: store)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/light", in: tab)
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        // As if the site were turned off in another tab while this page waited in the
+        // back-forward cache: its next report brings it in line.
+        store.setDarkPagesOff(true, forSite: "127.0.0.1")
+        let webView = try #require(harness.pool.existingWebView(for: tab))
+        _ = try await webView.evaluateJavaScript(DarkPages.setOffSource(false), in: nil, contentWorld: UserScripts.world)
+        try await waitUntil("corrected") { tab.darkPages == .offForSite }
     }
 
     @Test func turningItOffForASiteIsRememberedAndAppliesAtOnce() async throws {
@@ -257,15 +333,22 @@ struct DarkPagesTests {
             report("dark pages \(label): load \(describe(loads)); script median \(String(format: "%.2f", costs[costs.count / 2])) ms, max \(String(format: "%.2f", costs.last ?? 0)) ms")
         }
         report("load average: \(ProcessInfo.processInfo.loadAverage)")
-        try await measure("darkened", expect: .darkened)
-        store.setDarkPagesOff(true, forSite: "127.0.0.1")
-        harness.pool.darkPagesSitesDidChange()
-        try await measure("off for site", expect: .offForSite)
-        store.setDarkPagesOff(false, forSite: "127.0.0.1")
-        harness.pool.darkPagesSitesDidChange()
-        harness.window.overrideUserInterfaceStyle = .light
-        harness.pool.interfaceStyle = .light
-        try await measure("light app", expect: .inactive)
+        // A warm-up round first, so the first mode measured doesn't pay for JIT and caches; then
+        // the modes interleaved twice.
+        for round in 0..<3 {
+            let tag = round == 0 ? " (warm-up)" : ""
+            try await measure("darkened\(tag)", expect: .darkened)
+            store.setDarkPagesOff(true, forSite: "127.0.0.1")
+            harness.pool.darkPagesSitesDidChange()
+            try await measure("off for site\(tag)", expect: .offForSite)
+            store.setDarkPagesOff(false, forSite: "127.0.0.1")
+            harness.pool.darkPagesSitesDidChange()
+            harness.window.overrideUserInterfaceStyle = .light
+            harness.pool.interfaceStyle = .light
+            try await measure("light app\(tag)", expect: .inactive)
+            harness.window.overrideUserInterfaceStyle = .dark
+            harness.pool.interfaceStyle = .dark
+        }
     }
 }
 

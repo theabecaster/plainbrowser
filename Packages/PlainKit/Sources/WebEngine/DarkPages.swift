@@ -140,7 +140,10 @@ enum DarkPages {
 
     /// What gets the filter again, so it shows as the site made it: pictures, video, canvases
     /// (charts, maps, games), frames and plugins, and elements with an inline background image.
-    /// Elements whose background image is set by a style sheet are found by the script.
+    /// The script marks the rest with `data-plain-dark-media`: elements whose background image is
+    /// set by a style sheet, and inline SVGs drawn in color (logos). Inline SVGs in greys are
+    /// icons drawn like text and flip with it, as Safari's Adaptive Dark Mode does with simple
+    /// black-and-white images.
     static let mediaSelector = """
         img, picture, video, canvas, iframe, embed, object, svg image, [data-plain-dark-media], \
         [style*="background-image"], [style*="background:url"], [style*="background: url"]
@@ -150,11 +153,12 @@ enum DarkPages {
         """
         const site = location.hostname.toLowerCase().replace(/^www\\./, '');
         const media = '\(mediaSelector.replacingOccurrences(of: "\n", with: " "))';
+        const MARK = 'data-plain-dark-media';
         const dark = matchMedia('(prefers-color-scheme: dark)');
         let off = OFF_SITES.has(site);
         let verdict = null;   // 'darken' or 'native' once judged; null while the page is still loading
         let settled = false;  // judged for good after the page's load event
-        let posted = 'inactive';
+        let posted = '';
         let scanned = 0;
         let observer = null;
 
@@ -165,79 +169,140 @@ enum DarkPages {
           :is(${media}) { filter: \(filter) !important; }
           :is(${media}) :is(${media}) { filter: none !important; }
         }`);
+        const ours = (s) => s === guard || s === theme;
+        // Puts the sheets back if the page replaced its adopted style sheets.
         const adopt = () => {
           const list = document.adoptedStyleSheets;
           if (!list.includes(guard) || !list.includes(theme)) {
-            document.adoptedStyleSheets = [...list.filter((s) => s !== guard && s !== theme), guard, theme];
+            document.adoptedStyleSheets = [...list.filter((s) => !ours(s)), guard, theme];
           }
         };
 
+        // The state for the app's page menu, and whether this page has dark pages off: the app
+        // corrects a page that kept an old choice (one restored from the back-forward cache).
         const post = (state, force) => {
           if (state === posted && !force) return;
           posted = state;
-          try { webkit.messageHandlers.\(handlerName).postMessage(state); } catch (e) {}
+          try { webkit.messageHandlers.\(handlerName).postMessage({ state, off }); } catch (e) {}
         };
 
-        // Relative luminance of a computed color, or null when it is transparent.
-        const luminance = (color) => {
-          const m = color.match(/rgba?\\(([^)]+)\\)/);
+        // A computed color as { lum: relative luminance 0-1, alpha, chroma 0-1 }, or null when
+        // the format is unknown. Computed colors are rgb(), color(srgb | display-p3 …), or the
+        // lab family when the site wrote them that way.
+        const measure = (color) => {
+          if (!color || color === 'transparent') return { lum: 0, alpha: 0, chroma: 0 };
+          const m = color.match(/^([a-z-]+)\\((.*)\\)$/);
           if (!m) return null;
-          const [r, g, b, a = 1] = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number);
-          if (a < 0.5) return null;
-          const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
-          return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+          const [main, slash] = m[2].split('/');
+          let parts = main.trim().split(/[\\s,]+/);
+          let alpha = slash !== undefined ? parseFloat(slash) / (slash.includes('%') ? 100 : 1) : 1;
+          const num = (v, scale) => v.endsWith('%') ? parseFloat(v) / 100 : parseFloat(v) / scale;
+          const lin = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+          const fromRGB = (r, g, b) => ({
+            lum: 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b), alpha,
+            chroma: Math.max(r, g, b) - Math.min(r, g, b),
+          });
+          switch (m[1]) {
+            case 'rgb': case 'rgba':
+              if (parts.length === 4 && slash === undefined) alpha = parseFloat(parts[3]);
+              return fromRGB(num(parts[0], 255), num(parts[1], 255), num(parts[2], 255));
+            case 'color':
+              if (!/^(srgb|display-p3|srgb-linear)$/.test(parts[0])) return null;
+              return fromRGB(num(parts[1], 1), num(parts[2], 1), num(parts[3], 1));
+            case 'oklab': case 'oklch': {
+              const l = num(parts[0], 1);
+              const c = m[1] === 'oklch' ? parseFloat(parts[1]) : Math.hypot(parseFloat(parts[1]), parseFloat(parts[2]));
+              return { lum: Math.pow(Math.max(0, l), 3), alpha, chroma: Math.min(1, c / 0.25) };
+            }
+            case 'lab': case 'lch': {
+              const l = num(parts[0], 100) * 100;
+              const c = m[1] === 'lch' ? parseFloat(parts[1]) : Math.hypot(parseFloat(parts[1]), parseFloat(parts[2]));
+              return { lum: l > 8 ? Math.pow((l + 16) / 116, 3) : l / 903.3, alpha, chroma: Math.min(1, c / 100) };
+            }
+            default: return null;
+          }
         };
 
-        // Rules that apply in dark mode, in the style sheets this page can read (another
-        // origin's sheet throws, and is skipped).
+        // Rules that apply in dark mode, in the style sheets this page can read: its own, the
+        // ones they import, and its adopted ones. Another origin's sheet throws, and is skipped.
+        const DARK_QUERY = /prefers-color-scheme\\s*:\\s*dark/;
         const hasDarkRules = () => {
           let read = 0;
+          const visitSheet = (s) => {
+            if (s.media && DARK_QUERY.test(s.media.mediaText)) return true;
+            let rules = null;
+            try { rules = s.cssRules; } catch (e) { return false; }
+            return rules ? visit(rules) : false;
+          };
           const visit = (rules) => {
             for (const rule of rules) {
               if (++read > MAX_RULES) return false;
-              if (rule.media && /prefers-color-scheme\\s*:\\s*dark/.test(rule.media.mediaText)) return true;
-              if (rule.conditionText && /prefers-color-scheme\\s*:\\s*dark/.test(rule.conditionText)) return true;
+              if (rule.media && DARK_QUERY.test(rule.media.mediaText)) return true;
+              if (rule.conditionText && DARK_QUERY.test(rule.conditionText)) return true;
+              if (rule.styleSheet && visitSheet(rule.styleSheet)) return true;
               if (rule.cssRules && visit(rule.cssRules)) return true;
             }
             return false;
           };
           for (const s of document.styleSheets) {
-            if (s.media && /prefers-color-scheme\\s*:\\s*dark/.test(s.media.mediaText)) return true;
-            let rules = null;
-            try { rules = s.cssRules; } catch (e) { continue; }
-            if (rules && visit(rules)) return true;
-            if (read > MAX_RULES) break;
+            if (visitSheet(s)) return true;
+            if (read > MAX_RULES) return false;
+          }
+          for (const s of document.adoptedStyleSheets) {
+            if (!ours(s) && visitSheet(s)) return true;
           }
           return false;
         };
 
-        // 'native' when the page has a dark design or asks never to be darkened, 'darken' when
-        // its background is light, 'native' too for a page that is already dark.
+        // 'native' when the page has a dark design, asks never to be darkened, is already dark,
+        // or shows a background color Plain can't read; 'darken' when its background is light.
+        // Read with Plain's own sheets off, so only the page's colors count.
         const judge = () => {
           const meta = document.querySelector('meta[name="color-scheme" i]');
           const declared = ((meta && meta.content) || '') + ' ' + getComputedStyle(document.documentElement).colorScheme;
           if (/\\bdark\\b/.test(declared) || /\\bonly\\b/.test(declared)) return 'native';
           if (hasDarkRules()) return 'native';
-          const guarding = !guard.disabled;
+          const was = [guard.disabled, theme.disabled];
           guard.disabled = true;
-          let level = luminance(getComputedStyle(document.documentElement).backgroundColor);
-          if (level === null && document.body) level = luminance(getComputedStyle(document.body).backgroundColor);
-          guard.disabled = !guarding;
+          theme.disabled = true;
+          let color = measure(getComputedStyle(document.documentElement).backgroundColor);
+          if (color && color.alpha < 0.5 && document.body) color = measure(getComputedStyle(document.body).backgroundColor);
+          [guard.disabled, theme.disabled] = was;
+          if (!color) return 'native';
           // No background of its own: the page shows on the browser's white canvas.
-          return (level === null ? 1 : level) >= LIGHT ? 'darken' : 'native';
+          return (color.alpha < 0.5 ? 1 : color.lum) >= LIGHT ? 'darken' : 'native';
         };
 
-        // Elements whose style sheets give them a background picture get the media filter too.
+        // An inline SVG drawn in color is a logo or an illustration: it keeps its colors. One in
+        // greys is an icon drawn like text, and flips with it so it stays visible.
+        const coloredSVG = (svg) => {
+          const shapes = svg.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line, text, use');
+          for (let i = 0; i < shapes.length && i < \(FixedChoices.darkPagesSVGShapesChecked); i++) {
+            const style = getComputedStyle(shapes[i]);
+            for (const paint of [style.fill, style.stroke]) {
+              const c = measure(paint);
+              if (c && c.alpha >= 0.5 && c.chroma >= \(FixedChoices.darkPagesColoredSVGChroma)) return true;
+            }
+          }
+          return false;
+        };
+        // Pictures set by style sheets, and colored inline SVGs, get the media filter too.
+        const check = (el) => {
+          if (el.hasAttribute(MARK)) return;
+          if (el.localName === 'svg') {
+            if (coloredSVG(el)) el.setAttribute(MARK, '');
+            return;
+          }
+          const image = getComputedStyle(el).backgroundImage;
+          if (image && image !== 'none' && image.includes('url(')) el.setAttribute(MARK, '');
+        };
         const scan = (rootNode) => {
           if (scanned >= MAX_SCAN || !rootNode.querySelectorAll) return;
           const nodes = rootNode.querySelectorAll('*');
-          for (let i = 0; i < nodes.length && scanned < MAX_SCAN; i++, scanned++) {
-            const el = nodes[i];
-            if (el.hasAttribute('data-plain-dark-media')) continue;
-            const image = getComputedStyle(el).backgroundImage;
-            if (image && image !== 'none' && image.includes('url(')) el.setAttribute('data-plain-dark-media', '');
-          }
+          for (let i = 0; i < nodes.length && scanned < MAX_SCAN; i++, scanned++) check(nodes[i]);
         };
+        // After load, pages that add content (infinite scroll, late widgets) are checked in
+        // batches, and Plain's sheets are put back if the page replaced its adopted ones.
         const watch = () => {
           if (observer || !document.body) return;
           let pending = [];
@@ -247,16 +312,12 @@ enum DarkPages {
             if (!timer) timer = setTimeout(() => {
               timer = 0;
               const batch = pending; pending = [];
-              for (const n of batch) if (n.isConnected) { scan(n); if (n.parentNode) scanOne(n); }
-            }, 250);
+              if (theme.disabled) return;
+              adopt();
+              for (const n of batch) if (n.isConnected && scanned < MAX_SCAN) { scanned++; check(n); scan(n); }
+            }, \(FixedChoices.darkPagesWatchDelay));
           });
           observer.observe(document.body, { childList: true, subtree: true });
-        };
-        const scanOne = (el) => {
-          if (scanned >= MAX_SCAN) return;
-          scanned++;
-          const image = getComputedStyle(el).backgroundImage;
-          if (image && image !== 'none' && image.includes('url(')) el.setAttribute('data-plain-dark-media', '');
         };
 
         // Applies the current choice: darkened, the guard while judging, or nothing.
@@ -305,10 +366,10 @@ enum DarkPages {
           if (verdict === null) requestAnimationFrame(frame);
         };
 
-        // Judged only while it matters: a light app never reads the page's styles. A page loaded
-        // in light and shown in dark is judged when the colors change.
+        // Judged only while it matters: a light app never reads the page's styles. Each switch to
+        // dark (or back on for the site) judges the page as it is now.
         const refresh = () => timed(() => {
-          if (dark.matches && !off && verdict === null && document.readyState !== 'loading') {
+          if (dark.matches && !off && document.readyState !== 'loading') {
             settled = document.readyState === 'complete';
             verdict = judge();
           }
@@ -316,10 +377,10 @@ enum DarkPages {
           if (verdict === null && dark.matches && !off) requestAnimationFrame(frame);
         });
         globalThis.__plainDarkPages = {
-          setOff(value) { off = value; refresh(); },
+          setOff(value) { if (off !== value) { off = value; refresh(); } else { post(posted, true); } },
           get cost() { return cost; },
-          // The engine's perf test: the judgement and a full background-picture scan, averaged
-          // over `runs` (the page's clock counts whole milliseconds).
+          // The engine's perf test: the judgement and a full scan, averaged over `runs` (the
+          // page's clock counts whole milliseconds).
           bench(runs) {
             const start = performance.now();
             for (let i = 0; i < runs; i++) { judge(); scanned = 0; scan(document.body); }

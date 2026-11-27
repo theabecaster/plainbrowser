@@ -318,3 +318,19 @@ Newest feature last.
   tabs; a count or a scroll position hint may help (design review, round 2).
 - **Existing installs keep Left.** Above is the new default, but a stored Tab Layout is kept;
   the owner's Duo may need Settings > Tab Layout > Above once.
+
+## Follow-ups: reveal inset, page menu, cookie probe, History search (2026-11-27)
+
+- **Page menu with a download this session.** On the Duo's outer screen the menu fits a
+  readerable foreign page with a closed tab to reopen, but a Downloads row on top of that (only
+  after a download this launch) puts the History/Favorites/Settings row about 45 pt past the
+  menu's edge, so it scrolls. Options: Downloads in the tabs row, or zoom into Site Settings.
+- **Translate Page in the captioned row** loses its visible "French to English" subtitle (VoiceOver
+  reads it); "Translating…" no longer shows in the row either.
+- **Top bar reveal on the inner screen.** Same `PageInsetState` path as the bottom bar, unit-tested,
+  but not frame-checked: the fold can't be set from the command line and XCUITest can't drive the
+  simulator's resizable window. Check a fixed page header against the top bar on the Duo.
+- **Cookie banners: prehide for known consent managers.** A consent manager found by the probe
+  (not by a site rule) gets the engine after DOMContentLoaded, so its banner can show for a moment
+  before it is rejected. If it shows on real sites, inject only the prehide CSS of the generic rules
+  for the hosts the probe saw, before the engine.

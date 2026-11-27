@@ -164,9 +164,12 @@ extension BrowserViewController {
         tabsUI.gallery?.showList()
         updateStartScreen()
         updateStartScreenMessage()
-        // History waiting to be written, then its database and its website data store, off the
-        // main thread. The store is removed only after its web views are gone (just closed).
+        // The tab list without the profile is written first, so a crash from here on never brings
+        // the profile back without its data. Then the history waiting to be written, its
+        // database and its website data store, off the main thread. The store is removed only
+        // after its web views are gone (just closed).
         Task { [data, session] in
+            await session.saveTabs()
             await data.forgetProfile(id)
             await session.profileData.remove(id)
             await AppWebsiteData.removeProfileData(id)

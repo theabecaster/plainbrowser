@@ -103,8 +103,11 @@ public final class BrowserSession {
         // of a profile whose deletion the app could not finish.
         Task(priority: .background) { [tabs, profileData] in
             await tabs.pruneFiles()
-            if tabs.areProfilesKnown { await profileData.removeLeftovers(keeping: tabs.profiles.map(\.id)) }
-            await AppWebsiteData.removeLeftoverProfileData()
+            if tabs.areProfilesKnown {
+                let profiles = tabs.profiles.map(\.id)
+                await profileData.removeLeftovers(keeping: profiles)
+                await AppWebsiteData.removeLeftoverProfileData(keeping: profiles)
+            }
         }
         // A restored page loads only with its rules attached: lookups of compiled lists take
         // about 1 ms, and an update keeps the previous lists attached while it compiles.

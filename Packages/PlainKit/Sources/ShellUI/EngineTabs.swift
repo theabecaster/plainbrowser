@@ -265,11 +265,13 @@ final class EngineTabs {
     /// (TabStore's rule). No-op when already split.
     func split(showing id: TabID?) {
         store.split(window, showing: id)
+        checkProfile()
     }
 
     /// Closes `pane`; its tab stays open. The other pane is focused.
     func closePane(_ pane: Int) {
         store.closePane(pane, in: window)
+        checkProfile()
     }
 
     func focusPane(_ pane: Int) {

@@ -55,7 +55,7 @@ public enum AppWebsiteData {
     /// Deletes a deleted profile's website data store with everything in it. Call it once no web
     /// view uses the store. WebKit refuses while a web view is still letting go of it, so it is
     /// tried again a moment later, and a store it still can't remove waits in a list for the next
-    /// launch (`removeLeftoverProfileData()`).
+    /// launch (`removeLeftoverProfileData(keeping:)`).
     @MainActor
     public static func removeProfileData(_ id: ProfileID) async {
         guard id != Profile.defaultID else { return }
@@ -68,10 +68,19 @@ public enum AppWebsiteData {
         }
     }
 
-    /// Finishes the store removals an earlier launch could not. Run after launch settles.
+    /// Finishes the store removals an earlier launch could not, never for a profile in
+    /// `profiles` (the saved list, read): a deletion that never reached the disk left its profile
+    /// in place, and its store with it. Run after launch settles.
     @MainActor
-    public static func removeLeftoverProfileData() async {
-        for store in PendingRemovals.all { _ = await remove(store) }
+    public static func removeLeftoverProfileData(keeping profiles: [ProfileID]) async {
+        let live = Set(profiles.filter { $0 != Profile.defaultID }.map(identifier(forProfile:)))
+        for store in PendingRemovals.all {
+            if live.contains(store) {
+                PendingRemovals.remove(store)
+            } else {
+                _ = await remove(store)
+            }
+        }
     }
 
     /// Removes the store; true when it is gone (or never existed). Drops it from the list then.

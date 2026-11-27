@@ -485,7 +485,9 @@ extension BrowserViewController {
                 tab.load(url)
             }
             reader.onShown = { [weak self] in self?.updateButtons() }
-            reader.prepare(pool: session.pool, isPrivate: tab.isPrivate, in: self.webContainer, scrollDelegate: self)
+            reader.prepare(
+                pool: session.pool, isPrivate: tab.isPrivate, profile: tab.profileID, in: self.webContainer, scrollDelegate: self
+            )
             // A tap on the status bar scrolls the reader, not the page under it.
             session.pool.scrollView(for: tab)?.scrollsToTop = false
             self.updatePageInsets()

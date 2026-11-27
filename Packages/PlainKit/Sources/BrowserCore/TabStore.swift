@@ -439,6 +439,10 @@ public final class TabStore {
         if let id = windows[index].panes[pane] { touch(id) }
         windows[index].panes.remove(at: pane)
         windows[index].focusedPane = 0
+        // The remaining pane's tab decides the window's profile.
+        if let id = windows[index].panes[0], let entry = tabs[id], !entry.isPrivate {
+            windows[index].profileID = entry.profileID
+        }
         saveSession()
     }
 

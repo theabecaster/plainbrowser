@@ -69,6 +69,22 @@ import Testing
         #expect(store.tabs(in: window, private: true).map(\.id) == [secret])
     }
 
+    @Test func aSplitsFocusedPaneDecidesTheProfile() throws {
+        let store = makeStore()
+        let window = store.windows[0].id
+        let work = try #require(store.addProfile(named: "Work"))
+        let a = store.open(url("a"))
+        let w = store.open(url("w"), inBackground: true, profile: work)
+        store.split(window, showing: w)
+        #expect(store.profileID(of: window) == work)
+        store.focusPane(0, in: window)
+        #expect(store.profileID(of: window) == Profile.defaultID)
+        store.focusPane(1, in: window)
+        store.closePane(1, in: window)
+        #expect(store.selectedTabID(in: window) == a)
+        #expect(store.profileID(of: window) == Profile.defaultID, "the pane left decides")
+    }
+
     @Test func closingATabShowsOneOfTheSameProfile() throws {
         let store = makeStore()
         let window = store.windows[0].id

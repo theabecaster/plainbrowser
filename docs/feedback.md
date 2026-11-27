@@ -12,7 +12,7 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Done
 
-- **Suggestions flicker while typing:** fixed. Each row belongs to one suggestion, so a suggestion that stays never blinks; new rows fade in and old ones fade out in place, and a row that changes place crossfades there (0.18 s, nothing slides). Local pages and cached engine rows arrive as one list, and the previous engine rows hold for up to 120 ms until the new answer replaces them. Also fixed: engine rows that turned invisible after the first keystroke. (dev, suggestions lane.)
+- **Suggestions flicker while typing:** fixed. Each row belongs to one suggestion, so a suggestion that stays never blinks; new rows fade in and old ones fade out in place, and a row that changes place crossfades there (a 0.12 s crossfade; nothing slides). Local pages and cached engine rows arrive as one list, and the previous engine rows hold for up to 120 ms until the new answer replaces them. Also fixed: engine rows that turned invisible after the first keystroke. (dev, suggestions lane.)
 
 - **Tabs button with one tab:** with a single page the tabs button is the normal Tabs button, and a tap opens the switcher the swipe up opens (the page's card and a New Tab card), with the same motion. Its long press is unchanged; the start screen alone still has no tabs button. New Tab stays on the switcher's +, its New Tab card, More and the tabs menu. (dev, one-button lane.)
 

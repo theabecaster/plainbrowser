@@ -45,7 +45,8 @@ struct AddressBarDataTests {
 
     private static let answers: [String: [String]] = [
         "swift": ["swift docs", "swift ownership"],
-        "swift d": ["swift docs", "swift data"],
+        "kotl": ["kotlin docs", "kotl app"],
+        "kotli": ["kotlin docs", "kotlin coroutines"],
         "swiftx": ["swiftx one", "swiftx two"],
         "kotlin": ["kotlin docs", "kotlin coroutines"],
     ]
@@ -57,13 +58,13 @@ struct AddressBarDataTests {
     @Test func theFirstListForAKeystrokeAlreadyHasTheCachedEngineRows() async throws {
         let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
         await data.attach(try AppDatabase.inMemory())
-        await data.suggestions(for: "swift") { _ in }
+        await data.suggestions(for: "kotl") { _ in }
 
         var updates: [[AddressBarSuggestion]] = []
-        await data.suggestions(for: "swift d") { updates.append($0) }
-        // Local pages and the cached "swift" answer arrive together, never pages alone first; the
+        await data.suggestions(for: "kotli") { updates.append($0) }
+        // Local pages and the cached "kotl" answer arrive together, never pages alone first; the
         // row the cache has no match for holds its place until the answer comes.
-        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], ["swift docs", "swift data"]])
+        #expect(updates.map(Self.searches) == [["kotlin docs", "kotl app"], ["kotlin docs", "kotlin coroutines"]])
     }
 
     @Test func engineRowsStayInPlaceUntilTheNextAnswer() async throws {
@@ -98,6 +99,17 @@ struct AddressBarDataTests {
         // Not typing on from "swift" (the field was cleared and new text typed): nothing held.
         await data.suggestions(for: "kotlin") { updates.append($0) }
         #expect(updates.map(Self.searches) == [[], ["kotlin docs", "kotlin coroutines"]])
+    }
+
+    @Test func rowsNeverComeBackAfterTheFieldWasCleared() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        // "swift", cleared (the field asks for nothing), then "s": more than one keystroke on.
+        await data.suggestions(for: "s") { updates.append($0) }
+        #expect(updates.first.map(Self.searches) == [])
     }
 
     @Test func addressesNeverHoldEngineRows() async throws {

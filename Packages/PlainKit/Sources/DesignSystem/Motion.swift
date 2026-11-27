@@ -15,10 +15,12 @@ public enum Motion {
     /// Small state changes: a row highlight, an armed indicator.
     public static let quick = Animation.snappy(duration: 0.15)
     /// Address-bar suggestions changing while typing: new rows fade in, old ones fade out where
-    /// they stand, and a row that changes place crossfades there; nothing slides. An ease-out
-    /// fade of this duration, not a spring: a spring's long tail leaves the old text faintly
-    /// visible for a while. The next keystroke picks it up from what is on screen.
-    public static let suggestionsDuration: TimeInterval = 0.18
+    /// they stand, and a row that changes place crossfades there; nothing slides. A short linear
+    /// crossfade, not a spring or an ease: the two opacities always add up to one, so a place
+    /// never dims to empty between two texts, and they overlap for only a few frames (a spring's
+    /// long tail left old text faintly visible). The next keystroke picks up from what is on
+    /// screen.
+    public static let suggestionFade: TimeInterval = 0.12
     /// Toolbar snaps collapsed or expanded when a drag ends, from the release velocity. A spring
     /// value, not an `Animation`: `SpringDriver` runs it frame by frame so a new drag can grab it.
     public static let toolbarSnap = Spring.smooth(duration: 0.25)

@@ -228,6 +228,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     }
 
     private func update(_ items: [AddressBarSuggestion], showFavorites: Bool, animated: Bool) {
+        // The first rows after an empty list show at once, readable on the keystroke's frame:
+        // there is no text there to crossfade from.
+        let fillsEmpty = shownRows.isEmpty && leavingRows.isEmpty
         // Where every row is on screen now, mid-animation included, in the clip's space.
         var before: [ObjectIdentifier: (frame: CGRect, alpha: CGFloat)] = [:]
         for row in shownRows + leavingRows {
@@ -306,10 +309,11 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             row.isUserInteractionEnabled = row.fits
             row.accessibilityElementsHidden = !row.fits
             if entering.contains(ObjectIdentifier(row)) || !animated {
+                let fades = animated && !fillsEmpty
                 row.layer.removeAllAnimations()
                 row.transform = .identity
-                row.alpha = animated ? 0 : target
-                if animated { moves.append((row, target)) }
+                row.alpha = fades ? 0 : target
+                if fades { moves.append((row, target)) }
                 continue
             }
             guard let seen = before[ObjectIdentifier(row)] else {
@@ -333,6 +337,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         rowsStack.accessibilityElements = next.filter(\.fits)
 
         let plateAlpha: CGFloat = next.isEmpty ? 0 : 1
+        if fillsEmpty, animated { plate.layer.removeAllAnimations(); plate.alpha = plateAlpha }
         let area = rowsArea()
         if !animated {
             plate.alpha = plateAlpha
@@ -347,18 +352,14 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         }
         let leavingNow = leaving.filter { leavingRows.contains($0) }.map { ($0, $0.leaveToken) }
         setFavoritesShown(showFavorites, animated: true)
-        UIView.animate(
-            withDuration: Motion.suggestionsDuration, delay: 0,
-            options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]
-        ) {
+        // Linear: where one text replaces another, their opacities add up to one throughout.
+        let options: UIView.AnimationOptions = [.curveLinear, .allowUserInteraction, .beginFromCurrentState]
+        UIView.animate(withDuration: Motion.suggestionFade, delay: 0, options: options) {
             for (row, alpha) in moves {
                 row.transform = .identity
                 row.alpha = alpha
             }
-            for (row, _) in leavingNow {
-                row.transform = .identity
-                row.alpha = 0
-            }
+            for (row, _) in leavingNow { row.alpha = 0 }
             self.plate.alpha = plateAlpha
             if !area.isEmpty { self.plateMask.frame = area }
         } completion: { [weak self] _ in
@@ -371,8 +372,8 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         super.didMoveToWindow()
         guard window != nil, !didWarmRows else { return }
         didWarmRows = true
-        // After the frame that showed the sheet, not on the launch path.
-        DispatchQueue.main.async { [weak self] in self?.warmRows() }
+        // Well after the frame that showed the sheet: never on the launch path.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.warmRows() }
     }
 
     /// Lays the spare rows out once, out of sight, with a page and a search: the first keystroke
@@ -408,9 +409,12 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.isToppingUp = false
+            let signposter = Signposts.signposter
+            let signpost = signposter.beginInterval(Signposts.suggestionsApply, "spare rows")
             while self.spareRows.count < FixedChoices.maxAddressBarSuggestions {
                 self.spareRows.append(self.makeRow())
             }
+            signposter.endInterval(Signposts.suggestionsApply, signpost)
         }
     }
 
@@ -445,7 +449,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             return
         }
         UIView.animate(
-            withDuration: Motion.suggestionsDuration, delay: 0,
+            withDuration: Motion.suggestionFade, delay: 0,
             options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]
         ) {
             self.favoritesStrip.alpha = shown ? 1 : 0

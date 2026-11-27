@@ -174,7 +174,10 @@ public final class LiveAddressBarData: AddressBarData {
         // and never longer than the hold window in all: they never come back after the field
         // was cleared, and never linger over several fast keystrokes on a slow network.
         let now = ContinuousClock.now
-        let typingOn = !shownQuery.isEmpty && (query.hasPrefix(shownQuery) || shownQuery.hasPrefix(query))
+        // One keystroke on: a character typed or deleted. Clearing the field and typing again
+        // changes more than one, so rows for the old text never come back.
+        let typingOn = !shownQuery.isEmpty && abs(query.count - shownQuery.count) <= 1
+            && (query.hasPrefix(shownQuery) || shownQuery.hasPrefix(query))
         let holdLeft = FixedChoices.suggestionHoldWindow - (heldSince.map { now - $0 } ?? .zero)
         let canHold = remote && typingOn && holdLeft > .zero
         let held = !canHold ? [] : Array(
@@ -213,6 +216,9 @@ public final class LiveAddressBarData: AddressBarData {
             if !held.isEmpty, shown == first { deliver(cached) }
         } else if fresh != shown {
             deliver(fresh)
+        } else {
+            // The answer confirms the rows on screen: they are no longer held.
+            heldSince = nil
         }
     }
 

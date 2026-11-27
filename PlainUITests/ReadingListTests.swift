@@ -72,7 +72,7 @@ final class ReadingListTests: XCTestCase {
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 3))
         XCTAssertEqual(rows.count, 2)
         // Newest first; the article shows its reading time, the plain page only its site.
-        XCTAssertTrue(rows.element(boundBy: 0).label.contains("Page A"), rows.element(boundBy: 0).label)
+        XCTAssertTrue(rows.element(boundBy: 0).label.contains("Plain Test A"), rows.element(boundBy: 0).label)
         let article = rows.element(boundBy: 1)
         XCTAssertTrue(article.label.contains("The Quiet Page"), article.label)
         XCTAssertTrue(article.label.contains("min"), "a saved copy has a reading time: \(article.label)")

@@ -69,6 +69,15 @@ public enum Signposts {
     public static let toolbarSnap: StaticString = "toolbar.snap"
     /// Event: the page's bottom inset followed the bar's resting state (expanded or collapsed).
     public static let pageInset: StaticString = "toolbar.pageInset"
+    /// Event: the bar hides while reading (the pill sinks away). Message: what hid it.
+    public static let toolbarHide: StaticString = "toolbar.hide"
+    /// Event: a hidden or collapsed bar comes back whole. Message: what brought it back (scroll
+    /// up, edge tap, status bar, page end, navigation...).
+    public static let toolbarReveal: StaticString = "toolbar.reveal"
+    /// Interval: the shell's work in one page scroll callback (the toolbar's tracking, pull to
+    /// refresh). Emitted only while a signpost recorder listens; the main-thread cost per scroll
+    /// frame.
+    public static let scrollStep: StaticString = "toolbar.scrollStep"
     /// Event: pull to refresh crossed its threshold and is armed.
     public static let pullToRefreshArm: StaticString = "ptr.arm"
     /// Event: pull to refresh was released armed and the page reloads.

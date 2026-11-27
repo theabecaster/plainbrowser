@@ -2,7 +2,7 @@
 import BrowserCore
 import SwiftUI
 
-/// The Settings sheet: six rows, each showing its value, and one Done button.
+/// The Settings sheet: seven rows, each showing its value, and one Done button.
 ///
 /// Present it in a sheet. `onDone` runs when Done is tapped; without it the view dismisses itself.
 public struct SettingsView: View {
@@ -54,6 +54,19 @@ public struct SettingsView: View {
                     .disabled(!model.isLoaded)
                 } footer: {
                     Text(model.settings.archiveAfter.footer)
+                }
+
+                Section {
+                    Picker("Appearance", selection: Binding(
+                        get: { model.settings.appearance }, set: { model.setAppearance($0) }
+                    )) {
+                        ForEach(Appearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(!model.isLoaded)
+                    .accessibilityIdentifier("settings.appearance")
+                } footer: {
+                    Text(model.settings.appearance.footer)
                 }
 
                 Section {

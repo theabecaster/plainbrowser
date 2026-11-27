@@ -49,6 +49,11 @@ public enum ReaderItem: Sendable, Equatable {
     case show, hide, hidden
 }
 
+/// The dark pages item in the page menu (§4).
+public enum DarkPagesItem: Sendable, Equatable {
+    case turnOff, turnOn, hidden
+}
+
 /// The state of the browser screen, in the terms of docs/state-rules.md §2.
 public struct ChromeState: Sendable, Equatable {
     /// A tab is on screen. An empty tab counts; no tab at all (first run) does not.
@@ -85,6 +90,10 @@ public struct ChromeState: Sendable, Equatable {
     public var isWebPage = false
     public var isReaderAvailable = false
     public var isPDF = false
+    /// Plain darkens the page (only ever while the app is dark).
+    public var isDarkened = false
+    /// The user turned dark pages off for this site, and the app is dark.
+    public var isDarkPagesOff = false
     /// The page can be a favorite (history-recordable address).
     public var isRecordable = false
     /// A Duo split can show (width and height both regular).
@@ -228,6 +237,16 @@ public struct ControlRules: Sendable, Equatable {
 
     /// Like Desktop Site, regular tabs only (the allow-list is saved to disk).
     public var blockingToggle: Bool { desktopSite && !state.isPrivate }
+
+    /// Turn Off while Plain darkens the page, Turn On while the user has it off for the site; only
+    /// on the page itself (not under the reader, not on an error page). In a light app, or on a
+    /// page with its own dark design, there is nothing to switch.
+    public var darkPages: DarkPagesItem {
+        guard isPageShowing, state.isWebPage, !state.isReaderOpen else { return .hidden }
+        if state.isDarkened { return .turnOff }
+        if state.isDarkPagesOff { return .turnOn }
+        return .hidden
+    }
 
     /// A page that never loaded is not a favorite; the reader's page is.
     public var favorite: Bool {

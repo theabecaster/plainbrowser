@@ -37,9 +37,11 @@ import Testing
         model.setTabLayout(.right)
         model.setArchiveAfter(.twelveHours)
         model.setArchiveAfter(.oneWeek)
+        model.setAppearance(.dark)
+        model.setAppearance(.light)
         await model.waitForSaves()
         let saved = try await database.settings()
-        #expect(saved == BrowserSettings(searchEngine: .duckDuckGo, tabLayout: .right, archiveAfter: .oneWeek))
+        #expect(saved == BrowserSettings(searchEngine: .duckDuckGo, tabLayout: .right, archiveAfter: .oneWeek, appearance: .light))
     }
 
     @Test func customEngineIsValidatedNamedAndSaved() async throws {

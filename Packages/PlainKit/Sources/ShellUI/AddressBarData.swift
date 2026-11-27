@@ -53,6 +53,9 @@ public protocol AddressBarData: AnyObject {
     var archiveAfter: ArchiveAfter? { get }
     /// Settings > Tab Layout, once the saved settings are read; nil before.
     var tabLayout: TabLayout? { get }
+    /// Settings > Appearance, once the saved settings are read; nil before (the windows keep
+    /// the launch copy, `AppAppearance`).
+    var appearance: Appearance? { get }
     /// Called on the main thread when the settings in effect change (read at launch, or saved).
     var onSettingsChange: (() -> Void)? { get set }
 }
@@ -85,6 +88,7 @@ public final class LiveAddressBarData: AddressBarData {
     private var hasSettings = false
     public var archiveAfter: ArchiveAfter? { hasSettings ? settings.archiveAfter : nil }
     public var tabLayout: TabLayout? { hasSettings ? settings.tabLayout : nil }
+    public var appearance: Appearance? { hasSettings ? settings.appearance : nil }
     public var onSettingsChange: (() -> Void)?
     private var hasFirstFrame = false
     private var preconnectAfterFirstFrame = false

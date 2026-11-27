@@ -113,6 +113,49 @@ final class StorageSitePageZoomStore: SitePageZoomStore {
     }
 }
 
+/// The sites where dark pages is off. The engine builds each page's script from the list, so it
+/// lives in memory, loaded once from Storage after launch; changes go to memory at once and to
+/// Storage behind it, in order. Private tabs never reach it (the pool keeps theirs in memory).
+final class StorageSiteDarkPagesStore: SiteDarkPagesStore {
+    private(set) var offSites: Set<String> = []
+    /// Choices made before the stored list arrived, applied on top of it.
+    private var editsBeforeLoad: [String: Bool] = [:]
+    private var isLoaded = false
+    private var lastWrite: Task<Void, Never>?
+    private let database: DatabaseProvider
+
+    init(database: @escaping DatabaseProvider) {
+        self.database = database
+    }
+
+    /// Reads the stored list off the main thread. Call once, after the first frame. Returns
+    /// whether the list changed, so the pool can rebuild its scripts.
+    func load() async -> Bool {
+        guard !isLoaded, let database = await database() else { return false }
+        let stored = (try? await database.darkPagesOffSites()) ?? []
+        guard !isLoaded else { return false }
+        var sites = stored
+        for (site, off) in editsBeforeLoad {
+            if off { sites.insert(site) } else { sites.remove(site) }
+        }
+        editsBeforeLoad = [:]
+        isLoaded = true
+        defer { offSites = sites }
+        return sites != offSites
+    }
+
+    func setDarkPagesOff(_ off: Bool, forSite site: String) {
+        if off { offSites.insert(site) } else { offSites.remove(site) }
+        if !isLoaded { editsBeforeLoad[site] = off }
+        let previous = lastWrite
+        let database = database
+        lastWrite = Task {
+            await previous?.value
+            try? await database()?.setDarkPagesOff(off, forSite: site)
+        }
+    }
+}
+
 /// The sites where blocking is off, in Storage.
 nonisolated struct StorageSiteAllowListStore: SiteAllowListStore {
     let database: DatabaseProvider

@@ -46,4 +46,15 @@ import Testing
         try await database.saveBlockingAllowList(["b.example"])
         #expect(try await database.blockingAllowList() == ["b.example"])
     }
+
+    @Test func darkPagesOffSitesAreRemembered() async throws {
+        let database = try AppDatabase.inMemory()
+        #expect(try await database.darkPagesOffSites().isEmpty)
+        try await database.setDarkPagesOff(true, forSite: "a.example")
+        try await database.setDarkPagesOff(true, forSite: "a.example")
+        try await database.setDarkPagesOff(true, forSite: "b.example")
+        #expect(try await database.darkPagesOffSites() == ["a.example", "b.example"])
+        try await database.setDarkPagesOff(false, forSite: "a.example")
+        #expect(try await database.darkPagesOffSites() == ["b.example"])
+    }
 }

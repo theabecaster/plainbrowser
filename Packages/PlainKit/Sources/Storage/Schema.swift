@@ -20,6 +20,7 @@ enum Schema {
     static let siteContentMode = "siteContentMode"
     static let blockingAllowList = "blockingAllowList"
     static let sitePageZoom = "sitePageZoom"
+    static let darkPagesOff = "darkPagesOff"
 
     static func register(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1.history") { db in
@@ -205,6 +206,13 @@ enum Schema {
             try db.create(table: sitePageZoom) { t in
                 t.primaryKey("site", .text)
                 t.column("zoom", .double).notNull()
+            }
+        }
+
+        // The sites where the user turned off dark pages from the page menu.
+        migrator.registerMigration("v7.darkPagesOff") { db in
+            try db.create(table: darkPagesOff) { t in
+                t.primaryKey("site", .text)
             }
         }
     }

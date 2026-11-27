@@ -132,6 +132,7 @@ Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen.
 | Zoom row (− % +) | — | shown | shown; − / + dim at the ends, % dim at 100 % | — | — | — | Zoom acts on the page, which is hidden under the reader. |
 | Desktop Site | — | http(s) | http(s) | http(s) | — | — | A remembered Desktop Site choice can be why a page fails, so the switch back stays (it retries the load). Under the reader it would act out of sight. |
 | Turn Off / On Blocking on This Site | — | http(s), regular tabs | http(s), regular tabs | http(s), regular tabs (blocking can cause the failure) | — | — | Private tabs: hidden (the allow-list is saved to disk). |
+| Turn Off / On Dark Pages for This Site | — | as Loaded | Only while Plain is dark: Turn Off while Plain darkens the page, Turn On while the user has it off for this site | — | — | — | Hidden in a light app (it would change nothing), on pages with their own dark design (nothing to turn off), on error pages and under the reader. Applies at once, no reload. Private tabs: shown, kept for the private session only. |
 | Add to / Remove from Favorites | — | — | recordable page | — | — | shown (the page's address) | A page that never loaded is not a favorite. |
 | Open in Other Pane | — | Duo split possible | Duo split possible | — | — | — | Only where width and height are both regular (plan, section 6). |
 | New Private Tab, Reopen Closed Tab, Archived Tabs (top section) | New Private Tab always (on an empty private tab it reads "New Tab": it turns this empty tab, nothing is added); Reopen Closed Tab with `closed`; Archived Tabs with `archived` | ← same | ← | ← | ← | ← | The tabs menu's other items, one visible tap away in every state (owner). Without them, closed and archived tabs could not be reached with no tab open. |
@@ -204,6 +205,7 @@ Order is fixed (docs/ui-reference.md). Columns are states of the tab on screen.
 | Edit Favorites | "Add favorites from the page menu." |
 | Every sheet | Loading a local list shows nothing (no spinner). A failed read or write says so in one sentence with Try Again, never as the empty state. A search with no results shows the system's no-results view, and actions on the whole list (Clear) stay available. Such actions dim only when the list itself is empty. |
 | Settings → Clear History and Data | Confirmation first (it is destructive and broad); the row dims while it runs; a failure says so in one sentence. |
+| Settings → Appearance | Always shown and enabled: it applies on every screen. Its footer is one sentence for the current choice. |
 | Settings → Tab Layout | Shown only where side tabs can show (width and height both regular) and only once side tabs are built. Elsewhere it would be a choice that changes nothing. |
 
 ## 7. When states overlap

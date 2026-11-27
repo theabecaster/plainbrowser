@@ -8,11 +8,11 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Swipe up with one tab:** dragging the bar up with a single page opens the switcher with that card and a clear way to add a new tab, as in Arc. (One-tab lane.)
 
-- **Appearance:** Settings choice of System (default), Light or Dark, saved; sites follow it, and pages without a dark mode get darkened like Safari's new auto dark mode, with a per-site off switch. (Appearance lane.)
-
 - **Paper texture:** a subtle, elegant paper texture on the app's own surfaces, never costing frames or quality, never called out in the UI. (Paper lane.)
 
 ## Done
+
+- **Appearance:** Settings > Appearance (System by default, Light, Dark), saved and applied to every window with a crossfade; sites with a dark design follow it, and while Plain is dark, pages without one are darkened like Safari's Adaptive Dark Mode, with "Turn Off Dark Pages for This Site" in the page menu. (dev, next build.)
 
 - **Suggestions over the start-screen mark:** while a query is typed on the start screen, the mark and its shortcuts recede (fade, shrink, drift up) and the rows sit on the paper; they come back when the query is cleared. (dev, state lane.)
 

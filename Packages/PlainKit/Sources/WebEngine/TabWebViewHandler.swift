@@ -122,8 +122,10 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
             tab.set(\.isAwaitingResubmit, false)
             tab.set(\.isPDF, slot.pendingNavigationIsPDF)
             slot.pendingNavigationIsPDF = false
-            // The old document's frames, and their media, are gone.
+            // The old document's frames, and their media, are gone; the new one reports its own
+            // dark pages state.
             slot.clearMediaReports()
+            slot.receiveDarkPagesState(.inactive)
             pool.applyRememberedZoom(to: webView, in: tab)
         }
         updateSecurity(of: webView)

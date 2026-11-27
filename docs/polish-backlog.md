@@ -246,3 +246,27 @@ Newest feature last.
   move them to `Motion` with the other motion values. (Code review, round 3.)
 - **Signposts.** New Tab reusing an empty tab emits no `tab.open`; the tip's display and
   retirement emit none. (Code review, round 1.)
+
+
+## Appearance and dark pages (2026-11-26)
+
+- **Device hitch numbers for dark pages.** The simulator has no hitch metric; its in-page frame
+  proxy showed no difference (docs/research/dark-mode.md, section 8). Run
+  `AppearanceTests/testScrollHitchesDarkened` and `testScrollHitchesDarkPagesOff` on the Duo
+  (`TEST_RUNNER_PLAIN_DARK_PERF=1`). If darkened is worse by a measurable margin, switch the
+  darkening to Dark Reader's dynamic mode (MIT; research, section 4) behind the same judgement.
+- **Filter fidelity.** Darkening flips emoji and CSS-drawn artwork with the text, and pictures
+  given the filter twice lose a little saturation in very light or very dark saturated colors
+  (CSS filters clamp between steps): a pale yellow comes back cream. Colored text headers flip
+  in lightness (a blue bar with white text becomes light blue with black text). Inherent to the
+  filter; a style rewrite or Safari's in-engine darkening (private API on iOS 27) avoids it.
+  (Design review, round 1, blocking; accepted as the technique's trade, see decisions.)
+- **Link previews.** The link menu's preview web view has no dark pages script, so a light-only
+  page previews white in a dark app.
+- **Frames.** Iframes are kept as made (an embed in a darkened page stays light), by design; a
+  same-site iframe of an article could be darkened with the page.
+- **Crossfade duration** (0.3 s) lives in `AppAppearance`; move it to `Motion` when the
+  DesignSystem lane is free. (Code review, polish.)
+- **Settings polish seen in captures, not this lane's:** the dark sheet's Done capsule reads low
+  contrast; rows are full capsules where ui-reference says 6–10 pt corners; the Archive Tabs
+  footer says "used" where ui-reference says "opened". (Design review, polish.)

@@ -208,6 +208,27 @@ import Testing
         #expect(rules.back == .dimmed && rules.share == .shown)
     }
 
+    @Test func darkPagesItemOnlyWhereItSwitchesSomething() {
+        var state = Self.page()
+        #expect(ControlRules(state).darkPages == .hidden, "light app or a site's own dark design")
+        state.isDarkened = true
+        #expect(ControlRules(state).darkPages == .turnOff)
+        state.isPrivate = true
+        #expect(ControlRules(state).darkPages == .turnOff, "private tabs keep it for the session")
+        state.isDarkened = false
+        state.isDarkPagesOff = true
+        #expect(ControlRules(state).darkPages == .turnOn)
+        state.condition = .loading
+        #expect(ControlRules(state).darkPages == .turnOn)
+        for condition in [PageCondition.failed, .crashed, .awaitingResubmit] {
+            state.condition = condition
+            #expect(ControlRules(state).darkPages == .hidden, "\(condition)")
+        }
+        state.condition = .loaded
+        state.isReaderOpen = true
+        #expect(ControlRules(state).darkPages == .hidden, "under the reader it acts out of sight")
+    }
+
     @Test func crashedAndResendPagesAreReduced() {
         for condition in [PageCondition.crashed, .awaitingResubmit] {
             let rules = ControlRules(Self.page(condition: condition))

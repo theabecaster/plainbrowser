@@ -67,6 +67,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let intro = IntroViewController()
         let window = UIWindow(windowScene: windowScene)
         window.windowLevel = .normal + 1
+        AppAppearance.prepare(window)
         window.rootViewController = intro
         intro.onFinish = { [weak self, weak intro] in
             guard let self else { return }
@@ -83,6 +84,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func showBrowser(in windowScene: UIWindowScene) {
         browserShown = true
         let window = UIWindow(windowScene: windowScene)
+        // Settings > Appearance from the first frame (the database is read later).
+        AppAppearance.prepare(window)
         let savedWindow = (windowScene.session.userInfo?[Self.windowIDKey] as? String).flatMap(UUID.init(uuidString:))
         self.session = BrowserSession(
             database: { [database] in await database.value },

@@ -79,7 +79,7 @@ import Testing
 
     @Test func settingsRoundTrip() async throws {
         let database = try AppDatabase.inMemory()
-        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never)
+        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never, appearance: .dark)
         try await database.saveSettings(settings)
         #expect(try await database.settings() == settings)
     }
@@ -100,7 +100,7 @@ import Testing
         try await database.writer.write { db in
             try db.execute(sql: """
                 INSERT INTO setting (key, value) VALUES
-                ('searchEngine', 'altavista'), ('tabLayout', 'ribbon'), ('archiveAfter', 'fortnight')
+                ('searchEngine', 'altavista'), ('tabLayout', 'ribbon'), ('archiveAfter', 'fortnight'), ('appearance', 'sepia')
                 """)
         }
         #expect(try await database.settings() == .defaults)

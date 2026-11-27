@@ -389,7 +389,8 @@ final class CaptureTests: XCTestCase {
         pause(2)
         shot("s3-one-page")
         // The start screen while typing: before (empty field) and after (a query with rows).
-        app.buttons["tabs"].tap()
+        app.buttons["tabs"].press(forDuration: 1)
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
         pause(1.2)
         shot("s7a-start-typing-before")
         field.typeText("Plain Test")

@@ -55,11 +55,18 @@ final class PerfTests: XCTestCase {
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 10))
         // The search field shows before the database opens. Settings' Appearance row enables once
         // the saved settings are read, so the store is created and migrated before the terminate.
+        // More's Settings item is disabled until the database is attached, and the menu keeps the
+        // state it opened with: reopen it until Settings is enabled.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
         XCTAssertTrue(app.buttons["more"].waitForExistence(timeout: 3))
-        app.buttons["more"].tap()
         let settings = app.buttons["Settings…"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        for _ in 0..<10 {
+            app.buttons["more"].tap()
+            XCTAssertTrue(settings.waitForExistence(timeout: 3))
+            if settings.isEnabled { break }
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "database opens")], timeout: 0.5)
+        }
         settings.tap()
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Appearance'")).firstMatch
         let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: row)

@@ -73,6 +73,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var pillOnKeyboard: NSLayoutConstraint!
     /// The button bar's own constraints, activated again when it comes back after a vertical bar.
     private var buttonBarConstraints: [NSLayoutConstraint] = []
+    /// The chrome's row: the lane less its margins, at most 640 pt, centered. The pill and the bar
+    /// span it on a page; on the start screen the bar shrinks to its trailing end, beside the pill.
+    private var pillSpansRow: NSLayoutConstraint!
+    private var pillBesideBar: NSLayoutConstraint!
+    private var barSpansRow: NSLayoutConstraint!
+    /// Set while `applyEditingLayout` runs, which lays out the bar's shape in its own animation.
+    private var isApplyingEditingLayout = false
     private var geometry = ChromeGeometry(viewHeight: 0, safeBottom: 0, hasButtonBar: true)
     private(set) var usesVerticalBar = false
 
@@ -211,14 +218,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Set before every layout pass (`updateDuoLayout`, from `viewWillLayoutSubviews`).
         duo.laneWidth = lane.widthAnchor.constraint(equalToConstant: 0)
 
-        func capWidth(_ item: UIView) -> [NSLayoutConstraint] {
-            let fill = item.widthAnchor.constraint(equalTo: lane.widthAnchor, constant: -2 * margin)
+        let row = UILayoutGuide()
+        view.addLayoutGuide(row)
+
+        func capWidth(centerX: NSLayoutXAxisAnchor, width: NSLayoutDimension) -> [NSLayoutConstraint] {
+            let fill = width.constraint(equalTo: lane.widthAnchor, constant: -2 * margin)
             // Just under required: only the 640 pt cap may override it, never content size.
             fill.priority = .required - 1
             return [
-                item.centerXAnchor.constraint(equalTo: lane.centerXAnchor),
+                centerX.constraint(equalTo: lane.centerXAnchor),
                 fill,
-                item.widthAnchor.constraint(lessThanOrEqualToConstant: 640),
+                width.constraint(lessThanOrEqualToConstant: 640),
             ]
         }
 
@@ -265,12 +275,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             tabsUI.toast.centerXAnchor.constraint(equalTo: pill.centerXAnchor),
             tabsUI.toast.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
             tabsUI.toast.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
-        ] + capWidth(pill) + capWidth(sheet.content))
+        ] + capWidth(centerX: row.centerXAnchor, width: row.widthAnchor)
+            + capWidth(centerX: sheet.content.centerXAnchor, width: sheet.content.widthAnchor))
 
+        pillSpansRow = pill.trailingAnchor.constraint(equalTo: row.trailingAnchor)
+        pillBesideBar = pill.trailingAnchor.constraint(equalTo: buttonBar.leadingAnchor, constant: -ChromeGeometry.gap)
+        barSpansRow = buttonBar.leadingAnchor.constraint(equalTo: row.leadingAnchor)
+        NSLayoutConstraint.activate([
+            row.topAnchor.constraint(equalTo: lane.topAnchor),
+            row.bottomAnchor.constraint(equalTo: lane.bottomAnchor),
+            pill.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            pillSpansRow,
+        ])
         buttonBarConstraints = [
             buttonBar.heightAnchor.constraint(equalToConstant: ChromeGeometry.barHeight),
             buttonBar.bottomAnchor.constraint(equalTo: rest.topAnchor),
-        ] + capWidth(buttonBar)
+            buttonBar.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            barSpansRow,
+        ]
         NSLayoutConstraint.activate(buttonBarConstraints)
     }
 
@@ -351,16 +373,39 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     private func updatePillRestConstraint() {
+        let beside = rules.barBesidePill && buttonBar.superview != nil
         pillOnKeyboard.isActive = false
         pillOnBar.isActive = false
         pillOnEdge.isActive = false
         if isEditingAddress {
             pillOnKeyboard.isActive = true
-        } else if usesVerticalBar {
+        } else if usesVerticalBar || beside {
             pillOnEdge.isActive = true
         } else {
             pillOnBar.isActive = true
         }
+        // The start screen's bar: a round glass button at the row's end, the pill beside it.
+        buttonBar.setBesidePill(beside)
+        if beside {
+            barSpansRow.isActive = false
+            pillSpansRow.isActive = false
+            pillBesideBar.isActive = true
+        } else {
+            pillBesideBar.isActive = false
+            pillSpansRow.isActive = true
+            if buttonBar.superview != nil { barSpansRow.isActive = true }
+        }
+    }
+
+    /// Start and Page are different modes (state rules, principle 5): on the start screen the bar
+    /// sits beside the pill, on a page under it. Called whenever the rules change; the editing
+    /// layout moves the bar itself, inside the keyboard's animation.
+    func updateBarShapeIfNeeded() {
+        let beside = rules.barBesidePill && buttonBar.superview != nil
+        guard pillOnBar != nil, beside != buttonBar.isBesidePill, !isApplyingEditingLayout else { return }
+        updatePillRestConstraint()
+        guard view.window != nil else { return }
+        Motion.animate(Motion.reflow) { self.view.layoutIfNeeded() }
     }
 
     override public func viewWillLayoutSubviews() {
@@ -573,7 +618,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         guard changed || !animated else { return }
         // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
         // screen's button and shortcuts step aside for the field.
+        isApplyingEditingLayout = true
         updateButtons()
+        isApplyingEditingLayout = false
         tabsUI.start.isSearchFieldActive = editing
         if editing {
             sheet.isHidden = false

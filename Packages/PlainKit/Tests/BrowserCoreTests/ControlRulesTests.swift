@@ -283,6 +283,18 @@ import Testing
         #expect(ControlRules(Self.firstRun).barShown)
     }
 
+    @Test func theStartBarSitsBesideThePill() {
+        #expect(ControlRules(Self.firstRun).barBesidePill)
+        #expect(ControlRules(Self.emptyTab(others: 2)).barBesidePill)
+        var editing = Self.emptyTab()
+        editing.isEditing = true
+        #expect(!ControlRules(editing).barBesidePill, "the field takes the whole width")
+        var duo = Self.emptyTab()
+        duo.usesVerticalBar = true
+        #expect(!ControlRules(duo).barBesidePill, "the vertical bar packs its own items")
+        #expect(!ControlRules(Self.page()).barBesidePill, "a page has the full bar")
+    }
+
     @Test func theStartScreenRecedesWhileTyping() {
         var state = Self.emptyTab()
         state.isEditing = true

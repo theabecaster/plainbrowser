@@ -50,6 +50,12 @@ final class ButtonBar: UIView {
     private let glass = Glass.makeView(shape: .capsule)
     private(set) var stack = UIStackView()
     private(set) var buttons: [PageButton: UIButton] = [:]
+    /// Beside the pill on the start screen: only the buttons that show, each a round glass slot.
+    private(set) var isBesidePill = false
+    private var stackLeading: NSLayoutConstraint!
+    private var stackTrailing: NSLayoutConstraint!
+    /// The bar's width while beside the pill: one `ChromeGeometry.barHeight` per button.
+    private(set) var besideWidth: NSLayoutConstraint!
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -72,15 +78,17 @@ final class ButtonBar: UIView {
         }
         // A long press shows a button large at the biggest text sizes, as a toolbar does.
         addInteraction(UILargeContentViewerInteraction())
+        stackLeading = stack.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: Spacing.s)
+        stackTrailing = stack.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -Spacing.s)
+        besideWidth = widthAnchor.constraint(equalToConstant: ChromeGeometry.barHeight)
         NSLayoutConstraint.activate([
+            stackLeading, stackTrailing,
             glass.topAnchor.constraint(equalTo: topAnchor),
             glass.bottomAnchor.constraint(equalTo: bottomAnchor),
             glass.leadingAnchor.constraint(equalTo: leadingAnchor),
             glass.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
             stack.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: Spacing.s),
-            stack.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -Spacing.s),
         ])
     }
 
@@ -98,12 +106,39 @@ final class ButtonBar: UIView {
         button.isUserInteractionEnabled = visibility.isVisible
         button.accessibilityElementsHidden = !visibility.isVisible
         button.isAccessibilityElement = visibility.isVisible
+        // Beside the pill a hidden button gives up its slot: the bar is only what it shows.
+        let removed = isBesidePill && !visibility.isVisible
+        if button.isHidden != removed { button.isHidden = removed }
+        if isBesidePill { updateBesideWidth() }
         guard button.alpha != alpha else { return }
         if window == nil || UIView.inheritedAnimationDuration > 0 {
             button.alpha = alpha
         } else {
             Motion.animate(Motion.quick) { button.alpha = alpha }
         }
+    }
+
+    /// Between the full-width bar (a page) and the round glass button beside the pill (the start
+    /// screen, `ControlRules.barBesidePill`). The caller owns the constraints that place the bar;
+    /// this sets its own width and packs the buttons that show. Call inside the layout's animation.
+    func setBesidePill(_ beside: Bool) {
+        guard beside != isBesidePill else { return }
+        isBesidePill = beside
+        for button in buttons.values {
+            let removed = beside && !button.isUserInteractionEnabled
+            if button.isHidden != removed { button.isHidden = removed }
+        }
+        let inset = beside ? 0 : Spacing.s
+        stackLeading.constant = inset
+        stackTrailing.constant = -inset
+        updateBesideWidth()
+        besideWidth.isActive = beside
+    }
+
+    private func updateBesideWidth() {
+        let shown = buttons.values.count { !$0.isHidden }
+        let width = ChromeGeometry.barHeight * CGFloat(max(1, shown))
+        if besideWidth.constant != width { besideWidth.constant = width }
     }
 
     /// A button's symbol and label (the tabs slot's faces: Tabs or New Tab).

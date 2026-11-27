@@ -17,14 +17,21 @@ import Testing
         #expect(!IntroGate.shouldShow(arguments: [], defaults: defaults))
     }
 
-    #if DEBUG
-    @Test func browserUITestsSkipItUnlessAsked() {
+    /// Isolated runs (any build, Release perf runs included) skip the intro.
+    @Test func isolatedRunsSkipIt() {
         let defaults = freshDefaults()
         #expect(!IntroGate.shouldShow(arguments: ["-PlainInMemoryStore"], defaults: defaults))
         #expect(!IntroGate.shouldShow(arguments: ["-PlainTestStore"], defaults: defaults))
+    }
+
+    #if DEBUG
+    @Test func browserUITestsSkipItUnlessAsked() {
+        let defaults = freshDefaults()
         #expect(IntroGate.shouldShow(arguments: ["-PlainInMemoryStore", "-PlainShowIntro"], defaults: defaults))
+        #expect(IntroGate.shouldShow(arguments: ["-PlainTestStore", "-PlainRespectIntroSeen"], defaults: defaults))
         IntroGate.markSeen(defaults: defaults)
         #expect(IntroGate.shouldShow(arguments: ["-PlainShowIntro"], defaults: defaults))
+        #expect(!IntroGate.shouldShow(arguments: ["-PlainTestStore", "-PlainRespectIntroSeen"], defaults: defaults))
     }
 
     @Test func defaultBrowserPromptsAreOffUntilTheEntitlement() {

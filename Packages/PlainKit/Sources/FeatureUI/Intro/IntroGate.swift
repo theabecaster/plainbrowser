@@ -11,21 +11,23 @@ public nonisolated enum IntroGate {
     /// domain turns into the same value: the perf and smoke tests pass it, in Release too.
     public static let seenKey = "PlainIntroSeen"
 
-    /// Launch arguments, Debug builds only:
+    /// An isolated test run (`TestIsolation`: `-PlainInMemoryStore`, `-PlainTestStore`, any build)
+    /// shows no intro, unless one of these Debug arguments is also given:
     /// - `-PlainShowIntro`: show the intro even when it was seen (screenshots, the intro's UI test).
-    /// - `-PlainInMemoryStore`, `-PlainTestStore`: UI tests of the browser; no intro unless
-    ///   `-PlainShowIntro` is also given.
-    public static func shouldShow(arguments: [String], defaults: UserDefaults = .standard) -> Bool {
+    /// - `-PlainRespectIntroSeen`: the isolated run's own flag decides, as for a real user (the
+    ///   intro's test of "seen" across a relaunch).
+    public static func shouldShow(arguments: [String], defaults: UserDefaults = TestIsolation.defaults) -> Bool {
         guard FixedChoices.introShownOnce else { return false }
         #if DEBUG
         if arguments.contains("-PlainShowIntro") { return true }
-        if arguments.contains("-PlainInMemoryStore") || arguments.contains("-PlainTestStore") { return false }
+        if arguments.contains("-PlainRespectIntroSeen") { return !defaults.bool(forKey: seenKey) }
         #endif
+        if TestIsolation.mode(for: arguments) != .off { return false }
         return !defaults.bool(forKey: seenKey)
     }
 
     /// Records that the intro was finished or skipped, so it never shows again.
-    public static func markSeen(defaults: UserDefaults = .standard) {
+    public static func markSeen(defaults: UserDefaults = TestIsolation.defaults) {
         defaults.set(true, forKey: seenKey)
     }
 }
@@ -46,12 +48,12 @@ public nonisolated enum DefaultBrowserPrompts {
 
     /// Whether the empty start screen should show the card: prompts on, and not dismissed before.
     public static func showsEmptyTabCard(
-        arguments: [String] = ProcessInfo.processInfo.arguments, defaults: UserDefaults = .standard
+        arguments: [String] = ProcessInfo.processInfo.arguments, defaults: UserDefaults = TestIsolation.defaults
     ) -> Bool {
         isEnabled(arguments: arguments) && !defaults.bool(forKey: cardDismissedKey)
     }
 
-    public static func dismissEmptyTabCard(defaults: UserDefaults = .standard) {
+    public static func dismissEmptyTabCard(defaults: UserDefaults = TestIsolation.defaults) {
         defaults.set(true, forKey: cardDismissedKey)
     }
 }

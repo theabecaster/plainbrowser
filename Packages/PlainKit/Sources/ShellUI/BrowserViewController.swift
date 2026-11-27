@@ -67,6 +67,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     var currentTab: Tab?
     /// The tab's observation, the reader view, the page's error state and the prompt queue.
     let engineUI = EngineUIState()
+    let summaryUI = SummaryUIState()
     /// The gallery, the bar swipe, neighbour previews and the toast.
     let tabsUI = TabsUIState()
     /// What launch opened to: the last tab's picture and the fresh search's frost (`+Launch`).
@@ -193,6 +194,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             guard let self, !self.handleFocusPick(pick) else { return }
             self.open(pick)
         }
+        sheet.onBrowse = { [weak self] query in self?.browseForMe(query) }
         sheet.onDismiss = { [weak self] in self?.endEditing() }
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
         // A swipe down closes the search, as a sheet closes (Arc Search's way back to the tab).
@@ -223,6 +225,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
         wireProfiles()
+        session.summaries.onAvailabilityChange = { [weak self] in self?.summaryAvailabilityChanged() }
         session.pool.onTranslationFailed = { [weak self] tab in
             guard let self, tab === self.currentTab else { return }
             Haptic.nothingThere.play()
@@ -673,6 +676,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
         // Copy sits in the field while it still shows the page's own address.
         pill.setCopyShown(focusUI.isEditingPage && isCurrentAddress)
+        updateBrowseForMe(query: isCurrentAddress ? "" : query)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             // Before typing: never empty (docs/decisions.md, "Address focus").
             let items = focusItems()
@@ -1419,6 +1423,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             tiles.append(find)
         }
         tiles += readerMenuItems(rules.reader).compactMap { $0 as? UIAction }
+        tiles += summarizeMenuItems(rules).compactMap { $0 as? UIAction }
         tiles += translateMenuItems(for: tab, item: rules.translate).compactMap { $0 as? UIAction }
         let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
             guard let self else { return }

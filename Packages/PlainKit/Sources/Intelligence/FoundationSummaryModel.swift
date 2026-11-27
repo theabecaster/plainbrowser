@@ -81,7 +81,7 @@ public final class FoundationSummaryModel: SummaryModel {
             let task = Task { @MainActor in
                 do {
                     let options = GenerationOptions(
-                        sampling: .greedy, maximumResponseTokens: FixedChoices.summaryResponseTokens
+                        samplingMode: .greedy, maximumResponseTokens: FixedChoices.summaryResponseTokens
                     )
                     let stream = session.streamResponse(to: prompt, generating: GeneratedSummary.self, options: options)
                     for try await snapshot in stream {

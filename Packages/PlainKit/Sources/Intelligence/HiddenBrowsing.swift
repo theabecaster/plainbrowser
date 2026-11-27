@@ -256,7 +256,7 @@ import WebKit
 
 /// Resumes one continuation exactly once, from whichever side gets there first: the operation's
 /// result or the cancellation (which may arrive on any thread, even before the continuation).
-private final class CancelGate<Value: Sendable>: Sendable {
+private nonisolated final class CancelGate<Value: Sendable>: Sendable {
     private struct State {
         var continuation: CheckedContinuation<Value, any Error>?
         var task: Task<Void, Never>?

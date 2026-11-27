@@ -62,6 +62,8 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     var onPick: (SearchPick) -> Void = { _ in }
     /// A tap on the sheet outside any row: close the sheet.
     var onDismiss: () -> Void = {}
+    /// Browse for Me for what is typed (the row above the field).
+    var onBrowse: (String) -> Void = { _ in }
     /// "Edit Favorites" from a long press on the favorites strip.
     var onEditFavorites: () -> Void = {} {
         didSet { favoritesStrip.onEdit = onEditFavorites }
@@ -89,6 +91,10 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     private var flushObserver: CFRunLoopObserver?
     private var current: [SheetItem] = []
     private let favoritesStrip = FavoritesStrip()
+    private let browseRow = BrowseForMeRow()
+    /// The rows hang from the content's bottom, or from the top of Browse for Me's place.
+    private var rowsOnContent: NSLayoutConstraint!
+    private var rowsOverBrowse: NSLayoutConstraint!
     private var showsFavorites = false
     private var hasFavorites = false
     private var favoritesShown = false
@@ -137,6 +143,13 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         rowsClip.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(rowsClip)
 
+        browseRow.translatesAutoresizingMaskIntoConstraints = false
+        browseRow.addAction(UIAction { [weak self] _ in
+            guard let self, let query = browseRow.query else { return }
+            onBrowse(query)
+        }, for: .touchUpInside)
+        content.addSubview(browseRow)
+
         rowsStack.axis = .vertical
         rowsStack.spacing = 0
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
@@ -150,11 +163,16 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         // shorter list is never cut by the clip.
         let fill = content.heightAnchor.constraint(equalToConstant: 10_000)
         fill.priority = .defaultLow
+        rowsOnContent = rowsClip.bottomAnchor.constraint(equalTo: content.bottomAnchor)
+        rowsOverBrowse = rowsClip.bottomAnchor.constraint(equalTo: browseRow.topAnchor)
         NSLayoutConstraint.activate([
             rowsClip.topAnchor.constraint(equalTo: content.topAnchor),
             rowsClip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             rowsClip.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            rowsClip.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            rowsOnContent,
+            browseRow.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            browseRow.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            browseRow.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             rowsStack.leadingAnchor.constraint(equalTo: rowsClip.leadingAnchor),
             rowsStack.trailingAnchor.constraint(equalTo: rowsClip.trailingAnchor),
             rowsBottom,
@@ -222,6 +240,21 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         FixedChoices.maxAddressBarSuggestions,
         2 + FixedChoices.focusReadingList + FixedChoices.focusRecentPages + FixedChoices.focusClosedTabs
     )
+
+    /// Browse for Me's place above the field (`reserved`: the on-device model can run) and the
+    /// query it would browse for, or nil while the text is an address or empty (the row fades out
+    /// in place). The place changes only when the sheet opens, so the suggestions never move
+    /// while typing (docs/state-rules.md §1, principle 5).
+    func setBrowseForMe(reserved: Bool, query: String?) {
+        if rowsOverBrowse.isActive != reserved {
+            rowsOnContent.isActive = !reserved
+            rowsOverBrowse.isActive = reserved
+            browseRow.isHidden = !reserved
+            setNeedsLayout()
+        }
+        // Over the favorites strip (an empty field) the row is never shown.
+        browseRow.show(reserved ? query : nil, animated: !isApplying)
+    }
 
     /// Whether the favorites strip may show: only while the field is empty.
     func setFavoritesAllowed(_ allowed: Bool) {

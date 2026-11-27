@@ -22,6 +22,8 @@ public final class BrowserSession {
     let cookieBanners: CookieBanners
     /// Translate Page's engine (Apple's Translation framework; a stand-in in UI tests).
     let translator: any PageTranslator
+    /// Browse for Me and Summarize Page: Apple's on-device model and the hidden pages.
+    let summaries: SummaryService
     private let readerScripts: ReaderPageScripts
     /// Each profile's history database (Personal's is the main one): the app's, so two windows
     /// never open the same files twice.
@@ -64,6 +66,7 @@ public final class BrowserSession {
             darkPages: stores.darkPages,
             translator: translator
         )
+        summaries = SummaryService(pool: pool)
         tabs = EngineTabs(
             pool: pool, app: stores.tabs, database: database, tabStates: tabStates, windowID: windowID,
             isNewWindow: isNewWindow
@@ -84,6 +87,7 @@ public final class BrowserSession {
         guard !started else { return nil }
         started = true
         pool.warmUp()
+        summaries.start()
         async let darkSites = stores.loadSiteChoices()
         async let scripts: Void = readerScripts.prepare()
         async let cookieEngine: Void = cookieBanners.prepare()

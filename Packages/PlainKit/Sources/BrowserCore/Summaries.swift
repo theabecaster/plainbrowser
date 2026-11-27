@@ -128,6 +128,8 @@ public enum SummaryFailure: Sendable, Equatable {
     case noResults
     /// No result page could be read within the time budget.
     case nothingReadable
+    /// Summarize Page found no text on the page.
+    case pageUnreadable
     /// The phone is offline.
     case offline
     /// The model declined the topic (Apple's guardrails) or refused.
@@ -143,6 +145,7 @@ public enum SummaryFailure: Sendable, Equatable {
         switch self {
         case .noResults: "No results to read for this search."
         case .nothingReadable: "None of the results could be read in time."
+        case .pageUnreadable: "This page has no text to summarize."
         case .offline: "You're offline. Connect to the internet and try again."
         case .declined: "Apple Intelligence can't summarize this."
         case .unsupportedLanguage: "Apple Intelligence doesn't support this language yet."
@@ -156,7 +159,7 @@ public enum SummaryFailure: Sendable, Equatable {
     public var canRetry: Bool {
         switch self {
         case .nothingReadable, .offline, .failed: true
-        case .noResults, .declined, .unsupportedLanguage, .unavailable: false
+        case .noResults, .pageUnreadable, .declined, .unsupportedLanguage, .unavailable: false
         }
     }
 }

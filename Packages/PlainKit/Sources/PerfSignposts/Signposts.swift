@@ -199,6 +199,10 @@ public enum Signposts {
     public static let summaryFirstWords: StaticString = "summary.firstWords"
     /// Interval: the model writing, from the prompt sent until the last words.
     public static let summaryWrite: StaticString = "summary.write"
+    /// Event: the summary screen opened for Browse for Me or Summarize Page.
+    public static let summaryShow: StaticString = "summary.show"
+    /// Event: Back from a source's first page brought its summary back.
+    public static let summaryShowAgain: StaticString = "summary.showAgain"
     /// Event: a source opened from a summary (message: "new tab" or "background").
     public static let summaryOpenSource: StaticString = "summary.openSource"
 

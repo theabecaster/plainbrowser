@@ -23,6 +23,8 @@ extension BrowserViewController {
         state.hasClosed = tabs.canReopenClosedTab
         state.hasArchived = tabs.hasArchivedTabs
         state.usesAssistiveTech = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
+        state.isAIAvailable = session.summaries.isAvailable
+        state.queryIsSearch = isEditingAddress && Self.isSearch(pill.textField.text ?? "")
         guard let tab = currentTab else {
             state.others = tabs.otherTabCount(besides: nil) + tabs.otherProfilesTabCount
             // The last tab's picture stands in until the restored session is in.

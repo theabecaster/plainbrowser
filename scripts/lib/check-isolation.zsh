@@ -20,6 +20,7 @@
 #      route it through TestIsolation; the system hooks' files must check TestIsolation.isActive.
 #   5. The hosted unit tests (PlainTests) launch their host app isolated: the Smoke plan passes
 #      the isolation argument to it.
+#   6. Browse for Me's hidden pages use a non-persistent store of their own, never the tabs'.
 set -euo pipefail
 cd "${0:A:h:h:h}"
 
@@ -69,6 +70,17 @@ for needle in 'guard let base = isolatedBase else { return id }' 'IsolatedStores
 done
 grep -qF 'ProfileDataLocation(directory: inMemory ? nil : directory)' Plain/SceneDelegate.swift \
   || problems+="Plain/SceneDelegate.swift does not keep profile data beside the (isolated) store" 
+
+# Browse for Me's hidden pages load in a store made for each run, never the tabs' store (the
+# owner's cookies and logins): the readers make it non-persistent and never name AppWebsiteData,
+# and the pool's hidden views take the store they are given.
+hidden=Packages/PlainKit/Sources/Intelligence/HiddenBrowsing.swift
+grep -q 'WKWebsiteDataStore.nonPersistent()' $hidden \
+  || problems+="$hidden does not make its own non-persistent website data store"
+grep -rqn 'AppWebsiteData' Packages/PlainKit/Sources/Intelligence \
+  && problems+="Intelligence names AppWebsiteData: hidden pages must never use the tabs' store"
+grep -q 'configuration.websiteDataStore = dataStore' Packages/PlainKit/Sources/WebEngine/HiddenPages.swift \
+  || problems+="WebViewPool's hidden views do not take the run's own store"
 
 # 4. App code reaches the owner's state only through the isolation-aware places. A new use of one of
 #    these elsewhere must go through TestIsolation (or join this list after a look at isolation).

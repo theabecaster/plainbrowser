@@ -45,7 +45,7 @@ extension BrowserViewController {
     /// returns to the page that opened it.
     var canGoBack: Bool {
         guard let tab = currentTab else { return false }
-        return isShowingReader || tab.canGoBack || returnsToOpener(tab)
+        return isShowingReader || tab.canGoBack || returnsToOpener(tab) || summaryUI.returnTab === tab
     }
 
     /// The tab was opened from another one still open (a popup, a link, a search over a page):
@@ -63,6 +63,10 @@ extension BrowserViewController {
             closeReader(animated: true)
         } else if tab.canGoBack {
             tab.goBack()
+        } else if summaryUI.returnTab === tab {
+            // A source opened from a summary: Back closes it and the summary comes back.
+            closeTab(tab)
+            reopenSummary()
         } else if returnsToOpener(tab) {
             closeTab(tab)
         }

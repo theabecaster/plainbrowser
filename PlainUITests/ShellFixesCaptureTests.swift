@@ -72,6 +72,29 @@ final class ShellFixesCaptureTests: XCTestCase {
         }
     }
 
+    /// The same over a page in dark mode (Settings > Appearance > Dark).
+    func testCaptureChromeOverTextDark() {
+        let app = launch()
+        go(app, "/long", heading: "Long Read")
+        app.buttons["more"].tap()
+        let settings = app.buttons["menu.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Appearance'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        pause(1)
+        row.tap()
+        XCTAssertTrue(app.buttons["Dark"].waitForExistence(timeout: 2))
+        app.buttons["Dark"].tap()
+        app.buttons["Done"].tap()
+        pause(1)
+        let webView = app.webViews.firstMatch
+        webView.swipeUp(velocity: .slow)
+        webView.swipeDown(velocity: 300)
+        pause(1.5)
+        shot("glass-4-dark", app)
+    }
+
     /// Back on a link-opened tab: the tab slides away to the opener (record the screen for the
     /// motion; the shots are before and after).
     func testCaptureBackToOpener() {
@@ -99,6 +122,38 @@ final class ShellFixesCaptureTests: XCTestCase {
         shot("preview-1-portrait", app)
         let download = app.buttons["linkMenu.downloadLinkedFile"].frame
         XCTAssertLessThanOrEqual(download.maxY, app.windows.firstMatch.frame.maxY, "the menu's last item is on screen")
+    }
+
+    /// The intro's "What's inside", the empty private tab's shortcuts, and an empty sheet.
+    func testCaptureSmallFixes() {
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro"]
+        app.launch()
+        let next = app.buttons["introNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 8))
+        next.tap()
+        XCTAssertTrue(app.staticTexts["Private Tabs"].waitForExistence(timeout: 5))
+        pause(1.5)
+        shot("small-1-intro-inside", app)
+        app.buttons["introSkip"].tap()
+        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        pause(0.8)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        XCTAssertTrue(app.buttons["start.privateTab"].waitForExistence(timeout: 3))
+        app.buttons["start.privateTab"].tap()
+        pause(0.8)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        XCTAssertTrue(app.buttons["start.regularTab"].waitForExistence(timeout: 3))
+        pause(1)
+        shot("small-2-private-start", app)
+        app.buttons["more"].tap()
+        let favorites = app.buttons["menu.editFavorites"]
+        XCTAssertTrue(favorites.waitForExistence(timeout: 3))
+        favorites.tap()
+        XCTAssertTrue(app.otherElements["sheetEmptyState"].waitForExistence(timeout: 3)
+            || app.staticTexts["Add favorites from the page menu."].waitForExistence(timeout: 1))
+        pause(1)
+        shot("small-3-favorites-empty", app)
     }
 
     /// Compact height: one row, then the pill and hidden while reading, and the start screen.

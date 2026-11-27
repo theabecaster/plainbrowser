@@ -1,4 +1,5 @@
 #if os(iOS)
+import BrowserCore
 import DesignSystem
 import Observation
 import os
@@ -11,11 +12,12 @@ import UIKit
 @Observable
 final class IntroModel {
     enum Step: String, CaseIterable {
-        case promise, inside, icon, blocking, defaultBrowser
+        case promise, inside, icon, blocking, browseForMe, defaultBrowser
     }
 
-    /// The steps in order. The default-browser step only when its prompts are on.
-    let steps: [Step]
+    /// The steps in order. Browse for Me only where Apple Intelligence can run (`IntroSetup`),
+    /// decided once before the first step; the default-browser step only when its prompts are on.
+    private(set) var steps: [Step]
     /// The step on screen; nil during the splash and after the intro ends.
     private(set) var step: Step?
     /// The blocking demo: on is the clean page.
@@ -32,6 +34,13 @@ final class IntroModel {
     /// The window can be a foldable's (`IntroRules.showsUnfoldRow`), set by the view controller
     /// from its traits: only then does "What's inside" promise two pages side by side.
     var canUnfold = false
+    /// The on-device model's last answer; nil until the first one.
+    private(set) var aiAvailability: AIAvailability?
+    /// Apple Intelligence became ready while the intro was up (turned on in Settings, or the
+    /// model finished downloading): the step shows its check mark.
+    private(set) var aiBecameReady = false
+    /// The Browse for Me demo has run its one automatic play.
+    var browseDemoPlayed = false
 
     /// Runs on every step change, for the view controller's mark, field and VoiceOver.
     @ObservationIgnored var onStepChange: ((Step?) -> Void)?
@@ -40,14 +49,44 @@ final class IntroModel {
     @ObservationIgnored private var didFinish = false
 
     init(defaultBrowserStep: Bool, icon: AppIconChoice) {
-        steps = Step.allCases.filter { $0 != .defaultBrowser || defaultBrowserStep }
+        steps = Step.allCases.filter { $0 != .browseForMe && ($0 != .defaultBrowser || defaultBrowserStep) }
         self.icon = icon
+    }
+
+    /// What the Browse for Me step asks of the user now; nil when the step is left out.
+    var browseForMe: IntroSetup.BrowseForMe? { aiAvailability.flatMap(IntroSetup.browseForMe) }
+
+    /// A new answer from the model. Before the first step it decides whether the Browse for Me
+    /// step is in the intro (after the blocking demo, before the default-browser step); later it
+    /// only changes what the step shows, so the steps never change under the user.
+    func setAIAvailability(_ answer: AIAvailability) {
+        guard answer != aiAvailability else { return }
+        let before = aiAvailability
+        if step == nil, !didFinish {
+            let wanted = IntroSetup.browseForMe(answer) != nil
+            if wanted, !steps.contains(.browseForMe), let blocking = steps.firstIndex(of: .blocking) {
+                steps.insert(.browseForMe, at: blocking + 1)
+            } else if !wanted {
+                steps.removeAll { $0 == .browseForMe }
+            }
+        }
+        if answer == .available, let before, before != .available, steps.contains(.browseForMe), step != nil {
+            withAnimation(Motion.prefersCrossfade ? IntroMotion.crossfade : IntroMotion.enter) {
+                aiAvailability = answer
+                aiBecameReady = true
+            }
+        } else {
+            withAnimation(IntroMotion.crossfade) { aiAvailability = answer }
+        }
     }
 
     var isLastStep: Bool { step == steps.last }
 
     /// The splash ended: show the first step.
-    func start() { go(to: steps.first) }
+    func start() {
+        guard step == nil, !didFinish else { return }
+        go(to: steps.first)
+    }
 
     func next() {
         guard let step, let index = steps.firstIndex(of: step) else { return }
@@ -129,5 +168,10 @@ enum IntroMotion {
     static let dawnStep = Animation.spring(duration: 0.5, bounce: 0)
     /// The blocking demo's page reflow.
     static let reflow = Animation.spring(duration: 0.55, bounce: 0)
+    /// The longest the first step waits after the splash for the model's answer (it is usually in
+    /// long before the splash ends).
+    static let aiAnswerWait: Duration = .milliseconds(400)
+    /// How often the Browse for Me step reads the answer again while the model is getting ready.
+    static let aiRecheck: Duration = .seconds(2)
 }
 #endif

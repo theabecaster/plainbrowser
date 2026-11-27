@@ -27,7 +27,7 @@ enum IntroLayout {
     }
 
     private static func isBand(_ step: IntroModel.Step) -> Bool {
-        step == .inside || step == .icon || step == .blocking
+        step == .inside || step == .icon || step == .blocking || step == .browseForMe
     }
 
     /// The window's height on each step.
@@ -35,7 +35,7 @@ enum IntroLayout {
         switch step {
         case .promise: clamp(safeHeight * 0.40, 200, 360)
         case .defaultBrowser: clamp(safeHeight * 0.28, 170, 280)
-        case .inside, .icon, .blocking: clamp(safeHeight * 0.085, 56, 76)
+        case .inside, .icon, .blocking, .browseForMe: clamp(safeHeight * 0.085, 56, 76)
         }
     }
 
@@ -46,6 +46,7 @@ enum IntroLayout {
         case .inside: 0.35
         case .icon: 0.55
         case .blocking: 0.75
+        case .browseForMe: 0.88
         case .defaultBrowser: 1
         }
     }

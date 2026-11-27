@@ -7,7 +7,8 @@ import SwiftUI
 import UIKit
 
 /// The first-run intro: the Stem mark assembles on paper and the dawn opens behind it, then the steps (promise, what's
-/// inside, icon, blocking demo, and the default-browser step when its prompts are on). Finishing
+/// inside, icon, blocking demo, Browse for Me where Apple Intelligence can run, and the
+/// default-browser step when its prompts are on). Finishing
 /// or skipping dissolves it into the search field. See docs/research/intro.md.
 ///
 /// Shown once (`IntroGate`). The app puts it in its own window above the browser's: on finish it
@@ -32,9 +33,23 @@ public final class IntroViewController: UIViewController {
     private var didStart = false
     private var isSplashing = false
     private let splashTap = UITapGestureRecognizer()
+    /// Reads the on-device model's availability (ShellUI's `OnDeviceAI` in the app).
+    private let aiAvailability: @MainActor () async -> AIAvailability
+    private var firstAnswer: Task<Void, Never>?
+    private var aiCheck: Task<Void, Never>?
+    private var foregroundObserver: (any NSObjectProtocol)?
 
-    public init() {
+    /// - Parameter aiAvailability: the model's availability, read once before the first step
+    ///   (it decides whether the Browse for Me step shows) and again while that step needs it.
+    public init(aiAvailability: @escaping @MainActor () async -> AIAvailability = { .deviceNotEligible }) {
+        self.aiAvailability = aiAvailability
         super.init(nibName: nil, bundle: nil)
+    }
+
+    isolated deinit {
+        if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
+        firstAnswer?.cancel()
+        aiCheck?.cancel()
     }
 
     @available(*, unavailable)
@@ -71,6 +86,17 @@ public final class IntroViewController: UIViewController {
         model.onFinish = { [weak self] in self?.finished() }
         // Icon previews decode off the main thread now, so the icon step has them when it comes.
         Task { [model] in await model.loadPreviews() }
+        // The model's answer comes in during the splash, so the steps are known before the first.
+        firstAnswer = Task { [weak self, aiAvailability] in
+            let answer = await aiAvailability()
+            self?.model.setAIAvailability(answer)
+        }
+        // Back from Settings (Apple Intelligence turned on, or not): read the answer again.
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkAI() }
+        }
     }
 
     override public func viewDidLayoutSubviews() {
@@ -140,7 +166,40 @@ public final class IntroViewController: UIViewController {
         view.removeGestureRecognizer(splashTap)
         if let splashInterval { Signposts.signposter.endInterval(Signposts.introSplash, splashInterval) }
         splashInterval = nil
-        model.start()
+        // The first step waits a moment at most for the model's answer; without it the intro goes
+        // on with no Browse for Me step. The answer is almost always in by now.
+        guard model.aiAvailability == nil, let firstAnswer else {
+            model.start()
+            return
+        }
+        Task { [weak self] in
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await firstAnswer.value }
+                group.addTask { try? await Task.sleep(for: IntroMotion.aiAnswerWait) }
+                await group.next()
+                group.cancelAll()
+            }
+            self?.model.start()
+        }
+    }
+
+    // MARK: Apple Intelligence
+
+    /// Reads the answer again while the Browse for Me step is in the intro, and keeps reading it
+    /// every few seconds while the model is getting ready and its step is on screen.
+    private func checkAI() {
+        guard model.steps.contains(.browseForMe), model.step != nil else { return }
+        aiCheck?.cancel()
+        aiCheck = Task { [weak self, aiAvailability] in
+            while !Task.isCancelled {
+                let answer = await aiAvailability()
+                guard let self, !Task.isCancelled else { return }
+                Signposts.signposter.emitEvent(Signposts.introAIAvailability, "\(String(describing: answer), privacy: .public)")
+                model.setAIAvailability(answer)
+                guard model.step == .browseForMe, model.browseForMe == .gettingReady else { return }
+                try? await Task.sleep(for: IntroMotion.aiRecheck)
+            }
+        }
     }
 
     // MARK: Steps
@@ -162,6 +221,9 @@ public final class IntroViewController: UIViewController {
         if step != nil {
             UIAccessibility.post(notification: .screenChanged, argument: nil)
         }
+        // On the Browse for Me step the answer is read again (the model may have finished
+        // downloading meanwhile); elsewhere no checks run.
+        if step == .browseForMe { checkAI() } else { aiCheck?.cancel() }
     }
 
     /// The signature moment: the dawn opens out of the mark, growing from the ring's own window into

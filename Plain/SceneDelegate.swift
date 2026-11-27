@@ -177,7 +177,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// The intro in its own window. On finish the browser comes up underneath (its search field
     /// takes focus and the keyboard rises) while the intro dissolves off the top.
     private func showIntro(in windowScene: UIWindowScene) {
-        let intro = IntroViewController()
+        let intro = IntroViewController(aiAvailability: OnDeviceAI.availabilityCheck())
         let window = UIWindow(windowScene: windowScene)
         window.windowLevel = .normal + 1
         AppAppearance.prepare(window)

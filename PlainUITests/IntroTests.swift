@@ -110,6 +110,94 @@ final class IntroTests: XCTestCase {
         assertSearchFieldFocused(app)
     }
 
+    // MARK: Browse for Me (Apple Intelligence)
+
+    /// Walks to the Browse for Me step, which follows the blocking demo.
+    private func reachBrowseForMe(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        for step in ["promise", "inside", "icon", "blocking"] { tapNext(app, step: step) }
+        XCTAssertTrue(app.otherElements["intro.browseForMe"].waitForExistence(timeout: 5), "no Browse for Me step", file: file, line: line)
+    }
+
+    /// Available: nothing to set up; the step only shows the feature, and its row replays the demo.
+    func testBrowseForMeWhenAvailable() {
+        let app = launch(["-PlainAIAvailability", "available"])
+        reachBrowseForMe(app)
+        XCTAssertTrue(app.staticTexts["introAIAvailableLine"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["introTurnOnAI"].exists, "an available model needs no setup button")
+        let demo = app.buttons["introBrowseDemo"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 3))
+        demo.tap()
+        let go = app.buttons["introLetsGo"]
+        XCTAssertTrue(go.waitForExistence(timeout: 3))
+        go.tap()
+        assertSearchFieldFocused(app)
+    }
+
+    /// Off: one button opens Settings; back in Plain the step reads the answer again and shows
+    /// its check mark, then goes on.
+    func testBrowseForMeTurnOnThenReady() {
+        // One answer before the first step, one on arriving at the step, one after Settings.
+        let app = launch(["-PlainAIAvailability", "off,off,available"])
+        reachBrowseForMe(app)
+        let turnOn = app.buttons["introTurnOnAI"]
+        XCTAssertTrue(turnOn.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["introAITurnOnLine"].exists)
+        XCTAssertTrue(app.buttons["introAINotNow"].exists)
+        turnOn.tap()
+        // Settings comes up; coming back is what a user does after turning it on.
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 10), "Settings did not open")
+        app.activate()
+        XCTAssertTrue(app.otherElements["introAIReady"].waitForExistence(timeout: 5)
+            || app.staticTexts["introAIReady"].waitForExistence(timeout: 1), "no check mark after returning")
+        XCTAssertFalse(app.buttons["introTurnOnAI"].exists)
+        let go = app.buttons["introLetsGo"]
+        XCTAssertTrue(go.waitForExistence(timeout: 3))
+        go.tap()
+        assertSearchFieldFocused(app)
+    }
+
+    /// Off, and the user goes on without it: Not Now never blocks.
+    func testBrowseForMeNotNow() {
+        let app = launch(["-PlainAIAvailability", "off"])
+        reachBrowseForMe(app)
+        let notNow = app.buttons["introAINotNow"]
+        XCTAssertTrue(notNow.waitForExistence(timeout: 3))
+        notNow.tap()
+        assertSearchFieldFocused(app)
+    }
+
+    /// Downloading: "getting ready" while the step is up, then the check mark by itself.
+    func testBrowseForMeGettingReadyUpdates() {
+        let app = launch(["-PlainAIAvailability", "notReady,notReady,available"])
+        reachBrowseForMe(app)
+        XCTAssertTrue(app.otherElements["introAIGettingReady"].waitForExistence(timeout: 3)
+            || app.staticTexts["introAIGettingReady"].exists, "no getting-ready line")
+        XCTAssertFalse(app.buttons["introTurnOnAI"].exists)
+        XCTAssertTrue(app.otherElements["introAIReady"].waitForExistence(timeout: 8)
+            || app.staticTexts["introAIReady"].exists, "the step did not update when the model was ready")
+        app.buttons["introLetsGo"].tap()
+        assertSearchFieldFocused(app)
+    }
+
+    /// A phone that can't run Apple Intelligence never sees the step: the demo is the last step.
+    func testNoBrowseForMeStepWhenNotEligible() {
+        let app = launch(["-PlainAIAvailability", "notEligible"])
+        for step in ["promise", "inside", "icon"] { tapNext(app, step: step) }
+        let go = app.buttons["introLetsGo"]
+        XCTAssertTrue(go.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["intro.blocking"].exists)
+        go.tap()
+        assertSearchFieldFocused(app)
+    }
+
+    /// With the default-browser step too, Browse for Me comes first and the default step ends.
+    func testBrowseForMeBeforeDefaultBrowserStep() {
+        let app = launch(["-PlainAIAvailability", "available", "-PlainForceDefaultBrowserPrompts"])
+        reachBrowseForMe(app)
+        tapNext(app, step: "browseForMe")
+        XCTAssertTrue(app.buttons["introSetDefault"].waitForExistence(timeout: 5))
+    }
+
     func testDefaultBrowserCardPreview() {
         let app = XCUIApplication.isolated()
         app.launchArguments += ["-PlainInMemoryStore", "-PlainPreviewEmptyTabCard"]
@@ -178,6 +266,40 @@ final class IntroCaptureTests: XCTestCase {
         shot("8-dissolve", app)
         pause(1.5)
         shot("9-search", app)
+    }
+
+    /// The Browse for Me step in one availability state, for the device matrix:
+    /// `TEST_RUNNER_PLAIN_CAPTURE_AI` is the `-PlainAIAvailability` value (default `available`),
+    /// `PLAIN_CAPTURE_TAG` names the shots.
+    func testCaptureBrowseForMe() throws {
+        let environment = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let state = environment["PLAIN_CAPTURE_AI"] ?? "available"
+        let tag = environment["PLAIN_CAPTURE_TAG"] ?? "shot"
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainAIAvailability", state]
+        app.launch()
+        let next = app.buttons["introNext"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        for _ in 0..<4 {
+            pause(0.9)
+            next.tap()
+        }
+        pause(0.4)
+        shot("ai-\(tag)-a-playing", app)
+        pause(4.0)
+        shot("ai-\(tag)-b-played", app)
+        if app.buttons["introTurnOnAI"].exists {
+            app.buttons["introTurnOnAI"].tap()
+            _ = app.wait(for: .runningBackground, timeout: 10)
+            pause(1.0)
+            app.activate()
+            pause(1.5)
+            shot("ai-\(tag)-c-returned", app)
+        } else if app.otherElements["introAIGettingReady"].exists || app.staticTexts["introAIGettingReady"].exists {
+            pause(3.0)
+            shot("ai-\(tag)-c-ready", app)
+        }
     }
 
     func testCaptureEmptyTabCard() throws {

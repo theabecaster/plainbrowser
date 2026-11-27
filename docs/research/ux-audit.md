@@ -3,7 +3,7 @@
 A first-time user's walk through every flow on `dev` at 432dad1: iPhone 17, the iPhone Duo's
 outer screen and its inner screen (simulators, light and dark, Dynamic Type up to Accessibility
 XL, landscape). Each step was judged against Safari (and Arc Search where Plain follows it), the
-owner's feedback (docs/feedback.md), docs/ui-reference.md and docs/state-rules.md.
+owner's feedback (docs/feedback.md), docs/ui-reference.md and docs/state-rules.md. Fixes were checked again after rebasing on `dev` at fff9f68.
 
 Ranked by impact. **Fixed** items landed in this lane; the others name the lane that owns the
 area. Captures are named in brackets; they were taken into the session scratchpad
@@ -26,45 +26,49 @@ area. Captures are named in brackets; they were taken into the session scratchpa
    rests centred with the New Tab card beside it, as on a fresh open). It stays that way.
    Owner: tab switcher lane (TabGalleryUI). [i17-34-closed-toast, i17-36-after-close-5s; a fresh
    one-card open for comparison: i17-25-gallery-one]
-3. **Paper status band over every page (iPhone, Duo outer).** The page starts under the status
-   bar and a flat paper (light) or navy (dark) strip fills the status area above it. On a white
-   page it reads as a two-tone seam; in dark mode the navy band sits over the grey darkened page.
-   Safari runs the page under the status bar with the scroll edge effect. Same family as the
-   owner's Duo inner "band at the top" complaint, here on the phone layout. Owner: TopChrome / top
-   bar lane (page area and insets). [i17-13-page, i17-15-hidden, d-03-page-dark]
-4. **The address pill and button bar are hard to read over text.** The glass shows the page's
+3. **The address pill and button bar are hard to read over text.** The glass shows the page's
    text almost unblurred under "Not Secure — host" and the buttons (busy article pages are the
    worst case). Known in docs/polish-backlog.md ("Hard edge look"); it is the first thing a reader
    sees on every article. Owner: chrome / glass (shell lane; not changed here). [i17-28-fr,
    i17-30-reader-a]
-5. **Fixed. The address text overflowed the pill at accessibility text sizes.** At Accessibility
+4. **Fixed. The address text overflowed the pill at accessibility text sizes.** At Accessibility
    XL the host filled the 48 pt capsule edge to edge and the head truncation read "…Secure —
    127.0.0.1". The pill's text now stops growing at the largest non-accessibility size, as
-   Safari's field does. [t-01-page-ax, after-pill-ax]
+   Safari's field does. Trade-off: the field being edited is capped too (Safari's is); the Large
+   Content Viewer on the pill would give the enlarged address back. [t-01-page-ax, after-pill-ax]
 
 ## Medium
 
-6. **Fixed. Start screen shortcuts wrapped unevenly.** "Reopen Closed Tab" broke onto two lines
+5. **Fixed. An empty private tab looked exactly like a regular one.** Only the status band and
+   the field were tinted; a first-time user had no sign the tab is private (Safari says so on its
+   private start page). The sentence under the mark now reads "A private tab: Plain keeps no
+   history of it." No badge (docs/ui-reference.md). [i17-44-private-start, after-private-start
+   (the field closed on purpose to show the screen; opening a private tab still focuses it)]
+6. **The gallery's Private toggle shows no on/off state.** The hand is the same white glyph in
+   both lists; only the backdrop colour changes (VoiceOver reads "Private, Off"). Safari
+   highlights the selected group. A filled hand (`hand.raised.fill`) or a selected background
+   when on would do. Owner: tab switcher lane. [i17-46-private-gallery, i17-47-regular-gallery]
+7. **Paper status band over every page (iPhone, Duo outer).** The page starts under the status
+   bar and a flat paper (light) or navy (dark) strip fills the status area above it. On a white
+   page it reads as a two-tone seam; in dark mode the navy band sits over the grey darkened page.
+   Safari runs the page under the status bar. Same family as the owner's Duo inner "band at the
+   top" complaint (fixed there by the top bar lane), here on the phone layout. Owner: TopChrome /
+   top bar lane (page area and insets). [i17-13-page, i17-15-hidden, d-03-page-dark]
+8. **Fixed. The share sheet's header showed only the host and a blank compass.** Safari heads it
+   with the page's title. Plain now hands the sheet the title (and a mail subject) with the
+   address. [i17-24-share, after-share-header]
+9. **Fixed. Start screen shortcuts wrapped unevenly.** "Reopen Closed Tab" broke onto two lines
    next to a one-line "Private Tab", so the row's captions and heights did not line up, and the
    page menu calls the same items "Reopen Tab" and "Archive". The start screen now uses the page
    menu's captions in equal columns, with the full names for VoiceOver. [i17-43-start-screen,
    after-start-shortcuts]
-7. **Fixed. An empty private tab looked exactly like a regular one.** Only the status band and
-   the field were tinted; a first-time user had no sign the tab is private (Safari says so on its
-   private start page). The sentence under the mark now reads "A private tab: Plain keeps no
-   history of it." No badge (docs/ui-reference.md). [i17-44-private-start, after-private-start]
-8. **Fixed. The share sheet's header showed only the host and a blank compass.** Safari heads it
-   with the page's title. Plain now hands the sheet the title (and a mail subject) with the
-   address. [i17-24-share, after-share-header]
-9. **Gallery bar off-centre when More hides.** With one card (or in the regular list while a
-   private tab is on screen) More and Done hide in place, so the glass capsule keeps an empty slot
-   and the Private, "+" and Done buttons sit off-centre in it. Either collapse the capsule to what
-   shows, or centre the visible buttons. Owner: tab switcher lane. [i17-25-gallery-one,
-   i17-47-regular-gallery]
-10. **The gallery's Private toggle shows no on/off state.** The hand is the same white glyph in
-    both lists; only the backdrop colour changes (VoiceOver reads "Private, Off"). Safari
-    highlights the selected group. A filled hand (`hand.raised.fill`) or a selected background
-    when on would do. Owner: tab switcher lane. [i17-46-private-gallery, i17-47-regular-gallery]
+10. **Gallery bar off-centre when More hides.** With one card (or in the regular list while a
+    private tab is on screen) More and Done hide in place, so the glass capsule keeps an empty
+    slot and the Private, "+" and Done buttons sit off-centre in it. The hide-in-place rule
+    (state rules §1.5) keeps buttons from moving under the thumb inside a mode, so the lead should
+    decide: a capsule sized for the list's state when the gallery opens, or the rule as it is. The
+    same on the Duo's inner screen. Owner: tab switcher lane. [i17-25-gallery-one,
+    i17-47-regular-gallery, duo-i-02-gallery]
 11. **Gallery and its bar at large text.** At Accessibility XL "Done" nearly fills the capsule's
     height, and card titles grow large; the gallery chrome needs the same cap as the pill (or the
     Large Content Viewer). Owner: tab switcher lane. [t-03-gallery-ax]
@@ -109,6 +113,22 @@ area. Captures are named in brackets; they were taken into the session scratchpa
 23. **Back closing a link-opened tab switches with no motion**, where Safari slides back to the
     opener. Owner: shell. [nw-01-back-closing]
 24. **Status band in a private tab** is a light lilac over a white page, the same seam as item 3.
+25. **Duo inner gallery cards are small** for the canvas (about a quarter of its width, with the
+    New Tab card the same weight), and the thumbnail shows a white strip above the page's first
+    line (the snapshot keeps the area under the top bar), so pages are hard to recognise. Review
+    the card size before cropping the snapshot. Owner: tab switcher lane. [duo-i-02-gallery]
+26. **On an empty private tab the start screen's "New Tab" shortcut leaves private browsing**
+    without saying so (state rules §3 name it New Tab there). "Regular Tab" would say where it
+    goes. Owner: state rules (lead's call). [after-private-start]
+27. **Duo outer screen's system bar buttons are 38 x 38 pt** (the system's vertical bar sizes
+    them). Nothing to change in Plain; noted against the 44 pt rule. [duo-o-02-page]
+
+## Duo
+
+Outer screen (page, menu, fold and unfold round trip) and inner screen (top bar, gallery, page
+menu, Settings) follow the same flows as the iPhone; the findings above that apply there say so.
+The inner top bar itself is the top bar lane's and was not judged here. [duo-o-02-page,
+duo-o-03-menu, duo-o-04-refold, duo-i-01-unfold, duo-i-03-menu, duo-i-04-settings]
 
 ## Checked and fine
 

@@ -291,6 +291,10 @@ final class AddressPill: UIView {
         scrim.isPrivate = isPrivate
         overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
+        // The field says it too, for VoiceOver while editing (the pill is no element then).
+        textField.accessibilityLabel = isPrivate ? String(localized: "Private, Search or enter address") : nil
+        // Private, a long host loses its middle, never the mark at its start.
+        hostLabel.lineBreakMode = isPrivate ? .byTruncatingMiddle : .byTruncatingHead
         display(url: url, notSecure: notSecure)
         if isPrivate, textField.leftView == nil { textField.leftView = makeFieldMark() }
         textField.leftViewMode = isPrivate ? .always : .never
@@ -330,7 +334,7 @@ final class AddressPill: UIView {
         label.adjustsFontForContentSizeCategory = true
         label.maximumContentSizeCategory = hostLabel.maximumContentSizeCategory
         label.textAlignment = .center
-        label.lineBreakMode = .byTruncatingHead
+        label.lineBreakMode = hostLabel.lineBreakMode
         label.attributedText = Self.hostText(
             for: url, query: url.flatMap(searchQuery), notSecure: false, placeholder: "New Tab", isPrivate: isPrivateTint
         )

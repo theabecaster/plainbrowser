@@ -463,12 +463,7 @@ extension BrowserViewController: GalleryHost {
             start.setPrivate(currentTab?.isPrivate == true)
             updateStartScreenMessage()
         }
-        // The clock and battery stay light over the dark private start screen.
-        let lightStatusBar = showsStart && start.isPrivate
-        if lightStatusBar != tabsUI.prefersLightStatusBar {
-            tabsUI.prefersLightStatusBar = lightStatusBar
-            setNeedsStatusBarAppearanceUpdate()
-        }
+        updateStatusBarForStart()
         // Over a blank tab's web view, under the page-state message.
         if showsStart {
             webContainer.bringSubviewToFront(start)
@@ -491,6 +486,17 @@ extension BrowserViewController: GalleryHost {
         if !recedes, !isEditingAddress, let tab = currentTab,
            !session.tabs.isEmpty(tab.id) || engineUI.typedVisitTabs.contains(tab.id) { return }
         start.setReceded(recedes, animated: true)
+        updateStatusBarForStart()
+    }
+
+    /// The clock and battery stay light while the dark private start screen is what shows under
+    /// them; once it recedes for suggestions the sheet's paper is, and the system's style returns.
+    func updateStatusBarForStart() {
+        let start = tabsUI.start
+        let light = !start.isHidden && start.isPrivate && !start.isReceded
+        guard light != tabsUI.prefersLightStatusBar else { return }
+        tabsUI.prefersLightStatusBar = light
+        setNeedsStatusBarAppearanceUpdate()
     }
 
     /// The start screen's shortcuts under the mark (state rules §3): a private tab always, Reopen

@@ -117,7 +117,7 @@ final class GalleryTabs: TabGalleryDataSource {
 
     /// The store's entries, without making engine tabs or gallery items.
     func cardCount(private isPrivate: Bool) -> Int {
-        engineTabs.pageEntries(private: isPrivate, profile: shownProfile).count
+        engineTabs.entries(private: isPrivate, profile: shownProfile).count { !engineTabs.isEmpty($0.id) }
     }
 
     /// Lists `profile`'s regular tabs (the switcher, or the window's profile when the gallery

@@ -179,11 +179,16 @@ final class GalleryBottomBar: UIView {
     }
 
     /// Fits the bar into `width`: the switch drops its counts before the bar outgrows the screen
-    /// (the Duo's outer screen, the largest text). Returns the bar's size.
+    /// (the Duo's outer screen, the largest text). Measured first; the switch changes only when
+    /// the answer does. Returns the bar's size.
     func fit(width available: CGFloat) -> CGSize {
         let size = CGSize(width: available, height: Self.height)
-        if !modeSwitch.showsCounts { modeSwitch.showsCounts = true }
-        if width(of: row(fitting: size)) > available { modeSwitch.showsCounts = false }
+        if showsPrivateButton {
+            let counted = modeSwitch.fittingWidth(showingCounts: true)
+            let withCounts = row(fitting: size).map { $0.0 === modeSwitch ? ($0.0, counted) : $0 }
+            let fits = width(of: withCounts) <= available
+            if modeSwitch.showsCounts != fits { modeSwitch.showsCounts = fits }
+        }
         return sizeThatFits(size)
     }
 
@@ -260,47 +265,59 @@ final class GalleryModeSwitch: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     /// Which side shows, and how many cards each list has. Changes nothing when nothing changed;
-    /// returns whether the widths may have (a count's digits).
+    /// returns whether the switch's width changed (a count gained a digit, or came or went).
     @discardableResult
     func set(isPrivate: Bool, regularCount: Int, privateCount: Int) -> Bool {
         guard isPrivate != self.isPrivate || regularCount != counts.regular || privateCount != counts.private else { return false }
-        let digitsChanged = String(regularCount).count != String(counts.regular).count
-            || String(privateCount).count != String(counts.private).count
+        let before = fittingWidth(showingCounts: showsCounts)
         self.isPrivate = isPrivate
         counts = (regularCount, privateCount)
         applyTitles()
         setNeedsLayout()
-        return digitsChanged
+        return fittingWidth(showingCounts: showsCounts) != before
+    }
+
+    private func title(privateSide isPrivateSide: Bool, showingCounts: Bool) -> NSAttributedString {
+        let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traitCollection)
+        let selected = isPrivateSide == isPrivate
+        let count = isPrivateSide ? counts.private : counts.regular
+        // On the light Tabs capsule the text is dark; everywhere else light on the dark glass.
+        let color: UIColor = selected && !isPrivateSide ? Palette.galleryModeInk : .white
+        let title = NSMutableAttributedString(
+            string: isPrivateSide ? String(localized: "Private") : String(localized: "Tabs"),
+            attributes: [.font: font.withWeight(.semibold), .foregroundColor: color]
+        )
+        if showingCounts, count > 0 {
+            let digits = UIFont.monospacedDigitSystemFont(ofSize: font.pointSize, weight: .regular)
+            title.append(NSAttributedString(
+                string: " \(count)", attributes: [.font: digits, .foregroundColor: color.withAlphaComponent(0.72)]
+            ))
+        }
+        return title
     }
 
     private func applyTitles() {
-        let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traitCollection)
-        let word = font.withWeight(.semibold)
-        let digits = UIFont.monospacedDigitSystemFont(ofSize: font.pointSize, weight: .regular)
         for (button, isPrivateSide) in [(privateSide, true), (tabsSide, false)] {
-            let selected = isPrivateSide == isPrivate
             let count = isPrivateSide ? counts.private : counts.regular
-            // On the light Tabs capsule the text is dark; everywhere else light on the dark glass.
-            let color: UIColor = selected && !isPrivateSide ? Palette.galleryModeInk : .white
-            let title = NSMutableAttributedString(
-                string: isPrivateSide ? String(localized: "Private") : String(localized: "Tabs"),
-                attributes: [.font: word, .foregroundColor: color]
-            )
-            if showsCounts, count > 0 {
-                title.append(NSAttributedString(
-                    string: " \(count)", attributes: [.font: digits, .foregroundColor: color.withAlphaComponent(0.72)]
-                ))
-            }
-            button.setAttributedTitle(title, for: .normal)
+            button.setAttributedTitle(title(privateSide: isPrivateSide, showingCounts: showsCounts), for: .normal)
             button.accessibilityValue = count == 1 ? String(localized: "1 tab") : String(localized: "\(count) tabs")
-            button.accessibilityTraits = selected ? [.button, .selected] : .button
+            button.accessibilityTraits = isPrivateSide == isPrivate ? [.button, .selected] : .button
         }
         thumb.backgroundColor = isPrivate ? Palette.privateSelection : Palette.galleryModeLight
     }
 
+    private static func sideWidth(_ title: NSAttributedString) -> CGFloat {
+        max(minSide, ceil(title.size().width) + sideInset * 2)
+    }
+
     private func sideWidth(_ button: UIButton) -> CGFloat {
-        let text = button.attributedTitle(for: .normal)?.size().width ?? 0
-        return max(Self.minSide, ceil(text) + Self.sideInset * 2)
+        Self.sideWidth(button.attributedTitle(for: .normal) ?? NSAttributedString())
+    }
+
+    /// The switch's width with or without the counts, measured without changing what it shows.
+    func fittingWidth(showingCounts: Bool) -> CGFloat {
+        Self.sideWidth(title(privateSide: true, showingCounts: showingCounts))
+            + Self.sideWidth(title(privateSide: false, showingCounts: showingCounts))
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
@@ -310,8 +327,11 @@ final class GalleryModeSwitch: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         let privateWidth = sideWidth(privateSide)
-        privateSide.frame = CGRect(x: 0, y: 0, width: privateWidth, height: bounds.height)
-        tabsSide.frame = CGRect(x: privateWidth, y: 0, width: max(0, bounds.width - privateWidth), height: bounds.height)
+        // Private leads: on the right in a right-to-left language.
+        let rightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let tabsWidth = max(0, bounds.width - privateWidth)
+        privateSide.frame = CGRect(x: rightToLeft ? tabsWidth : 0, y: 0, width: privateWidth, height: bounds.height)
+        tabsSide.frame = CGRect(x: rightToLeft ? 0 : privateWidth, y: 0, width: tabsWidth, height: bounds.height)
         let selected = isPrivate ? privateSide.frame : tabsSide.frame
         let thumbFrame = selected.insetBy(dx: 0, dy: Spacing.xxs)
         if thumb.frame != thumbFrame { thumb.frame = thumbFrame }

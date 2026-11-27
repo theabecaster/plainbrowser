@@ -22,7 +22,14 @@ public enum PlainCommand: Hashable, Sendable {
 /// The scheme is registered in the app's Info.plist, so any app can use these links. Each one does
 /// only what a tap in Plain does (open a page, a tab, the search field), so that is safe.
 public enum PlainLink {
-    public static let scheme = "plainbrowser"
+    /// `plainbrowser`, or `plainbrowser.dev` in Plain Dev (the `PlainLinkScheme` key both
+    /// Info.plists carry), so a Plain Dev widget never opens the TestFlight app, or the reverse.
+    public static let scheme: String = {
+        let value = (Bundle.main.object(forInfoDictionaryKey: "PlainLinkScheme") as? String)?.lowercased()
+        guard let value, value.hasPrefix(defaultScheme) else { return defaultScheme }
+        return value
+    }()
+    static let defaultScheme = "plainbrowser"
 
     public static func url(for command: PlainCommand) -> URL {
         var components = URLComponents()

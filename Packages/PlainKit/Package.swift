@@ -48,7 +48,9 @@ let package = Package(
         .target(name: "PerfSignposts"),
         // Foundation only, so the widget extension links it without the rest: Plain's links and
         // commands, the App Group and the favorites file the app shares with the widgets.
-        .target(name: "PlainShared"),
+        // BrowserCore (Foundation only too): TestIsolation, so an isolated run never uses the
+        // owner's App Group.
+        .target(name: "PlainShared", dependencies: ["BrowserCore"]),
         // PerfSignposts: the paper tile's generation shows up in Instruments.
         .target(name: "DesignSystem", dependencies: ["PerfSignposts"], swiftSettings: mainActorByDefault),
 
@@ -76,7 +78,7 @@ let package = Package(
 
         // The system's copies of the favorites (Spotlight, the App Group file, widget timelines)
         // and the activities the system hands back. Engine layer: it reads Storage, never the UI.
-        .target(name: "SystemSync", dependencies: ["Storage", "PlainShared"]),
+        .target(name: "SystemSync", dependencies: ["Storage", "PlainShared", "BrowserCore"]),
 
         // Layer 3: UI.
         .target(

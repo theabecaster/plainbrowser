@@ -2,7 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   The app's entitlements. The App Group is shared with the widget extension: the app writes the
-  favorites file there (PlainShared.AppGroup), the widgets and App Intents read it.
+  favorites file there (PlainShared.AppGroup), the widgets and App Intents read it. The id follows
+  the bundle suffix (PLAIN_APP_GROUP in project.yml): Plain Dev has a group of its own.
   When Apple grants the web-browser entitlement, its key from Plain-WebBrowser.entitlements moves
   in here (see that file).
 -->
@@ -10,7 +11,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.dev.abrahamgonzalez.plainbrowser</string>
+		<string>$(PLAIN_APP_GROUP)</string>
 	</array>
 </dict>
 </plist>

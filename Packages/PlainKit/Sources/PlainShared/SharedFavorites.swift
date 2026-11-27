@@ -1,14 +1,27 @@
+import BrowserCore
 import Foundation
 
 /// The App Group the app and its widget extension share. Both targets list it in their
 /// entitlements; automatic signing registers it (docs/development.md, "Widgets and App Group").
 public enum AppGroup {
-    public static let identifier = "group.dev.abrahamgonzalez.plainbrowser"
+    /// The group's id, from the `PlainAppGroup` key both Info.plists carry (`PLAIN_APP_GROUP` in
+    /// project.yml): `group.dev.abrahamgonzalez.plainbrowser`, plus `.dev` for Plain Dev, so the
+    /// device build and the TestFlight app never share a group. Nil in a process without the key
+    /// (unit tests on macOS).
+    public static let identifier: String? = {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "PlainAppGroup") as? String,
+              value.hasPrefix("group.") else { return nil }
+        return value
+    }()
 
     /// The shared folder, or nil when the process is not signed with the group (unit tests on
-    /// macOS, an unsigned build).
+    /// macOS, an unsigned build). An isolated test run gets a folder of its own under
+    /// `TestIsolation.directory` instead: it never reads or writes the owner's group, so the
+    /// owner's widgets and Shortcuts never see a test's favorites.
     public static var containerURL: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier)
+        if TestIsolation.isActive { return TestIsolation.folder("AppGroup") }
+        guard let identifier else { return nil }
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: identifier)
     }
 }
 

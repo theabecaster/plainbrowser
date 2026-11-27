@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **Duo inner screen: chrome takes too much space, portrait bottom menu looks broken — follow Safari on iPhone Duo.** The tab bar takes too much room and looks broken; the page should get the screen; the portrait bottom menu (pill over a full-width button bar) looks horrible. Safari's Duo layout is the model: its options, its use of space, how intuitive it is. (Duo layout lane.)
+
 - **Launch with tabs feels empty:** open to the last tab (or a search with the last tab behind it), like Arc but smoother. (Launch lane.)
 
 

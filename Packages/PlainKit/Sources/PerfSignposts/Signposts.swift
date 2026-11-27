@@ -273,14 +273,16 @@ public enum Signposts {
 
     // MARK: Tab gallery (TabGalleryUI emits these)
 
-    /// Interval: the page zooming into its card, until it visibly rests there (`visualSettle`;
-    /// Core Animation finishes the spring's tail a few hundred ms later).
+    /// Interval: opening the gallery, from the tabs button or the swipe up (the shell getting the
+    /// gallery ready and the page's snapshot, since 2026-11-27) until the page visibly rests on
+    /// its card (`visualSettle`; Core Animation finishes the spring's tail a few hundred ms later).
     public static let galleryShow: StaticString = "gallery.show"
     /// Where `gallery.show` counts the page as at rest, in points: within this distance of its card
     /// on every edge, and moving less than this in a frame (so a page still crossing the card's
     /// frame at speed doesn't count). Half a point is below what the eye can see move.
     public static let visualSettle: Double = 0.5
-    /// Interval: a card zooming into its page, until the page is settled.
+    /// Interval: a card zooming into its page, until the page visibly rests there (`visualSettle`,
+    /// the same rule as `gallery.show`, since 2026-11-27); the live page takes over then.
     public static let galleryOpenTab: StaticString = "gallery.openTab"
     /// Interval: a card flicked away (or closed from its button or menu), until the cards reflow.
     public static let galleryCardClose: StaticString = "gallery.cardClose"
@@ -376,6 +378,19 @@ public enum Signposts {
     public static let splitSwap: StaticString = "split.swap"
     /// Event: the focused pane changed (a touch on the other pane, or a tab chosen in it).
     public static let paneFocus: StaticString = "pane.focus"
+    /// Interval: the side pane opening (More, the edge swipe, History, Find on Page), from the
+    /// request until its spring settles. The message says what it shows.
+    public static let sidePaneOpen: StaticString = "sidePane.open"
+    /// Interval: the side pane closing, until the page has its width back.
+    public static let sidePaneClose: StaticString = "sidePane.close"
+    /// Event: the side pane switched what it shows (Reader, Find, History).
+    public static let sidePaneSection: StaticString = "sidePane.section"
+    /// Interval: Find in the side pane, from a query to its list of matches.
+    public static let sidePaneFind: StaticString = "sidePane.find"
+    /// Event: a new window was asked for (Open in New Window, New Window).
+    public static let windowOpen: StaticString = "window.open"
+    /// Event: another window was brought forward from the tabs menu.
+    public static let windowSwitch: StaticString = "window.switch"
     /// Interval: a size change of the window (fold, unfold, rotation), from
     /// `viewWillTransition(to:with:)` to its completion, when the page insets apply. The message is
     /// the target size.

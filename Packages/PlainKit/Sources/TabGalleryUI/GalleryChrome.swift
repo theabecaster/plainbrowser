@@ -3,7 +3,9 @@ import DesignSystem
 import UIKit
 
 /// The gallery's floating bar: the gallery menu, the private toggle, New Tab and Done, on one
-/// glass capsule.
+/// glass capsule. A control the state rules leave out is taken out of the row and the capsule
+/// fits the rest, centered (UX audit, 2026-11-27: a hidden-in-place More left the row
+/// off-centre). Text is capped at the pill's size; a long press shows the Large Content Viewer.
 final class GalleryBottomBar: UIView {
     let menuButton = UIButton(type: .system)
     let privateButton = UIButton(type: .system)
@@ -17,6 +19,11 @@ final class GalleryBottomBar: UIView {
         }
     }
     private let glass = Glass.makeView(shape: .capsule, tint: Palette.glassTintOnPaper)
+    /// Which of the optional controls are in the row (the private toggle follows
+    /// `showsPrivateButton`).
+    private(set) var showsMenu = true
+    private(set) var showsNewTab = true
+    private(set) var showsDone = true
 
     private static let height: CGFloat = 52
     private static let padding: CGFloat = 4
@@ -24,6 +31,9 @@ final class GalleryBottomBar: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         addSubview(glass)
+        // The pill's cap (AddressPill): past it the capsule would outgrow its row.
+        maximumContentSizeCategory = .extraExtraExtraLarge
+        addInteraction(UILargeContentViewerInteraction())
 
         let symbols = UIImage.SymbolConfiguration(textStyle: .body, scale: .large)
         menuButton.setImage(UIImage(systemName: "ellipsis", withConfiguration: symbols), for: .normal)
@@ -44,6 +54,7 @@ final class GalleryBottomBar: UIView {
             return attributes
         }
         done.contentInsets = .init(top: 0, leading: Spacing.m, bottom: 0, trailing: Spacing.m)
+        done.titleLineBreakMode = .byTruncatingTail
         doneButton.configuration = done
         doneButton.accessibilityIdentifier = "galleryDone"
 
@@ -59,29 +70,120 @@ final class GalleryBottomBar: UIView {
         }
         doneButton.tintColor = Palette.accentOnGlass
         for button in [menuButton, privateButton, newTabButton, doneButton] {
+            button.showsLargeContentViewer = true
+            button.largeContentTitle = button.accessibilityLabel
             glass.contentView.addSubview(button)
         }
+        doneButton.largeContentTitle = "Done"
     }
+
+    /// Puts the optional controls in or out of the row. Returns whether anything changed; the
+    /// caller lays the bar out again (animated or not, `animateRowChange`).
+    @discardableResult
+    func setShown(menu: Bool, newTab: Bool, done: Bool) -> Bool {
+        guard menu != showsMenu || newTab != showsNewTab || done != showsDone else { return false }
+        showsMenu = menu
+        showsNewTab = newTab
+        showsDone = done
+        return true
+    }
+
+    /// After `setShown`: a control leaving fades where it stands, then the others glide to the
+    /// new centered row with a short spring as the capsule takes its new width (`layout` lays the
+    /// bar out in its parent); one arriving fades in at its place. Without `animated`, or when
+    /// `canAnimate` says a finger is on the gallery by the time the glide would start, everything
+    /// lands at once. A newer change takes over from wherever the last one was.
+    func animateRowChange(animated: Bool, canAnimate: @escaping () -> Bool, layout: @escaping () -> Void) {
+        rowGeneration += 1
+        let generation = rowGeneration
+        let buttons: [(UIButton, Bool)] = [(menuButton, showsMenu), (newTabButton, showsNewTab), (doneButton, showsDone)]
+        let land = {
+            for (button, shown) in buttons {
+                button.layer.removeAllAnimations()
+                button.isHidden = !shown
+                button.alpha = 1
+            }
+            layout()
+        }
+        guard animated, window != nil, !Motion.prefersCrossfade else { return land() }
+        let leaving = buttons.filter { !$0.1 && !$0.0.isHidden }.map(\.0)
+        // Arriving: hidden ones, and any caught fading out by the change before this one.
+        let arriving = buttons.filter { $0.1 && ($0.0.isHidden || $0.0.alpha < 1) }.map(\.0)
+        for button in arriving where button.isHidden {
+            button.alpha = 0
+            button.isHidden = false
+        }
+        Motion.animate(Motion.quick, changes: { for button in leaving { button.alpha = 0 } }, completion: { [weak self] in
+            guard let self, generation == rowGeneration else { return }
+            for button in leaving {
+                button.isHidden = true
+                button.alpha = 1
+            }
+        })
+        // The glide starts as the fade is mostly done, so nothing slides under a fading glyph.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.glideDelay) { [weak self] in
+            guard let self, generation == rowGeneration else { return }
+            guard canAnimate() else { return land() }
+            Motion.animate(Motion.barGlide, changes: layout)
+            Motion.animate(Motion.quick) { for button in arriving { button.alpha = 1 } }
+        }
+    }
+
+    private var rowGeneration = 0
+
+    private func isShown(_ button: UIButton) -> Bool {
+        switch button {
+        case menuButton: showsMenu
+        case newTabButton: showsNewTab
+        case doneButton: showsDone
+        default: true
+        }
+    }
+
+    private static let glideDelay: TimeInterval = 0.1
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// The private toggle's look: a filled hand while the gallery shows private tabs.
+    /// The private toggle's look: on, a filled hand on a light disc (the selected state, as a
+    /// selected bar button in the system's glass bars); off, the hand's outline like its
+    /// neighbours (UX audit, 2026-11-27: the two looked alike).
     func setPrivate(_ isPrivate: Bool) {
         let symbols = UIImage.SymbolConfiguration(textStyle: .body, scale: .large)
-        privateButton.setImage(
-            UIImage(systemName: isPrivate ? "hand.raised.fill" : "hand.raised", withConfiguration: symbols), for: .normal
-        )
+        var configuration = isPrivate ? UIButton.Configuration.filled() : UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: isPrivate ? "hand.raised.fill" : "hand.raised", withConfiguration: symbols)
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = .zero
+        if isPrivate {
+            configuration.baseBackgroundColor = Palette.textPrimary
+            configuration.baseForegroundColor = Palette.privateBackground
+        } else {
+            configuration.baseForegroundColor = Palette.textPrimary
+        }
+        privateButton.configuration = configuration
         privateButton.accessibilityValue = isPrivate ? "On" : "Off"
         privateButton.accessibilityTraits = isPrivate ? [.button, .selected] : .button
     }
 
-    private var buttonCount: CGFloat { showsPrivateButton ? 3 : 2 }
+    /// The controls in the row, in order, with their widths.
+    private func row(fitting size: CGSize) -> [(UIButton, CGFloat)] {
+        var row: [(UIButton, CGFloat)] = []
+        let side = Metrics.tapTarget
+        if showsMenu { row.append((menuButton, side)) }
+        if showsPrivateButton { row.append((privateButton, side)) }
+        if showsNewTab { row.append((newTabButton, side)) }
+        if showsDone {
+            // At the largest text "Done" truncates rather than push the capsule off the screen.
+            let done = min(max(side, doneButton.sizeThatFits(size).width), Self.maxDoneWidth)
+            row.append((doneButton, done))
+        }
+        return row
+    }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let done = max(Metrics.tapTarget, doneButton.sizeThatFits(size).width)
-        let width = Self.padding * 2 + Metrics.tapTarget * buttonCount + done + Spacing.xl * buttonCount
-        return CGSize(width: width, height: Self.height)
+        let row = row(fitting: size)
+        let width = Self.padding * 2 + row.reduce(0) { $0 + $1.1 } + Spacing.xl * CGFloat(max(0, row.count - 1))
+        return CGSize(width: max(width, Self.height), height: Self.height)
     }
 
     override func layoutSubviews() {
@@ -89,16 +191,15 @@ final class GalleryBottomBar: UIView {
         glass.frame = bounds
         let side = Metrics.tapTarget
         let y = ((bounds.height - side) / 2).rounded()
-        menuButton.frame = CGRect(x: Self.padding, y: y, width: side, height: side)
-        var next = menuButton.frame.maxX + Spacing.xl
-        if showsPrivateButton {
-            privateButton.frame = CGRect(x: next, y: y, width: side, height: side)
-            next = privateButton.frame.maxX + Spacing.xl
+        var x = Self.padding
+        for (button, width) in row(fitting: bounds.size) {
+            button.frame = CGRect(x: x, y: y, width: width, height: side)
+            x += width + Spacing.xl
         }
-        newTabButton.frame = CGRect(x: next, y: y, width: side, height: side)
-        let doneX = newTabButton.frame.maxX + Spacing.xl
-        doneButton.frame = CGRect(x: doneX, y: y, width: bounds.width - Self.padding - doneX, height: side)
     }
+
+    /// "Done" never takes more than this, in points.
+    private static let maxDoneWidth: CGFloat = 120
 }
 
 /// "Reopen Tab", shown only after a close and gone a few seconds later (docs/ui-reference.md).

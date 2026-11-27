@@ -178,9 +178,8 @@ Newest feature last.
   landscape; M3 kept the one bottom pill and moved it over the focused pane (the brief: keep the
   existing chrome). Decide on the device whether the inner screen wants top pills. (Design
   review, round 1.)
-- **Open in New Window** needs one app-wide `TabStore` shared by scenes, and a fresh window for a
-  scene whose saved window is gone (today it takes the first window; one scene only). (Code
-  review, round 1.)
+- ~~**Open in New Window** needs one app-wide `TabStore` shared by scenes.~~ Done 2026-11-27
+  (docs/decisions.md, "Open in New Window: one tab store, a scene per window").
 - **Drop a tab on the other pane to split** (plan, side tabs) and drag a tab between panes are not
   built; Open in Other Pane covers it from the menus.
 - **Site icons in the rail.** Rows show a letter tile until Storage's favicons reach the shell.
@@ -240,13 +239,7 @@ Newest feature last.
 
 ## One-tab switcher (2026-11-26)
 
-- **New Tab card entrance.** It grows in after the page has landed on its card, which reads as a
-  second animation. Starting it as the zoom settles would feel like one motion, but while the page
-  still moves above the gallery the card's overlap would pop at the end; solve both together.
-  (Design review, round 2.)
-- **New Tab card fade reversal.** Back to one card within the 0.15 s fade-out (a reopen then a
-  close), the card restarts its grow-in from nothing instead of from where the fade had it.
-  (Code review, round 2.)
+- The New Tab card's entrance and fade items were dropped with the card (removed 2026-11-27).
 
 ## Paper texture (2026-11-26)
 
@@ -418,3 +411,18 @@ Newest feature last.
 - **Status items over a colored header.** On the inner screen the system's status items turn black
   over a red header at rest and while reading; check on the device that the switch doesn't flash
   during motion (design review, round 1).
+## Side pane and windows (2026-11-27)
+
+- **Find's first result can start with a heading number** ("…3 Papermaking"): context crosses
+  into the table of contents' numbering. Trim leading list numbers from the context. (Design
+  review, round 2.)
+- **History and Find search fields differ** in height and fill inside the pane; make them one
+  style. (Design review, round 2.)
+- **Book pose gutter:** the 40 pt fold gap between the page and the pane reads as a blank column;
+  try letting the pane's paper run to the page's edge with its controls kept off the fold.
+  (Design review, round 2.)
+- **Reader at 250 pt:** infobox tables scroll sideways (by design) and look clipped; the
+  publisher line, large title and accent rule take much of the first screen in the pane. A
+  narrower reader style for the pane. (Design review, round 1.)
+- **Device checks:** two windows side by side in Split View, a fold with two windows, the edge
+  swipe against WebKit's swipe forward, and the pane's header beside the real status corner.

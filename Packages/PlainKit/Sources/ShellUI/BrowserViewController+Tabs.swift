@@ -93,7 +93,9 @@ extension BrowserViewController {
         var later: [UIMenuElement] = []
         if rules.menuReopenClosedTab { later.append(reopenClosedTabAction()) }
         if rules.menuArchivedTabs { later.append(archivedTabsAction()) }
-        var sections = [opening, moves, later].filter { !$0.isEmpty }.map {
+        // New Window and the app's other windows, where windows exist (`+Windows`).
+        let windows = windowMenuItems()
+        var sections = [opening, moves, windows, later].filter { !$0.isEmpty }.map {
             UIMenu(options: .displayInline, children: $0) as UIMenuElement
         }
         if rules.menuCloseTab, let tab = currentTab {
@@ -296,7 +298,9 @@ extension BrowserViewController {
         switch placement {
         case .otherPane where canSplit:
             openInOtherPane(url, opener: tab)
-        case .newTab, .otherPane:
+        case .newWindow where canOpenNewWindow:
+            openNewWindow(url, isPrivate: tab.isPrivate)
+        case .newTab, .otherPane, .newWindow:
             let new = session.tabs.newTab(opener: tab)
             new.load(url)
             show(new)

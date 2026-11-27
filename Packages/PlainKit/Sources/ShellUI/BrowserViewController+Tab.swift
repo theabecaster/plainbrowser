@@ -84,6 +84,8 @@ extension BrowserViewController {
             guard let self else { return }
             if let restored, self.currentTab == nil { self.show(restored) }
             self.launchSessionRestored(restored)
+            // From here a spare gallery may be built at idle: never inside the launch.
+            self.tabsUI.isLaunchDone = true
             self.tabsDidChange()
             self.sessionDidLoadForCommands()
             self.tabsUI.tip.start(in: self)
@@ -283,11 +285,8 @@ extension BrowserViewController {
         updateButtons()
         updatePageState()
         updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
-        // A page from the reading list that can't load offline opens its saved copy instead.
-        if new.isFailed, old?.isFailed != true, let error = new.loadError, let tried = new.shownAddress,
-           ControlRules.opensSavedCopy(errorDomain: error.domain, code: error.code) {
-            openSavedCopy(of: tried)
-        }
+        // A new tab on screen, a new address or a finished load: the side pane follows the page.
+        if old == nil || old?.url != new.url || old?.isLoading != new.isLoading { sidePanePageDidChange() }
     }
 
     // MARK: Page state (crash, error, form waiting)
@@ -365,6 +364,8 @@ extension BrowserViewController {
     /// Find on Page: in the reader while it shows, else on the page (`Tab.beginFind`, which emits
     /// the signpost itself).
     func findOnPage() {
+        // A list of matches beside the page where the side pane can show.
+        if currentRules().findInSidePane { return openSidePane(.find, focus: true) }
         if let reader = engineUI.reader.webView {
             Signposts.signposter.emitEvent(Signposts.findOnPage)
             reader.findInteraction?.presentFindNavigator(showingReplace: false)

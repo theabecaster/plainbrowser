@@ -531,6 +531,12 @@ public final class WebViewPool {
         await thumbnails.thumbnail(for: tab.id)
     }
 
+    /// How much of the top of the tab's web view a bar covers (its `obscuredContentInsets.top`):
+    /// thumbnails leave it out, so the gallery's zoom does too. Zero without a web view.
+    public func obscuredTop(for tab: Tab) -> CGFloat {
+        slots[tab.id]?.webView.obscuredContentInsets.top ?? 0
+    }
+
     /// The page's scroll view, for the collapsing toolbar's scroll delegate. Nil when the tab has
     /// no web view.
     public func scrollView(for tab: Tab) -> UIScrollView? {

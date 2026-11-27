@@ -33,6 +33,9 @@ public final class TabGalleryTransition {
     private let container: UIView
     private let snapshot: UIView
     private let pageFrame: CGRect
+    /// How much of the page's top a floating bar covers: the card's thumbnail leaves it out, so
+    /// the moving page slides it up and out of the card over the way.
+    private let contentTop: CGFloat
     private var cardFrame: CGRect
     private let wrapper = UIView()
     private let completion: (End) -> Void
@@ -40,8 +43,6 @@ public final class TabGalleryTransition {
     private let signpostName: StaticString
     private let signpostState: OSSignpostIntervalState
     private var signpostEnded = false
-    /// `gallery.show` ends when the page visibly rests on its card, not at the spring's settle.
-    private let endsAtVisualSettle: Bool
     /// Samples the moving page each frame while a spring runs, to end the signpost interval when
     /// the motion has visibly settled (`visualSettle`) rather than at the spring's long tail.
     private var settleWatch: CADisplayLink?
@@ -59,8 +60,10 @@ public final class TabGalleryTransition {
     ///   - start: where it starts; it heads to the other end.
     public init(
         tabID: UUID, gallery: TabGalleryViewController, container: UIView, snapshot: UIView,
-        pageFrame: CGRect, from start: End, completion: @escaping (End) -> Void
+        pageFrame: CGRect, contentTop: CGFloat = 0, from start: End, interval: OSSignpostIntervalState? = nil,
+        completion: @escaping (End) -> Void
     ) {
+        self.contentTop = max(0, contentTop)
         self.tabID = tabID
         self.gallery = gallery
         self.container = container
@@ -69,20 +72,18 @@ public final class TabGalleryTransition {
         self.completion = completion
         destination = start == .page ? .gallery : .page
         signpostName = start == .page ? Signposts.galleryShow : Signposts.galleryOpenTab
-        endsAtVisualSettle = start == .page
-        signpostState = Signposts.signposter.beginInterval(signpostName)
+        // The shell may have begun the interval already, at the tap, so the gallery's set-up
+        // before the first frame is inside it.
+        signpostState = interval ?? Signposts.signposter.beginInterval(signpostName)
 
         gallery.prepareForTransition(to: tabID, revealFully: start == .page)
         cardFrame = gallery.thumbnailFrame(for: tabID, in: container)
             ?? CGRect(x: pageFrame.midX - 1, y: pageFrame.midY - 1, width: 2, height: 2)
         gallery.setThumbnailHidden(for: tabID)
-        // The New Tab card beside a lone card would cover the moving page's edge; it waits and
-        // grows in once the page has landed. A crossfade moves nothing, so it stays.
-        if !Motion.prefersCrossfade { gallery.setNewTabCardHeld(true, fades: start == .gallery) }
 
         wrapper.clipsToBounds = true
         wrapper.layer.cornerCurve = .continuous
-        wrapper.layer.borderColor = Palette.coral.cgColor
+        wrapper.layer.borderColor = Palette.accent.cgColor
         wrapper.backgroundColor = Palette.surface
         wrapper.accessibilityElementsHidden = true
         snapshot.layer.anchorPoint = CGPoint(x: 0.5, y: 0)
@@ -208,21 +209,24 @@ public final class TabGalleryTransition {
                 self.offset = .zero
                 self.apply(progress: self.progress(of: end), crossfade: false, setsRing: false)
             }, completion: finish)
-            // Only the page zooming into its card (the perf gate's `gallery.show`); a card
-            // opening into its page keeps ending at the spring's settle.
-            if endsAtVisualSettle { watchSettle() }
+            // Both ways the run ends when the motion is visibly over (`gallery.show`,
+            // `gallery.openTab`), not when Core Animation finishes the spring's sub-point tail.
+            watchSettle()
         }
     }
 
     // MARK: Signpost
 
-    /// Watches the page each frame until it is visibly at rest (`Signposts.visualSettle`). The
-    /// critically damped spring creeps over that last half point for several hundred
-    /// milliseconds more before Core Animation calls it finished.
+    /// Watches the page each frame until it is visibly at rest (`Signposts.visualSettle`), then
+    /// ends the run there: the spring would creep over that last half point for several hundred
+    /// milliseconds more before Core Animation calls it finished, with the live page (or the
+    /// gallery's touches) waiting on it.
     private func watchSettle() {
         lastShown = nil
         guard !signpostEnded, settleWatch == nil else { return }
         let link = CADisplayLink(target: SettleWatchTarget(self), selector: #selector(SettleWatchTarget.tick))
+        // Sampled at the rate the zoom runs at: a 60 Hz sample would see the rest up to a frame late.
+        link.preferredFrameRateRange = SpringDriver.frameRateRange
         link.add(to: .main, forMode: .common)
         settleWatch = link
     }
@@ -234,8 +238,19 @@ public final class TabGalleryTransition {
         guard let last = lastShown else { return }
         let settle = CGFloat(Signposts.visualSettle)
         if Self.distance(shown, wrapper.frame) <= settle, Self.distance(shown, last) <= settle {
-            endSignpost()
+            landAtRest()
         }
+    }
+
+    /// The motion is visibly over: what is left of the spring is under half a point, so the
+    /// layers stop at their model values (a jump the eye cannot see) and the run ends now. The
+    /// spring's own completion, later, is ignored.
+    private func landAtRest() {
+        guard !isFinished else { return endSignpost() }
+        generation += 1
+        wrapper.layer.removeAllAnimations()
+        for view in gallery.transitionContent { view.layer.removeAllAnimations() }
+        complete(at: destination)
     }
 
     /// The largest gap between two frames' matching edges.
@@ -256,7 +271,7 @@ public final class TabGalleryTransition {
     private func apply(progress: CGFloat, crossfade: Bool, setsRing: Bool = true) {
         let content = gallery.transitionContent
         if crossfade {
-            setFrame(pageFrame)
+            setFrame(pageFrame, progress: 0)
             wrapper.layer.cornerRadius = 0
             wrapper.layer.borderWidth = 0
             wrapper.alpha = progress
@@ -264,6 +279,7 @@ public final class TabGalleryTransition {
             // The card shows under the fading page, so there is no gap.
             gallery.setThumbnailHidden(for: nil)
             gallery.setHeaderFade(1)
+            gallery.setBackdropFade(1)
             return
         }
         let frame = CGRect(
@@ -272,7 +288,7 @@ public final class TabGalleryTransition {
             width: max(1, lerp(pageFrame.width, cardFrame.width, progress)),
             height: max(1, lerp(pageFrame.height, cardFrame.height, progress))
         )
-        setFrame(frame)
+        setFrame(frame, progress: progress)
         let t = min(max(progress, 0), 1)
         wrapper.layer.cornerRadius = lerp(0, Radius.large, t)
         // The tab being opened or left is the selected one: its card's ring grows in with the
@@ -299,6 +315,10 @@ public final class TabGalleryTransition {
         let zoomFade = min(1, max(0, (progress - 0.6) / 0.4))
         let liftFade = min(1, max(0, 1 + offset.y / Self.liftFadeDistance))
         gallery.setHeaderFade(zoomFade * liftFade)
+        // The blurred backdrop comes and goes with the zoom, over the third of the way nearest
+        // the page (where the moving page still covers most of what is under it): no dark edge
+        // is left beside a page that has landed, and the page under never shows through for long.
+        gallery.setBackdropFade(t * 3)
     }
 
     private static let ringKey = "selectionRing"
@@ -355,12 +375,14 @@ public final class TabGalleryTransition {
     }
 
     /// The snapshot keeps the page's shape, scaled to the wrapper's width and pinned to its top:
-    /// a card shows the top of its page.
-    private func setFrame(_ frame: CGRect) {
+    /// a card shows the top of its page. The strip a floating bar covers slides out of the top
+    /// with the progress, so the page lands on its card showing what the thumbnail shows.
+    private func setFrame(_ frame: CGRect, progress: CGFloat) {
         wrapper.frame = frame
         let scale = pageFrame.width > 0 ? frame.width / pageFrame.width : 1
         snapshot.transform = CGAffineTransform(scaleX: scale, y: scale)
-        snapshot.center = CGPoint(x: frame.width / 2, y: 0)
+        let t = min(max(progress, 0), 1)
+        snapshot.center = CGPoint(x: frame.width / 2, y: -contentTop * scale * t)
     }
 
     private func complete(at end: End) {
@@ -372,7 +394,7 @@ public final class TabGalleryTransition {
         }
         gallery.setThumbnailHidden(for: nil)
         gallery.setHeaderFade(1)
-        gallery.setNewTabCardHeld(false, grows: end == .gallery)
+        gallery.setBackdropFade(1)
         endSignpost()
         completion(end)
     }

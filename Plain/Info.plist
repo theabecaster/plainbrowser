@@ -41,10 +41,12 @@
 		</dict>
 	</array>
 	<!-- Handoff: web pages continued from another device. iOS sends them to the default browser,
-	     so they reach Plain once it can be the default (docs/research/system-integration.md). -->
+	     so they reach Plain once it can be the default (docs/research/system-integration.md).
+	     "Open in New Window" asks for a scene with Plain's window activity (ShellUI's Windows). -->
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>NSUserActivityTypeBrowsingWeb</string>
+		<string>dev.abrahamgonzalez.plainbrowser.window</string>
 	</array>
 	<!-- The App Group and the link scheme, from project.yml (they follow the bundle suffix):
 	     PlainShared.AppGroup and PlainLink read them. -->
@@ -88,10 +90,12 @@
 	<string>Websites you allow can see your location, for maps and places nearby.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Images you save from websites go to your photo library.</string>
+	<!-- Windows: the iPhone Duo's inner screen and iPad-size windows take more than one
+	     (docs/decisions.md, "Open in New Window"). -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
+		<true/>
 		<key>UISceneConfigurations</key>
 		<dict>
 			<key>UIWindowSceneSessionRoleApplication</key>

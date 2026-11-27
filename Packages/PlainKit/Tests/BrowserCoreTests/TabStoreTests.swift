@@ -457,6 +457,46 @@ final class RecordingPersistence: TabPersistence {
         #expect(store.windowID(of: a) == first)
     }
 
+    @Test func reopenPrefersTheWindowsOwnCloseAndUsesItForAGoneWindow() {
+        let store = makeStore()
+        let first = store.windows[0].id
+        let second = store.addWindow()
+        let a = store.open(url("a"), in: first)
+        let b = store.open(url("b"), in: second)
+        store.close(a)
+        store.close(b)
+        // The first window's own close, though b's is newer.
+        #expect(store.reopenLastClosed(window: first) == [a])
+        #expect(store.windowID(of: a) == first)
+        let third = store.addWindow()
+        let c = store.open(url("c"), in: third)
+        store.closeWindow(third)
+        // c's window is gone: it comes back in the window that asked.
+        #expect(store.reopenLastClosed(window: first) == [c], "the first window closed nothing left: the newest batch")
+        #expect(store.windowID(of: c) == first)
+    }
+
+    @Test func addWindowKeepsAnExistingIDAndMergeMovesEveryTab() {
+        let store = makeStore()
+        let first = store.windows[0].id
+        let second = WindowID()
+        #expect(store.addWindow(id: second) == second)
+        #expect(store.addWindow(id: second) == second)
+        #expect(store.windows.count == 2)
+        let a = store.open(url("a"), in: first)
+        let b = store.open(url("b"), in: second)
+        let p = store.open(url("p"), in: second, isPrivate: true)
+        store.setPinned(true, for: b)
+        store.mergeWindow(second, into: first)
+        #expect(store.windows.map(\.id) == [first])
+        #expect(store.windows[0].tabIDs == [b, a], "a pinned tab stays first")
+        #expect(store.windows[0].privateTabIDs == [p])
+        #expect(store.windowID(of: b) == first)
+        #expect(store.windows[0].panes == [a], "the target's panes stay")
+        store.mergeWindow(first, into: first)
+        #expect(store.windows.count == 1)
+    }
+
     @Test func aClosedSplitWindowReopensSplit() {
         let store = makeStore()
         let window = store.windows[0].id

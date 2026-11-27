@@ -126,7 +126,7 @@ import Testing
         let rules = ControlRules(Self.page())
         #expect(rules.tabsSlot == .tabs, "the tap opens the switcher, as the swipe up does")
         #expect(rules.galleryHasCards)
-        #expect(rules.swipeUpOpensGallery, "one card and a New Tab card")
+        #expect(rules.swipeUpOpensGallery, "its one card")
         #expect(rules.menuShowAllTabs, "same predicate as the swipe up")
         #expect(rules.back == .dimmed)
         #expect(rules.forward == .hidden)
@@ -446,6 +446,35 @@ import Testing
         #expect(ControlRules(empty).paneItems, "an empty pane can still be swapped or closed")
     }
 
+    @Test func sidePaneShowsWhereItFitsAndTakesHistoryAndFind() {
+        var state = Self.page()
+        #expect(ControlRules(state).sidePane == .hidden, "phones and the outer screen have no side pane")
+        #expect(!ControlRules(state).historyInSidePane)
+        #expect(!ControlRules(state).findInSidePane)
+        state.canShowSidePane = true
+        #expect(ControlRules(state).sidePane == .show)
+        #expect(ControlRules(state).historyInSidePane)
+        #expect(ControlRules(state).findInSidePane)
+        state.isSidePaneOpen = true
+        #expect(ControlRules(state).sidePane == .hide)
+        state.isReaderOpen = true
+        #expect(!ControlRules(state).findInSidePane, "the reader on the page keeps the find bar")
+        var start = Self.emptyTab()
+        start.canShowSidePane = true
+        #expect(ControlRules(start).sidePane == .show, "History is useful on the start screen too")
+    }
+
+    @Test func aSidePaneOverASplitHidesThePaneItems() {
+        var state = Self.page(others: 1)
+        state.canSplit = true
+        state.isSplit = true
+        state.canShowSidePane = true
+        state.isSidePaneOpen = true
+        #expect(!ControlRules(state).paneItems, "the side pane has the second pane's place")
+        state.isSplit = false
+        #expect(!ControlRules(state).openInOtherPane, "a split would have nowhere to show")
+    }
+
     @Test func sideTabsMakeTheSidebarTheSwitcher() {
         var state = Self.page()
         state.sideTabs = true
@@ -486,14 +515,6 @@ import Testing
         #expect(!rules.done)
         #expect(!rules.more)
         #expect(GalleryRules(Self.gallery(count: 1)).newTabButton)
-    }
-
-    @Test func galleryOneCardGetsANewTabCardBesideIt() {
-        #expect(!GalleryRules(Self.gallery(count: 0)).newTabCard, "the empty state has its own button")
-        #expect(GalleryRules(Self.gallery(count: 1)).newTabCard)
-        #expect(GalleryRules(Self.gallery(count: 1, isPrivate: true)).newTabCard)
-        #expect(GalleryRules(Self.gallery(count: 1, selection: false)).newTabCard, "the other list's lone card too")
-        #expect(!GalleryRules(Self.gallery(count: 2)).newTabCard)
     }
 
     @Test func galleryDoneOnlyWithTheScreenTabInTheList() {

@@ -50,7 +50,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   cell and the open gaps, is `docs/state-rules.md`.
 - A button, its gesture and its menu item follow one condition. The swipe up and Show All Tabs
   open the switcher whenever it has a card: another tab, or the page on screen (with one tab, its
-  card and a New Tab card). The tabs button's tap opens the same switcher, so it is Tabs whenever
+  card alone; New Tab is the "+" under it). The tabs button's tap opens the same switcher, so it is Tabs whenever
   the switcher has a card. An empty tab alone has nothing to show: no tabs button, and the swipe
   bumps.
 - A long press is never the only way to an item: New Private Tab, Reopen Closed Tab and Archived

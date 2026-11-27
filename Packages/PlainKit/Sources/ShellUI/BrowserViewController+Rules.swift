@@ -18,6 +18,8 @@ extension BrowserViewController {
         state.sideTabs = duo.layout?.showsSidebar ?? false
         state.canSplit = canSplit
         state.isSplit = isSplit
+        state.canShowSidePane = duo.layout?.sidePaneAvailable ?? false
+        state.isSidePaneOpen = isSidePaneShown
         state.hasClosed = tabs.canReopenClosedTab
         state.hasArchived = tabs.hasArchivedTabs
         state.usesAssistiveTech = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
@@ -121,7 +123,9 @@ extension BrowserViewController {
     /// column keeps its width and nothing under it lays out again.
     func applyToolbarItems() {
         // Kept in step in either bar mode, so a switch to the vertical bar finds them right.
-        let items = rules.barShown && !isShowingGallery ? PageButton.allCases.compactMap { barItems[$0] } : []
+        // A card growing into its page brings the page's buttons back with it, not after it.
+        let galleryUp = isShowingGallery && tabsUI.galleryTransition?.destination != .page
+        let items = rules.barShown && !galleryUp ? PageButton.allCases.compactMap { barItems[$0] } : []
         guard (toolbarItems ?? []) != items else { return }
         setToolbarItems(items, animated: true)
     }

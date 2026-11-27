@@ -54,7 +54,9 @@ public protocol AddressBarData: AnyObject {
     var searchEngine: SearchEngine { get }
     /// Suggestions for `query`, delivered through `update`: local pages first (fast), then again
     /// with the engine's suggestions merged in. Stops quietly when the calling task is cancelled.
-    func suggestions(for query: String, update: @escaping ([AddressBarSuggestion]) -> Void) async
+    /// `isPrivate`: the asking window's tab is private (no remote suggestions), passed with each
+    /// query because the data is the app's and several windows ask.
+    func suggestions(for query: String, isPrivate: Bool, update: @escaping ([AddressBarSuggestion]) -> Void) async
     /// Stops any engine request still running (the address bar closed).
     func cancelSuggestions()
     /// Favorites, in the user's order.
@@ -106,8 +108,9 @@ public protocol AddressBarData: AnyObject {
     /// Settings > Appearance, once the saved settings are read; nil before (the windows keep
     /// the launch copy, `AppAppearance`).
     var appearance: Appearance? { get }
-    /// Called on the main thread when the settings in effect change (read at launch, or saved).
-    var onSettingsChange: (() -> Void)? { get set }
+    /// `observer` runs on the main thread each time the settings in effect change (read at launch,
+    /// or saved). Every window adds one: the data is the app's.
+    func observeSettings(_ observer: @escaping () -> Void)
 }
 
 extension AddressBarData {
@@ -144,7 +147,7 @@ public final class LiveAddressBarData: AddressBarData {
     public var archiveAfter: ArchiveAfter? { hasSettings ? settings.archiveAfter : nil }
     public var tabLayout: TabLayout? { hasSettings ? settings.tabLayout : nil }
     public var appearance: Appearance? { hasSettings ? settings.appearance : nil }
-    public var onSettingsChange: (() -> Void)?
+    private var settingsObservers: [() -> Void] = []
     private var hasFirstFrame = false
     private var preconnectAfterFirstFrame = false
     public var searchEngine: SearchEngine { settings.searchEngine }
@@ -189,7 +192,7 @@ public final class LiveAddressBarData: AddressBarData {
             settings = stored
         }
         hasSettings = true
-        onSettingsChange?()
+        settingsDidChange()
     }
 
     /// Puts `settings` in effect; Settings calls it after each save.
@@ -197,7 +200,15 @@ public final class LiveAddressBarData: AddressBarData {
         settingsEdits += 1
         self.settings = settings
         hasSettings = true
-        onSettingsChange?()
+        settingsDidChange()
+    }
+
+    public func observeSettings(_ observer: @escaping () -> Void) {
+        settingsObservers.append(observer)
+    }
+
+    private func settingsDidChange() {
+        for observer in settingsObservers { observer() }
     }
 
     /// Writes buffered history. Call when the app moves to the background.
@@ -225,8 +236,13 @@ public final class LiveAddressBarData: AddressBarData {
     /// 2. The engine's answer, when it differs. If it has not come by the end of the hold, the
     ///    held rows go first, then the answer follows whenever it arrives.
     public func suggestions(for query: String, update: @escaping ([AddressBarSuggestion]) -> Void) async {
+        await suggestions(for: query, isPrivate: isPrivate, update: update)
+    }
+
+    public func suggestions(
+        for query: String, isPrivate: Bool, update: @escaping ([AddressBarSuggestion]) -> Void
+    ) async {
         let engine = searchEngine
-        let isPrivate = isPrivate
         let client = client
         // The database and the cache are read together, so the first list already has both.
         async let cachedAnswer = client.cachedSuggestions(for: query, engine: engine, isPrivate: isPrivate)

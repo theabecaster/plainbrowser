@@ -9,27 +9,116 @@ import SystemSync
 import UIKit
 import WebEngine
 
-final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
-    var window: UIWindow?
-    private let options = LaunchOptions(arguments: ProcessInfo.processInfo.arguments)
-    /// The database, opened off the main thread as the scene connects, so launch never waits on
-    /// disk. makeDatabase and seed are @concurrent: the disk work runs on the global executor.
-    private lazy var database: Task<AppDatabase?, Never> = { [options] in
+/// What every window of the app shares, made once per process: the database (opened off the main
+/// thread as the first scene connects, so launch never waits on disk), the app's stores
+/// (`AppStores`: the tabs of every window, each profile's history database, the per-site
+/// choices, content blocking) and the system sync. Each window keeps its own address bar data
+/// and sheets, since each shows its own profile; a saved setting reaches all of them. Per-window
+/// browser state, docs/plan.md, section 6.
+@MainActor
+final class AppServices {
+    static let shared = AppServices()
+
+    let options = LaunchOptions(arguments: ProcessInfo.processInfo.arguments)
+    /// makeDatabase and seed are @concurrent: the disk work runs on the global executor.
+    private(set) lazy var database: Task<AppDatabase?, Never> = { [options] in
         Task(priority: .userInitiated) {
             guard let database = try? await options.makeDatabase() else { return nil }
             await options.seed(database)
             return database
         }
     }()
-    /// The engine: pool, tabs, content blocking and reader. Its stores wait for the database.
-    /// Made when the scene connects, for the window the scene showed last time.
+    private(set) lazy var stores: AppStores = {
+        let stores = AppStores(database: { [database] in await database.value }, profileData: options.profileData)
+        // Windows whose scene is gone for good join a window that has one (`AppTabs`).
+        stores.tabs.sessionWindowIDs = {
+            Set(SceneState.valuesOfOpenSessions(forKey: Windows.windowIDKey).compactMap(UUID.init(uuidString:)))
+        }
+        return stores
+    }()
+    /// The database once open, with the app-wide upkeep started once.
+    private var opening: Task<AppDatabase?, Never>?
+    /// Spotlight, the App Group file and widget timelines, following the favorites: one for the
+    /// app, whatever its windows.
+    private(set) var systemSync: SystemSync?
+    private var systemSyncTask: Task<Void, Never>?
+    /// The favorites the sync follows: the profile of the window the user was in last.
+    private var profileFavorites: AppDatabase?
+    private weak var followedFavorites: AppDatabase?
+    /// Every window's address bar data, so a setting saved in one window reaches the others.
+    private let addressBars = NSHashTable<LiveAddressBarData>.weakObjects()
+
+    /// The database once it is open; every window waits for the same opening. The daily upkeep and
+    /// the system sync start once. Nil when it could not open.
+    func openedDatabase() async -> AppDatabase? {
+        if let opening { return await opening.value }
+        let databaseTask = database
+        let task = Task(priority: .userInitiated) { [weak self] () -> AppDatabase? in
+            guard let database = await databaseTask.value else { return nil }
+            // Pruning and SQLite upkeep, at most daily, at background priority after launch settles.
+            database.scheduleDailyMaintenance()
+            self?.startSystemSync(database)
+            return database
+        }
+        opening = task
+        return await task.value
+    }
+
+    /// A window's address bar data, to keep its settings in step with the others'.
+    func register(_ data: LiveAddressBarData) {
+        addressBars.add(data)
+    }
+
+    /// A window saved `settings`: every other window's address bar uses them too.
+    func settingsSaved(_ settings: BrowserSettings, by data: LiveAddressBarData) {
+        for other in addressBars.allObjects where other !== data { other.apply(settings) }
+    }
+
+    /// Spotlight, the widgets' favorites file and their timelines follow the favorites from here
+    /// on, at background priority once launch has settled (`FixedChoices.systemSyncLaunchDelay`).
+    /// Clear History and Data empties Spotlight through it. Once per app.
+    private func startSystemSync(_ database: AppDatabase) {
+        guard systemSync == nil else { return }
+        // An isolated test run gets its own folder and a Spotlight, widgets and Shortcuts that
+        // keep nothing (`SystemSync.live`, TestIsolation).
+        let sync = SystemSync.live {
+            // "Open <favorite> in Plain" learns the new names.
+            PlainShortcuts.updateAppShortcutParameters()
+        }
+        systemSync = sync
+        followFavorites(of: profileFavorites ?? database, after: FixedChoices.systemSyncLaunchDelay)
+    }
+
+    /// Spotlight, the widgets and Shortcuts offer the favorites of the profile of the window the
+    /// user moved to last (docs/decisions.md, "Profiles, no tab groups"): the sync follows that
+    /// profile's database from here on.
+    func followFavorites(of database: AppDatabase, after delay: Duration = .zero) {
+        guard let sync = systemSync else {
+            profileFavorites = database
+            return
+        }
+        guard database !== followedFavorites else { return }
+        followedFavorites = database
+        systemSyncTask?.cancel()
+        systemSyncTask = Task.detached(priority: .background) {
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await sync.follow(database)
+        }
+    }
+}
+
+final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+    private let services = AppServices.shared
+    private var options: LaunchOptions { services.options }
+    /// The engine: pool, the window's tabs and the reader. Made when the scene connects, for the
+    /// window the scene showed last time.
     private var session: BrowserSession!
-    /// Where a scene keeps its window's id across launches (per-window state, docs/plan.md,
-    /// section 6): each scene comes back to its own tabs and panes.
-    private static let windowIDKey = "plain.windowID"
+    /// The window's address bar data: its profile's history and favorites, the app's settings.
     private let addressBarData = LiveAddressBarData()
     /// Settings, History and the favorites editor. A saved setting goes straight to the address
-    /// bar, so the next search uses it.
+    /// bar, so the next search uses it, and to every other window's.
     private lazy var sheets = FeatureSheets(addressBar: addressBarData)
 
     /// The first-run intro's window, above the browser's, only while the intro is up.
@@ -42,17 +131,24 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var pendingCommands: [PlainCommand] = []
     /// The address bar has the saved search engine, so a search goes to the right engine.
     private var addressBarReady = false
-    /// Spotlight, the App Group file and widget timelines, following the favorites; the task
-    /// that follows them, cancelled with the scene.
-    private var systemSync: SystemSync?
-    private var systemSyncTask: Task<Void, Never>?
+    /// A new window was asked for ("Open in New Window"): its page, or nil for the start page, and
+    /// whether it is private. Nil when the scene was not made for that.
+    private var newWindowRequest: (url: URL?, isPrivate: Bool)?
     /// When the scene last went to the background: a long absence opens a fresh search on return.
     private var leftAt: Date?
     private var currentMemory: LaunchMemory?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
-        _ = database
+        // A window a test run opened never comes back in the owner's app.
+        if SceneState.isTestSession(session) {
+            SceneState.destroy(session)
+            return
+        }
+        newWindowRequest = options.userActivities.lazy.compactMap(Windows.request(in:)).first
+        // A window an isolated test run asks for is marked, so the owner never sees it.
+        SceneState.sessionDidConnect(session, isNewWindow: newWindowRequest != nil)
+        _ = services.database
         let arguments = ProcessInfo.processInfo.arguments
         #if DEBUG
         if arguments.contains("-PlainPreviewEmptyTabCard") {
@@ -65,14 +161,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         #endif
         pendingCommands = Self.commands(urls: options.urlContexts.map(\.url), activities: Array(options.userActivities))
-        // App Intents run in this process; their commands come here (waiting ones arrive now).
-        CommandInbox.shared.handler = { [weak self, weak windowScene] command in
-            guard let self, let windowScene else { return }
-            self.receive([command], in: windowScene)
-        }
+        // App Intents run in this process; their commands come to the window that connected or
+        // became active last (waiting ones arrive now).
+        takeCommandInbox(in: windowScene)
         // After the intro was seen this is one defaults read; no intro code runs. A link from
         // another app (or a widget, a shortcut) opens at once: the intro waits for the next launch.
-        if pendingCommands.isEmpty, IntroGate.shouldShow(arguments: arguments) {
+        // So does a new window.
+        if pendingCommands.isEmpty, newWindowRequest == nil, IntroGate.shouldShow(arguments: arguments) {
             showIntro(in: windowScene)
         } else {
             showBrowser(in: windowScene)
@@ -110,18 +205,33 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // First, so the last tab's picture decodes off the main thread while the browser is built.
         let launch = launchPlan(for: savedWindow)
         self.session = BrowserSession(
-            database: { [database] in await database.value },
+            database: { [database = services.database] in await database.value },
+            stores: services.stores,
             tabStates: TabStateStore(directory: self.options.tabStateDirectory),
-            // A scene the system made new shows the window whose page the first frame shows.
-            windowID: savedWindow ?? launch.hint?.windowID,
-            thumbnailDirectory: self.options.thumbnailDirectory,
-            profileData: self.options.profileData
+            // A scene the system made new shows the window whose page the first frame shows; one
+            // asked for by Open in New Window gets an empty window of its own.
+            windowID: savedWindow ?? launch.hint?.windowID, isNewWindow: newWindowRequest != nil,
+            thumbnailDirectory: self.options.thumbnailDirectory
         )
-        let browser = BrowserViewController(session: self.session, data: addressBarData, sheets: sheets, launch: launch) {
-            [weak self] in
-            Signposts.signposter.endInterval(Signposts.launch, launchInterval, "\(String(describing: launch.opening))")
+        // Known at once, so the window's id survives even a scene that never goes inactive.
+        SceneState.set(session.windowID.uuidString, forKey: Windows.windowIDKey, in: windowScene.session)
+        services.register(addressBarData)
+        sheets.settingsSaved = { [services, addressBarData] settings in
+            services.settingsSaved(settings, by: addressBarData)
+        }
+        // Read when a clear runs: the sync starts once the database is open.
+        sheets.didClearBrowsingData = { [services] in await services.systemSync?.browsingDataCleared() }
+        let browser = BrowserViewController(
+            session: self.session, data: addressBarData, sheets: sheets, launch: launch
+        ) { [weak self] in
+            // The process's launch ends once: a later window's first screen is not a launch.
+            if !LaunchFirstFrame.launchEnded {
+                LaunchFirstFrame.launchEnded = true
+                Signposts.signposter.endInterval(Signposts.launch, launchInterval, "\(String(describing: launch.opening))")
+            }
             // Links that launched the app open once the launch focus is done, so the search
-            // field never comes up over their page.
+            // field never comes up over their page. A new window's page opens the same way.
+            self?.openNewWindowRequest()
             self?.performPendingCommands()
         }
         // The navigation controller gives the page buttons a place in the system's vertical bar
@@ -134,7 +244,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         TestIsolationMarker.install(in: window)
         self.window = window
         self.browser = browser
-        browser.onProfileDatabaseChange = { [weak self] database in self?.followFavorites(of: database) }
+        browser.onProfileDatabaseChange = { [services] database in services.followFavorites(of: database) }
         LaunchFirstFrame.endAtNextFrame()
         attachDatabase(to: browser)
         #if DEBUG
@@ -146,11 +256,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         func value(after flag: String) -> String? {
             arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
         }
+        // A window made by Open in New Window shows its own page, not the launch's.
+        guard newWindowRequest == nil else { return }
         let pages = value(after: "-PlainOpen")?.split(separator: ",").compactMap { URL(string: String($0)) } ?? []
         browser.debugSetUp(
             open: pages, split: arguments.contains("-PlainSplit"), tabLayout: value(after: "-PlainTabLayout"),
             sidebar: value(after: "-PlainSidebar")
         )
+        browser.debugSidePane(value(after: "-PlainSidePane"), find: value(after: "-PlainFind"))
+        browser.debugNewWindow(value(after: "-PlainNewWindow"))
         #endif
     }
 
@@ -175,11 +289,24 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func launchPlan(for windowID: UUID?) -> LaunchPlan {
         let onlyScene = UIApplication.shared.connectedScenes.count <= 1
         let memory = launchMemory(for: windowID)
-        guard pendingCommands.isEmpty, windowID != nil || onlyScene, let hint = memory.hint,
+        guard pendingCommands.isEmpty, newWindowRequest == nil, windowID != nil || onlyScene, let hint = memory.hint,
               // A known window that never left a hint gets no other window's page.
               windowID == nil || hint.windowID == windowID else { return .search }
         let opening = LaunchRules.opening(hint: hint, now: options.now)
         return LaunchPlan(opening: opening, hint: hint, picture: memory.startDecodingPicture(for: hint))
+    }
+
+    /// The window the user is in takes App Intents' commands.
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+        takeCommandInbox(in: windowScene)
+    }
+
+    private func takeCommandInbox(in windowScene: UIWindowScene) {
+        CommandInbox.shared.handler = { [weak self, weak windowScene] command in
+            guard let self, let windowScene else { return }
+            self.receive([command], in: windowScene)
+        }
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
@@ -227,6 +354,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
 
+    /// A window made by "Open in New Window" opens its page (a private one in a private tab), or
+    /// stays on its search when it was made empty.
+    private func openNewWindowRequest() {
+        guard let browser, let request = newWindowRequest else { return }
+        newWindowRequest = nil
+        guard let url = request.url else { return }
+        browser.openInThisWindow(url, isPrivate: request.isPrivate)
+    }
+
     private static func commands(urls: [URL], activities: [NSUserActivity]) -> [PlainCommand] {
         urls.compactMap(PlainLink.command(from:)) + activities.compactMap(SystemActivity.command(from:))
     }
@@ -234,14 +370,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneWillResignActive(_ scene: UIScene) {
         // Final once the saved tabs are in; written each time so the next launch finds it.
         guard let session else { return }
-        SceneState.set(session.windowID.uuidString, forKey: Self.windowIDKey, in: scene.session)
+        SceneState.set(session.windowID.uuidString, forKey: Windows.windowIDKey, in: scene.session)
         // The page on screen and its picture, for the next launch's first frame.
         browser?.rememberForLaunch(in: launchMemory(for: session.windowID))
     }
 
     /// The scene's window id (`SceneState`: never the owner's scene state in an isolated run).
     private static func savedWindowID(of sceneSession: UISceneSession) -> UUID? {
-        SceneState.string(forKey: windowIDKey, in: sceneSession).flatMap(UUID.init(uuidString:))
+        SceneState.string(forKey: Windows.windowIDKey, in: sceneSession).flatMap(UUID.init(uuidString:))
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
@@ -256,14 +392,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         Task { await session.saveTabs() }
     }
 
-    /// Hands the database to the address bar and the sheets once it is open.
+    /// The browser hears about the database once the app has handed it to the address bar and the
+    /// sheets; searches that waited for the saved engine go then.
     private func attachDatabase(to browser: BrowserViewController) {
+        let services = services
         let data = addressBarData
         let sheets = sheets
-        let opening = database
         let profiles = session?.profileData
         Task(priority: .userInitiated) { [weak self] in
-            guard let database = await opening.value else {
+            guard let database = await services.openedDatabase() else {
                 self?.addressBarIsReady()
                 return
             }
@@ -272,9 +409,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             browser.addressBarDataDidChange()
             TestIsolationMarker.storeIsReady()
             self?.addressBarIsReady()
-            // Pruning and SQLite upkeep, at most daily, at background priority after launch settles.
-            database.scheduleDailyMaintenance()
-            self?.startSystemSync(database)
         }
     }
 
@@ -284,50 +418,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if browser?.viewIfLoaded?.window != nil { performPendingCommands() }
     }
 
-    /// Spotlight, the widgets' favorites file and their timelines follow the favorites from here
-    /// on, at background priority once launch has settled (`FixedChoices.systemSyncLaunchDelay`).
-    /// Clear History and Data empties Spotlight through it.
-    private func startSystemSync(_ database: AppDatabase) {
-        guard systemSync == nil else { return }
-        // An isolated test run gets its own folder and a Spotlight, widgets and Shortcuts that
-        // keep nothing (`SystemSync.live`, TestIsolation).
-        let sync = SystemSync.live {
-            // "Open <favorite> in Plain" learns the new names.
-            PlainShortcuts.updateAppShortcutParameters()
-        }
-        systemSync = sync
-        sheets.didClearBrowsingData = { await sync.browsingDataCleared() }
-        followFavorites(of: profileFavorites ?? database, after: FixedChoices.systemSyncLaunchDelay)
-    }
-
-    /// The window's profile's history database, when the browser moved to a profile before the
-    /// sync started.
-    private var profileFavorites: AppDatabase?
-    private weak var followedFavorites: AppDatabase?
-
-    /// Spotlight, the widgets and Shortcuts offer the window's profile's favorites
-    /// (docs/decisions.md, "Profiles, no tab groups"): the sync follows that profile's database
-    /// from here on.
-    private func followFavorites(of database: AppDatabase, after delay: Duration = .zero) {
-        guard let sync = systemSync else {
-            profileFavorites = database
-            return
-        }
-        guard database !== followedFavorites else { return }
-        followedFavorites = database
-        systemSyncTask?.cancel()
-        systemSyncTask = Task.detached(priority: .background) {
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
-            await sync.follow(database)
-        }
-    }
-
-    /// The scene is gone: intents wait in the inbox for the next one, and the sync stops.
+    /// The system let the scene go (a window closed, or memory): its window stays in the app's
+    /// tabs, so the scene comes back to it; the app delegate closes it if the session is discarded.
+    /// Intents wait in the inbox for the next window.
     func sceneDidDisconnect(_ scene: UIScene) {
         CommandInbox.shared.handler = nil
-        systemSyncTask?.cancel()
-        systemSyncTask = nil
+        session?.sceneDidDisconnect()
     }
 }
 
@@ -336,6 +432,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 @MainActor
 private enum LaunchFirstFrame {
     private static var pending = true
+    /// The `launch` interval ended (the first window's screen was ready).
+    static var launchEnded = false
 
     static func endAtNextFrame() {
         guard pending else { return }
@@ -359,7 +457,7 @@ private enum LaunchFirstFrame {
 /// (`TestIsolation`: `-PlainInMemoryStore`, `-PlainTestStore`, `-PlainResetStore`) work in every
 /// configuration, so a Release perf run on the owner's phone uses throwaway state too. The seeds
 /// are Debug only.
-private nonisolated struct LaunchOptions: Sendable {
+nonisolated struct LaunchOptions: Sendable {
     /// `-PlainInMemoryStore`: a fresh, empty database (UI tests).
     let inMemory: Bool
     /// `-PlainSeedFavorites`: a few favorites, for screenshots. Debug builds only.
@@ -481,7 +579,7 @@ private nonisolated struct LaunchOptions: Sendable {
 /// bar and the sheets, the value gains `TestIsolation.storeReadyValue`: a readiness signal the
 /// tests read without driving any UI, so it holds in every layout.
 @MainActor
-private enum TestIsolationMarker {
+enum TestIsolationMarker {
     private static let markers = NSHashTable<UIView>.weakObjects()
     private static var storeReady = false
 

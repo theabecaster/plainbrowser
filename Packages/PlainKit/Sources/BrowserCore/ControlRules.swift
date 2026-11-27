@@ -47,6 +47,12 @@ public enum ReaderItem: Sendable, Equatable {
     case show, hide, hidden
 }
 
+/// The side pane item in the page menu (§4): Show Side Pane, Hide Side Pane, or nothing where the
+/// pane can't show (the Duo's outer screen, phones).
+public enum SidePaneItem: Sendable, Equatable {
+    case show, hide, hidden
+}
+
 /// The dark pages item in the page menu (§4).
 public enum DarkPagesItem: Sendable, Equatable {
     case turnOff, turnOn, hidden
@@ -121,6 +127,10 @@ public struct ChromeState: Sendable, Equatable {
     public var canSplit = false
     /// Two panes show; the rules describe the focused one.
     public var isSplit = false
+    /// The side pane can show here (the top bar's screens: the Duo's inner screen).
+    public var canShowSidePane = false
+    /// The side pane is open in this window.
+    public var isSidePaneOpen = false
     /// The sidebar (Tab Layout Left or Right) is in effect: it is the tab list.
     public var sideTabs = false
     /// VoiceOver or Switch Control runs: the bar stays reachable, never hidden.
@@ -196,14 +206,14 @@ public struct ControlRules: Sendable, Equatable {
     public var more: ControlVisibility { .shown }
 
     /// Tabs whenever the switcher has a card, the swipe up's predicate: with one page tab the tap
-    /// opens its card beside a New Tab card, as dragging the bar up does (owner, 2026-11-27). With
+    /// opens its card, as dragging the bar up does (owner, 2026-11-27). With
     /// side tabs the slot shows and hides the sidebar, which is always there to toggle (M3).
     public var tabsSlot: TabsSlotFace {
         state.sideTabs || galleryHasCards ? .tabs : .hidden
     }
 
     /// The gallery has a card to show: another tab, or the page on screen (one page tab shows its
-    /// card beside a New Tab card). An empty tab alone has nothing to show.
+    /// card alone, with New Tab in the bar under it). An empty tab alone has nothing to show.
     public var galleryHasCards: Bool { state.others >= 1 || state.hasPage }
 
     /// The swipe up from the bar opens the gallery whenever it has a card, so the gesture always
@@ -350,10 +360,25 @@ public struct ControlRules: Sendable, Equatable {
     public var downloads: Bool { state.hasDownloads }
 
     /// Open in Other Pane: a page that shows, where a split can show and none does yet.
-    public var openInOtherPane: Bool { state.canSplit && !state.isSplit && isPageShowing && !state.isReaderOpen }
+    public var openInOtherPane: Bool {
+        state.canSplit && !state.isSplit && !state.isSidePaneOpen && isPageShowing && !state.isReaderOpen
+    }
 
-    /// Swap Panes and Close Pane while a split shows, whatever the focused pane holds.
-    public var paneItems: Bool { state.canSplit && state.isSplit }
+    /// Swap Panes and Close Pane while a split shows, whatever the focused pane holds. The side
+    /// pane takes the second pane's place while it is open, so neither applies then.
+    public var paneItems: Bool { state.canSplit && state.isSplit && !state.isSidePaneOpen }
+
+    /// Show or Hide Side Pane wherever the pane can show, page or start screen: History is useful on
+    /// either, and the item is how the pane closes from the bar.
+    public var sidePane: SidePaneItem {
+        guard state.canShowSidePane, !state.isEditing else { return .hidden }
+        return state.isSidePaneOpen ? .hide : .show
+    }
+
+    /// History and Find on Page open in the side pane where it can show (next to the page), and
+    /// as a sheet and the find bar elsewhere.
+    public var historyInSidePane: Bool { state.canShowSidePane }
+    public var findInSidePane: Bool { state.canShowSidePane && !state.isReaderOpen }
 
     // The tabs menu's other items sit in More's top section in every state where they apply, one
     // visible tap away; the long press on the tabs slot is a shortcut, never the only way (owner,
@@ -429,10 +454,6 @@ public struct GalleryRules: Sendable, Equatable {
 
     /// In an empty list, the empty state's button is the one New Tab (principle 8).
     public var newTabButton: Bool { state.listCount > 0 }
-
-    /// One card in the list: a paper New Tab card sits beside it, so the switcher never looks
-    /// half empty and the next step is in plain sight (owner, 2026-11-26).
-    public var newTabCard: Bool { state.listCount == 1 }
 
     /// Done returns to the tab on screen, so it shows only when that tab is in the list.
     public var done: Bool { state.selectionInList }

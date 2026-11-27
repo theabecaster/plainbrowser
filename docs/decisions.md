@@ -481,7 +481,8 @@ Each entry: what was chosen, and why. Newest last.
 - **Perf cost:** a bar swipe start attaches at most one web view (about 1.5 ms) or adds one image
   view; a tab switch adds one WebKit snapshot of the page leaving (2x, kept only for the two
   neighbours, about 5 MB each decoded). The gallery is built when opened and released when it
-  closes. Engine-tab watches are one Observation per tab with an engine tab.
+  closes (superseded 2026-11-27: one gallery is kept ready, see "Gallery open and bar swipe
+  speed"). Engine-tab watches are one Observation per tab with an engine tab.
 
 ## Tab gallery: the app-switcher cascade on a plain scroll view (2026-11-26)
 
@@ -501,7 +502,8 @@ Each entry: what was chosen, and why. Newest last.
   per moving value, stepped on one update link), so a scroll or a second close joins a running
   reflow without a jump; a diffable data source would animate each change on its own.
 - **Regular width keeps a grid, now paged sideways.** Arc has no big-screen layout; the iPad app
-  switcher is a sideways grid. Four columns by two rows in landscape (two by two in portrait), one
+  switcher is a sideways grid. Four columns by two rows in landscape (two by two since the
+  2026-11-27 UX audit, for bigger cards; two by two in portrait), one
   page per flick, columns even so the middle gap sits on the fold. The same swipe up closes.
 - **The open zoom scales the cards with the page.** At the page end the cards are scaled about the
   tapped card until it covers the page, so its neighbors slide past the screen edges as it grows,
@@ -629,7 +631,8 @@ Each entry: what was chosen, and why. Newest last.
   through the reserved regions (`updateViewConstraints`). Desktop or mobile stays the choice made
   at navigation start; a tab opened into a pane is attached before it loads, so the choice uses
   that pane's width.
-- **Per-window state.** Each scene keeps its `TabStore` window id and its sidebar state in
+- **Per-window state** (superseded 2026-11-27 by "Open in New Window: one tab store, a scene per
+  window"). Each scene keeps its `TabStore` window id and its sidebar state in
   `UISceneSession.userInfo`; `EngineTabs` acts on that window only. No multi-window UI yet
   (`UIApplicationSupportsMultipleScenes` is off), so a scene without a saved id, or whose window
   is gone, takes the first saved window: that is the one scene's tabs. "Open in New Window" will
@@ -1562,6 +1565,121 @@ Research: docs/research/bookmarks.md.
 - **Signposts:** `readingList.save` (interval, "copy" or "link"), `readingList.remove`,
   `readingList.show`, `readingList.load` (interval), `readingList.open`, `readingList.edit`,
   `readingList.offlineCopy` (interval).
+## Duo inner screen: the side pane (2026-11-27)
+
+Plan, section 6, item 4: a supporting pane (~30%, 250 pt min) with the reader, find results and
+history next to the page. Research: `docs/research/duo-pane-windows.md`.
+
+- **Where:** only where the top bar is (`DuoLayout.sidePaneAvailable`: both size classes regular,
+  page ≥ 640 pt), the Duo's inner screen in both orientations and iPad-size windows. The outer
+  screen and phones keep the full-screen reader, the find bar and the History sheet; a fold to the
+  outer screen hides the pane and an unfold brings it back. Phones in landscape are compact in
+  height, so they never get it (the rule, not an exception).
+- **Its column:** the trailing end of the pages, `FixedChoices.sidePaneFraction` (30%) of their
+  width and at least `sidePaneMinimumWidth` (250 pt): 285 pt in inner landscape (page 666 pt,
+  still desktop width), 250 pt in inner portrait (page 419 pt, wider than the outer screen's 382).
+  It docks: the page narrows once, inside the pane's spring (one new frame per web view, as a
+  fold), and the top bar's lane, the strip and the toast keep to the page. A floating pane was
+  considered for portrait and dropped: 419 pt still reads as a phone page, and a pane over the
+  page hides what it serves.
+- **Why not the system's inspector column:** the shell is a custom container whose panes live in
+  a `UIArrangementViewController`, which must not sit inside a split view controller. The pane
+  follows the inspector's rules by hand (trailing column at regular width, nothing at compact).
+- **The crease:** flat, the crease is only a position and the 30% column sits clear of it.
+  Partly folded (book pose), the page takes the side before the fold and the pane the side after
+  it, so neither crosses it, as a split does; the top bar stays over the page.
+- **With a split:** a split needs two 375 pt panes, and 2 × 375 + 250 is wider than the inner
+  screen. The pane takes the second pane's place (that pane keeps its page out of sight, with no
+  relayout), the first pane is focused and is the page it serves; Swap, Close Pane and Open in
+  Other Pane wait until it closes. The sidebar stays a rail while the pane is open.
+- **With the status row:** the pane runs from the top edge like the page; its header sits under
+  the status items where they are over the column (the Duo's top-trailing clock and battery), and
+  on the top bar's row where nothing is in the way.
+- **Sections:** Reader (the focused page's article in a reader web view from the pool, the same
+  renderer as Show Reader; a link opens in the page), Find (a list of matches with the words
+  around them; a tap scrolls the page to the match and marks it; Return goes to the next) and
+  History (the History screen without Done; a row opens in the page). A segmented control picks
+  one; the pane remembers the last.
+- **Find runs in the page's process** (`PageFind`, the engine's content world): it walks visible
+  text block by block (a paragraph, a list item, a cell), so a phrase split by inline tags still
+  matches; a visually hidden screen-reader label does not. Matching is case-insensitive by Unicode
+  case folding on the text itself, so offsets never shift. Style and geometry are read only for
+  matches. It keeps a DOM range per match and stops at `FixedChoices.findResultLimit` (300; the
+  count then reads "More than 300 matches"); on a huge page it hands the page's main thread back
+  every `findChunkNodes` (2000) text nodes, and a newer query ends the older one there. The matches are marked with the CSS Custom Highlight API,
+  which draws without changing the page's DOM; the style is a constructed style sheet, which a
+  page's CSP does not block. Typing waits `FixedChoices.findDebounce` (150 ms). The system find
+  bar stays for phones and the reader.
+- **Reader waits in words:** "Looking for an article…" shows until the article is on screen;
+  hiding the pane or the section lets the reader web view go.
+- **Opening and closing:** More's Show / Hide Side Pane (the obvious control), the pane's ×,
+  History and Find on Page (which open it on their section where it can show), a swipe in from the
+  trailing edge (interactive: the pane follows the finger over the page, the page narrows on
+  release) and a swipe toward the edge on the pane. The edge swipe takes the trailing edge from
+  WebKit's swipe forward where the pane can open; the top bar's Forward button stays.
+- **Per window:** open or closed and the section are kept with the scene (`SceneState`).
+- **Perf:** nothing until first use; then one view controller and the shown section, each built
+  once. Opening sets two constants and lays out once; the reader web view exists only while the
+  Reader section shows an article. Find's search is one async call into the page per query.
+  Signposts: `sidePane.open`, `sidePane.close`, `sidePane.section`, `sidePane.find`.
+
+## Open in New Window: one tab store, a scene per window (2026-11-27)
+
+Plan, section 6, item 6. The Duo's inner screen takes several windows of one app the iPad way;
+its outer screen takes none, and iPhone has no system New Window button
+(`docs/research/duo-pane-windows.md`).
+
+- **Multiple scenes on** (`UIApplicationSupportsMultipleScenes`). Each window is a scene with its
+  own `BrowserSession` (web view pool, reader, the window's view of the tabs).
+- **App-wide stores** (`AppStores`, made once by the app): one `TabStore` for every window
+  (`AppTabs`), so two scenes never write the tab session over each other; the per-site choices
+  (desktop, zoom, dark pages, cookie banners) and the content blocker, so a choice made in one
+  window holds in the others; the database and each profile's history database, opened once for
+  every window. Each loads once, for the first window that starts. A window's own state stays
+  with its scene: its window id, the sidebar and the side pane (`UISceneSession.userInfo` through
+  `SceneState`), and its address bar data and sheets, since each window shows its own profile
+  ("Profiles, no tab groups"): a setting saved in one window reaches every window's address bar.
+  The system sync is the app's and follows the favorites of the profile of the window the user
+  moved to last. A profile deleted in one window closes its tabs and lets its website data store
+  go in every window.
+- **Which window a scene shows** (`AppTabs.claim`): its saved window; with none, the first
+  window no scene shows when it is the only scene (the app's first window after an update),
+  else a new empty window. A window asked for with Open in New Window or New Window always gets
+  a new empty one, and a saved window another open scene session names waits for that session.
+  A window that connected before the saved session loaded joins its
+  saved window at load, tabs opened meanwhile included. Windows no open scene names (their scene
+  was discarded while the app was not running) join the first scene's window, so no tab is left
+  unseen.
+- **Web views per window:** each scene keeps its own pool. A tab never moves between windows
+  (Open in New Window opens the link as a new tab there), so no web view crosses pools. Another
+  window's changes to the shared store (archive, reopen, a closed window) reach a window through
+  `AppTabs.didChange`, which drops engine tabs whose tab left the store.
+- **Where a new window can open** (`Windows.canOpenNew`): both size classes regular and the app
+  may have several scenes. The link menu's "Open in New Window" (a private tab's link opens
+  private there) and the tabs menu's "New Window" show only then; a refusal by the system plays
+  the "nothing there" haptic and a toast.
+- **Switching:** iPhone has no Show All Windows. The tabs menu lists the other windows (the page
+  each shows, its tab count), and so does More (Other Windows, a submenu), since a window with one
+  tab hides its Tabs button; a tap brings that window forward
+  (`activateSceneSession(for: .init(session:))`).
+- **Closing:** a window whose scene the system discards (closed for good in the app switcher)
+  gives its tabs to Reopen Closed Tab as one batch, while another window remains. When none
+  would remain (the whole app swiped away), the windows stay and the next scene takes them, so
+  quitting never closes tabs. Reopen Closed Tab prefers the window's own last close, and brings a
+  gone window's tabs back into the window that asked.
+- **Test isolation:** a scene made for Plain's new-window request during an isolated run is
+  marked in its session (the owner's own sessions, which the system reconnects for a test run, are
+  never marked); a normal launch destroys such sessions, so a window a test opened never comes back in the
+  owner's app. Sessions are read and destroyed only in `SceneState`
+  (`scripts/lib/check-isolation.zsh` enforces it).
+- **Settings reach every window:** a saved setting is applied to every window's address bar data
+  (`AppServices.settingsSaved`); each suggestion query carries the asking window's private state.
+- **Signposts:** the process's `launch` interval ends once, with the first window; a later
+  window's first screen is not a launch. `window.open`, `window.switch`.
+- **Not verified on the device:** two windows side by side and a fold with two windows were seen
+  only on the simulator. What the system does with a second window on fold is not published.
+- Supersedes M3's "Per-window state" note (one scene, the first saved window) and the polish
+  backlog's Open in New Window item.
 
 
 ## Profiles, no tab groups (2026-11-27)
@@ -1686,3 +1804,98 @@ bar above every page. Research: docs/research/inset-fill.md.
   before, a red band filled 0–72.5 behind the controls at rest and the header jumped to the top
   edge in one frame at collapse; after, nothing above the header at rest, the header rides with
   the page, a fresh load and Back show the first line under the controls from the first frame.
+## Tab cards follow the finger (2026-11-27)
+
+- **Chosen:** a gallery card is lifted by `LiftGestureRecognizer`, not a `UIPanGestureRecognizer`.
+  It measures the finger from touch-down and decides the axis after 6 pt: within 60° of straight up
+  lifts the card, flatter fails at once so the gallery scrolls (`CardSwipe.isLift`, shared with the
+  scroll view and the empty-space swipe, so exactly one of them takes a move). The card's offset is
+  the finger's travel, set directly each touch event, with the 6–12 pt before the lock paid back over
+  the next 12 pt (no jump on the first frame, exactly under the finger after). Why: the owner found
+  dragging a tab hard, "not like Arc or the iPhone app switcher at all". Measured on the simulator
+  (docs/research/tab-drag-feel.md): before, the card moved only after 70 pt of finger travel and
+  rested at 49 pt under a 90 pt drag (a pan begins after its hysteresis and counts from there, and an
+  `interactiveSpring` trailed it further), and a short flick never moved it. Now it moves after the
+  lock and rests at 90 pt under 90 pt; a short flick closes.
+- **Release:** a flick faster than 500 pt/s up closes (was 800: a light flick fell short), as does a
+  projection (0.99) past 40% of the card's height. A card that stays springs back with the release
+  velocity, and a closing card flies on with it, both frame by frame on a `SpringDriver`, so a
+  finger can catch either mid-flight from where it is on screen. The throw no longer continues a
+  tracking animation (there is none now).
+- **No resisting card.** The owner also asked that a card that cannot be dismissed resist a lift
+  and spring back, with no words; then asked for the New Tab card to go. Gallery items are never
+  pinned (nothing pins a tab), so no card is left that cannot close and the resisting lift was not
+  built. If one comes back: UIScrollView's rubber band toward ~80 pt, a slight shrink, one soft
+  "nothing there" bump, spring back (docs/research/tab-drag-feel.md).
+- **Kept:** horizontal swipes scroll the cards; a tap opens; the long press keeps the menu and the
+  drag to reorder (their interactions stay on the card's body).
+
+## The switcher has no New Tab card (2026-11-27)
+
+- **Chosen:** removed the paper New Tab card that sat beside a lone card (and its grow-in, hold
+  during the zoom, VoiceOver entry and the grid's centered pair). With one tab the card rests
+  centered, in the cascade and in the grid, and New Tab is the "+" in the bar under the cards.
+  Why: the owner, "I don't like the New Tab thing in the tab switcher. Get rid of it; there's
+  already a simple button under all the tabs." The app switcher with one app shows one card.
+- **Kept:** the bar swipe's New Tab card past the last tab (`TabSwipe`): a different gesture
+  outside the switcher, not what the owner named.
+
+## Gallery open and bar swipe speed (2026-11-27)
+
+- **The device gate missed both targets on spring tails, not stalls** (gallery 680 ms, swipe
+  526 ms; breakdown in docs/research/perf-gallery-swipe.md). The gallery's critically damped
+  0.42 s spring needs 0.58–0.66 s to come within half a point; the swipe's 0.35 s / 0.12 spring
+  overshoots 2–3 pt on the Duo's 951 pt inner page and creeps back for ~0.2 s.
+- **Springs retuned, same pace:** the gallery zoom is `.spring(0.42, bounce 0.06)` (damping 0.94:
+  the same first half, the last points sooner, overshoot under 0.2 pt) and the bar swipe
+  `Spring(0.28, bounce 0.08)` (damping 0.92: 95% of the way a touch sooner than before, overshoot
+  under half a point on any width, at rest in ~0.26–0.30 s). Critically damped was tried on paper and is
+  slower to rest. Motion table updated with the reasons.
+- **The settle rule is unchanged.** `gallery.show` and `tab.swipeSettle` still end when the motion
+  is within 0.5 pt of its target and moving less than 0.5 pt a frame; the motion ends sooner, the
+  metric does not end earlier. The gallery's settle watch now samples at 120 Hz.
+- **`gallery.openTab` ends at visual rest too**, and both zooms end their run there: the layers
+  stop at their model values (under half a point away) and the live page, or the gallery's
+  touches, take over then instead of after Core Animation's ~1 s settle (perf program: the
+  interval read ~1,490 ms on the simulator).
+- **The card-to-page landing is one step** (design review): the page's buttons come back as the
+  card starts growing (not after it lands), and the gallery's blurred backdrop fades in and out
+  with the zoom over the third of the way nearest the page, so no dark rail is left beside a
+  landed page.
+- **`gallery.show` starts earlier: at the tap.** The shell begins it in `presentGallery` and hands
+  it to the transition, so getting the gallery ready and the page's snapshot count. Stricter than
+  before (the old start left out building the gallery), and the kept gallery cannot move work
+  outside the metric.
+- **One gallery kept ready.** Built at idle (a second after the tab list changes, in the default
+  run loop mode) as a hidden child laid out at the page's size, cards placed and pictures decoded
+  off the main thread; closing hides it; opening calls `prepareToShow()` (a diff, no new views).
+  Before, every tap built the view controller, blur and cards on the main thread (8–66 ms before
+  the zoom could start) and neighbouring cards' pictures arrived a few frames late. Cost: the
+  gallery's views and its decoded thumbnails (cache-limited) stay in memory; a memory warning drops
+  them. Not built with side tabs (the sidebar is the switcher).
+
+## Tab switcher UX audit fixes (2026-11-27)
+
+From docs/research/ux-audit.md, items 6, 10, 11, 12 (gallery part) and 25.
+- **The gallery bar re-centres** when More, Done or "+" leaves (one card; the regular list while
+  a private tab shows). Lead's call over hide-in-place: the empty slot read as a misaligned bar.
+  The change waits for a bar at rest (no scroll, lift or reorder under a finger): the leaving
+  control fades (`Motion.quick`), then the rest glide to the centred row (`Motion.barGlide`,
+  0.3 s, no bounce). Mid-gesture it lands without motion.
+- **The Private toggle shows its state:** on, a filled hand on a light disc (the selected look
+  of a glass bar button); off, the outline hand like its neighbours.
+- **Large text:** the gallery (titles and bar) stops growing at the pill's cap
+  (`maximumContentSizeCategory = .extraExtraExtraLarge`); "Done" truncates past 120 pt; a long
+  press on the bar shows the Large Content Viewer.
+- **Cards run to the screen's edge** except on the side of the system's vertical bar (the Duo's
+  outer screen), found from `traitCollection.verticalBarEdge`. In iPhone landscape the cascade
+  now scrolls past the Dynamic Island's inset like the app switcher.
+- **Duo inner: bigger cards, no white strip.** The grid is two columns there (one each side of the
+  fold) as wide as two rows allow: about 334 pt in landscape, was four 217 pt columns
+  (`TabGalleryChoices.minGridCardWidth` 180 → 300). Thumbnails leave out the strip a floating top
+  bar covers (`WKSnapshotConfiguration.rect` from `obscuredContentInsets.top`), and the page↔card
+  zoom slides that strip out of the card over the way so the landing matches the thumbnail. Cards
+  take the shape of the page below that bar (`pageTopInset`, grid aspect floor 0.62 → 0.55), so
+  the cropped thumbnail fills its card at the same scale the zoom draws it (Codex review).
+- **The selected card's ring is Lagoon** (`Palette.accent`), not coral: coral is kept for the one
+  thing that matters on screen, the progress bar's tip (profiles lane design review).

@@ -125,7 +125,7 @@ final class StateRulesTests: XCTestCase {
     }
 
     /// One page tab: the slot is Tabs, and a tap opens the switcher the swipe up opens, with the
-    /// page's card and a New Tab card beside it; that card adds the second tab.
+    /// page's card alone (no New Tab card); the bar's + adds the second tab.
     func testOneTabTabsButtonOpensTheSwitcher() throws {
         let app = try launch()
         go(app, to: "/a")
@@ -142,11 +142,12 @@ final class StateRulesTests: XCTestCase {
         let gallery = app.scrollViews["tabGallery"]
         XCTAssertTrue(gallery.waitForExistence(timeout: 3), "the tap reaches the switcher with one tab")
         XCTAssertTrue(waitForTabCount(gallery, 1))
-        let newTabCard = app.descendants(matching: .any)["galleryNewTabCard"]
-        XCTAssertTrue(newTabCard.waitForExistence(timeout: 2), "a New Tab card beside the lone card")
-        newTabCard.tap()
+        XCTAssertFalse(app.descendants(matching: .any)["galleryNewTabCard"].exists, "no New Tab card (owner, 2026-11-27)")
+        let newTab = app.buttons["galleryNewTab"]
+        XCTAssertTrue(newTab.waitForExistence(timeout: 2), "New Tab is the + under the cards")
+        newTab.tap()
         let field = app.textFields["searchField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 2) && field.hasKeyboardFocus, "the New Tab card opens a new tab's search field")
+        XCTAssertTrue(field.waitForExistence(timeout: 2) && field.hasKeyboardFocus, "the + opens a new tab's search field")
         go(app, to: "/b")
         waitForPage(app, "Page B")
         XCTAssertEqual(app.buttons["tabs"].label, "Tabs")
@@ -155,9 +156,9 @@ final class StateRulesTests: XCTestCase {
         XCTAssertTrue(waitForTabCount(gallery, 2))
     }
 
-    /// One page tab: the swipe up opens the switcher with its card and a New Tab card beside it;
-    /// the New Tab card opens a second tab's search field.
-    func testOneTabSwipeUpShowsItsCardAndANewTabCard() throws {
+    /// One page tab: the swipe up opens the switcher with its card alone, and the bar's + opens a
+    /// second tab's search field. There is no New Tab card (owner, 2026-11-27).
+    func testOneTabSwipeUpShowsItsCardAlone() throws {
         let app = try launch()
         go(app, to: "/a")
         waitForPage(app, "Page A")
@@ -166,7 +167,7 @@ final class StateRulesTests: XCTestCase {
         XCTAssertTrue(gallery.waitForExistence(timeout: 3), "the swipe up reaches the switcher with one tab")
         XCTAssertTrue(waitForTabCount(gallery, 1))
         let newTabCard = app.descendants(matching: .any)["galleryNewTabCard"]
-        XCTAssertTrue(newTabCard.waitForExistence(timeout: 2), "a New Tab card beside the lone card")
+        XCTAssertFalse(newTabCard.exists, "no New Tab card beside the lone card")
         XCTAssertTrue(app.buttons["galleryNewTab"].exists, "the bar keeps its +")
         XCTAssertTrue(app.buttons["galleryDone"].exists)
 
@@ -176,11 +177,11 @@ final class StateRulesTests: XCTestCase {
         XCTAssertTrue(gallery.waitForNonExistence(timeout: 3))
         tabsMenu(app, pick: "Show All Tabs")
         XCTAssertTrue(gallery.waitForExistence(timeout: 3))
-        XCTAssertTrue(newTabCard.waitForExistence(timeout: 2))
+        XCTAssertTrue(waitForTabCount(gallery, 1))
 
-        newTabCard.tap()
+        app.buttons["galleryNewTab"].tap()
         let field = app.textFields["searchField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 2) && field.hasKeyboardFocus, "the New Tab card opens a new tab's search field")
+        XCTAssertTrue(field.waitForExistence(timeout: 2) && field.hasKeyboardFocus, "the + opens a new tab's search field")
         XCTAssertTrue(gallery.waitForNonExistence(timeout: 3))
         go(app, to: "/b")
         waitForPage(app, "Page B")

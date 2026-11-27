@@ -278,6 +278,9 @@ final class ButtonBar: UIView {
         trailingGlass.effect = effect
         scrim.isPrivate = isPrivate
         overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
+        // Glass picks its content's style from what is behind it unless told (AddressPill).
+        glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
+        trailingGlass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
     }
 
     override func layoutSubviews() {

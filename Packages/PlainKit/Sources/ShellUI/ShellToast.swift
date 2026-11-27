@@ -76,6 +76,7 @@ final class ShellToast: UIView {
         effect.isInteractive = true
         glass.effect = effect
         overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
+        glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
     }
 
     /// Shows `message` with an optional button, replacing a toast already up.

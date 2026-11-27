@@ -245,7 +245,14 @@ final class AddressPill: UIView {
         guard isPrivate else { return text }
         let marked = NSMutableAttributedString(attachment: privateMark())
         marked.append(NSAttributedString(string: " "))
-        marked.append(text)
+        // The night's text colors, fixed: the private glass is always dark, whatever the glass
+        // decides from the page behind it.
+        let dark = UITraitCollection(userInterfaceStyle: .dark)
+        let light = NSMutableAttributedString(attributedString: text)
+        light.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: light.length)) { value, range, _ in
+            if let color = value as? UIColor { light.addAttribute(.foregroundColor, value: color.resolvedColor(with: dark), range: range) }
+        }
+        marked.append(light)
         return marked
     }
 
@@ -290,12 +297,21 @@ final class AddressPill: UIView {
         glass.effect = effect
         scrim.isPrivate = isPrivate
         overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
+        // On the effect view too: glass picks light or dark content from what is behind it, and
+        // over a white page it drew dark text on the violet. Set there, it stays dark.
+        glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
         // The field says it too, for VoiceOver while editing (the pill is no element then).
         textField.accessibilityLabel = isPrivate ? String(localized: "Private, Search or enter address") : nil
         // Private, a long host loses its middle, never the mark at its start.
         hostLabel.lineBreakMode = isPrivate ? .byTruncatingMiddle : .byTruncatingHead
         display(url: url, notSecure: notSecure)
+        // The field's text too, fixed light on the always-dark private glass.
+        textField.textColor = isPrivate ? .white : Palette.textPrimary
+        textField.attributedPlaceholder = NSAttributedString(
+            string: textField.placeholder ?? "",
+            attributes: [.foregroundColor: isPrivate ? UIColor(white: 1, alpha: 0.6) : Palette.textSecondary]
+        )
         if isPrivate, textField.leftView == nil { textField.leftView = makeFieldMark() }
         textField.leftViewMode = isPrivate ? .always : .never
         // iOS has no "don't learn" flag for the keyboard (docs/research/private-mode.md). The field
@@ -315,7 +331,7 @@ final class AddressPill: UIView {
         mark.tintColor = Palette.privateAccent
         mark.contentMode = .left
         mark.isAccessibilityElement = false
-        mark.frame = CGRect(x: 0, y: 0, width: mark.intrinsicContentSize.width + Spacing.s, height: Metrics.tapTarget)
+        mark.frame = CGRect(x: 0, y: 0, width: mark.intrinsicContentSize.width + Spacing.m, height: Metrics.tapTarget)
         return mark
     }
 

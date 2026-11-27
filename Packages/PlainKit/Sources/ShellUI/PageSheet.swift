@@ -411,9 +411,10 @@ final class PageSheetController: UIViewController {
     /// The largest text size of the sheet's fixed grids (the address row, the tiles, the chips and
     /// the zoom row): three or four cells share the width, so past this size their captions were
     /// cut to "Rea…" and "Su…" and the address row's buttons ran into each other. They stop at the
-    /// largest standard size, as the pill and the switcher's bar do (docs/ui-reference.md); the
+    /// Extra Large size, where "Summarize" and "Reading List" still fit a quarter of the narrowest
+    /// iPhone (the pill and the switcher's bar stop too, docs/ui-reference.md); the
     /// rows under them keep growing.
-    private static let gridLimit = UIContentSizeCategory.extraExtraExtraLarge
+    private static let gridLimit = UIContentSizeCategory.extraLarge
 
     private static func gridFont(_ style: UIFont.TextStyle) -> UIFont {
         let category = UITraitCollection.current.preferredContentSizeCategory

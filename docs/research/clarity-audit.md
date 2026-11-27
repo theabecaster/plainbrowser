@@ -175,7 +175,8 @@ change to make. Captures: `clarity/<config>/<shot>.jpg` in the session scratchpa
    wrapped ("100 / %"), and the start screen's shortcut read "Pri-vate Tab".** Three or four cells
    share the width, so the text cannot grow without end. The sheet's fixed grids (address row,
    tiles, keep row, chips, zoom row) and the start screen's shortcut captions now stop at the
-   largest standard size, as the pill and the switcher's bar already do; the rows under them
+   Extra Large size (the shortcut at the largest standard size), where every caption is still a
+   whole word; the pill and the switcher's bar already stop the same way. The rows under them
    ("New Private Tab", Site Settings) keep growing. [before: i17-xl/sheet-02-article-sheet,
    sheet-03-favorited-saved, sheet-08-reader-sheet, start-02-empty; after:
    i17-xl-fix, same names]

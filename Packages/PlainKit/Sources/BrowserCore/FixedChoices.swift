@@ -92,6 +92,11 @@ public enum FixedChoices {
     /// A touch (or a link from another app) ends the splash with this fade: gone at once, without
     /// a hard cut. The touch itself already went to the app underneath.
     public static let splashSkipFade: TimeInterval = 0.12
+    /// A search-first launch has the field focused under the splash from the first frame, but
+    /// its keyboard stays down until this far into the dive: iOS draws the keyboard above every
+    /// window of the app, so it would lie over the splash. From here it rises as the sheet's
+    /// last part leaves the screen. A touch brings it at once.
+    public static let splashKeyboardAt: TimeInterval = 0.36
     /// The app starts this much larger under the hole and settles to its size as the hole opens,
     /// so the page comes up toward the viewer instead of sitting flat behind a growing circle.
     public static let splashContentZoom: Double = 1.08

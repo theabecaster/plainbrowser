@@ -127,10 +127,13 @@ final class LaunchSplashTests: XCTestCase {
         let app = launch(["-PlainSplashHold", "20"])
         Thread.sleep(forTimeInterval: 1)
         XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "plainLaunchSplash").firstMatch.exists, "the splash ended by itself")
-        // Typing goes to the search field under the splash, and ends it.
-        app.keys["p"].tap()
+        // The field has focus under the splash; its keyboard waits for the splash to open.
+        XCTAssertTrue(app.textFields["searchField"].hasKeyboardFocus)
+        XCTAssertFalse(app.keyboards.firstMatch.exists, "the keyboard lies over the splash")
+        // A tap goes through the splash to the app (here, the field itself) and ends the splash.
+        app.textFields["searchField"].tap()
         XCTAssertTrue(ending(app, within: 2).hasPrefix("skipped"))
-        XCTAssertEqual(app.textFields["searchField"].value as? String, "p")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3), "the keyboard did not come once the splash ended")
     }
 
     /// The first run: the dive opens onto the intro.

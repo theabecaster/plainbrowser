@@ -260,7 +260,7 @@ nonisolated struct SplashIrisArt: Sendable {
     static let fieldHoleCut = (SplashGeometry.flapReach + StemGeometry.creaseDistance) / 2 + 7
 
     /// Dimming over the whole opening: the app sits below the sheet, out of the light.
-    static let ambient: CGFloat = 0.20
+    static let ambient: CGFloat = 0.12
     /// The sheet's shadow on the app, cast down and right, away from the light (points).
     static let shadowAlpha: CGFloat = 0.5
     static let shadowBlur: CGFloat = 6

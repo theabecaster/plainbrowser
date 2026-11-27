@@ -165,6 +165,16 @@ for it. `scripts/duo-fold.sh <simulator name> Open` presses Device Hub's buttons
 terminal). Screenshots per screen: `xcrun simctl io <udid> enumerate`, then
 `screenshot --display=<id>` (the inner screen is the 2007x2853 one). The Duo layout UI tests
 (`DuoTests`) skip unless the simulator is unfolded, so run them after `duo-fold.sh ... Open`.
+The launch splash: an isolated run plays it only with `-PlainSplash` (any build; the perf launch
+tests pass it). Debug builds also take `-PlainSplashIcon Dawn|Night|Coral|Paper` (that icon's
+world, without changing the Home Screen icon), `-PlainSplashSlow <factor>` (the dive that many
+times slower, for frame strips), `-PlainSplashHold <seconds>` (the still splash that much longer)
+and `-PlainSplashPath iris` (Core Animation's iris instead of the GPU dive). How it ended is in
+the `launch.splash` signpost's message and, in an isolated run, in the value of the
+`plainLaunchSplash` accessibility element in the app's window ("metal", "iris", "crossfade",
+"skipped", "left"), followed after a GPU dive by its frame timing. The same timing goes to the
+log: `log stream --level debug --predicate 'subsystem == "dev.abrahamgonzalez.plainbrowser" AND
+category == "launch"'` (on a simulator: `xcrun simctl spawn <udid> log stream ...`).
 Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit`, `-PlainTabLayout above|left|right` and
 `-PlainSidebar rail|expanded|hidden` (none saved) to reach a split or a tab layout for screenshots
 without driving the UI. `-PlainSeedFavorites` and `-PlainSeedHistory` fill an isolated store for

@@ -168,6 +168,15 @@ public final class LaunchSplash {
     private var diveInterval: OSSignpostIntervalState?
     /// Called once, when the splash is gone (or was never shown).
     public var onEnd: (() -> Void)?
+    /// Called once, when the app starts to show: `FixedChoices.splashKeyboardAt` into the dive,
+    /// or when the splash ends sooner. The keyboard of a search-first launch waits for this.
+    public var onOpening: (() -> Void)?
+
+    private func opening() {
+        let open = onOpening
+        onOpening = nil
+        open?()
+    }
 
     /// Decides whether this launch has a splash and, if so, starts drawing its pictures and
     /// compiling its shaders off the main thread. Call it as early as the scene connects, before
@@ -178,6 +187,9 @@ public final class LaunchSplash {
         )
         Self.decided = true
         guard play else { return nil }
+        let signposter = Signposts.signposter
+        let build = signposter.beginInterval(Signposts.launchSplashBuild, "prepare")
+        defer { signposter.endInterval(Signposts.launchSplashBuild, build) }
         self.scene = scene
         debug = SplashDebug(arguments: arguments)
         // The icon's world, as the Home Screen shows it: the system's light or dark, not the
@@ -218,7 +230,7 @@ public final class LaunchSplash {
     public func show(over content: @escaping () -> UIView?) {
         guard !ended, window == nil, let scene else { return }
         let signposter = Signposts.signposter
-        let build = signposter.beginInterval(Signposts.launchSplashBuild)
+        let build = signposter.beginInterval(Signposts.launchSplashBuild, "show")
         defer { signposter.endInterval(Signposts.launchSplashBuild, build) }
         guard let art = takeArt() else {
             Self.log.error("splash pictures not ready for the first frame: no splash")
@@ -280,6 +292,7 @@ public final class LaunchSplash {
 
         if Motion.prefersCrossfade {
             view.crossfade(t0: start, duration: Motion.crossfadeDuration) { [weak self] in self?.finish(.crossfade) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.opening() }
             return
         }
 
@@ -306,6 +319,8 @@ public final class LaunchSplash {
                 Task { @MainActor in self?.choose(nil, why: "no renderer") }
                 return
             }
+            let note = String(format: "kit %.1f ms (shaders %.1f)", kit.buildTime * 1000, kit.compileTime * 1000)
+            Task { @MainActor in self?.kitNote = note }
             DispatchQueue.global(qos: .userInteractive).async {
                 let made: SplashRenderer?
                 let why: String
@@ -346,9 +361,14 @@ public final class LaunchSplash {
             DispatchQueue.main.asyncAfter(deadline: .now() + limit) { [weak self] in self?.finish(.metal) }
         } else {
             made?.cancel()
-            Self.log.debug("splash: Core Animation iris (\(made == nil ? why : "renderer too close to the start", privacy: .public))")
+            let reason = made == nil ? why : "renderer too close to the start"
+            Self.log.debug("splash: Core Animation iris (\(reason, privacy: .public))")
+            frames = reason
             if let iris = iris.take(waitingUpTo: 0), !view.hasIrisArt { view.setIrisArt(iris) }
             view.playIris(t0: start, slow: k) { [weak self] in self?.finish(.iris) }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (start - now) + FixedChoices.splashKeyboardAt * k) { [weak self] in
+            self?.opening()
         }
         // The app settles from a little large to its size as the opening grows.
         if let content = content() {
@@ -368,14 +388,17 @@ public final class LaunchSplash {
     private static let zoomKey = "launchSplashZoom"
 
     private func rendererFinished(_ stats: SplashStats) {
-        let summary = stats.summary
+        let summary = stats.summary + (kitNote.map { "; " + $0 } ?? "")
         Self.log.debug("splash: \(summary, privacy: .public)")
         Signposts.signposter.emitEvent(Signposts.launchSplashFrames, "\(summary, privacy: .public)")
         frames = summary
         finish(.metal)
     }
 
+    /// After a GPU dive its frame timing; after an iris, why the GPU did not draw it.
     private var frames: String?
+    /// The kit's build times, for the frame report.
+    private var kitNote: String?
 
     // MARK: Ending
 
@@ -386,6 +409,7 @@ public final class LaunchSplash {
         ended = true
         choosing = false
         content()?.layer.removeAnimation(forKey: Self.zoomKey)
+        opening()
         view.fadeOut(duration: FixedChoices.splashSkipFade) { [weak self] in self?.remove(.skipped) }
     }
 
@@ -417,10 +441,14 @@ public final class LaunchSplash {
         view = nil
         let signposter = Signposts.signposter
         if let diveInterval { signposter.endInterval(Signposts.launchSplashDive, diveInterval, "\(ending.rawValue, privacy: .public)") }
-        if let splashInterval { signposter.endInterval(Signposts.launchSplash, splashInterval, "\(ending.rawValue, privacy: .public)") }
+        if let splashInterval {
+            let why = ending == .iris ? frames.map { " (\($0))" } ?? "" : ""
+            signposter.endInterval(Signposts.launchSplash, splashInterval, "\(ending.rawValue, privacy: .public)\(why, privacy: .public)")
+        }
         diveInterval = nil
         splashInterval = nil
         report(ending, in: host)
+        opening()
         let done = onEnd
         onEnd = nil
         content = { nil }

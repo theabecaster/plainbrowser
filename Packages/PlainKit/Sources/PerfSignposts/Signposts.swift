@@ -233,8 +233,9 @@ public enum Signposts {
     public static let launchPictureHandoff: StaticString = "launch.pictureHandoff"
     /// Event: a fresh search opened over the last tab (message: "launch" or "return").
     public static let freshSearch: StaticString = "launch.freshSearch"
-    /// Interval: the launch splash's work on the main thread before the first frame (its window,
-    /// its layers, the icon read). Inside `launch.firstFrame`.
+    /// Interval, twice a launch: the launch splash's work on the main thread before the first
+    /// frame ("prepare": the icon read and starting the off-main work as the scene connects;
+    /// "show": its window and layers). Inside `launch.firstFrame`.
     public static let launchSplashBuild: StaticString = "launch.splashBuild"
     /// Interval: the first frame waiting for the splash's pictures (message: "ready" or
     /// "timedOut"); absent when they were already drawn.

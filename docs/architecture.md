@@ -37,7 +37,7 @@ writes to the App Group (`SharedFavoritesFile`).
 | `Intelligence` | MainActor by default | Reader, WebEngine, BrowserCore, PerfSignposts, FoundationModels | `SummaryRun` (Browse for Me and Summarize Page: results page, sources in parallel within a time budget, fit to the context, stream), `SummaryModel` (`FoundationSummaryModel`: Apple's on-device model, guided generation; `ScriptedSummaryModel` for tests), `HiddenBrowsing` (results and sources in the pool's hidden views, one non-persistent store per run), `SummaryPrompt` |
 | `ShellUI` | MainActor | UIKit, WebKit, Storage, FeatureUI, TabGalleryUI, WebEngine, ContentBlocking, Reader | `BrowserViewController` (page, URL pill, search sheet, page buttons; the tab on screen in `+Tab`, the engine's questions in `+EngineHost`, the gallery in `+Gallery`, the tabs button, archive and link menu in `+Tabs`, zoom, PDF and downloads in `+PageFeatures`), `TabSwipe` (bar swipe between tabs, swipe up to the gallery), `GalleryTabs` (the gallery's data source over `EngineTabs`), `ShellToast`, `BrowserSession` (pool, `EngineTabs`, `ContentBlocker`, `CookieBanners`, `ReaderExtractor`, the translator, wired once), `PageTranslators` (`AppleTranslator` over the Translation framework; a Debug stand-in for UI tests), `EngineTabs` (engine `Tab`s in step with BrowserCore's `TabStore` by id), Storage adapters for the engine seams (`SiteStores`), `ReaderPresenter`, `PageStateView`, `AddressBarData` seam + `LiveAddressBarData`, `FeatureSheets` (Settings, History, Reading List, favorites editor, Downloads, archive), `PageSheet` (the page sheet: address row, tiles, rows), `+AddressFocus` (what the focused field shows before typing, the copied link, editing the page's address), `ChromeModel` (collapse, pull to refresh, chrome geometry: plain values tested on macOS), the Duo layout: `DuoLayout` (panes, sidebar, chrome lane, folds: plain values tested on macOS), `PanesController` (`UIArrangementViewController` with two `PaneSlot`s), `+Panes` (split, focus, fold resize), `+SideTabs` and `SideTabs` (the sidebar's data source), `+SidePane` and `SidePane` (Reader, Find and History beside the page), `AppStores`/`AppTabs` (what every window shares), `Windows` and `+Windows` (Open in New Window, switching) |
 | `TabGalleryUI` | MainActor | UIKit | `TabGalleryViewController` (app-switcher cascade on compact width, sideways grid pages on regular width, one `UIScrollView` whose cards are placed every frame by position and transform only; swipe up to close, menus), `TabCardView`, `CardMotion` (springs for gaps, new cards and scroll shifts on one update link), `TabGalleryReorder` (drag to reorder, edge auto-scroll), `EmptyTabView` + `MarkView` (the start screen with the spinnable Stem mark; the shell shows it for an empty tab), `TabGalleryDataSource` seam (the shell implements it over `TabStore`) + `TabGalleryDemoData` fake, `TabGalleryTransition` (snapshot animator page <-> card; zooms the cards about the card; `track`/`release` for the swipe up from the bar), `ThumbnailPipeline` (off-main decode), `TabGalleryLayout`: `CascadeCurve`/`TabGalleryMetrics`/`CardSwipe` (plain values tested on macOS; numbers in `docs/research/arc-tab-switcher.md`), side tabs: `SideTabsViewController` + `SideTabCell`, `SideTabsDataSource` seam, `SidebarState`/`SidebarDrag` (plain values), the Above strip: `TabStripViewController` + `TabStripCell` |
-| `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `ReadingListView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift` |
+| `FeatureUI` | MainActor | SwiftUI | `SettingsView`, `HistoryView`, `ReadingListView`, `FavoritesEditor`, `AboutView` and their `@Observable` models; store protocols in `Stores.swift`; the first-run intro (`Intro/`) and the launch splash (`Splash/`: `LaunchSplash`, `SplashArt`, `SplashTimeline`, `SplashRenderer`, plain values tested on macOS; Core Animation and Metal, no SwiftUI) |
 | `DesignSystem` | MainActor | UIKit, SwiftUI | `Palette` (brand + semantic colors), `Spacing`/`Radius`/`Metrics`, `Motion` (named springs, Reduce Motion crossfade), `SpringDriver` (frame-by-frame spring at 80–120 Hz), `Haptic`, `Glass` (the one Liquid Glass helper and its container), `Paper` (the textured Paper background: `apply(to:)`, `PaperBackground`) and `PaperTexture` (the tile, CoreGraphics only) |
 | `PerfSignposts` | nonisolated | os | signpost subsystem, category and names |
 | `PlainShared` | nonisolated (`CommandInbox` MainActor) | Foundation, BrowserCore (TestIsolation) | `PlainCommand` (what the system asks for), `PlainLink` (`plainbrowser:` links both ways), `CommandInbox` (App Intents to the scene), `AppGroup`, `SharedFavorite`/`SharedFavoritesFile` (the App Group file), `SearchWidgetContent` |
@@ -65,6 +65,23 @@ and compile to nothing on macOS.
    picture over the page container (waiting at most 40 ms for the decode, `launch.pictureWait`)
    with the bar resting and following the hint, or, after 4 hours away, the search field over it
    with the frost (`+Launch`). The app ends `launch` (message: the opening screen).
+   **The launch splash** (a cold launch's first scene; `SplashGate`) is a second window above
+   the browser's (or the intro's), made in the same turn, so it is in the app's first frame. The
+   browser underneath is built exactly as without it and takes every touch: the splash window's
+   `hitTest` answers nil and ends the splash. As the scene connects, before the browser is
+   built, `LaunchSplash.init` starts two jobs off the main thread: the splash's three pictures
+   drawn with Core Graphics (`SplashArt`: the icon's field, the mark, the dawn in its window;
+   they depend only on the icon and the screen's scale) and the GPU kit (`SplashKit`: shaders
+   compiled from source, two pipelines, the pictures as textures, the mesh's index buffer). The
+   first frame takes the pictures with a bounded wait (`splashArtWait`, 30 ms; no splash if they
+   are late) and shows them as three layers. The dive starts `splashMinimumTime` after the
+   process started and at least `splashHandoff` after the first frame. If the kit is ready
+   `splashRendererLead` before that, `SplashRenderer` draws its still first frame off the main
+   thread (the same pixels as the layers), the main thread swaps it in within one transaction,
+   and a render thread clocked by a `CAMetalDisplayLink` draws the dive: one sheet (a ring mesh
+   around the P's counter) whose cut edge rolls back while the camera goes through. Otherwise
+   Core Animation plays a plain iris on the render server (`LaunchSplashView.playIris`). Either
+   way the main thread only schedules; nothing of the dive runs on it.
 4. After the first frame commits (a display link's first callback), `BrowserSession.start()`
    warms one offscreen `WKWebView`, which starts the WebContent and Networking processes, then,
    off the main thread: the remembered Desktop Site choices, the reader check's source, the rule
@@ -233,6 +250,11 @@ exactly what the app emits.
 | `launch.pictureHandoff` | interval | restored page attached under the picture → picture faded ("loaded", "timedOut", "failed", "dropped") |
 | `launch.pictureSave` | interval | the picture encoded and written off main when the app resigns active |
 | `launch.freshSearch` | event | a fresh search opened over the last tab ("launch" or "return") |
+| `launch.splashBuild` | interval | the launch splash's main-thread work before the first frame (window, layers, the icon read); inside `launch.firstFrame` |
+| `launch.splashArtWait` | interval | the first frame waiting for the splash's pictures (only when not ready; "ready" or "timedOut") |
+| `launch.splash` | interval | the splash on screen: first frame → gone (message: "metal", "iris", "crossfade", "skipped", "left") |
+| `launch.splashDive` | interval | the dive: its renderer chosen → the app filling the screen |
+| `launch.splashFrames` | event | the GPU dive's frame timing: frames, intervals, late frames, CPU encode and GPU time |
 | `launch.searchFieldReady` | event | search field first responder |
 | `nav.commit` | interval | provisional navigation start → commit |
 | `nav.finish` | interval | provisional navigation start → finish or failure |

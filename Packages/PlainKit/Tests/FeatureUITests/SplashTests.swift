@@ -293,7 +293,7 @@ import Testing
         }
         // Dimmed in the middle, darker under the top-left edge, clear on the sheet.
         let middle = depthPixel(layout.pivot)
-        #expect(middle > 30 && middle < 110, "\(middle)")
+        #expect(middle > 18 && middle < 110, "\(middle)")
         let r = layout.holeRadius
         let underEdge = depthPixel(CGPoint(x: layout.center.x - (r - 2.5) * 0.7071, y: layout.center.y - (r - 2.5) * 0.7071))
         #expect(underEdge > middle + 20, "\(underEdge) vs \(middle)")

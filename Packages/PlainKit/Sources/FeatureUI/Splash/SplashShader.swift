@@ -8,7 +8,8 @@
 /// - the window's cut edge rolls back. A roll of radius R travels outward from the window's
 ///   edge: paper inside the fold line wraps up and round it, and past `phiMax` it leaves the roll
 ///   as a straight tail lying back over the sheet, underside up. Under the icon's own fold the
-///   edge stays down (the fold already holds it), and the lift eases in on either side.
+///   edge stays down (the fold already holds it); on either side the roll grows from nothing
+///   to its full size over thirty-four degrees, a smaller roll nearer the edge, never a torn one.
 /// - the camera goes through: everything scales about the opening's pivot, and the lifted rim,
 ///   being nearer, grows a little faster (perspective about the screen's centre).
 ///
@@ -76,19 +77,22 @@ vertex SheetOut sheet_vertex(uint vid [[vertex_id]], const device float2 *mesh [
     float2 dir = float2(cos(theta), sin(theta));
     float2 c = u.hole.xy;
     float2 at = c + dir * rho;
-    // Flat within 56 degrees of the crease's normal, where the icon's fold lies; fully lifted from 76.
-    float lifted = (1.0 - smoothstep(0.242, 0.559, dot(dir, u.flap.xy))) * u.curl.w;
-    float p = u.curl.x, R = u.curl.y, phiMax = u.curl.z;
+    // Flat within 56 degrees of the crease's normal, where the icon's fold lies; fully lifted from 90.
+    float lifted = (1.0 - smoothstep(0.0, 0.559, dot(dir, u.flap.xy))) * u.curl.w;
+    // Where the edge lifts less, the same roll is smaller: its fold line stays nearer the
+    // window's edge and its radius shrinks with it, down to nothing under the icon's fold.
+    float r0 = u.hole.z, phiMax = u.curl.z;
+    float p = r0 + (u.curl.x - r0) * lifted;
+    float R = max(u.curl.y * lifted, 0.05);
     float s = p - rho;
     float3 pos = float3(at, 0.0);
     float3 n = float3(0.0, 0.0, 1.0);
-    if (s > 0.0 && lifted > 0.0) {
+    if (s > 0.0 && lifted > 0.002) {
         float phi = min(s / R, phiMax);
         float e = s - R * phi;                        // straight tail past the roll
         float along = R * sin(phi) + e * cos(phi);
-        float z = R * (1.0 - cos(phi)) + e * sin(phi);
-        pos = float3(c + dir * mix(rho, p - along, lifted), z * lifted);
-        n = mix(n, float3(dir * sin(phi), cos(phi)), lifted);
+        pos = float3(c + dir * (p - along), R * (1.0 - cos(phi)) + e * sin(phi));
+        n = float3(dir * sin(phi), cos(phi));
     }
     return { project(pos, u), at, n, s, lifted };
 }
@@ -130,19 +134,20 @@ fragment float4 sheet_fragment(SheetOut in [[stage_in]], bool front [[front_faci
     float lit = (ka + kd * max(dot(n, L), 0.0)) / (ka + kd * L.z);
     if (front) {
         c *= lit;
-        if (in.behind <= 0.0 && u.lip.y > 0.0) {
+        if (in.behind <= 0.0 && u.lip.y > 0.0 && in.lifted > 0.002) {
             // The rolled rim's shadow on the sheet beside it: tight on the lit side, longer away
             // from the light.
             float2 dir = q / max(rho, 1e-3);
             float away = 0.5 + 0.5 * dot(dir, normalize(float2(0.35, 0.6)));
-            float lift = 1.0 - smoothstep(0.242, 0.559, dot(dir, u.flap.xy));
-            float shadow = u.lip.y * lift * exp(-max(rho - u.lip.x, 0.0) / (1.0 + 2.6 * away));
+            float lift = 1.0 - smoothstep(0.0, 0.559, dot(dir, u.flap.xy));
+            float reach = r0 + (u.lip.x - r0) * lift;     // the rim's outer edge at this angle
+            float shadow = u.lip.y * lift * exp(-max(rho - reach, 0.0) / (1.0 + 2.6 * away));
             c = mix(c, u.shadeColor.rgb, shadow);
         }
         return float4(c * cover, cover);
     }
     // The underside: the fold's color, crease to free edge, darker deep in the roll.
-    float k = saturate(in.behind / u.lip.z);
+    float k = saturate(in.behind / (u.lip.z * max(in.lifted, 1e-3)));
     float3 b = k < 0.18 ? mix(u.back0.rgb, u.back1.rgb, k / 0.18)
              : k < 0.6 ? mix(u.back1.rgb, u.back2.rgb, (k - 0.18) / 0.42)
              : mix(u.back2.rgb, u.back3.rgb, (k - 0.6) / 0.4);
@@ -176,7 +181,7 @@ fragment float4 hole_fragment(HoleOut in [[stage_in]], texture2d<float> dawn [[t
     float2 qs = q - u.depth.xy;
     float blur = u.depth.z;
     float lit = smoothstep(-0.5 * blur, 0.5 * blur, u.depth.w - length(qs)) * (1.0 - flapCover(qs, u, blur));
-    float dim = u.shade.z * (1.0 - 0.8 * (1.0 - 0.5 * (1.0 - lit)));
+    float dim = u.shade.z * (1.0 - 0.88 * (1.0 - 0.5 * (1.0 - lit)));
     return float4(v.rgb, v.a + (1.0 - v.a) * dim);
 }
 """

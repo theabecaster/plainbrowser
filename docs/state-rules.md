@@ -290,6 +290,29 @@ is the time since the app last left the foreground; "long" is `FixedChoices.fres
 While the picture stands in (before the saved session is read), the bar follows the saved tab:
 its address, Back and Forward, the tabs slot; nothing in the bar moves when the live page arrives.
 
+### Launch splash
+
+A cold launch opens with the chosen app icon's world (its field, the mark in its colors) and a
+dive through the P's counter into the app (`FeatureUI/Splash`, `SplashGate`; docs/decisions.md,
+"Launch splash: through the P"). The app is whole underneath from its own first frame: the table
+above still says what it shows, and the splash only covers it.
+
+| Situation | Splash | Why |
+|---|---|---|
+| Cold launch from the Home Screen or the app switcher (the app was not running) | Plays: the icon's world from the first frame, then the dive (0.66 s) | The owner: "for the startup." |
+| First run | Plays; the dive opens onto the intro | The intro comes after the splash. |
+| Cold launch by a link from another app, a widget, a shortcut, a Spotlight result or Handoff | None | A link always wins: the page comes first. |
+| Return from the background (the app still running), however long away | None | Not a startup; the user is where they left off. |
+| A second window (Open in New Window), or a scene the system makes later | None | Once per launch. |
+| A touch anywhere, typing, a link arriving, the screen rotating or folding | Ends at once (a 0.12 s fade); the touch has already gone to the app underneath | Nothing blocks input. |
+| The app leaves the foreground while it plays | Gone at once, nothing drawn in the background | |
+| Reduce Motion | The icon's world, then a 0.2 s crossfade to the app; no dive | The motion table's rule. |
+| An isolated test run | None, unless `-PlainSplash` is given | Hundreds of UI tests launch the app; the perf launch tests and the splash's own tests pass it. |
+
+The splash follows the Home Screen icon as it is (`AppIcons.current`) and the system's light or
+dark, like the icon and the launch screen under it, not the app's own Appearance setting. Dawn
+has dark art; Night, Coral and Paper look the same in both.
+
 ### Tab gallery (Gallery mode, reachable with a card to show: `others ≥ 1`, or a page on screen)
 
 | Control | Rule | Why |

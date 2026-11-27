@@ -204,6 +204,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 self?.introWindow = nil
             }
         }
+        // Under the launch splash the mark waits to assemble until the dive opens onto it.
+        if let launchSplash {
+            intro.waitsForLaunchSplash = true
+            launchSplash.onOpening = { [weak intro] in intro?.launchSplashIsOpening() }
+        }
         window.makeKeyAndVisible()
         TestIsolationMarker.install(in: window)
         introWindow = window
@@ -258,6 +263,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         TestIsolationMarker.install(in: window)
         self.window = window
         self.browser = browser
+        // Under the launch splash the field has focus but its keyboard waits for the dive.
+        if let launchSplash {
+            browser.holdLaunchKeyboard()
+            launchSplash.onOpening = { [weak browser] in browser?.releaseLaunchKeyboard() }
+        }
         browser.onProfileDatabaseChange = { [services] database in services.followFavorites(of: database) }
         LaunchFirstFrame.endAtNextFrame()
         attachDatabase(to: browser)

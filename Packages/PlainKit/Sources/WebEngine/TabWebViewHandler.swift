@@ -189,6 +189,10 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         case "https":
             if let host = webView.url?.host(), pool.trustExceptions.contains(host: host) {
                 state = .certificateBypassed
+            } else if webView.serverTrust == nil {
+                // Nothing committed yet (a restored page's address arrives before its load): no
+                // verdict, rather than a "Not Secure" that flashes in the bar until the commit.
+                state = .none
             } else {
                 state = webView.hasOnlySecureContent ? .secure : .notSecure
             }

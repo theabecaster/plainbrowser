@@ -36,6 +36,7 @@ extension DarkPages {
         const BG_L = \(FixedChoices.darkPagesBackgroundLightness), BG_T = \(FixedChoices.darkPagesBackgroundThreshold);
         const FG_L = \(FixedChoices.darkPagesTextLightness), FG_T = \(FixedChoices.darkPagesTextThreshold);
         const BD_L = \(FixedChoices.darkPagesBorderLightness), BD_T = \(FixedChoices.darkPagesBorderThreshold);
+        const LIFT = \(FixedChoices.darkPagesLift), LIFT_BELOW = \(FixedChoices.darkPagesLiftBelowContrast);
         const MIN_CONTRAST = \(FixedChoices.darkPagesMinimumContrast);
         const FIRST_MS = \(FixedChoices.darkPagesFirstFrameBudget), SLICE_MS = \(FixedChoices.darkPagesSliceBudget);
         const SVG_CHROMA = \(FixedChoices.darkPagesColoredSVGChroma), SVG_SHAPES = \(FixedChoices.darkPagesSVGShapesChecked);
@@ -54,7 +55,7 @@ extension DarkPages {
     let posted = '';
     const now = () => performance.now();
     const stats = { judgeMs: 0, rewriteMs: 0, patchMs: 0, rules: 0, emitted: 0, patched: 0, contrastFixed: 0,
-      icons: 0, checked: 0, chained: 0, rechecked: 0, flushes: 0, slices: 0, styleMs: 0, onPicture: 0, fetched: 0, unreadable: 0, firstDark: -1, dcl: -1, firstPatchDone: -1 };
+      icons: 0, lifted: 0, checked: 0, chained: 0, rechecked: 0, flushes: 0, slices: 0, styleMs: 0, onPicture: 0, fetched: 0, unreadable: 0, firstDark: -1, dcl: -1, firstPatchDone: -1 };
     // Script time on the page (outermost calls only), and per part.
     let cost = 0;
     let depth = 0;
@@ -765,12 +766,29 @@ extension DarkPages {
       let bg = up.bg;
       let image = up.image;
       let owner = up.owner; // the nearest element with an opaque background (this one included)
+      let darkened = up.darkened; // whether what is behind it was light before
       const own = parseColor(cs.backgroundColor);
       if (own && own[3] > 0) {
-        const mapped = mapRGBA('b', own);
+        let mapped = mapRGBA('b', own);
+        // Light before any of Plain's changes: turned dark here, or already by a twin (the site's
+        // value rides along in --plain-o-bg).
+        let wasLight = mapped !== own;
+        if (!wasLight && own[3] > 0.9) {
+          const o = cs.getPropertyValue('--plain-o-bg');
+          const original = o && parseColor(o.trim());
+          wasLight = !!original && !close(original, own) && close(mapRGBA('b', original), own);
+        }
         if (mapped !== own && !covered('background')) decls.push('background-color:' + css(mapped) + ' !important');
+        else if (!wasLight && own[3] > 0.9 && up.darkened && contrast(own, up.bg) < LIFT_BELOW) {
+          // A dark card on a light section: once the section is dark too, the card would melt
+          // into it. It is lifted a little, as raised surfaces are in dark designs.
+          const lab = toLab(own);
+          mapped = fromLab(Math.max(lab[0], toLab(up.bg)[0]) + LIFT, lab[1], lab[2]).concat(own[3]);
+          decls.push('background-color:' + css(mapped) + ' !important');
+          stats.lifted++;
+        }
         bg = over(mapped, bg);
-        if (mapped[3] > 0.9) { image = false; owner = el; }
+        if (mapped[3] > 0.9) { image = false; owner = el; darkened = wasLight; }
       }
       const picture = cs.backgroundImage;
       if (picture && picture !== 'none') {
@@ -851,7 +869,7 @@ extension DarkPages {
         for (const d of pd) marks.push(token(d, pseudo));
       }
       if (marks.length) writes.push([el, marks.join(' ')]);
-      return { bg, image, owner };
+      return { bg, image, owner, darkened };
     };
     const pictureText = new WeakSet();
     const close = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 0.03;
@@ -951,7 +969,7 @@ extension DarkPages {
     let seen = new WeakSet();
     let queue = [];
     let walk = null; // { root, el }
-    const rootInfo = { bg: PAGE_BG, image: false, owner: null };
+    const rootInfo = { bg: PAGE_BG, image: false, owner: null, darkened: true };
     const infoAbove = (el) => {
       const parent = el.parentElement;
       if (!parent) return rootInfo;
@@ -969,10 +987,20 @@ extension DarkPages {
       for (const p of chain) {
         const cs = getComputedStyle(p);
         const c = parseColor(cs.backgroundColor);
-        let bg = result.bg, image = result.image, owner = result.owner;
-        if (c && c[3] > 0) { const m = mapRGBA('b', c); bg = over(m, bg); if (m[3] > 0.9) { image = false; owner = p; } }
+        let bg = result.bg, image = result.image, owner = result.owner, darkened = result.darkened;
+        if (c && c[3] > 0) {
+          const m = mapRGBA('b', c);
+          bg = over(m, bg);
+          if (m[3] > 0.9) {
+            image = false;
+            owner = p;
+            const o = cs.getPropertyValue('--plain-o-bg');
+            const original = o && parseColor(o.trim());
+            darkened = m !== c || (!!original && !close(original, c) && close(mapRGBA('b', original), c));
+          }
+        }
         if (cs.backgroundImage !== 'none' && cs.backgroundImage.includes('url(')) image = true;
-        result = { bg, image, owner };
+        result = { bg, image, owner, darkened };
         above.set(p, result);
         stats.chained++;
       }
@@ -1282,7 +1310,11 @@ extension DarkPages {
           setEnabled(true);
           if (!built) { built = true; build(); } else if (rewalkNeeded) { rewalkNeeded = false; rewalk(); }
           if (stats.firstDark < 0) stats.firstDark = now();
-        } else if (enabled) setEnabled(false);
+        } else if (enabled) {
+          setEnabled(false);
+          // A design of its own after all (it arrived late): nothing of Plain's stays on it.
+          if (verdict === 'native') for (const el of document.querySelectorAll('[' + ATTR + ']')) el.removeAttribute(ATTR);
+        }
       }
       post(!dark.matches ? 'inactive' : off ? '\#(DarkPagesState.offForSite.rawValue)'
         : verdict === 'darken' ? 'darkened' : verdict === 'native' ? 'native' : 'inactive');

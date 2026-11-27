@@ -272,8 +272,12 @@ struct DarkPagesTests {
         #expect(try await css("backgroundColor", "#hero") == "rgb(0, 0, 0)")
         #expect(try await css("color", "#hero-title") == "rgb(245, 245, 247)")
         #expect(try await css("backgroundColor", "#hero-2") == "rgb(0, 0, 0)")
-        #expect(try await css("backgroundColor", "#tile-dark") == "rgb(29, 29, 31)")
         #expect(try await css("color", "#tile-dark-title") == "rgb(245, 245, 247)")
+        // The dark card on the light section stays dark, lifted just enough to stand off the
+        // section, which is dark now too.
+        let card = try await lum("backgroundColor", "#tile-dark")
+        let section = try await lum("backgroundColor", "#light")
+        #expect(card < 0.05 && (card + 0.05) / (section + 0.05) > 1.1, "card \(card), section \(section)")
         #expect(try await css("backgroundColor", "#vars-dark") == "rgb(0, 0, 0)")
         #expect(try await css("color", "#vars-dark-title") == "rgb(245, 245, 247)")
         // Brand colors stay: the blue button, the gradient headline.

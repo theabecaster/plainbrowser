@@ -122,6 +122,13 @@ public enum FixedChoices {
     /// becomes 0.30, a typical #d2d2d7 hairline 0.37); dark ones stay.
     public static let darkPagesBorderLightness = 0.30
     public static let darkPagesBorderThreshold = 0.55
+    /// A dark box (a card, a panel) on a light section that dark pages darkened would melt into
+    /// it: when the two differ by less than this contrast ratio, the box is lifted to the
+    /// section's lightness plus `darkPagesLift` (OKLab L), as raised surfaces are lighter in dark
+    /// designs. 1.15 lifts a #1d1d1f card on a #f5f5f7 section (1.03 once darkened) and leaves a
+    /// black hero on a white page (1.19) black.
+    public static let darkPagesLiftBelowContrast = 1.15
+    public static let darkPagesLift = 0.05
     /// Text whose contrast with what is behind it falls under this (WCAG AA for body text, the
     /// target Safari's Adaptive Dark Mode states) is made lighter or darker until it passes.
     public static let darkPagesMinimumContrast = 4.5

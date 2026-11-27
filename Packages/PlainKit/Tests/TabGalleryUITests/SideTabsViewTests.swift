@@ -92,8 +92,10 @@ final class SideTabsViewTests: XCTestCase {
         sidebar.visibleWidth = expanded
         XCTAssertEqual(title.alpha, 1)
         XCTAssertEqual(row.frame, frameBefore, "no row moved or resized")
-        sidebar.visibleWidth = (rail + expanded) / 2
-        XCTAssertGreaterThan(title.alpha, 0.5, "titles are in by the middle of the way")
+        sidebar.visibleWidth = rail + (expanded - rail) * 0.2
+        XCTAssertEqual(title.alpha, 0, "no clipped fragments while there is no room for words")
+        sidebar.visibleWidth = rail + (expanded - rail) * 0.85
+        XCTAssertEqual(title.alpha, 1, "titles are in before the edge rests")
     }
 
     func testTheSelectionMarkSpansWhatShows() {

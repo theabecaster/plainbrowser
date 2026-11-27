@@ -29,11 +29,12 @@ enum SideTabMetrics {
         return CGRect(x: 0, y: 0, width: width, height: height).insetBy(dx: markInset.width, dy: markInset.height)
     }
 
-    /// How far the titles have come in (0 in the rail, 1 from the middle of the way to Expanded):
-    /// they fade in behind the widening edge and are gone before the rail closes over them.
+    /// How far the titles and close buttons have come in (0 in the rail and over the first third
+    /// of the way, 1 from four fifths): they fade in together once there is room for a few words,
+    /// not as clipped fragments behind the edge, and are gone before the rail closes over them.
     static func titleAlpha(visibleWidth: CGFloat) -> CGFloat {
         let progress = (visibleWidth - rail) / max(1, expanded - rail)
-        return min(max((progress - 0.12) / 0.4, 0), 1)
+        return min(max((progress - 0.35) / 0.45, 0), 1)
     }
 }
 

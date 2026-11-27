@@ -34,8 +34,14 @@ extension BrowserViewController {
         sidebar.view.isHidden = layout.sidebar == .hidden
         // Open over the bar (the inner screen's portrait): above the chrome before it widens. It
         // goes back under once it rests narrower (`setSidebar`'s completion), never mid-spring.
-        if layout.sidebarFloats, layout.expandedSidebarCoversChrome { raiseSidebarOverChrome(true) }
-        else if duo.sidebarInterval == nil { raiseSidebarOverChrome(false) }
+        let isDrawer = layout.sidebarFloats && layout.expandedSidebarCoversChrome
+        if isDrawer { raiseSidebarOverChrome(true) } else if duo.sidebarInterval == nil { raiseSidebarOverChrome(false) }
+        // The page and the bar dim under the drawer (inside a spring, with it).
+        duo.sidebarScrim?.alpha = isDrawer ? 1 : 0
+    }
+
+    @objc func sidebarScrimTapped() {
+        collapseFloatingSidebar()
     }
 
     /// The expanded sidebar opens over the top bar where the bar has no room beside it
@@ -45,8 +51,23 @@ extension BrowserViewController {
         guard let sidebar = duo.sidebar, duo.isSidebarOverChrome != raised else { return }
         duo.isSidebarOverChrome = raised
         if raised {
-            view.insertSubview(sidebar.view, aboveSubview: chromeGlass)
+            // A scrim between the drawer and what it covers: the page and the bar dim, take no
+            // touches, and a tap there closes the drawer.
+            let scrim = UIView(frame: view.bounds)
+            scrim.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            scrim.backgroundColor = Palette.drawerScrim
+            scrim.alpha = 0
+            scrim.isAccessibilityElement = true
+            scrim.accessibilityLabel = String(localized: "Hide Titles")
+            scrim.accessibilityTraits = .button
+            scrim.accessibilityIdentifier = "sideTabs.scrim"
+            scrim.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(sidebarScrimTapped)))
+            view.insertSubview(scrim, aboveSubview: chromeGlass)
+            view.insertSubview(sidebar.view, aboveSubview: scrim)
+            duo.sidebarScrim = scrim
         } else {
+            duo.sidebarScrim?.removeFromSuperview()
+            duo.sidebarScrim = nil
             view.insertSubview(sidebar.view, aboveSubview: panes.view)
         }
     }
@@ -159,6 +180,8 @@ extension BrowserViewController {
         duo.sidebarTrailing = nil
         duo.isDraggingSidebar = false
         duo.isSidebarOverChrome = false
+        duo.sidebarScrim?.removeFromSuperview()
+        duo.sidebarScrim = nil
     }
 
     /// The tab a split's other pane shows, when the split is on screen.
@@ -241,7 +264,10 @@ extension BrowserViewController {
             // A Right sidebar widens toward the page, to the left.
             let width = drag.trackedWidth(duo.sidebarDragStart + (layout.sidebarOnRight ? -travel : travel))
             widthConstraint.constant = width
+            let rail = SidebarState.rail.width
+            let open = min(max((width - rail) / (SidebarState.expanded.width - rail), 0), 1)
             UIView.animate(Motion.sidebarTrack) {
+                self.duo.sidebarScrim?.alpha = open
                 self.duo.sidebar?.visibleWidth = width
                 self.view.layoutIfNeeded()
             }

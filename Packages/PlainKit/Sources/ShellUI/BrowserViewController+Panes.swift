@@ -42,6 +42,8 @@ final class DuoUIState {
     var isDraggingSidebar = false
     /// The sidebar sits above the chrome (Expanded over the top bar, `raiseSidebarOverChrome`).
     var isSidebarOverChrome = false
+    /// What dims the page and the bar under the drawer while the sidebar is over the chrome.
+    var sidebarScrim: UIView?
     var sidebarDragStart: CGFloat = 0
     var sidebarInterval: OSSignpostIntervalState?
     /// Settings > Tab Layout, once the saved settings are read.

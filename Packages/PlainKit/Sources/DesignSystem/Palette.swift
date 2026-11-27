@@ -84,6 +84,10 @@ public enum Palette {
     /// A row or button under the finger.
     public static let pressed = UIColor(light: UIColor(rgb: 0x2973FF, alpha: 0.10), dark: UIColor(rgb: 0x2973FF, alpha: 0.22))
 
+    /// What dims the page and the bar under the sidebar's drawer (portrait), so the drawer reads as
+    /// a layer over them: Deep Lagoon, lighter than the gallery's dim.
+    public static let drawerScrim = UIColor(light: UIColor(rgb: 0x0A2133, alpha: 0.22), dark: UIColor(rgb: 0x000000, alpha: 0.4))
+
     // MARK: Site icons
 
     /// The tile under a site icon that is one dark shape on a clear ground (a black logo): white

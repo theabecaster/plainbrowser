@@ -29,6 +29,9 @@ final class IntroModel {
     /// The safe area's height, set by the view controller: the steps leave room for the dawn
     /// from it (`IntroLayout`).
     var safeHeight: CGFloat = 0
+    /// The window can be a foldable's (`IntroRules.showsUnfoldRow`), set by the view controller
+    /// from its traits: only then does "What's inside" promise two pages side by side.
+    var canUnfold = false
 
     /// Runs on every step change, for the view controller's mark, field and VoiceOver.
     @ObservationIgnored var onStepChange: ((Step?) -> Void)?

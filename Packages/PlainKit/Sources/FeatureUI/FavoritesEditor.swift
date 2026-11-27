@@ -43,7 +43,7 @@ public struct FavoritesEditor: View {
                     .onMove { model.move(fromOffsets: $0, toOffset: $1) }
                     .onDelete { model.delete(atOffsets: $0) }
                 } footer: {
-                    if !model.favorites.isEmpty { Text(Wording.favoritesFooter) }
+                    if !model.favorites.isEmpty { Text(Wording.favoritesFooter).foregroundStyle(.secondary) }
                 }
                 .paperRows()
             }

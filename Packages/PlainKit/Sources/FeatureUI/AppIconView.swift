@@ -44,7 +44,7 @@ struct AppIconView: View {
                     .accessibilityAddTraits(choice == current ? .isSelected : [])
                 }
             } footer: {
-                Text("The icon on your Home Screen.")
+                Text("The icon on your Home Screen.").foregroundStyle(.secondary)
             }
             .paperRows()
         }

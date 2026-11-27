@@ -16,9 +16,11 @@ enum Style {
 }
 
 extension View {
-    /// A sheet's list on Plain's paper: the textured ground behind it, ink text, and supporting
-    /// text (footers, values, a row's address: `.secondary`) in the ink's secondary step. Native
-    /// in every other way. Put it on the `List` (or `ScrollView`); give the rows `paperRows()`.
+    /// A sheet's list on Plain's paper: the textured ground behind it and ink text. Supporting
+    /// text (footers, values, a row's address) asks for `.secondary`, which here is the ink's
+    /// secondary step; the ink replaces the system's own footer gray, so each footer says so.
+    /// Native in every other way. Put it on the `List` (or `ScrollView`); give the rows
+    /// `paperRows()`.
     func paperSheet() -> some View {
         scrollContentBackground(.hidden)
             .background { PaperBackground().ignoresSafeArea() }
@@ -58,6 +60,26 @@ private struct SheetTitle: View {
             .lineLimit(1)
             .dynamicTypeSize(...DynamicTypeSize.accessibility1)
             .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A row's title and its current value ("Search Engine", "Google"): `LabeledContent` with the value
+/// in the ink's secondary step, since the sheet's ink would otherwise flatten it to the title's.
+struct ValueLabel: View {
+    let title: String
+    let value: String
+
+    init(_ title: String, value: String) {
+        self.title = title
+        self.value = value
+    }
+
+    var body: some View {
+        LabeledContent {
+            Text(value).foregroundStyle(.secondary)
+        } label: {
+            Text(title)
+        }
     }
 }
 

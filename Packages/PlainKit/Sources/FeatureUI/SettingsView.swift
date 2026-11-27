@@ -25,11 +25,11 @@ public struct SettingsView: View {
                         NavigationLink {
                             SearchEngineView(model: model)
                         } label: {
-                            LabeledContent("Search Engine", value: model.isLoaded ? model.settings.searchEngine.name : "")
+                            ValueLabel("Search Engine", value: model.isLoaded ? model.settings.searchEngine.name : "")
                         }
                         .disabled(!model.isLoaded)
                     } footer: {
-                        Text(Wording.searchEngineFooter)
+                        Text(Wording.searchEngineFooter).foregroundStyle(.secondary)
                     }
 
                     Section {
@@ -43,6 +43,7 @@ public struct SettingsView: View {
                         .accessibilityIdentifier("settings.tabLayout")
                     } footer: {
                         Text(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
+                            .foregroundStyle(.secondary)
                     }
 
                     Section {
@@ -54,7 +55,7 @@ public struct SettingsView: View {
                         .pickerStyle(.menu)
                         .disabled(!model.isLoaded)
                     } footer: {
-                        Text(model.settings.archiveAfter.footer)
+                        Text(model.settings.archiveAfter.footer).foregroundStyle(.secondary)
                     }
 
                     Section {
@@ -67,14 +68,14 @@ public struct SettingsView: View {
                         .disabled(!model.isLoaded)
                         .accessibilityIdentifier("settings.appearance")
                     } footer: {
-                        Text(model.settings.appearance.footer)
+                        Text(model.settings.appearance.footer).foregroundStyle(.secondary)
                     }
 
                     Section {
                         NavigationLink {
                             AppIconView(current: $appIcon)
                         } label: {
-                            LabeledContent("App Icon", value: appIcon.title)
+                            ValueLabel("App Icon", value: appIcon.title)
                         }
                         .accessibilityIdentifier("settingsAppIcon")
                     }
@@ -84,7 +85,8 @@ public struct SettingsView: View {
                             confirmingClear = true
                         } label: {
                             HStack {
-                                Text("Clear History and Data")
+                                // Its own red: the sheet's ink would otherwise override the role's color.
+                            Text("Clear History and Data").foregroundStyle(Color(uiColor: .systemRed))
                                 Spacer()
                                 if model.isClearing { ProgressView() }
                             }
@@ -98,14 +100,14 @@ public struct SettingsView: View {
                             Text(Wording.clearConfirmMessage)
                         }
                     } footer: {
-                        Text(Wording.clearFooter)
+                        Text(Wording.clearFooter).foregroundStyle(.secondary)
                     }
 
                     Section {
                         NavigationLink {
                             AboutView(info: model.about)
                         } label: {
-                            LabeledContent("About", value: model.about.version)
+                            ValueLabel("About", value: model.about.version)
                         }
                     }
                 }
@@ -180,7 +182,7 @@ struct SearchEngineView: View {
                     if let error = model.customError {
                         Text(error).foregroundStyle(.red)
                     } else {
-                        Text(Wording.customEngineFooter)
+                        Text(Wording.customEngineFooter).foregroundStyle(.secondary)
                     }
                 }
             }

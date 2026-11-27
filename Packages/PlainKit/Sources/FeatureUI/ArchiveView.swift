@@ -35,7 +35,7 @@ public struct ArchiveView: View {
                             }
                     }
                 } footer: {
-                    if !model.rows.isEmpty, model.query.isEmpty { Text(footer) }
+                    if !model.rows.isEmpty, model.query.isEmpty { Text(footer).foregroundStyle(.secondary) }
                 }
                 .paperRows()
             }

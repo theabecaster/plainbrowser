@@ -37,6 +37,7 @@ public struct AboutView: View {
                 }
             } footer: {
                 Text("Plain is free software under the GNU Affero General Public License 3.0.")
+                    .foregroundStyle(.secondary)
             }
             .paperRows()
         }

@@ -87,19 +87,21 @@ struct TabGalleryMetrics: Equatable {
     var bottomChrome: CGFloat = 0
     /// Room a control over the cards takes at the top (the profile switcher), under the safe area.
     var topChrome: CGFloat = 0
-    /// In the grid, this many slots (a lone card and its New Tab card) sit in one row centered on
-    /// the screen instead of filling the grid from its top left; 0 fills the grid as usual. With
-    /// an even column count the pair meets on the fold.
+    /// In the grid, this many slots (a lone card) sit in one row centered on the screen instead
+    /// of filling the grid from its top left; 0 fills the grid as usual.
     var centeredRow = 0
+    /// The page's top that a floating bar covers; thumbnails leave it out (`pageAspect`).
+    var pageTopInset: CGFloat = 0
 
     /// Space around the cards and between grid cards.
     static let margin: CGFloat = 16
     static let spacing: CGFloat = 16
     /// A cascade card is this much of the space it has: the Arc measurement (0.66 of the screen).
     static let cascadeWidthFraction: CGFloat = 0.66
-    /// Grid cards take the page's shape, kept inside these bounds (height over width). Taller than
+    /// Grid cards take the page's shape (below a floating top bar, about 0.6 on the Duo's inner
+    /// screen in landscape), kept inside these bounds (height over width). Taller than
     /// 1.1 and a portrait grid fits only one row.
-    static let gridAspect: ClosedRange<CGFloat> = 0.62...1.1
+    static let gridAspect: ClosedRange<CGFloat> = 0.55...1.1
     /// The site icon over each card.
     static let faviconSize: CGFloat = 20
     /// The gap between the title row and its card.
@@ -125,7 +127,7 @@ struct TabGalleryMetrics: Equatable {
     /// card of this shape shows the whole picture with no strip of card under it.
     var pageAspect: CGFloat {
         guard width > 0 else { return 1 }
-        return max(1, height - safeTop) / contentWidth
+        return max(1, height - safeTop - pageTopInset) / contentWidth
     }
 
     /// The page preview's height over its width. In the cascade a card is the whole page, the
@@ -148,8 +150,15 @@ struct TabGalleryMetrics: Equatable {
             let byHeight = (contentHeight - headerHeight) / thumbnailAspect
             return max(1, min(byWidth, byHeight).rounded(.down))
         case .grid:
-            return gridCardWidth(columns: columns)
+            return min(gridCardWidth(columns: columns), gridWidthForTwoRows)
         }
+    }
+
+    /// The widest grid card that still leaves room for two rows above the bar, so a page of the
+    /// grid always shows at least four tabs.
+    private var gridWidthForTwoRows: CGFloat {
+        let thumbnail = (contentHeight - Self.spacing) / 2 - headerHeight
+        return max(1, (thumbnail / thumbnailAspect).rounded(.down))
     }
 
     var thumbnailHeight: CGFloat {
@@ -359,13 +368,33 @@ enum ScrollSnap {
 /// back.
 enum CardSwipe {
     static let closeFraction: CGFloat = 0.4
-    static let closeVelocity: CGFloat = 800
+    /// A flick up this fast closes from any height: the app switcher takes a light flick, and
+    /// at 800 pt/s a quick thumb flick often fell short (owner feedback, "hard to drag a tab").
+    static let closeVelocity: CGFloat = 500
     /// `UIScrollView.DecelerationRate.fast`: a slow release does not carry a card far.
     static let decelerationRate: CGFloat = 0.99
     /// A release moving down faster than this keeps the card, wherever it is.
     static let keepVelocity: CGFloat = 300
     /// UIScrollView's rubber-band constant.
     static let rubberBand: CGFloat = 0.55
+    /// A drag up this close to vertical lifts the card (tan 30°: within 60° of straight up);
+    /// flatter, the gallery scrolls. Thumbs swipe up in an arc, so an even split (45°) sent many
+    /// lifts to the scroll. Down stays at 45°: it only rubber-bands.
+    static let liftSlope: CGFloat = 0.577
+    /// The finger's travel before its direction decides between lifting the card and scrolling
+    /// (`LiftGestureRecognizer`): a few points, under the scroll view's own ~10 pt, so a lift
+    /// starts first and the card moves from the first frames of the drag.
+    static let lockDistance: CGFloat = 6
+    /// The card pays the locking travel back over this much more finger travel, so it neither
+    /// jumps on the first frame nor stays behind the finger.
+    static let takeUp: CGFloat = 12
+
+    /// Whether a move in `direction` (a velocity or a travel) lifts a card rather than scrolling
+    /// the gallery.
+    static func isLift(velocity direction: CGPoint) -> Bool {
+        if direction.y < 0 { return -direction.y > abs(direction.x) * liftSlope }
+        return direction.y > abs(direction.x)
+    }
 
     /// Where a throw released at `velocity` (pt/s) would come to rest, relative to the release.
     static func projectedDistance(velocity: CGFloat) -> CGFloat {
@@ -383,6 +412,14 @@ enum CardSwipe {
     static func offset(translation: CGFloat, cardHeight: CGFloat) -> CGFloat {
         guard translation > 0, cardHeight > 0 else { return translation }
         return (1 - 1 / (translation * rubberBand / cardHeight + 1)) * cardHeight
+    }
+
+    /// The finger translation that `offset(translation:cardHeight:)` shows as `offset`: a card
+    /// caught while it springs back down picks the band up from where it is on screen.
+    static func translation(forOffset offset: CGFloat, cardHeight: CGFloat) -> CGFloat {
+        guard offset > 0, cardHeight > 0 else { return offset }
+        let fraction = min(offset / cardHeight, 0.999)
+        return (1 / (1 - fraction) - 1) * cardHeight / rubberBand
     }
 }
 
@@ -446,9 +483,11 @@ enum TabGalleryChoices {
     /// Decoded previews kept in memory. 100 phone-size previews at 3x are about 60 MB; the cache
     /// evicts under pressure, and the rest decode again in about a frame each.
     static let thumbnailCacheCost = 64 * 1024 * 1024
-    /// A grid card is never narrower than this: below it a title shows only a word or two. The Duo's
-    /// inner screen gets four columns in landscape (217 pt cards) and two in portrait.
-    static let minGridCardWidth: CGFloat = 180
+    /// A grid card is never narrower than this: smaller, a page is hard to recognise and a title
+    /// shows only a word or two (UX audit, 2026-11-27: four 217 pt columns on the Duo's inner
+    /// screen read as a quarter of it each). The inner screen gets two columns either way: in
+    /// landscape two rows of about 334 pt cards, one each side of the fold.
+    static let minGridCardWidth: CGFloat = 300
 }
 
 extension Comparable {

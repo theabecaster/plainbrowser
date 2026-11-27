@@ -10,6 +10,14 @@ import WebEngine
 /// swipe, swipe previews and the toast. One stored property on `BrowserViewController`.
 final class TabsUIState {
     var gallery: TabGalleryViewController?
+    /// The gallery kept ready while it is not up: a hidden child, laid out at the page's size with
+    /// its cards built and their pictures decoded, so opening it shows them on the first frame
+    /// (docs/research/perf-gallery-swipe.md). Dropped on a memory warning.
+    var spareGallery: TabGalleryViewController?
+    /// A spare gallery build is waiting for an idle moment.
+    var isPrewarmScheduled = false
+    /// The saved tabs are in and the first frame is long gone: idle work may start.
+    var isLaunchDone = false
     /// The page ↔ card transition running now, if any.
     var galleryTransition: TabGalleryTransition?
     /// Bumped whenever a running transition is replaced or dropped, so its late completion is
@@ -50,9 +58,9 @@ extension BrowserViewController: GalleryHost {
     @discardableResult
     func presentGallery(source: StaticString, interactive: Bool = false) -> TabGalleryTransition? {
         guard !isShowingGallery, presentedViewController == nil else { return nil }
-        // Reachable only with a card to show (state rules §3): another tab, or the page on screen
-        // beside a New Tab card. The swipe up and Show All Tabs share this one condition, and the
-        // gallery never opens empty.
+        // Reachable only with a card to show (state rules §3): another tab, or the page on screen.
+        // The swipe up and Show All Tabs share this one condition, and the gallery never opens
+        // empty.
         // The window's profile's list, or with none there (and no private tabs) the latest list of
         // another profile: the switcher then says whose it is.
         let profile = session.tabs.pageEntries(private: false).isEmpty && session.tabs.pageEntries(private: true).isEmpty
@@ -76,18 +84,19 @@ extension BrowserViewController: GalleryHost {
         tabs.setShowingProfile(profile)
         tabs.setShowingPrivateTabs(showsPrivate)
         Signposts.signposter.emitEvent(Signposts.galleryOpen, "\(source)")
+        // `gallery.show` runs from here: getting the gallery ready (a diff of the kept one, or a
+        // new one) and the page's snapshot are part of what the user waits for.
+        let showInterval = Signposts.signposter.beginInterval(Signposts.galleryShow)
         if isEditingAddress { endAddressEditing() }
         tabsUI.toast.hide(animated: false)
-        let gallery = TabGalleryViewController(dataSource: tabs)
-        gallery.onLastTabClosed = { [weak self] in self?.galleryLastTabClosed() }
-        addChild(gallery)
-        gallery.view.frame = view.bounds
-        gallery.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        gallery.view.accessibilityViewIsModal = true
+        let gallery = tabsUI.spareGallery ?? makeGallery(tabs)
+        tabsUI.spareGallery = nil
         // Over the page, under the chrome (which fades as the gallery's own bar arrives) and the
         // search sheet (a new tab from the gallery opens it).
         view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
-        gallery.didMove(toParent: self)
+        gallery.pageTopInset = currentTab.map { session.pool.obscuredTop(for: $0) } ?? 0
+        gallery.prepareToShow()
+        gallery.view.isHidden = false
         tabsUI.gallery = gallery
         // The gallery has its own bar: the system's vertical bar (Duo) empties rather than hides,
         // so its column keeps its width and nothing under the gallery lays out again.
@@ -100,7 +109,9 @@ extension BrowserViewController: GalleryHost {
               let snapshot = webContainer.snapshotView(afterScreenUpdates: false)
         else {
             gallery.view.alpha = 0
-            Motion.animate(Motion.quick) { gallery.view.alpha = 1 }
+            Motion.animate(Motion.quick, changes: { gallery.view.alpha = 1 }) {
+                Signposts.signposter.endInterval(Signposts.galleryShow, showInterval)
+            }
             setChromeHiddenForGallery(true, animated: true)
             return nil
         }
@@ -109,7 +120,8 @@ extension BrowserViewController: GalleryHost {
         let generation = tabsUI.galleryGeneration
         let transition = TabGalleryTransition(
             tabID: tab.id, gallery: gallery, container: view, snapshot: snapshot,
-            pageFrame: pageClip.convert(pageClip.bounds, to: view), from: .page
+            pageFrame: pageClip.convert(pageClip.bounds, to: view), contentTop: session.pool.obscuredTop(for: tab),
+            from: .page, interval: showInterval
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }
@@ -122,6 +134,59 @@ extension BrowserViewController: GalleryHost {
             setChromeHiddenForGallery(true, animated: true)
         }
         return transition
+    }
+
+    /// A new gallery, a child of the browser with its view in the hierarchy, hidden.
+    private func makeGallery(_ tabs: GalleryTabs) -> TabGalleryViewController {
+        let gallery = TabGalleryViewController(dataSource: tabs)
+        gallery.onLastTabClosed = { [weak self] in self?.galleryLastTabClosed() }
+        addChild(gallery)
+        gallery.view.frame = view.bounds
+        gallery.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        gallery.view.accessibilityViewIsModal = true
+        gallery.view.isHidden = true
+        view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
+        gallery.didMove(toParent: self)
+        return gallery
+    }
+
+    /// Builds the spare gallery once the app is idle, when the switcher has cards and none is
+    /// ready: its view, its cards for the tabs on screen and their pictures (decoded off the
+    /// main thread). Waits a second and for the default run loop mode, so it never lands in a
+    /// scroll or a gesture.
+    func scheduleGalleryPrewarm() {
+        guard tabsUI.isLaunchDone, tabsUI.spareGallery == nil, !isShowingGallery, !tabsUI.isPrewarmScheduled,
+              wantsSpareGallery else { return }
+        tabsUI.isPrewarmScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            RunLoop.main.perform(inModes: [.default]) { [weak self] in
+                MainActor.assumeIsolated { self?.prewarmGallery() }
+            }
+        }
+    }
+
+    private func prewarmGallery() {
+        tabsUI.isPrewarmScheduled = false
+        guard tabsUI.spareGallery == nil, !isShowingGallery, presentedViewController == nil, wantsSpareGallery else { return }
+        let gallery = makeGallery(galleryTabs())
+        gallery.pageTopInset = currentTab.map { session.pool.obscuredTop(for: $0) } ?? 0
+        gallery.prepareToShow()
+        tabsUI.spareGallery = gallery
+    }
+
+    /// The switcher can open (it has a card) and is the gallery, not the sidebar.
+    private var wantsSpareGallery: Bool {
+        let rules = currentRules()
+        return rules.galleryHasCards && !rules.state.sideTabs
+    }
+
+    /// Drops the spare gallery (a memory warning).
+    func dropSpareGallery() {
+        guard let spare = tabsUI.spareGallery else { return }
+        tabsUI.spareGallery = nil
+        spare.willMove(toParent: nil)
+        spare.view.removeFromSuperview()
+        spare.removeFromParent()
     }
 
     /// The gallery data source, made once.
@@ -164,6 +229,8 @@ extension BrowserViewController: GalleryHost {
         switch end {
         case .gallery:
             setChromeHiddenForGallery(true, animated: false)
+            // Turned back to the gallery mid-way: the page's buttons leave again.
+            applyToolbarItems()
         case .page:
             removeGallery()
         }
@@ -173,10 +240,11 @@ extension BrowserViewController: GalleryHost {
     private func removeGallery() {
         guard let gallery = tabsUI.gallery else { return }
         dropGalleryTransition()
-        gallery.willMove(toParent: nil)
-        gallery.view.removeFromSuperview()
-        gallery.removeFromParent()
+        // Kept, hidden, as the next opening's gallery: its cards and decoded pictures stay.
+        gallery.view.isHidden = true
+        gallery.view.alpha = 1
         tabsUI.gallery = nil
+        tabsUI.spareGallery = gallery
         applyToolbarItems()
         setChromeHiddenForGallery(false, animated: false)
         updateButtons()
@@ -217,9 +285,11 @@ extension BrowserViewController: GalleryHost {
         show(tab)
         setChromeHiddenForGallery(false, animated: true)
         let generation = tabsUI.galleryGeneration
+        // After `show`: the tab's web view is attached and carries the page's insets.
+        let top = session.pool.obscuredTop(for: tab)
         let transition = TabGalleryTransition(
-            tabID: id, gallery: gallery, container: view, snapshot: cardPicture(for: id),
-            pageFrame: pageClip.convert(pageClip.bounds, to: view), from: .gallery
+            tabID: id, gallery: gallery, container: view, snapshot: cardPicture(for: id, top: top),
+            pageFrame: pageClip.convert(pageClip.bounds, to: view), contentTop: top, from: .gallery
         ) { [weak self] end in
             self?.galleryTransitionEnded(at: end, generation: generation)
         }
@@ -227,18 +297,24 @@ extension BrowserViewController: GalleryHost {
         view.bringSubviewToFront(tabsUI.toast)
         tabsUI.galleryTransition = transition
         transition.run()
+        applyToolbarItems()
     }
 
     /// The page as its card shows it, sized like the page and pinned to its top: the transition's
     /// stand-in until the live page is uncovered.
-    private func cardPicture(for id: TabID) -> UIView {
+    /// The thumbnail leaves out the strip a floating bar covers (`top`): it sits that far down,
+    /// where the live page shows the same content.
+    private func cardPicture(for id: TabID, top: CGFloat) -> UIView {
         let size = webContainer.bounds.size
         let view = UIView(frame: CGRect(origin: .zero, size: size))
         view.backgroundColor = Palette.surface
         view.clipsToBounds = true
-        if let image = session.pool.thumbnails.cachedThumbnail(for: id) ?? tabsUI.previews[id], image.size.width > 0 {
+        let thumbnail = session.pool.thumbnails.cachedThumbnail(for: id)
+        if let image = thumbnail ?? tabsUI.previews[id], image.size.width > 0 {
             let imageView = UIImageView(image: image)
-            imageView.frame = CGRect(x: 0, y: 0, width: size.width, height: size.width * image.size.height / image.size.width)
+            // A neighbour's full-screen picture includes the strip; a thumbnail does not.
+            let y = thumbnail != nil ? top : 0
+            imageView.frame = CGRect(x: 0, y: y, width: size.width, height: size.width * image.size.height / image.size.width)
             view.addSubview(imageView)
         }
         return view
@@ -452,6 +528,7 @@ extension BrowserViewController: GalleryHost {
     func tabsDidChange() {
         // The rules first: the sidebar's New Tab reads them.
         updateButtons()
+        scheduleGalleryPrewarm()
         updatePageTabCount()
         tabsUI.gallery?.reloadTabs(animated: false)
         duo.sidebar?.reloadTabs()

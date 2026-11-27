@@ -81,15 +81,18 @@ They agree with the Arc measurements. Apple has not published its own numbers. *
 
 **Regular width (the Duo's inner screen): pages of an even grid**
 - Arc Search has no large-screen layout. The cascade shows four cards on 951 pt; the iPad app
-  switcher, Apple's answer for big screens, is a grid that scrolls sideways. Plain uses that: 4
-  columns × 2 rows in landscape (217 pt cards), 2 × 2 in portrait, one page per flick. Columns
+  switcher, Apple's answer for big screens, is a grid that scrolls sideways. Plain uses that: 2
+  columns × 2 rows in landscape (about 334 pt cards; was 4 × 2 at 217 pt until the 2026-11-27 UX
+  audit found them too small), 2 × 2 in portrait, one page per flick. Columns
   stay even and centered, so the middle gap sits on the fold at rest. Same swipe up to close.
 
 **Close: swipe a card up**
-- The axis locks on the first movement: mostly vertical moves the card, mostly sideways scrolls.
-- Up tracks 1:1; down rubber-bands (c = 0.55 over the card's height).
+- The axis locks after 6 pt from touch-down: within 60° of straight up lifts the card, flatter
+  scrolls (2026-11-27, docs/research/tab-drag-feel.md; was a 45° split decided by a pan).
+- Up tracks 1:1 from touch-down, with no smoothing spring; down rubber-bands (c = 0.55 over the
+  card's height.
 - Closes when the projection (d = 0.99) passes **40% of the card's height**, or the flick is
-  faster than **800 pt/s** up; a release moving down faster than 300 pt/s keeps the card.
+  faster than **500 pt/s** up (was 800, 2026-11-27: a light flick fell short); a release moving down faster than 300 pt/s keeps the card.
 - Otherwise it springs back: `.spring(duration: 0.32, bounce: 0.12)` (momentum earns the bounce).
 - A closing card flies up off the screen with `.spring(duration: 0.3, bounce: 0)`, continuing
   the finger's tracking spring, so it keeps the release velocity with no hand-off.
@@ -98,7 +101,7 @@ They agree with the Arc measurements. Apple has not published its own numbers. *
   card slides the stack right instead. Soft impact haptic on commit; the Reopen Tab toast shows.
 
 **Open: tap a card**
-- The page grows from the card with `.spring(duration: 0.42, bounce: 0)` (plan motion table), and
+- The page grows from the card with `.spring(duration: 0.42, bounce: 0.06)` (plan motion table), and
   the whole cascade zooms with it about the card, so the neighbors slide out past the screen edges
   exactly as the app switcher does. The reverse plays when the gallery opens; either way can be
   reversed mid-flight. Reduce Motion: 0.2 s crossfade.
@@ -165,7 +168,9 @@ What Plain takes from this:
   only an empty start screen alone bumps (nothing to show). Show All Tabs follows it.
 - The page shrinks into its card with the same interactive motion as with many tabs, and the card
   rests centered, as the app switcher's lone card does: no left-aligned cascade.
-- A paper **New Tab card** sits in the slot after the card, where the next tab would go, at the
+- Removed 2026-11-27 (owner: "there's already a simple button under all the tabs, so just remove
+  the fake tab that says New Tab"): the lone card rests centered and New Tab is the bar's "+".
+  Before that, a paper **New Tab card** sat in the slot after the card, where the next tab would go, at the
   cascade's next-card place (0.78 card widths over, on top, peeking in from the right edge), or
   beside it on the fold in the Duo's grid. It looks like the card past the last tab in the bar
   swipe ("+" and "New Tab" toward its leading edge, so it reads while it peeks) on the paper of a
@@ -175,7 +180,7 @@ What Plain takes from this:
   a card. The bar keeps "+" and Done.
 - Superseded 2026-11-27 (owner): with one tab the tabs button is Tabs and opens this switcher,
   like the swipe up. It had stayed "+" (Arc keeps its "+" beside the switcher button because a
-  new page is the common next step); New Tab is now the switcher's "+" or its New Tab card.
+  new page is the common next step); New Tab is now the switcher's "+".
 
 **Other**
 - Long-press a card: its menu (Open in Other Pane, Copy Link, Share, Close Tab "Or swipe the card

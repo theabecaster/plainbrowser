@@ -18,5 +18,11 @@ extension Motion {
     /// A card swiped up and away. Started right after `tracking`, it keeps the finger's velocity;
     /// no bounce, since it ends off screen.
     public static let cardThrow = Animation.spring(duration: 0.3, bounce: 0)
+    /// `cardThrow` as a value, for `SpringDriver`: a closing card flies on with the finger's
+    /// release velocity, frame by frame.
+    public static let cardThrowSpring = Spring(duration: 0.3, bounce: 0)
+    /// `cardReturn` as a value: a lifted card that stays springs back with the release velocity
+    /// (frame by frame, so a finger can grab it again mid-flight).
+    public static let cardReturnSpring = Spring(duration: 0.32, bounce: 0.12)
 }
 #endif

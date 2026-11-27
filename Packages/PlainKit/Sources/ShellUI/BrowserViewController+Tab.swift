@@ -74,6 +74,8 @@ extension BrowserViewController {
             guard let self else { return }
             if let restored, self.currentTab == nil { self.show(restored) }
             self.launchSessionRestored(restored)
+            // From here a spare gallery may be built at idle: never inside the launch.
+            self.tabsUI.isLaunchDone = true
             self.tabsDidChange()
             self.sessionDidLoadForCommands()
             self.tabsUI.tip.start(in: self)

@@ -9,7 +9,7 @@ Xcode 27.2+, XcodeGen (`brew install xcodegen`) and `jq`. Every script runs from
 | `scripts/build.sh` | `xcodegen generate`, then a Debug simulator build of the app and UI tests (no simulator needed). Log: `build/build.log`. |
 | `scripts/test.sh` | `swift test` for PlainKit on macOS, then the Smoke test plan on the `plain-duo` (iPhone Duo) and `plain-17` (iPhone 17) simulators. It creates them when missing and deletes them afterwards; `KEEP_SIMS=1` keeps them. `PLAIN_SIM_PREFIX=plain-x` renames them (`plain-x-duo`, `plain-x-17`) so parallel runs don't share simulators. |
 | `scripts/perf-gate.sh` | The perf tests (Perf test plan, Release). Simulator by default; `--device` for the phone. Appends a row to `docs/perf-log.md`. See below. |
-| `scripts/install-duo.sh [--no-launch] [build]` | Release build for the device, install, then launch. Best effort: an install that fails (phone locked or unreachable) prints a note and exits 0; launch is skipped on a locked phone. `--no-launch` installs only. |
+| `scripts/install-duo.sh [--no-launch] [build]` | Release build for the device as "Plain Dev" (`dev.abrahamgonzalez.plainbrowser.dev`), installed beside the TestFlight app, never over it, then launch. `perf-gate.sh --device` uses the same id. Best effort: an install that fails (phone locked or unreachable) prints a note and exits 0; launch is skipped on a locked phone. `--no-launch` installs only. |
 | `scripts/shot.sh <name>` | Screenshots every active display of the device into `build/shots/<name>-<display>.png`. |
 
 Package tests alone: `cd Packages/PlainKit && swift test`.

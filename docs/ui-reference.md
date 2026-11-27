@@ -30,9 +30,10 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - The page gets the screen. Controls show only while they apply, for example the progress bar while loading or a "Reopen tab" toast after a close.
 - No badges, banners or standing overlays.
 - **The floating controls read over any page.** Liquid Glass shows the page almost unblurred, so
-  each glass control on the page (the pill, the button capsules) has a soft paper glow under it
-  (`ChromeScrim`): the glass's own shape 3 pt larger, feathered out over about 6 pt,
-  inside the control so it moves and fades with it. It is local, never a band across the screen.
+  each glass control on the page (the pill, the button capsules) has a paper ground under it
+  (`ChromeScrim`): the glass's own shape, its edge softened over 2 pt, nothing past it, inside
+  the control so it moves and fades with it. Never a band, never a halo: the page shows in the
+  gaps between capsules, so they float apart.
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
   pill in a fixed place, Tabs, Share and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.

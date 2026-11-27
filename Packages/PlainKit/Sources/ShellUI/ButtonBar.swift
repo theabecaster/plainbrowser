@@ -287,15 +287,8 @@ final class ButtonBar: UIView {
     /// or the split shape's two.
     private func updateScrim() {
         let shown = [glass, trailingGlass].filter { $0.superview === self && !$0.isHidden }
-        scrim.shapes = shown.map { shape in
-            // Under the pill the glow also fills the gap up to it, so no line of page text shows
-            // between the two capsules (it moves away with the bar as it collapses).
-            guard !isSplit, !isBesidePill else { return shape.frame }
-            var frame = shape.frame
-            frame.origin.y -= ChromeGeometry.gap
-            frame.size.height += ChromeGeometry.gap
-            return frame
-        }
+        // Only under the glass: the page shows in the gaps, so the capsules float apart.
+        scrim.shapes = shown.map(\.frame)
     }
 }
 

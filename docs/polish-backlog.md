@@ -429,8 +429,10 @@ Newest feature last.
 
 ## UX audit leftovers: shell and engine (2026-11-27)
 
-- **Glow over colored pages.** Narrowed after the design review (3 pt, feathered over 6 pt); over
-  a saturated fixed footer it still shows as a faint paper rim. Check on the Duo.
+- **Ground under the glass.** Now only under each glass shape (design review, two rounds), so a
+  line of page text can show in the 6 pt gap between the pill and the bar. Check on the Duo.
+- **Start screen captions.** "Regular Tab" (and "Private Tab") read lighter than their blue
+  symbol; the design review asked for ink secondary (start screen, polish).
 - **Landscape side bars.** In compact height the page is still pillarboxed with paper bars beside
   the safe area (audit item 12); that is the page area's inset (top/inner insets lane).
 - **Back to the opener by the edge swipe** still slides the page over paper, then switches; the

@@ -6,8 +6,9 @@ import UIKit
 /// page (ux-audit item 3; docs/polish-backlog.md, "Hard edge look"). Liquid Glass shows the page
 /// through itself almost unblurred, so body text ran under "Not Secure — host" and the buttons.
 ///
-/// It is local, never a band: a blurred capsule the shape of each glass shape, a little larger,
-/// fading out over `feather` points around it. The glass above it then shows mostly paper. It
+/// It is local, never a band: the shape of each glass shape, its edge softened over `feather`
+/// points, and nothing past it, so the capsules still float apart over a colored page. The
+/// glass above it then shows mostly paper. It
 /// sits inside the control, behind its glass, so it moves, scales and fades with the control
 /// (the collapse, the hide, the gallery) with no work of its own per frame. One layer shadow with
 /// a fixed path: no offscreen pass.
@@ -21,12 +22,11 @@ final class ChromeScrim: UIView {
         didSet { if isPrivate != oldValue { resolveColor() } }
     }
 
-    /// How far the glow reaches past the glass (the shadow's blur radius).
-    static let feather: CGFloat = 6
-    /// How far the solid part reaches past the glass edge, so the edge itself is covered too.
-    /// Small on purpose: over a colored page a wider glow read as a cream halo joining the
-    /// capsules (design review). The gap between the pill and the bar is the bar's to fill.
-    static let outset: CGFloat = 3
+    /// The softening at the glass edge (the shadow's blur radius). Two design review rounds:
+    /// any wider glow read as a cream halo joining the capsules over a colored page.
+    static let feather: CGFloat = 2
+    /// Drawn this far inside the glass edge, so the softening stays under the glass's own rim.
+    static let inset: CGFloat = 1
     /// Under the glass the page shows only faintly; at the edge the glow fades out. Denser in
     /// dark mode: light text under the dark ground showed through more than dark text on paper.
     static let opacity: CGFloat = 0.82
@@ -55,7 +55,7 @@ final class ChromeScrim: UIView {
     private func updatePath() {
         let path = UIBezierPath()
         for shape in shapes where !shape.isEmpty {
-            let rect = shape.insetBy(dx: -Self.outset, dy: -Self.outset)
+            let rect = shape.insetBy(dx: Self.inset, dy: Self.inset)
             path.append(UIBezierPath(roundedRect: rect, cornerRadius: min(rect.height, rect.width) / 2))
         }
         layer.shadowPath = path.cgPath

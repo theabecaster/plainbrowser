@@ -1952,15 +1952,16 @@ The owner asked for a week instead of a day. A day archived tabs people still me
 
 The shell and engine items left from docs/research/ux-audit.md.
 
-- **A soft paper glow under the floating glass (`ChromeScrim`), not a stronger tint or a band.**
+- **A paper ground under the floating glass (`ChromeScrim`), not a stronger tint or a band.**
   The pill's tint was already 88% Paper; Liquid Glass still showed body text almost unblurred
-  under the host and the buttons. A blurred capsule of the background color (82%; 92% in dark
-  mode, where light text showed through more; 3 pt past the glass, feathered over 6 pt) sits inside each control behind its glass, so it moves, scales and
-  fades with the control at no per-frame cost (one layer shadow with a fixed path, no offscreen
-  pass). Under the pill the bar's glow also fills the 6 pt gap up to it, which showed a line of
-  text. A first try (5 pt, feathered over 8 pt) read as a cream halo joining the capsules over a
-  colored footer (design review); a band or a page-colored scrim were the alternatives (a band is
-  what the owner removed at the top).
+  under the host and the buttons. The background color (82%; 92% in dark mode, where light text
+  showed through more) fills each glass shape from 1 pt inside its edge, softened over 2 pt, and
+  nothing past it. It sits inside each control behind its glass, so it moves, scales and fades
+  with the control at no per-frame cost (one layer shadow with a fixed path, no offscreen pass).
+  Two design review rounds rejected anything wider (5 pt, then 3 pt past the glass, feathered 8
+  and 6 pt): over a colored footer it read as a cream halo joining the capsules. The page shows
+  in the 6 pt gaps between capsules, so they float apart; a band or a page-colored scrim were the
+  alternatives (a band is what the owner removed at the top).
 - **Compact height is one bottom row.** The top bar's split shape (Back and Forward in a capsule,
   Tabs, Share and More in another) at the bottom row's ends, with the pill between them in a
   fixed place. Unlike the top bar's, the leading capsule keeps both slots (Forward hides in

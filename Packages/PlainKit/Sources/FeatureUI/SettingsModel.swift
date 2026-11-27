@@ -213,6 +213,18 @@ extension ArchiveAfter {
         case .never: "Tabs stay open until you close them."
         }
     }
+
+    /// The Archive screen's footer: when tabs move there under this choice, and that they leave
+    /// after the archive's 30 days (`FixedChoices.archivedTabLifetime`). With Never, nothing moves
+    /// there, so it says only how long tabs already there stay.
+    public var archiveFooter: String {
+        switch self {
+        case .twelveHours: "Tabs you haven't opened in 12 hours move here, and leave after 30 days."
+        case .oneDay: "Tabs you haven't opened in a day move here, and leave after 30 days."
+        case .oneWeek: "Tabs you haven't opened in a week move here, and leave after 30 days."
+        case .never: "Tabs here leave after 30 days."
+        }
+    }
 }
 
 extension Appearance {

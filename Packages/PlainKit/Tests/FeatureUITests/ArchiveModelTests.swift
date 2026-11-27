@@ -82,6 +82,109 @@ struct ArchiveModelTests {
         #expect(model.rows.isEmpty)
     }
 
+    // MARK: Sections
+
+    /// Friday 27 November 2026, 15:00 in New York.
+    private static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        return calendar
+    }()
+    private static let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 27, hour: 15))!
+
+    private static func tab(_ title: String, archivedAt date: Date) -> ArchivedTab {
+        ArchivedTab(entry: TabEntry(id: TabID(), url: URL(string: "https://\(title.lowercased()).example"), title: title, createdAt: date), archivedAt: date)
+    }
+
+    private static func date(day: Int, hour: Int) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))!
+    }
+
+    @Test func sectionsFollowWhenTabsWereArchivedNewestFirst() async {
+        let archive = FakeArchive([
+            Self.tab("Morning", archivedAt: Self.date(day: 27, hour: 9)),
+            Self.tab("Midnight", archivedAt: Self.date(day: 27, hour: 0)),
+            Self.tab("LateYesterday", archivedAt: Self.date(day: 26, hour: 23)),
+            Self.tab("Yesterday", archivedAt: Self.date(day: 26, hour: 0)),
+            Self.tab("TwoDaysAgo", archivedAt: Self.date(day: 25, hour: 12)),
+            Self.tab("SixDaysAgo", archivedAt: Self.date(day: 21, hour: 0)),
+            Self.tab("SevenDaysAgo", archivedAt: Self.date(day: 20, hour: 23)),
+            Self.tab("Weeks", archivedAt: Self.date(day: 2, hour: 8)),
+        ])
+        let model = ArchiveModel(
+            store: archive, onRestore: { _ in }, onDelete: { _ in }, now: { Self.now }, calendar: Self.calendar
+        )
+        await model.load()
+        #expect(model.sections.map(\.title) == ["Today", "Yesterday", "This Week", "Earlier"])
+        #expect(model.sections.map { $0.rows.map(\.title) } == [
+            ["Morning", "Midnight"], ["LateYesterday", "Yesterday"], ["TwoDaysAgo", "SixDaysAgo"], ["SevenDaysAgo", "Weeks"],
+        ])
+        #expect(model.rows.count == 8)
+    }
+
+    @Test func onlyPeriodsWithTabsShowAndAnEmptiedOneLeaves() async {
+        let archive = FakeArchive([
+            Self.tab("Today", archivedAt: Self.date(day: 27, hour: 10)),
+            Self.tab("Old", archivedAt: Self.date(day: 10, hour: 10)),
+        ])
+        var deleted: [TabID] = []
+        let model = ArchiveModel(
+            store: archive, onRestore: { _ in }, onDelete: { deleted += $0 }, now: { Self.now }, calendar: Self.calendar
+        )
+        await model.load()
+        #expect(model.sections.map(\.period) == [.today, .earlier])
+        let today = model.sections[0].rows[0]
+        model.delete(today)
+        #expect(deleted == [today.id])
+        #expect(model.sections.map(\.period) == [.earlier])
+    }
+
+    @Test func aClockMovedBackKeepsFutureTabsInToday() {
+        let later = Self.now.addingTimeInterval(3_600 * 30)
+        #expect(ArchivePeriod.of(later, now: Self.now, calendar: Self.calendar) == .today)
+    }
+
+    @Test func theWholeArchiveLoadsWithNoQueryAndASearchIsCapped() async throws {
+        let base = Self.now
+        let tabs = (0 ..< FixedChoices.archivedTabLimit).map {
+            Self.tab("Page\($0)", archivedAt: base.addingTimeInterval(-Double($0) * 2_000))
+        }
+        let archive = FakeArchive(tabs)
+        let model = ArchiveModel(
+            store: archive, onRestore: { _ in }, onDelete: { _ in }, now: { Self.now }, calendar: Self.calendar
+        )
+        await model.load()
+        #expect(model.rows.count == FixedChoices.archivedTabLimit)
+        #expect(model.rows.map(\.id) == tabs.map(\.id), "newest first across sections")
+        model.query = "page"
+        try await Task.sleep(for: FixedChoices.historySearchDelay * 4)
+        #expect(model.rows.count == FixedChoices.archiveSearchLimit)
+    }
+
+    @Test func groupingAFullArchiveIsQuick() async {
+        let tabs = (0 ..< FixedChoices.archivedTabLimit).map {
+            Self.tab("Page\($0)", archivedAt: Self.now.addingTimeInterval(-Double($0) * 2_500))
+        }
+        var times: [Duration] = []
+        for _ in 0 ..< 10 {
+            let start = ContinuousClock.now
+            let sections = await ArchiveModel.group(tabs, leavingOut: [], now: Self.now, calendar: Self.calendar)
+            times.append(ContinuousClock.now - start)
+            #expect(sections.reduce(0) { $0 + $1.rows.count } == tabs.count)
+        }
+        let median = times.sorted()[times.count / 2]
+        print("[perf] archive grouping (\(tabs.count) rows, off main), median of 10: \(median)")
+        #expect(median < .milliseconds(50))
+    }
+
+    @Test func footerSaysWhenTabsMoveHereAndThatTheyLeave() {
+        #expect(ArchiveAfter.oneWeek.archiveFooter == "Tabs you haven't opened in a week move here, and leave after 30 days.")
+        #expect(ArchiveAfter.oneDay.archiveFooter.contains("in a day"))
+        #expect(ArchiveAfter.twelveHours.archiveFooter.contains("in 12 hours"))
+        #expect(ArchiveAfter.never.archiveFooter == "Tabs here leave after 30 days.", "Never says nothing about moving")
+        #expect(FixedChoices.archivedTabLifetime == 30 * 86_400, "the footers say 30 days")
+    }
+
     @Test func searchWaitsForThePauseThenFilters() async throws {
         let archive = FakeArchive([
             Self.tab("Recipes", "https://recipes.example", archivedHoursAgo: 1),

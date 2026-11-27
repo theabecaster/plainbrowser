@@ -245,7 +245,7 @@ extension BrowserViewController {
     /// deletes one for good.
     func showArchive() {
         if isEditingAddress { endAddressEditing() }
-        let footer = (data.archiveAfter ?? FixedChoices.defaultArchiveAfter).footer
+        let footer = (data.archiveAfter ?? FixedChoices.defaultArchiveAfter).archiveFooter
         let archive = sheets.archive(
             footer: footer,
             onRestore: { [weak self] archived in

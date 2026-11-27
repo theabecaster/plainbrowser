@@ -65,14 +65,14 @@ import WebKit
         #expect(checks[3] as? Int == 1)
         #expect(!webView.configuration.defaultWebpagePreferences.allowsContentJavaScript)
 
-        // The paper tile comes from the scheme too, at 320 px, and sits under the page.
+        // The paper tile comes from the scheme too, at 256 px, and sits under the page.
         let paper = try await webView.callAsyncJavaScript("""
             const image = new Image();
             image.src = 'plain-reader://reader/paper-day.png';
             await image.decode();
             return [image.naturalWidth, getComputedStyle(document.documentElement).backgroundImage];
             """, contentWorld: .page) as? [Any] ?? []
-        #expect(paper.first as? Int == 320, "paper tile: \(paper)")
+        #expect(paper.first as? Int == 256, "paper tile: \(paper)")
         #expect((paper.last as? String)?.contains("paper-") == true, "paper under the page: \(paper)")
     }
 

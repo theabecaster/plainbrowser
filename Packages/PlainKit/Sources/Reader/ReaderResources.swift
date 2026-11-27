@@ -36,9 +36,10 @@ enum ReaderResources {
         try css.get()
     }
 
-    /// The paper tile for `sheet` as a PNG (320 px square), for the page's background.
+    /// The paper tile for `sheet` as a PNG (256 px square), for the page's background. Made on
+    /// each request (about 2 ms) rather than kept: WebKit caches the decoded image itself.
     @concurrent static func paperTile(_ sheet: PaperTexture.Sheet) async throws -> Data {
-        try (sheet == .day ? paperDay : paperNight).get()
+        try png(sheet)
     }
 
     // Static lets are initialized lazily and exactly once, on the first caller's thread, which is
@@ -61,9 +62,6 @@ enum ReaderResources {
         else { throw Failure.missing("reader.css") }
         return try Data(contentsOf: url)
     }
-
-    private static let paperDay: Result<Data, any Error> = Result { try png(.day) }
-    private static let paperNight: Result<Data, any Error> = Result { try png(.night) }
 
     private static func png(_ sheet: PaperTexture.Sheet) throws -> Data {
         let data = NSMutableData()

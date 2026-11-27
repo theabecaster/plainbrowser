@@ -20,9 +20,9 @@ public nonisolated enum PaperTexture {
         case day, night
     }
 
-    /// The tile's side in pixels. At 3x that is about 107 pt, wide enough that the eye finds no
-    /// repeat in a texture this faint, and small enough that a tile is 400 KB (320 × 320 × 4).
-    public static let side = 320
+    /// The tile's side in pixels. At 3x that is about 85 pt, wide enough that the eye finds no
+    /// repeat in a texture this faint, and small enough that a tile is 256 KB (256 × 256 × 4).
+    public static let side = 256
 
     /// The recipe for one sheet. Amplitudes are in 8-bit levels of the base color.
     struct Recipe {
@@ -43,15 +43,15 @@ public nonisolated enum PaperTexture {
 
         static let day = Recipe(
             base: (255, 246, 230), channel: (0.85, 1.0, 1.2),
-            formation: 0.7, tooth: 1.0, fibres: 180, fibreStrength: -5.0 ... -2.2, fibreContrary: 0.3
+            formation: 0.7, tooth: 1.0, fibres: 115, fibreStrength: -5.0 ... -2.2, fibreContrary: 0.3
         )
         static let night = Recipe(
             base: (10, 33, 51), channel: (0.75, 0.9, 1.0),
-            formation: 0.35, tooth: 0.5, fibres: 160, fibreStrength: 1.2 ... 2.6, fibreContrary: 0.25
+            formation: 0.35, tooth: 0.5, fibres: 102, fibreStrength: 1.2 ... 2.6, fibreContrary: 0.25
         )
     }
 
-    /// The tile, opaque RGB (no alpha), `side` × `side` pixels. About 5 ms in a Release build;
+    /// The tile, opaque RGB (no alpha), `side` × `side` pixels. About 1.5 ms optimized;
     /// call it off the main thread.
     public static func makeImage(_ sheet: Sheet) -> CGImage? {
         let bytes = pixels(sheet)
@@ -69,8 +69,8 @@ public nonisolated enum PaperTexture {
         let recipe: Recipe = sheet == .day ? .day : .night
         var random = SplitMix(seed: sheet == .day ? 0x5041_5045_5201 : 0x4E49_4748_5401)
         let n = side
-        let formation = normalized(valueNoise(cell: 20, &random), weight: 0.6)
-            .add(normalized(valueNoise(cell: 10, &random), weight: 0.4))
+        let formation = normalized(valueNoise(cell: 16, &random), weight: 0.6)
+            .add(normalized(valueNoise(cell: 8, &random), weight: 0.4))
         let tooth = normalized(softGrain(&random), weight: 1)
         let fibres = fibreField(recipe, &random)
 

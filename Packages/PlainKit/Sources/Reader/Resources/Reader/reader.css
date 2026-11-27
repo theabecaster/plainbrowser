@@ -28,11 +28,11 @@
 html {
   font: -apple-system-body;
   -webkit-text-size-adjust: 100%;
-  /* The app's paper texture (DesignSystem PaperTexture), which averages to --bg. The tile is 320
+  /* The app's paper texture (DesignSystem PaperTexture), which averages to --bg. The tile is 256
      device pixels: 1:1 at 3x, scaled at 2x. It scrolls with the page: never `fixed`, which
      repaints on every scroll. Relative, so it comes from the reader scheme like this file. */
   background: var(--bg) url(paper-day.png) repeat;
-  background-size: calc(320px / 3);
+  background-size: calc(256px / 3);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,7 +40,7 @@ html {
 }
 
 @media (max-resolution: 2.5dppx) {
-  html { background-size: 160px; }
+  html { background-size: 128px; }
 }
 
 /* Increase Contrast: flat paper. */

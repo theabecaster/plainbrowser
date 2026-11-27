@@ -10,7 +10,7 @@ import UIKit
 /// The texture is an opaque tile baked onto the Paper color, drawn by Core Animation as a pattern
 /// in the layer's background color: no extra layer, no blending, no offscreen pass, nothing per
 /// frame. Each tile (day, night) is generated once, off the main thread, the first time an
-/// appearance needs it, and kept: 400 KB each. Until it is ready, and whenever Increase Contrast
+/// appearance needs it, and kept: 256 KB each. Until it is ready, and whenever Increase Contrast
 /// or Reduce Transparency is on, the surface is the flat `Palette.background`, which the texture
 /// averages to, so the change can't be seen.
 ///

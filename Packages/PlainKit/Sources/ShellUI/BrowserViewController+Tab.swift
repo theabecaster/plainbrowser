@@ -285,6 +285,11 @@ extension BrowserViewController {
         updateButtons()
         updatePageState()
         updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
+        // A page from the reading list that can't load offline opens its saved copy instead.
+        if new.isFailed, old?.isFailed != true, let error = new.loadError, let tried = new.shownAddress,
+           ControlRules.opensSavedCopy(errorDomain: error.domain, code: error.code) {
+            openSavedCopy(of: tried)
+        }
         // A new tab on screen, a new address or a finished load: the side pane follows the page.
         if old == nil || old?.url != new.url || old?.isLoading != new.isLoading { sidePanePageDidChange() }
     }

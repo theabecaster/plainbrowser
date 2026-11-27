@@ -502,6 +502,15 @@ extension BrowserViewController {
             guard let self, !Task.isCancelled, self.currentTab === tab, !tab.isLoading, tab.loadError == failure
             else { return }
             await self.presentReader(article, over: tab)
+            // Say why the page reads as the reader, and offer the live page again.
+            self.showToastWhenFree { [weak self, weak tab] in
+                self?.tabsUI.toast.show(String(localized: "This page didn't load. Here's your saved copy."), button: "Try Again") {
+                    guard let self, let tab, self.currentTab === tab else { return }
+                    Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again from saved copy")
+                    self.closeReader(animated: true)
+                    tab.load(url)
+                }
+            }
         }
     }
 

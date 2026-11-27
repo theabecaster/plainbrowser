@@ -247,6 +247,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             await data.attach(database)
             sheets.attach(database)
             browser.addressBarDataDidChange()
+            TestIsolationMarker.storeIsReady()
             // Pruning and SQLite upkeep, at most daily, at background priority after launch settles.
             database.scheduleDailyMaintenance()
         }
@@ -375,8 +376,14 @@ private nonisolated struct LaunchOptions: Sendable {
 /// accessibility element (`TestIsolation.markerIdentifier`, value the mode). The UI tests look for
 /// it right after each launch and stop at once when it is missing, so a build that ignored the
 /// isolation arguments can't go on touching the owner's data. Nothing is added otherwise.
+/// Once the database is open and migrated (on disk for the test store) and handed to the address
+/// bar and the sheets, the value gains `TestIsolation.storeReadyValue`: a readiness signal the
+/// tests read without driving any UI, so it holds in every layout.
 @MainActor
 private enum TestIsolationMarker {
+    private static let markers = NSHashTable<UIView>.weakObjects()
+    private static var storeReady = false
+
     static func install(in window: UIWindow) {
         guard TestIsolation.isActive else { return }
         let marker = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
@@ -384,7 +391,20 @@ private enum TestIsolationMarker {
         marker.isAccessibilityElement = true
         marker.accessibilityIdentifier = TestIsolation.markerIdentifier
         marker.accessibilityLabel = "Test isolation"
-        marker.accessibilityValue = TestIsolation.mode.rawValue
+        marker.accessibilityValue = value
         window.addSubview(marker)
+        markers.add(marker)
+    }
+
+    /// The database is attached: every marker, now and later, says so.
+    static func storeIsReady() {
+        guard TestIsolation.isActive, !storeReady else { return }
+        storeReady = true
+        for marker in markers.allObjects { marker.accessibilityValue = value }
+    }
+
+    private static var value: String {
+        let mode = TestIsolation.mode.rawValue
+        return storeReady ? "\(mode) \(TestIsolation.storeReadyValue)" : mode
     }
 }

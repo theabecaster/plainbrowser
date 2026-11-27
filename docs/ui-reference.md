@@ -11,7 +11,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - Labels are Title Case nouns ("Search Engine", "Clear History and Data").
 - A row that doesn't apply on this screen stays, disabled, keeping its value, and its footer says why and what to use instead (Tab Layout on a narrow screen: "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs.").
 
-**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, cookie banners are rejected, translation is on the device, PDFs are Letter or A4 by region, haptics follow iOS, text follows Dynamic Type, the archive default is 1 day, Appearance starts on System, and dark pages is on.
+**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, cookie banners are rejected, translation is on the device, PDFs are Letter or A4 by region, haptics follow iOS, text follows Dynamic Type, the archive default is a week and archived tabs leave after 30 days, Appearance starts on System, and dark pages is on.
 
 ## Options live on the object
 

@@ -9,6 +9,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Done
 
+- **Archive could become a mess with week-long archiving:** it tidies itself. Archived tabs leave after 30 days (their pages stay in History), and the Archive is in sections by when tabs moved there: Today, Yesterday, This Week, Earlier, newest first, with search on top and one tap to bring a tab back. Its footer says when tabs come and go ("Tabs you haven't opened in a week move here, and leave after 30 days."). Still one Archive, per profile; no second place to learn. (Archive lane.)
+
 - **Tapping the address bar looks empty:** it never is now. A tap on the pill opens an empty field on a paper card over the page, which stays visible behind a veil (Arc's sheet), with, nearest the thumb: "Open Copied Link" when a link was just copied (checked without the paste alert), the page itself (title and address, Copy, a tap to edit), your favorites, the pages you visited last and the tabs you closed last; the first run says in one sentence what will show there. All of it is on screen in the frame the keyboard starts. Arc's two doors: what you type from a page opens a new tab (Back returns to the page); More (or a long press on the pill) opens the new page sheet, whose address row (Back, Forward, the host, Copy Link, Reload) edits the address in place with Copy inside the field, then Find, Reader, Translate, Favorite and Share tiles, then Zoom, Site Settings and the app's places. On a search results page the pill shows what you searched for. Private tabs show no history. (Address focus lane; to check on the device.)
 
 - **Duo inner: header-colored bar under the address row at rest; jumpy collapse:** gone. The bar

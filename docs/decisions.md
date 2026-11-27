@@ -1947,3 +1947,39 @@ From docs/research/ux-audit.md, items 6, 10, 11, 12 (gallery part) and 25.
 ## Archive after a week by default (2026-11-27)
 
 The owner asked for a week instead of a day. A day archived tabs people still meant to come back to within the week; a week keeps those and still clears the clutter. People who already picked a value in Settings keep it; only the default changes (`FixedChoices.defaultArchiveAfter`).
+
+## The archive clears itself after 30 days (2026-11-27)
+
+The owner worried that week-long archiving would make a mess of the archive. Plain keeps one
+Archive and makes it tidy by itself.
+
+- **Research.** Safari on iPhone: Settings > Safari > Close Tabs is Manually, After One Day, After
+  One Week or After One Month, and those tabs close outright, with no archive in between
+  ([MacRumors](https://www.macrumors.com/how-to/auto-close-old-safari-tabs-in-ios/), secondhand).
+  Arc: idle unpinned tabs archive after 12 hours by default
+  ([Arc help](https://resources.arc.net/hc/en-us/articles/19228855311127), read through search
+  snippets: the page refuses direct fetches), up to 30 days (Digital Trends, Zapier, secondhand),
+  and the archive keeps them until "Clear Archive" is run by hand: no age limit was found. That
+  is the pile the owner pictured. Chrome on Android: a tab not used for 14 days (7, 14 or 21) moves to a separate
+  "Inactive tabs" section, and tabs there close by themselves after 6 months
+  ([Chrome help](https://support.google.com/chrome/answer/2391819)).
+- **One place, not two.** Chrome's inactive section is a second place for the same tabs: people
+  must learn which one a tab went to. Plain's archive already is that place, so it gets the
+  clean-up instead of a sibling.
+- **Archived tabs leave after 30 days** (`FixedChoices.archivedTabLifetime`), in every profile, with
+  their state files. Their pages stay in History, so "where did it go" has an answer. With the
+  week default a tab leaves about five weeks after it was last opened: later than Safari's
+  longest choice (a month, closed outright), and the archive stays a month deep instead of
+  growing for ever as Arc's did. The newest 1,000 (`archivedTabLimit`) stays as the safety net.
+- **Pruning** is a `TabChange` (`pruneArchive(archivedBefore:)`) written in the tab writer's chain,
+  off the main thread and in order with every other change: at launch and each return (with the
+  archive pass, whatever the Archive Tabs setting) and when the app moves to the background. One
+  indexed query; at most the archive's 1,000 rows.
+- **The Archive screen is in sections** by when tabs moved there: Today, Yesterday, This Week
+  (the five days before yesterday, so the three make the last seven days) and Earlier, newest
+  first, like History's days. No "Older": nothing in the archive is older than 30 days. Search
+  stays at the top, and each row is still one tap to restore. With no query it reads the whole
+  archive, so every section is complete; a search shows its best 200. Grouping runs off main.
+- **Footer**, once under the last section, follows the setting: "Tabs you haven't opened in a week
+  move here, and leave after 30 days." (12 hours, a day); with Never: "Tabs here leave after 30
+  days."

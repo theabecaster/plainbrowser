@@ -239,6 +239,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
         // A site's icon arrived: the lists that show it read their tabs again (once per turn).
         session.pool.favicons.onChange = { [weak self] _ in self?.siteIconsDidChange() }
+        // The switcher's cards have no tile of their own: there a site's shape comes on one, light
+        // in both appearances (the cards' titles sit on the dimmed page either way).
+        let light = UITraitCollection(userInterfaceStyle: .light)
+        session.pool.favicons.plateColors = (
+            Palette.iconTileForDarkMark.resolvedColor(with: light).cgColor,
+            Palette.iconTileForLightMark.resolvedColor(with: light).cgColor
+        )
         wireProfiles()
         // Which private sites were told a feature is off ends with the private session.
         session.privateSessionDidEnd = { [weak self] in self?.engineUI.privateAccessNotices = SystemAccessNoticeMemory() }

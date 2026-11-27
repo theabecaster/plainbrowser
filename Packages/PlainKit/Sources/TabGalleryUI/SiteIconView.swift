@@ -20,6 +20,9 @@ final class SiteIconView: UIView {
 
     /// What is shown, or being loaded: a new site or a new revision of its icon starts a load.
     private struct Shown: Equatable {
+        /// The tab: another tab's row never keeps this one's icon (another profile's tab on the
+        /// same site has its own).
+        var tab: UUID
         var site: String?
         var revision: Int
         var isPrivate: Bool
@@ -89,9 +92,9 @@ final class SiteIconView: UIView {
     func show(_ item: TabGalleryItem, from source: any SideTabsDataSource) {
         let scale = max(1, traitCollection.displayScale)
         let pixelSize = Int((iconSide * scale).rounded())
-        let next = Shown(site: item.host, revision: item.faviconRevision, isPrivate: item.isPrivate, pixelSize: pixelSize)
+        let next = Shown(tab: item.id, site: item.host, revision: item.faviconRevision, isPrivate: item.isPrivate, pixelSize: pixelSize)
         guard next != shown else { return }
-        let sameSite = shown?.site == next.site && shown?.isPrivate == next.isPrivate
+        let sameSite = shown?.tab == next.tab && shown?.site == next.site && shown?.isPrivate == next.isPrivate
         shown = next
         isPrivate = item.isPrivate
         load?.cancel()

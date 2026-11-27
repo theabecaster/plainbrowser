@@ -61,6 +61,23 @@ import Testing
         #expect(FaviconRules.ranked(small, page: page).map(\.lastPathComponent) == ["48.png", "32.png", "16.png", "favicon.ico"])
     }
 
+    @Test func aPublicPageCannotSendTheDownloadIntoTheLocalNetwork() {
+        let allowed = { (url: String, page: URL) in FaviconRules.allows(URL(string: url)!, from: page) }
+        #expect(allowed("https://cdn.example.com/i.png", page))
+        #expect(!allowed("https://user:secret@example.com/i.png", page), "no credentials in the address")
+        #expect(!allowed("http://example.com/i.png", page), "no plain HTTP for an HTTPS page")
+        #expect(!allowed("ftp://example.com/i.png", page))
+        for local in ["localhost", "127.0.0.1", "10.0.0.5", "192.168.1.1", "172.16.4.2", "169.254.169.254", "100.64.0.1",
+                      "printer.local", "router", "[::1]", "[fe80::1]", "[fd00::2]", "0.0.0.0", "2130706433", "0x7f000001"] {
+            #expect(!allowed("https://\(local)/favicon.ico", page), "\(local)")
+        }
+        // A page on the local network may show its own icon, and only its own.
+        let home = URL(string: "http://192.168.1.10:8080/admin")!
+        #expect(allowed("http://192.168.1.10:8080/favicon.ico", home))
+        #expect(!allowed("http://192.168.1.1/favicon.ico", home))
+        #expect(allowed("https://example.com/i.png", home))
+    }
+
     @Test func styleFollowsThePixels() {
         // Opaque edge to edge: the icon is the tile.
         #expect(SiteIconStyle.style(clear: 0, dark: 0.9, light: 0) == .tile)

@@ -77,6 +77,42 @@ nonisolated enum FaviconRules {
         return Array(urls.prefix(FixedChoices.faviconAttempts))
     }
 
+    /// Whether an icon may be downloaded from `url` for `page` (checked for the first address and
+    /// every redirect). The page chooses the address and the download runs outside WebKit, so:
+    /// web addresses only, no credentials in the address, no plain HTTP for an HTTPS page, and no
+    /// loopback, private-network or link-local host unless it is the page's own host (a page on
+    /// the local network may show its own icon; a public page can't make Plain call into one).
+    static func allows(_ url: URL, from page: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let host = url.host()?.lowercased(), !host.isEmpty,
+              url.user() == nil, url.password() == nil else { return false }
+        if scheme == "http", page.scheme?.lowercased() != "http" { return false }
+        if isLocal(host), host != page.host()?.lowercased() { return false }
+        return true
+    }
+
+    /// A host on this device or the local network: localhost, `.local` and `.internal` names,
+    /// and loopback, private, link-local, carrier-NAT and unspecified IP addresses.
+    static func isLocal(_ host: String) -> Bool {
+        let name = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        if name == "localhost" || name.hasSuffix(".localhost") || name.hasSuffix(".local") || name.hasSuffix(".internal")
+            || name.hasSuffix(".lan") || name.hasSuffix(".home.arpa") || !name.contains(".") && !name.contains(":") {
+            return true
+        }
+        let parts = name.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
+        if parts.count == 4, let a = parts[0], let b = parts[1], parts[2] != nil, parts[3] != nil {
+            return a == 0 || a == 10 || a == 127 || (a == 169 && b == 254) || (a == 172 && (16...31).contains(b))
+                || (a == 192 && b == 168) || (a == 100 && (64...127).contains(b)) || a >= 224
+        }
+        // A number in another spelling (decimal, hex) is no host name a site's icon lives on.
+        if name.allSatisfy({ $0.isNumber || $0 == "." }) || name.hasPrefix("0x") { return true }
+        if name.contains(":") {
+            return name == "::1" || name == "::" || name.hasPrefix("fe80") || name.hasPrefix("fc") || name.hasPrefix("fd")
+                || name.hasPrefix("::ffff:")
+        }
+        return false
+    }
+
     /// `/favicon.ico` at the page's origin.
     static func fallbackURL(for page: URL) -> URL? {
         guard var components = URLComponents(url: page, resolvingAgainstBaseURL: false),

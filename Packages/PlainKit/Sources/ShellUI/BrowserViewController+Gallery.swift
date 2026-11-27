@@ -95,6 +95,7 @@ extension BrowserViewController: GalleryHost {
         tabsUI.spareGallery = nil
         // Over the page, under the chrome (which fades as the gallery's own bar arrives) and the
         // search sheet (a new tab from the gallery opens it).
+        lowerSidebarForGallery()
         view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
         gallery.pageTopInset = currentTab.map { session.pool.obscuredTop(for: $0) } ?? 0
         gallery.prepareToShow()
@@ -147,6 +148,7 @@ extension BrowserViewController: GalleryHost {
         gallery.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         gallery.view.accessibilityViewIsModal = true
         gallery.view.isHidden = true
+        lowerSidebarForGallery()
         view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
         gallery.didMove(toParent: self)
         return gallery
@@ -527,6 +529,19 @@ extension BrowserViewController: GalleryHost {
                 }
             }
         })
+    }
+
+    /// The gallery goes over the page area: a drawer open over the bar (portrait) closes and goes
+    /// back under the chrome first, so it is never left over the cards.
+    func lowerSidebarForGallery() {
+        guard duo.isSidebarOverChrome else { return }
+        duo.sidebarRequest = .rail
+        duo.lastShownSidebar = .rail
+        UIView.performWithoutAnimation {
+            self.updateDuoLayout()
+            self.view.layoutIfNeeded()
+        }
+        raiseSidebarOverChrome(false)
     }
 
     /// Site icons arrived (often several at once, as restored pages finish): the sidebar, the

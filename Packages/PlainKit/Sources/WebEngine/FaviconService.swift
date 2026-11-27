@@ -44,7 +44,8 @@ public final class FaviconService {
     }
 
     private enum Status {
-        case loading
+        /// A fetch is running; its number tells it from a later fetch of the same site.
+        case loading(Int)
         case stored
         /// No icon was found, at this time.
         case missing(Date)
@@ -57,8 +58,15 @@ public final class FaviconService {
 
     private var status: [Key: Status] = [:]
     private var revisions: [Key: Int] = [:]
-    /// Bumped by `clear()`, so every revision changes at once.
+    /// Bumped by `clear()`, so every revision changes at once and nothing decoded or fetched
+    /// before it is kept after it.
     private var epoch = 0
+    /// The same for the private tabs alone, bumped when the private session ends.
+    private var privateEpoch = 0
+    private var nextLoad = 0
+    /// The tiles a plated icon is drawn on (`icon(plated:)`): the shell's palette colors. Without
+    /// them a plated icon comes as it is.
+    public var plateColors: (shape: CGColor, lightMark: CGColor)?
     /// Sites the database has no icon for, so a row asking again costs no read.
     private var absent: Set<Key> = []
     /// Icons kept in memory only: the private tabs', and every icon when there is no database.
@@ -97,7 +105,7 @@ public final class FaviconService {
 
     /// Changes when `site`'s icon arrives or changes, so a list knows to show it.
     public func revision(site: String, scope: SiteIconScope) -> Int {
-        epoch &* 100_000 &+ revisions[Key(scope: scope, site: site), default: 0]
+(epoch &+ (scope == .privateTabs ? privateEpoch : 0)) &* 100_000 &+ revisions[Key(scope: scope, site: site), default: 0]
     }
 
     /// The icon if it is decoded in memory now. Never touches the disk.
@@ -114,9 +122,9 @@ public final class FaviconService {
     /// decodes off the main thread; rows asking for the same icon share one decode.
     public func icon(site: String, scope: SiteIconScope, pixelSize: Int, plated: Bool = false) async -> SiteIcon? {
         let key = Key(scope: scope, site: site)
-        let cacheKey = CacheKey(
-            scope: scope, site: site, revision: revision(site: site, scope: scope), pixelSize: pixelSize, plated: plated
-        )
+        let asked = revision(site: site, scope: scope)
+        let plate = plated ? plateColors : nil
+        let cacheKey = CacheKey(scope: scope, site: site, revision: asked, pixelSize: pixelSize, plated: plated)
         if let box = cache(for: scope).object(forKey: cacheKey) { return box.icon }
         if let task = decoding[cacheKey] { return await task.value }
         if absent.contains(key) { return nil }
@@ -126,11 +134,13 @@ public final class FaviconService {
             let signposter = Signposts.signposter
             let interval = signposter.beginInterval(Signposts.faviconDecode, id: signposter.makeSignpostID())
             defer { signposter.endInterval(Signposts.faviconDecode, interval) }
-            return await Self.decode(data, pixelSize: pixelSize, plated: plated)
+            return await Self.decode(data, pixelSize: pixelSize, plate: plate)
         }
         decoding[cacheKey] = task
         let icon = await task.value
-        decoding[cacheKey] = nil
+        if decoding[cacheKey] == task { decoding[cacheKey] = nil }
+        // Cleared, replaced or its private session ended while it decoded: not kept, not shown.
+        guard revision(site: site, scope: scope) == asked else { return nil }
         if let icon {
             cache(for: scope).setObject(IconBox(icon), forKey: cacheKey, cost: pixelSize * pixelSize * 4)
         }
@@ -164,21 +174,34 @@ public final class FaviconService {
         case let .missing(date) where Date.now.timeIntervalSince(date) < FixedChoices.faviconRetryAge: return
         default: break
         }
-        status[key] = .loading
-        if status.count > 4_000 { trimStatus(keeping: key) }
-        Task { [weak self, weak webView] in await self?.load(key, page: page, webView: webView) }
+        if status.count > 4_000 { trimSettled() }
+        nextLoad += 1
+        let load = nextLoad
+        status[key] = .loading(load)
+        Task { [weak self, weak webView] in await self?.load(key, number: load, page: page, webView: webView) }
     }
 
-    private func load(_ key: Key, page: URL, webView: WKWebView?) async {
+    /// This fetch is still the one in charge of `key`: not cleared, forgotten or replaced since.
+    private func isCurrent(_ number: Int, for key: Key) -> Bool {
+        if case .loading(number) = status[key] { return true }
+        return false
+    }
+
+    private func load(_ key: Key, number: Int, page: URL, webView: WKWebView?) async {
         var database: AppDatabase?
         if case let .profile(profile) = key.scope { database = await databases?(profile) }
+        guard isCurrent(number, for: key) else { return }
         var existing: Data?
-        if let database, let stored = try? await database.favicon(forHost: key.site) {
-            if Date.now.timeIntervalSince(stored.updatedAt) < FixedChoices.faviconRefreshAge {
-                status[key] = .stored
-                return
+        if let database {
+            let stored = try? await database.favicon(forHost: key.site)
+            guard isCurrent(number, for: key) else { return }
+            if let stored {
+                if Date.now.timeIntervalSince(stored.updatedAt) < FixedChoices.faviconRefreshAge {
+                    status[key] = .stored
+                    return
+                }
+                existing = stored.data
             }
-            existing = stored.data
         } else if let data = memoryData[key] {
             existing = data
         }
@@ -190,11 +213,11 @@ public final class FaviconService {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.faviconFetch, id: signposter.makeSignpostID())
         let candidates = await Self.reportedIcons(in: webView, page: page)
-        let data = await Self.fetch(FaviconRules.ranked(candidates, page: page))
+        let data = await Self.fetch(FaviconRules.ranked(candidates, page: page), page: page)
         signposter.endInterval(Signposts.faviconFetch, interval, "\(data == nil ? "none" : "stored")")
-        // Cleared or forgotten meanwhile (Clear History and Data, the private session's end): an
-        // icon fetched before that is not kept after it.
-        guard case .loading = status[key] else { return }
+        // Cleared or forgotten meanwhile (Clear History and Data, the private session's end), or
+        // a later fetch took over: an icon fetched before that is not kept after it.
+        guard isCurrent(number, for: key) else { return }
         guard let data else {
             // A failed refresh keeps the icon there was.
             status[key] = existing == nil ? .missing(.now) : .stored
@@ -202,6 +225,11 @@ public final class FaviconService {
         }
         if let database {
             try? await database.saveFavicon(Favicon(host: key.site, data: data, updatedAt: .now))
+            // Cleared while it was written: the row goes too.
+            guard isCurrent(number, for: key) else {
+                try? await database.removeFavicon(forHost: key.site)
+                return
+            }
         } else {
             keepInMemory(data, for: key)
         }
@@ -218,18 +246,32 @@ public final class FaviconService {
             let oldest = memoryOrder.removeFirst()
             memoryData[oldest] = nil
             status[oldest] = nil
+            // Its revision goes with it, so the bookkeeping is bounded like the icons. The
+            // scope's epoch moves on, so no cache entry of the dropped revision is read again.
+            revisions[oldest] = nil
+            if oldest.scope == .privateTabs {
+                privateEpoch += 1
+                privateCache.removeAllObjects()
+            } else {
+                epoch += 1
+                cache.removeAllObjects()
+            }
         }
     }
 
-    /// A long session visited thousands of sites: forget which were settled (they are asked again
-    /// on their next visit, one database read each).
-    private func trimStatus(keeping key: Key) {
+    /// A long session visited thousands of sites: forget which were settled and their revisions
+    /// (they are asked again on their next visit, one database read each). The epoch moves on,
+    /// so rows read their icons again and no cache entry of a dropped revision is read.
+    private func trimSettled() {
         status = status.filter { entry in
-            if entry.key == key || memoryData[entry.key] != nil { return true }
             if case .loading = entry.value { return true }
             return false
         }
+        revisions = revisions.filter { memoryData[$0.key] != nil }
         absent = []
+        cache.removeAllObjects()
+        epoch += 1
+        onChange?(nil)
     }
 
     // MARK: Forgetting
@@ -243,6 +285,12 @@ public final class FaviconService {
         revisions = revisions.filter { !isPrivate($0.key) }
         absent = absent.filter { !isPrivate($0) }
         privateCache.removeAllObjects()
+        // A decode or a fetch still running belongs to the session that ended.
+        for (key, task) in decoding where key.isPrivate {
+            task.cancel()
+            decoding[key] = nil
+        }
+        privateEpoch += 1
     }
 
     /// Clear History and Data removed the stored icons: memory follows, and lists show letters
@@ -255,6 +303,8 @@ public final class FaviconService {
         memoryOrder = []
         cache.removeAllObjects()
         privateCache.removeAllObjects()
+        decoding.values.forEach { $0.cancel() }
+        decoding = [:]
         epoch += 1
         onChange?(nil)
     }
@@ -334,11 +384,12 @@ public final class FaviconService {
     /// The first of `urls` that downloads and decodes, as a PNG no larger than
     /// `FixedChoices.faviconStoredPixelSize`.
     @concurrent
-    private nonisolated static func fetch(_ urls: [URL]) async -> Data? {
-        for url in urls {
+    private nonisolated static func fetch(_ urls: [URL], page: URL) async -> Data? {
+        let guardian = RedirectGuard(page: page)
+        for url in urls where FaviconRules.allows(url, from: page) {
             var request = URLRequest(url: url)
             request.setValue("image/png,image/*;q=0.9,*/*;q=0.5", forHTTPHeaderField: "Accept")
-            guard let (bytes, response) = try? await session.bytes(for: request) else { continue }
+            guard let (bytes, response) = try? await session.bytes(for: request, delegate: guardian) else { continue }
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { continue }
             let limit = FixedChoices.faviconMaxBytes
             guard response.expectedContentLength <= Int64(limit) else { continue }
@@ -391,11 +442,13 @@ public final class FaviconService {
 
     /// Decodes a stored icon at `pixelSize` square and reads its style from the pixels.
     @concurrent
-    nonisolated static func decode(_ data: Data, pixelSize: Int, plated: Bool) async -> SiteIcon? {
-        decodeNow(data, pixelSize: pixelSize, plated: plated)
+    nonisolated static func decode(_ data: Data, pixelSize: Int, plate: (shape: CGColor, lightMark: CGColor)?) async -> SiteIcon? {
+        decodeNow(data, pixelSize: pixelSize, plate: plate)
     }
 
-    nonisolated static func decodeNow(_ data: Data, pixelSize: Int, plated: Bool) -> SiteIcon? {
+    nonisolated static func decodeNow(
+        _ data: Data, pixelSize: Int, plate colors: (shape: CGColor, lightMark: CGColor)? = nil
+    ) -> SiteIcon? {
         guard pixelSize > 0,
               let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary)
         else { return nil }
@@ -416,7 +469,7 @@ public final class FaviconService {
             image, in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2, width: size.width, height: size.height)
         )
         let style = bitmap.style()
-        guard plated else {
+        guard let colors else {
             guard let result = bitmap.context.makeImage() else { return nil }
             return SiteIcon(image: UIImage(cgImage: result), style: style)
         }
@@ -428,9 +481,7 @@ public final class FaviconService {
         if style == .tile {
             plate.context.draw(drawn, in: bounds)
         } else {
-            plate.context.setFillColor(
-                style == .lightGlyph ? CGColor(red: 0.04, green: 0.13, blue: 0.2, alpha: 1) : CGColor(gray: 0.97, alpha: 1)
-            )
+            plate.context.setFillColor(style == .lightGlyph ? colors.lightMark : colors.shape)
             plate.context.fill(bounds)
             plate.context.interpolationQuality = .high
             plate.context.draw(drawn, in: bounds.insetBy(dx: side * 0.14, dy: side * 0.14))
@@ -483,7 +534,23 @@ private nonisolated struct Bitmap {
     }
 }
 
+/// Redirects of an icon download keep to the rules its first address passed (`FaviconRules.allows`).
+private nonisolated final class RedirectGuard: NSObject, URLSessionTaskDelegate {
+    let page: URL
+    init(page: URL) { self.page = page }
+
+    func urlSession(
+        _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest
+    ) async -> URLRequest? {
+        guard let url = request.url, FaviconRules.allows(url, from: page),
+              !(task.originalRequest?.url?.scheme == "https" && url.scheme != "https") else { return nil }
+        return request
+    }
+}
+
 private nonisolated final class CacheKey: NSObject {
+    var isPrivate: Bool { scope == .privateTabs }
     private let scope: SiteIconScope
     private let site: String
     private let revision: Int

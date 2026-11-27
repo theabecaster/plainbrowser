@@ -108,6 +108,7 @@ struct FaviconServiceTests {
         let icon = try #require(await favicons.icon(site: Self.site, scope: Self.personal, pixelSize: 48))
         #expect(icon.style == .darkGlyph, "a black mark on a clear ground asks for a light tile at night")
         // For a view with no tile of its own the mark comes on one.
+        favicons.plateColors = (CGColor(gray: 1, alpha: 1), CGColor(gray: 0, alpha: 1))
         let plated = try #require(await favicons.icon(site: Self.site, scope: Self.personal, pixelSize: 48, plated: true))
         #expect(plated.style == .tile)
     }
@@ -156,8 +157,12 @@ struct FaviconServiceTests {
         #expect(try await database.favicon(forHost: Self.site) == nil, "nothing of a private tab reaches the database")
         #expect(await favicons.icon(site: Self.site, scope: Self.personal, pixelSize: 60) == nil, "nor a regular tab's row")
 
+        // A decode still running when the session ends gives nothing and leaves nothing behind.
+        async let late = favicons.icon(site: Self.site, scope: .privateTabs, pixelSize: 44)
         pool.close(secret)
         pool.endPrivateSession()
+        #expect(await late == nil)
+        #expect(favicons.cachedIcon(site: Self.site, scope: .privateTabs, pixelSize: 44) == nil)
         #expect(await favicons.icon(site: Self.site, scope: .privateTabs, pixelSize: 60) == nil)
         #expect(favicons.cachedIcon(site: Self.site, scope: .privateTabs, pixelSize: 60) == nil)
 
@@ -181,11 +186,13 @@ struct FaviconServiceTests {
 
     @Test func decodingReadsTheStyleFromThePixels() throws {
         let opaque = try #require(FaviconService.normalized(Self.png(.opaque)))
-        #expect(FaviconService.decodeNow(opaque, pixelSize: 60, plated: false)?.style == .tile)
+        #expect(FaviconService.decodeNow(opaque, pixelSize: 60)?.style == .tile)
         let dark = try #require(FaviconService.normalized(Self.png(.darkMark)))
-        #expect(FaviconService.decodeNow(dark, pixelSize: 60, plated: false)?.style == .darkGlyph)
+        #expect(FaviconService.decodeNow(dark, pixelSize: 60)?.style == .darkGlyph)
+        let white = CGColor(gray: 1, alpha: 1)
+        #expect(FaviconService.decodeNow(dark, pixelSize: 60, plate: (white, white))?.style == .tile, "on its own tile")
         let color = try #require(FaviconService.normalized(Self.png(.color)))
-        #expect(FaviconService.decodeNow(color, pixelSize: 60, plated: false)?.style == .glyph)
+        #expect(FaviconService.decodeNow(color, pixelSize: 60)?.style == .glyph)
         // A tracking pixel, or anything that is no image, is no icon.
         #expect(FaviconService.normalized(Self.png(.opaque, side: 1)) == nil)
         #expect(FaviconService.normalized(Data("<html>".utf8)) == nil)

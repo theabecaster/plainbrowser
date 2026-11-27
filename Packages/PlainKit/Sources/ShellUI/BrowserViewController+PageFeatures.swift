@@ -119,15 +119,17 @@ extension BrowserViewController {
     /// After that, Translate Page waits in the page menu. No banner, no badge (ui-reference).
     func offerTranslationOnce() {
         let key = "PlainTranslateHintShown"
-        guard FixedChoices.translateHintShownOnce, !UserDefaults.standard.bool(forKey: key),
+        // TestIsolation.defaults: a test run's own suite, never the owner's flag.
+        let defaults = TestIsolation.defaults
+        guard FixedChoices.translateHintShownOnce, !defaults.bool(forKey: key),
               let tab = currentTab, let language = tab.pageLanguage.flatMap(Self.languageName)
         else { return }
         let page = tab.url
         showToastWhenFree { [weak self, weak tab] in
             guard let self, let tab, tab === self.currentTab, tab.url == page, tab.translationTarget != nil,
-                  tab.translation == .original, !UserDefaults.standard.bool(forKey: key)
+                  tab.translation == .original, !defaults.bool(forKey: key)
             else { return }
-            UserDefaults.standard.set(true, forKey: key)
+            defaults.set(true, forKey: key)
             self.tabsUI.toast.show(String(localized: "This page is in \(language)"), button: "Translate") { [weak tab] in
                 tab?.translate()
             }

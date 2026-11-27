@@ -11,6 +11,9 @@
 #      tests only append with +=. The factory's one assignment is the exception.
 #   3. The app honors the isolation arguments in every build configuration: TestIsolation has no
 #      #if DEBUG, and the app's store and the shared website data, thumbnails and downloads read it.
+#   4. App code touches the owner's state (standard defaults, general pasteboard, default website
+#      data, icon, Documents, scene state, Photos, tips, Spotlight, widgets, App Groups, Keychain)
+#      only in the files that route it through TestIsolation.
 set -euo pipefail
 cd "${0:A:h:h:h}"
 
@@ -44,6 +47,30 @@ grep -q 'TestIsolationMarker.install' Plain/SceneDelegate.swift \
 for needle in 'AppWebsiteData.store' 'TestIsolation.folder("Thumbnails")' 'TestIsolation.folder(EngineChoices.downloadsFolderName)'; do
   grep -qF "$needle" Packages/PlainKit/Sources/WebEngine/WebViewPool.swift \
     || problems+="WebViewPool does not use $needle"
+done
+
+# 4. App code reaches the owner's state only through the isolation-aware places. A new use of one of
+#    these elsewhere must go through TestIsolation (or join this list after a look at isolation).
+sources=(Plain/**/*.swift(N) Packages/PlainKit/Sources/**/*.swift(N))
+typeset -A allowed=(
+  'UserDefaults\.standard'        'BrowserCore/TestIsolation.swift'
+  'UIPasteboard\.general'         'WebEngine/AppWebsiteData.swift|FeatureUI/Pasteboard.swift'
+  'WKWebsiteDataStore\.default'   '^$'
+  'setAlternateIconName\('        'FeatureUI/Intro/AppIconChoice.swift'
+  'documentDirectory|documentsDirectory' 'WebEngine/WebViewPool.swift'
+  'applicationSupportDirectory'   'Plain/SceneDelegate.swift'
+  'session\.userInfo|sessionRole' 'ShellUI/SceneState.swift|Plain/AppDelegate.swift'
+  'PHPhotoLibrary'                'WebEngine/LinkMenu.swift'
+  'Tips\.configure'               'ShellUI/TabsMenuTip.swift'
+  'CSSearchableIndex|WidgetCenter|containerURL\(forSecurityApplicationGroupIdentifier|SecItem(Add|Update|Delete|CopyMatching)' '^$'
+)
+for pattern in ${(k)allowed}; do
+  while IFS= read -r line; do
+    [[ -z $line ]] && continue
+    file=${line%%:*}
+    [[ $file =~ ${allowed[$pattern]} ]] && continue
+    problems+="owner state outside TestIsolation ($pattern): $line"
+  done < <(grep -nE "$pattern" $sources | grep -vE '^[^:]+:[0-9]+: *//' || true)
 done
 
 if (( ${#problems} )); then

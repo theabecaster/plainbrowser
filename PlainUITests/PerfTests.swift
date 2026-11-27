@@ -354,7 +354,7 @@ final class PerfTests: XCTestCase {
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard up")], timeout: Self.keyboardWait)
             XCTAssertTrue(field.hasKeyboardFocus, "the new tab's field is not focused")
             field.typeText(server.address("/c") + "\n")
-            XCTAssertTrue(app.webViews.staticTexts["Page C"].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.webViews.staticTexts["Page C"].firstMatch.waitForExistence(timeout: 20), "page C did not show")
         }
     }
 

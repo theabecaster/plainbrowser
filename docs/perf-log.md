@@ -36,6 +36,12 @@ the first run and 7 to 60 during the second (other lanes' simulators), so launch
 Simulator signposts in the after build: the last tab's picture finished decoding 25–33 ms after the
 scene connected, hundreds of ms before the first frame, so the first frame never waited for it.
 
+Note, perf program row (2026-11-27 14:11): the first with every new column, at load average
+800–970 (other lanes), so launch and last tab "regressed" within noise. The one failing test,
+`testNewTabToSearchField`, timed out waiting 10 s for its page under that load (the wait is 20 s
+since, and it passes alone). Gallery tab reads ~1.5 s against ~0.6 s for the gallery's open:
+`gallery.openTab` seems to end at Core Animation's completion rather than the visual settle.
+
 | Date | SHA | Target | Launch ms | Field ms | Hitch ms/s | Gallery ms | Swipe ms | Last tab ms | Focus ms | Suggest ms | Link paint ms | Gallery tab ms | New tab ms | Memory MB | Heavy hitch ms/s | Result |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 2026-11-26 05:23 | 9b9ba4e | sim | 3353.9 | 2064.4 | n/a | pass |
@@ -56,3 +62,4 @@ scene connected, hundreds of ms before the first frame, so the first frame never
 | 2026-11-27 11:25 | d9da72b | device | — | — | 0 | 690.5 | 528.7 | 223.9 | FAIL |
 | 2026-11-27 11:52 | 5788977 | device | 225.4 | 198.1 | 0 | — | — | 214.3 | FAIL |
 | 2026-11-27 12:00 | 6c1231f | device | 225.4 | 198.1 | 0 | 680 | 526 | 214.3 | pass (gallery/swipe rerun alone after a notification interrupted them) |
+| 2026-11-27 14:11 | 5094071 | sim | 968.3 | 507.2 | n/a | 583.7 | 329.3 | 889.3 | 468.3 | 9.3 | 56 | 1489.9 | 531.3 | 72 | n/a | FAIL |

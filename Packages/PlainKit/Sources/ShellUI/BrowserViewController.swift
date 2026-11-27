@@ -975,7 +975,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // The database is still opening (the first moments after launch).
             for item in [history, favorites, settings] { item.attributes = .disabled }
         }
-        let app = UIMenu(options: .displayInline, children: downloadsMenuItems() + [history, favorites, settings])
+        // The app's own places, always there and rarely needed mid-page: one row of three, with
+        // Downloads (and its progress) above it while there are any. Short titles fit the row.
+        favorites.title = "Favorites"
+        favorites.accessibilityLabel = "Edit Favorites"
+        let appRow = UIMenu(options: .displayInline, children: [history, favorites, settings])
+        appRow.preferredElementSize = .medium
+        let downloads = downloadsMenuItems()
+        let app = UIMenu(options: .displayInline, children: downloads.isEmpty ? [appRow] : downloads + [appRow])
         // Every item below follows docs/state-rules.md §4 through ControlRules: items that never
         // apply to this page are left out, Stop takes Reload's place while loading.
         let rules = currentRules()
@@ -987,21 +994,22 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             return [top] + (paneItems.isEmpty ? [] : [UIMenu(options: .displayInline, children: paneItems)]) + [app]
         }
         var pageItems: [UIMenuElement] = []
+        var reload: UIAction?
         switch rules.reload {
         case .reload:
-            let reload = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+            let action = UIAction(title: "Reload", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
                 Signposts.signposter.emitEvent(Signposts.reload)
                 self?.reloadPage()
             }
-            reload.accessibilityIdentifier = "menu.reload"
-            pageItems.append(reload)
+            action.accessibilityIdentifier = "menu.reload"
+            reload = action
         case .stop:
-            let stop = UIAction(title: "Stop", image: UIImage(systemName: "xmark")) { [weak tab] _ in
+            let action = UIAction(title: "Stop", image: UIImage(systemName: "xmark")) { [weak tab] _ in
                 Signposts.signposter.emitEvent(Signposts.reload, "stop")
                 tab?.stopLoading()
             }
-            stop.accessibilityIdentifier = "menu.stop"
-            pageItems.append(stop)
+            action.accessibilityIdentifier = "menu.stop"
+            reload = action
         case .hidden:
             break
         }
@@ -1025,10 +1033,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             UIPasteboard.general.url = url
             Haptic.success.play()
         }
-        var siteItems = siteMenuItems(
+        copy.accessibilityIdentifier = "menu.copyLink"
+        let siteItems = siteMenuItems(
             for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
         )
-            + paneMenuItems(for: tab, rules: rules)
+        let paneItems = paneMenuItems(for: tab, rules: rules)
+        var favoriteItem: UIAction?
         if rules.favorite, let isFavorite {
             let title = tab.title
             let favorite = UIAction(
@@ -1038,14 +1048,36 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 self?.setFavorite(!isFavorite, url: url, title: title)
             }
             favorite.accessibilityIdentifier = "menu.favorite"
-            siteItems.append(favorite)
+            favoriteItem = favorite
         }
+        // The menu fits the Duo's outer screen (docs/ui-reference.md, page menu): the most used
+        // actions are one row, the per-site choices one submenu, the app's places one row.
         var sections: [UIMenuElement] = []
+        let actions = UIMenu(options: .displayInline, children: (reload.map { [$0] } ?? []) + [share, copy])
+        actions.preferredElementSize = .medium
+        sections.append(actions)
         if !pageItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: pageItems)) }
-        sections.append(UIMenu(options: .displayInline, children: [share, copy]))
         if rules.zoom { sections.append(zoomMenu(for: tab, source: source)) }
-        if !siteItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: siteItems)) }
+        var placeItems: [UIMenuElement] = favoriteItem.map { [$0] } ?? []
+        if siteItems.count > 1, let host = url.host() {
+            // Desktop Site, blocking and dark pages: set once per site, then remembered.
+            let site = UIMenu(
+                title: "Site Settings", subtitle: Self.siteName(host), image: UIImage(systemName: "slider.horizontal.3"),
+                children: siteItems
+            )
+            site.accessibilityIdentifier = "menu.siteSettings"
+            placeItems.append(site)
+        } else {
+            placeItems += siteItems
+        }
+        placeItems += paneItems
+        if !placeItems.isEmpty { sections.append(UIMenu(options: .displayInline, children: placeItems)) }
         return [top] + sections + [app]
+    }
+
+    /// A site's name as the pill shows it: the host without `www.`.
+    static func siteName(_ host: String) -> String {
+        host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {

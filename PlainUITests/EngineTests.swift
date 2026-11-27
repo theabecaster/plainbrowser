@@ -45,6 +45,9 @@ final class EngineTests: XCTestCase {
         XCTAssertTrue(more.waitForExistence(timeout: 2))
         more.tap()
         let action = app.buttons[item]
+        // Desktop Site and the blocking toggle live in the Site Settings submenu.
+        let site = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Site Settings'")).firstMatch
+        if !action.waitForExistence(timeout: 1), site.exists { site.tap() }
         guard action.waitForExistence(timeout: timeout) else {
             // Close the menu with a tap above it.
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()

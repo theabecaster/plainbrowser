@@ -72,6 +72,9 @@ final class AppearanceTests: XCTestCase {
         XCTAssertTrue(more.waitForExistence(timeout: 2))
         more.tap()
         XCTAssertTrue(app.buttons["Settings…"].waitForExistence(timeout: 3))
+        // The dark pages switch lives in the Site Settings submenu.
+        let site = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Site Settings'")).firstMatch
+        if site.exists { site.tap() }
     }
 
     private func closeMenu(_ app: XCUIApplication) {

@@ -29,17 +29,19 @@ nonisolated public enum EngineChoices {
 
     // MARK: Thumbnails (docs/plan.md, "Engine rules" 3)
 
-    /// Thumbnails are stored at this many pixels per point of `FixedChoices.thumbnailWidth`: sharp
-    /// on a card, and 2.25x fewer pixels than a 3x screen-scale snapshot.
-    public static let thumbnailPixelsPerPoint: CGFloat = 2
+    /// Thumbnails are stored at this many pixels per point of `FixedChoices.thumbnailWidth`: a
+    /// 3x screen's pixels on a card (about 780 px wide), and still under a sixth of the pixels of
+    /// a full-screen snapshot. At 2x a card upscaled them and read blurry.
+    public static let thumbnailPixelsPerPoint: CGFloat = 3
     /// JPEG quality on disk: invisible loss at card size, a third of PNG's size and write time.
     public static let thumbnailJPEGQuality: CGFloat = 0.7
     /// The bar swipe's full-screen preview of a neighbour tab, in pixels per point (docs/plan.md,
     /// motion table): sharp enough full width, and a third fewer pixels than a 3x screen. Only the
     /// two neighbours of the tab on screen keep one.
     public static let swipeSnapshotPixelsPerPoint: CGFloat = 2
-    /// Decoded thumbnails kept in memory. About 8 cards; the rest reload from disk on demand.
-    public static let thumbnailMemoryBytes = 24 * 1024 * 1024
+    /// Decoded thumbnails kept in memory. About 8 cards (5 MB each at card size); the rest
+    /// reload from disk on demand. Dropped on a memory warning.
+    public static let thumbnailMemoryBytes = 40 * 1024 * 1024
 
     // MARK: Desktop or mobile site (docs/plan.md, section 4b)
 

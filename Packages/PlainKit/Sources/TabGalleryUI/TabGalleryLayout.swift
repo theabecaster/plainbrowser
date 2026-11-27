@@ -118,11 +118,18 @@ struct TabGalleryMetrics: Equatable {
         (max(Self.faviconSize, titleLineHeight) + Self.headerGap).rounded(.up)
     }
 
+    /// The page's own shape: the shell's page runs from under the status bar to the bottom edge,
+    /// beside a vertical bar (the safe area's sides). Thumbnails are pictures of that area, so a
+    /// card of this shape shows the whole picture with no strip of card under it.
+    var pageAspect: CGFloat {
+        guard width > 0 else { return 1 }
+        return max(1, height - safeTop) / contentWidth
+    }
+
     /// The page preview's height over its width. In the cascade a card is the whole page, the
     /// way the app switcher shows a whole app, so the zoom into it is one continuous scale.
     var thumbnailAspect: CGFloat {
         guard width > 0 else { return 1 }
-        let pageAspect = height / width
         switch style {
         case .cascade: return pageAspect
         case .grid: return min(max(pageAspect, Self.gridAspect.lowerBound), Self.gridAspect.upperBound)

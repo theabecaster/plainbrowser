@@ -501,14 +501,16 @@ extension BrowserViewController {
             // certificate warning that must stay in front) or another tab makes the copy moot.
             guard let self, !Task.isCancelled, self.currentTab === tab, !tab.isLoading, tab.loadError == failure
             else { return }
-            await self.presentReader(article, over: tab)
-            // Say why the page reads as the reader, and offer the live page again.
-            self.showToastWhenFree { [weak self, weak tab] in
-                self?.tabsUI.toast.show(String(localized: "Showing your saved copy."), button: "Try Again") {
-                    guard let self, let tab, self.currentTab === tab else { return }
-                    Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again from saved copy")
-                    self.closeReader(animated: true)
-                    tab.load(url)
+            // Once the copy is on screen, say why the page reads as the reader and offer the live
+            // page again.
+            await self.presentReader(article, over: tab) { [weak self, weak tab] in
+                self?.showToastWhenFree { [weak self, weak tab] in
+                    self?.tabsUI.toast.show(String(localized: "Showing your saved copy."), button: "Try Again") {
+                        guard let self, let tab, self.currentTab === tab else { return }
+                        Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again from saved copy")
+                        self.closeReader(animated: true)
+                        tab.load(url)
+                    }
                 }
             }
         }
@@ -519,8 +521,8 @@ extension BrowserViewController {
         try? JSONDecoder().decode(ReaderArticle.self, from: data)
     }
 
-    /// Puts `article` in the reader view over `tab`'s page.
-    private func presentReader(_ article: ReaderArticle, over tab: Tab) async {
+    /// Puts `article` in the reader view over `tab`'s page; `shown` runs once it is on screen.
+    private func presentReader(_ article: ReaderArticle, over tab: Tab, shown: (() -> Void)? = nil) async {
         expandChrome(animated: true)
         let reader = engineUI.reader
         reader.onOpenLink = { [weak self] url in
@@ -528,7 +530,10 @@ extension BrowserViewController {
             self.closeReader(animated: true)
             tab.load(url)
         }
-        reader.onShown = { [weak self] in self?.updateButtons() }
+        reader.onShown = { [weak self] in
+            self?.updateButtons()
+            shown?()
+        }
         reader.prepare(pool: session.pool, isPrivate: tab.isPrivate, in: webContainer, scrollDelegate: self)
         // A tap on the status bar scrolls the reader, not the page under it.
         session.pool.scrollView(for: tab)?.scrollsToTop = false

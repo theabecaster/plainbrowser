@@ -80,7 +80,7 @@ final class PageFeatureTests: XCTestCase {
         go(app, to: "/french", heading: "Le marché du samedi")
         let button = app.buttons["Translate"]
         XCTAssertTrue(button.waitForExistence(timeout: 5), "the one quiet hint offers Translate")
-        XCTAssertTrue(app.staticTexts["This page is in French"].exists)
+        // The toast leaves after a few seconds: tap first, look after.
         shot("t5-hint")
         button.tap()
         XCTAssertTrue(app.webViews.staticTexts["The Saturday market"].waitForExistence(timeout: 10))

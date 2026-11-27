@@ -574,12 +574,13 @@ struct DuoInnerStatusRowTests {
         let bar = try Self.geometry(Self.landscape)
         let row = bar.rowFrames(lane: 0...951, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
         #expect(row.trailingCapsule.maxX == 819)
-        #expect(bar.rowTop == 19, "centered on the region's 0–82")
+        #expect(bar.rowTop == 26, "centered on the items (27–69), 12 pt above the region's bottom")
+        #expect(abs(row.trailingCapsule.midY - Self.landscape.items.midY) <= 0.5)
         // The address takes its full 560 pt (121–681), its end 6 pt before the capsule.
         #expect(row.pill.width == 560 && row.pill.minX == 121)
-        // The strip 12–939 under the region (86); the page's first line at 124.
-        #expect(bar.stripTop == 86)
-        #expect(bar.expandedInset == 124)
+        // The strip 12–939 at 74, under the items; the page's first line at 112.
+        #expect(bar.stripTop == 74)
+        #expect(bar.expandedInset == 112)
         // Margins that hug the items: the capsule at 823 (8 pt), the row on the items' row.
         let hugging = try Self.geometry(Self.landscape.with(hugging: true))
         let tight = hugging.rowFrames(lane: 0...951, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)

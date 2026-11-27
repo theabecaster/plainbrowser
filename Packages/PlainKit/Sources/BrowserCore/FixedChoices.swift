@@ -511,6 +511,11 @@ public enum FixedChoices {
     /// treating the region as a camera (and reaching 64 pt past it, the build the owner tried)
     /// left them about 100 pt away, with the strip cut there too.
     public static let statusRegionPadding: Double = 20
+    /// How far above the bottom of the status items' own region the top bar's row ends, where
+    /// the region's margins don't place the items: they sit low in it (Duo inner screen: region
+    /// 0–82, items 27–69), so a 44 pt row ending 12 pt above the bottom (26–70) is centered on
+    /// them. Centered on the region instead, the row sat 7 pt above the clock (design review).
+    public static let statusRegionBottomPadding: Double = 12
     /// Between the top bar's end (Tabs, Share and More) and the status items' left edge (the
     /// clock) on the Duo's inner screen: the glass sits snug beside them without touching, at the
     /// bar's own spacing (its capsules sit 6 pt from the address). Was 12 on top of a 64 pt

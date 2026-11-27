@@ -136,14 +136,22 @@ enum StatusCorner {
     /// safe area's height, active) around the time, the indicators and the battery ring, which
     /// are drawn at 831–924 x 27–69, as on the device. The frame includes margins kept for
     /// interactive content; the items start `FixedChoices.statusRegionPadding` inside it, or where
-    /// the region's own margins say, whichever is further in. The row is centered on the
-    /// region's reserved rect.
+    /// the region's own margins say, whichever is further in. The row is centered on the items:
+    /// on the region's reserved rect where its margins make that shorter than the frame, else a
+    /// row high, `FixedChoices.statusRegionBottomPadding` above the region's bottom (the items'
+    /// middle at 48 in 0–82; the frame's own middle, 41, put the row 7 pt above them).
     static func statusRegion(in regions: [Region], width: CGFloat, safeTop: CGFloat) -> CGRect? {
         let padding = CGFloat(FixedChoices.statusRegionPadding)
         for region in regions {
             guard let trailing = cornerSide(region, width: width, safeTop: safeTop) else { continue }
             let frame = region.frame
-            let band = band(around: region.reserved)
+            let reserved = region.reserved
+            let rowHeight = TopChromeGeometry.rowHeight
+            let items = reserved.height < frame.height - 0.5 ? reserved : CGRect(
+                x: reserved.minX, y: frame.maxY - CGFloat(FixedChoices.statusRegionBottomPadding) - rowHeight,
+                width: reserved.width, height: rowHeight
+            )
+            let band = band(around: items)
             if trailing, frame.maxX >= width - 0.5 {
                 let left = min(max(region.reserved.minX, frame.minX + padding), width)
                 return CGRect(x: left, y: band.top, width: width - left, height: band.height)

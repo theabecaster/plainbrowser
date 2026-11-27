@@ -1979,12 +1979,13 @@ other indicators."
   (`DuoLayout.stripLane`), cut only by regions in its own band. On its way out it still rises only
   to the corner's bottom.
 - **Numbers, landscape** (951 wide, region 807–951 x 0–82, margins read as zero): the corner
-  starts at 827; the row 19–63; the trailing capsule 687–819, 12 pt before the time (was 731);
-  the address 560 pt at 121–681; the strip 12–939 at 86; the page's first line at 124 with the
-  strip, 82 without (the region's bottom). If the region's margins hug the items: capsule to 823
-  (8 pt), row 26–70, strip at 74, page at 112. **Portrait** (669 wide, the region assumed at the
-  same distance from the trailing edge): capsule 405–537, the address filling 106–399, the strip
-  12–657.
+  starts at 827; the row 26–70, centered on the items (12 pt above the region's bottom,
+  `statusRegionBottomPadding`; centered on the region, 19–63, it sat 7 pt above the clock: design
+  review); the trailing capsule 687–819, 12 pt before the time (was 731); the address 560 pt at
+  121–681; the strip 12–939 at 74; the page's first line at 112 with the strip, 74 without. If
+  the region's margins hug the items: capsule to 823 (8 pt), the rest the same. **Portrait**
+  (669 wide, the region assumed at the same distance from the trailing edge): capsule 405–537,
+  the address filling 106–399, the strip 12–657.
 - **Phones and the outer screen are unchanged:** no top bar, no corner, `stripLane` equals the
   chrome lane, and the bottom pill's numbers are pinned (`PhonesAndOuterScreenUnchangedTests`).
 - **Diagnostics for the device** (`duo` category, notice level, kept on the device): `status

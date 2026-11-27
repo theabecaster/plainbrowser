@@ -346,13 +346,19 @@ extension BrowserViewController {
         // The Duo's vertical bar empties too (`ControlRules.barShown`).
         updateButtons()
         engineUI.findWatch = Task { [weak self] in
+            // The find bar can take a moment to show (it rides in with the keyboard): the chrome
+            // stays hidden until it has shown and closed again, or never showed within 2 s.
+            var hasShown = false
+            var checks = 0
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
                 guard let self, !Task.isCancelled else { return }
+                checks += 1
                 let isOpen = self.isFindOpen
+                hasShown = hasShown || isOpen
                 // Bar gestures follow the rules, which read the find bar when they are applied.
                 if isOpen != self.rules.state.isFindOpen { self.updateButtons() }
-                guard !isOpen else { continue }
+                guard !isOpen, hasShown || checks >= 8 else { continue }
                 self.engineUI.findWatch = nil
                 self.setChromeHiddenForFind(false)
                 return
@@ -363,12 +369,16 @@ extension BrowserViewController {
     private func setChromeHiddenForFind(_ hidden: Bool) {
         let content = chromeGlass.contentView
         content.isUserInteractionEnabled = !hidden
-        // On each control too: the glass container exposes its controls to accessibility past
-        // its content view.
-        for control in [pill, buttonBar] as [UIView] { control.accessibilityElementsHidden = hidden }
         let alpha: CGFloat = hidden ? 0 : 1
         guard content.alpha != alpha else { return }
-        Motion.animate(Motion.quick) { content.alpha = alpha }
+        // Once faded, the whole glass container hides, so the pill and the bar also leave the
+        // accessibility tree: the glass exposes its controls even inside a hidden content view.
+        // The gallery hides the same container; it cannot open while the find bar is up.
+        if !hidden { chromeGlass.isHidden = isShowingGallery }
+        Motion.animate(Motion.quick, changes: { content.alpha = alpha }) { [weak self] in
+            guard let self, content.alpha == 0, engineUI.findWatch != nil else { return }
+            chromeGlass.isHidden = true
+        }
     }
 
     // MARK: Page menu items

@@ -32,6 +32,10 @@ struct DuoLayoutInput: Equatable {
     var occlusions: [CGRect] = []
     /// The vertical band the floating pill and toast occupy, to test against occlusions.
     var chromeBand: ClosedRange<CGFloat> = 0...0
+    /// The vertical band the tab strip occupies under a top bar, to test against occlusions; nil
+    /// to use `chromeBand`. The strip sits under the status items (`TopChromeGeometry.stripTop`),
+    /// so the camera beside the row is not in its way.
+    var stripBand: ClosedRange<CGFloat>?
     /// The user opened the side pane (Reader, Find, History next to the page) in this window.
     var sidePaneOpen = false
 
@@ -39,8 +43,9 @@ struct DuoLayoutInput: Equatable {
         pageArea: CGRect, isRegularWidth: Bool, isRegularHeight: Bool, tabLayout: TabLayout = FixedChoices.defaultTabLayout,
         requestedSidebar: SidebarState = .rail, paneCount: Int = 1, tabCount: Int = 2, focusedPane: Int = 0,
         division: CGRect? = nil, isDivisionActive: Bool = false, occlusions: [CGRect] = [],
-        chromeBand: ClosedRange<CGFloat> = 0...0, sidePaneOpen: Bool = false
+        chromeBand: ClosedRange<CGFloat> = 0...0, stripBand: ClosedRange<CGFloat>? = nil, sidePaneOpen: Bool = false
     ) {
+        self.stripBand = stripBand
         self.sidePaneOpen = sidePaneOpen
         self.pageArea = pageArea
         self.isRegularWidth = isRegularWidth
@@ -98,6 +103,10 @@ struct DuoLayout: Equatable {
     /// pages under a top bar, which acts on the focused one), moved off a floating sidebar, an
     /// active fold and the camera.
     var chromeLane: ClosedRange<CGFloat>
+    /// The tab strip's lane: `chromeLane`, except that only occlusions in the strip's own band
+    /// (`DuoLayoutInput.stripBand`) cut it. Under the top bar the camera sits beside the row,
+    /// above the strip, so the strip runs on under the status items to the screen's margin.
+    var stripLane: ClosedRange<CGFloat>
 
     /// The focused pane's frame.
     var focusedPaneFrame: CGRect
@@ -222,11 +231,17 @@ struct DuoLayout: Equatable {
         if input.isDivisionActive, let fold = vertical {
             lane = Self.lane(lane, avoiding: fold.minX...fold.maxX)
         }
+        var strip = lane
         for region in input.occlusions where region.minY < input.chromeBand.upperBound
             && region.maxY > input.chromeBand.lowerBound {
             lane = Self.lane(lane, avoiding: region.minX...region.maxX)
         }
+        let stripBand = input.stripBand ?? input.chromeBand
+        for region in input.occlusions where region.minY < stripBand.upperBound && region.maxY > stripBand.lowerBound {
+            strip = Self.lane(strip, avoiding: region.minX...region.maxX)
+        }
         chromeLane = lane
+        stripLane = strip
     }
 
     /// The division as a vertical crease (book pose), or nil for a horizontal one (tabletop),

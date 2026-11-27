@@ -51,6 +51,8 @@ final class DuoUIState {
     var topGeometry: TopChromeGeometry?
     /// The corner the status items keep to (`readStatusCorner`), read before each layout pass.
     var statusCorner: CGRect?
+    /// What `statusCorner` was read from (`StatusCorner.Source`, "forced" or "none"), for the log.
+    var statusCornerSource = "none"
     var lastStatusReading: StatusZoneReading?
     /// Page tabs in the window, kept as tabs change: the strip shows from the second.
     var pageTabCount = 0
@@ -110,6 +112,7 @@ extension BrowserViewController {
         #endif
         let pillFrame = pill.frame
         let row = makeTopGeometry(stripHeight: 0)
+        let stripHeight = CGFloat(FixedChoices.tabStripHeight)
         return DuoLayoutInput(
             pageArea: pageArea,
             isRegularWidth: traitCollection.horizontalSizeClass == .regular,
@@ -125,6 +128,7 @@ extension BrowserViewController {
             chromeBand: chromeOnTop
                 ? row.rowTop...row.rowBottom
                 : min(pillFrame.minY, bounds.maxY - ChromeGeometry.pillHeight * 2)...bounds.maxY,
+            stripBand: chromeOnTop ? row.stripTop...(row.stripTop + stripHeight) : nil,
             sidePaneOpen: sidePaneUI.isRequested
         )
     }
@@ -156,6 +160,7 @@ extension BrowserViewController {
         applyStripLayout(layout)
         duo.laneLeading.constant = layout.chromeLane.lowerBound
         duo.laneWidth.constant = layout.chromeLane.upperBound - layout.chromeLane.lowerBound
+        placeStrip(layout)
         applySidebarLayout(layout)
 
         // Flat, the primary pane's exact width puts the split on the crease. Partly folded, the

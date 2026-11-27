@@ -494,11 +494,15 @@ public enum FixedChoices {
     /// The room Plain leaves for the status bar's time beside a camera the status items wrap, used
     /// only where the system reports the camera (an occlusion region inside the top safe area) but
     /// no corner-adaptive guide says how far the items reach. It is an allowance for the time's
-    /// text (the widest, "12:59", in the status bar's font), not a screen measurement: the
-    /// camera's place still comes from the system. Checked against the Duo's inner screen, where
-    /// the time starts 57 pt before the camera. The top bar's row stops this far (plus its gap)
-    /// before the camera.
-    public static let statusItemsReach: Double = 64
+    /// text, not a screen measurement: the camera's place still comes from the system. Calibrated
+    /// on the owner's screenshot of the Duo's inner screen (landscape, 3x): the time "11:08"
+    /// starts at x 831.7 pt, 53 pt before the camera (884.7), the battery ring wraps the camera
+    /// (883–924) and the indicators above the time start further right (845.7). Plus 4 pt for a
+    /// wider time ("10:58", "12:00": the 1s are the narrow digits). The top bar's trailing capsule
+    /// then ends `TopChromeGeometry.cornerGap` (8 pt) before that: 12 pt before "11:08", at least
+    /// 8 before any 12-hour time. Was 64 (with a 12 pt gap: 23 pt short of the clock, which the
+    /// owner saw as the buttons stopping too far from the status items).
+    public static let statusItemsReach: Double = 57
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375

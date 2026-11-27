@@ -276,7 +276,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             sheet.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             sheet.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             sheet.content.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: Spacing.s),
-            sheet.content.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s),
+            duo.top.sheetOverPill as NSLayoutConstraint,
 
             duo.top.pillHeight as NSLayoutConstraint,
 

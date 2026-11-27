@@ -39,6 +39,10 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+    override public func loadView() {
+        view = StripView()
+    }
+
     override public func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
@@ -239,6 +243,22 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
 
     /// The diffable data source performs local moves itself (`reorderingHandlers`).
     public func collectionView(_ collectionView: UICollectionView, performDropWith coordinator: any UICollectionViewDropCoordinator) {}
+}
+
+/// The strip's view: 34 pt high, it takes touches 5 pt above and below too, so each tab and New
+/// Tab is a 44 pt target. A touch there goes to what is at the same x inside the strip.
+private final class StripView: UIView {
+    private static let outset = max(0, (Metrics.tapTarget - CGFloat(FixedChoices.tabStripHeight)) / 2)
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.insetBy(dx: 0, dy: -Self.outset).contains(point)
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, self.point(inside: point, with: event) else { return nil }
+        let clamped = CGPoint(x: point.x, y: min(max(point.y, bounds.minY + 1), bounds.maxY - 1))
+        return super.hitTest(clamped, with: event)
+    }
 }
 
 /// One tab in the strip: the site tile, the title, and a close button on the focused tab.

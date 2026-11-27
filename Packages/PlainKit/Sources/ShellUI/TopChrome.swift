@@ -24,11 +24,8 @@ struct TopChromeGeometry: Equatable {
     static let topGap: CGFloat = 2
     /// Between the row and the strip, and under the lowest of them.
     static let gap: CGFloat = 4
-    /// The collapsed pill's size relative to the expanded one: the address stays readable.
-    static let compactScale: CGFloat = 0.7
-    /// The pill's widest: Safari's address field on the inner screen is about this wide. Wider, an
-    /// address reads as a sentence across the screen and the buttons drift from the pill.
-    static let maxPillWidth: CGFloat = 560
+    /// The collapsed pill's size relative to the expanded one.
+    static var compactScale: CGFloat { CGFloat(FixedChoices.topBarCollapsedScale) }
 
     /// The row's top (the pill's and the buttons').
     var rowTop: CGFloat { pageTop + Self.topGap }

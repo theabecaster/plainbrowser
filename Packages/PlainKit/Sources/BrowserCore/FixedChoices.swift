@@ -352,6 +352,12 @@ public enum FixedChoices {
     /// controls under the status bar, as Safari puts it there. The page gets the full width and
     /// height under it, and the bar shrinks to the address while reading.
     public static let topBarHeight: Double = 44
+    /// The top bar's address pill at its widest: about Safari's address field there. Wider, an
+    /// address reads as a sentence across the screen and the buttons drift from it.
+    public static let topBarPillMaxWidth: Double = 560
+    /// The top bar's pill while reading, relative to its resting size: the address stays readable
+    /// (about 31 pt high) and the chrome drops under 9% of the inner screen.
+    public static let topBarCollapsedScale: Double = 0.7
     /// The narrowest pane of a split: the narrowest current iPhone. Narrower panes get cramped
     /// mobile layouts, so the Duo's inner portrait (669 pt) shows one pane.
     public static let splitMinimumPaneWidth: Double = 375

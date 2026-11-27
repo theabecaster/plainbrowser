@@ -10,6 +10,10 @@ final class TopBarLayout {
     var pillHeight: NSLayoutConstraint!
     /// The toast just above the pill (bottom row), or low on the page (top bar).
     var toastOverPill: NSLayoutConstraint!
+    /// The search sheet's content ends above the pill; with the pill in the top bar (the sheet is
+    /// closed then) it rests on the safe area's bottom instead, so the two never conflict.
+    var sheetOverPill: NSLayoutConstraint!
+    var sheetLow: NSLayoutConstraint!
     var toastLow: NSLayoutConstraint!
     /// The pull indicator's top: under the top bar when it shows.
     var pullIndicatorTop: NSLayoutConstraint!
@@ -54,6 +58,8 @@ extension BrowserViewController {
         top.pillHeight = pill.heightAnchor.constraint(equalToConstant: ChromeGeometry.pillHeight)
         top.toastOverPill = tabsUI.toast.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s)
         top.toastLow = tabsUI.toast.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -Spacing.s)
+        top.sheetOverPill = sheet.content.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s)
+        top.sheetLow = sheet.content.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -Spacing.s)
         top.pullIndicatorTop = pullIndicator.topAnchor.constraint(equalTo: panes.view.topAnchor, constant: Spacing.s)
 
         let centered = pill.centerXAnchor.constraint(equalTo: lane.centerXAnchor)
@@ -64,7 +70,7 @@ extension BrowserViewController {
             pill.topAnchor.constraint(equalTo: safe.topAnchor, constant: TopChromeGeometry.topGap),
             centered,
             fill,
-            pill.widthAnchor.constraint(lessThanOrEqualToConstant: TopChromeGeometry.maxPillWidth),
+            pill.widthAnchor.constraint(lessThanOrEqualToConstant: CGFloat(FixedChoices.topBarPillMaxWidth)),
             pill.leadingAnchor.constraint(greaterThanOrEqualTo: lane.leadingAnchor, constant: margin),
             pill.trailingAnchor.constraint(lessThanOrEqualTo: lane.trailingAnchor, constant: -margin),
         ]
@@ -91,11 +97,11 @@ extension BrowserViewController {
         if top.isPillOnTop != pillOnTop {
             top.isPillOnTop = pillOnTop
             if pillOnTop {
-                top.toastOverPill.isActive = false
-                NSLayoutConstraint.activate(top.pill + [top.toastLow])
+                NSLayoutConstraint.deactivate([top.toastOverPill, top.sheetOverPill])
+                NSLayoutConstraint.activate(top.pill + [top.toastLow, top.sheetLow])
             } else {
-                NSLayoutConstraint.deactivate(top.pill + [top.toastLow])
-                top.toastOverPill.isActive = true
+                NSLayoutConstraint.deactivate(top.pill + [top.toastLow, top.sheetLow])
+                NSLayoutConstraint.activate([top.toastOverPill, top.sheetOverPill])
             }
             top.pillHeight.constant = pillOnTop ? TopChromeGeometry.rowHeight : ChromeGeometry.pillHeight
         }
@@ -119,8 +125,9 @@ extension BrowserViewController {
         updatePillRestConstraint()
         // Forward dims instead of hiding in the top bar's fixed slots.
         updateButtons()
+        // The geometry stays until the next layout pass compares it (`viewDidLayoutSubviews`),
+        // which then places the chrome for the new mode. The buttons' rise is the top bar's alone.
         if !chromeOnTop {
-            duo.topGeometry = nil
             buttonBar.transform = .identity
         }
     }
@@ -164,6 +171,11 @@ extension BrowserViewController {
         engineUI.reader.setInsets(obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
         setPageTopStart(geometry.expandedInset, for: engineUI.reader.webView?.scrollView)
         duo.top.pullIndicatorTop.constant = geometry.expandedInset + Spacing.s
+        // A split's other pane follows a change of the bar's height (the strip coming or going).
+        let panes = session.tabs.panes
+        for index in shownPanes where index != session.tabs.focusedPane {
+            if let id = panes[index], let tab = session.tabs.existingTab(id) { applyOtherPaneTopInsets(to: tab, geometry: geometry) }
+        }
     }
 
     /// The other pane of a split under the top bar: the expanded bar's inset, so a focus switch

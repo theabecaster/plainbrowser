@@ -502,7 +502,9 @@ extension BrowserViewController: GalleryHost {
                     [weak self] in self?.openNewTab(private: true)
                 }
             case .regularTab:
-                EmptyTabView.Shortcut(id: "start.newTab", title: String(localized: "New Tab"), symbol: "plus") {
+                // Only on an empty private tab: it leaves private browsing, so it says where it
+                // goes (state rules §3).
+                EmptyTabView.Shortcut(id: "start.regularTab", title: String(localized: "Regular Tab"), symbol: "plus") {
                     [weak self] in self?.openNewTab(private: false)
                 }
             case .reopenClosedTab:

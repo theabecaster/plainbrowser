@@ -48,6 +48,8 @@ enum PageButton: CaseIterable {
 /// The glass button bar under the pill on iPhones without a vertical bar.
 final class ButtonBar: UIView {
     private let glass = Glass.makeView(shape: .capsule)
+    /// The soft paper glow under the glass shapes, so the symbols read over any page.
+    private let scrim = ChromeScrim()
     private(set) var stack = UIStackView()
     private(set) var buttons: [PageButton: UIButton] = [:]
     /// Beside the pill on the start screen: only the buttons that show, each a round glass slot.
@@ -63,6 +65,10 @@ final class ButtonBar: UIView {
     /// and grows away from Back (Forward comes in to its right), so Back never moves; the trailing
     /// capsule keeps every slot. The pill keeps its place either way.
     private(set) var isSplit = false
+    /// The split shape's leading capsule holds only the buttons that show (the top bar, as Safari
+    /// has it); off, it keeps both slots and Forward hides in place (the one bottom row in compact
+    /// height, so the capsule never changes shape under the thumb inside a mode).
+    private(set) var packsLeading = true
     private let trailingGlass = Glass.makeView(shape: .capsule)
     private let trailingStack = UIStackView()
     private var glassTrailing: NSLayoutConstraint!
@@ -77,6 +83,9 @@ final class ButtonBar: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        scrim.frame = bounds
+        scrim.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(scrim)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
         stack.axis = .horizontal
@@ -126,7 +135,12 @@ final class ButtonBar: UIView {
     /// move between the capsules and keep their actions and menus. The caller owns the constraints
     /// that place the bar: in the split shape it spans the row, and the pill sits between the
     /// capsules. Call inside the layout's animation.
-    func setSplit(_ split: Bool) {
+    func setSplit(_ split: Bool, packsLeading packs: Bool = true) {
+        if split, isSplit, packs != packsLeading {
+            packsLeading = packs
+            return updateCapsules()
+        }
+        packsLeading = packs
         guard split != isSplit else { return }
         if split { setBesidePill(false) }
         isSplit = split
@@ -176,17 +190,20 @@ final class ButtonBar: UIView {
     private func updateCapsules() {
         let leadingShown = stack.arrangedSubviews.filter { $0.isUserInteractionEnabled }
         if isSplit {
-            // Back and Forward: only what shows, packed from Back.
-            for view in stack.arrangedSubviews where view.isHidden == view.isUserInteractionEnabled {
-                view.isHidden = !view.isUserInteractionEnabled
+            // Back and Forward: only what shows, packed from Back; or both slots, kept.
+            for view in stack.arrangedSubviews {
+                let hidden = packsLeading && !view.isUserInteractionEnabled
+                if view.isHidden != hidden { view.isHidden = hidden }
             }
-            let width = Self.slot * CGFloat(max(1, leadingShown.count))
+            let slots = packsLeading ? max(1, leadingShown.count) : stack.arrangedSubviews.count
+            let width = Self.slot * CGFloat(slots)
             if leadingWidth?.constant != width { leadingWidth?.constant = width }
         }
         let showsLeading = !isSplit || !leadingShown.isEmpty
         if glass.isHidden == showsLeading { glass.isHidden = !showsLeading }
         let showsTrailing = trailingStack.arrangedSubviews.contains { $0.isUserInteractionEnabled }
         if trailingGlass.isHidden == showsTrailing { trailingGlass.isHidden = !showsTrailing }
+        setNeedsLayout()
     }
 
     /// In the split shape only the two capsules take touches: the pill sits in the gap.
@@ -211,7 +228,7 @@ final class ButtonBar: UIView {
         button.isAccessibilityElement = visibility.isVisible
         // Beside the pill a hidden button gives up its slot: the bar is only what it shows. So
         // does Back or Forward in the top bar's leading capsule.
-        let packs = isBesidePill || (isSplit && button.superview === stack)
+        let packs = isBesidePill || (isSplit && packsLeading && button.superview === stack)
         let removed = packs && !visibility.isVisible
         if button.isHidden != removed { button.isHidden = removed }
         if isBesidePill { updateBesideWidth() }
@@ -258,6 +275,20 @@ final class ButtonBar: UIView {
         effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
         glass.effect = effect
         trailingGlass.effect = effect
+        scrim.isPrivate = isPrivate
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateScrim()
+    }
+
+    /// The glow follows the glass shapes that show: one capsule, the round slot beside the pill,
+    /// or the split shape's two.
+    private func updateScrim() {
+        let shown = [glass, trailingGlass].filter { $0.superview === self && !$0.isHidden }
+        // Only under the glass: the page shows in the gaps, so the capsules float apart.
+        scrim.shapes = shown.map(\.frame)
     }
 }
 

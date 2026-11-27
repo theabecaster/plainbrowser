@@ -27,6 +27,25 @@ nonisolated enum NavigationRules {
         return .external
     }
 
+    /// An `http://` address WebKit's HTTPS-first try can't help: a local or private host (an IP
+    /// address, `localhost`, `.local`, `.localhost`, `.internal`, `.home.arpa`, or a one-word
+    /// intranet name), or an explicit port other than 80. None of these has a public certificate,
+    /// and a server on an HTTP port that gets a TLS hello usually just waits, so the upgrade sat
+    /// on a blank page for seconds before falling back. These load as asked; every other
+    /// `http://` address still tries HTTPS first (`FixedChoices.httpsUpgradeAlwaysOn`).
+    static func keepsHTTPAsRequested(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "http", let host = url.host()?.lowercased(), !host.isEmpty else {
+            return false
+        }
+        if let port = url.port, port != 80 { return true }
+        let bare = host.hasPrefix("[") ? String(host.dropFirst().dropLast()) : host
+        if bare.contains(":") { return true }  // IPv6 literal
+        if bare.split(separator: ".").count == 4, bare.allSatisfy({ $0.isNumber || $0 == "." }) { return true }
+        if !bare.contains(".") { return true }  // localhost, an intranet name
+        let localSuffixes = [".local", ".localhost", ".internal", ".home.arpa", ".lan"]
+        return localSuffixes.contains { bare.hasSuffix($0) }
+    }
+
     /// Desktop on a pane whose shorter side is at least `EngineChoices.desktopMinimumSide`.
     static func contentMode(forPaneSize size: CGSize) -> ContentMode {
         min(size.width, size.height) >= EngineChoices.desktopMinimumSide ? .desktop : .mobile

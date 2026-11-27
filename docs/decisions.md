@@ -1947,3 +1947,50 @@ From docs/research/ux-audit.md, items 6, 10, 11, 12 (gallery part) and 25.
 ## Archive after a week by default (2026-11-27)
 
 The owner asked for a week instead of a day. A day archived tabs people still meant to come back to within the week; a week keeps those and still clears the clutter. People who already picked a value in Settings keep it; only the default changes (`FixedChoices.defaultArchiveAfter`).
+
+## UX audit leftovers: legibility, landscape, Back to the opener, errors (2026-11-27)
+
+The shell and engine items left from docs/research/ux-audit.md.
+
+- **A paper ground under the floating glass (`ChromeScrim`), not a stronger tint or a band.**
+  The pill's tint was already 88% Paper; Liquid Glass still showed body text almost unblurred
+  under the host and the buttons. The background color (82%; 92% in dark mode, where light text
+  showed through more) fills each glass shape from 1 pt inside its edge, softened over 2 pt, and
+  nothing past it. It sits inside each control behind its glass, so it moves, scales and fades
+  with the control at no per-frame cost (one layer shadow with a fixed path, no offscreen pass).
+  Two design review rounds rejected anything wider (5 pt, then 3 pt past the glass, feathered 8
+  and 6 pt): over a colored footer it read as a cream halo joining the capsules. The page shows
+  in the 6 pt gaps between capsules, so they float apart; a band or a page-colored scrim were the
+  alternatives (a band is what the owner removed at the top).
+- **Compact height is one bottom row.** The top bar's split shape (Back and Forward in a capsule,
+  Tabs, Share and More in another) at the bottom row's ends, with the pill between them in a
+  fixed place. Unlike the top bar's, the leading capsule keeps both slots (Forward hides in
+  place), so it never changes shape inside a mode (state rules, principle 5; design review). Kept at the bottom rather than moved to the top: the thumb stays where it was in
+  portrait, the scroll-chrome rules apply unchanged (`ChromeGeometry` treats it as a bar-less
+  row), and the top inset belongs to the top bar lane. 69 pt of 402 at rest on an iPhone 17
+  (17%, was ~40%).
+- **Back to the opener is a pop.** A snapshot of the closing tab's page slides off toward the
+  trailing edge over the live opener, which comes in from 30% behind (`Motion.backToOpener`,
+  `.spring(0.35, bounce 0)`, a button drives it); Reduce Motion crossfades. The opener is live from
+  the first frame, so the motion never blocks input. The swap's own layout lands before the
+  motion starts, so the pill's text never slides with the pages.
+- **The link preview is sized so the whole menu fits** (`LinkMenuRules.previewSize`): the window
+  less the safe area, the menu's rows at the current text size and its section gaps; at most
+  1.3 times as tall as wide; beside the menu in compact height.
+- **`http://` addresses that HTTPS can't help load as asked** (`NavigationRules
+  .keepsHTTPAsRequested`: IP addresses, `localhost`, `.local` and other private names, one-word
+  intranet hosts, explicit ports other than 80), via the navigation's `WKWebpagePreferences`.
+  Measured on the iPhone 17 simulator: for `http://127.0.0.1:<port>` WebKit already went straight
+  to HTTP (the request reached the server in the same second, before and after the change), so the
+  audit's 5 s blank page was the cold launch and the first web process, not the upgrade. The rule
+  stays for the names WebKit does try to upgrade. The progress bar now creeps toward a third while
+  the engine reports nothing (Safari's cue), so a slow server never looks stuck.
+- **Error sentences come from `LoadFailure`** (BrowserCore, tested on macOS): the error's domain
+  and code, then its underlying error. The audit's "refused connection" was port 9, which WebKit
+  refuses itself (`WebKitErrorDomain` 103); it now says "Plain doesn't open pages on this port."
+  A real refused port says "The site isn't answering."
+- **Lead's calls:** the intro's "Made for iPhone Duo" row shows only where the window can be a
+  foldable's (`IntroRules.showsUnfoldRow`: a vertical bar edge, or both size classes regular;
+  Plain is iPhone-only), never from the device model. An empty private tab's shortcut says
+  "Regular Tab", since it leaves private browsing.
+- **Sheets' empty states** are `PaperEmptyState`: symbol and sentence in ink secondary, body text.

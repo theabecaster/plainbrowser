@@ -181,7 +181,8 @@ Motion principles: springs with no bounce by default; bounce only when a flick w
 | Toolbar collapse | tied to scroll; snaps on release, toward the release velocity when it is clear; a drag during the snap retargets from the on-screen position | `.smooth(0.25)` | none |
 | Toolbar hide | reading on past the pill (120 pt, or a flick projected that far) sinks the pill 12 pt past the bottom edge as its text fades; the page inset follows at rest (docs/state-rules.md, "Chrome while reading") | `.smooth(0.35)`, frame by frame (`SpringDriver`) | none |
 | Toolbar reveal | the whole bar springs back from the pill or hidden: 24 pt up (8 pt fast), a bottom-edge or status-bar tap, the page's end, a new page; a reveal during a hide retargets with its velocity; the page inset moves at the start, so a fixed footer rises with the bar | `.smooth(0.25)` | none |
-| Link preview | `UIContextMenuInteraction` | system | system |
+| Back to the opener | Back on a link-opened tab's first page closes the tab: a snapshot of its page slides off toward the trailing edge (where Back sends a page) over the live opener, which slides in from 30% behind it, as a navigation pop; input is never blocked; Reduce Motion: a 0.2 s crossfade | `.spring(duration: 0.35, bounce: 0)` | none |
+| Link preview | `UIContextMenuInteraction`; the live preview is capped (`LinkMenuRules.previewSize`) so the whole menu fits under it, or beside it in compact height | system | system |
 | Fold / unfold | none custom; system bounds change | — | none |
 
 Chrome: the pill and the button bar share one Liquid Glass container (`UIGlassContainerEffect`) with no extra layer shadow, plus the system scroll edge effect on the page edge under them.

@@ -1,4 +1,5 @@
 #if os(iOS)
+import BrowserCore
 import DesignSystem
 import os
 import PerfSignposts
@@ -76,6 +77,13 @@ public final class IntroViewController: UIViewController {
         super.viewDidLayoutSubviews()
         let safe = view.safeAreaLayoutGuide.layoutFrame
         if model.safeHeight != safe.height { model.safeHeight = safe.height }
+        // A fold or unfold changes the traits and the bounds together, so this pass sees it.
+        let traits = traitCollection
+        let canUnfold = IntroRules.showsUnfoldRow(
+            hasVerticalBarEdge: traits.verticalBarEdge != .unspecified,
+            widthRegular: traits.horizontalSizeClass == .regular, heightRegular: traits.verticalSizeClass == .regular
+        )
+        if model.canUnfold != canUnfold { model.canUnfold = canUnfold }
         layoutMark()
         // A new size (the Duo unfolding, a rotation) moves the dawn with it, at once.
         if laidOut.map({ $0.0 != view.bounds || $0.1 != safe }) ?? true {

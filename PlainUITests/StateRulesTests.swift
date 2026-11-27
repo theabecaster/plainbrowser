@@ -291,6 +291,18 @@ final class StateRulesTests: XCTestCase {
         XCTAssertFalse(app.buttons["reopenTab"].waitForExistence(timeout: 1), "private tabs never come back")
     }
 
+    /// An empty private tab's shortcut leaves private browsing, so it says so: "Regular Tab".
+    func testEmptyPrivateTabOffersARegularTab() throws {
+        let app = try launch()
+        closeSearch(app)
+        app.buttons["start.privateTab"].tap()
+        closeSearch(app)
+        let regular = app.buttons["start.regularTab"]
+        XCTAssertTrue(regular.waitForExistence(timeout: 3))
+        XCTAssertEqual(regular.label, "Regular Tab")
+        XCTAssertFalse(app.buttons["start.privateTab"].exists, "already private")
+    }
+
     /// With only private tabs open and an empty regular tab, the private tabs are one tap away.
     func testPrivateTabsReachableFromTheStartScreen() throws {
         let app = try launch()

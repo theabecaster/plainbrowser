@@ -93,6 +93,39 @@ struct ValueLabel: View {
     }
 }
 
+/// A sheet's empty state on paper (docs/state-rules.md §6, Sheets): the symbol and one sentence
+/// in the ink's secondary step, body text, as the start screen's sentence. The system's
+/// `ContentUnavailableView` sets the sentence as a bold black title, which nothing else in Plain
+/// uses. An optional footer is one more quiet line under it.
+struct PaperEmptyState: View {
+    let message: String
+    let systemImage: String
+    var footer: String?
+
+    var body: some View {
+        VStack(spacing: Spacing.s) {
+            Image(systemName: systemImage)
+                .font(.title)
+                .foregroundStyle(Style.inkSecondary)
+                .accessibilityHidden(true)
+                .padding(.bottom, Spacing.xs)
+            Text(message)
+                .font(.body)
+                .foregroundStyle(Style.inkSecondary)
+            if let footer {
+                Text(footer)
+                    .font(.footnote)
+                    .foregroundStyle(Style.inkSecondary)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, Spacing.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("sheetEmptyState")
+    }
+}
+
 /// A read that failed, in place of the list: one sentence and Try Again (docs/state-rules.md §6,
 /// Sheets). Never the empty state.
 struct ReadFailedView: View {

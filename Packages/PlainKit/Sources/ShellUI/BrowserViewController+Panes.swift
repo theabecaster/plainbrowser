@@ -250,7 +250,8 @@ extension BrowserViewController {
         setPageTopStart(0, for: session.pool.scrollView(for: tab))
         let bottom = panes.view.frame.maxY
         let geometry = ChromeGeometry(
-            viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar
+            viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom,
+            hasButtonBar: !usesVerticalBar && !usesSingleRow
         )
         let expanded = geometry.expandedInset(pageBottom: bottom)
         let hidden = geometry.hiddenInset(pageBottom: bottom)

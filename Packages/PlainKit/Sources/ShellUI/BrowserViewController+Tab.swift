@@ -68,8 +68,51 @@ extension BrowserViewController {
             closeTab(tab)
             reopenSummary()
         } else if returnsToOpener(tab) {
-            closeTab(tab)
+            closeReturningToOpener(tab)
         }
+    }
+
+    /// Back on a link-opened tab's first page closes it and shows its opener with a pop: the
+    /// tab's page slides off toward the trailing edge, where Back sends a page, and the opener
+    /// slides in from a little behind it (docs/plan.md, motion table, "Back to the opener").
+    /// Reduce Motion: the page crossfades to the opener. Nothing waits on it: the opener is live
+    /// and takes touches from the first frame.
+    private func closeReturningToOpener(_ tab: Tab) {
+        let clip = pageClip
+        let page = webContainer
+        guard view.window != nil, let cover = page.snapshotView(afterScreenUpdates: false) else {
+            return closeTab(tab)
+        }
+        closeTab(tab)
+        // The opener (or the tab chosen in its place) holds the same pane; anything else (the
+        // search field, the other pane of a split) gets no motion.
+        guard currentTab != nil, !isEditingAddress, pageClip === clip, webContainer === page else { return }
+        // The swap's own layout (the pill's text, the buttons) lands now, unanimated, so only the
+        // pages move: otherwise the pill's host slid in from the side with them.
+        UIView.performWithoutAnimation { view.layoutIfNeeded() }
+        cover.frame = page.frame
+        cover.isUserInteractionEnabled = false
+        clip.addSubview(cover)
+        if Motion.prefersCrossfade {
+            UIView.animate(withDuration: Motion.crossfadeDuration, delay: 0, options: [.allowUserInteraction]) {
+                cover.alpha = 0
+            } completion: { _ in cover.removeFromSuperview() }
+            return
+        }
+        let direction: CGFloat = view.effectiveUserInterfaceLayoutDirection == .rightToLeft ? -1 : 1
+        let width = clip.bounds.width
+        // The leaving page's edge casts a soft shadow on the opener, as a popped page does.
+        cover.layer.shadowColor = Palette.floatingShadow.resolvedColor(with: traitCollection).cgColor
+        cover.layer.shadowOpacity = 0.18
+        cover.layer.shadowRadius = 12
+        cover.layer.shadowPath = UIBezierPath(rect: cover.bounds).cgPath
+        page.transform = CGAffineTransform(translationX: -direction * width * Motion.backToOpenerParallax, y: 0)
+        Motion.animate(Motion.backToOpener, changes: {
+            cover.transform = CGAffineTransform(translationX: direction * (width + 24), y: 0)
+            page.transform = .identity
+        }, completion: {
+            cover.removeFromSuperview()
+        })
     }
 
     /// Whether `tab`'s visits go into history: never for a private tab.

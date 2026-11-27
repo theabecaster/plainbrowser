@@ -29,6 +29,14 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - The page gets the screen. Controls show only while they apply, for example the progress bar while loading or a "Reopen tab" toast after a close.
 - No badges, banners or standing overlays.
+- **The floating controls read over any page.** Liquid Glass shows the page almost unblurred, so
+  each glass control on the page (the pill, the button capsules) has a paper ground under it
+  (`ChromeScrim`): the glass's own shape, its edge softened over 2 pt, nothing past it, inside
+  the control so it moves and fades with it. Never a band, never a halo: the page shows in the
+  gaps between capsules, so they float apart.
+- **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
+  Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
+  pill in a fixed place, Tabs, Share and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, Share and
   More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
@@ -67,6 +75,8 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 ## Empty and first-run states
 
 - Each empty state is one sentence and one main button.
+- In sheets an empty list shows its symbol and the sentence in ink secondary, body text
+  (`PaperEmptyState`), as the start screen does; never the system's bold black title.
 - After the last tab closes, Plain goes straight to the search field. There is no empty screen in between.
 - **Opening with tabs:** the last tab, exactly as it was, from the first frame (its saved picture until the live page has loaded), the bar resting, no keyboard. After 4 hours away, a fresh search over it instead: keyboard up, the tab behind a paper veil, a swipe down back to it. With no tabs, search with the keyboard up. Rules in docs/state-rules.md, "Launch and return".
 - **First run:** the owner chose a short intro, shown once on first launch and never again after it is finished or skipped. It is the Stem mark assembling, one promise, what's inside, an icon picker and a live blocking demo, then it dissolves into the search field with the keyboard up. Every step has Skip. It asks no permissions: camera, location and notifications are still asked only when a site needs them. Its structure follows Arc Search's intro; its look is Plain's own (docs/research/intro.md): paper, a dawn window at the top with the mark on its sill, New York headlines with a coral fold-cut underline, paper cards and a Lagoon Liquid Glass button. These are the intro's own; the rest of the app keeps the rules below.
@@ -85,6 +95,13 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - Short and plain, with Title Case for labels and sentence case for footers and messages.
 - Error messages are written by Plain from known error cases, never raw WebKit or server text.
+  A page that can't load says why in one sentence, with Try Again (`LoadFailure`): "You're
+  offline.", "Plain can't find this site.", "The site isn't answering.", "The site took too
+  long to answer.", "This site's connection isn't private.", "This address doesn't work.",
+  "This site keeps redirecting.", "The site sent something Plain can't show.", "Plain doesn't
+  open pages on this port.", else "Plain couldn't open this page."
+- The intro promises only what this screen can do: "Made for iPhone Duo" shows only where the
+  window can be a foldable's (a vertical bar edge, or both size classes regular), from traits.
 - An item captioned under its symbol uses the same short caption everywhere it shows (the page menu's rows and the start screen's shortcuts: "Private Tab", "Reopen Tab", "Archive"), with the full name for VoiceOver.
 - The same action has the same symbol everywhere: Copy Link is `link`, Share `square.and.arrow.up`, Close Tab `xmark`.
 

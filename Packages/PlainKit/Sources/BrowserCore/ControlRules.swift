@@ -518,3 +518,17 @@ public struct GalleryRules: Sendable, Equatable {
         return otherListCount > 0 ? .switchList : .search
     }
 }
+
+// MARK: - First-run intro
+
+/// What the intro may promise on this screen.
+public enum IntroRules {
+    /// "Made for iPhone Duo — Unfold for two pages side by side" shows only where the window can
+    /// be a foldable's: the outer screen (the system gives it a vertical bar edge) or the inner one
+    /// (both size classes regular; Plain is iPhone-only, so no iPad takes that branch). Other
+    /// iPhones can't unfold, and the row would promise something they can't do. Traits only,
+    /// never the device model (AGENTS.md).
+    public static func showsUnfoldRow(hasVerticalBarEdge: Bool, widthRegular: Bool, heightRegular: Bool) -> Bool {
+        hasVerticalBarEdge || (widthRegular && heightRegular)
+    }
+}

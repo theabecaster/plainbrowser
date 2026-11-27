@@ -69,6 +69,54 @@ final class EngineTests: XCTestCase {
         action.tap()
     }
 
+    /// A typed `http://` address on this machine shows its page at once: no HTTPS try first,
+    /// which left a blank page for seconds (ux-audit item 21). Then a closed port says so in
+    /// Plain's words with Try Again (item 22).
+    func testLocalHTTPAddressLoadsAtOnceAndARefusedOneSaysSo() throws {
+        let app = try launch()
+        go(app, to: "/a")
+        waitForPage(app, "Page A")
+        let field = app.textFields["searchField"]
+        app.buttons["addressPill"].tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        field.typeText("http://127.0.0.1:\(server.port)/b")
+        let start = Date()
+        field.typeText("\n")
+        // The HTTPS try took about 5 s before it fell back; UI queries add 2 to 3 s of their own.
+        waitForPage(app, "Page B", timeout: 4.5)
+        print("[plain-measure] Go on http://127.0.0.1 to Page B: \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+
+        // A port that was listening a moment ago and is closed now: refused.
+        let closed = try TestServer()
+        try closed.start()
+        let port = closed.port
+        closed.stop()
+        app.buttons["addressPill"].tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        field.typeText("http://127.0.0.1:\(port)/nothing\n")
+        XCTAssertTrue(app.staticTexts["The site isn't answering."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Try Again"].exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "refused"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    /// Back on a link-opened tab's first page closes it and slides back to the opener, which
+    /// takes touches at once (the motion never blocks input).
+    func testBackClosesALinkOpenedTabBackToItsOpener() throws {
+        let app = try launch()
+        go(app, to: "/opener")
+        waitForPage(app, "Opener Page")
+        app.webViews.links["Open B in a new tab"].tap()
+        waitForPage(app, "Page B")
+        app.buttons["back"].tap()
+        waitForPage(app, "Opener Page", timeout: 3)
+        XCTAssertFalse(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 1), "the slide left nothing behind")
+        app.webViews.links["Read the long page"].tap()
+        waitForPage(app, "Long Read")
+    }
+
     func testPageLoadsThroughTheEngineAndComesBackAfterRelaunch() throws {
         var app = try launch(["-PlainTestStore", "-PlainResetStore"])
         go(app, to: "/a")

@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import UIKit
 import WebEngine
@@ -64,26 +65,10 @@ final class PageStateView: UIView {
         isHidden = false
     }
 
-    /// Plain's sentence for a failed load, from the known error cases (docs/ui-reference.md,
-    /// "Wording": never the raw WebKit or server text).
+    /// Plain's sentence for a failed load, from the known error cases (`LoadFailure`;
+    /// docs/ui-reference.md, "Wording": never the raw WebKit or server text).
     static func message(for error: LoadError) -> String {
-        guard error.domain == NSURLErrorDomain else { return "Plain couldn't open this page." }
-        switch error.code {
-        case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost, NSURLErrorDataNotAllowed:
-            return "You're offline."
-        case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed:
-            return "Plain can't find this site."
-        case NSURLErrorTimedOut:
-            return "The site took too long to answer."
-        case NSURLErrorCannotConnectToHost:
-            return "The site isn't answering."
-        case NSURLErrorServerCertificateUntrusted, NSURLErrorServerCertificateHasBadDate,
-             NSURLErrorServerCertificateHasUnknownRoot, NSURLErrorServerCertificateNotYetValid,
-             NSURLErrorSecureConnectionFailed:
-            return "This site's connection isn't private."
-        default:
-            return "Plain couldn't open this page."
-        }
+        error.failure.message
     }
 }
 #endif

@@ -92,8 +92,15 @@ extension WebViewPool {
     func contextMenuConfiguration(for linkURL: URL?, in tab: Tab) async -> UIContextMenuConfiguration? {
         guard let menu = await linkMenu(for: linkURL, in: tab) else { return nil }
         let preview: UIContextMenuContentPreviewProvider?
-        if menu.hasPreview, let url = menu.element.linkURL {
-            preview = { [weak self] in self?.makeLinkPreview(url, isPrivate: tab.isPrivate, profile: tab.profileID) }
+        // No preview where the menu alone fills the screen (the largest text, a short window):
+        // the whole menu matters more than a glimpse of the page.
+        if menu.hasPreview, let url = menu.element.linkURL, let size = linkPreviewSize(for: menu, in: tab) {
+            preview = { [weak self, weak tab] in
+                guard let self, let tab else { return nil }
+                let controller = self.makeLinkPreview(url, isPrivate: tab.isPrivate, profile: tab.profileID)
+                controller.preferredContentSize = size
+                return controller
+            }
         } else {
             preview = nil
         }
@@ -143,6 +150,20 @@ extension WebViewPool {
             webView.stopLoading()
             self?.contentRules?.release(controller)
         }
+    }
+
+    /// The preview's size for `menu` in `tab`'s window (`LinkMenuRules.previewSize`): short
+    /// enough that every item shows without scrolling. Nil when there is no room for one, or
+    /// before the tab is in a window.
+    private func linkPreviewSize(for menu: LinkMenu, in tab: Tab) -> CGSize? {
+        guard let window = existingWebView(for: tab)?.window else { return nil }
+        let traits = window.traitCollection
+        let rowHeight = UIFontMetrics(forTextStyle: .body).scaledValue(for: LinkMenuRules.menuRowHeight, compatibleWith: traits)
+        return LinkMenuRules.previewSize(
+            window: window.bounds.size, safeTop: window.safeAreaInsets.top, safeBottom: window.safeAreaInsets.bottom,
+            rows: menu.items.count, sections: menu.sections.count, rowHeight: rowHeight,
+            menuBeside: traits.verticalSizeClass == .compact
+        )
     }
 
     /// The user tapped the preview: the link opens in the tab, as in Safari.

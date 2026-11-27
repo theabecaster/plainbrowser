@@ -7,6 +7,45 @@ import Testing
     let web = URL(string: "https://example.com/page")!
     let image = URL(string: "https://example.com/a.png")!
 
+    /// The whole menu fits under the preview: iPhone 17, the Duo's outer screen, an iPhone SE, and
+    /// the largest text; beside it in compact height.
+    @Test func previewLeavesRoomForTheWholeMenu() {
+        let screens: [(CGSize, CGFloat, CGFloat)] = [
+            (CGSize(width: 402, height: 874), 62, 34), (CGSize(width: 466, height: 678), 20, 20),
+            (CGSize(width: 375, height: 667), 20, 0),
+        ]
+        for (window, top, bottom) in screens {
+            // A link (5 items, 3 sections) and a linked image (7 items, 4 sections), default to
+            // the largest text.
+            for (rows, sections) in [(5, 3), (7, 4)] {
+                for rowHeight in [LinkMenuRules.menuRowHeight, 64, 110] {
+                    let menu = CGFloat(rows) * rowHeight + CGFloat(sections - 1) * LinkMenuRules.previewSectionGap
+                    guard let size = LinkMenuRules.previewSize(
+                        window: window, safeTop: top, safeBottom: bottom, rows: rows, sections: sections,
+                        rowHeight: rowHeight, menuBeside: false
+                    ) else {
+                        // No preview only when a useful one could not fit.
+                        #expect(window.height - bottom - top - 16 * 3 - menu - 32 < LinkMenuRules.previewMinimumHeight)
+                        continue
+                    }
+                    #expect(top + 16 + size.height + 16 + menu <= window.height - bottom, "\(window) at \(rowHeight) pt rows")
+                    #expect(size.width <= window.width - 32)
+                    #expect(size.height >= LinkMenuRules.previewMinimumHeight)
+                }
+            }
+        }
+        // The usual case always has a preview.
+        #expect(LinkMenuRules.previewSize(
+            window: CGSize(width: 402, height: 874), safeTop: 62, safeBottom: 34, rows: 5, sections: 3,
+            rowHeight: LinkMenuRules.menuRowHeight, menuBeside: false
+        ) != nil)
+        let landscape = LinkMenuRules.previewSize(
+            window: CGSize(width: 874, height: 402), safeTop: 0, safeBottom: 21, rows: 5, sections: 3,
+            rowHeight: LinkMenuRules.menuRowHeight, menuBeside: true
+        )
+        #expect(landscape.map { $0.height <= 402 - 21 - 32 && $0.width <= 874 / 2 } == true)
+    }
+
     @Test func webLinkSections() {
         let sections = LinkMenuRules.sections(
             for: LinkElement(linkURL: web, imageURL: nil), canOpenInOtherPane: false, canSaveImages: true

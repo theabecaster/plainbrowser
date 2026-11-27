@@ -4,6 +4,18 @@ import Testing
 
 /// docs/state-rules.md §8, row by row: each test builds one state of the matrix and checks every
 /// control the row names.
+@Suite struct IntroRulesTests {
+    @Test func unfoldRowOnlyWhereTheWindowCanBeAFoldables() {
+        // A regular iPhone, portrait and landscape (a Pro Max is regular width in landscape).
+        #expect(!IntroRules.showsUnfoldRow(hasVerticalBarEdge: false, widthRegular: false, heightRegular: true))
+        #expect(!IntroRules.showsUnfoldRow(hasVerticalBarEdge: false, widthRegular: true, heightRegular: false))
+        #expect(!IntroRules.showsUnfoldRow(hasVerticalBarEdge: false, widthRegular: false, heightRegular: false))
+        // The Duo's outer screen (vertical bar) and its inner screen (regular both ways).
+        #expect(IntroRules.showsUnfoldRow(hasVerticalBarEdge: true, widthRegular: false, heightRegular: true))
+        #expect(IntroRules.showsUnfoldRow(hasVerticalBarEdge: false, widthRegular: true, heightRegular: true))
+    }
+}
+
 @Suite struct ControlRulesTests {
     // MARK: States
 

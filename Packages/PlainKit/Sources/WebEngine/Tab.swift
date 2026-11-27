@@ -33,6 +33,8 @@ public struct LoadError: Sendable, Equatable {
     public let code: Int
     public let domain: String
     public let message: String
+    /// What went wrong in the user's terms, for the error page's sentence.
+    public let failure: LoadFailure
 }
 
 /// One tab. The shell's `TabStore` owns it; the `WebViewPool` owns its web view.

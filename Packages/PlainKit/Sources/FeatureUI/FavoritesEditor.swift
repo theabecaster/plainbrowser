@@ -53,7 +53,7 @@ public struct FavoritesEditor: View {
                 if model.loadFailed {
                     ReadFailedView(message: Wording.favoritesReadFailed, systemImage: "star") { await model.load() }
                 } else if model.isLoaded, model.favorites.isEmpty {
-                    ContentUnavailableView("Add favorites from the page menu.", systemImage: "star")
+                    PaperEmptyState(message: "Add favorites from the page menu.", systemImage: "star")
                 }
             }
             .sheetTitle("Favorites")

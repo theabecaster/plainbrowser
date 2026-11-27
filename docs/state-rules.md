@@ -128,7 +128,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
 | Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. With two or more profiles the sentence names the window's profile ("Start with a search or an address in Work."), so a search never starts in the wrong one unnoticed. |
-| Start screen shortcuts (under the Search button) | Private Tab always (New Tab on an empty private tab); Reopen Closed Tab with `closed`; Archived Tabs with `archived`. Only while the keyboard is down. | — | | Small, quiet, one tap: the tabs items in plain sight when no switcher shows (owner). |
+| Start screen shortcuts (under the Search button) | Private Tab always (Regular Tab on an empty private tab: it leaves private browsing, so it says where it goes); Reopen Closed Tab with `closed`; Archived Tabs with `archived`. Only while the keyboard is down. | — | | Small, quiet, one tap: the tabs items in plain sight when no switcher shows (owner). |
 | Pull to refresh | off | on a loaded or loading page; off on failed and crashed pages (their Try Again / Reload owns it) and in the reader | Off | Nothing to reload on Start; a second reload control next to Try Again is noise. |
 | Bar swipe sideways | to neighbours in `list` | to neighbours in `list` | Rubber-band with no neighbour | The same gesture as on a page. Leaving an empty tab drops it. |
 | New Tab card past the last tab | never | when the tab has an address and is last in `list` | Not offered | Swiping past an empty tab would make a second empty tab. |
@@ -164,6 +164,13 @@ footer moves up in the frame the bar starts rising and the bar slides in under i
 goes away it changes as the motion ends, so the footer never sits under a bar still on screen.
 The top bar on the Duo's inner screen changes no inset at all (below). Under Reduce Motion, hiding
 and revealing are a crossfade.
+
+**Compact height (an iPhone on its side).** Expanded is one bottom row: Back and Forward in a
+capsule at the leading end, the pill, then Tabs, Share and More in a capsule at the trailing end
+(the top bar's two capsules, at the bottom). The leading capsule keeps both slots and the pill a
+fixed place, so Forward coming and going hides in place and moves nothing. Pill and Hidden are as above: the capsules drop and fade, the pill shrinks
+into the home-indicator zone, then sinks away. The start screen keeps its own row (More beside the
+pill); editing lifts the pill above the keyboard, full width, as everywhere.
 
 **Duo inner screen (top bar).** The same three states drive the top bar. Where the status items
 keep to a corner (the Duo's inner screen) the row sits on their row, clear of the corner, and the
@@ -336,7 +343,7 @@ its address, Back and Forward, the tabs slot; nothing in the bar moves when the 
 | Edit Favorites | "Add favorites from the page menu." |
 | Reading List | "Save pages to read later from the page menu." Unread rows first, then a "Read" section; each section shows only with rows. Tap opens the page (marks it read); swipe right Mark Read / Mark Unread, swipe left Delete, no confirmation. Search with no results: the system's no-results view. |
 | Summary (Browse for Me, Summarize Page) | Never empty: it opens on what it is doing ("Searching Google…", the sites being read with each one's state, "Writing from 4 pages…"), then the summary streams in. One Done; a swipe down or Done stops everything at once. A failure is one sentence of Plain's (no results, none readable in time, offline, declined, language) with Try Again where a second try can help, or Search Instead for Browse for Me. A source opens in a new tab with the summary kept behind it: Back on that tab's first page closes it and brings the summary back. Its menu opens a source in the background. |
-| Every sheet | Loading a local list shows nothing (no spinner). A failed read or write says so in one sentence with Try Again, never as the empty state. A search with no results shows the system's no-results view, and actions on the whole list (Clear) stay available. Such actions dim only when the list itself is empty. |
+| Every sheet | An empty list shows its symbol and one sentence in the ink's secondary step, body text (`PaperEmptyState`), never the system's bold black title. Loading a local list shows nothing (no spinner). A failed read or write says so in one sentence with Try Again, never as the empty state. A search with no results shows the system's no-results view, and actions on the whole list (Clear) stay available. Such actions dim only when the list itself is empty. |
 | Settings → Clear History and Data | Confirmation first (it is destructive and broad); the row dims while it runs; a failure says so in one sentence. |
 | Settings → Appearance | Always shown and enabled: it applies on every screen. Its footer is one sentence for the current choice. |
 | Settings → Tab Layout | Shown only where side tabs can show (width and height both regular) and only once side tabs are built. Elsewhere it would be a choice that changes nothing. |

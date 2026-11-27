@@ -14,6 +14,23 @@ import Testing
         #expect(NavigationRules.schemeKind(of: URL(string: "itms-apps://app")!) == .external)
     }
 
+    @Test func httpKeptAsRequestedOnlyWhereHTTPSCantHelp() {
+        func keeps(_ string: String) -> Bool { NavigationRules.keepsHTTPAsRequested(URL(string: string)!) }
+        #expect(keeps("http://127.0.0.1:8080/a"))
+        #expect(keeps("http://192.168.1.159/"))
+        #expect(keeps("http://[::1]:3000/"))
+        #expect(keeps("http://localhost/"))
+        #expect(keeps("http://printer.local/"))
+        #expect(keeps("http://nas/"))
+        #expect(keeps("http://example.com:8080/"))
+        // Public hosts on the default port still try HTTPS first; HTTPS is never touched.
+        #expect(!keeps("http://example.com/"))
+        #expect(!keeps("http://example.com:80/"))
+        #expect(!keeps("http://1.example.com/"))
+        #expect(!keeps("https://127.0.0.1:8443/"))
+        #expect(!keeps("https://localhost/"))
+    }
+
     @Test func contentModeFromPaneSize() {
         // Duo inner screen, both orientations: desktop.
         #expect(NavigationRules.contentMode(forPaneSize: CGSize(width: 951, height: 669)) == .desktop)

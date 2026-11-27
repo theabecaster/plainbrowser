@@ -11,6 +11,17 @@ final class ProgressBar: UIView {
     private(set) var progress: Double = 0
     /// Bumped by every new load, so a fade from the previous load cannot hide this one.
     private var generation = 0
+    /// Moves the bar on its own while the engine reports nothing, so a page that waits on its
+    /// server never looks stuck (`creep`).
+    private var creepTimer: Timer?
+    private var lastReport = Date.distantPast
+
+    /// How often the creep checks, how long the engine may stay quiet first, and how far the
+    /// creep may take the bar: a third of the way, eased, so real progress always has room.
+    static let creepInterval: TimeInterval = 0.25
+    static let creepQuietTime: TimeInterval = 0.5
+    static let creepCeiling: Double = 0.35
+    static let creepStep: Double = 0.12
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -29,6 +40,11 @@ final class ProgressBar: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    // The run loop keeps a timer alive: it must not outlive the bar.
+    isolated deinit {
+        creepTimer?.invalidate()
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         fill.transform = .identity
@@ -44,6 +60,12 @@ final class ProgressBar: UIView {
     func setProgress(_ value: Double) {
         let clamped = min(max(value, 0), 1)
         guard clamped > progress else { return }
+        lastReport = Date()
+        if clamped < Self.creepCeiling { startCreep() }
+        move(to: clamped)
+    }
+
+    private func move(to clamped: Double) {
         progress = clamped
         if alpha < 1 {
             alpha = 1
@@ -56,6 +78,7 @@ final class ProgressBar: UIView {
     /// Starts a new load: empties the bar, cancelling the previous load's fill and fade.
     func begin() {
         generation += 1
+        stopCreep()
         layer.removeAllAnimations()
         fill.layer.removeAllAnimations()
         reset()
@@ -63,6 +86,7 @@ final class ProgressBar: UIView {
 
     /// Fills the bar, then fades it out (the load finished).
     func finish() {
+        stopCreep()
         guard alpha > 0 else { return }
         progress = 1
         let load = generation
@@ -78,9 +102,35 @@ final class ProgressBar: UIView {
 
     /// Hides the bar at once and empties it, ready for the next load.
     func reset() {
+        stopCreep()
         progress = 0
         alpha = 0
         applyProgress()
+    }
+
+    /// While the engine is quiet (the server has not answered yet, a slow connection), the bar
+    /// eases toward `creepCeiling` by itself, as Safari's does. Monotonic: the engine's next
+    /// report only ever moves it further.
+    private func startCreep() {
+        guard creepTimer == nil else { return }
+        let timer = Timer(timeInterval: Self.creepInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.creep() }
+        }
+        timer.tolerance = Self.creepInterval / 2
+        RunLoop.main.add(timer, forMode: .common)
+        creepTimer = timer
+    }
+
+    private func stopCreep() {
+        creepTimer?.invalidate()
+        creepTimer = nil
+    }
+
+    private func creep() {
+        // The ease never quite reaches the ceiling: stop just short of it.
+        guard alpha > 0, progress < Self.creepCeiling - 0.01 else { return stopCreep() }
+        guard Date().timeIntervalSince(lastReport) >= Self.creepQuietTime else { return }
+        move(to: progress + (Self.creepCeiling - progress) * Self.creepStep)
     }
 
     private func applyProgress() {

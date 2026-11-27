@@ -37,6 +37,12 @@ public enum Motion {
     /// The same spring as a value, for `SpringDriver`: the bar swipe runs frame by frame so a
     /// finger can grab the page mid-flight.
     public static let tabSwitchSpring = Spring(duration: 0.28, bounce: 0.08)
+    /// Back on a link-opened tab's first page: the tab slides off toward the trailing edge, as a
+    /// page pops, uncovering its opener. A button drives it, so no bounce.
+    public static let backToOpener = Animation.spring(duration: 0.35, bounce: 0)
+    /// How far behind the leaving page the opener starts, as a share of the pane's width: the
+    /// parallax of a navigation pop, so the opener reads as the page underneath.
+    public static let backToOpenerParallax: CGFloat = 0.3
     /// Page zooms into its card in the tab gallery (M2). Damping 0.94, not 1: the same pace
     /// through the first half, the last few points land sooner, and the overshoot is a fifth of a
     /// point at most (none the eye can see). A critically damped spring creeps over its last

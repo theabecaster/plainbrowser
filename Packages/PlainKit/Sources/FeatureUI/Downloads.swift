@@ -78,7 +78,7 @@ public struct DownloadsView<Source: DownloadListSource>: View {
             .paperSheet()
             .overlay {
                 if items.isEmpty {
-                    ContentUnavailableView("Files you download show up here.", systemImage: "arrow.down.circle")
+                    PaperEmptyState(message: "Files you download show up here.", systemImage: "arrow.down.circle")
                 }
             }
             .sheetTitle("Downloads")

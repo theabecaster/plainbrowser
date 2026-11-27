@@ -15,6 +15,8 @@ final class AddressPill: UIView {
     let textField = UITextField()
     let progressBar = ProgressBar()
     private let glass = Glass.makeView(shape: .capsule, interactive: true)
+    /// The soft paper glow under the glass, so the host reads over any page.
+    private let scrim = ChromeScrim()
     private let hostLabel = UILabel()
     private let rim = GradientView()
     private let rimMask = CAShapeLayer()
@@ -52,6 +54,9 @@ final class AddressPill: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        scrim.frame = bounds
+        scrim.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(scrim)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
         // The resting capsule keeps its height, so its host stops growing at the largest
@@ -157,6 +162,7 @@ final class AddressPill: UIView {
         let shape = bounds.insetBy(dx: inset, dy: inset)
         rimMask.frame = bounds
         rimMask.path = UIBezierPath(roundedRect: shape, cornerRadius: shape.height / 2).cgPath
+        scrim.shapes = [bounds]
     }
 
     private func resolveColors() {
@@ -206,6 +212,7 @@ final class AddressPill: UIView {
         effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
         effect.isInteractive = true
         glass.effect = effect
+        scrim.isPrivate = isPrivate
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
     }
 

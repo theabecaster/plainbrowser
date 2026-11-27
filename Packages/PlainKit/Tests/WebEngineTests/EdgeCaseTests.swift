@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import Foundation
 import Security
 import Testing
@@ -157,6 +158,58 @@ struct EdgeCaseTests {
         _ = try await harness.evaluate("location.href = '/raw'; 0", in: tab)
         try await waitUntil("download end") { !harness.host.endedDownloads.isEmpty }
         #expect(harness.host.endedDownloads[0].filename == "raw")
+    }
+
+    // MARK: http:// and errors
+
+    /// A local http:// address loads as asked: no HTTPS try first, which left the page blank for
+    /// seconds while it timed out (ux-audit item 21). The web process starts on the first load,
+    /// so the second one, on another path, is the one timed.
+    @Test func localHTTPLoadsWithoutWaitingOnHTTPS() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        var start = ContinuousClock.now
+        try await harness.load("/opener", in: tab)
+        report("[plain-measure] local http, first load: \(ms(ContinuousClock.now - start)) ms")
+        start = ContinuousClock.now
+        try await harness.load("/child", in: tab)
+        let elapsed = ContinuousClock.now - start
+        report("[plain-measure] local http, second load: \(ms(elapsed)) ms")
+        #expect(tab.url?.scheme == "http")
+        // Generous: a load that waited on an HTTPS try took seconds.
+        #expect(elapsed < .seconds(2))
+    }
+
+    /// A refused connection says so in Plain's words, at once (ux-audit item 22).
+    @Test func refusedConnectionSaysTheSiteIsNotAnswering() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        // A port that was just listening and is now closed: the connection is refused.
+        let closed = try await TestServer { _ in .html("") }
+        let url = closed.url("/nothing-here")
+        closed.stop()
+        try await Task.sleep(for: .milliseconds(100))
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        let start = ContinuousClock.now
+        tab.load(url)
+        try await waitUntil("load error", timeout: .seconds(4)) { tab.loadError != nil && !tab.isLoading }
+        let error = try #require(tab.loadError)
+        report("[plain-measure] refused port error after \(ms(ContinuousClock.now - start)) ms: \(error.domain) \(error.code)")
+        #expect(error.failure == .notAnswering)
+    }
+
+    /// A port WebKit never opens (9, discard) says so, rather than the catch-all sentence.
+    @Test func restrictedPortSaysSo() async throws {
+        let harness = try await Harness()
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        tab.load(URL(string: "http://127.0.0.1:9/nothing-here")!)
+        try await waitUntil("load error", timeout: .seconds(4)) { tab.loadError != nil && !tab.isLoading }
+        #expect(tab.loadError?.failure == .blockedPort)
     }
 
     @Test func pdfShowsInline() async throws {

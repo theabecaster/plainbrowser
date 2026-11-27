@@ -69,7 +69,8 @@ final class ProfilesTests: XCTestCase {
             }
         }
         field.typeText(name)
-        alert.buttons[button].tap()
+        // On the Duo's outer screen the keyboard can cover the buttons: Return is the preferred action.
+        if alert.buttons[button].isHittable { alert.buttons[button].tap() } else { field.typeText("\n") }
     }
 
     private func profileButton(_ app: XCUIApplication) -> XCUIElement {
@@ -183,7 +184,10 @@ final class ProfilesTests: XCTestCase {
     }
 
     private func shot(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        // The Duo's inner screen when it is open (the outer one is dark then): the largest screen.
+        let shots = XCUIScreen.screens.map { $0.screenshot() }
+        let screenshot = shots.max { $0.image.size.width * $0.image.size.height < $1.image.size.width * $1.image.size.height }
+        let attachment = XCTAttachment(screenshot: screenshot ?? XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)

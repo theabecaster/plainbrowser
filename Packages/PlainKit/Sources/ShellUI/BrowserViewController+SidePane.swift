@@ -58,13 +58,13 @@ extension BrowserViewController {
     /// Opens the pane on `section` (or what it showed last), animated.
     func openSidePane(_ section: SidePaneSection? = nil, focus: Bool = false) {
         guard duo.layout?.sidePaneAvailable == true else { return Haptic.nothingThere.play() }
-        if let section { sidePaneUI.section = section }
         let controller = makeSidePaneIfNeeded()
         if sidePaneUI.isRequested {
-            showSidePaneSection(sidePaneUI.section)
+            showSidePaneSection(section ?? sidePaneUI.section)
             if focus { controller.focusSection() }
             return
         }
+        if let section { sidePaneUI.section = section }
         let signposter = Signposts.signposter
         sidePaneUI.openInterval = signposter.beginInterval(
             Signposts.sidePaneOpen, id: signposter.makeSignpostID(), "\(self.sidePaneUI.section.rawValue)"
@@ -309,19 +309,21 @@ extension BrowserViewController {
             guard let column = sidePaneUI.dragColumn, let controller = sidePaneUI.controller else { return }
             // Past the column it moves at a quarter of the finger's speed.
             let reach = column.width + Spacing.s
-            let moved = travel <= reach ? travel : reach + (travel - reach) / 4
+            let moved = travel <= reach ? travel : reach + (travel - reach) * CGFloat(FixedChoices.sidePaneOverdragFactor)
             controller.view.transform = CGAffineTransform(translationX: reach - moved, y: 0)
         case .ended, .cancelled, .failed:
             guard let column = sidePaneUI.dragColumn, let controller = sidePaneUI.controller else { return }
             let velocity = -pan.velocity(in: view).x
-            let opens = pan.state == .ended && (travel > column.width / 3 || velocity > 500) && velocity > -300
+            let flick = CGFloat(FixedChoices.sidePaneFlickVelocity)
+            let opens = pan.state == .ended && velocity > -flick / 2
+                && (travel > column.width * CGFloat(FixedChoices.sidePaneOpenFraction) || velocity > flick)
             if opens {
                 let signposter = Signposts.signposter
                 sidePaneUI.openInterval = signposter.beginInterval(
                     Signposts.sidePaneOpen, id: signposter.makeSignpostID(), "swipe \(self.sidePaneUI.section.rawValue)"
                 )
                 if isSplit, session.tabs.focusedPane != 0 { focusPane(0) }
-                setSidePane(open: true, flicked: velocity > 500)
+                setSidePane(open: true, flicked: velocity > flick)
             } else {
                 sidePaneUI.isAnimating = true
                 Motion.animate(Motion.sidebarSettle(flicked: false), changes: {

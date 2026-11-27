@@ -53,24 +53,32 @@ public final class AppTabs {
 
     // MARK: Windows
 
-    /// The window a connecting scene shows, given the window it showed last time.
-    func claim(saved: WindowID?) -> WindowID {
+    /// The window a connecting scene shows, given the window it showed last time. `isNew`: the
+    /// scene was asked for as a new window ("Open in New Window"), which never takes a saved one.
+    func claim(saved: WindowID?, isNew: Bool = false) -> WindowID {
         let id: WindowID
         if !isLoaded {
             id = saved ?? WindowID()
             store.addWindow(id: id)
-            if saved == nil { unbound.append(id) }
+            if saved == nil, !isNew { unbound.append(id) }
             dropPlaceholder(keeping: id)
         } else if let saved, store.window(saved) != nil, !claimed.contains(saved) {
             id = saved
-        } else if saved == nil, claimed.isEmpty, let first = store.windows.first(where: { !claimed.contains($0.id) }) {
-            id = first.id
+        } else if saved == nil, !isNew, claimed.isEmpty, let first = firstFreeWindow() {
+            id = first
         } else {
             id = store.addWindow(id: saved.flatMap { claimed.contains($0) ? nil : $0 } ?? WindowID())
         }
         claimed.insert(id)
         if isLoaded { adoptOrphans(into: id) }
         return id
+    }
+
+    /// The first window no scene shows and no other open scene session names (that session will
+    /// come back to it).
+    private func firstFreeWindow(in windows: [WindowID]? = nil) -> WindowID? {
+        let named = sessionWindowIDs?() ?? []
+        return (windows ?? store.windows.map(\.id)).first { !claimed.contains($0) && !named.contains($0) }
     }
 
     /// The scene left (disconnected); its window stays for when it comes back.
@@ -135,7 +143,8 @@ public final class AppTabs {
         let current = store
         var session = saved
         var remapped: [WindowID: WindowID] = [:]
-        var taken = Set<WindowID>()
+        // Windows another open scene session names wait for that session.
+        var taken = sessionWindowIDs?() ?? []
         // Windows that connected with a saved id keep theirs.
         for window in current.windows where session.windows.contains(where: { $0.id == window.id }) {
             taken.insert(window.id)

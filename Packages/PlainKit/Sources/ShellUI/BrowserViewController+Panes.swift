@@ -174,9 +174,11 @@ extension BrowserViewController {
     /// The gutter and the focus ring: only while a split shows.
     func updatePaneLooks() {
         let split = duo.layout?.splitShown ?? false
+        // With the side pane over the second pane, one page shows: no split look, no ring.
+        let looksSplit = split && !(duo.layout?.sidePaneCoversSecondPane ?? false)
         let focused = session.tabs.focusedPane
         for (index, slot) in panes.slots.enumerated() {
-            slot.setSplit(split, focused: index == focused, gutterOnLeading: index == 1, gutterOnTrailing: index == 0)
+            slot.setSplit(looksSplit, focused: index == focused, gutterOnLeading: index == 1, gutterOnTrailing: index == 0)
         }
         // Bar swipes and Next/Previous Tab stay in the focused pane.
         let panes = session.tabs.panes

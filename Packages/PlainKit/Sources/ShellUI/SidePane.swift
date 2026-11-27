@@ -214,6 +214,8 @@ final class SidePaneReader: UIViewController, SidePaneContent, UIScrollViewDeleg
             message.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Spacing.l),
         ])
         presenter.onOpenLink = { [weak self] url in self?.browser?.load(url) }
+        // The message stays until the article is on screen, so the pane is never blank paper.
+        presenter.onShown = { [weak self] in self?.message.isHidden = true }
     }
 
     func sectionDidShow() { refresh() }
@@ -231,7 +233,7 @@ final class SidePaneReader: UIViewController, SidePaneContent, UIScrollViewDeleg
         switch browser.session.reader.isAvailable(in: page) {
         case nil:
             // The check reports when the page has loaded (`onAvailability`).
-            if !presenter.isShowing { showMessage(String(localized: "Looking for an article…")) }
+            if !presenter.isShowing { showWaiting() }
         case false?:
             showMessage(String(localized: "This page has no article to read."))
         case true?:
@@ -243,17 +245,23 @@ final class SidePaneReader: UIViewController, SidePaneContent, UIScrollViewDeleg
         guard let browser else { return }
         task?.cancel()
         let url = page.url
+        if !presenter.isShowing { showWaiting() }
         task = Task { [weak self, session = browser.session] in
             let article = try? await session.reader.article(in: page)
             guard let self, !Task.isCancelled else { return }
             guard let article else { return showMessage(String(localized: "This page has no article to read.")) }
             presenter.close(animated: false)
-            message.isHidden = true
             presenter.prepare(pool: session.pool, isPrivate: isPrivate, in: view, scrollDelegate: self)
             presenter.webView?.accessibilityIdentifier = "sidePane.readerView"
             shownPage = (page, url)
             try? await presenter.show(article)
         }
+    }
+
+    /// "Looking for an article…" while the page's check or the article is on its way.
+    private func showWaiting() {
+        message.text = String(localized: "Looking for an article…")
+        message.isHidden = false
     }
 
     private func showMessage(_ text: String) {
@@ -264,8 +272,11 @@ final class SidePaneReader: UIViewController, SidePaneContent, UIScrollViewDeleg
         message.isHidden = false
     }
 
+    /// Off screen, the reader web view (and the page it read) goes; showing again reads anew.
     func paneWillHide() {
         task?.cancel()
+        presenter.close(animated: false)
+        shownPage = nil
     }
 }
 
@@ -354,9 +365,11 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
     }
     #endif
 
+    /// The marks come off the page; the list is searched again when Find shows next.
     func paneWillHide() {
         task?.cancel()
         if let searchedPage { PageFind.clear(in: searchedPage) }
+        searchedPage = nil
         field.resignFirstResponder()
     }
 
@@ -414,8 +427,8 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
             count.text = String(localized: "No matches")
         } else if result.total == 1 {
             count.text = String(localized: "1 match")
-        } else if result.total > result.matches.count {
-            count.text = String(localized: "\(result.total) matches, the first \(result.matches.count) listed")
+        } else if result.hasMore {
+            count.text = String(localized: "More than \(result.matches.count) matches, the first listed")
         } else {
             count.text = String(localized: "\(result.total) matches")
         }

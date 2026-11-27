@@ -473,6 +473,15 @@ public enum FixedChoices {
     /// Find in the side pane waits this long after a keystroke before it searches, so typing a
     /// word searches once, not per letter.
     public static let findDebounce: Duration = .milliseconds(150)
+    /// The edge swipe opens the side pane past this share of its width, as the sidebar's drag
+    /// settles past a third: less is a touch that strayed in from the edge.
+    public static let sidePaneOpenFraction = 1.0 / 3
+    /// A swipe this fast (pt/s) opens the side pane however short it was; a swipe back half as
+    /// fast cancels it. The sidebar's flick speed, so both edges feel the same.
+    public static let sidePaneFlickVelocity = 500.0
+    /// Past the pane's width the edge swipe moves it at this share of the finger's travel: it
+    /// gives, so the end of the pane reads as an end.
+    public static let sidePaneOverdragFactor = 0.25
 
     // MARK: Tab switching and toasts
 

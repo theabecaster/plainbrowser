@@ -16,20 +16,26 @@ public struct PageFindMatch: Sendable, Equatable {
     }
 }
 
-/// Every match of a query on a page: how many there are, and the first ones with their context.
+/// The first matches of a query on a page, with their context, and whether there are more.
 public struct PageFindResult: Sendable, Equatable {
-    public let total: Int
     public let matches: [PageFindMatch]
+    /// The page has more matches than were listed (the search stopped at the limit).
+    public let hasMore: Bool
 
-    public static let none = PageFindResult(total: 0, matches: [])
+    public var total: Int { matches.count }
+
+    public static let none = PageFindResult(matches: [], hasMore: false)
 }
 
 /// Find on Page as a list of results (the side pane's Find), next to the system find bar.
 ///
 /// The search runs in the page's process, in the engine's content world (the page can't see or
-/// change it): it walks the visible text, keeps a DOM range per match, and marks every match with
-/// the CSS Custom Highlight API, which draws without touching the page's DOM. A tapped result
-/// scrolls its match to the middle of the page and marks it as the current one.
+/// change it). It walks the visible text block by block (a paragraph, a list item, a cell), so a
+/// phrase split by inline tags (`hello <b>world</b>`) still matches, keeps a DOM range per match,
+/// and marks every match with the CSS Custom Highlight API, which draws without touching the
+/// page's DOM. It stops at `limit` matches: the work is bounded by the matches listed, plus one
+/// pass over the text up to the last of them. A tapped result scrolls its match to the middle of
+/// the page and marks it as the current one.
 public enum PageFind {
     /// Finds `query` (case-insensitive) in `webView`'s page, up to `limit` matches with context.
     @MainActor
@@ -48,7 +54,7 @@ public enum PageFind {
                         after: $0["after"] as? String ?? ""
                     )
                 }
-                continuation.resume(returning: PageFindResult(total: reply["total"] as? Int ?? matches.count, matches: matches))
+                continuation.resume(returning: PageFindResult(matches: matches, hasMore: reply["more"] as? Bool ?? false))
             }
         }
     }
@@ -96,67 +102,76 @@ public enum PageFind {
         const state = globalThis.__plainFind = { ranges: [] };
         if (highlights) { highlights.delete('plain-find'); highlights.delete('plain-find-current'); }
         const needle = String(query).trim().toLocaleLowerCase();
-        if (!needle || !document.body) return { total: 0, matches: [] };
+        if (!needle || !document.body) return { matches: [], more: false };
         const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA', 'SELECT', 'OPTION']);
+        const blocks = 'p,li,td,th,h1,h2,h3,h4,h5,h6,blockquote,figcaption,dd,dt,pre,article,section,div,body';
         const shown = new Map();
         const isShown = (element) => {
           if (shown.has(element)) return shown.get(element);
-          const style = getComputedStyle(element);
-          const value = element.getClientRects().length > 0 && style.visibility !== 'hidden';
+          const rect = element.getClientRects()[0];
+          // A visually hidden label (a 1 pt clipped box for screen readers) is not on the page.
+          const value = !!rect && rect.width > 1 && rect.height > 1 && getComputedStyle(element).visibility !== 'hidden';
           shown.set(element, value);
           return value;
         };
-        const blockOf = (element) => element.closest(
-          'p,li,td,th,h1,h2,h3,h4,h5,h6,blockquote,figcaption,dd,dt,pre,article,section,div') || element;
-        // The block's text with the match's offset in it, so the context crosses inline tags.
-        const contextOf = (node, at) => {
-          const block = blockOf(node.parentElement);
-          const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-          let offset = 0;
-          for (let current = walker.nextNode(); current && current !== node; current = walker.nextNode()) {
-            offset += current.nodeValue.length;
+        const clip = (value) => value.replace(/\\s+/g, ' ');
+        const matches = [];
+        let more = false;
+        // One block's text nodes, joined: matches may cross inline tags, never blocks.
+        let group = null;
+        const position = (offset, end) => {
+          // The text node and offset for a place in the group's text (an end stays in its node).
+          let index = 0;
+          while (index + 1 < group.starts.length && (end ? group.starts[index + 1] < offset : group.starts[index + 1] <= offset)) index += 1;
+          return [group.nodes[index], offset - group.starts[index]];
+        };
+        const flush = () => {
+          if (!group || more) return;
+          const text = group.text;
+          const lower = text.toLocaleLowerCase();
+          if (lower.length !== text.length) return;
+          let at = lower.indexOf(needle);
+          while (at >= 0) {
+            if (matches.length >= limit) { more = true; return; }
+            const [startNode, startOffset] = position(at, false);
+            const [endNode, endOffset] = position(at + needle.length, true);
+            const range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            state.ranges.push(range);
+            matches.push({
+              before: clip(text.slice(Math.max(0, at - context), at)).trimStart(),
+              match: text.slice(at, at + needle.length),
+              after: clip(text.slice(at + needle.length, at + needle.length + context * 2)).trimEnd(),
+            });
+            at = lower.indexOf(needle, at + needle.length);
           }
-          const text = block.textContent || '';
-          const start = offset + at;
-          const clip = (value) => value.replace(/\\s+/g, ' ');
-          return {
-            before: clip(text.slice(Math.max(0, start - context), start)).trimStart(),
-            match: text.slice(start, start + needle.length),
-            after: clip(text.slice(start + needle.length, start + needle.length + context * 2)).trimEnd(),
-          };
         };
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
           acceptNode(node) {
             const parent = node.parentElement;
             if (!parent || skip.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
-            return node.nodeValue && node.nodeValue.length >= needle.length ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+            return node.nodeValue ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
           },
         });
-        const matches = [];
-        let total = 0;
-        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-          const text = node.nodeValue;
-          const lower = text.toLocaleLowerCase();
-          if (lower.length !== text.length) continue;
-          let at = lower.indexOf(needle);
-          if (at < 0 || !isShown(node.parentElement)) continue;
-          while (at >= 0) {
-            total += 1;
-            if (state.ranges.length < limit) {
-              const range = document.createRange();
-              range.setStart(node, at);
-              range.setEnd(node, at + needle.length);
-              state.ranges.push(range);
-              matches.push(contextOf(node, at));
-            }
-            at = lower.indexOf(needle, at + needle.length);
+        for (let node = walker.nextNode(); node && !more; node = walker.nextNode()) {
+          const parent = node.parentElement;
+          if (!isShown(parent)) continue;
+          const block = parent.closest(blocks) || parent;
+          if (!group || group.block !== block) {
+            flush();
+            group = { block, nodes: [], starts: [], text: '' };
           }
+          group.starts.push(group.text.length);
+          group.nodes.push(node);
+          group.text += node.nodeValue;
         }
+        flush();
         if (highlights && state.ranges.length && globalThis.Highlight) {
           ensureStyle();
           highlights.set('plain-find', new Highlight(...state.ranges));
         }
-        return { total, matches };
+        return { matches, more };
         """
 
     static let revealSource = """

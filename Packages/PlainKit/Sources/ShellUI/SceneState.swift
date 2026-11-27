@@ -40,13 +40,15 @@ public enum SceneState {
     /// The app's open scene sessions.
     public static var openSessions: Set<UISceneSession> { UIApplication.shared.openSessions }
 
-    /// Marks a scene session made during an isolated test run (a new window a test opened: it has
-    /// no state of its own yet), so the owner's next normal launch destroys it. The owner's own
-    /// sessions, reconnected by the system for a test run, already carry their state and are left
-    /// alone. The mark is the only thing an isolated run writes to a session.
-    static func markIfTestSession(_ session: UISceneSession) {
-        guard TestIsolation.isActive, session.userInfo?.isEmpty ?? true else { return }
-        session.userInfo = [testSessionKey: true]
+    /// Marks a scene session a test run made (a window it asked for with New Window or Open in New
+    /// Window), so the owner's next normal launch destroys it. Only sessions made for Plain's own
+    /// new-window request are marked: the owner's sessions, which the system reconnects for a test
+    /// run, never are. The mark is the only thing an isolated run writes to a session.
+    static func markTestSession(_ session: UISceneSession) {
+        guard TestIsolation.isActive else { return }
+        var info = session.userInfo ?? [:]
+        info[testSessionKey] = true
+        session.userInfo = info
     }
 
     /// A session a test run opened (`markIfTestSession`). Only a normal launch asks.
@@ -64,9 +66,10 @@ public enum SceneState {
         UIApplication.shared.requestSceneSessionDestruction(session, options: nil)
     }
 
-    /// Marks `session` when the run is isolated and the session is new.
-    public static func sessionDidConnect(_ session: UISceneSession) {
-        markIfTestSession(session)
+    /// `session` connected; `isNewWindow`: for Plain's new-window request. In an isolated run that
+    /// session is the test's, and is marked.
+    public static func sessionDidConnect(_ session: UISceneSession, isNewWindow: Bool) {
+        if isNewWindow { markTestSession(session) }
     }
 
     private static let testSessionKey = "plain.testSession"

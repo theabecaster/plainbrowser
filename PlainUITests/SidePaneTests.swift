@@ -122,7 +122,6 @@ final class SidePaneTests: XCTestCase {
              "the new window opened on search")
         field.typeText(server.address("/b") + "\n")
         XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 10), "the new window loads its own page")
-        keep(app, "new-window")
         // More lists the other window (the tabs menu too, once this window has a second tab).
         app.buttons["more"].firstMatch.tap()
         let others = app.buttons["menu.otherWindows"]
@@ -130,17 +129,32 @@ final class SidePaneTests: XCTestCase {
         others.tap()
         let first = app.buttons["menu.window.0"]
         XCTAssertTrue(first.waitForExistence(timeout: 3), "the first window is in the list")
-        keep(app, "other-windows-menu")
         first.tap()
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10), "the first window came forward")
-        keep(app, "back-to-first-window")
     }
 
-    /// A screenshot kept in the result bundle (captures for review).
-    private func keep(_ app: XCUIApplication, _ name: String) {
-        let shot = XCTAttachment(screenshot: app.screenshot())
-        shot.name = name
-        shot.lifetime = .keepAlways
-        add(shot)
+    /// Walks two windows for screenshots taken from outside (`simctl io screenshot`, the inner
+    /// display): it pauses in each state. Runs on request only (`TEST_RUNNER_PLAIN_CAPTURE=1`).
+    func testCaptureTwoWindows() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let app = try launch()
+        go(app, to: "/article", heading: "The Quiet Page")
+        app.buttons["tabs"].firstMatch.press(forDuration: 1.0)
+        XCTAssertTrue(app.buttons["menu.newWindow"].waitForExistence(timeout: 3))
+        sleep(4)  // capture: the tabs menu with New Window
+        app.buttons["menu.newWindow"].tap()
+        let field = app.textFields["searchField"]
+        wait({ field.exists && field.hasKeyboardFocus && !app.webViews.staticTexts["The Quiet Page"].exists }, timeout: 10,
+             "the new window opened on search")
+        field.typeText(server.address("/long") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Long Read"].waitForExistence(timeout: 10))
+        sleep(4)  // capture: the second window
+        app.buttons["more"].firstMatch.tap()
+        app.buttons["menu.otherWindows"].tap()
+        XCTAssertTrue(app.buttons["menu.window.0"].waitForExistence(timeout: 3))
+        sleep(4)  // capture: Other Windows
+        app.buttons["menu.window.0"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["The Quiet Page"].waitForExistence(timeout: 10))
+        sleep(4)  // capture: back in the first window
     }
 }

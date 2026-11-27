@@ -1717,6 +1717,10 @@ bar above every page. Research: docs/research/inset-fill.md.
   stop at their model values (under half a point away) and the live page, or the gallery's
   touches, take over then instead of after Core Animation's ~1 s settle (perf program: the
   interval read ~1,490 ms on the simulator).
+- **The card-to-page landing is one step** (design review): the page's buttons come back as the
+  card starts growing (not after it lands), and the gallery's blurred backdrop fades in and out
+  with the zoom over the third of the way nearest the page, so no dark rail is left beside a
+  landed page.
 - **`gallery.show` starts earlier: at the tap.** The shell begins it in `presentGallery` and hands
   it to the transition, so getting the gallery ready and the page's snapshot count. Stricter than
   before (the old start left out building the gallery), and the kept gallery cannot move work

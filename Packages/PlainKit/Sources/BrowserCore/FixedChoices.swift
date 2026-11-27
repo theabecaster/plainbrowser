@@ -195,6 +195,11 @@ public enum FixedChoices {
 
     /// Suggestions older than this are useless while typing; give up and show what we have.
     public static let suggestionTimeout = Duration.milliseconds(1_000)
+    /// When no cached answer fits a keystroke, the previous keystroke's engine rows stay this long
+    /// while the new answer is on its way, so they change into the new rows in one step instead of
+    /// leaving and coming back a moment later. Long enough for a warm connection's answer (about
+    /// 90 ms), short enough that rows for the old text never linger where anyone reads them.
+    public static let suggestionHoldWindow = Duration.milliseconds(120)
     /// Engine suggestions kept per keystroke: enough to choose from, few enough to scan at a glance.
     public static let maxSearchSuggestions = 6
     /// History and favorite rows per keystroke, so pages never push search suggestions off screen.

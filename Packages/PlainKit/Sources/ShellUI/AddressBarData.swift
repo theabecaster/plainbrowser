@@ -1,6 +1,7 @@
 import BrowserCore
 import Foundation
 import Storage
+import Synchronization
 
 /// A page pinned above the keyboard.
 public struct FavoritePage: Hashable, Sendable {
@@ -105,6 +106,9 @@ public final class LiveAddressBarData: AddressBarData {
     private var lastRecord: Task<Void, Never>?
     /// The visit title changes belong to.
     private var lastVisit: (url: URL, at: Date)?
+    /// The engine rows in the last list delivered, held in place for the next keystroke when no
+    /// cached answer fits it (`suggestions(for:update:)`).
+    private var shownSearches: [String] = []
 
     /// - Parameter makeClient: builds the engine suggestion client on first use (tests pass one
     ///   with a fake loader).
@@ -138,25 +142,73 @@ public final class LiveAddressBarData: AddressBarData {
         await recorder?.flush()
     }
 
+    /// Delivers at most two lists per keystroke, and never one with fewer engine rows only to add
+    /// them back a moment later (that reads as flicker):
+    /// 1. At once: local pages with the engine rows already known for this text (the cached
+    ///    answer for its longest prefix). When none is cached, the previous keystroke's engine
+    ///    rows stay in place for `FixedChoices.suggestionHoldWindow` while the answer is on its way.
+    /// 2. The engine's answer, when it differs. If it has not come by the end of the hold, the
+    ///    held rows go first, then the answer follows whenever it arrives.
     public func suggestions(for query: String, update: @escaping ([AddressBarSuggestion]) -> Void) async {
+        let engine = searchEngine
+        let isPrivate = isPrivate
+        let client = client
+        // The database and the cache are read together, so the first list already has both.
+        async let cachedAnswer = client.cachedSuggestions(for: query, engine: engine, isPrivate: isPrivate)
         var history: [PageCandidate] = []
         var favorites: [PageCandidate] = []
         if let database, let candidates = try? await database.addressBarCandidates(for: query) {
             (history, favorites) = candidates
         }
+        let cached = await cachedAnswer
         guard !Task.isCancelled else { return }
-        update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: []))
-        // While the engine answers, the longest cached prefix's suggestions fill the list.
-        let cached = await client.cachedSuggestions(for: query, engine: searchEngine, isPrivate: isPrivate)
-        guard !Task.isCancelled else { return }
-        if !cached.isEmpty {
-            update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: cached))
-        }
 
-        guard let searches = try? await client.suggestions(for: query, engine: searchEngine, isPrivate: isPrivate),
-              !searches.isEmpty, searches != cached, !Task.isCancelled
-        else { return }
-        update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: searches))
+        let remote = SuggestionClient.allowsRemote(query, isPrivate: isPrivate)
+        let held = cached.isEmpty && remote ? shownSearches : []
+        var shown = cached.isEmpty ? held : cached
+        func deliver(_ searches: [String]) {
+            shown = searches
+            shownSearches = searches
+            update(AddressBarSuggestions.merge(query: query, history: history, favorites: favorites, searches: searches))
+        }
+        deliver(shown)
+        guard remote else { return }
+
+        let request = Task { try? await client.suggestions(for: query, engine: engine, isPrivate: isPrivate) }
+        let answer: [String]? = await withTaskCancellationHandler {
+            if !held.isEmpty, case .some(let early) = await Self.value(of: request, within: FixedChoices.suggestionHoldWindow) {
+                return early
+            }
+            if !held.isEmpty, !Task.isCancelled {
+                // The answer is late: the rows for the old text go now.
+                deliver([])
+            }
+            return await request.value
+        } onCancel: {
+            request.cancel()
+        }
+        guard !Task.isCancelled else { return }
+        let fresh = answer ?? []
+        if fresh.isEmpty {
+            // No answer (offline, timed out, nothing to suggest): rows for the old text go.
+            if !held.isEmpty, shown == held { deliver([]) }
+        } else if fresh != shown {
+            deliver(fresh)
+        }
+    }
+
+    /// `task`'s value if it finishes within `window`; otherwise `.none` at the window's end,
+    /// without waiting for the task (which keeps running).
+    private static func value<T: Sendable>(of task: Task<T, Never>, within window: Duration) async -> T? {
+        let first = FirstValue<T?>()
+        return await withCheckedContinuation { continuation in
+            first.attach(continuation)
+            Task { first.resolve(.some(await task.value)) }
+            Task {
+                try? await Task.sleep(for: window)
+                first.resolve(.none)
+            }
+        }
     }
 
     /// Warms the connection to the engine's suggestion host as the field takes focus. Returns at
@@ -194,6 +246,7 @@ public final class LiveAddressBarData: AddressBarData {
     }
 
     public func cancelSuggestions() {
+        shownSearches = []
         Task { [client] in await client.cancel() }
     }
 
@@ -250,5 +303,42 @@ public final class LiveAddressBarData: AddressBarData {
     static func isRecordable(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased() else { return false }
         return scheme == "http" || scheme == "https"
+    }
+}
+
+/// The first of two racing values, handed to one waiting continuation exactly once.
+private final class FirstValue<T: Sendable>: Sendable {
+    private struct State {
+        var value: T?
+        var continuation: CheckedContinuation<T, Never>?
+        var isDone = false
+    }
+
+    private let state = Mutex(State())
+
+    func resolve(_ value: T) {
+        let continuation: CheckedContinuation<T, Never>? = state.withLock { state in
+            guard !state.isDone else { return nil }
+            guard let continuation = state.continuation else {
+                if state.value == nil { state.value = value }
+                return nil
+            }
+            state.isDone = true
+            state.continuation = nil
+            return continuation
+        }
+        continuation?.resume(returning: value)
+    }
+
+    func attach(_ continuation: CheckedContinuation<T, Never>) {
+        let ready: T? = state.withLock { state in
+            guard let value = state.value else {
+                state.continuation = continuation
+                return nil
+            }
+            state.isDone = true
+            return value
+        }
+        if let ready { continuation.resume(returning: ready) }
     }
 }

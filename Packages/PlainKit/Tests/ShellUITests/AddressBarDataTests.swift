@@ -41,6 +41,63 @@ struct AddressBarDataTests {
         #expect(updates.last?.dropFirst() == [.search("swift.org"), .search("swift ownership")])
     }
 
+    // MARK: Calm updates while typing (docs/feedback.md, suggestions flicker)
+
+    private static let answers: [String: [String]] = [
+        "swift": ["swift docs", "swift ownership"],
+        "swift d": ["swift docs", "swift data"],
+        "kotlin": ["kotlin docs", "kotlin coroutines"],
+    ]
+
+    private static func searches(_ list: [AddressBarSuggestion]) -> [String] {
+        list.compactMap { if case .search(let query) = $0 { query } else { nil } }
+    }
+
+    @Test func theFirstListForAKeystrokeAlreadyHasTheCachedEngineRows() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        await data.suggestions(for: "swift d") { updates.append($0) }
+        // Local pages and the cached "swift" answer arrive together, never pages alone first.
+        #expect(updates.map(Self.searches) == [["swift docs"], ["swift docs", "swift data"]])
+    }
+
+    @Test func engineRowsStayInPlaceUntilTheNextAnswer() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        // Nothing cached fits "kotlin": the "swift" rows hold until its answer replaces them.
+        await data.suggestions(for: "kotlin") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], ["kotlin docs", "kotlin coroutines"]])
+    }
+
+    @Test func heldEngineRowsGoWhenTheAnswerIsLate() async throws {
+        let data = LiveAddressBarData {
+            SuggestionClient(http: ByQueryEngine(answers: Self.answers, delays: ["kotlin": .milliseconds(400)]))
+        }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        await data.suggestions(for: "kotlin") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [["swift docs", "swift ownership"], [], ["kotlin docs", "kotlin coroutines"]])
+    }
+
+    @Test func addressesNeverHoldEngineRows() async throws {
+        let data = LiveAddressBarData { SuggestionClient(http: ByQueryEngine(answers: Self.answers)) }
+        await data.attach(try AppDatabase.inMemory())
+        await data.suggestions(for: "swift") { _ in }
+
+        var updates: [[AddressBarSuggestion]] = []
+        // An address is never sent to the engine, so no answer is coming: nothing to hold for.
+        await data.suggestions(for: "swift.org") { updates.append($0) }
+        #expect(updates.map(Self.searches) == [[]])
+    }
+
     @Test func savedSettingsTakeEffectForTheNextSearch() async throws {
         let database = try AppDatabase.inMemory()
         let data = LiveAddressBarData()
@@ -168,5 +225,21 @@ private struct FakeEngine: HTTPLoading {
     func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
         let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         return (Data(body.utf8), response)
+    }
+}
+
+/// An engine endpoint that answers each query from `answers` (an empty list otherwise), after
+/// `delays[query]` when given, without the network.
+private struct ByQueryEngine: HTTPLoading {
+    let answers: [String: [String]]
+    var delays: [String: Duration] = [:]
+
+    func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let components = request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        let query = components?.queryItems?.first { $0.name == "q" }?.value ?? ""
+        if let delay = delays[query] { try await Task.sleep(for: delay) }
+        let body = try JSONSerialization.data(withJSONObject: [query, answers[query] ?? []] as [Any])
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        return (body, response)
     }
 }

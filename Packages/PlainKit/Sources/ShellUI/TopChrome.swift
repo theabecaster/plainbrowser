@@ -4,54 +4,131 @@ import Foundation
 
 // The top bar on a wide screen (the Duo's inner screen, iPad-size windows), as plain values free of
 // UIKit so `swift test` checks them on macOS. Safari puts its bar there on the Duo's inner screen:
-// one row under the status bar, the page under it at full width (docs/research/safari-duo.md).
+// one row at the top, the page under it at full width (docs/research/safari-duo.md).
 //
-// The bar floats over the page like the bottom pill does on a phone: it moves by transform and
-// alpha only, and the page's top `obscuredContentInsets` follows its resting state, changed once
-// when a snap ends (`PageInsetState`), never per frame.
+// Where the system keeps its status items to a corner (the Duo's inner screen: clock and battery in
+// the top-trailing corner of an 81 pt safe area), the row sits in that zone, on the status items'
+// row and clear of their corner, and the page runs to the top edge under it. Where the status bar
+// spans the width, the row sits under it. Either way the bar floats over the page like the bottom
+// pill does on a phone: it moves by transform and alpha only, and the page's top
+// `obscuredContentInsets` follows its resting state, changed once per rest (`PageInsetState`),
+// never per frame. Decision: docs/decisions.md, "Duo inner screen: the bar in the status row".
+
+/// The corner the system's status items keep to, read from the root view's safe area and its
+/// corner-adaptive variant (`UIView.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))`,
+/// the guide for bar-like content beside a corner element). Never from the device or the screen.
+enum StatusCorner {
+    /// The corner as a rect in the root view's coordinates, or nil where the status bar spans the
+    /// width (the adapted guide is no shorter than the safe area, or no wider at either side).
+    ///
+    /// The adapted guide's top is what the row may use beside the corner; its leading or trailing
+    /// inset is how far the corner reaches in. The corner then runs from that inset to the edge,
+    /// from the adapted top down to the safe area's top.
+    static func rect(
+        width: CGFloat, safeTop: CGFloat, safeLeft: CGFloat, safeRight: CGFloat,
+        adaptedTop: CGFloat, adaptedLeft: CGFloat, adaptedRight: CGFloat
+    ) -> CGRect? {
+        // Half a point either way is rounding, not a corner.
+        let slack: CGFloat = 0.5
+        guard width > 0, adaptedTop < safeTop - slack else { return nil }
+        let top = max(adaptedTop, 0)
+        let height = safeTop - top
+        // The side the guide grew on more holds the corner.
+        if adaptedRight > safeRight + slack, adaptedRight - safeRight >= adaptedLeft - safeLeft {
+            return CGRect(x: width - adaptedRight, y: top, width: adaptedRight - safeRight, height: height)
+        }
+        if adaptedLeft > safeLeft + slack {
+            return CGRect(x: safeLeft, y: top, width: adaptedLeft - safeLeft, height: height)
+        }
+        return nil
+    }
+}
 
 /// Where the top bar and the strip under it sit, expanded and collapsed, in the root view's
-/// coordinates.
+/// coordinates. The pages start at the root view's top edge under a top bar, so the insets are
+/// measured from there too.
 struct TopChromeGeometry: Equatable {
-    /// The pages' top: under the status bar.
-    var pageTop: CGFloat
+    /// The root view's width.
+    var width: CGFloat
+    /// The safe area's top: under every status item.
+    var safeTop: CGFloat
+    /// The corner the status items keep to (`StatusCorner`), nil under a full-width status bar.
+    var corner: CGRect?
     /// The strip's height under the bar, 0 when it does not show.
     var stripHeight: CGFloat
 
+    init(width: CGFloat, safeTop: CGFloat, corner: CGRect? = nil, stripHeight: CGFloat) {
+        self.width = width
+        self.safeTop = safeTop
+        self.stripHeight = stripHeight
+        // A corner too thin to hold the row's controls beside it is a full-width status bar.
+        if let corner, corner.width > 0, corner.height > 0, corner.minX > 0 || corner.maxX < width {
+            self.corner = corner
+        } else {
+            self.corner = nil
+        }
+    }
+
     /// The bar's row: one 44 pt control high.
     static var rowHeight: CGFloat { CGFloat(FixedChoices.topBarHeight) }
-    /// Between the status bar and the row.
+    /// Between a full-width status bar and the row.
     static let topGap: CGFloat = 2
     /// Between the row and the strip, and under the lowest of them.
     static let gap: CGFloat = 4
+    /// Between the row's end and the status items' corner: the glass never touches the clock.
+    static let cornerGap: CGFloat = 12
     /// The collapsed pill's size relative to the expanded one.
     static var compactScale: CGFloat { CGFloat(FixedChoices.topBarCollapsedScale) }
 
-    /// The row's top (the pill's and the buttons').
-    var rowTop: CGFloat { pageTop + Self.topGap }
+    /// The row sits in the status zone, beside the status items, rather than under it.
+    var isInStatusZone: Bool { corner != nil }
+
+    /// The row's top (the pill's and the buttons'). In the status zone: centered on the corner's
+    /// middle, never above the corner's top; under a full-width status bar: just under it.
+    var rowTop: CGFloat {
+        guard let corner else { return safeTop + Self.topGap }
+        return max(corner.midY - Self.rowHeight / 2, corner.minY)
+    }
+
+    /// The row's bottom.
+    var rowBottom: CGFloat { rowTop + Self.rowHeight }
+
+    /// How far the row keeps from the leading and trailing edges of the root view: past the
+    /// corner and `cornerGap`, or 0 where nothing is in the way.
+    var rowClearance: (leading: CGFloat, trailing: CGFloat) {
+        guard let corner else { return (0, 0) }
+        let onTrailing = corner.midX > width / 2
+        let clearance = onTrailing ? width - corner.minX + Self.cornerGap : corner.maxX + Self.cornerGap
+        return onTrailing ? (0, clearance) : (clearance, 0)
+    }
 
     /// The strip's top, under the row.
-    var stripTop: CGFloat { rowTop + Self.rowHeight + Self.gap }
+    var stripTop: CGFloat { rowBottom + Self.gap }
 
     /// The bottom of the expanded chrome: the row, or the strip under it.
     var expandedBottom: CGFloat {
-        (stripHeight > 0 ? stripTop + stripHeight : rowTop + Self.rowHeight) + Self.gap
+        (stripHeight > 0 ? stripTop + stripHeight : rowBottom) + Self.gap
     }
 
     /// The collapsed pill's height.
     var collapsedPillHeight: CGFloat { Self.rowHeight * Self.compactScale }
 
-    /// The collapsed pill tucks under the status bar: only the address is left.
-    var collapsedBottom: CGFloat { pageTop + collapsedPillHeight }
+    /// The collapsed pill's center: in place on the status row, or tucked under a full-width
+    /// status bar.
+    var collapsedCenter: CGFloat {
+        isInStatusZone ? rowTop + Self.rowHeight / 2 : safeTop + collapsedPillHeight / 2
+    }
+
+    /// The collapsed pill's bottom.
+    var collapsedBottom: CGFloat { collapsedCenter + collapsedPillHeight / 2 }
 
     /// The pill's vertical translation and scale at collapse `progress` (0 expanded, 1 collapsed,
-    /// 2 hidden), for a transform about its center. Past 1 the tucked pill rises off the top edge,
+    /// 2 hidden), for a transform about its center. Past 1 the pill rises off the top edge,
     /// `ChromeGeometry.hiddenClearance` past it, as the bottom pill sinks off the bottom.
     func pillTransform(progress: CGFloat) -> (translationY: CGFloat, scale: CGFloat) {
         let p = min(max(progress, 0), 1)
         let scale = 1 - (1 - Self.compactScale) * p
         let restCenter = rowTop + Self.rowHeight / 2
-        let collapsedCenter = pageTop + collapsedPillHeight / 2
         let rise = (collapsedBottom + ChromeGeometry.hiddenClearance) * min(max(progress - 1, 0), 1)
         return ((collapsedCenter - restCenter) * p - rise, scale)
     }
@@ -66,16 +143,20 @@ struct TopChromeGeometry: Equatable {
         -(Self.rowHeight + Self.gap) * min(max(progress, 0), 1)
     }
 
-    /// The collapsed chrome's height over the page: the smallest top inset the page sees.
-    var collapsedInset: CGFloat { collapsedBottom + Self.gap - pageTop }
+    /// The hidden bar's height over the page: the smallest top inset the page sees. In the status
+    /// zone the status row's bottom, so the page gets everything under the clock's row and a fixed
+    /// header never sits under it; under a full-width status bar, that bar.
+    var hiddenInset: CGFloat { isInStatusZone ? rowBottom : safeTop }
+
+    /// The collapsed chrome's height over the page. In the status zone the shrunken address stays
+    /// on the status row, so the page sees the same as hidden.
+    var collapsedInset: CGFloat {
+        isInStatusZone ? hiddenInset : collapsedBottom + Self.gap
+    }
 
     /// The expanded chrome's height over the page: the largest top inset the page sees, never equal
     /// to the collapsed one (WebKit wants the maximum viewport inset strictly larger).
-    var expandedInset: CGFloat { max(expandedBottom - pageTop, collapsedInset + 1) }
-
-    /// The hidden bar's height over the page: nothing, the page starts under the status bar. The
-    /// smallest top inset the page sees.
-    var hiddenInset: CGFloat { 0 }
+    var expandedInset: CGFloat { max(expandedBottom, collapsedInset + 1) }
 
     /// The page's obscured top inset for the bar resting collapsed or expanded.
     func obscuredInset(collapsed: Bool) -> CGFloat {
@@ -92,10 +173,9 @@ struct TopChromeGeometry: Equatable {
     }
 
     /// The share of `screen` the chrome covers at rest (`collapsed` false) or while reading: the
-    /// status bar (the root view's top `pageTop` points) and the bar, both across the full width. For the design record and tests (target: 12% at rest).
+    /// page's top inset across the full width. For the design record and tests.
     func chromeShare(of screen: CGSize, collapsed: Bool) -> CGFloat {
         guard screen.width > 0, screen.height > 0 else { return 0 }
-        let height = pageTop + obscuredInset(collapsed: collapsed)
-        return height / screen.height
+        return obscuredInset(collapsed: collapsed) / screen.height
     }
 }

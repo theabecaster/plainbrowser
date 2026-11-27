@@ -52,9 +52,9 @@ extension BrowserViewController {
         strip.view.translatesAutoresizingMaskIntoConstraints = false
         // Over the pages and the sidebar, under the chrome and the search sheet.
         view.insertSubview(strip.view, aboveSubview: duo.sidebar?.view ?? panes.view)
-        let safe = view.safeAreaLayoutGuide
-        let geometry = TopChromeGeometry(pageTop: 0, stripHeight: layout.stripHeight)
-        let top = strip.view.topAnchor.constraint(equalTo: safe.topAnchor, constant: geometry.stripTop)
+        // Under the row, from the root view's top (`applyTopBarPlacement` keeps it there).
+        let geometry = makeTopGeometry(stripHeight: layout.stripHeight)
+        let top = strip.view.topAnchor.constraint(equalTo: view.topAnchor, constant: geometry.stripTop)
         NSLayoutConstraint.activate([
             top,
             strip.view.leadingAnchor.constraint(equalTo: duo.chromeLane.leadingAnchor, constant: Spacing.m),

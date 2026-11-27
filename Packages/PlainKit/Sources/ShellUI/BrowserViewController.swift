@@ -495,7 +495,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar
         )
         let top = duo.layout?.chromeOnTop == true
-            ? TopChromeGeometry(pageTop: panes.view.frame.minY, stripHeight: duo.layout?.stripHeight ?? 0) : nil
+            ? makeTopGeometry(stripHeight: duo.layout?.stripHeight ?? 0) : nil
         guard next != geometry || top != duo.topGeometry else { return }
         geometry = next
         duo.topGeometry = top

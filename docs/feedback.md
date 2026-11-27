@@ -4,6 +4,8 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 ## Open
 
+- **URL bar should get out of the way while reading:** scrolling a page collapses the bar to the pill, but the pill never leaves. Keep reading and the bar should disappear and let the page have the screen, and come back the moment it is wanted. (Scroll chrome lane.)
+
 - **Launch with tabs feels empty:** open to the last tab (or a search with the last tab behind it), like Arc but smoother. (Launch lane.)
 
 

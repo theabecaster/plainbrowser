@@ -15,6 +15,9 @@ extension BrowserViewController {
     /// would reach: a new tab with the search field, a page, or the tab switcher.
     public func perform(_ command: PlainCommand) {
         Signposts.signposter.emitEvent(Signposts.systemCommand, "\(command.signpostName, privacy: .public)")
+        // A later command supersedes a Show Tabs still waiting for the saved tabs: the gallery
+        // must not pop up over what the user asked for next.
+        if command != .showTabs { showTabsAwaitingSession = false }
         if case .open(let url) = command { return open(externalURL: url) }
         let root = navigationController ?? self
         // Not animated: the app is coming forward, and the gallery checks for a sheet at once.

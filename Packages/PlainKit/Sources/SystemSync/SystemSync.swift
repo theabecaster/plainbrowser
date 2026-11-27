@@ -115,18 +115,19 @@ public actor SystemSync {
         } catch {
             log.error("Spotlight clear failed: \(error.localizedDescription, privacy: .public)")
         }
-        indexed = nil
-        try? indexedFile.map { try FileManager.default.removeItem(at: $0.url) }
         await reindex(shared ?? file?.read() ?? [])
     }
 
     private func reindex(_ favorites: [SharedFavorite]) async {
+        // A replace that fails halfway leaves Spotlight unknown: forget the old record first, so
+        // no later list is ever taken as already indexed.
+        indexed = nil
+        try? indexedFile.map { try FileManager.default.removeItem(at: $0.url) }
         do {
             try await index.replace(favorites.map(SpotlightItem.init), inDomain: SpotlightItem.favoritesDomain)
             indexed = favorites
             try indexedFile?.write(favorites)
         } catch {
-            indexed = nil
             log.error("Spotlight index failed: \(error.localizedDescription, privacy: .public)")
         }
     }

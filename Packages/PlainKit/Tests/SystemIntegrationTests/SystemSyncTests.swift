@@ -134,6 +134,24 @@ private final class FakeWidgets: WidgetReloading, @unchecked Sendable {
         try? FileManager.default.removeItem(at: folder)
     }
 
+    /// A replace that fails halfway may have emptied Spotlight: going back to the earlier list
+    /// must index it again, now and after a relaunch.
+    @Test func aFailedReplaceForgetsTheEarlierRecord() async throws {
+        let index = FakeIndex()
+        let sync = SystemSync(file: file, indexed: indexed, index: index, widgets: FakeWidgets())
+        await sync.apply([favorite("a")])
+        await index.setFailNext()
+        await sync.apply([favorite("b")])
+        #expect(indexed.read().isEmpty)
+        let relaunched = SystemSync(file: file, indexed: indexed, index: index, widgets: FakeWidgets())
+        await relaunched.apply([favorite("a")])
+        #expect(await index.calls.map { if case .replace(let ids, _) = $0 { ids } else { [] } } == [
+            ["favorite:https://a.example"], ["favorite:https://b.example"], ["favorite:https://a.example"],
+        ])
+        #expect(indexed.read() == [favorite("a")])
+        try? FileManager.default.removeItem(at: folder)
+    }
+
     @Test func clearingBrowsingDataEmptiesSpotlightThenKeepsFavorites() async throws {
         let index = FakeIndex()
         let sync = SystemSync(file: nil, index: index, widgets: FakeWidgets())

@@ -167,7 +167,8 @@ public enum Signposts {
 
     // MARK: Tab gallery (TabGalleryUI emits these)
 
-    /// Interval: the page zooming into its card, until the gallery is settled.
+    /// Interval: the page zooming into its card, until it visibly rests there (within half a point
+    /// of its card; Core Animation finishes the spring's tail a few hundred ms later).
     public static let galleryShow: StaticString = "gallery.show"
     /// Interval: a card zooming into its page, until the page is settled.
     public static let galleryOpenTab: StaticString = "gallery.openTab"

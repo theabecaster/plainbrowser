@@ -108,6 +108,9 @@ extension BrowserViewController {
                 keepPreview(of: current, beside: tab)
                 session.pool.detach(current)
                 forgetAttachment(of: current.id)
+            } else {
+                // It stays on screen in the other pane, which keeps the expanded bar's reserve.
+                applyOtherPaneInsets(to: current)
             }
         }
         self.currentTab = tab
@@ -130,6 +133,8 @@ extension BrowserViewController {
         session.pool.defaultPaneSize = webContainer.bounds.size
         view.layoutIfNeeded()
         updatePageInsets()
+        // Another tab (the sidebar, a link's new tab): it opens with the whole bar.
+        revealChrome(.newTab)
 
         tab.onProgress = { [weak self, weak tab] progress in
             guard let self, let tab, tab.isLoading, tab === self.currentTab else { return }
@@ -306,12 +311,13 @@ extension BrowserViewController {
 
     /// Every inset change goes through here: the page and, while it shows, the reader. Values
     /// come from `updatePageInsets()`, which decides them.
-    func applyPageInsets(obscuredBottom: CGFloat, collapsedBottom: CGFloat, expandedBottom: CGFloat) {
+    func applyPageInsets(obscuredBottom: CGFloat, minimumBottom: CGFloat, expandedBottom: CGFloat) {
         let obscured = UIEdgeInsets(top: 0, left: 0, bottom: obscuredBottom, right: 0)
-        let minimum = UIEdgeInsets(top: 0, left: 0, bottom: collapsedBottom, right: 0)
+        let minimum = UIEdgeInsets(top: 0, left: 0, bottom: minimumBottom, right: 0)
         let maximum = UIEdgeInsets(top: 0, left: 0, bottom: expandedBottom, right: 0)
         if let tab = currentTab {
             session.pool.setInsets(for: tab, obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
+            session.pool.scrollView(for: tab)?.followObscuredBottom(obscuredBottom)
         }
         engineUI.reader.setInsets(obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
     }
@@ -335,6 +341,8 @@ extension BrowserViewController {
         } else {
             currentTab?.beginFind()
         }
+        // The find bar replaces the bar; when it closes, the whole bar is back.
+        revealChrome(.find)
         watchFindBar()
     }
 
@@ -594,4 +602,16 @@ final class PromptQueue {
     }
 }
 
+extension UIScrollView {
+    /// Makes the page's scroll range end above the resting chrome: `obscuredContentInsets` places
+    /// fixed footers and the viewport, but leaves the range at the safe area, so without this the
+    /// page's last lines would stay under the expanded bar. Set with the obscured inset, once per
+    /// rest, never per frame: a range change, not a relayout.
+    func followObscuredBottom(_ obscuredBottom: CGFloat) {
+        let system = adjustedContentInset.bottom - contentInset.bottom
+        let bottom = max(0, obscuredBottom - system)
+        guard abs(contentInset.bottom - bottom) > 0.5 else { return }
+        contentInset.bottom = bottom
+    }
+}
 #endif

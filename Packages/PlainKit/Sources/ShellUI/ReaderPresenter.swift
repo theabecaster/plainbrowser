@@ -72,6 +72,7 @@ final class ReaderPresenter: NSObject, WKNavigationDelegate {
         insets = (obscured, minimumViewport, maximumViewport)
         guard let webView else { return }
         if webView.obscuredContentInsets != obscured { webView.obscuredContentInsets = obscured }
+        webView.scrollView.followObscuredBottom(obscured.bottom)
         if webView.minimumViewportInset != minimumViewport || webView.maximumViewportInset != maximumViewport {
             webView.setMinimumViewportInset(minimumViewport, maximumViewportInset: maximumViewport)
         }

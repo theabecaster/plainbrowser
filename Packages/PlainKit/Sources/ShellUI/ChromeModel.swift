@@ -4,12 +4,38 @@ import Foundation
 // The shell's chrome rules as plain values, free of UIKit so `swift test` checks them on macOS.
 // The view controller feeds them view geometry and scroll offsets and applies what they return.
 
+/// The bar's three resting states (docs/state-rules.md, "Chrome while reading").
+///
+/// As a collapse progress: 0 expanded, 1 the pill, 2 hidden. Between expanded and the pill the bar
+/// follows the finger 1:1; from the pill to hidden, and back, it springs.
+enum ChromeRest: Equatable {
+    /// The pill and the button bar (or the pill alone beside a vertical bar).
+    case expanded
+    /// The small pill low in the home-indicator zone. Taps only.
+    case pill
+    /// Nothing on screen: the page has the screen. A tap on the bottom edge brings the bar back.
+    case hidden
+
+    var progress: CGFloat {
+        switch self {
+        case .expanded: 0
+        case .pill: 1
+        case .hidden: 2
+        }
+    }
+
+    /// The rest a snap to `progress` ends in.
+    init(progress: CGFloat) {
+        self = progress >= 2 ? .hidden : progress >= 1 ? .pill : .expanded
+    }
+}
+
 /// Where the bottom chrome sits, expanded and collapsed, in the root view's coordinates.
 ///
 /// The page never relayouts while the toolbar moves (docs/plan.md, engine rule 4): the bar moves by
 /// transform and alpha, and the web view's bottom `obscuredContentInsets` follows the bar's resting
 /// state, changed once when a snap ends (`PageInsetState`). `setMinimumViewportInset` gets the
-/// collapsed and expanded sizes, so CSS `svh`/`lvh` stay stable while the bar moves.
+/// hidden and expanded sizes, so CSS `svh`/`lvh` stay stable while the bar moves.
 struct ChromeGeometry: Equatable {
     /// The root view's height.
     var viewHeight: CGFloat
@@ -32,6 +58,12 @@ struct ChromeGeometry: Equatable {
     /// How far above the bottom edge the collapsed pill ends on a phone with a home indicator.
     /// It sits clear above the indicator, which is about 13 pt from the edge.
     static let collapsedLiftOverIndicator: CGFloat = 18
+    /// The shortest bottom-edge strip that brings a hidden bar back, where there is no home
+    /// indicator (iPhone SE). With one, the strip is the home-indicator zone itself.
+    static let revealEdgeMinimum: CGFloat = 16
+    /// How far past the bottom edge the hidden pill's top ends: the spring's slow tail then runs
+    /// off screen, and no sliver of glass lingers at the edge (glass ignores the fade).
+    static let hiddenClearance: CGFloat = 12
 
     /// The bottom of the resting chrome: the button bar's bottom, or the pill's.
     var restBottom: CGFloat {
@@ -54,14 +86,25 @@ struct ChromeGeometry: Equatable {
     /// The top of the collapsed pill.
     var collapsedTop: CGFloat { collapsedBottom - Self.pillHeight * Self.compactScale }
 
-    /// The pill's vertical translation and scale at collapse `progress` (0 expanded, 1 collapsed),
-    /// for a transform about its center.
+    /// The top of the strip a hidden bar leaves along the bottom edge: the home-indicator zone,
+    /// where a tap brings the bar back. The page scrolls under it, and the page's inset covers
+    /// only it, so a fixed footer rests just above the indicator.
+    var hiddenTop: CGFloat { viewHeight - max(safeBottom, Self.revealEdgeMinimum) }
+
+    /// The pill's vertical translation and scale at collapse `progress` (0 expanded, 1 the pill,
+    /// 2 hidden), for a transform about its center. Past 1 it sinks below the bottom edge.
     func pillTransform(progress: CGFloat) -> (translationY: CGFloat, scale: CGFloat) {
         let p = min(max(progress, 0), 1)
         let scale = 1 - (1 - Self.compactScale) * p
         let bottom = pillRestBottom + (collapsedBottom - pillRestBottom) * p
         let restCenter = pillRestBottom - Self.pillHeight / 2
-        return (bottom - Self.pillHeight * scale / 2 - restCenter, scale)
+        let sink = (viewHeight - collapsedTop + Self.hiddenClearance) * min(max(progress - 1, 0), 1)
+        return (bottom - Self.pillHeight * scale / 2 - restCenter + sink, scale)
+    }
+
+    /// The pill's opacity: whole down to the pill, then fading as it sinks away.
+    static func pillAlpha(progress: CGFloat) -> CGFloat {
+        1 - min(max(progress - 1, 0), 1)
     }
 
     /// The button bar's drop at `progress`: it leaves past the bottom edge.
@@ -75,8 +118,14 @@ struct ChromeGeometry: Equatable {
         max(0, 1 - progress / 0.6)
     }
 
-    /// The collapsed chrome's height over the page, measured up from `pageBottom` (the web view's
-    /// bottom in the same coordinates). The smallest bottom inset the page sees.
+    /// The hidden chrome's height over the page: the edge strip only. The smallest bottom inset
+    /// the page sees.
+    func hiddenInset(pageBottom: CGFloat) -> CGFloat {
+        max(0, min(pageBottom - hiddenTop, collapsedInset(pageBottom: pageBottom)))
+    }
+
+    /// The collapsed pill's height over the page, measured up from `pageBottom` (the web view's
+    /// bottom in the same coordinates).
     func collapsedInset(pageBottom: CGFloat) -> CGFloat {
         max(0, pageBottom - collapsedTop)
     }
@@ -87,59 +136,164 @@ struct ChromeGeometry: Equatable {
         max(pageBottom - expandedTop, collapsedInset(pageBottom: pageBottom) + 1)
     }
 
-    /// The page's obscured bottom inset for the bar resting collapsed or expanded, so the resting
-    /// bar never covers fixed page footers or the page's last lines.
-    func obscuredInset(pageBottom: CGFloat, collapsed: Bool) -> CGFloat {
-        collapsed ? collapsedInset(pageBottom: pageBottom) : expandedInset(pageBottom: pageBottom)
+    /// The page's obscured bottom inset for the bar resting at `rest`, so the resting bar never
+    /// covers fixed page footers or the page's last lines.
+    func obscuredInset(pageBottom: CGFloat, rest: ChromeRest) -> CGFloat {
+        switch rest {
+        case .expanded: expandedInset(pageBottom: pageBottom)
+        case .pill: collapsedInset(pageBottom: pageBottom)
+        case .hidden: hiddenInset(pageBottom: pageBottom)
+        }
     }
 }
 
-/// Tracks how collapsed the toolbar is from the page's scroll, 1:1 with the finger.
+/// Tracks the toolbar from the page's scroll: expanded to the pill 1:1 with the finger, hidden
+/// once the reader keeps going, and back on a clear move up (docs/state-rules.md, "Chrome while
+/// reading").
 struct ChromeCollapse: Equatable {
-    /// 0 is expanded, 1 is collapsed.
+    /// What a scroll sample asks of the bar.
+    enum Step: Equatable {
+        /// Nothing changed.
+        case none
+        /// `progress` moved with the finger (between expanded and the pill).
+        case moved
+        /// Hide the bar: spring to `ChromeRest.hidden`.
+        case hide
+        /// Bring the whole bar back: spring to `ChromeRest.expanded`.
+        case reveal
+    }
+
+    /// 0 expanded, 1 the pill, 2 hidden (`ChromeRest.progress`).
     private(set) var progress: CGFloat = 0
-    /// Scroll distance that takes the bar from expanded to collapsed.
+    /// Where the bar rests, or where the snap running now takes it.
+    private(set) var rest = ChromeRest.expanded
+    /// Scroll distance that takes the bar from expanded to the pill.
     let distance: CGFloat
+    /// Further downward travel past the pill, in one drag or over several, before the bar hides.
+    let hideDistance: CGFloat
+    /// Downward page travel since the bar was last expanded; moves up take it back.
+    private(set) var downTravel: CGFloat = 0
+    /// Upward travel in the current drag while the bar is hidden.
+    private var upTravel: CGFloat = 0
     private var lastOffset: CGFloat?
 
-    init(distance: CGFloat = 56) {
+    init(distance: CGFloat = 56, hideDistance: CGFloat = 120) {
         self.distance = distance
+        self.hideDistance = hideDistance
     }
 
-    /// Feeds a new content offset. `top` is the offset at the page's top, `bottom` the largest
-    /// offset. Returns true when `progress` changed.
+    /// Upward travel in one drag that brings a hidden bar back: a deliberate move, not a nudge to
+    /// reread a line or a finger's jitter (Firefox uses 20 pt, Chrome 10 pt).
+    static let revealDistance: CGFloat = 24
+    /// An upward drag at least this fast (points per millisecond) brings it back sooner, after
+    /// `revealMinimumTravel`.
+    static let revealVelocity: CGFloat = 0.3
+    static let revealMinimumTravel: CGFloat = 8
+
+    /// The downward travel since the bar was expanded at which it hides.
+    var hideTravel: CGFloat { distance + hideDistance }
+
+    /// Feeds a new content offset and returns what the bar should do.
+    ///
+    /// - Parameters:
+    ///   - top: the offset at the page's top; `bottom` the largest offset at rest.
+    ///   - pageEnd: the offset where the page's end reaches the screen's bottom edge
+    ///     (`contentSize.height - bounds.height`). Arriving there brings the bar back, and the bar
+    ///     does not collapse in the last `distance` before it: the reader is done, the bar is next.
+    ///   - tracking: the finger is on the page. Coasting never moves the bar 1:1.
+    ///   - snapping: a snap or a hide is moving the bar; only hide and reveal decisions apply.
+    ///   - velocity: the finger's speed in points per millisecond, positive down the page.
+    ///   - canHide: the state and the page allow the hidden bar (`ControlRules.chromeMayHide`, a
+    ///     page long enough).
     @discardableResult
-    mutating func scrolled(to offset: CGFloat, top: CGFloat, bottom: CGFloat) -> Bool {
-        defer { lastOffset = offset }
-        let before = progress
+    mutating func scrolled(
+        to offset: CGFloat, top: CGFloat, bottom: CGFloat, pageEnd: CGFloat = .greatestFiniteMagnitude,
+        tracking: Bool = true, snapping: Bool = false, velocity: CGFloat = 0, canHide: Bool = false
+    ) -> Step {
+        let last = lastOffset
+        lastOffset = offset
         if offset <= top {
             // At the top (or pulling past it) the bar is always out.
+            if rest != .expanded, snapping || !tracking || progress > 1 { return .reveal }
+            guard tracking, !snapping, progress != 0 else { return .none }
             progress = 0
-        } else if let lastOffset, offset < bottom {
-            // The bottom's rubber band must not pull the bar back in.
-            progress = min(max(progress + (offset - lastOffset) / distance, 0), 1)
+            downTravel = 0
+            return .moved
         }
-        return progress != before
+        guard let last else { return .none }
+        let delta = offset - last
+        // Arriving at the page's end brings the bar back.
+        if last < pageEnd, offset >= pageEnd, rest != .expanded || progress > 0 { return .reveal }
+        // The bottom's rubber band must not move the bar.
+        guard offset < bottom else { return .none }
+
+        if rest == .hidden {
+            guard tracking else { return .none }
+            upTravel = delta < 0 ? upTravel - delta : 0
+            let fast = -velocity >= Self.revealVelocity && upTravel >= Self.revealMinimumTravel
+            return upTravel >= Self.revealDistance || fast ? .reveal : .none
+        }
+
+        // Close to the end the bar stays as it is: collapsing there would only bring it back.
+        let nearEnd = offset >= pageEnd - distance
+        if delta < 0 || !nearEnd, tracking || rest == .pill {
+            downTravel = max(0, downTravel + delta)
+        }
+        if canHide, !nearEnd, delta > 0, downTravel >= hideTravel { return .hide }
+        guard tracking, !snapping, delta < 0 || !nearEnd else { return .none }
+        let before = progress
+        progress = min(max(progress + delta / distance, 0), 1)
+        if progress == 0 { downTravel = 0 }
+        return progress != before ? .moved : .none
     }
 
-    /// Forgets the last offset, so the next scroll starts fresh (a new page, a finished snap).
+    /// Forgets the last offset, so the next scroll starts fresh (a new drag, a finished snap).
     mutating func resetTracking() {
         lastOffset = nil
+        upTravel = 0
     }
 
-    /// Sets the progress outright (a snap's frame, a drag taking over mid-snap, or expanding for a
+    /// A snap or a hide starts toward `rest`: hide and reveal decisions follow it from now.
+    mutating func head(to rest: ChromeRest) {
+        self.rest = rest
+        upTravel = 0
+        if rest == .expanded { downTravel = 0 }
+    }
+
+    /// The value on screen in a snap's frame. The scroll tracking is left alone.
+    mutating func place(at value: CGFloat) {
+        progress = min(max(value, 0), 2)
+    }
+
+    /// Sets the progress outright (a snap's end, a drag taking over mid-snap, or expanding for a
     /// new page). The next scroll starts fresh from it.
     mutating func settle(at value: CGFloat) {
-        progress = min(max(value, 0), 1)
-        lastOffset = nil
+        progress = min(max(value, 0), 2)
+        rest = ChromeRest(progress: progress)
+        if progress == 0 { downTravel = 0 }
+        resetTracking()
     }
 
-    /// Where the bar should settle when the finger lifts: the nearer end, unless the release had
-    /// clear velocity (points per millisecond, positive scrolling down the page).
-    func settleTarget(velocity: CGFloat = 0) -> CGFloat {
-        if velocity > Self.clearVelocity { return 1 }
-        if velocity < -Self.clearVelocity { return 0 }
-        return progress >= 0.5 ? 1 : 0
+    /// Where the bar should settle when the finger lifts.
+    ///
+    /// - Parameters:
+    ///   - velocity: the release velocity in points per millisecond, positive down the page.
+    ///   - coast: how far down the page will still travel after the release (the scroll view's
+    ///     target offset less the current one). A flick that carries the reader past the hide
+    ///     travel goes straight to hidden, in one motion.
+    ///   - canHide: as in `scrolled`. `coastReachesEnd`: the coast ends near the page's end, where
+    ///     the bar comes back anyway. `atEnd`: the finger lifts near the end already, where the bar
+    ///     is out (a flick against the end must not collapse it).
+    func settleTarget(
+        velocity: CGFloat = 0, coast: CGFloat = 0, canHide: Bool = false, coastReachesEnd: Bool = false,
+        atEnd: Bool = false
+    ) -> ChromeRest {
+        if atEnd { return .expanded }
+        if rest == .hidden { return velocity < -Self.clearVelocity ? .expanded : .hidden }
+        if canHide, !coastReachesEnd, velocity > 0, downTravel + max(coast, 0) >= hideTravel { return .hidden }
+        if velocity > Self.clearVelocity { return .pill }
+        if velocity < -Self.clearVelocity { return .expanded }
+        return progress >= 0.5 ? .pill : .expanded
     }
 
     /// A release faster than this (points per millisecond) picks the snap's direction.
@@ -158,24 +312,24 @@ struct ChromeCollapse: Equatable {
         return min(max(towardTarget, -Self.maxSnapVelocity), Self.maxSnapVelocity)
     }
 
-    /// True while the bar is between its two resting states.
+    /// True while the bar is between expanded and the pill.
     var isMidway: Bool { progress > 0 && progress < 1 }
 }
 
 /// When the page's bottom inset may follow the bar's resting state (docs/plan.md, engine rule 4).
 ///
-/// The bar comes to rest at the end of each snap. The inset then changes once, to the expanded or
-/// collapsed chrome, never per frame. While the page is pulled past its top or bottom the change
-/// waits, because WebKit clamps the overscroll on any inset change and the bounce would jump.
+/// The bar comes to rest at the end of each snap. The inset then changes once, to the expanded,
+/// pill or hidden chrome, never per frame. While the page is pulled past its top or bottom the
+/// change waits, because WebKit clamps the overscroll on any inset change and the bounce would jump.
 struct PageInsetState: Equatable {
-    /// The resting state the page's inset shows: true for the collapsed bar. The bar starts out.
-    private(set) var collapsed = false
+    /// The resting state the page's inset shows. The bar starts out.
+    private(set) var rest = ChromeRest.expanded
     /// A resting state waiting for the bounce to end.
-    private(set) var pending: Bool?
+    private(set) var pending: ChromeRest?
 
-    /// The bar came to rest, collapsed or expanded.
-    mutating func barRested(collapsed: Bool) {
-        pending = collapsed == self.collapsed ? nil : collapsed
+    /// The bar came to rest.
+    mutating func barRested(_ rest: ChromeRest) {
+        pending = rest == self.rest ? nil : rest
     }
 
     /// The bar is on the move again: a change still waiting for a bounce is stale.
@@ -191,11 +345,12 @@ struct PageInsetState: Equatable {
         // A page shorter than the screen rests at its top.
         let isOverscrolled = offset < top - 0.5 || offset > max(bottom, top) + 0.5
         guard !isOverscrolled else { return false }
-        collapsed = pending
+        rest = pending
         self.pending = nil
         return true
     }
 }
+
 
 /// Pull to refresh's threshold logic (docs/plan.md, motion table: arms at 80 pt, selection haptic
 /// at arm).
@@ -226,4 +381,20 @@ struct PullToRefreshTracker: Equatable {
         defer { isArmed = false }
         return isArmed
     }
+}
+
+/// What brought a collapsed or hidden bar back, for the `toolbar.reveal` signpost.
+enum ChromeRevealReason: String {
+    case scrollUp = "scroll up"
+    case pageTop = "page top"
+    case pageEnd = "page end"
+    case edgeTap = "edge tap"
+    case statusBar = "status bar"
+    case keyboard
+    case find
+    case alert
+    case newTab = "new tab"
+    case shortPage = "short page"
+    case state
+    case accessibility
 }

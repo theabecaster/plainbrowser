@@ -147,6 +147,11 @@ extension BrowserViewController {
             pill.transform = CGAffineTransform(translationX: 0, y: move.translationY).scaledBy(x: move.scale, y: move.scale)
             pill.isCompact = progress > 0
         }
+        // Reading on, the tucked address rises off the top edge as its text fades (docs/state-rules.md,
+        // "Chrome while reading"); the top bar is clear of the home-indicator zone, so it may go.
+        pill.alpha = editing ? 1 : ChromeGeometry.pillAlpha(progress: progress)
+        let isGone = !editing && progress >= ChromeRest.hidden.progress
+        if pill.accessibilityElementsHidden != isGone { pill.accessibilityElementsHidden = isGone }
         let alpha = ChromeGeometry.barAlpha(progress: progress)
         buttonBar.transform = CGAffineTransform(translationX: 0, y: geometry.buttonsTranslation(progress: progress))
         if !editing { buttonBar.alpha = alpha }
@@ -160,13 +165,15 @@ extension BrowserViewController {
 
     /// The page's top inset follows the bar's resting state; the viewport insets span collapsed to
     /// expanded, so CSS `svh`/`lvh` stay put while the bar moves.
-    func applyTopBarInsets(_ geometry: TopChromeGeometry, collapsed: Bool) {
-        let obscured = UIEdgeInsets(top: geometry.obscuredInset(collapsed: collapsed), left: 0, bottom: 0, right: 0)
-        let minimum = UIEdgeInsets(top: geometry.collapsedInset, left: 0, bottom: 0, right: 0)
+    func applyTopBarInsets(_ geometry: TopChromeGeometry, rest: ChromeRest) {
+        let obscured = UIEdgeInsets(top: geometry.obscuredInset(rest: rest), left: 0, bottom: 0, right: 0)
+        let minimum = UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: 0, right: 0)
         let maximum = UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: 0, right: 0)
         if let tab = currentTab {
             session.pool.setInsets(for: tab, obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
             setPageTopStart(geometry.expandedInset, for: session.pool.scrollView(for: tab))
+            // Nothing rests at the bottom under a top bar.
+            session.pool.scrollView(for: tab)?.followObscuredBottom(0)
         }
         engineUI.reader.setInsets(obscured: obscured, minimumViewport: minimum, maximumViewport: maximum)
         setPageTopStart(geometry.expandedInset, for: engineUI.reader.webView?.scrollView)
@@ -185,10 +192,11 @@ extension BrowserViewController {
         session.pool.setInsets(
             for: tab,
             obscured: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: 0, right: 0),
-            minimumViewport: UIEdgeInsets(top: geometry.collapsedInset, left: 0, bottom: 0, right: 0),
+            minimumViewport: UIEdgeInsets(top: geometry.hiddenInset, left: 0, bottom: 0, right: 0),
             maximumViewport: UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: 0, right: 0)
         )
         setPageTopStart(geometry.expandedInset, for: session.pool.scrollView(for: tab))
+        session.pool.scrollView(for: tab)?.followObscuredBottom(0)
     }
 
     /// Where a page's top rests: under the expanded top bar, so its first lines show below it and

@@ -121,6 +121,8 @@ public struct ChromeState: Sendable, Equatable {
     public var isSplit = false
     /// The sidebar (Tab Layout Left or Right) is in effect: it is the tab list.
     public var sideTabs = false
+    /// VoiceOver or Switch Control runs: the bar stays reachable, never hidden.
+    public var usesAssistiveTech = false
 
     public init() {}
 }
@@ -153,6 +155,17 @@ public struct ControlRules: Sendable, Equatable {
     /// full-width bar with one button at its end. Start is its own mode, so the bar may change
     /// shape (§1, principle 5). The Duo's vertical bar packs its own items.
     public var barBesidePill: Bool { isStart && !state.isEditing && !state.usesVerticalBar }
+
+    /// The bar may leave the screen while the user reads (state rules, "Chrome while reading"):
+    /// only on a loaded page. Not while it loads (the pill carries the progress and the page may
+    /// not have painted), not on a failed, crashed or resend page (its button is the next step),
+    /// not while editing or finding, and never for VoiceOver or Switch Control, which need the
+    /// bar in reach. The pill stays allowed in all of these, as it is today. The page must also
+    /// be long enough, which the shell checks from the scroll view.
+    public var chromeMayHide: Bool {
+        isPageShowing && state.condition == .loaded && !state.isEditing && !state.isFindOpen
+            && !state.usesAssistiveTech
+    }
 
 
     /// Leftmost; dim inside Page so its place stays muscle memory. Hidden on Start.

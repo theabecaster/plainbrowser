@@ -1026,3 +1026,43 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
 - **Not verified on the device yet:** the Mac was locked, so Device Hub's fold could not be driven.
   Captures come from the simulator's resizable window at 951x669 and 669x951 (`docs/development.md`),
   which has no fold and no vertical bar of its own. Checks for the device are in the polish backlog.
+
+## Scroll chrome: expanded, pill, hidden (2026-11-27)
+
+- **Chosen:** three resting states. Scrolling down takes the bar to the pill 1:1 as before; reading
+  on (120 pt past the pill, or a flick projected that far) sinks the pill past the bottom edge as its text fades
+  (`Motion.toolbarHide`, `.smooth(0.35)`); a clear move up (24 pt, or 8 pt at 0.3 pt/ms), a tap
+  on the bottom edge, a status bar tap, the page's end, the top or a new page brings the whole bar
+  back (`.smooth(0.25)`). Research and sources: docs/research/scroll-chrome.md; rules:
+  docs/state-rules.md, "Chrome while reading".
+- **Why nothing remains:** a thin host label without glass is illegible over an arbitrary page, and
+  with glass it is the pill again. The pill shows the host on the way down; the home-indicator
+  strip is the way back by touch (taps reach the app there; swipes stay the system's).
+- **Inset:** `PageInsetState` holds a `ChromeRest`; hidden obscures only the home-indicator strip
+  (34 pt on iPhone 17, 16 pt minimum), so fixed footers rest just above the indicator. Still one
+  change per rest, never per frame. The viewport range is now hidden to expanded.
+- **Scroll range follows too:** measured on the iPhone 17 simulator, `obscuredContentInsets` moves
+  fixed footers and the viewport but leaves the scroll view's `adjustedContentInset.bottom` at the
+  safe area (34 pt), so a page's last lines stayed under the expanded bar at its end (true before
+  this change too, behind the pill). The shell now sets `scrollView.contentInset.bottom` to the
+  rest's inset less the safe area, in the same once-per-rest step (`followObscuredBottom`): a range
+  change, not a relayout. When the bar comes back while the page rests at its very end, the page
+  rises with it (`setContentOffset(animated:)`), never under the finger.
+- **One driver, two springs:** `SpringDriver.animate(to:velocity:spring:)` takes a per-motion spring,
+  so a reveal can retarget a hide mid-flight with its velocity. A drag grabs only motions between
+  expanded and the pill; a hide or reveal finishes, and the drag can still turn it around.
+- **Never hidden** while loading, on error pages, editing, finding, under VoiceOver or Switch
+  Control (`ControlRules.chromeMayHide`), or on a page shorter than two screens.
+- **Inner screen top bar:** the lead's top bar lane reads the same collapse progress. Past the
+  pill (1 to 2) the tucked address rises off the top edge (`TopChromeGeometry.pillTransform`) and
+  the top inset goes to `hiddenInset` (0); the viewport range is hidden to expanded there too. The
+  top bar is clear of the home-indicator zone, so it hides fully like the bottom pill.
+- **Performance** (iPhone 17 simulator, Release, 25 scripted swipes on the long test page; the
+  simulator has no hitch data, so two proxies). The shell's work per scroll callback
+  (`toolbar.scrollStep` signpost, ~3,500 callbacks): before mean 6.7–8.0 µs, p95 5.8–9.1 µs, max
+  0.4–4.7 ms; after mean 7.1–7.9 µs, p95 11.4–11.9 µs, max 0.5–0.7 ms. Main-thread CPU per scroll
+  frame (Time Profiler, 1/60 s buckets that hold a scroll callback; XCUITest's own queries are in
+  it): before mean 5.5 ms, 554 frames over 16.7 ms; after mean 4.2 ms, 368 over 16.7 ms. No layout
+  during motion: the edge strip toggles `isUserInteractionEnabled`, the pill moves by transform and
+  alpha, and insets change once per rest. The device perf gate (`testPageScrollHitches`) is the
+  check for 120 Hz.

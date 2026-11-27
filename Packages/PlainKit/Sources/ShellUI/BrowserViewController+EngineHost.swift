@@ -181,6 +181,8 @@ extension BrowserViewController: EngineHost {
             let (alert, fallback) = make { answer.resume($0) }
             answer.fallback = fallback
             alert.view.tintColor = Palette.accent
+            // The page asked something: the whole bar is back under the answer.
+            revealChrome(.alert)
             topPresenter.present(alert, animated: true)
             if alert.presentingViewController == nil { answer.resume(fallback) }
         }

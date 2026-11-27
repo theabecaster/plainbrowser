@@ -157,6 +157,8 @@ Motion principles: springs with no bounce by default; bounce only when a flick w
 | Suggestions change while typing | nothing slides: a row that stays in place is untouched, new rows fade in and old ones fade out where they stand, a row that changes place crossfades there; one change per frame, picked up mid-flight by the next keystroke; Reduce Motion: the list crossfades | linear crossfade, 0.12 s, from the on-screen opacity | none |
 | Pull to refresh | rubber-band, arms at 80 pt | — | selection at arm |
 | Toolbar collapse | tied to scroll; snaps on release, toward the release velocity when it is clear; a drag during the snap retargets from the on-screen position | `.smooth(0.25)` | none |
+| Toolbar hide | reading on past the pill (120 pt, or a flick projected that far) sinks the pill 12 pt past the bottom edge as its text fades; the page inset follows at rest (docs/state-rules.md, "Chrome while reading") | `.smooth(0.35)`, frame by frame (`SpringDriver`) | none |
+| Toolbar reveal | the whole bar springs back from the pill or hidden: 24 pt up (8 pt fast), a bottom-edge or status-bar tap, the page's end, a new page; a reveal during a hide retargets with its velocity | `.smooth(0.25)` | none |
 | Link preview | `UIContextMenuInteraction` | system | system |
 | Fold / unfold | none custom; system bounds change | — | none |
 

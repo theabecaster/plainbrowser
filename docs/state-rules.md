@@ -120,7 +120,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | More (page menu) | shown | shown | Never hidden | History, Settings and Edit Favorites apply everywhere. |
 | Tabs slot | see above | see above | | |
 | Bar shape | beside the pill: the bar shrinks to a round glass button (More), or a capsule (Tabs and More), at the pill's trailing end, and the pill takes the rest of the row at the bottom (`ControlRules.barBesidePill`) | under the pill, full width | Changes between modes only | A full-width bar holding one button read as unfinished. Start is its own mode, so the bar may change shape (principle 5); the Duo's vertical bar packs its items itself. On a wide screen (the Duo's inner screen) the bar is the top bar in every mode: Back and Forward at the row's leading end, Tabs, Share and More at its trailing end, the pill between; a capsule with nothing to show (Back and Forward on Start) leaves no empty glass. |
-| Pill | placeholder "Search or enter address" | host, "Not Secure —" first on http, mixed content or a passed certificate; on a failed page the address that was tried | Never hidden | The one way to search. |
+| Pill | placeholder "Search or enter address" | host, "Not Secure —" first on http, mixed content or a passed certificate; on a failed page the address that was tried | Never hidden by a mode; while reading it may sink away (below) | The one way to search. |
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
 | Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. |
@@ -129,6 +129,39 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Bar swipe sideways | to neighbours in `list` | to neighbours in `list` | Rubber-band with no neighbour | The same gesture as on a page. Leaving an empty tab drops it. |
 | New Tab card past the last tab | never | when the tab has an address and is last in `list` | Not offered | Swiping past an empty tab would make a second empty tab. |
 | Collapsed pill | n/a | taps only | | It sits in the home-indicator zone. |
+
+### Chrome while reading: expanded, pill, hidden
+
+Scrolling a page moves the bar through three resting states (owner, 2026-11-27: "the URL bar
+should disappear and let the user browse at some point"; research and numbers in
+docs/research/scroll-chrome.md). `ChromeCollapse` and `ControlRules.chromeMayHide` hold the rules.
+
+| State | On screen | Page inset (`obscuredContentInsets.bottom`) | Gets there | Leaves |
+|---|---|---|---|---|
+| Expanded | pill + button bar (Duo: pill; the system's vertical bar keeps its buttons) | the expanded chrome | the top, a reveal (below) | scrolling down: 1:1 into the pill over 56 pt |
+| Pill | the small pill in the home-indicator zone, taps only | the pill | scrolling down 56 pt; a release snaps to the nearer state, or follows a clear flick | a tap or scrolling up: 1:1 back out; reading on: hidden |
+| Hidden | nothing; the home-indicator strip under the focused pane takes taps | the strip only (the home indicator, at least 16 pt) | 120 pt more reading past the pill (one drag, several, or a coast), or a flick whose coast will carry that far, in one motion | any reveal |
+
+**Reveal** (back to Expanded, whole): an upward drag of 24 pt (or 8 pt at 0.3 pt/ms), an upward
+flick; a tap on the bottom edge strip; a status bar tap (it reveals and keeps the place; the next
+tap scrolls to the top); the page's end reaching the screen's bottom edge (the bar does not
+collapse in the last 56 pt before it, and the page rises with the bar if it rests at the very
+end); the top; a new page, another tab, Find, a page's keyboard or alert, the reader; the page
+becoming too short; VoiceOver or Switch Control turning on.
+
+**Never Hidden** (the pill is still allowed, as before): Start; a page loading (the pill carries
+the progress and the page may not have painted); a failed, crashed or resend page; Editing; Find;
+VoiceOver or Switch Control running (the bar stays in reach, as in Chrome, Firefox and Safari); a
+page shorter than two screens (the end, where the bar comes back, is already near).
+
+The inset changes once, when a motion ends, never per frame (docs/plan.md, engine rule 4), so a
+fixed footer sits above whatever rests there. Under Reduce Motion, hiding and revealing are a
+crossfade.
+
+**Duo inner screen (top bar).** The same three states drive the top bar: Expanded is the row
+(Back/Forward, the pill, Tabs/Share/More) and the strip; Pill is the address tucked under the
+status bar, buttons and strip faded; Hidden lifts the tucked address off the top edge and the
+page's top inset drops to 0 (only the status bar). Same triggers and the same never-hidden list.
 
 ## 4. The page menu (More, and a long press on the pill)
 
@@ -248,7 +281,8 @@ apply only to what it leaves open.
    stays on the page it was showing, with that page's address and controls; a tab that had no
    page goes back to Start. Stopped after commit: the partly loaded page counts as loaded, with
    its own address.
-8. **Typing in a page's form** is not editing the address. The keyboard covers the bar; the bar
+8. **Typing in a page's form** is not editing the address. The keyboard brings the whole bar
+   back (from the pill or hidden), then covers it; the bar
    comes back when the keyboard leaves. Bar gestures need the bar on screen, so they wait.
 
 ## 8. State matrix

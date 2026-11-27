@@ -24,6 +24,9 @@ public enum Motion {
     /// Toolbar snaps collapsed or expanded when a drag ends, from the release velocity. A spring
     /// value, not an `Animation`: `SpringDriver` runs it frame by frame so a new drag can grab it.
     public static let toolbarSnap = Spring.smooth(duration: 0.25)
+    /// The pill sinking away once the reader keeps scrolling: a calmer exit than the snap, so the
+    /// chrome leaves without drawing the eye. Coming back uses `toolbarSnap`: it answers the user.
+    public static let toolbarHide = Spring.smooth(duration: 0.35)
     /// Tab switch by bar swipe (M2), with the gesture's velocity.
     public static let tabSwitch = Animation.spring(duration: 0.35, bounce: 0.12)
     /// The same spring as a value, for `SpringDriver`: the bar swipe runs frame by frame so a

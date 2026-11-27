@@ -233,13 +233,14 @@ extension BrowserViewController {
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom, hasButtonBar: !usesVerticalBar
         )
         let expanded = geometry.expandedInset(pageBottom: bottom)
-        let collapsed = geometry.collapsedInset(pageBottom: bottom)
+        let hidden = geometry.hiddenInset(pageBottom: bottom)
         session.pool.setInsets(
             for: tab,
             obscured: UIEdgeInsets(top: 0, left: 0, bottom: expanded, right: 0),
-            minimumViewport: UIEdgeInsets(top: 0, left: 0, bottom: collapsed, right: 0),
+            minimumViewport: UIEdgeInsets(top: 0, left: 0, bottom: hidden, right: 0),
             maximumViewport: UIEdgeInsets(top: 0, left: 0, bottom: expanded, right: 0)
         )
+        session.pool.scrollView(for: tab)?.followObscuredBottom(expanded)
     }
 
     // MARK: Focus
@@ -261,6 +262,7 @@ extension BrowserViewController {
     func focusPane(_ index: Int) {
         guard session.tabs.panes.indices.contains(index), index != session.tabs.focusedPane else { return }
         if isEditingAddress { endAddressEditing() }
+        let outgoing = currentTab
         session.tabs.focusPane(index)
         if let id = session.tabs.panes[index] {
             show(session.tabs.tab(id))
@@ -268,6 +270,9 @@ extension BrowserViewController {
             clearPage()
         }
         focusDidChange()
+        // The pane it leaves keeps its page, which may have the pill's or the hidden bar's inset:
+        // it gets the other pane's expanded reserve.
+        if let outgoing, outgoing !== currentTab, isShownInOtherPane(outgoing.id) { applyOtherPaneInsets(to: outgoing) }
     }
 
     /// The focused pane changed: the ring, the lane (the pill slides over the new pane) and the

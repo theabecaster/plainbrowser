@@ -19,11 +19,13 @@ public final class SpringDriver {
     public private(set) var target: CGFloat
     public var isRunning: Bool { link != nil }
 
-    private let spring: Spring
+    /// The running spring: the one given at init, or the one the last `animate` asked for.
+    private var spring: Spring
     /// When set, the spring lands on its target once the value is within this distance of it and
     /// moves less than this a frame (the motion is visibly over), instead of after the
     /// spring's long sub-point tail. The jump to the target is below what the eye can see.
     private let restDistance: CGFloat?
+    private let defaultSpring: Spring
     private var link: UIUpdateLink?
     private var origin: CGFloat = 0
     private var initialVelocity: CGFloat = 0
@@ -37,6 +39,7 @@ public final class SpringDriver {
     ///   over (see `restDistance`); nil runs the spring to its full settle.
     public init(spring: Spring, value: CGFloat = 0, restDistance: CGFloat? = nil) {
         self.spring = spring
+        self.defaultSpring = spring
         self.restDistance = restDistance
         self.value = value
         self.target = value
@@ -53,6 +56,8 @@ public final class SpringDriver {
     ///
     /// - Parameters:
     ///   - velocity: the starting velocity in value units per second (a gesture's release).
+    ///   - spring: this motion's spring, when it is not the driver's own (a calmer exit than the
+    ///     snap, for example). A retarget starts from the current velocity either way.
     ///   - view: the view whose display paces the frames.
     ///   - onFrame: applies a value; runs once per frame, and once with `target` at the end.
     ///   - completion: runs when the spring settles (or comes to rest, with `restDistance`), not
@@ -61,11 +66,12 @@ public final class SpringDriver {
     /// Under Reduce Motion, or with the view off screen, the value jumps to `target`; under Reduce
     /// Motion the caller wraps the call in `Motion.crossfade`.
     public func animate(
-        to target: CGFloat, velocity: CGFloat? = nil, in view: UIView,
+        to target: CGFloat, velocity: CGFloat? = nil, spring: Spring? = nil, in view: UIView,
         onFrame: @escaping (CGFloat) -> Void, completion: (() -> Void)? = nil
     ) {
         let now = CACurrentMediaTime()
         let startVelocity = velocity ?? self.velocity(at: now)
+        self.spring = spring ?? defaultSpring
         self.onFrame = onFrame
         self.completion = completion
         guard !Motion.prefersCrossfade, view.window != nil, target != value || startVelocity != 0 else {
@@ -77,7 +83,7 @@ public final class SpringDriver {
         initialVelocity = startVelocity
         startTime = now
         lastTime = now
-        duration = spring.settlingDuration(target: target - origin, initialVelocity: startVelocity, epsilon: 0.001)
+        duration = self.spring.settlingDuration(target: target - origin, initialVelocity: startVelocity, epsilon: 0.001)
         if link == nil {
             let link = UIUpdateLink(view: view)
             link.addAction { [weak self] _, info in self?.step(to: info.modelTime) }

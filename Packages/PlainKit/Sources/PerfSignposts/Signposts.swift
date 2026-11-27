@@ -12,6 +12,12 @@ public enum Signposts {
 
     /// Interval from `main` entering to the search field becoming first responder.
     public static let launch: StaticString = "launch"
+    /// Interval from `main` entering to the first display-link callback after the first window
+    /// became visible: the run loop turn that showed the window is done and the main thread runs
+    /// the next frame's work. The perf gate's cold launch (`launchMs`): Apple's
+    /// XCTApplicationLaunchMetric records nothing for Plain on the device and only some runs on a
+    /// simulator. Time before `main` (dyld, static initializers) is not in it.
+    public static let launchFirstFrame: StaticString = "launch.firstFrame"
     /// Event: the search field became first responder at launch.
     public static let searchFieldReady: StaticString = "launch.searchFieldReady"
     /// Interval: the pool creating the warm web view after the first frame.
@@ -161,8 +167,13 @@ public enum Signposts {
 
     // MARK: Tab gallery (TabGalleryUI emits these)
 
-    /// Interval: the page zooming into its card, until the gallery is settled.
+    /// Interval: the page zooming into its card, until it visibly rests there (`visualSettle`;
+    /// Core Animation finishes the spring's tail a few hundred ms later).
     public static let galleryShow: StaticString = "gallery.show"
+    /// Where `gallery.show` counts the page as at rest, in points: within this distance of its card
+    /// on every edge, and moving less than this in a frame (so a page still crossing the card's
+    /// frame at speed doesn't count). Half a point is below what the eye can see move.
+    public static let visualSettle: Double = 0.5
     /// Interval: a card zooming into its page, until the page is settled.
     public static let galleryOpenTab: StaticString = "gallery.openTab"
     /// Interval: a card flicked away (or closed from its button or menu), until the cards reflow.

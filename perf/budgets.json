@@ -3,7 +3,7 @@
   "simRegressionTolerance": 0.20,
   "metrics": {
     "launchMs": {
-      "label": "Cold launch until responsive (ms)",
+      "label": "main() to first frame, responsive (ms)",
       "target": 300,
       "fail": 400
     },
@@ -18,9 +18,10 @@
       "fail": 10
     },
     "galleryMs": {
-      "label": "Tabs button to gallery settled (ms, spring settle)",
-      "target": 1500,
-      "fail": 1800
+      "label": "Tabs button to gallery visibly settled (ms)",
+      "target": 650,
+      "fail": 800,
+      "reason": "Ends when the page is within 0.5 pt of its card (TabGalleryTransition), not at Core Animation's settle of the 0.42 s spring (~0.98 s on the Duo). The spring alone takes ~0.6 s to come within 0.5 pt, so 800 leaves ~200 ms for stalls."
     },
     "swipeMs": {
       "label": "Bar swipe to page settled (ms)",

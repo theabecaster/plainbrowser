@@ -7,6 +7,9 @@ import XCTest
 @MainActor
 final class PerfTests: XCTestCase {
     private static let iterations = 5
+    /// Long enough for the bar swipe's spring (`Motion.tabSwitchSpring`, 0.35 s) to settle with a
+    /// wide margin for a loaded simulator; the interval ends well inside it.
+    private static let swipeSettleWait: TimeInterval = 2
 
     private var options: XCTMeasureOptions {
         let options = XCTMeasureOptions()
@@ -14,9 +17,14 @@ final class PerfTests: XCTestCase {
         return options
     }
 
-    /// Cold launch until the main thread is responsive after the first frame.
+    /// Cold launch: from `main` to the first display-link callback after the window is visible
+    /// (the `launch.firstFrame` interval). Not XCTApplicationLaunchMetric: on iOS 27 it records nothing
+    /// for Plain on the device and only in some runs on a simulator.
     func testLaunch() {
-        measure(metrics: [XCTApplicationLaunchMetric(waitUntilResponsive: true)], options: options) {
+        let metric = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.launchFirstFrame)
+        )
+        measure(metrics: [metric], options: options) {
             XCUIApplication.introSeen().launch()
         }
     }
@@ -79,6 +87,13 @@ final class PerfTests: XCTestCase {
         var toPrevious = true
         measure(metrics: [metric], options: options) {
             if toPrevious { pill.swipeRight(velocity: .fast) } else { pill.swipeLeft(velocity: .fast) }
+            // The swipe call returns when the finger lifts, while the page still springs. The
+            // metric only counts an interval that ends inside this block, so wait out the settle
+            // here, without querying the app (a query costs its main thread mid-interval).
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "page settles")], timeout: Self.swipeSettleWait)
+            // Then check the swipe really switched: the page it left is out of the window.
+            let left = toPrevious ? "Long Read" : "Page A"
+            XCTAssertFalse(app.webViews.staticTexts[left].exists, "the bar swipe did not switch tabs")
             toPrevious.toggle()
         }
     }

@@ -78,7 +78,7 @@ median() {  # $1: test name, $2: jq filter selecting the metric, $3: scale
       else sort | .[length / 2 | floor] * \$k | . * 10 | round / 10 end" <<<"$raw"
 }
 typeset -A value=(
-  launchMs      "$(median 'PerfTests/testLaunch()' '.identifier | contains("ApplicationLaunch")' 1000)"
+  launchMs      "$(median 'PerfTests/testLaunch()' '.identifier | endswith("OSSignpost-launch.firstFrame.duration")' 1000)"
   searchFieldMs "$(median 'PerfTests/testLaunchToSearchFieldReady()' '.identifier | endswith("OSSignpost-launch.duration")' 1000)"
   hitchMsPerS   "$(median 'PerfTests/testPageScrollHitches()' '.displayName | test("hitch.*ratio"; "i")' 1)"
   galleryMs     "$(median 'PerfTests/testGalleryOpen()' '.identifier | endswith("OSSignpost-gallery.show.duration")' 1000)"

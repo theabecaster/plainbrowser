@@ -262,7 +262,7 @@ Dropped: outer-screen "peek" (no API), hinge gestures (gimmick), tabletop video 
 
 - Engine: Apple Foundation Models. On this class of device it runs Apple's 20B sparse model at ~70–86 tok/s with no download. Not frontier for knowledge, strong for summarize/extract/structure.
 - Features: summarize page (Readability first, map-reduce over chunks, streamed bullets, prewarm on page load), ask the page (chunk + embed + retrieve), smart tab titles, translation via Apple's Translation framework (not an LLM).
-- Browse for Me: needs search results. Options: Brave Search API (~$5/month credit, fully allowed) or self-hosted SearXNG on a home server (free). Fetch top 5 pages on the phone, extract, synthesize on-device with citations.
+- Browse for Me: results come from a search results page read in a hidden tab, with no API key: DuckDuckGo's lite page by default, the user's engine when it works (owner's choice, 2026-11-26). Fetch the top 5 pages on the phone, extract, synthesize on-device with citations. A Brave Search API key can be added later as an opt-in.
 - Optional "Deep" mode: Qwen3.5-4B via MLX (~3 GB download) behind the same `LanguageModelSession` interface. Per-app memory ceiling is ~6 GB, so 4B at 4-bit is the limit.
 
 ## 9. How the overnight build runs

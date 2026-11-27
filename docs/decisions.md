@@ -791,3 +791,7 @@ Research and sources: docs/research/dark-mode.md.
   4056 → 3648 ms, main → field 619 → 596 ms, gallery 1491 → 1484 ms. Gallery scroll of 100 tabs
   with 25 new-tab cards, main-thread work p95: 1.7–3.7 ms flat, 1.9–2.6 ms on paper. Start-screen
   footprint within noise (19.3–21.2 MB both).
+
+## Browse for Me result source
+
+- **Search results page in a hidden tab, no API key.** DuckDuckGo's lite page is the default because it is stable and light; the user's chosen engine is used when its page parses. Free, works for every tester, and needs no server. Trade-off: a page redesign can break parsing, so the parser is tested against saved pages. Brave Search API stays a later opt-in. (Owner's choice, 2026-11-26.)

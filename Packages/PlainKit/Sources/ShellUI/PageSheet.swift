@@ -193,17 +193,21 @@ final class PageSheetController: UIViewController {
     /// A tile: the symbol on a card, the caption under it.
     private func tile(_ action: UIAction) -> UIView {
         var configuration = UIButton.Configuration.filled()
+        // A mode that is on (the reader open, the page translated) shows in the accent, so the
+        // sheet says which mode the page is in; the tile turns it off.
+        let isOn = action.state == .on
         configuration.baseBackgroundColor = Palette.paperCard
-        configuration.baseForegroundColor = Palette.ink
+        configuration.baseForegroundColor = isOn ? Palette.accentOnPaper : Palette.ink
         configuration.background.cornerRadius = Radius.large
-        configuration.background.strokeColor = Palette.paperHairline
-        configuration.background.strokeWidth = 1 / max(1, traitCollection.displayScale)
+        configuration.background.strokeColor = isOn ? Palette.accentOnPaper : Palette.paperHairline
+        configuration.background.strokeWidth = (isOn ? 1.5 : 1) / max(1, traitCollection.displayScale)
         configuration.image = action.image
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .title2)
         configuration.imagePlacement = .top
         configuration.imagePadding = Spacing.s
         configuration.attributedTitle = AttributedString(Self.caption(action.title), attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .footnote), .foregroundColor: Palette.inkSecondary,
+            .font: UIFont.preferredFont(forTextStyle: .footnote),
+            .foregroundColor: isOn ? Palette.accentOnPaper : Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.contentInsets = NSDirectionalEdgeInsets(top: Spacing.m, leading: Spacing.xs, bottom: Spacing.s, trailing: Spacing.xs)
@@ -211,6 +215,7 @@ final class PageSheetController: UIViewController {
         Self.identify(button, as: action)
         button.isEnabled = !action.attributes.contains(.disabled)
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 72).isActive = true
+        if isOn { button.accessibilityTraits.insert(.selected) }
         return button
     }
 

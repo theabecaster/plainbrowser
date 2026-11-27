@@ -37,7 +37,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         didSet { favoritesStrip.onEdit = onEditFavorites }
     }
 
-    private let rowsClip = UIView()
+    private let rowsClip = PassThroughView()
     /// The paper behind the rows, so they read over the start screen's mark even while it
     /// recedes (docs/state-rules.md §6, start screen while typing). It covers the whole sheet, so
     /// its texture lines up with the sheet's own paper, and a mask shows it only behind the rows.
@@ -278,9 +278,11 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             row.leaveToken += 1
             row.translatesAutoresizingMaskIntoConstraints = true
             row.transform = .identity
-            row.frame = rest
+            // Only a slide of at most one place is finished; anything else fades where it stands.
             let offset = seen.frame.midY - rest.midY
-            if animated, abs(offset) > 0.5 { row.transform = CGAffineTransform(translationX: 0, y: offset) }
+            let finishesSlide = animated && abs(offset) > 0.5 && abs(offset) <= rest.height + 0.5
+            row.frame = finishesSlide ? rest : seen.frame
+            if finishesSlide { row.transform = CGAffineTransform(translationX: 0, y: offset) }
             row.alpha = seen.alpha
             row.isUserInteractionEnabled = false
             row.accessibilityElementsHidden = true
@@ -456,6 +458,15 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         else { return .zero }
         let rect = CGRect(x: 0, y: top, width: rowsClip.bounds.width, height: bottom - top)
         return plate.convert(rect, from: rowsClip)
+    }
+}
+
+/// A container that takes no touches itself, only through its subviews: the rows' clip covers the
+/// whole sheet content, and taps on its empty space reach the favorites under it or the sheet.
+final class PassThroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
     }
 }
 

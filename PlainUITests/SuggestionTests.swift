@@ -41,6 +41,30 @@ final class SuggestionTests: XCTestCase {
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
     }
 
+    /// After typing and clearing the field, the favorites are back under the (now empty) rows and
+    /// a tap on one opens it rather than closing the sheet. Opening starts a load of the seeded
+    /// favorite (needs no page to finish: the pill names it at once).
+    func testFavoriteOpensAfterTypingAndClearing() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainSeedFavorites"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        let tile = app.buttons["favorite.0"]
+        XCTAssertTrue(tile.waitForExistence(timeout: 3))
+
+        field.typeText("wi")
+        field.typeText(XCUIKeyboardKey.delete.rawValue + XCUIKeyboardKey.delete.rawValue)
+        XCTAssertTrue(tile.waitForExistence(timeout: 3))
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertTrue(tile.isHittable)
+        tile.tap()
+        let pill = app.buttons["addressPill"]
+        let opened = NSPredicate { _, _ in (pill.value as? String)?.contains("wikipedia.org") == true }
+        wait(for: [XCTNSPredicateExpectation(predicate: opened, object: nil)], timeout: 10)
+    }
+
     /// Types "github" letter by letter with pauses, for a screen recording of the list
     /// (`xcrun simctl io <udid> recordVideo`). Not a test of behavior: it needs the network and
     /// runs only when `PLAIN_CAPTURE=1` reaches the runner (`TEST_RUNNER_PLAIN_CAPTURE=1`).

@@ -300,9 +300,6 @@ Newest feature last.
   but WebKit has no `prefers-reduced-transparency`, so the reader page keeps its texture. Bridge the
   setting into the reader (a class on the root, or a flat stylesheet), including changes while it
   is open. (Code review, round 1.)
-- **Intro surfaces.** `IntroViewController` and `DefaultBrowserCard` still set the flat
-  `Palette.background`; the intro restyle was in flight in another lane. Swap both for
-  `Paper.apply(to:)` once it lands.
 - **Sheets on paper.** Settings, History, Favorites, Archive and Downloads keep the system grouped
   list look. Hiding the list background in `FeatureSheets.sheet` alone leaves white rows on a white
   sheet, so paper there needs `PaperBackground()` inside each screen's `NavigationStack` and a row

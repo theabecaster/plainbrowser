@@ -247,13 +247,13 @@ public final class IntroViewController: UIViewController {
 }
 
 /// The intro's paper in one place: the ground under every step and the fill of its sheets (the
-/// feature cards). A shared paper texture, when DesignSystem has one, is applied here and nowhere
+/// feature cards). The shared paper texture (DesignSystem `Paper`) is applied here and nowhere
 /// else in the intro.
 enum IntroPaper {
     /// The ground under the dawn and the steps.
     static func makeGround() -> UIView {
         let ground = UIView()
-        ground.backgroundColor = Palette.background
+        Paper.apply(to: ground)
         ground.isUserInteractionEnabled = false
         return ground
     }

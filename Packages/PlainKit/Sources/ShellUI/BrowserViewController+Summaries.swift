@@ -70,8 +70,9 @@ extension BrowserViewController {
         let isPrivate = currentTab?.isPrivate ?? false
         endAddressEditing()
         let input = SummaryRun.Input.search(query, engine: data.searchEngine)
-        let screen = presentSummary(SummaryProgress(subject: .search(query), stage: .searching(engine: data.searchEngine.name)),
-                                    isPrivate: isPrivate)
+        guard let screen = presentSummary(
+            SummaryProgress(subject: .search(query), stage: .searching(engine: data.searchEngine.name)), isPrivate: isPrivate
+        ) else { return }
         summaryUI.input = input
         startRun(input, on: screen)
     }
@@ -79,8 +80,9 @@ extension BrowserViewController {
     func summarizePage() {
         guard let tab = currentTab, let page = session.pool.webView(for: tab), let url = pageAddress else { return }
         let title = tab.title.isEmpty ? BrowseForMe.siteName(url) : tab.title
-        let screen = presentSummary(SummaryProgress(subject: .page(title: title, url: url), stage: .writing),
-                                    isPrivate: tab.isPrivate)
+        guard let screen = presentSummary(
+            SummaryProgress(subject: .page(title: title, url: url), stage: .writing), isPrivate: tab.isPrivate
+        ) else { return }
         summaryUI.extraction = Task { [weak self] in
             let text = try? await ReaderExtractor.text(in: page, limit: FixedChoices.summaryMaxPageText)
             guard let self, !Task.isCancelled, summaryUI.screen === screen else { return }
@@ -97,9 +99,10 @@ extension BrowserViewController {
         }
     }
 
-    /// Shows the summary sheet with its first state and wires its actions. Replaces a summary kept
-    /// from before.
-    private func presentSummary(_ progress: SummaryProgress, isPrivate: Bool) -> SummaryScreenModel {
+    /// Shows the summary sheet with its first state and wires its actions, or nil when another
+    /// sheet is up (nothing then starts out of sight). Replaces a summary kept from before.
+    private func presentSummary(_ progress: SummaryProgress, isPrivate: Bool) -> SummaryScreenModel? {
+        guard presentedViewController == nil else { return nil }
         cancelSummary()
         let screen = SummaryScreenModel(progress: progress)
         screen.onDone = { [weak self] in self?.closeSheet() }

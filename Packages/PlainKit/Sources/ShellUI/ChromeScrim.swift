@@ -23,12 +23,14 @@ final class ChromeScrim: UIView {
 
     /// How far the glow reaches past the glass (the shadow's blur radius).
     static let feather: CGFloat = 6
-    /// How far the solid part reaches past the glass edge, so the edge itself is covered too, and
-    /// the 6 pt gap between the pill and the bar mostly is. Small on purpose: over a colored page
-    /// a wider glow read as a cream halo joining the capsules (design review).
+    /// How far the solid part reaches past the glass edge, so the edge itself is covered too.
+    /// Small on purpose: over a colored page a wider glow read as a cream halo joining the
+    /// capsules (design review). The gap between the pill and the bar is the bar's to fill.
     static let outset: CGFloat = 3
-    /// Under the glass the page shows only faintly; at the edge the glow fades out.
-    static let opacity: Float = 0.82
+    /// Under the glass the page shows only faintly; at the edge the glow fades out. Denser in
+    /// dark mode: light text under the dark ground showed through more than dark text on paper.
+    static let opacity: CGFloat = 0.82
+    static let darkOpacity: CGFloat = 0.92
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -36,7 +38,7 @@ final class ChromeScrim: UIView {
         isAccessibilityElement = false
         layer.shadowOffset = .zero
         layer.shadowRadius = Self.feather
-        layer.shadowOpacity = Self.opacity
+        layer.shadowOpacity = 1
         resolveColor()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (scrim: ChromeScrim, _) in scrim.resolveColor() }
     }
@@ -46,14 +48,15 @@ final class ChromeScrim: UIView {
 
     private func resolveColor() {
         let ground = isPrivate ? Palette.privateBackground : Palette.background
-        layer.shadowColor = ground.resolvedColor(with: traitCollection).cgColor
+        let alpha = traitCollection.userInterfaceStyle == .dark ? Self.darkOpacity : Self.opacity
+        layer.shadowColor = ground.resolvedColor(with: traitCollection).withAlphaComponent(alpha).cgColor
     }
 
     private func updatePath() {
         let path = UIBezierPath()
         for shape in shapes where !shape.isEmpty {
             let rect = shape.insetBy(dx: -Self.outset, dy: -Self.outset)
-            path.append(UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2))
+            path.append(UIBezierPath(roundedRect: rect, cornerRadius: min(rect.height, rect.width) / 2))
         }
         layer.shadowPath = path.cgPath
     }

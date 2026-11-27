@@ -1954,10 +1954,10 @@ The shell and engine items left from docs/research/ux-audit.md.
 
 - **A soft paper glow under the floating glass (`ChromeScrim`), not a stronger tint or a band.**
   The pill's tint was already 88% Paper; Liquid Glass still showed body text almost unblurred
-  under the host and the buttons. A blurred capsule of the background color (82%, 3 pt past the
-  glass, feathered over 6 pt) sits inside each control behind its glass, so it moves, scales and
+  under the host and the buttons. A blurred capsule of the background color (82%; 92% in dark
+  mode, where light text showed through more; 3 pt past the glass, feathered over 6 pt) sits inside each control behind its glass, so it moves, scales and
   fades with the control at no per-frame cost (one layer shadow with a fixed path, no offscreen
-  pass). It mostly closes the 6 pt gap between the pill and the bar, which showed a sliver of
+  pass). Under the pill the bar's glow also fills the 6 pt gap up to it, which showed a line of
   text. A first try (5 pt, feathered over 8 pt) read as a cream halo joining the capsules over a
   colored footer (design review); a band or a page-colored scrim were the alternatives (a band is
   what the owner removed at the top).

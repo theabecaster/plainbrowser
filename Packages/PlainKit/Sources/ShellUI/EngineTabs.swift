@@ -413,7 +413,10 @@ final class EngineTabs {
     /// the foreground). WebKit is asked first whether hidden tabs play media, so a tab playing
     /// sound stays. Archived tabs keep their state file.
     func archiveIdleTabs(after setting: ArchiveAfter) async {
-        guard isSessionLoaded, setting.interval != nil else { return }
+        guard isSessionLoaded else { return }
+        // Tabs past their 30 days leave the archive first, whatever the setting.
+        store.pruneArchive()
+        guard setting.interval != nil else { return refreshArchiveState() }
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.tabArchive, id: signposter.makeSignpostID())
         let visible = store.visibleTabIDs
@@ -422,17 +425,22 @@ final class EngineTabs {
         }
         let archived = await store.archiveIdleTabs(after: setting)
         for id in archived { drop(id) }
-        if !archived.isEmpty {
-            refreshArchiveState()
-            // Other windows' idle tabs went too.
-            app.didChange(from: self)
-        }
+        // The count reads after the prune and the archive are written.
+        refreshArchiveState()
+        // Other windows' idle tabs went too.
+        if !archived.isEmpty { app.didChange(from: self) }
         signposter.endInterval(Signposts.tabArchive, interval, "\(archived.count)")
     }
 
     /// Writes what is waiting. Call when the app moves to the background.
     func flush() async {
         await store.flush()
+    }
+
+    /// Archived tabs past their 30 days leave the archive (written off the main thread).
+    func pruneArchive() {
+        guard isSessionLoaded else { return }
+        store.pruneArchive()
     }
 
     /// Whether the database no longer lists `profile`: its deletion is written. A write that gave

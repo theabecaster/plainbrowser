@@ -161,6 +161,48 @@ import Testing
         #expect(try await database.tabStates.read(for: entries[2].id) == nil)
     }
 
+    @Test func archivedTabsLeaveAfter30DaysWithTheirStateFilesAndStayInHistory() async throws {
+        let database = try AppDatabase.inMemory()
+        defer { try? FileManager.default.removeItem(at: database.tabStates.directory) }
+        let clock = TestDate()
+        let store = try await makeStore(database, clock: { clock.now })
+        let old = TabEntry(url: url("old"), title: "Old", createdAt: t0)
+        let kept = TabEntry(url: url("kept"), title: "Kept", createdAt: t0)
+        for entry in [old, kept] { try await database.tabStates.write(Data([1]), for: entry.id) }
+        try await database.apply([.visit(HistoryVisit(url: url("old"), title: "Old", visitedAt: t0))])
+        let lifetime = FixedChoices.archivedTabLifetime
+        database.tabSession.enqueue(.archive([old], at: t0))
+        database.tabSession.enqueue(.archive([kept], at: t0.addingTimeInterval(2 * 86_400)))
+
+        // A minute short of 30 days: nothing goes.
+        clock.advance(lifetime - 60)
+        store.pruneArchive()
+        #expect(try await database.archivedTabCount() == 2)
+
+        clock.advance(120)
+        store.pruneArchive()
+        #expect(try await database.archivedTabs().map(\.id) == [kept.id])
+        #expect(try await database.tabStates.read(for: old.id) == nil, "its state file goes with it")
+        #expect(try await database.tabStates.read(for: kept.id) != nil)
+        #expect(try await database.recentVisits(limit: 10).map(\.url) == [url("old")], "History keeps the page")
+    }
+
+    @Test func pruningClearsEveryProfilesExpiredTabsOnly() async throws {
+        let database = try AppDatabase.inMemory()
+        let clock = TestDate()
+        let store = try await makeStore(database, clock: { clock.now })
+        let work = try #require(store.addProfile(named: "Work"))
+        let personalOld = TabEntry(url: url("p-old"), createdAt: t0)
+        let workOld = TabEntry(url: url("w-old"), profileID: work, createdAt: t0)
+        let workNew = TabEntry(url: url("w-new"), profileID: work, createdAt: t0)
+        database.tabSession.enqueue(.archive([personalOld, workOld], at: t0))
+        database.tabSession.enqueue(.archive([workNew], at: t0.addingTimeInterval(10 * 86_400)))
+        clock.advance(FixedChoices.archivedTabLifetime + 1)
+        store.pruneArchive()
+        #expect(try await database.archivedTabCount(profile: Profile.defaultID) == 0)
+        #expect(try await database.archivedTabs(profile: work).map(\.id) == [workNew.id])
+    }
+
     // MARK: State files
 
     @Test func closedTabsKeepStateFilesUntilTheyLeaveTheStack() async throws {

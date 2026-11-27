@@ -51,6 +51,51 @@ import Testing
         #expect(Self.p95(builds) < Self.mainThreadBudget)
     }
 
+    /// The Archive screen's read at its largest (the whole archive, 1,000 rows) and a pruning pass
+    /// that clears 500 expired tabs with their state files, both off the main thread.
+    @Test func fullArchiveReadAndPruneAreQuick() async throws {
+        var reads: [Duration] = []
+        var prunes: [Duration] = []
+        for _ in 0 ..< 10 {
+            let folder = FileManager.default.temporaryDirectory.appending(path: "plain-archive-perf-\(UUID())")
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let database = try await AppDatabase.open(
+                at: folder.appending(path: "Plain.sqlite"), tabStateDirectory: folder.appending(path: "TabState")
+            )
+            let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+            // Spread over 60 days: the older half is past the archive's 30 days.
+            let step = 2 * FixedChoices.archivedTabLifetime / Double(Self.archivedTabs)
+            let entries = (0 ..< Self.archivedTabs).map { index in
+                TabEntry(url: URL(string: "https://example.com/\(index)")!, title: "Page \(index)", createdAt: now)
+            }
+            for entry in entries { try await database.tabStates.write(Data(repeating: 1, count: 4_096), for: entry.id) }
+            try await database.writer.write { db in
+                for (index, entry) in entries.enumerated() {
+                    _ = try TabSessionWriter.apply(
+                        [.archive([entry], at: now.addingTimeInterval(-step * Double(index)))], written: nil,
+                        archiveLimit: Self.archivedTabs, in: db
+                    )
+                }
+            }
+            let readStart = ContinuousClock.now
+            let all = try await database.archivedTabs(limit: Self.archivedTabs)
+            reads.append(ContinuousClock.now - readStart)
+            #expect(all.count == Self.archivedTabs)
+
+            let pruneStart = ContinuousClock.now
+            database.tabSession.enqueue(.pruneArchive(archivedBefore: now.addingTimeInterval(-FixedChoices.archivedTabLifetime)))
+            await database.tabSession.flush()
+            prunes.append(ContinuousClock.now - pruneStart)
+            let left = try await database.archivedTabCount()
+            #expect(left == Self.archivedTabs / 2 + 1 || left == Self.archivedTabs / 2)
+        }
+        print("""
+            [perf] archive (\(Self.archivedTabs) rows), median of \(reads.count):
+              full archive read (off main): \(Self.ms(Self.median(reads))) ms, p95 \(Self.ms(Self.p95(reads))) ms
+              prune of ~500 expired with state files (off main): \(Self.ms(Self.median(prunes))) ms, p95 \(Self.ms(Self.p95(prunes))) ms
+            """)
+    }
+
     static func seed(_ database: AppDatabase) async throws {
         let window = WindowID()
         let base = Date(timeIntervalSinceReferenceDate: 800_000_000)

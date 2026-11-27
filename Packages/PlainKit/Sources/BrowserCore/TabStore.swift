@@ -617,6 +617,14 @@ public final class TabStore {
         persistence?.enqueue(.deleteArchived(ids))
     }
 
+    /// Archived tabs clear themselves `FixedChoices.archivedTabLifetime` after they moved there,
+    /// in every profile; their pages stay in History. The shell runs it with each archive pass
+    /// (launch, each return) and when the app moves to the background; the delete is written off
+    /// the main thread, after every change before it.
+    public func pruneArchive() {
+        persistence?.enqueue(.pruneArchive(archivedBefore: now().addingTimeInterval(-FixedChoices.archivedTabLifetime)))
+    }
+
     /// Deletes the whole archive (Clear History and Data).
     public func clearArchive() {
         persistence?.enqueue(.deleteArchived(nil))

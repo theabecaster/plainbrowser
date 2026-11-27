@@ -20,96 +20,99 @@ public struct SettingsView: View {
     public var body: some View {
         NavigationStack {
             List {
-                Section {
-                    NavigationLink {
-                        SearchEngineView(model: model)
-                    } label: {
-                        LabeledContent("Search Engine", value: model.isLoaded ? model.settings.searchEngine.name : "")
+                Group {
+                    Section {
+                        NavigationLink {
+                            SearchEngineView(model: model)
+                        } label: {
+                            LabeledContent("Search Engine", value: model.isLoaded ? model.settings.searchEngine.name : "")
+                        }
+                        .disabled(!model.isLoaded)
+                    } footer: {
+                        Text(Wording.searchEngineFooter)
                     }
-                    .disabled(!model.isLoaded)
-                } footer: {
-                    Text(Wording.searchEngineFooter)
-                }
 
-                Section {
-                    Picker("Tab Layout", selection: Binding(
-                        get: { model.settings.tabLayout }, set: { model.setTabLayout($0) }
-                    )) {
-                        ForEach(TabLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                    Section {
+                        Picker("Tab Layout", selection: Binding(
+                            get: { model.settings.tabLayout }, set: { model.setTabLayout($0) }
+                        )) {
+                            ForEach(TabLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(!model.isLoaded || !model.isTabLayoutAvailable)
+                        .accessibilityIdentifier("settings.tabLayout")
+                    } footer: {
+                        Text(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
                     }
-                    .pickerStyle(.menu)
-                    .disabled(!model.isLoaded || !model.isTabLayoutAvailable)
-                    .accessibilityIdentifier("settings.tabLayout")
-                } footer: {
-                    Text(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
-                }
 
-                Section {
-                    Picker("Archive Tabs", selection: Binding(
-                        get: { model.settings.archiveAfter }, set: { model.setArchiveAfter($0) }
-                    )) {
-                        ForEach(ArchiveAfter.allCases, id: \.self) { Text($0.title).tag($0) }
+                    Section {
+                        Picker("Archive Tabs", selection: Binding(
+                            get: { model.settings.archiveAfter }, set: { model.setArchiveAfter($0) }
+                        )) {
+                            ForEach(ArchiveAfter.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(!model.isLoaded)
+                    } footer: {
+                        Text(model.settings.archiveAfter.footer)
                     }
-                    .pickerStyle(.menu)
-                    .disabled(!model.isLoaded)
-                } footer: {
-                    Text(model.settings.archiveAfter.footer)
-                }
 
-                Section {
-                    Picker("Appearance", selection: Binding(
-                        get: { model.settings.appearance }, set: { model.setAppearance($0) }
-                    )) {
-                        ForEach(Appearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                    Section {
+                        Picker("Appearance", selection: Binding(
+                            get: { model.settings.appearance }, set: { model.setAppearance($0) }
+                        )) {
+                            ForEach(Appearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(!model.isLoaded)
+                        .accessibilityIdentifier("settings.appearance")
+                    } footer: {
+                        Text(model.settings.appearance.footer)
                     }
-                    .pickerStyle(.menu)
-                    .disabled(!model.isLoaded)
-                    .accessibilityIdentifier("settings.appearance")
-                } footer: {
-                    Text(model.settings.appearance.footer)
-                }
 
-                Section {
-                    NavigationLink {
-                        AppIconView(current: $appIcon)
-                    } label: {
-                        LabeledContent("App Icon", value: appIcon.title)
+                    Section {
+                        NavigationLink {
+                            AppIconView(current: $appIcon)
+                        } label: {
+                            LabeledContent("App Icon", value: appIcon.title)
+                        }
+                        .accessibilityIdentifier("settingsAppIcon")
                     }
-                    .accessibilityIdentifier("settingsAppIcon")
-                }
 
-                Section {
-                    Button(role: .destructive) {
-                        confirmingClear = true
-                    } label: {
-                        HStack {
-                            Text("Clear History and Data")
-                            Spacer()
-                            if model.isClearing { ProgressView() }
+                    Section {
+                        Button(role: .destructive) {
+                            confirmingClear = true
+                        } label: {
+                            HStack {
+                                Text("Clear History and Data")
+                                Spacer()
+                                if model.isClearing { ProgressView() }
+                            }
+                        }
+                        .disabled(model.isClearing)
+                        .confirmationDialog(Wording.clearConfirmTitle, isPresented: $confirmingClear, titleVisibility: .visible) {
+                            Button("Clear History and Data", role: .destructive) {
+                                Task { await model.clearHistoryAndData() }
+                            }
+                        } message: {
+                            Text(Wording.clearConfirmMessage)
+                        }
+                    } footer: {
+                        Text(Wording.clearFooter)
+                    }
+
+                    Section {
+                        NavigationLink {
+                            AboutView(info: model.about)
+                        } label: {
+                            LabeledContent("About", value: model.about.version)
                         }
                     }
-                    .disabled(model.isClearing)
-                    .confirmationDialog(Wording.clearConfirmTitle, isPresented: $confirmingClear, titleVisibility: .visible) {
-                        Button("Clear History and Data", role: .destructive) {
-                            Task { await model.clearHistoryAndData() }
-                        }
-                    } message: {
-                        Text(Wording.clearConfirmMessage)
-                    }
-                } footer: {
-                    Text(Wording.clearFooter)
                 }
-
-                Section {
-                    NavigationLink {
-                        AboutView(info: model.about)
-                    } label: {
-                        LabeledContent("About", value: model.about.version)
-                    }
-                }
+                .paperRows()
             }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
+            .paperSheet()
+            .sheetTitle("Settings")
             .toolbar { DoneButton(onDone: onDone) }
             .alert(model.errorMessage ?? "", isPresented: Binding(
                 get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } }
@@ -130,58 +133,61 @@ struct SearchEngineView: View {
 
     var body: some View {
         List {
-            Section {
-                ForEach(model.engineChoices) { engine in
-                    Button {
-                        model.selectSearchEngine(engine)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(engine.name).foregroundStyle(.primary)
-                                if engine.isCustom {
-                                    Text("Custom").font(.footnote).foregroundStyle(.secondary)
+            Group {
+                Section {
+                    ForEach(model.engineChoices) { engine in
+                        Button {
+                            model.selectSearchEngine(engine)
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(engine.name).foregroundStyle(.primary)
+                                    if engine.isCustom {
+                                        Text("Custom").font(.footnote).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if engine == model.settings.searchEngine {
+                                    Image(systemName: "checkmark")
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Style.accent)
+                                        .accessibilityLabel("Selected")
                                 }
                             }
-                            Spacer()
-                            if engine == model.settings.searchEngine {
-                                Image(systemName: "checkmark")
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(Style.accent)
-                                    .accessibilityLabel("Selected")
-                            }
+                            .contentShape(.rect)
                         }
-                        .contentShape(.rect)
+                        .tint(.primary)
+                        .accessibilityAddTraits(engine == model.settings.searchEngine ? .isSelected : [])
                     }
-                    .tint(.primary)
-                    .accessibilityAddTraits(engine == model.settings.searchEngine ? .isSelected : [])
                 }
-            }
 
-            Section {
-                TextField("https://example.com/search?q=%s", text: $model.customTemplate)
-                    .keyboardType(.URL)
-                    .textContentType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.done)
-                    .focused($fieldFocused)
-                    .onSubmit { if model.useCustomTemplate() { fieldFocused = false } }
-                Button("Use Custom Engine") {
-                    if model.useCustomTemplate() { fieldFocused = false }
-                }
-                .disabled(model.customTemplate.trimmingCharacters(in: .whitespaces).isEmpty)
-            } header: {
-                Text("Custom")
-            } footer: {
-                if let error = model.customError {
-                    Text(error).foregroundStyle(.red)
-                } else {
-                    Text(Wording.customEngineFooter)
+                Section {
+                    TextField("https://example.com/search?q=%s", text: $model.customTemplate)
+                        .keyboardType(.URL)
+                        .textContentType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .focused($fieldFocused)
+                        .onSubmit { if model.useCustomTemplate() { fieldFocused = false } }
+                    Button("Use Custom Engine") {
+                        if model.useCustomTemplate() { fieldFocused = false }
+                    }
+                    .disabled(model.customTemplate.trimmingCharacters(in: .whitespaces).isEmpty)
+                } header: {
+                    Text("Custom")
+                } footer: {
+                    if let error = model.customError {
+                        Text(error).foregroundStyle(.red)
+                    } else {
+                        Text(Wording.customEngineFooter)
+                    }
                 }
             }
+            .paperRows()
         }
-        .navigationTitle("Search Engine")
-        .navigationBarTitleDisplayMode(.inline)
+        .paperSheet()
+        .sheetTitle("Search Engine")
     }
 }
 

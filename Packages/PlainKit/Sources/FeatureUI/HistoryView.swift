@@ -41,11 +41,15 @@ public struct HistoryView: View {
                                 }
                                 .onAppear { model.rowAppeared(row) }
                         }
+                        .paperRows()
                     }
                 }
             }
+            .paperSheet()
             .overlay {
-                if model.isLoaded, model.isEmpty {
+                if model.loadFailed {
+                    ReadFailedView(message: Wording.historyReadFailed, systemImage: "clock") { await model.load() }
+                } else if model.isLoaded, model.isEmpty {
                     if model.query.isEmpty {
                         ContentUnavailableView("Pages you visit show up here.", systemImage: "clock")
                     } else {
@@ -54,8 +58,7 @@ public struct HistoryView: View {
                 }
             }
             .searchable(text: $model.query, prompt: "Search History")
-            .navigationTitle("History")
-            .navigationBarTitleDisplayMode(.inline)
+            .sheetTitle("History")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Menu("Clear…") {
@@ -63,7 +66,8 @@ public struct HistoryView: View {
                         Button("Today") { pendingClear = .today }
                         Button("All History", role: .destructive) { pendingClear = .all }
                     }
-                    .disabled(model.isLoaded && model.isEmpty && model.query.isEmpty)
+                    // Dims only when history itself is empty, not when a search finds nothing.
+                    .disabled(model.isLoaded && !model.hasHistory)
                 }
                 DoneButton(onDone: onDone)
             }

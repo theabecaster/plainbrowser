@@ -11,14 +11,16 @@ public struct AboutView: View {
 
     public var body: some View {
         List {
+            // The name on the paper itself, in the intro's New York with its coral fold.
             Section {
-                VStack(spacing: 4) {
-                    Text(info.name).font(.title2.bold())
+                VStack(spacing: 6) {
+                    DisplayText(lead: "", emphasis: info.name, trail: "")
                     Text(info.versionLine).font(.subheadline).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
                 .accessibilityElement(children: .combine)
+                .listRowBackground(Color.clear)
             }
 
             Section {
@@ -36,9 +38,10 @@ public struct AboutView: View {
             } footer: {
                 Text("Plain is free software under the GNU Affero General Public License 3.0.")
             }
+            .paperRows()
         }
-        .navigationTitle("About")
-        .navigationBarTitleDisplayMode(.inline)
+        .paperSheet()
+        .sheetTitle("About")
     }
 }
 
@@ -60,8 +63,8 @@ struct DocumentView: View {
                 ContentUnavailableView("Plain couldn't open this file.", systemImage: "doc")
             }
         }
-        .navigationTitle(document.title)
-        .navigationBarTitleDisplayMode(.inline)
+        .paperSheet()
+        .sheetTitle(document.title)
         .task {
             text = await AboutInfo.text(of: document)
             failed = text == nil

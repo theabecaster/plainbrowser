@@ -46,9 +46,10 @@ struct AppIconView: View {
             } footer: {
                 Text("The icon on your Home Screen.")
             }
+            .paperRows()
         }
-        .navigationTitle("App Icon")
-        .navigationBarTitleDisplayMode(.inline)
+        .paperSheet()
+        .sheetTitle("App Icon")
         .task {
             for choice in AppIconChoice.allCases where previews[choice] == nil {
                 previews[choice] = await AppIcons.preview(choice)

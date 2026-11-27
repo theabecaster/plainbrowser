@@ -73,14 +73,15 @@ public struct DownloadsView<Source: DownloadListSource>: View {
         NavigationStack {
             List(items, id: \.id) { item in
                 DownloadRow(item: item, open: open, showInFiles: showInFiles)
+                    .paperRows()
             }
+            .paperSheet()
             .overlay {
                 if items.isEmpty {
                     ContentUnavailableView("Files you download show up here.", systemImage: "arrow.down.circle")
                 }
             }
-            .navigationTitle("Downloads")
-            .navigationBarTitleDisplayMode(.inline)
+            .sheetTitle("Downloads")
             .toolbar {
                 // An icon, so the title stays centered between it and Done.
                 ToolbarItem(placement: .cancellationAction) {

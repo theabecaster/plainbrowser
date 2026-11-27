@@ -8,9 +8,10 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Sign-in like Safari:** passkeys on sites that support them, and saved passwords from the Passwords app and every password manager on the phone (1Password, Bitwarden and others), as easily as in Safari. Both need Apple's web-browser entitlement; the request is ready for the owner to submit. Until it lands, sites are steered to password sign-in and a failed passkey attempt says why. Done when the entitlement ships and the device checks in `docs/research/sign-in.md` pass. (Sign-in lane.)
 
-- **Paper texture:** a subtle, elegant paper texture on the app's own surfaces, never costing frames or quality, never called out in the UI. (Paper lane.)
 
 ## Done
+
+- **Paper texture:** faint fibre and grain on the start screen, search, tab cards, sidebar and strip, reader and intro; flat under Increase Contrast. Settings-style sheets keep the system list look for now. (dev, next build.)
 
 - **Swipe up with one tab:** dragging the bar up (or Show All Tabs) with a single page opens the switcher with the same page-to-card motion: the card rests centered and a paper New Tab card grows in beside it; the tabs button's tap stays "+". On the start screen alone the swipe still bumps. (dev, one-tab lane.)
 

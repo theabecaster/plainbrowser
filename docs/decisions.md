@@ -706,7 +706,7 @@ Show it only where needed, elegantly; follow what credible research says."
     for them.
 - **The step** (`BrowseForMeDemo`, `IntroSetup.browseForMe`): "Let Plain *browse* for you" over a
   mock of Plain's own search on paper. The question types itself into the field, Browse for Me is
-  pressed, three source chips spin and turn into numbers, and three short points arrive, each
+  pressed, three source chips show an open ring and turn into numbers, and three short points arrive, each
   ending with its Lagoon citation, as the real summary writes them (about 3.5 s). It plays once by
   itself; a tap on its Browse for Me row plays it again, as the blocking demo's toggle flips. Every
   part holds its place from the first frame, so nothing moves while it plays. One line under it,
@@ -714,7 +714,7 @@ Show it only where needed, elegantly; follow what credible research says."
   - available: "Written on your iPhone, with every source cited." Next. Nothing to do.
   - Apple Intelligence off: "Find it in Settings, under Apple Intelligence & Siri." and Turn On
     Apple Intelligence, with Not Now under it. Neither blocks: Skip and Not Now always go on.
-  - model downloading: a small spinner and "Apple Intelligence is getting ready…", with Next.
+  - model downloading: a download mark and "Apple Intelligence is getting ready…", with Next.
   - device not eligible, or a language the model doesn't read: no step at all.
   Turned on in Settings, or finished downloading while the step is up, the line becomes a check
   mark and "Apple Intelligence is ready.", and the buttons become Next.
@@ -728,6 +728,12 @@ Show it only where needed, elegantly; follow what credible research says."
   the step is on screen. Nothing runs on the other steps, and after the intro was seen none of it
   is made. The steps are decided before the first one, so the rings never change under the user.
 - **Asks no permission.** The step opens Settings only when tapped; no system alert is involved.
+- **Dynamic colors resolve on any thread.** SwiftUI resolves colors on its render thread during
+  some animations; DesignSystem's `UIColor(light:dark:)` and the paper tokens had providers
+  isolated to the main actor (the module's default), which trap there (seen in the intro's UI
+  tests). Their providers are now `@Sendable` and nonisolated (`UIColor.anyThread`): they only
+  pick between fixed colors. The demo's reading chips use an open ring and the downloading line a
+  static mark rather than spinners, so nothing on the step moves without a reason.
 
 ## Apple Intelligence availability, shared (2026-11-27)
 

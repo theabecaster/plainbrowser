@@ -359,7 +359,9 @@ private struct BrowseForMeStep: View {
                 .accessibilityIdentifier("introAITurnOnLine")
         case .gettingReady:
             HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
+                // A still mark: the line itself is what changes, once the model is ready.
+                Image(systemName: "arrow.down.circle")
+                    .accessibilityHidden(true)
                 Text("Apple Intelligence is getting ready…")
             }
             .opacity(0.72)

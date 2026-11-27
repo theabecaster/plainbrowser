@@ -167,7 +167,8 @@ final class IntroTests: XCTestCase {
 
     /// Downloading: "getting ready" while the step is up, then the check mark by itself.
     func testBrowseForMeGettingReadyUpdates() {
-        let app = launch(["-PlainAIAvailability", "notReady,notReady,available"])
+        // Before the first step, on arriving, then two rechecks 2 s apart: ready about 4 s in.
+        let app = launch(["-PlainAIAvailability", "notReady,notReady,notReady,available"])
         reachBrowseForMe(app)
         XCTAssertTrue(app.descendants(matching: .any)["introAIGettingReady"].waitForExistence(timeout: 3), "no getting-ready line")
         XCTAssertFalse(app.buttons["introTurnOnAI"].exists)

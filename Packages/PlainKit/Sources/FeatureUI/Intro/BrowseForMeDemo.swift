@@ -101,7 +101,7 @@ struct BrowseForMeDemo: View {
         .accessibilityIdentifier("introBrowseDemo")
     }
 
-    /// The pages it reads: a spinner while reading, then the number the points cite.
+    /// The pages it reads: an open ring while reading, then the number the points cite.
     private var sourceChips: some View {
         HStack(spacing: 6) {
             ForEach(Array(Self.sources.enumerated()), id: \.offset) { index, site in
@@ -115,8 +115,9 @@ struct BrowseForMeDemo: View {
                                 .background(Color(uiColor: Palette.accentOnPaper), in: .circle)
                                 .transition(.scale(scale: 0.5).combined(with: .opacity))
                         } else {
-                            ProgressView()
-                                .controlSize(.mini)
+                            // Reading: an open ring that fills with the number once read.
+                            Circle()
+                                .strokeBorder(Color(uiColor: Palette.accentOnPaper), lineWidth: 1.5)
                                 .transition(.opacity)
                         }
                     }

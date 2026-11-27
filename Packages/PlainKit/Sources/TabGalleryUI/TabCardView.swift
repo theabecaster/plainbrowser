@@ -228,7 +228,7 @@ final class TabCardView: UIView, UIGestureRecognizerDelegate {
         // A new tab's card shows its start screen as the tab shows it: in the window's own
         // appearance, not the gallery's always-dark one.
         let pageTraits = window?.windowScene?.traitCollection ?? traitCollection
-        thumbnailContainer.backgroundColor = isBlankTab ? Palette.background.resolvedColor(with: pageTraits) : Palette.surface
+        thumbnailContainer.backgroundColor = isBlankTab ? Paper.resolved(for: pageTraits) : Palette.surface
         placeholderIcon.isHidden = isBlankTab || imageView.image != nil
         if imageView.image == nil {
             placeholderIcon.image = faviconView.image ?? UIImage(systemName: "globe")

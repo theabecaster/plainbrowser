@@ -371,7 +371,7 @@ extension BrowserViewController: GalleryHost {
             webContainer.bringSubviewToFront(start)
             webContainer.bringSubviewToFront(engineUI.pageState)
         }
-        sheet.backgroundColor = showsStart && !start.isReceded ? .clear : Palette.background
+        sheet.backgroundColor = showsStart && !start.isReceded ? .clear : Paper.background
     }
 
     /// The start screen while typing (state rules §3): with a query, the mark and its shortcuts
@@ -389,7 +389,7 @@ extension BrowserViewController: GalleryHost {
            !session.tabs.isEmpty(tab.id) || engineUI.typedVisitTabs.contains(tab.id) { return }
         start.setReceded(recedes, animated: true)
         guard !start.isHidden else { return }
-        let paper: UIColor = recedes ? Palette.background : .clear
+        let paper: UIColor = recedes ? Paper.background : .clear
         Motion.animate(Motion.reflow, crossfading: sheet) { self.sheet.backgroundColor = paper }
     }
 

@@ -75,7 +75,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
 
     override public func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = Palette.background
+        Paper.apply(to: view)
         view.clipsToBounds = false
         view.layer.shadowColor = Palette.floatingShadow.cgColor
         view.layer.shadowRadius = 12

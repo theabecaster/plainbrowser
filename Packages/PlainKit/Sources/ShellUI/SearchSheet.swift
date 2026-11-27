@@ -36,7 +36,7 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = Palette.background
+        Paper.apply(to: self)
         accessibilityIdentifier = "searchSheet"
 
         content.translatesAutoresizingMaskIntoConstraints = false

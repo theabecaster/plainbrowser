@@ -29,6 +29,8 @@ public final class BrowserSession {
     /// never open the same files twice.
     public var profileData: ProfileDatabases { stores.profileData }
     private var started = false
+    /// The last private tab closed: the shell drops what it kept for the private session.
+    var privateSessionDidEnd: (() -> Void)?
 
     /// - Parameters:
     ///   - database: the app's database once it has opened off the main thread.
@@ -71,7 +73,10 @@ public final class BrowserSession {
             pool: pool, app: stores.tabs, database: database, tabStates: tabStates, windowID: windowID,
             isNewWindow: isNewWindow
         )
-        tabs.privateSessionDidEnd = { [cookieBanners] in cookieBanners.endPrivateSession() }
+        tabs.privateSessionDidEnd = { [cookieBanners, weak self] in
+            cookieBanners.endPrivateSession()
+            self?.privateSessionDidEnd?()
+        }
     }
 
     /// The window this scene shows. Keep it with the scene (`UISceneSession.userInfo`) so the next

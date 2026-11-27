@@ -1143,6 +1143,7 @@ public final class WebViewPool {
                 // A user script runs from the next document on: the pages already open are
                 // watched from now (the script leaves what it already wrapped alone).
                 if !watched.isEmpty { slot.webView.evaluateJavaScript(AccessRequestWatch.source, in: nil, in: .page) { _ in } }
+                // (Frames already loaded inside those pages are watched from their next load.)
             }
         }
         host?.pool(self, systemAccessDidChange: changed)
@@ -1281,9 +1282,13 @@ public final class WebViewPool {
             return allowed
         }
         pendingPermissionAsks[key] = ask
+        let generation = privateSessionGeneration
         let allowed = await ask.value
         pendingPermissionAsks[key] = nil
-        for permission in unknown { siteAnswers[Self.answersKey(site, isPrivate: tab.isPrivate), default: [:]][permission] = allowed }
+        // A private answer that arrives after its session ended is not kept.
+        if !tab.isPrivate || generation == privateSessionGeneration {
+            for permission in unknown { siteAnswers[Self.answersKey(site, isPrivate: tab.isPrivate), default: [:]][permission] = allowed }
+        }
         return allowed
     }
 

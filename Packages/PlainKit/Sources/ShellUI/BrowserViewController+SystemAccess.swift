@@ -23,13 +23,17 @@ extension BrowserViewController {
             return
         }
         let access = { monitor.access($0) }
-        guard let notice = SystemAccessRules.notice(for: features, access: access),
-              engineUI.accessNotices.shouldShow(features, site: site, access: access) else { return }
+        guard let notice = SystemAccessRules.notice(for: features, access: access) else { return }
+        let isNew = tab.isPrivate
+            ? engineUI.privateAccessNotices.shouldShow(features, site: site, access: access)
+            : engineUI.accessNotices.shouldShow(features, site: site, access: access)
+        guard isNew else { return }
         showNotice(notice)
     }
 
     public func pool(_ pool: WebViewPool, systemAccessDidChange features: Set<SystemFeature>) {
         engineUI.accessNotices.forget(features)
+        engineUI.privateAccessNotices.forget(features)
         guard features.contains(.cellular), let tab = currentTab else { return }
         if engineUI.networkBlockedTab == tab.id, pool.systemAccess.networkBlock == nil {
             // Cellular data is back on for Plain: the page the user wanted loads by itself.

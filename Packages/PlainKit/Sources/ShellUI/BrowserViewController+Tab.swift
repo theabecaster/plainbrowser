@@ -22,7 +22,9 @@ final class EngineUIState {
     var crashedTabs: Set<UUID> = []
     let prompts = PromptQueue()
     /// Which sites were told that a feature is off for Plain: once per site until it changes.
+    /// Private tabs keep theirs apart, dropped with the private session.
     var accessNotices = SystemAccessNoticeMemory()
+    var privateAccessNotices = SystemAccessNoticeMemory()
     /// The current tab's network error page was shown because of a switch of Plain's (cellular
     /// data off for Plain): turning it back on retries the page.
     var networkBlockedTab: UUID?

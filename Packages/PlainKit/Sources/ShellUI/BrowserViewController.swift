@@ -227,6 +227,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
         wireProfiles()
+        // Which private sites were told a feature is off ends with the private session.
+        session.privateSessionDidEnd = { [weak self] in self?.engineUI.privateAccessNotices = SystemAccessNoticeMemory() }
         session.summaries.onAvailabilityChange = { [weak self] in self?.summaryAvailabilityChanged() }
         session.pool.onTranslationFailed = { [weak self] tab in
             guard let self, tab === self.currentTab else { return }

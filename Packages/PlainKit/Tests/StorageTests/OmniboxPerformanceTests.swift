@@ -67,6 +67,18 @@ import Testing
             """)
         #expect(samples.filter { $0.query.hasPrefix("gith") }.allSatisfy { $0.hits > 0 })
         #expect(percentile(0.95) < Self.budget)
+
+        // The reading list's share of each query, alone: its own index, on the same keystrokes.
+        var saved: [Duration] = []
+        for query in queries {
+            let start = ContinuousClock.now
+            _ = try await database.writer.read { db in
+                try AppDatabase.readingListMatches(HistoryQuery(query), limit: FixedChoices.maxPageSuggestions, in: db)
+            }
+            saved.append(ContinuousClock.now - start)
+        }
+        saved.sort()
+        print("[perf]   reading list (\(Self.readingListCount) saved) alone: p95 \(Self.ms(saved[Int(Double(saved.count) * 0.95)]))")
     }
 
     static func ms(_ duration: Duration) -> String {

@@ -1084,7 +1084,7 @@ public final class WebViewPool {
         (isPrivate ? privateAnswersPrefix : "") + site
     }
 
-    private static let privateAnswersPrefix = "private 
+    private static let privateAnswersPrefix = "private "
 
     /// What the user answered for the site `tab` shows: nothing for a permission never asked.
     public func rememberedPermissions(for tab: Tab) -> [SitePermission: Bool] {

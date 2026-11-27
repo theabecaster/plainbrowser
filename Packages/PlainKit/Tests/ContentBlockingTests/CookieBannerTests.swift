@@ -112,6 +112,21 @@ final class CookiePage: NSObject, WKNavigationDelegate {
         </script></body></html>
         """
 
+    /// The OneTrust page with a sampler that counts the frames in which the banner shows before it
+    /// is answered (`__visibleFrames`), from the first frame on.
+    static let oneTrustSampled = oneTrust.replacingOccurrences(of: "</body>", with: """
+        <script>
+          window.__visibleFrames = 0; window.__frames = 0;
+          (function tick() {
+            const b = document.getElementById('onetrust-banner-sdk');
+            const cs = b && getComputedStyle(b);
+            if (cs && cs.display !== 'none' && parseFloat(cs.opacity) > 0.05 && document.body.dataset.consent === 'none') window.__visibleFrames++;
+            window.__frames++;
+            if (document.body.dataset.consent === 'none' && window.__frames < 600) requestAnimationFrame(tick);
+          })();
+        </script></body>
+        """)
+
     /// A Cookiebot-style banner a script adds after the page loaded (as a hosted consent manager
     /// does once its script arrives): the probe's later look finds it.
     static let lateBanner = """
@@ -167,6 +182,34 @@ final class CookiePage: NSObject, WKNavigationDelegate {
         #expect(await page.value("getComputedStyle(document.getElementById('onetrust-banner-sdk')).display") == "none")
         try await Task.sleep(for: .milliseconds(200))
         #expect(answered == true)
+    }
+
+    /// A known consent manager's banner found by the probe (no site rule, so the engine comes only
+    /// after DOMContentLoaded) is hidden from the first frame until it is answered: no flash.
+    @Test func aLateEngineBannerNeverFlashes() async throws {
+        let page = await CookiePage(banners: CookieBanners())
+        let start = ContinuousClock.now
+        await page.load(CookiePage.oneTrustSampled)
+        let deadline = ContinuousClock.now + .seconds(15)
+        while await page.value("document.body.dataset.consent") == "none", ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let answered = ContinuousClock.now - start
+        let visible = await page.number("window.__visibleFrames")
+        let frames = await page.number("window.__frames")
+        print("[plain-measure] cookie banner flash: visible in \(Int(visible)) of \(Int(frames)) frames before it was answered (\(answered))")
+        #expect(await page.value("document.body.dataset.consent") == "rejected")
+        #expect(visible == 0, "the banner showed in \(visible) frames")
+    }
+
+    /// A banner the engine can't answer (turned off for the site) shows at once, never hidden.
+    @Test func aBannerLeftAloneIsNotHidden() async throws {
+        let banners = CookieBanners()
+        banners.setOff(true, for: URL(string: "https://shop.example/"), isPrivate: false)
+        let page = await CookiePage(banners: banners)
+        await page.load(CookiePage.oneTrustSampled)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(await page.value("getComputedStyle(document.getElementById('onetrust-banner-sdk')).opacity") == "1")
     }
 
     /// A page with no sign of a consent manager never gets the engine: nothing to parse.

@@ -12,6 +12,11 @@ import Foundation
 /// - thumbnails, downloads and TipKit's datastore: subfolders of `directory`;
 /// - the Home Screen icon, Photos and the general pasteboard: stubbed or a private pasteboard.
 ///
+/// Shared on purpose: WebKit's compiled content-blocking lists (`WKContentRuleListStore.default()`),
+/// a cache built from the bundled lists that is the same for every run and holds no user data
+/// (the sites with blocking off are in the database). A separate store would recompile them for
+/// seconds on every test launch.
+///
 /// The arguments work in every build configuration, Release included (the perf gate runs
 /// Release on the device). They only ever point the app at throwaway state.
 public nonisolated enum TestIsolation {

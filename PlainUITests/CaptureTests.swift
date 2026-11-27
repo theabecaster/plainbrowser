@@ -881,7 +881,7 @@ final class CaptureTests: XCTestCase {
         )
         let options = XCTMeasureOptions()
         options.iterationCount = 5
-        options.invocationOptions = [.manuallyStop]
+        options.invocationOptions = [.manuallyStart, .manuallyStop]
         measure(metrics: [load, XCTClockMetric()], options: options) {
             app.buttons["more"].tap()
             let item = app.buttons["more.archivedTabs"]
@@ -894,11 +894,36 @@ final class CaptureTests: XCTestCase {
             app.navigationBars.buttons["Done"].tap()
             XCTAssertTrue(app.otherElements["archiveSheet"].waitForNonExistence(timeout: 3))
         }
-        // Scrolling the full list: one long fling down and back.
+    }
+
+    /// Hitches while flinging through a full archive's sections (1,000 rows), five times.
+    func testMeasureFullArchiveScroll() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFullArchive"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/a") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
         app.buttons["more"].tap()
         app.buttons["more.archivedTabs"].tap()
         let list = app.collectionViews.firstMatch
         XCTAssertTrue(list.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(identifier: "archiveRow").firstMatch.waitForExistence(timeout: 5))
+        let scroll = XCTMeasureOptions()
+        scroll.iterationCount = 5
+        scroll.invocationOptions = [.manuallyStop]
+        measure(metrics: [XCTHitchMetric(application: app), XCTOSSignpostMetric.scrollingAndDecelerationMetric], options: scroll) {
+            list.swipeUp(velocity: .fast)
+            list.swipeUp(velocity: .fast)
+            stopMeasuring()
+            list.swipeDown(velocity: .fast)
+            list.swipeDown(velocity: .fast)
+        }
         for _ in 0 ..< 6 { list.swipeUp(velocity: .fast) }
         pause(1)
         shot("m-full-archive-scrolled")

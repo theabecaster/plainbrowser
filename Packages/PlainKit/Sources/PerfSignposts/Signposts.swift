@@ -152,9 +152,13 @@ public enum Signposts {
     /// Interval: a swipe along the expanded address bar, from the finger starting to move until the
     /// page settles. Exclusive and without an end message, so XCTOSSignpostMetric measures it.
     public static let tabSwipe: StaticString = "tab.swipe"
-    /// Interval: a bar swipe from the finger lifting until the page settles. The part Plain owns:
-    /// it leaves out the finger's own travel, which in UI tests is the test's scripted drag.
+    /// Interval: a bar swipe from the finger lifting until the page settles (visibly at rest,
+    /// `visualSettle`) and the new tab has taken over. The part Plain owns: it leaves out the
+    /// finger's own travel, which in UI tests is the test's scripted drag.
     public static let tabSwipeSettle: StaticString = "tab.swipeSettle"
+    /// Interval inside `tab.swipeSettle`: the page at rest on the neighbour, its web view moving
+    /// into the page container (`completeTabSwipe`) until the page takes touches.
+    public static let tabSwipeHandoff: StaticString = "tab.swipeHandoff"
     /// Event right after `tab.swipe` ends: where it landed, "switched" (the neighbour tab),
     /// "stayed", "newTab" (past the last tab) or "cancelled".
     public static let tabSwipeEnd: StaticString = "tab.swipeEnd"

@@ -445,6 +445,13 @@ Each entry: what was chosen, and why. Newest last.
 - **The swipe spring runs frame by frame** (`SpringDriver`, `Motion.tabSwitchSpring`), like the
   toolbar snap: the release velocity carries in, and a finger can grab the page mid-flight
   without a jump. Commit at half the projected travel (UIScrollView's normal deceleration).
+- **The swipe ends when the page is visibly at rest, not at the spring's settle.** The driver ran
+  the spring to within 0.001 pt of the target: on a 400 pt page about 0.85 s, of which the last
+  0.5 s moves under a point, while the new tab waited for the hand-off (pill text, touches). Now
+  `SpringDriver(restDistance:)` lands on the target once the page is within 0.5 pt and moved less
+  than 0.5 pt in the last frame (`Signposts.visualSettle`, the gallery's rule), then hands off.
+  The jump is below a pixel step the eye can follow. The spring is unchanged (0.35 s, bounce 0.12,
+  the motion table's row).
 - **One pan recognizer per bar view** decides by its first velocity: sideways switches tabs, up
   opens the gallery (the same `TabGalleryTransition`, finger-driven). It never begins on the
   collapsed pill or during a snap (`acceptsBarGestures`).

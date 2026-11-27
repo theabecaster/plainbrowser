@@ -20,6 +20,10 @@ public final class SpringDriver {
     public var isRunning: Bool { link != nil }
 
     private let spring: Spring
+    /// When set, the spring lands on its target once the value is within this distance of it and
+    /// moved less than this in the last frame (the motion is visibly over), instead of after the
+    /// spring's long sub-point tail. The jump to the target is below what the eye can see.
+    private let restDistance: CGFloat?
     private var link: UIUpdateLink?
     private var origin: CGFloat = 0
     private var initialVelocity: CGFloat = 0
@@ -29,8 +33,11 @@ public final class SpringDriver {
     private var onFrame: ((CGFloat) -> Void)?
     private var completion: (() -> Void)?
 
-    public init(spring: Spring, value: CGFloat = 0) {
+    /// - Parameter restDistance: lands on the target, and completes, once the motion is visibly
+    ///   over (see `restDistance`); nil runs the spring to its full settle.
+    public init(spring: Spring, value: CGFloat = 0, restDistance: CGFloat? = nil) {
         self.spring = spring
+        self.restDistance = restDistance
         self.value = value
         self.target = value
     }
@@ -48,7 +55,8 @@ public final class SpringDriver {
     ///   - velocity: the starting velocity in value units per second (a gesture's release).
     ///   - view: the view whose display paces the frames.
     ///   - onFrame: applies a value; runs once per frame, and once with `target` at the end.
-    ///   - completion: runs when the spring settles, not when it is stopped or retargeted.
+    ///   - completion: runs when the spring settles (or comes to rest, with `restDistance`), not
+    ///     when it is stopped or retargeted.
     ///
     /// Under Reduce Motion, or with the view off screen, the value jumps to `target`; under Reduce
     /// Motion the caller wraps the call in `Motion.crossfade`.
@@ -109,7 +117,12 @@ public final class SpringDriver {
             finish(at: target)
             return
         }
-        value = origin + spring.value(target: target - origin, initialVelocity: initialVelocity, time: elapsed)
+        let next = origin + spring.value(target: target - origin, initialVelocity: initialVelocity, time: elapsed)
+        if let restDistance, abs(target - next) <= restDistance, abs(next - value) <= restDistance {
+            finish(at: target)
+            return
+        }
+        value = next
         onFrame?(value)
     }
 

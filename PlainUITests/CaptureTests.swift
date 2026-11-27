@@ -450,6 +450,42 @@ final class CaptureTests: XCTestCase {
         shot("s8b-start-with-closed")
     }
 
+    /// The tab cards' close button: the regular gallery (three local tabs), then the private one.
+    /// `PLAIN_CAPTURE_TAG` names the shots (iphone-light, duo-inner-dark, ...).
+    func testCaptureCardClose() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let name = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_TAG"] ?? "light"
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        for (index, path) in ["/a", "/b", "/c"].enumerated() {
+            if index > 0 {
+                app.buttons["tabs"].press(forDuration: 1)
+                app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+            }
+            if !(field.exists && field.hasKeyboardFocus) { app.buttons["addressPill"].tap() }
+            field.typeText(server.address(path) + "\n")
+            pause(2.5)
+        }
+        app.buttons["tabs"].tap()
+        pause(1.5)
+        shot("cc-gallery-\(name)")
+        app.buttons["galleryPrivate"].tap()
+        pause(1.2)
+        app.buttons["emptyNewTab"].tap()
+        pause(1)
+        field.typeText(server.address("/a") + "\n")
+        pause(2.5)
+        app.buttons["tabs"].tap()
+        pause(1.5)
+        shot("cc-private-\(name)")
+    }
+
     /// The Paper surfaces: the intro, the start screen (keyboard up and down), the reader view,
     /// Settings and the gallery. Set the simulator's appearance first (`xcrun simctl ui <udid>
     /// appearance dark`); `PLAIN_CAPTURE_TAG` names the shots (light, dark).

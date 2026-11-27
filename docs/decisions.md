@@ -2177,5 +2177,8 @@ users have things turned off", "don't be too annoying", following credible sourc
 - **Captures and UI tests:** Debug's `-PlainSystemAccess feature=state,…` stands in for what a
   simulator can't reach (no camera, no cellular), `-PlainSeedSitePermissions` seeds remembered
   answers (local pages can't reach WebKit's prompts), and `-PlainAIGoesAwayInBackground` makes
-  the scripted model unavailable while the app is away. Photos and location use the simulator's
-  own switches (`simctl privacy`).
+  the scripted model unavailable while the app is away. Location also uses the simulator's own
+  switch (`simctl privacy`, which has no camera service).
+- **`decide` refuses a switched-off feature too.** On a simulator WebKit's stand-in cameras skip
+  its authorization check and reach Plain's delegate; should WebKit ever ask first on a device,
+  the same holds: no question of Plain's for a feature that is off, nothing remembered, one line.

@@ -3,7 +3,7 @@ import Foundation
 import Observation
 import PerfSignposts
 
-/// State for the Settings sheet: the three stored settings, the custom search engine form and the
+/// State for the Settings sheet: the four stored settings, the custom search engine form and the
 /// Clear History and Data action. Every change is saved at once; there is no Save button.
 @Observable
 public final class SettingsModel {
@@ -85,6 +85,13 @@ public final class SettingsModel {
     public func setArchiveAfter(_ archive: ArchiveAfter) {
         guard isLoaded, archive != settings.archiveAfter else { return }
         settings.archiveAfter = archive
+        save()
+    }
+
+    /// Saves the choice; the shell applies it to every window as the save is handed to it.
+    public func setAppearance(_ appearance: Appearance) {
+        guard isLoaded, appearance != settings.appearance else { return }
+        settings.appearance = appearance
         save()
     }
 
@@ -204,6 +211,26 @@ extension ArchiveAfter {
         case .oneDay: "Tabs you haven't used in a day move to the archive."
         case .oneWeek: "Tabs you haven't used in a week move to the archive."
         case .never: "Tabs stay open until you close them."
+        }
+    }
+}
+
+extension Appearance {
+    /// The row value and picker label.
+    public var title: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    /// The section footer: one sentence on what the current choice does.
+    public var footer: String {
+        switch self {
+        case .system: "Plain and websites follow your iPhone's light or dark setting."
+        case .light: "Plain and websites stay light."
+        case .dark: "Plain and websites stay dark, even sites made only in light."
         }
     }
 }

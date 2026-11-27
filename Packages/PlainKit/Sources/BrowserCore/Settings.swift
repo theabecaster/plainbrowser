@@ -48,23 +48,38 @@ public enum ArchiveAfter: String, Hashable, Sendable, Codable, CaseIterable {
     }
 }
 
+/// The app's colors: follow iOS, or stay light or dark whatever iOS uses. Web pages follow it too:
+/// sites with a dark design switch with the app, and pages without one are darkened while it is
+/// dark (`FixedChoices.darkPagesOn`).
+public enum Appearance: String, Hashable, Sendable, Codable, CaseIterable {
+    case system
+    case light
+    case dark
+}
+
 /// Every user setting Plain has (docs/plan.md, section 4b). "Clear History and Data" is an action,
 /// not a stored value, so it is not here. Nothing else belongs in this type.
 public struct BrowserSettings: Hashable, Sendable, Codable {
     public var searchEngine: SearchEngine
     public var tabLayout: TabLayout
     public var archiveAfter: ArchiveAfter
+    public var appearance: Appearance
 
-    public init(searchEngine: SearchEngine, tabLayout: TabLayout, archiveAfter: ArchiveAfter) {
+    public init(
+        searchEngine: SearchEngine, tabLayout: TabLayout, archiveAfter: ArchiveAfter,
+        appearance: Appearance = FixedChoices.defaultAppearance
+    ) {
         self.searchEngine = searchEngine
         self.tabLayout = tabLayout
         self.archiveAfter = archiveAfter
+        self.appearance = appearance
     }
 
     /// First-launch values.
     public static let defaults = BrowserSettings(
         searchEngine: FixedChoices.defaultSearchEngine,
         tabLayout: FixedChoices.defaultTabLayout,
-        archiveAfter: FixedChoices.defaultArchiveAfter
+        archiveAfter: FixedChoices.defaultArchiveAfter,
+        appearance: FixedChoices.defaultAppearance
     )
 }

@@ -2,7 +2,7 @@ import BrowserCore
 import Foundation
 import GRDB
 
-/// Persists `BrowserSettings`: search engine, tab layout and archive interval. Nothing else is a
+/// Persists `BrowserSettings`: search engine, tab layout, archive interval and appearance. Nothing else is a
 /// setting (docs/plan.md, section 4b), so there is no generic key-value API.
 ///
 /// Built-in engines are stored by id, so a template fix in the catalog reaches existing users. A
@@ -14,6 +14,7 @@ extension AppDatabase {
         case customSearchEngine
         case tabLayout
         case archiveAfter
+        case appearance
     }
 
     private struct StoredCustomEngine: Codable {
@@ -44,6 +45,9 @@ extension AppDatabase {
             if let raw = values[SettingKey.archiveAfter.rawValue], let archive = ArchiveAfter(rawValue: raw) {
                 settings.archiveAfter = archive
             }
+            if let raw = values[SettingKey.appearance.rawValue], let appearance = Appearance(rawValue: raw) {
+                settings.appearance = appearance
+            }
             return settings
         }
     }
@@ -64,6 +68,7 @@ extension AppDatabase {
             (.searchEngine, settings.searchEngine.id),
             (.tabLayout, settings.tabLayout.rawValue),
             (.archiveAfter, settings.archiveAfter.rawValue),
+            (.appearance, settings.appearance.rawValue),
         ]
         if settings.searchEngine.isCustom {
             let stored = StoredCustomEngine(name: settings.searchEngine.name, template: settings.searchEngine.template)

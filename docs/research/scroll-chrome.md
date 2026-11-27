@@ -141,8 +141,10 @@ Three resting states: **expanded → pill → hidden**.
    The pill is allowed in all of these, as before.
 6. **Page inset** (engine rule 4): `obscuredContentInsets.bottom` follows the resting state, now
    one of three: the expanded chrome (136 pt on iPhone 17), the pill (54 pt), or hidden: only the
-   home-indicator strip (34 pt; 16 pt where there is none). It switches once, when a motion ends,
-   never per frame, and waits out bounces as before. So a fixed footer sits above the expanded bar,
+   home-indicator strip (34 pt; 16 pt where there is none). The scroll view's own bottom inset
+   follows it (WebKit's obscured inset alone leaves the scroll range at the safe area, measured),
+   so the page's last line can always clear the bar. It switches once, when a motion ends, never
+   per frame, and waits out bounces as before. So a fixed footer sits above the expanded bar,
    above the pill, and just above the home indicator while hidden. The viewport range is now
    hidden to expanded (`setMinimumViewportInset`), so `svh`/`lvh` stay fixed during motion.
 7. **Duo**: the system's vertical bar cannot hide and keeps its buttons; only the pill sinks away,

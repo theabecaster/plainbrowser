@@ -58,6 +58,12 @@ final class AppleTranslator: PageTranslator {
     }
 
     func translate(_ texts: [String], from source: Locale.Language, to target: Locale.Language) async throws -> [String] {
+        try await translate(texts, from: source, to: target, retry: true)
+    }
+
+    private func translate(
+        _ texts: [String], from source: Locale.Language, to target: Locale.Language, retry: Bool
+    ) async throws -> [String] {
         let key = "\(source.maximalIdentifier)>\(target.maximalIdentifier)"
         let box = sessions[key] ?? SessionBox(source: source, target: target)
         sessions[key] = box
@@ -72,11 +78,10 @@ final class AppleTranslator: PageTranslator {
         } catch {
             // A language deleted in Settings since the page was checked: ask again, once.
             logger.notice("translation failed: \(String(describing: error), privacy: .public)")
-            sessions[key] = nil
-            guard await askToDownload(source, target) else { throw error }
-            let fresh = SessionBox(source: source, target: target)
-            sessions[key] = fresh
-            return try await fresh.translate(texts)
+            if sessions[key] === box { sessions[key] = nil }
+            guard retry, await askToDownload(source, target) else { throw error }
+            // Through the chain again, with a new session.
+            return try await translate(texts, from: source, to: target, retry: false)
         }
     }
 

@@ -43,6 +43,27 @@ public enum PageExport {
     /// How long each step of the last `pdf(of:)` held the main thread, for the perf test.
     static var lastTimings: (layout: Duration, longestPage: Duration, pages: Int) = (.zero, .zero, 0)
 
+    /// Marks the document now in `webView` (a token in the engine's world, invisible to the page)
+    /// and returns the token; `isSameDocument` tells later whether that document is still there.
+    /// A reload, or leaving and coming back, makes a new document without the token.
+    public static func markDocument(in webView: WKWebView) async -> String {
+        let token = UUID().uuidString
+        await withCheckedContinuation { continuation in
+            webView.evaluateJavaScript("globalThis.__plainExport = '\(token)';", in: nil, in: UserScripts.world) { _ in
+                continuation.resume()
+            }
+        }
+        return token
+    }
+
+    public static func isSameDocument(_ webView: WKWebView, token: String) async -> Bool {
+        await withCheckedContinuation { continuation in
+            webView.evaluateJavaScript("globalThis.__plainExport", in: nil, in: UserScripts.world) { result in
+                continuation.resume(returning: (try? result.get()) as? String == token)
+            }
+        }
+    }
+
     /// The page as a paginated PDF on `paperSize` with `FixedChoices.exportMargin` margins.
     ///
     /// The print formatter works on the main thread. Laying out the printed pages is one wait on

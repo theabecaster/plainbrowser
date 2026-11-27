@@ -166,7 +166,7 @@ enum PageTranslation {
           };
 
           const apply = (node, original, translated) => {
-            if (!active || !node.isConnected || node.nodeValue !== original) return;
+            if (!active || !node.isConnected || node.nodeValue !== original || excluded(node)) return;
             const lead = original.match(/^\\s*/)[0], trail = original.match(/\\s*$/)[0];
             const value = lead + translated.trim() + trail;
             if (!originals.has(node)) originals.set(node, original);
@@ -180,12 +180,15 @@ enum PageTranslation {
             while (active && inFlight < IN_FLIGHT && queue.length > 0) {
               const batch = [], texts = [];
               let chars = 0;
-              while (queue.length > 0 && batch.length < BATCH_COUNT && chars < BATCH_CHARS) {
-                const node = queue.shift();
-                queued.delete(node);
+              while (queue.length > 0 && batch.length < BATCH_COUNT) {
+                const node = queue[0];
                 const original = node.nodeValue;
-                if (!node.isConnected || !original || written.get(node) === original) continue;
-                const key = original.trim();
+                const key = original ? original.trim() : '';
+                // A batch stays under the size; one long text goes alone.
+                if (batch.length > 0 && chars + key.length > BATCH_CHARS) break;
+                queue.shift();
+                queued.delete(node);
+                if (!node.isConnected || !original || written.get(node) === original || excluded(node)) continue;
                 if (cache.has(key)) { apply(node, original, cache.get(key)); continue; }
                 batch.push([node, original, key]);
                 texts.push(key);
@@ -238,10 +241,19 @@ enum PageTranslation {
                   if (record.removedNodes.length > 0) removed = true;
                 }
               }
-              // Text the page took away is let go, so an endless page doesn't keep it alive.
+              // Text the page took away is let go, so an endless page doesn't keep it alive. A text
+              // Plain translated gets its original back first, in case the page puts it back.
               if (removed) {
-                for (const node of originals.keys()) if (!node.isConnected) { originals.delete(node); written.delete(node); }
-                for (const el of waiting.keys()) if (!el.isConnected) { waiting.delete(el); visible.unobserve(el); }
+                for (const [node, original] of originals) {
+                  if (node.isConnected) continue;
+                  if (node.nodeValue === written.get(node)) node.nodeValue = original;
+                  originals.delete(node); written.delete(node);
+                }
+                for (const [el, nodes] of waiting) {
+                  if (!el.isConnected) { waiting.delete(el); visible.unobserve(el); continue; }
+                  const kept = nodes.filter((node) => node.isConnected);
+                  if (kept.length !== nodes.length) waiting.set(el, kept);
+                }
               }
             }, MUTATION_DELAY);
           };

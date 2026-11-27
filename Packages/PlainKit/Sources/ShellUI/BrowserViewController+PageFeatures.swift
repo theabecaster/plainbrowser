@@ -178,8 +178,11 @@ extension BrowserViewController {
         guard let (tab, webView) = exportTarget() else { return Haptic.nothingThere.play() }
         let document = webView.url
         Task { [weak self] in
+            let token = await PageExport.markDocument(in: webView)
             await PageExport.loadLazyImages(in: webView)
-            guard let self, self.isStillExporting(tab, webView, document: document) else { return }
+            guard let self, self.isStillExporting(tab, webView, document: document),
+                  await PageExport.isSameDocument(webView, token: token)
+            else { return }
             Signposts.signposter.emitEvent(Signposts.printPage)
             let info = UIPrintInfo(dictionary: nil)
             info.outputType = .general
@@ -198,8 +201,11 @@ extension BrowserViewController {
         let interval = Signposts.signposter.beginInterval(Signposts.exportPDF)
         let document = webView.url
         Task { [weak self] in
+            let token = await PageExport.markDocument(in: webView)
             await PageExport.loadLazyImages(in: webView)
-            guard let self, self.isStillExporting(tab, webView, document: document) else {
+            guard let self, self.isStillExporting(tab, webView, document: document),
+                  await PageExport.isSameDocument(webView, token: token)
+            else {
                 return Signposts.signposter.endInterval(Signposts.exportPDF, interval, "cancelled")
             }
             let title = tab.title
@@ -211,7 +217,8 @@ extension BrowserViewController {
                 try? PageExport.writeTemporaryFile(data, named: name)
             }.value
             Signposts.signposter.endInterval(Signposts.exportPDF, interval)
-            guard self.isStillExporting(tab, webView, document: document) else {
+            let same = await PageExport.isSameDocument(webView, token: token)
+            guard same, self.isStillExporting(tab, webView, document: document) else {
                 if let file { Task.detached { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) } }
                 return
             }

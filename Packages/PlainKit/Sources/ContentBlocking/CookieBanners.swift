@@ -92,14 +92,13 @@ public final class CookieBanners {
     private let waiting = NSHashTable<WKUserContentController>.weakObjects()
     /// Controllers that already have the scripts and the handler (a handler can be added once).
     private let installed = NSHashTable<WKUserContentController>.weakObjects()
-    /// Recent answers per tab and site, for the loop guard (a page that reloads itself after each
-    /// answer); the tabs and sites that tripped it, left alone for this launch.
-    private var recentAnswers: [LoopKey: [ContinuousClock.Instant]] = [:]
-    private var looping: Set<LoopKey> = []
+    /// Recent answers per web view and site, for the loop guard (a page that reloads itself after
+    /// each answer), and the sites that tripped it in that web view; gone with the web view.
+    private let loops = NSMapTable<WKWebView, LoopState>.weakToStrongObjects()
 
-    private struct LoopKey: Hashable {
-        let webView: ObjectIdentifier
-        let site: String
+    private final class LoopState {
+        var answers: [String: [ContinuousClock.Instant]] = [:]
+        var looping: Set<String> = []
     }
     private lazy var handler = MessageHandler(owner: self)
 
@@ -197,7 +196,11 @@ public final class CookieBanners {
         } else {
             store.setCookieBannersOff(off, forSite: site)
             privateStore?.baseDidChange()
-            if !off { looping = looping.filter { $0.site != site } }
+            if !off {
+                for case let webView as WKWebView in loops.keyEnumerator().allObjects {
+                    loops.object(forKey: webView)?.looping.remove(site)
+                }
+            }
         }
     }
 
@@ -254,8 +257,8 @@ public final class CookieBanners {
             let page = isMain ? ((body["url"] as? String).flatMap(URL.init(string:)) ?? webView.url) : webView.url
             let isPrivate = !webView.configuration.websiteDataStore.isPersistent
             let site = SiteKey.site(forHost: page?.host())
-            let loops = site.map { looping.contains(LoopKey(webView: ObjectIdentifier(webView), site: $0)) } ?? false
-            let enabled = !isOff(for: page, isPrivate: isPrivate) && !loops
+            let loop = site.map { loops.object(forKey: webView)?.looping.contains($0) ?? false } ?? false
+            let enabled = !isOff(for: page, isPrivate: isPrivate) && !loop
             var reply: [String: Any] = ["type": "initResp", "config": Self.config(enabled: enabled)]
             guard enabled else { return reply }
             let address = (body["url"] as? String) ?? frame.request.url?.absoluteString ?? ""
@@ -308,14 +311,14 @@ public final class CookieBanners {
     /// The loop guard: the same site answered again and again in one tab in a short time.
     private func noteAnswer(on url: URL?, in webView: WKWebView) {
         guard let site = SiteKey.site(forHost: url?.host()) else { return }
-        let key = LoopKey(webView: ObjectIdentifier(webView), site: site)
+        let state = loops.object(forKey: webView) ?? LoopState()
+        loops.setObject(state, forKey: webView)
         let now = ContinuousClock.now
-        recentAnswers = recentAnswers.filter { $0.value.contains { now - $0 < FixedChoices.cookieBannerLoopWindow } }
-        var answers = (recentAnswers[key] ?? []).filter { now - $0 < FixedChoices.cookieBannerLoopWindow }
+        var answers = (state.answers[site] ?? []).filter { now - $0 < FixedChoices.cookieBannerLoopWindow }
         answers.append(now)
-        recentAnswers[key] = answers
+        state.answers[site] = answers
         if answers.count >= FixedChoices.cookieBannerLoopLimit {
-            looping.insert(key)
+            state.looping.insert(site)
             logger.notice("cookie banner keeps coming back; leaving the site alone this launch")
         }
     }

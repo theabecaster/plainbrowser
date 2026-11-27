@@ -69,7 +69,8 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 ## Visual and motion
 
 - One accent color (Lagoon Blue, from `Brand/identity.md`) and semantic colors from `DesignSystem`. No hard-coded colors in features.
-- System text styles with Dynamic Type. Tap targets are at least 44 pt.
+- System text styles with Dynamic Type. Tap targets are at least 44 pt (the tappable area, not only the frame around it).
+- Text inside fixed-height chrome (the address pill) stops growing at the largest non-accessibility size, as Safari's field does; everything else grows.
 - Corner radii of 6–10 pt. Liquid Glass only on floating controls, built with one shared helper.
 - Motion vocabulary: `.snappy(0.15–0.3)` for most changes, `.spring(0.32–0.42, bounce 0–0.12)` for gesture-driven moves, `.easeInOut(0.2)` crossfade under Reduce Motion. The full table is in the plan.
 - One `Haptic` enum: `tap`, `selection`, `threshold`, `success`, and a rate-limited "nothing there" bump.
@@ -78,6 +79,8 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - Short and plain, with Title Case for labels and sentence case for footers and messages.
 - Error messages are written by Plain from known error cases, never raw WebKit or server text.
+- An item captioned under its symbol uses the same short caption everywhere it shows (the page menu's rows and the start screen's shortcuts: "Private Tab", "Reopen Tab", "Archive"), with the full name for VoiceOver.
+- The same action has the same symbol everywhere: Copy Link is `link`, Share `square.and.arrow.up`, Close Tab `xmark`.
 
 ## Outside the app
 

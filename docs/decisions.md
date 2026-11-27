@@ -1349,6 +1349,7 @@ simulator's 24 pt status bar had hidden this.
 - **Not verified on the device:** the simulator draws no status bar in its resizable window and
   reports the safe area differently. Captures use the window's real camera region (portrait) and
   the forced device corner (landscape).
+
 ## System integration: intents, Spotlight, widgets, controls, Handoff (v0.2, 2026-11-27)
 
 - **One command type.** App Intents, widget links, Spotlight results and Handoff all become a
@@ -1398,3 +1399,23 @@ simulator's 24 pt status bar had hidden this.
   Duo simulator, Release, five launches each, `dev` then this branch back to back (machine load
   about 860, so noisy): `launch.firstFrame` median 937 → 908 ms, `launch` (main to field) 592 →
   634 ms (fastest runs 562 and 575 ms). Within noise; confirm with the device perf gate.
+
+## UX audit fixes (2026-11-27)
+
+The UX lane's walk (docs/research/ux-audit.md) fixed the small, contained items; the rest are
+routed to the lanes that own them.
+
+- **The reader gets its own `WKWebpagePreferences`.** `WKWebViewConfiguration.copy()` shares
+  `defaultWebpagePreferences`, so the reader's `allowsContentJavaScript = false` turned JavaScript
+  off for every page loaded after the first reader visit (Google showed its no-JavaScript page).
+  Any helper that changes a copied configuration's preferences assigns a new object instead.
+- **The share sheet gets an item source with the page's title** (`PageShareItem`,
+  LinkPresentation metadata): Safari heads the sheet with the title, and a bare URL showed only
+  the host. The title also becomes a mail's subject. A failed page shares the address tried, with
+  no title.
+- **The pill's text stops at the largest non-accessibility size**
+  (`maximumContentSizeCategory = .extraExtraExtraLarge`): the capsule keeps its 48 pt height, as
+  Safari's field does, and the larger sizes overflowed it.
+- **Start screen shortcuts use the page menu's captions** ("Reopen Tab", "Archive") in equal
+  columns, full names for VoiceOver; an empty private tab's sentence says it is private ("A private
+  tab: Plain keeps no history of it."), with no badge.

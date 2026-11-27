@@ -10,6 +10,11 @@ final class PerfTests: XCTestCase {
     /// Long enough for the bar swipe's spring (`Motion.tabSwitchSpring`, 0.35 s) to settle with a
     /// wide margin for a loaded simulator; the interval ends well inside it.
     private static let swipeSettleWait: TimeInterval = 2
+    /// Long enough for the gallery's zoom (`Motion.galleryZoom`, 0.42 s; Core Animation settles it
+    /// near 1 s) to bring the gallery's bar in, with a margin for a loaded simulator.
+    private static let galleryZoomWait: TimeInterval = 1.5
+
+    private struct SetupFailed: Error {}
 
     private var options: XCTMeasureOptions {
         let options = XCTMeasureOptions()
@@ -39,19 +44,33 @@ final class PerfTests: XCTestCase {
         }
     }
 
-    /// Two local pages in two tabs, with the search sheet closed: the start of the tab tests.
-    private func launchWithTwoTabs(_ server: TestServer) -> XCUIApplication {
+    /// Two local pages in two tabs, side by side and both live, with the search sheet closed: the
+    /// start of the tab tests. Always the same: the store starts empty each launch
+    /// (`-PlainTestStore -PlainResetStore`, honored in Release), so tabs left by earlier runs (or,
+    /// on the device, the owner's own) are never restored, archived at launch or made neighbours.
+    private func launchWithTwoTabs(_ server: TestServer) throws -> XCUIApplication {
         let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainTestStore", "-PlainResetStore"]
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText(server.address("/a") + "\n")
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
+        // One page tab: the slot is New Tab ("+"). Its menu's New Tab, by identifier: a label match
+        // could also find the slot itself, whose label is "New Tab" now.
         app.buttons["tabs"].press(forDuration: 1)
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Tab'")).firstMatch.tap()
+        let newTab = app.buttons["menu.newTab"]
+        XCTAssertTrue(newTab.waitForExistence(timeout: 3))
+        newTab.tap()
         XCTAssertTrue(field.waitForExistence(timeout: 2))
         field.typeText(server.address("/long") + "\n")
         XCTAssertTrue(app.webViews.staticTexts["Long Read"].waitForExistence(timeout: 10))
+        // Two tabs: the slot is Tabs, so a tap opens the gallery (docs/state-rules.md §3).
+        let tabs = app.buttons["tabs"]
+        guard tabs.waitForExistence(timeout: 3), tabs.label == "Tabs" else {
+            XCTFail("setup did not reach two tabs; the tabs slot reads \(tabs.label)")
+            throw SetupFailed()
+        }
         return app
     }
 
@@ -60,15 +79,21 @@ final class PerfTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = launchWithTwoTabs(server)
+        let app = try launchWithTwoTabs(server)
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.galleryShow)
         )
         let gallery = app.scrollViews["tabGallery"]
+        let done = app.buttons["galleryDone"]
         measure(metrics: [metric], options: options) {
             app.buttons["tabs"].tap()
-            XCTAssertTrue(gallery.waitForExistence(timeout: 3))
-            app.buttons["galleryDone"].tap()
+            // The cards' scroll view exists from the first frame, but the gallery's bar (Done)
+            // fades in over the zoom's second half: until then Done is not on screen, and a tap
+            // finds no match. Wait out the zoom without querying the app (a query costs its main
+            // thread mid-interval; `gallery.show` ends inside this wait), then wait for Done.
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "gallery settles")], timeout: Self.galleryZoomWait)
+            XCTAssertTrue(done.waitForExistence(timeout: 3), "the gallery did not open")
+            done.tap()
             XCTAssertTrue(gallery.waitForNonExistence(timeout: 3))
         }
     }
@@ -79,13 +104,17 @@ final class PerfTests: XCTestCase {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
-        let app = launchWithTwoTabs(server)
+        let app = try launchWithTwoTabs(server)
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.tabSwipeSettle)
         )
         let pill = app.buttons["addressPill"]
         var toPrevious = true
-        measure(metrics: [metric], options: options) {
+        // The hand-off inside it (the new tab taking the page), for the per-step numbers.
+        let handoff = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.tabSwipeHandoff)
+        )
+        measure(metrics: [metric, handoff], options: options) {
             if toPrevious { pill.swipeRight(velocity: .fast) } else { pill.swipeLeft(velocity: .fast) }
             // The swipe call returns when the finger lifts, while the page still springs. The
             // metric only counts an interval that ends inside this block, so wait out the settle

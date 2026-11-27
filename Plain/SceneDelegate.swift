@@ -236,18 +236,20 @@ private nonisolated struct LaunchOptions: Sendable {
     /// `-PlainSeedArchive`: a few archived tabs, for screenshots of the archive. Debug builds only.
     var seedArchive = false
     /// `-PlainTestStore`: a database and tab state on disk in a temporary folder that survives
-    /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. Debug
-    /// builds only.
+    /// relaunches, for UI tests of session restore; `-PlainResetStore` empties it first. Release
+    /// builds too: the perf tests start each launch from an empty session this way, on disk like the
+    /// real store, and never read or write the user's own tabs. The reset only ever touches that
+    /// temporary folder.
     var testStore = false
     var resetStore = false
 
     init(arguments: [String]) {
+        testStore = arguments.contains("-PlainTestStore")
+        resetStore = testStore && arguments.contains("-PlainResetStore")
         #if DEBUG
         inMemory = arguments.contains("-PlainInMemoryStore")
         seedFavorites = arguments.contains("-PlainSeedFavorites")
         seedArchive = arguments.contains("-PlainSeedArchive")
-        testStore = arguments.contains("-PlainTestStore")
-        resetStore = arguments.contains("-PlainResetStore")
         #endif
         let temporary = FileManager.default.temporaryDirectory
         if testStore {

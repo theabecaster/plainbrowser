@@ -57,7 +57,7 @@ reads the metrics with `xcrun xcresulttool get test-results metrics`, and append
 | `searchFieldMs` | `testLaunchToSearchFieldReady`: the `launch` signpost interval | target 300, fail ≥ 400 |
 | `hitchMsPerS` | `testPageScrollHitches`: `XCTHitchMetric` while scrolling a Wikipedia article (needs network). Device only: the simulator reports no hitch data. | target 5, fail ≥ 10 |
 | `galleryMs` | `testGalleryOpen`: the `gallery.show` interval, ending when the page is within 0.5 pt of its card and moving less than 0.5 pt a frame (not at Core Animation's settle of the spring's tail) | target 650, fail ≥ 800 |
-| `swipeMs` | `testBarSwipe`: the `tab.swipe` interval, the finger starting to move until the page settles. Each iteration waits out the settle before it ends: the metric drops an interval that ends after the measure block. | target 650, fail ≥ 900 |
+| `swipeMs` | `testBarSwipe`: the `tab.swipeSettle` interval, the finger lifting until the page is visibly at rest on the neighbour (within 0.5 pt, moving less than 0.5 pt a frame) and the new tab has taken the page (`tab.swipeHandoff`, also reported). The test's scripted drag is left out. Each iteration waits out the settle before it ends: the metric drops an interval that ends after the measure block. | target 450, fail ≥ 650 |
 
 - **Simulator (default):** runs on the `plain-perf-duo` simulator (iPhone Duo; `PLAIN_SIM_PREFIX`
   renames it), shut down afterwards and deleted when the run created it. Fails on a test failure or on a regression of more than 20%
@@ -66,6 +66,11 @@ reads the metrics with `xcrun xcresulttool get test-results metrics`, and append
 - **Device:** `scripts/perf-gate.sh --device` or `PLAIN_PERF_TARGET=device`. Applies the absolute
   budgets in `perf/budgets.json`. A locked or unreachable phone exits 2 with a message instead of
   hanging.
+
+The tab tests (`testGalleryOpen`, `testBarSwipe`) launch with `-PlainTestStore -PlainResetStore`
+(honored in Release builds too): an empty store on disk in the app's temporary folder, so each run
+starts from the same two tabs, and on the device the owner's own tabs are never restored, archived
+or touched.
 
 Exit codes: 0 pass, 1 budget breach, regression or test failure, 2 device not ready.
 

@@ -16,6 +16,8 @@ import Network
 /// - `/article`: a readerable article (Reader), with a link to `/b`.
 /// - `/location`: asks for the location (a permission prompt).
 /// - `/motion`: a button that asks for motion sensors (a permission prompt after a tap).
+/// - `/login`: a sign-in form with the `autocomplete` hints AutoFill reads.
+/// - `/passkey`: "Sign In with a Passkey", which asks for a passkey; the heading says how it ended.
 final class TestServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "TestServer")
@@ -158,6 +160,26 @@ final class TestServer: @unchecked Sendable {
                   () => { document.getElementById('state').textContent = 'Location allowed'; },
                   () => { document.getElementById('state').textContent = 'Location denied'; });
                 </script>
+                """))
+        case "/login":
+            return ("200 OK", html("Plain Login", """
+                <h1>Sign In</h1>
+                <form method="post" action="/a">
+                  <p><input id="user" name="username" type="email" autocomplete="username" placeholder="Email"
+                    style="font-size:20px;width:90%"></p>
+                  <p><input id="pass" name="password" type="password" autocomplete="current-password"
+                    placeholder="Password" style="font-size:20px;width:90%"></p>
+                  <p><button style="font-size:20px">Sign In</button></p>
+                </form>
+                """))
+        case "/passkey":
+            return ("200 OK", html("Plain Passkey", """
+                <h1 id="state">Passkey</h1>
+                <p><button id="go" style="font-size:22px;padding:12px 20px" onclick="
+                  navigator.credentials.get({ publicKey: { challenge: new Uint8Array(32), timeout: 5000 } })
+                    .then(() => { document.getElementById('state').textContent = 'Signed in'; })
+                    .catch(e => { document.getElementById('state').textContent = 'Passkey ' + e.name; });
+                ">Sign In with a Passkey</button></p>
                 """))
         default:
             return ("404 Not Found", html("Not Found", "<h1>Not Found</h1>"))

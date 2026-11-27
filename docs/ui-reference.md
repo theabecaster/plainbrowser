@@ -19,6 +19,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - **Address bar, two doors (Arc):** a tap on the pill opens an empty field to go somewhere new; what is submitted from a page opens a new tab (Back on its first page returns to the page). On the search engine's results page the pill shows the query, and a tap brings it back selected, to refine in the same tab. Editing the page's own address is the page sheet's host, or the page's row above the field.
 - **Automatic, with a way out:** cookie banners are answered (rejected where the banner allows it) on every site, and a foreign page offers Translate Page in its menu. Each has its switch or item on the page, never in Settings. The one hint Plain gives about a feature is a single toast the first time ever it applies ("This page is in French", Translate); after that the menu is the way.
 - **Context menus on links, tabs and favorites:** Open in New Tab, Open in Other Pane, Copy Link, Share, Close, Pin, Rename favorite.
+- **Profiles live in the tab switcher, not Settings:** with a second profile a capsule over the cards names the profile shown, and its menu switches, makes, renames and deletes profiles. While Personal is the only one, New Profile is in the switcher's More menu. Clear History and Data clears every profile.
 - **Swipe actions:** quick actions with no confirmation, for example close a tab or delete a history row.
 - **Confirmations:** only for destructive actions that affect a lot, for example Clear History and Data or Close All Tabs.
 - **Gestures are shortcuts, never the only way.** Every gesture has a menu equivalent, and menus name the gesture where it helps ("Next Tab — or swipe the address bar").
@@ -32,7 +33,10 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
   Layout Above adds a 34 pt strip under the bar from the second tab. Where the status items keep
   to a corner (the inner screen) the bar sits on their row, and nothing of Plain's is behind it:
-  no band, backing or blur at the top in any state, only the floating glass. While
+  no band, backing, blur or header-colored fill at the top in any state, only the floating
+  glass. At a page's top a site's fixed header rests under the bar and rides up with the page
+  to the top edge; mid-page it stays at the top edge under the bar, and nothing in the page moves
+  when the bar collapses or comes back. While
   reading, the address shrinks in place and then lifts away, the buttons and strip fade, and the
   page runs to the top edge under the status items. The page's first line starts under the bar
   and slides under it. To type an address, the pill still rises above the keyboard with the search

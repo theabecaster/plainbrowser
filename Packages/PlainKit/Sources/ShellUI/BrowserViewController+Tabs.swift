@@ -150,6 +150,7 @@ extension BrowserViewController {
     /// New Tab and New Private Tab: an empty tab, straight to the search field. An empty tab of the
     /// same kind already on screen is reused, so empty tabs never pile up (state rules, principle 7).
     func openNewTab(private isPrivate: Bool) {
+        OpenIntervals.begin(Signposts.newTabReady, until: UIResponder.keyboardDidShowNotification)
         if isShowingGallery { dismissGalleryFading() }
         if let current = currentTab, current.isPrivate == isPrivate, session.tabs.isEmpty(current.id) {
             beginAddressEditing()

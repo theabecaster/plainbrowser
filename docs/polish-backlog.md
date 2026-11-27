@@ -365,10 +365,8 @@ Newest feature last.
   `SystemCaptureTests` runs on simulators only; a device capture would need a throwaway install.
 ## Duo inner: no band at the top (2026-11-27)
 
-- **Header fill at rest.** On a site with a fixed or sticky header, WebKit paints the header's
-  color into the page's top inset behind the floating controls at rest (Safari does the same).
-  An inset of 0 at rest makes WebKit load pages with the first line under the row, so it stays;
-  the owner judges it on the device (docs/decisions.md, "No band at the top").
+- **Header fill at rest.** Done: the page's top inset never follows the bar (docs/decisions.md,
+  "The page's top inset never follows the bar").
 - **Portrait strip, three tabs.** The selected tab ends tight against the strip's "+" and its
   close button looks clipped where the strip stops beside the status corner (design review,
   round 1). Not changed by this lane.
@@ -390,3 +388,33 @@ Newest feature last.
   ("Private Tab", "Reopen Tab", "Downloads") fits with no scroll.
 - **Zoom row's 100%** still reads as disabled: a `UIAction` title can't be drawn in secondary
   text, and an enabled 100% would be a button that does nothing.
+
+
+## Profiles (v0.2, 2026-11-27)
+
+- **Another profile's archive from the switcher.** Archived Tabs shows the window's profile's
+  archive, so it is offered only on that profile's list; a profile whose tabs were all archived
+  needs a tab opened there first. Count each profile's archive and present the shown one's.
+- **A split showing two profiles records each visit in its own profile**, but the favorites and
+  suggestions follow the focused pane. Check on the Duo that this reads as expected.
+- **Device checks:** that WebKit removes a deleted profile's store on the first try with real
+  pages, and the cost of a second profile's first web view (its store's Networking session).
+
+## The page's top inset never follows the bar (2026-11-27)
+
+- **Smooth scroll to the very top.** A page's animated `scrollTo({top: 0, behavior: "smooth"})`
+  ends at WebKit's top (offset 0) and then steps 72.5 pt down to rest under the bar. Rare; if it
+  shows, ease the last step instead of setting it.
+- **Status bar over the page on phones.** The system's soft top edge effect is back there for
+  the clock's legibility (Safari's look); check on the device that it doesn't read as a band.
+- **Fixed header behind the controls mid-page.** Revealed mid-page, the controls float over a
+  site's fixed header (its buttons are reachable once the bar hides or at the page's top).
+- **Gallery thumbnails** now include the status bar's strip of the page on phones (the inner
+  screen already did, UX audit item 25).
+- **Motion on the device.** The simulator's recorder dropped every in-between frame of the
+  collapse under the machine's load (1.4 s gaps), so the strips show only rest states: the header
+  moves with the page in each, and the inset no longer changes at all. Check the collapse and
+  reveal over a fixed header on the Duo (design review, round 2).
+- **Status items over a colored header.** On the inner screen the system's status items turn black
+  over a red header at rest and while reading; check on the device that the switch doesn't flash
+  during motion (design review, round 1).

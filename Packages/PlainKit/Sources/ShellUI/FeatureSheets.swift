@@ -18,6 +18,11 @@ import WebKit
 public final class FeatureSheets {
     private let addressBar: LiveAddressBarData
     private var database: AppDatabase?
+    /// The window's profile, and its history database once open (the main one for Personal).
+    private var profile = Profile.defaultID
+    private var profileDatabase: AppDatabase?
+    /// Every profile's history database, and the profile list, for Clear History and Data.
+    private var profiles: (databases: ProfileDatabases, ids: () -> [ProfileID])?
     /// Kept across presentations, so a save still queued from the last visit is written (and
     /// read back) before anything the next visit does.
     private var settingsModel: SettingsModel?
@@ -41,7 +46,32 @@ public final class FeatureSheets {
         await didClearBrowsingData()
     }
 
-    var isReady: Bool { database != nil }
+    /// The profiles the window has, for Clear History and Data.
+    func attachProfiles(_ databases: ProfileDatabases, ids: @escaping () -> [ProfileID]) {
+        profiles = (databases, ids)
+    }
+
+    /// History and favorites now show `id`'s, from `database` (nil while it opens: the sheets
+    /// wait rather than show another profile's).
+    func useProfile(_ id: ProfileID, database: AppDatabase?) {
+        guard id != profile || database !== profileDatabase else { return }
+        profile = id
+        profileDatabase = id == Profile.defaultID ? nil : database
+        favoritesModel = nil
+    }
+
+    /// The window's profile's history and favorites.
+    private var activeDatabase: AppDatabase? {
+        profile == Profile.defaultID ? database : profileDatabase.flatMap { database != nil ? $0 : nil }
+    }
+
+    /// Every profile but Personal with its history database, read when a clear runs.
+    private func otherProfileDatabases() async -> [(ProfileID, AppDatabase)] {
+        guard let profiles else { return [] }
+        return await profiles.databases.openDatabases(of: profiles.ids())
+    }
+
+    var isReady: Bool { activeDatabase != nil }
 
     /// Writes every visit the shell has queued; history reads and deletes wait for it, so a
     /// page just visited shows and a cleared visit can't land late.
@@ -53,17 +83,20 @@ public final class FeatureSheets {
         if let settingsModel { return settingsModel }
         guard let database else { return nil }
         let store = LiveSettingsStore(database: database) { [addressBar] in addressBar.apply($0) }
-        // Read when the clear runs: the model is kept, and the hook may be set after it was made.
-        let clearer = LiveBrowsingDataClearer(database: database, settle: settleHistory) { [weak self] in
-            await self?.runClearHook()
-        }
+        // Read when the clear runs: the model is kept, and the hook and the profiles may be set
+        // after it was made.
+        let clearer = LiveBrowsingDataClearer(
+            database: database, settle: settleHistory,
+            otherProfiles: { [weak self] in await self?.otherProfileDatabases() ?? [] },
+            cleared: { [weak self] in await self?.runClearHook() }
+        )
         let model = SettingsModel(store: store, clearer: clearer)
         settingsModel = model
         return model
     }
 
     func makeHistoryStore() -> ShellHistoryStore? {
-        database.map { ShellHistoryStore(database: $0, settle: settleHistory) }
+        activeDatabase.map { ShellHistoryStore(database: $0, settle: settleHistory) }
     }
 
     #if os(iOS)
@@ -92,7 +125,7 @@ public final class FeatureSheets {
 
     /// The favorites editor.
     func favoritesEditor(onDone: @escaping () -> Void) -> UIViewController? {
-        guard let database else { return nil }
+        guard let database = activeDatabase else { return nil }
         let model = favoritesModel ?? FavoritesModel(store: database)
         favoritesModel = model
         return Self.sheet(FavoritesEditor(model: model, onDone: onDone), identifier: "favoritesSheet")
@@ -103,8 +136,8 @@ public final class FeatureSheets {
         footer: String, onRestore: @escaping (ArchivedTab) -> Void, onDelete: @escaping ([TabID]) -> Void,
         onDone: @escaping () -> Void
     ) -> UIViewController? {
-        guard let database else { return nil }
-        let model = ArchiveModel(store: database, onRestore: onRestore, onDelete: onDelete)
+        guard let database, activeDatabase != nil else { return nil }
+        let model = ArchiveModel(store: ProfileArchive(database: database, profile: profile), onRestore: onRestore, onDelete: onDelete)
         return Self.sheet(ArchiveView(model: model, footer: footer, onDone: onDone), identifier: "archiveSheet")
     }
 
@@ -172,26 +205,40 @@ nonisolated struct ShellHistoryStore: HistoryStoring {
 nonisolated struct LiveBrowsingDataClearer: BrowsingDataClearing {
     let database: AppDatabase
     let settle: @MainActor @Sendable () async -> Void
+    /// Every profile but Personal, with its history database: they are cleared too.
+    var otherProfiles: @MainActor @Sendable () async -> [(ProfileID, AppDatabase)] = { [] }
     var cleared: @Sendable () async -> Void = {}
 
     func clearHistoryAndData() async throws {
         await settle()
-        try await database.clearHistory(since: nil)
-        try await database.clearFavicons()
+        let others = await otherProfiles()
+        for history in [database] + others.map(\.1) {
+            try await history.clearHistory(since: nil)
+            try await history.clearFavicons()
+        }
         #if os(iOS)
-        await Self.removeWebsiteData()
+        await Self.removeWebsiteData(profiles: others.map(\.0))
         #endif
         await cleared()
     }
 
     #if os(iOS)
-    /// The store the tabs share (`AppWebsiteData.store`): in an isolated test run that is a
-    /// throwaway store, so clearing never reaches the owner's cookies and logins.
+    /// The stores the tabs use (`AppWebsiteData`): Personal's and each profile's. In an isolated
+    /// test run those are throwaway stores, so clearing never reaches the owner's cookies and
+    /// logins.
     @MainActor
-    private static func removeWebsiteData() async {
-        await AppWebsiteData.store.removeData(
-            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast
-        )
+    private static func removeWebsiteData(profiles: [ProfileID]) async {
+        await AppWebsiteData.removeAllData(profiles: profiles)
     }
     #endif
+}
+
+/// The archive screen's rows: the window's profile's archived tabs only.
+nonisolated struct ProfileArchive: ArchiveStoring {
+    let database: AppDatabase
+    let profile: ProfileID
+
+    func archivedTabs(matching query: String, limit: Int) async throws -> [ArchivedTab] {
+        try await database.searchArchivedTabs(query, profile: profile, limit: limit)
+    }
 }

@@ -49,6 +49,9 @@ public final class Tab: Identifiable {
     /// private tab, and nothing about it is written to disk (state files, thumbnails, per-site
     /// choices).
     public let isPrivate: Bool
+    /// The profile whose website data store the tab's pages use (unless private). A link or a
+    /// popup it opens is the same profile's.
+    public let profileID: ProfileID
 
     public internal(set) var url: URL?
     public internal(set) var title = ""
@@ -127,10 +130,14 @@ public final class Tab: Identifiable {
     /// (`FixedChoices.translationFollowsTab`).
     @ObservationIgnored var followsTranslation: (source: Locale.Language, target: Locale.Language)?
 
-    init(id: UUID, openerID: UUID?, isPrivate: Bool = false, pool: WebViewPool, restoring state: TabRestorationState?) {
+    init(
+        id: UUID, openerID: UUID?, isPrivate: Bool = false, profileID: ProfileID = Profile.defaultID, pool: WebViewPool,
+        restoring state: TabRestorationState?
+    ) {
         self.id = id
         self.openerID = openerID
         self.isPrivate = isPrivate
+        self.profileID = profileID
         self.pool = pool
         restoration = state
         if let state {

@@ -80,6 +80,8 @@ public final class TabGalleryViewController: UIViewController {
     private static let newTabCardID = UUID()
     private let toast = ReopenToast()
     private let emptyView = GalleryEmptyView()
+    /// The profile switcher over the cards, with a second profile.
+    private let profileButton = GalleryProfileButton()
     private var scrollInterval: OSSignpostIntervalState?
     private var didFocusSelection = false
 
@@ -159,6 +161,13 @@ public final class TabGalleryViewController: UIViewController {
 
         toast.button.addAction(UIAction { [weak self] _ in self?.reopenClosedTab(offered: true) }, for: .primaryActionTriggered)
         root.addSubview(toast)
+
+        profileButton.isHidden = true
+        profileButton.button.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
+            Signposts.signposter.emitEvent(Signposts.galleryMenu, "profiles")
+            completion(self?.dataSource.profileMenuElements() ?? [])
+        }])
+        root.addSubview(profileButton)
     }
 
     override public func viewDidLoad() {
@@ -202,6 +211,11 @@ public final class TabGalleryViewController: UIViewController {
             x: (midX - toastSize.width / 2).rounded(), y: bottomBar.frame.minY - Spacing.m - toastSize.height,
             width: toastSize.width, height: toastSize.height
         )
+        let profileSize = profileButton.sizeThatFits(CGSize(width: min(bounds.width - Spacing.xl * 2, 280), height: bounds.height))
+        profileButton.frame = CGRect(
+            x: (midX - profileSize.width / 2).rounded(), y: safe.top + Spacing.s,
+            width: profileSize.width, height: profileSize.height
+        )
         let emptySize = emptyView.sizeThatFits(CGSize(width: min(bounds.width - Spacing.xl * 2, 360), height: bounds.height))
         emptyView.frame = CGRect(
             x: (midX - emptySize.width / 2).rounded(), y: ((bounds.height - emptySize.height) / 2).rounded(),
@@ -214,6 +228,9 @@ public final class TabGalleryViewController: UIViewController {
             isCompactWidth: traitCollection.horizontalSizeClass != .regular,
             titleLineHeight: TabCardView.titleFont(for: traitCollection).lineHeight,
             bottomChrome: max(0, bounds.height - safe.bottom - bottomBar.frame.minY),
+            // With a second profile the switcher's room stays reserved, private list or not, so
+            // the cards never jump when it hides.
+            topChrome: dataSource.profileCount > 1 ? GalleryProfileButton.reserve : 0,
             centeredRow: showsNewTabCard ? slotCount : 0
         )
         if next != metrics { apply(next) }
@@ -580,6 +597,13 @@ public final class TabGalleryViewController: UIViewController {
         bottomBar.newTabButton.isHidden = !rules.newTabButton
         bottomBar.doneButton.isHidden = !rules.done
         bottomBar.menuButton.isHidden = !rules.more
+        profileButton.isHidden = !rules.profileSwitcher
+        if rules.profileSwitcher, profileButton.title != dataSource.profileTitle {
+            profileButton.title = dataSource.profileTitle
+            view.setNeedsLayout()
+        }
+        if !isPrivate, emptyView.setText(dataSource.emptyListText) { view.setNeedsLayout() }
+        if (dataSource.profileCount > 1 ? GalleryProfileButton.reserve : 0) != metrics.topChrome { view.setNeedsLayout() }
         if isEmpty { toast.hide(animated: false) }
     }
 
@@ -592,6 +616,7 @@ public final class TabGalleryViewController: UIViewController {
         state.selectionInList = selectedID.map { items[$0] != nil } ?? false
         state.hasClosed = dataSource.canReopenClosedTab
         state.hasArchived = dataSource.canShowArchive
+        state.profileCount = dataSource.profileCount
         return state
     }
 
@@ -689,6 +714,18 @@ public final class TabGalleryViewController: UIViewController {
         Haptic.selection.play()
         toast.hide(animated: true)
         dataSource.setShowingPrivateTabs(isPrivate)
+        crossfadeToList()
+    }
+
+    /// The shell changed which list the data source shows (another profile's, from the
+    /// switcher): the cards cross-fade to it, as for the private toggle.
+    public func showList() {
+        Haptic.selection.play()
+        toast.hide(animated: true)
+        crossfadeToList()
+    }
+
+    private func crossfadeToList() {
         Motion.crossfade(view, changes: { [weak self] in
             guard let self else { return }
             reloadTabs(animated: false)
@@ -789,6 +826,15 @@ public final class TabGalleryViewController: UIViewController {
             archive.accessibilityIdentifier = "gallery.archive"
             elements.append(archive)
         }
+        if rules.newProfile {
+            let profile = UIAction(title: String(localized: "New Profile…"), image: UIImage(systemName: "person.crop.circle.badge.plus")) {
+                [weak self] _ in
+                self?.toast.hide(animated: false)
+                self?.dataSource.newProfile()
+            }
+            profile.accessibilityIdentifier = "gallery.newProfile"
+            elements.append(profile)
+        }
         guard rules.closeAllTabs else { return elements }
         let closeAll = UIAction(title: "Close All Tabs", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
             guard let self else { return }
@@ -859,7 +905,7 @@ public final class TabGalleryViewController: UIViewController {
     }
 
     /// The views a transition zooms and fades: the cards, then the floating controls.
-    var transitionContent: [UIView] { [scrollView, bottomBar, toast] }
+    var transitionContent: [UIView] { [scrollView, bottomBar, toast, profileButton] }
 
     // MARK: Reorder support
 

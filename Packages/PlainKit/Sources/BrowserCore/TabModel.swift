@@ -35,6 +35,9 @@ public struct TabEntry: Identifiable, Hashable, Sendable, Codable {
     public var isPinned: Bool
     /// Private tabs live in their own list and are never written to disk.
     public let isPrivate: Bool
+    /// The profile whose cookies, history and favorites the tab uses. A private tab records the
+    /// profile it was opened from but uses the private session's store, never the profile's.
+    public let profileID: ProfileID
     public var createdAt: Date
     /// The last time the tab was on screen. Auto-archive counts from here.
     public var lastActiveAt: Date
@@ -42,8 +45,8 @@ public struct TabEntry: Identifiable, Hashable, Sendable, Codable {
 
     public init(
         id: TabID = TabID(), url: URL? = nil, title: String? = nil, openerID: TabID? = nil,
-        isPinned: Bool = false, isPrivate: Bool = false, createdAt: Date, lastActiveAt: Date? = nil,
-        thumbnail: TabThumbnail? = nil
+        isPinned: Bool = false, isPrivate: Bool = false, profileID: ProfileID = Profile.defaultID, createdAt: Date,
+        lastActiveAt: Date? = nil, thumbnail: TabThumbnail? = nil
     ) {
         self.id = id
         self.url = url
@@ -51,6 +54,7 @@ public struct TabEntry: Identifiable, Hashable, Sendable, Codable {
         self.openerID = openerID
         self.isPinned = isPinned
         self.isPrivate = isPrivate
+        self.profileID = profileID
         self.createdAt = createdAt
         self.lastActiveAt = lastActiveAt ?? createdAt
         self.thumbnail = thumbnail
@@ -64,17 +68,25 @@ public struct TabEntry: Identifiable, Hashable, Sendable, Codable {
 /// a plain `select` act on it.
 public struct TabWindow: Identifiable, Hashable, Sendable {
     public let id: WindowID
-    /// Regular tabs in order, pinned ones first.
+    /// Regular tabs of every profile in order, pinned ones first. Each profile's tabs keep their
+    /// own order inside it; `TabStore.tabs(in:private:profile:)` reads one profile's.
     public internal(set) var tabIDs: [TabID]
+    /// The window's profile: the profile of the regular tab last shown in its focused pane. New
+    /// tabs open in it and the gallery opens on its tabs.
+    public internal(set) var profileID: ProfileID
     /// Private tabs in order. Never persisted.
     public internal(set) var privateTabIDs: [TabID]
     /// The tab each pane shows; nil shows the start page. One or two panes.
     public internal(set) var panes: [TabID?]
     public internal(set) var focusedPane: Int
 
-    public init(id: WindowID = WindowID(), tabIDs: [TabID] = [], privateTabIDs: [TabID] = [], panes: [TabID?] = [nil], focusedPane: Int = 0) {
+    public init(
+        id: WindowID = WindowID(), tabIDs: [TabID] = [], privateTabIDs: [TabID] = [], panes: [TabID?] = [nil],
+        focusedPane: Int = 0, profileID: ProfileID = Profile.defaultID
+    ) {
         self.id = id
         self.tabIDs = tabIDs
+        self.profileID = profileID
         self.privateTabIDs = privateTabIDs
         self.panes = panes.isEmpty ? [nil] : panes
         self.focusedPane = min(max(0, focusedPane), self.panes.count - 1)
@@ -128,12 +140,14 @@ public struct WindowSession: Hashable, Sendable {
     public var tabIDs: [TabID]
     public var panes: [TabID?]
     public var focusedPane: Int
+    public var profileID: ProfileID
 
-    public init(id: WindowID, tabIDs: [TabID], panes: [TabID?], focusedPane: Int) {
+    public init(id: WindowID, tabIDs: [TabID], panes: [TabID?], focusedPane: Int, profileID: ProfileID = Profile.defaultID) {
         self.id = id
         self.tabIDs = tabIDs
         self.panes = panes
         self.focusedPane = focusedPane
+        self.profileID = profileID
     }
 }
 
@@ -145,11 +159,17 @@ public struct TabSession: Hashable, Sendable {
     public var tabs: [TabEntry]
     /// Oldest first; the last batch reopens first.
     public var recentlyClosed: [ClosedTabBatch]
+    /// Profiles in the order the switcher lists them, Personal first. Empty in a session saved
+    /// before profiles: the store then has Personal alone.
+    public var profiles: [Profile]
 
-    public init(windows: [WindowSession] = [], tabs: [TabEntry] = [], recentlyClosed: [ClosedTabBatch] = []) {
+    public init(
+        windows: [WindowSession] = [], tabs: [TabEntry] = [], recentlyClosed: [ClosedTabBatch] = [], profiles: [Profile] = []
+    ) {
         self.windows = windows
         self.tabs = tabs
         self.recentlyClosed = recentlyClosed
+        self.profiles = profiles
     }
 
     public static let empty = TabSession()
@@ -165,6 +185,9 @@ public enum TabChange: Sendable, Equatable {
     case unarchive([TabID])
     /// Delete these archived tabs; nil deletes the whole archive.
     case deleteArchived([TabID]?)
+    /// A profile was deleted: its archived tabs go with it (its open and recently closed tabs
+    /// already left the session).
+    case deleteProfile(ProfileID)
 }
 
 /// Where `TabStore` sends its changes. Storage's `TabSessionWriter` implements it.

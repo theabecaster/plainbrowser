@@ -1320,7 +1320,9 @@ simulator's 24 pt status bar had hidden this.
     line clear. WebKit then loads each page scrolled to its obscured top, the first line and the
     header under the row (capture, round 2), so it was reverted. Removing that fill would need a
     scroll correction after every load and history restore (a visible jump) or WebKit SPI; left
-    for the owner to judge on the device. Safari paints the same fill.
+    for the owner to judge on the device. Safari paints the same fill. **Superseded** by "The
+    page's top inset never follows the bar" below: the owner judged it ("that bar needs to be
+    removed"), and the correction is done in the same pass as WebKit's move, so nothing shows.
   - **No scroll edge effect on the page or the reader, top or bottom**
     (`UIScrollView.hideChromeEdgeEffects`), on every attached page, the split's other pane and the
     reader. The bottom one was already off (the page runs under the pill); the chrome's
@@ -1560,3 +1562,127 @@ Research: docs/research/bookmarks.md.
 - **Signposts:** `readingList.save` (interval, "copy" or "link"), `readingList.remove`,
   `readingList.show`, `readingList.load` (interval), `readingList.open`, `readingList.edit`,
   `readingList.offlineCopy` (interval).
+
+
+## Profiles, no tab groups (2026-11-27)
+
+Research: docs/research/groups-profiles.md.
+
+- **Profiles only.** A profile is its own open tabs, archive, recently closed tabs, history,
+  favorites, typed-input learning, and its own website data store (cookies, logins, caches, site
+  storage). Settings, per-site choices (zoom, Desktop Site, blocking, permissions), downloads and
+  private tabs belong to the app. **No tab groups:** tabs archive themselves after a day, so the
+  list stays short, and groups are where Safari's iPhone confusion and "lost tabs" come from. Two
+  logins to one site is the need people state, and only a separate store meets it.
+- **Personal is the first profile and keeps everything Plain had** (`Profile.defaultID`, fixed):
+  the default website data store and the main database. It can be renamed, never deleted.
+  Nothing changes for someone who never makes a second profile: no switcher, no extra database
+  opens, the warm web view stays Personal's.
+- **Each other profile's website data store is named by an identifier**
+  (`WKWebsiteDataStore(forIdentifier:)`, iOS 17), the profile's id, made with its first web view
+  (`AppWebsiteData.store(forProfile:)`). A tab's popups and links use its configuration, so they
+  stay in its profile. Link previews, the reader and Copy Image's cookies use the tab's store.
+- **Each other profile's history and favorites live in a database of their own**
+  (`Profiles/<id>/Plain.sqlite`, `ProfileDataLocation`), same schema, opened off the main thread
+  the first time the window shows one of its tabs. Why not a profile column: history is unique
+  by address and its full-text index is synced to it, so a column would mean rebuilding those
+  tables and a filter in every query; a folder per profile makes deletion complete by
+  construction. Tabs, the archive and the profile list stay in the main database (migration
+  `v9.profiles`; every older row is Personal's), so `TabStore` remains the one owner of tabs.
+- **The window's profile is the profile of the tab on screen.** `TabWindow.tabIDs` holds every
+  profile's tabs in order; `tabs(in:profile:)` reads one profile's. Showing a regular tab moves the
+  window to its profile; new tabs, the bar swipe, Close All Tabs, Reopen Closed Tab, the archive
+  and the start screen follow the window's profile. Closing a tab never shows another profile's
+  page in its place. A split may show two profiles side by side (each web view has its own
+  store); a visit is recorded in its own tab's profile.
+- **Switched from the tab switcher.** With a second profile, a capsule over the cards names the
+  profile listed ("Work ⌄"); its menu lists the profiles (the shown one checked), New Profile,
+  Rename Profile and Delete Profile. Picking one lists its tabs, like the private toggle: nothing
+  else changes until a card or New Tab is opened there. Until then New Profile is in the gallery's
+  More menu. The switcher's room stays reserved while the private list shows, so the cards never
+  jump. Not in Settings: options live on the thing they act on (docs/ui-reference.md), and
+  Safari's Settings detour is the friction reviewers name.
+- **No surprises:** the start screen says "Start with a search or an address in Work." once
+  there are two profiles; an empty profile list says "Tabs in Work show up here, with Work's own
+  logins and history."; the gallery opens on the window's profile (or, with nothing there, the
+  profile used last). **Delete asks once** and counts what goes: "This deletes 3 open tabs,
+  archived tabs, history, favorites, website logins and site data in Work. This can't be undone."
+  Delete Profile sits alone in the menu's last section. Then its tabs close without a Reopen (their data is gone), its history database and
+  its website data store are deleted after its web views are released. WebKit refuses to remove a
+  store still in use, so the removal is tried again a moment later and, failing that, at the next
+  launch (`removeLeftoverProfileData`); a profile folder left by a crash goes at launch too.
+- **Private tabs stay one mode for every profile**: one list and one in-memory store. The
+  switcher hides over them; deleting a profile leaves them open.
+- **Limits (FixedChoices):** six profiles (the menu fits the Duo's outer screen), names up to 24
+  characters, unique ignoring case.
+- **Test isolation:** an isolated run maps each profile to a fresh store identifier recorded
+  with the run's own store and removed with it (`IsolatedStores`); profile databases live in the
+  run's temporary folder or in memory. `check-isolation.zsh` allows the identifier APIs only in
+  `AppWebsiteData` and checks the mapping.
+- **Widgets, Spotlight and Shortcuts follow the window's profile.** `SystemSync` follows the
+  favorites of the window's profile's database, switching when the window moves to another
+  profile, so the Search widget, Spotlight and "Open <favorite>" offer the favorites you see above
+  the keyboard. Their commands (search, open a link or a favorite) and links from other apps open
+  in the window's profile, as a typed address would. Handoff sends the page on screen, whichever
+  profile it is in; private tabs never.
+- **Perf:** nothing on the launch path for one profile. A second profile's database opens once
+  per launch, off the main thread (`profile.dataOpen`); its store is made with its first web
+  view. Rules cost one extra pass over the window's tabs only while two profiles exist.
+
+## The page's top inset never follows the bar (2026-11-27)
+
+Owner, on the latest beta, Duo inner screen: "The bar under the URL text field is still there
+when the text field is present, and the transition to the no-bar state is terrible. I think that
+bar needs to be removed and the address URL can work normally." UX audit, the same family on
+phones and the Duo's outer screen: a paper (navy in dark, lilac in private) strip filled the status
+bar above every page. Research: docs/research/inset-fill.md.
+
+- **Cause.** WebKit's fixed color extension fills any obscured inset above a fixed or sticky
+  element with the element's color. At rest the inner screen's obscured top was the controls'
+  bottom (72.5 pt), so a fixed header sat under the controls with 72.5 pt of its color above it:
+  the bar. When the bar came to rest collapsed the inset went to 0 in one step, so the header
+  jumped 72.5 pt and the fill vanished after the controls had gone: the transition. On phones the
+  panes started under the status bar and the root view's paper showed above them.
+- **Chosen: the bar floats over the page and gives it no inset of its own.** Under the top bar
+  the obscured top is the status items' strip in every state (`TopChromeGeometry.obscuredInset`):
+  0 in the status zone, the status bar's height under a full-width status bar. No public API turns
+  the fill off (`_shouldSuppressTopColorExtensionView` is SPI) and the viewport insets don't move
+  fixed elements, so an obscured top that never covers the controls is the only public way. With
+  nothing changing, nothing can jump: a collapse and a reveal move only the glass (transform and
+  alpha), the page relayouts never.
+- **The first line still starts under the controls.** The scroll range starts under the
+  expanded bar (`contentInset.top` 72.5, as before). WebKit's own top is minus the obscured inset:
+  a load's first commit, a history restore and a page's `scrollTo(0, 0)` set the offset to
+  exactly 0. `UIScrollView.keepPageTopUnderBar` moves such a move on to the range's start inside
+  the same `scrollViewDidScroll`, before the frame is drawn (WebKit reads the corrected offset for
+  its visible-rect update). Moves under the finger, a coast, a bounce and zooming are left alone.
+  Every page under the top bar gets it, a split's other pane (its scroll view's delegate is now
+  the browser too; the other callbacks still act on the focused page only) and the reader.
+- **A fixed header at the page's top rests under the controls, not behind them.** WebKit keeps
+  the layout viewport inside the document while the page sits above its scroll origin, so at the
+  top a fixed header sits at the document's top (72.5 pt, under the row, the page's own
+  background above it) and rides up with the page to the top edge as it scrolls: one continuous
+  motion, like a sticky header. Measured on the simulator (captures below).
+- **Phones and the Duo's outer screen: the page runs under the status bar**, as in Safari. The
+  panes start at the root view's top on every screen; the obscured top is the status bar's height
+  (`pageStatusInset`) in every state, and the scroll view's safe-area adjustment puts the first
+  line under it, so WebKit's top and the range's start agree and no correction is needed. A
+  fixed header rests just under the clock and WebKit extends its color behind the status bar, as
+  Safari does; that strip is the system's, not Plain's, and a header under the clock would lose
+  its buttons to the status bar's tap target. The bottom bar's own rules are unchanged.
+- **Cost.** At rest mid-page (a reveal) the floating controls sit over a fixed header, as the
+  glass floats over the page everywhere else; scroll to the top and it comes out from under them.
+  A page's scroll position at the top reads as negative (the page sits above WebKit's origin by
+  the bar's height). A smooth programmatic scroll to
+  the very top ends with a 72.5 pt step (rare: WebKit animates it, and only its last frame lands
+  on 0).
+- **Phones and the outer screen get the system's top edge effect back**
+  (`UIScrollView.showStatusEdgeEffect`): with the page under the status bar, the clock sat on the
+  page's text with nothing behind it (capture). Its soft blur covers the scroll view's top inset,
+  which there is the status bar alone, as in Safari; it is the system's, not a band of Plain's.
+  Under the inner screen's top bar it stays off, since that inset is the bar's.
+- **Captures** (simulator, landscape inner screen with the device's forced corner, the outer
+  screen and iPhone 17; fixtures `/fixed-header`, `/sticky-header`, `/dark-header`, `/long`):
+  before, a red band filled 0–72.5 behind the controls at rest and the header jumped to the top
+  edge in one frame at collapse; after, nothing above the header at rest, the header rides with
+  the page, a fresh load and Back show the first line under the controls from the first frame.

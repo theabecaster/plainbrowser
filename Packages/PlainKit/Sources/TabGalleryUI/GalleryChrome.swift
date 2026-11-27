@@ -233,6 +233,17 @@ final class GalleryEmptyView: UIView {
         setNeedsLayout()
     }
 
+    /// The regular list's sentence: the data source's (a profile with no tabs yet), else the
+    /// default.
+    @discardableResult
+    func setText(_ text: String?) -> Bool {
+        let text = text ?? "Your open tabs show up here."
+        guard label.text != text else { return false }
+        label.text = text
+        setNeedsLayout()
+        return true
+    }
+
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let text = label.sizeThatFits(CGSize(width: size.width, height: .greatestFiniteMagnitude))
         let buttonSize = button.sizeThatFits(size)

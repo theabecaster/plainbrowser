@@ -52,7 +52,11 @@ final class EngineTests: XCTestCase {
             // Close the menu with a tap above it.
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
             // The page sheet goes down before the next tap can reach the bar.
-            _ = app.buttons["menu.settings"].waitForNonExistence(timeout: 3)
+            // A first tap may only close the Site Settings menu over it; a second closes the sheet.
+            if !app.buttons["menu.settings"].waitForNonExistence(timeout: 1.5) {
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+                _ = app.buttons["menu.settings"].waitForNonExistence(timeout: 3)
+            }
             return nil
         }
         return action

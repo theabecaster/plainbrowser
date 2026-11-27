@@ -128,6 +128,18 @@ public protocol TabGalleryDataSource: AnyObject {
     func returnToPage()
     /// The Reopen toast after a close: brings back exactly that close, if it still can.
     @discardableResult func reopenOfferedTab() -> UUID?
+
+    /// Profiles there are (0: the data source has none). With one, the More menu offers New
+    /// Profile; with two or more, the switcher shows over the cards.
+    var profileCount: Int { get }
+    /// The name of the profile whose tabs the gallery lists.
+    var profileTitle: String? { get }
+    /// The switcher's menu: the profiles, New Profile, and Rename and Delete for the shown one.
+    func profileMenuElements() -> [UIMenuElement]
+    /// New Profile from the More menu.
+    func newProfile()
+    /// The empty regular list's sentence (a profile with no tabs yet); nil for the default.
+    var emptyListText: String? { get }
 }
 
 extension TabGalleryDataSource {
@@ -140,5 +152,10 @@ extension TabGalleryDataSource {
     public func showArchive() {}
     public func returnToPage() {}
     @discardableResult public func reopenOfferedTab() -> UUID? { reopenClosedTab() }
+    public var profileCount: Int { 0 }
+    public var profileTitle: String? { nil }
+    public func profileMenuElements() -> [UIMenuElement] { [] }
+    public func newProfile() {}
+    public var emptyListText: String? { nil }
 }
 #endif

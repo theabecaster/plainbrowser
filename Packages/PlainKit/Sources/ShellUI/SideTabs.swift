@@ -44,9 +44,9 @@ final class SideTabs: SideTabsDataSource {
 
 extension EngineTabs {
     /// The window's tabs as the gallery and the sidebar show them.
-    func galleryItems(private isPrivate: Bool) -> [TabGalleryItem] {
+    func galleryItems(private isPrivate: Bool, profile: ProfileID? = nil) -> [TabGalleryItem] {
         // An empty tab is never a card or a row (docs/state-rules.md, principle 7).
-        pageEntries(private: isPrivate).map { entry in
+        pageEntries(private: isPrivate, profile: profile).map { entry in
             let tab = existingTab(entry.id)
             return TabGalleryItem(
                 id: entry.id,

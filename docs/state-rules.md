@@ -61,7 +61,8 @@ Sources behind these choices are in section 9.
 |---|---|
 | `start` | No tab on screen, or the tab on screen has no address and is not loading. The start screen shows. |
 | `page` | The tab on screen has an address: loaded, loading, failed or crashed. |
-| `others` | Open tabs besides the one on screen, regular and private together. An empty tab never counts (principle 7). |
+| `others` | Open tabs besides the one on screen, regular and private together, of every profile (the switcher is the way to another profile's). An empty tab never counts (principle 7). |
+| `profile` | The window's profile: the profile of the regular tab last shown in the focused pane. New tabs, the bar swipe, Close All Tabs, Reopen Closed Tab, the archive and the start screen use its tabs. |
 | `list` | The tab on screen's own list (regular or private), which the bar swipe moves through. |
 | `closed` | The recently closed stack holds a regular batch. |
 | `archived` | The archive holds at least one tab. Needs a cheap count from Storage. |
@@ -123,7 +124,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Pill | placeholder "Search or enter address" | host, "Not Secure —" first on http, mixed content or a passed certificate; on a failed page the address that was tried | Never hidden by a mode; while reading it may sink away (below) | The one way to search. |
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
-| Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. |
+| Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. With two or more profiles the sentence names the window's profile ("Start with a search or an address in Work."), so a search never starts in the wrong one unnoticed. |
 | Start screen shortcuts (under the Search button) | Private Tab always (New Tab on an empty private tab); Reopen Closed Tab with `closed`; Archived Tabs with `archived`. Only while the keyboard is down. | — | | Small, quiet, one tap: the tabs items in plain sight when no switcher shows (owner). |
 | Pull to refresh | off | on a loaded or loading page; off on failed and crashed pages (their Try Again / Reload owns it) and in the reader | Off | Nothing to reload on Start; a second reload control next to Try Again is noise. |
 | Bar swipe sideways | to neighbours in `list` | to neighbours in `list` | Rubber-band with no neighbour | The same gesture as on a page. Leaving an empty tab drops it. |
@@ -157,20 +158,23 @@ page shorter than two screens (the end, where the bar comes back, is already nea
 The inset changes once per motion, never per frame (docs/plan.md, engine rule 4): when the bar
 comes back (to the pill or expanded from further down) it changes as the motion starts, so a fixed
 footer moves up in the frame the bar starts rising and the bar slides in under it; when the bar
-goes away it changes as the motion ends, so the footer never sits under a bar still on screen. The
-same holds for the top bar on the Duo's inner screen. Under Reduce Motion, hiding and revealing are a
-crossfade.
+goes away it changes as the motion ends, so the footer never sits under a bar still on screen.
+The top bar on the Duo's inner screen changes no inset at all (below). Under Reduce Motion, hiding
+and revealing are a crossfade.
 
 **Duo inner screen (top bar).** The same three states drive the top bar. Where the status items
 keep to a corner (the Duo's inner screen) the row sits on their row, clear of the corner, and the
 page runs to the top edge: Expanded is the row (Back/Forward, the pill, Tabs/Share/More) and the
-strip, page inset = their bottom; Pill shrinks the address in place on the row, buttons and strip
-faded; Hidden lifts it off the top edge. Pill and Hidden give the page the whole screen: the page
-and any fixed header run to the top edge under the status items (top inset 0). In no state does
-a band, backing or scroll edge effect of Plain's sit at the top, only the floating glass (owner,
-2026-11-27: "I don't like that bar that stays there"). Under a full-width status bar the row sits under it, Pill tucks the address
-under the status bar, and Hidden leaves only the status bar. Same triggers and the same
-never-hidden list.
+strip, and a fresh page's first line starts under them; Pill shrinks the address in place on the
+row, buttons and strip faded; Hidden lifts it off the top edge. The page's top inset is the same in
+every state (`obscuredContentInsets.top` 0): the bar floats over the page, so the page and any
+fixed header run to the top edge under the status items, a collapse or reveal moves nothing in
+the page, and WebKit fills no band of a header's color behind the controls. In no state does a
+band, backing or scroll edge effect sit at the top, only the floating glass (owner, 2026-11-27:
+"I don't like that bar that stays there", "that bar needs to be removed"). Under a full-width
+status bar the row sits under it, the page's top inset is the status bar in every state, Pill
+tucks the address under the status bar, and Hidden leaves only the status bar. Same triggers and
+the same never-hidden list.
 
 ## 4. The page sheet (More, and a long press on the pill)
 
@@ -217,7 +221,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | New Private Tab | Hidden when the tab on screen is an empty private tab | Same. |
 | Previous Tab / Next Tab | Shown when `list` has 2 or more tabs; each dims at its end | A pair, so it keeps its shape. Subtitles name the swipe. |
 | Show All Tabs | `others ≥ 1`, or a page on screen (with side tabs: `others ≥ 1`, as the sidebar already lists a lone tab) | Same predicate as the swipe up. |
-| Reopen Closed Tab | `closed` | The way back after a close, outside the gallery too. Today only the gallery and the toast have it. |
+| Reopen Closed Tab | `closed` in the window's profile | The way back after a close, outside the gallery too. Another profile's close never comes back here. |
 | Archived Tabs | `archived` | Today the archive is reachable only from the gallery, so with no open tabs it cannot be reached. |
 | Close Tab | `page` | Closing an empty tab does nothing useful; it goes away by itself. |
 
@@ -267,7 +271,12 @@ its address, Back and Forward, the tabs slot; nothing in the bar moves when the 
 
 | Control | Rule | Why |
 |---|---|---|
-| List shown first | Decided after an empty tab on screen is dropped: the list of the tab on screen if it still has tabs, else the other list. | Never open on an empty list when the other one has tabs (an empty regular tab with private pages open opens the private list, and the reverse). |
+| List shown first | Decided after an empty tab on screen is dropped: the list of the tab on screen if it still has tabs, else the other list. With neither, the list of the profile used last. | Never open on an empty list when the other one has tabs (an empty regular tab with private pages open opens the private list, and the reverse). |
+| Profile switcher (a capsule over the cards: the shown profile's name and a chevron) | Two or more profiles, a regular list. Its room stays reserved over the private list, so the cards never move. | Profiles, no tab groups (docs/decisions.md). With Personal alone there is nothing to switch to. |
+| Switcher menu | The profiles, the shown one checked; New Profile (until six); Rename Profile; Delete Profile (never for Personal) | Options on the object. Picking a profile lists its tabs; the window's profile changes only when one of them (or New Tab there) opens. |
+| More → New Profile | Personal is the only profile, regular list | From the second profile on it is in the switcher's menu. |
+| Delete Profile | One confirmation that counts the open tabs and names what goes (archived tabs, history, favorites, logins and site data) and says it can't be undone | Destructive and broad (docs/ui-reference.md, Confirmations). Its tabs close without a Reopen: their data is gone. |
+| Empty profile list | "Tabs in Work show up here, with Work's own logins and history." + New Tab | A new profile's list says whose it is and what is separate. |
 | Cards | Every tab in the list; never an empty tab (principle 7) | |
 | New Tab card | When the shown list has exactly one card: a paper card in the slot after it, "+" and "New Tab", in the window's appearance (the private paper in the private list). The lone card rests centered (cascade) or the pair sits centered on the fold (grid). A tap opens a new tab with the search field. It grows in after the page lands on its card, and fades when a second card arrives or the last one closes. | Owner: one tab shows the switcher with a clear way to add a tab. The app switcher with one app shows one centered card; Arc and Safari offer "+" in the switcher. The card makes the next step visible without leaving the gallery half empty. |
 | Swipe a card up | Closes it; Reopen toast for regular tabs | |
@@ -278,7 +287,7 @@ its address, Back and Forward, the tabs slot; nothing in the bar moves when the 
 | More (…) | Shown when its menu has at least one item | A menu button with an empty menu is a dead end. |
 | More → Reopen Closed Tab | `closed`, regular list | |
 | More → Archived Tabs | `archived`, regular list | |
-| More → Close All Tabs | The list has 2 or more tabs not pinned; the confirmation counts only those | With one card, its swipe or menu closes it. |
+| More → Close All Tabs | The list has 2 or more tabs not pinned; the confirmation counts only those | With one card, its swipe or menu closes it. Only the shown profile's tabs. |
 | Empty private list | "Private tabs show up here, and Plain keeps no history of them." + New Private Tab | The user chose this list; it is an intentional empty state. |
 | Empty regular list (toggled to it with only private tabs open) | "Your open tabs show up here." + New Tab | Same. |
 | Card menu | Open in Other Pane (Duo split possible), Copy Link and Share (card has an address), Close Tab | Context menu: hide what does not apply. |

@@ -34,6 +34,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let session: BrowserSession
     let data: any AddressBarData
     let sheets: FeatureSheets
+    /// The window moved to another profile and its history database is open: the app points
+    /// Spotlight, the widgets and Shortcuts at that profile's favorites.
+    public var onProfileDatabaseChange: ((AppDatabase) -> Void)?
     private let onLaunchReady: () -> Void
 
     /// The page panes: one, or two in a split on the Duo's inner screen (`+Panes`).
@@ -109,8 +112,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var snapInterval: OSSignpostIntervalState?
     /// Which resting state the page's bottom inset follows, and a change waiting for a bounce.
     private var pageInset = PageInsetState()
-    /// The resting state the page's insets follow now (a split's other pane follows it too).
-    var pageInsetRest: ChromeRest { pageInset.rest }
+    /// Each page scroll view's vertical offset at its last scroll callback under the top bar, so
+    /// `keepPageTopUnderBar` acts only on a move to WebKit's top, not on a page left there. Weak
+    /// keys: a web view's scroll view leaves with it.
+    private let lastPageOffsetY = NSMapTable<UIScrollView, NSNumber>.weakToStrongObjects()
     /// A page started loading under the finger: the bar comes back when the finger lifts.
     private var expandOnRelease = false
     /// The bar came back at the page's end while the finger was down: the page's end (before the
@@ -122,7 +127,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var crossfadeTarget: CGFloat?
     private var pullTracker = PullToRefreshTracker()
     private var suggestionTask: Task<Void, Never>?
-    private var favoritesTask: Task<Void, Never>?
     /// Runs when the presented feature sheet closes, by Done or by a swipe.
     private var sheetClosed: (() -> Void)?
 
@@ -215,6 +219,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        wireProfiles()
         session.pool.onTranslationFailed = { [weak self] tab in
             guard let self, tab === self.currentTab else { return }
             Haptic.nothingThere.play()
@@ -250,7 +255,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Their constants make room for the sidebar (either side) and the tab strip (`+Panes`).
         duo.panesLeading = panes.view.leadingAnchor.constraint(equalTo: safe.leadingAnchor)
         duo.panesTrailing = panes.view.trailingAnchor.constraint(equalTo: safe.trailingAnchor)
-        duo.panesTop = panes.view.topAnchor.constraint(equalTo: safe.topAnchor)
+        // The panes run under the status bar on every screen: the page goes to the top edge, as in
+        // Safari, and the status bar floats over it (docs/decisions.md, "The page's top inset
+        // never follows the bar").
+        duo.panesTop = panes.view.topAnchor.constraint(equalTo: view.topAnchor)
         let margin = Spacing.m
         makeTopBarConstraints()
         // The resting chrome's bottom: above the home indicator, or 8 pt above a plain edge.
@@ -304,8 +312,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             lane.topAnchor.constraint(equalTo: view.topAnchor),
             lane.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            // The panes fill the view below the status bar and beside a vertical bar and the
-            // sidebar. Their bottom runs under the chrome; obscuredContentInsets tells WebKit what
+            // The panes fill the view from its top edge, under the status bar, and beside a
+            // vertical bar and the sidebar. Their bottom runs under the chrome; obscuredContentInsets tells WebKit what
             // the chrome covers.
             duo.panesTop,
             duo.panesLeading,
@@ -585,6 +593,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             return
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
+        OpenIntervals.begin(Signposts.urlBarReady, until: UIResponder.keyboardDidShowNotification)
         // Go somewhere new (Arc): the field opens empty over the page, which stays behind the
         // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
         // Editing the page's address is its own door: the page's row, or the page sheet.
@@ -682,7 +691,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
     }
 
-    private func loadFavorites() {
+    func loadFavorites() {
         refreshFocusContent()
     }
 
@@ -820,7 +829,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // During a fold or rotation the insets wait for the transition's completion.
         guard view.bounds.height > 0, !duo.isResizing else { return }
         if let top = duo.topGeometry {
-            applyTopBarInsets(top, rest: pageInset.rest)
+            applyTopBarInsets(top)
             return
         }
         // Back from a top bar (a fold to the outer screen): the page's top rests at the top again.
@@ -828,7 +837,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // The reader's bottom inset was the top bar's own (`pageBottomInset`); the safe area is
         // back in its adjustment.
         engineUI.reader.webView?.scrollView.followObscuredBottom(0)
-        for slot in panes.slots { slot.setRingTopInset(0) }
+        for slot in panes.slots { slot.setRingTopInset(pageStatusInset) }
+        duo.top.pullIndicatorTop.constant = pageStatusInset + Spacing.s
         let pageBottom = panes.view.frame.maxY
         let hidden = geometry.hiddenInset(pageBottom: pageBottom)
         let expanded = geometry.expandedInset(pageBottom: pageBottom)
@@ -1079,6 +1089,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // Any page under the top bar, a split's other pane and the reader too: WebKit's own move
+        // to a page's top goes on to under the bar (its move back calls this again).
+        if let top = duo.topGeometry {
+            let previousY = lastPageOffsetY.object(forKey: scrollView)?.doubleValue
+            lastPageOffsetY.setObject(NSNumber(value: Double(scrollView.contentOffset.y)), forKey: scrollView)
+            if scrollView.keepPageTopUnderBar(webKitTop: top.obscuredInset, previousY: previousY.map { CGFloat($0) }) { return }
+        }
         guard scrollView === pageScrollView, !isEditingAddress else { return }
         let signposter = Signposts.signposter
         let step = signposter.isEnabled ? signposter.beginInterval(Signposts.scrollStep) : nil
@@ -1185,6 +1202,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     public func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
+        guard scrollView === pageScrollView else { return }
         expandChrome(animated: true)
     }
 

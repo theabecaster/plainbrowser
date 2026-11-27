@@ -48,8 +48,9 @@ area. Captures are named in brackets; they were taken into the session scratchpa
    both lists; only the backdrop colour changes (VoiceOver reads "Private, Off"). Safari
    highlights the selected group. A filled hand (`hand.raised.fill`) or a selected background
    when on would do. Owner: tab switcher lane. [i17-46-private-gallery, i17-47-regular-gallery]
-7. **Paper status band over every page (iPhone, Duo outer).** The page starts under the status
-   bar and a flat paper (light) or navy (dark) strip fills the status area above it. On a white
+7. **Fixed. Paper status band over every page (iPhone, Duo outer).** The page now runs under the
+   status bar (docs/decisions.md, "The page's top inset never follows the bar"). The page started under the status
+   bar and a flat paper (light) or navy (dark) strip filled the status area above it. On a white
    page it reads as a two-tone seam; in dark mode the navy band sits over the grey darkened page.
    Safari runs the page under the status bar. Same family as the owner's Duo inner "band at the
    top" complaint (fixed there by the top bar lane), here on the phone layout. Owner: TopChrome /
@@ -112,7 +113,7 @@ area. Captures are named in brackets; they were taken into the session scratchpa
     error the upgrade fallback reports. Owner: WebEngine. [i17-63-noanswer]
 23. **Back closing a link-opened tab switches with no motion**, where Safari slides back to the
     opener. Owner: shell. [nw-01-back-closing]
-24. **Status band in a private tab** is a light lilac over a white page, the same seam as item 3.
+24. **Fixed (with item 7). Status band in a private tab** is a light lilac over a white page, the same seam as item 3.
 25. **Duo inner gallery cards are small** for the canvas (about a quarter of its width, with the
     New Tab card the same weight), and the thumbnail shows a white strip above the page's first
     line (the snapshot keeps the area under the top bar), so pages are hard to recognise. Review

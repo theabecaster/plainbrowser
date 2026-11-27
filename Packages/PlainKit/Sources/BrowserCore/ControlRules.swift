@@ -404,6 +404,8 @@ public struct GalleryState: Sendable, Equatable {
     public var selectionInList = false
     public var hasClosed = false
     public var hasArchived = false
+    /// Profiles there are; 0 where the data source has none (previews, tests).
+    public var profileCount = 0
 
     public init() {}
 }
@@ -441,8 +443,16 @@ public struct GalleryRules: Sendable, Equatable {
     /// With one card, its swipe or menu closes it.
     public var closeAllTabs: Bool { state.closableCount >= 2 }
 
+    /// The profile switcher above the cards: only with a second profile to switch to, and never
+    /// over private tabs, which belong to no profile's data.
+    public var profileSwitcher: Bool { state.profileCount >= 2 && !state.isPrivateList }
+
+    /// New Profile in the More menu while Personal is the only profile; from the second one on it
+    /// lives in the switcher's menu with the profiles.
+    public var newProfile: Bool { state.profileCount == 1 && !state.isPrivateList }
+
     /// A menu button with an empty menu is a dead end.
-    public var more: Bool { reopenClosedTab || archivedTabs || closeAllTabs }
+    public var more: Bool { reopenClosedTab || archivedTabs || closeAllTabs || newProfile }
 
     /// Private tabs never come back, so their close offers nothing.
     public var reopenToastAfterClose: Bool { !state.isPrivateList }

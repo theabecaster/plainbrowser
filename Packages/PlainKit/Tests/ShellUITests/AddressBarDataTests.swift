@@ -178,9 +178,33 @@ struct AddressBarDataTests {
         await data.attach(database)
         let url = URL(string: "https://example.com/x")!
         data.pageVisited(url: url, title: nil)
-        data.pageTitleChanged(url: url, title: "Example X")
+        data.pageTitleChanged(url: url, title: "Example X", profile: Profile.defaultID)
         await data.flush()
         #expect(try await database.visits(matching: "example x", limit: 10).map(\.title) == ["Example X"])
+    }
+
+    @Test func eachProfileHasItsOwnHistoryAndFavorites() async throws {
+        let personal = try AppDatabase.inMemory()
+        let work = try AppDatabase.inMemory()
+        let workID = UUID()
+        let data = LiveAddressBarData()
+        await data.attach(personal) { $0 == workID ? work : nil }
+        let home = URL(string: "https://home.example/")!, office = URL(string: "https://office.example/")!
+        data.pageVisited(url: home, title: "Home", kind: .link, profile: Profile.defaultID)
+        // A Work tab's visit goes to Work, whichever profile the window shows.
+        data.pageVisited(url: office, title: "Office", kind: .link, profile: workID)
+        data.profile = workID
+        #expect(await data.setFavorite(true, url: office, title: "Office"))
+        await data.flush()
+        #expect(try await personal.visits(matching: "", limit: 10).map(\.title) == ["Home"])
+        #expect(try await work.visits(matching: "", limit: 10).map(\.title) == ["Office"])
+        #expect(await data.favorites().map(\.url) == [office])
+        var rows: [AddressBarSuggestion] = []
+        await data.suggestions(for: "home") { rows = $0 }
+        #expect(!rows.contains { if case .page = $0 { true } else { false } }, "Personal's pages never suggest in Work")
+        data.profile = Profile.defaultID
+        #expect(await data.favorites().isEmpty)
+        #expect(try await personal.favorites().isEmpty)
     }
 
     @Test func historyScreenSeesAndDeletesVisitsStillQueuedInTheShell() async throws {
@@ -224,7 +248,7 @@ struct AddressBarDataTests {
         let typed = URL(string: "https://example.com/typed")!
         // Same visit count; the typed one weighs more.
         data.pageVisited(url: linked, title: "Example Page")
-        data.pageVisited(url: typed, title: "Example Page", kind: .typed)
+        data.pageVisited(url: typed, title: "Example Page", kind: .typed, profile: Profile.defaultID)
         await data.flush()
         var pages: [URL] = []
         await data.suggestions(for: "example page") { updates in

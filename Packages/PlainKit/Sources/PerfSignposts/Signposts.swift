@@ -70,6 +70,10 @@ public enum Signposts {
     public static let pageSheet: StaticString = "pageSheet.open"
     /// Event: editing the page's address began (the page sheet's address, or the page's row).
     public static let editAddress: StaticString = "urlBar.editAddress"
+    /// Interval from a tap on the URL pill to the keyboard at rest under the focused field
+    /// (`keyboardDidShow`; `OpenIntervals`). The perf gate's `focusMs`: the system keyboard's own
+    /// rise is inside it, so the app's part is what delays the rise's start.
+    public static let urlBarReady: StaticString = "urlBar.ready"
     /// Interval from a keystroke in the address bar to its local suggestions (history and
     /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
     public static let suggestionsShown: StaticString = "search.suggestions"
@@ -210,6 +214,10 @@ public enum Signposts {
     /// Interval: a new tab, from the open request (new-tab button, link, popup) to its pane
     /// showing it (or, in the background, to it being in the list).
     public static let tabOpen: StaticString = "tab.open"
+    /// Interval from New Tab (a menu, the gallery, a swipe past the last tab) to the keyboard at
+    /// rest under the new tab's focused search field (`keyboardDidShow`; `OpenIntervals`). The perf
+    /// gate's `newTabMs`.
+    public static let newTabReady: StaticString = "tab.newReady"
     /// Interval: closing a tab (button, flick in the gallery, `window.close()`), until the next
     /// tab is on screen.
     public static let tabClose: StaticString = "tab.close"
@@ -249,6 +257,17 @@ public enum Signposts {
     public static let archiveShow: StaticString = "archive.show"
     /// Event: private browsing turned on or off in the gallery.
     public static let privateMode: StaticString = "tab.privateMode"
+    /// Event: the gallery switched to another profile's tabs from its profile switcher.
+    public static let profileShow: StaticString = "profile.show"
+    /// Event: a profile was made, from the gallery's More menu or the switcher.
+    public static let profileCreate: StaticString = "profile.create"
+    /// Event: a profile was renamed.
+    public static let profileRename: StaticString = "profile.rename"
+    /// Event: a profile and everything in it were deleted.
+    public static let profileDelete: StaticString = "profile.delete"
+    /// Interval: a profile's history database opening, off the main thread, the first time the
+    /// window shows one of its tabs in a launch.
+    public static let profileDataOpen: StaticString = "profile.dataOpen"
     /// Event: a short toast over the chrome (Reopen Tab after a close, a finished download).
     public static let toast: StaticString = "toast.show"
 

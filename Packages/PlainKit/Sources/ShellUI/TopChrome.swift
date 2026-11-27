@@ -11,8 +11,9 @@ import Foundation
 // row and clear of their corner, and the page runs to the top edge under it. Where the status bar
 // spans the width, the row sits under it. Either way the bar floats over the page like the bottom
 // pill does on a phone: it moves by transform and alpha only, and the page's top
-// `obscuredContentInsets` follows its resting state, changed once per rest (`PageInsetState`),
-// never per frame. Decision: docs/decisions.md, "Duo inner screen: the bar in the status row".
+// `obscuredContentInsets` never follows it (`TopChromeGeometry.obscuredInset`). Decisions:
+// docs/decisions.md, "Duo inner screen: the bar in the status row" and "The page's top inset
+// never follows the bar".
 
 /// The corner the system's status items keep to, read from the root view's safe area and its
 /// corner-adaptive variant (`UIView.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))`,
@@ -180,46 +181,35 @@ struct TopChromeGeometry: Equatable {
         return -rise * min(max(progress, 0), 1)
     }
 
-    /// The hidden bar's height over the page: the smallest top inset the page sees. In the status
-    /// zone nothing: the page runs to the top edge under the status items, as Safari's full-screen
-    /// reading does, and nothing of Plain's (no band, backing or edge effect) stays behind. A
-    /// fixed header then sits at the top edge, and WebKit extends no color above it. Under a
-    /// full-width status bar, that bar.
-    var hiddenInset: CGFloat {
+    /// The page's obscured top inset (`obscuredContentInsets.top`), the same in every state of
+    /// the bar: in the status zone nothing, under a full-width status bar that bar. The bar
+    /// floats over the page and leaves it no inset of its own: a fixed or sticky header keeps to
+    /// the top edge (or under the status bar) whatever the bar does, except at the page's top,
+    /// where it rests under the expanded controls with the page and rides up with it (WebKit
+    /// keeps the layout viewport inside the document while the page sits above its origin). WebKit, which
+    /// fills an obscured inset above such a header with the header's color (its fixed color
+    /// extension, `WKWebView.h`: it "adjusts how fixed and sticky elements are rendered near
+    /// edges with non-zero obscured insets"), paints no band behind the controls, and nothing
+    /// jumps when they go or come back, because nothing changes. The page's first line still
+    /// starts under the controls: that is the scroll range's start (`expandedInset`,
+    /// `setPageTopStart`, `UIScrollView.keepPageTopUnderBar`). Decision: docs/decisions.md,
+    /// "The page's top inset never follows the bar".
+    var obscuredInset: CGFloat {
         isInStatusZone ? 0 : safeTop
     }
 
-    /// The collapsed chrome's height over the page. In the status zone the shrunken address
-    /// floats alone on the status row over the page, which runs to the top edge as when hidden:
-    /// an inset there would leave a band of the page's header color behind the address.
-    var collapsedInset: CGFloat {
-        isInStatusZone ? hiddenInset : collapsedBottom + Self.gap
-    }
-
-    /// The expanded chrome's height over the page: the largest top inset the page sees, never equal
-    /// to the collapsed one (WebKit wants the maximum viewport inset strictly larger). In the status
+    /// The expanded chrome's height over the page: where the page's first line rests (the scroll
+    /// range's start) and the largest viewport inset (`maximumViewportInset`), never equal to
+    /// the obscured one (WebKit wants the maximum viewport inset strictly larger). In the status
     /// zone never above the corner's bottom, so the page's first line at rest starts clear of the
     /// clock.
-    var expandedInset: CGFloat { max(expandedBottom, corner?.maxY ?? 0, collapsedInset + 1) }
-
-    /// The page's obscured top inset for the bar resting collapsed or expanded.
-    func obscuredInset(collapsed: Bool) -> CGFloat {
-        collapsed ? collapsedInset : expandedInset
-    }
-
-    /// The page's obscured top inset for the bar resting at `rest`.
-    func obscuredInset(rest: ChromeRest) -> CGFloat {
-        switch rest {
-        case .expanded: expandedInset
-        case .pill: collapsedInset
-        case .hidden: hiddenInset
-        }
-    }
+    var expandedInset: CGFloat { max(expandedBottom, corner?.maxY ?? 0, obscuredInset + 1) }
 
     /// The share of `screen` the chrome covers at rest (`collapsed` false) or while reading: the
-    /// page's top inset across the full width. For the design record and tests.
+    /// page's first line at rest, its obscured inset while reading, across the full width. For
+    /// the design record and tests.
     func chromeShare(of screen: CGSize, collapsed: Bool) -> CGFloat {
         guard screen.width > 0, screen.height > 0 else { return 0 }
-        return obscuredInset(collapsed: collapsed) / screen.height
+        return (collapsed ? obscuredInset : expandedInset) / screen.height
     }
 }

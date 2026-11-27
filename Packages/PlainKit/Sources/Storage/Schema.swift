@@ -25,6 +25,7 @@ enum Schema {
     static let readingListItem = "readingListItem"
     static let readingListCopy = "readingListCopy"
     static let readingListSearch = "readingListSearch"
+    static let profile = "profile"
 
     static func register(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1.history") { db in
@@ -227,11 +228,29 @@ enum Schema {
             }
         }
 
+        // Profiles (docs/decisions.md, "Profiles, no tab groups"): the list, and each tab's,
+        // closed tab's and window's profile. Every row written before belongs to Personal, the
+        // fixed first profile. A profile's history and favorites live in a database of their own
+        // (`ProfileDataLocation`); Personal's stay in this one.
+        migrator.registerMigration("v9.profiles") { db in
+            try db.create(table: profile) { t in
+                t.primaryKey("id", .text)
+                t.column("name", .text).notNull()
+                t.column("position", .integer).notNull()
+            }
+            let personal = Profile.defaultID.uuidString
+            for table in [tab, closedTab, tabWindow] {
+                try db.alter(table: table) { t in
+                    t.add(column: "profileID", .text).notNull().defaults(to: personal)
+                }
+            }
+        }
+
         // The reading list (docs/research/bookmarks.md): pages saved to read later, unread until
         // opened from the list, each with its reader copy for offline reading in a table of its
         // own, so the list and the address bar never read the copies. Full-text search over title
-        // and address, like history.
-        migrator.registerMigration("v9.readingList") { db in
+        // and address, like history. After profiles, which shipped first on dev.
+        migrator.registerMigration("v10.readingList") { db in
             try db.create(table: readingListItem) { t in
                 t.autoIncrementedPrimaryKey("id")
                 t.column("url", .text).notNull().unique()

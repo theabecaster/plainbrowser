@@ -20,7 +20,7 @@ Feedback from testing the app, newest first. Each item stays here until it ships
 
 - **Paper texture:** faint fibre and grain on the start screen, search, tab cards, sidebar and strip, reader and intro; flat under Increase Contrast. (dev, next build.)
 
-- **Swipe up with one tab:** dragging the bar up (or Show All Tabs) with a single page opens the switcher with the same page-to-card motion: the card rests centered and a paper New Tab card grows in beside it; the tabs button's tap stays "+". On the start screen alone the swipe still bumps. (dev, one-tab lane.)
+- **Swipe up with one tab:** dragging the bar up (or Show All Tabs) with a single page opens the switcher with the same page-to-card motion: the card rests centered and a paper New Tab card grows in beside it; the tabs button's tap stayed "+" (now Tabs, see "Tabs button with one tab"). On the start screen alone the swipe still bumps. (dev, one-tab lane.)
 
 - **Appearance:** Settings > Appearance (System by default, Light, Dark), saved and applied to every window with a crossfade; sites with a dark design follow it, and while Plain is dark, pages without one are darkened like Safari's Adaptive Dark Mode, with "Turn Off Dark Pages for This Site" in the page menu. (dev, next build.)
 

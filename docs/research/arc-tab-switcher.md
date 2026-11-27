@@ -173,9 +173,9 @@ What Plain takes from this:
   visible, so the one-card switcher never looks half empty. It grows in after the page lands on
   its card (while the page moves it would cover the page's edge), and scrolls into the focus like
   a card. The bar keeps "+" and Done.
-- The tabs button's tap stays "+" with one tab: Arc keeps its "+" beside the switcher button
-  because a new page is the common next step, and Plain has one slot. The switcher is one swipe
-  (or the long-press menu) away.
+- Superseded 2026-11-27 (owner): with one tab the tabs button is Tabs and opens this switcher,
+  like the swipe up. It had stayed "+" (Arc keeps its "+" beside the switcher button because a
+  new page is the common next step); New Tab is now the switcher's "+" or its New Tab card.
 
 **Other**
 - Long-press a card: its menu (Open in Other Pane, Copy Link, Share, Close Tab "Or swipe the card

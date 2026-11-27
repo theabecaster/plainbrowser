@@ -120,6 +120,32 @@ final class ShellTests: XCTestCase {
         waitForPage(app, "Load 2")
     }
 
+    /// Waits for `condition`, polling the app.
+    private func waitUntil(
+        _ what: String, timeout: TimeInterval = 4, file: StaticString = #filePath, line: UInt = #line,
+        _ condition: @escaping () -> Bool
+    ) {
+        let predicate = NSPredicate { _, _ in condition() }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+        expectation.expectationDescription = what
+        let result = XCTWaiter().wait(for: [expectation], timeout: timeout)
+        XCTAssertEqual(result, .completed, "timed out waiting for: \(what)", file: file, line: line)
+    }
+
+    /// A drag on the page that stops before the finger lifts, so the page does not coast:
+    /// `from` and `to` are heights in the web view (0 top, 1 bottom).
+    private func drag(_ app: XCUIApplication, from: CGFloat, to: CGFloat) {
+        let webView = app.webViews.firstMatch
+        let start = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from))
+        let end = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.3)
+    }
+
+    /// The pill is gone: the bar is hidden (it sinks away and leaves the accessibility tree).
+    private func isHidden(_ pill: XCUIElement) -> Bool {
+        !pill.exists || !pill.isHittable
+    }
+
     func testToolbarCollapsesOnScrollAndComesBackAtTheTop() throws {
         let app = try launch()
         go(app, to: "/long")
@@ -127,20 +153,73 @@ final class ShellTests: XCTestCase {
         let pill = app.buttons["addressPill"]
         let expanded = pill.frame.height
 
-        let webView = app.webViews.firstMatch
-        webView.swipeUp(velocity: .slow)
-        let collapsed = NSPredicate { _, _ in pill.frame.height < expanded - 4 }
-        wait(for: [XCTNSPredicateExpectation(predicate: collapsed, object: nil)], timeout: 3)
+        // A short drag: the bar becomes the pill, and stays there.
+        drag(app, from: 0.6, to: 0.5)
+        waitUntil("bar collapsed") { pill.exists && pill.frame.height < expanded - 4 }
 
         // A tap on the collapsed pill brings the bar back instead of editing.
         pill.tap()
-        let back = NSPredicate { _, _ in abs(pill.frame.height - expanded) < 1 }
-        wait(for: [XCTNSPredicateExpectation(predicate: back, object: nil)], timeout: 3)
+        waitUntil("bar back") { abs(pill.frame.height - expanded) < 1 }
         XCTAssertFalse(app.textFields["searchField"].exists)
     }
 
+    /// Reading on: past the pill the bar hides, and a move up brings the whole bar back.
+    func testBarHidesWhileReadingAndComesBackOnScrollUp() throws {
+        let app = try launch()
+        go(app, to: "/long")
+        waitForPage(app, "Long Read")
+        let pill = app.buttons["addressPill"]
+        let expanded = pill.frame.height
+
+        app.webViews.firstMatch.swipeUp(velocity: .slow)
+        waitUntil("bar hidden") { self.isHidden(pill) }
+
+        // A small nudge up (rereading a line) leaves it hidden.
+        drag(app, from: 0.5, to: 0.51)
+        XCTAssertTrue(isHidden(pill))
+
+        drag(app, from: 0.4, to: 0.5)
+        waitUntil("bar back whole") { pill.exists && abs(pill.frame.height - expanded) < 1 }
+    }
+
+    /// A tap on the bottom edge (the home-indicator zone) brings a hidden bar back.
+    func testTapOnTheBottomEdgeBringsAHiddenBarBack() throws {
+        let app = try launch()
+        go(app, to: "/long")
+        waitForPage(app, "Long Read")
+        let pill = app.buttons["addressPill"]
+        let expanded = pill.frame.height
+
+        app.webViews.firstMatch.swipeUp(velocity: .slow)
+        waitUntil("bar hidden") { self.isHidden(pill) }
+
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.995)).tap()
+        waitUntil("bar back whole") { pill.exists && abs(pill.frame.height - expanded) < 1 }
+        XCTAssertFalse(app.textFields["searchField"].exists)
+    }
+
+    /// Reaching the end of the page brings the bar back, and the page's last line clears it.
+    func testPageEndBringsTheBarBack() throws {
+        let app = try launch()
+        go(app, to: "/long")
+        waitForPage(app, "Long Read")
+        let pill = app.buttons["addressPill"]
+        let expanded = pill.frame.height
+        let webView = app.webViews.firstMatch
+
+        webView.swipeUp(velocity: .slow)
+        waitUntil("bar hidden") { self.isHidden(pill) }
+        let last = webView.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Paragraph 80.'")).firstMatch
+        for _ in 0..<12 where !(last.exists && last.isHittable) {
+            webView.swipeUp(velocity: .fast)
+        }
+        waitUntil("bar back at the end", timeout: 6) { pill.exists && abs(pill.frame.height - expanded) < 1 }
+        waitUntil("last line above the bar") { last.exists && last.frame.maxY <= pill.frame.minY + 1 }
+    }
+
     /// The page's bottom inset follows the bar's resting state: a fixed footer sits above the
-    /// expanded bar, moves down when the bar rests collapsed, and comes back up with the bar.
+    /// expanded bar, moves down with the pill, further down to the home indicator when the bar
+    /// hides, and comes back up with the bar.
     func testFixedFooterClearsTheRestingBar() throws {
         let app = try launch()
         go(app, to: "/footer")
@@ -150,24 +229,25 @@ final class ShellTests: XCTestCase {
         XCTAssertTrue(footer.waitForExistence(timeout: 5))
         let expandedHeight = pill.frame.height
 
-        func waitUntil(_ what: String, _ condition: @escaping () -> Bool) {
-            let predicate = NSPredicate { _, _ in condition() }
-            let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
-            expectation.expectationDescription = what
-            wait(for: [expectation], timeout: 4)
-        }
-
         waitUntil("footer above the expanded bar") { footer.frame.maxY <= pill.frame.minY + 1 }
         let expandedFooterBottom = footer.frame.maxY
 
-        app.webViews.firstMatch.swipeUp(velocity: .slow)
-        waitUntil("bar collapsed") { pill.frame.height < expandedHeight - 4 }
+        drag(app, from: 0.6, to: 0.5)
+        waitUntil("bar collapsed") { pill.exists && pill.frame.height < expandedHeight - 4 }
         waitUntil("footer down to the collapsed bar") {
             footer.frame.maxY > expandedFooterBottom + 20 && footer.frame.maxY <= pill.frame.minY + 1
         }
+        let pillFooterBottom = footer.frame.maxY
 
-        pill.tap()
-        waitUntil("bar back") { abs(pill.frame.height - expandedHeight) < 1 }
+        app.webViews.firstMatch.swipeUp(velocity: .slow)
+        waitUntil("bar hidden") { self.isHidden(pill) }
+        let screenBottom = app.windows.firstMatch.frame.maxY
+        waitUntil("footer down to the home indicator") {
+            footer.frame.maxY > pillFooterBottom + 10 && footer.frame.maxY < screenBottom
+        }
+
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.995)).tap()
+        waitUntil("bar back") { pill.exists && abs(pill.frame.height - expandedHeight) < 1 }
         waitUntil("footer back above the expanded bar") { footer.frame.maxY <= pill.frame.minY + 1 }
     }
 }

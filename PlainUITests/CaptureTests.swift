@@ -595,6 +595,49 @@ final class CaptureTests: XCTestCase {
         shot("p8-start-with-tabs")
     }
 
+    /// Reading a long page with a fixed footer: expanded, the pill, hidden, and each way back
+    /// (scroll up, a tap on the bottom edge, the page's end), for the scroll chrome's review.
+    func testCaptureScrollChrome() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.introSeen()
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 20))
+        field.typeText(server.address("/footer") + "\n")
+        let webView = app.webViews.firstMatch
+        XCTAssertTrue(webView.staticTexts["Footer Page"].waitForExistence(timeout: 10))
+        pause(2)
+        shot("scroll-1-expanded")
+
+        func drag(_ from: CGFloat, _ to: CGFloat) {
+            let start = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from))
+            let end = webView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.3)
+        }
+        drag(0.6, 0.5)
+        pause(1.5)
+        shot("scroll-2-pill")
+        webView.swipeUp(velocity: .slow)
+        pause(2)
+        shot("scroll-3-hidden")
+        drag(0.4, 0.5)
+        pause(1.5)
+        shot("scroll-4-back-scroll-up")
+        webView.swipeUp(velocity: .slow)
+        pause(1.5)
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.995)).tap()
+        pause(1.5)
+        shot("scroll-5-back-edge-tap")
+        webView.swipeUp(velocity: .slow)
+        pause(1)
+        for _ in 0..<4 { webView.swipeUp(velocity: .fast) }
+        pause(2.5)
+        shot("scroll-6-back-page-end")
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

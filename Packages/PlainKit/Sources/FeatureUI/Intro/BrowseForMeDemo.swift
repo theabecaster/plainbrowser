@@ -23,6 +23,13 @@ struct BrowseForMeDemo: View {
     @State private var pointsShown = 0
     @State private var run: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // The example's text follows Dynamic Type; its step caps it at the largest standard size.
+    @ScaledMetric(relativeTo: .body) private var bodySize: CGFloat = 15
+    @ScaledMetric(relativeTo: .body) private var fieldHeight: CGFloat = 40
+    @ScaledMetric(relativeTo: .subheadline) private var pointSize: CGFloat = 13
+    @ScaledMetric(relativeTo: .caption) private var chipSize: CGFloat = 11
+    @ScaledMetric(relativeTo: .caption2) private var numberSize: CGFloat = 10
+    @ScaledMetric(relativeTo: .caption2) private var dotSize: CGFloat = 15
 
     private static let query = "quiet trails near the coast"
     private static let sources = ["fieldnotes", "coastwalks", "parkguide"]
@@ -60,7 +67,7 @@ struct BrowseForMeDemo: View {
     private var field: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: bodySize - 2, weight: .semibold))
                 .opacity(0.5)
             Group {
                 if typed == 0 {
@@ -69,12 +76,12 @@ struct BrowseForMeDemo: View {
                     Text(Self.query.prefix(typed))
                 }
             }
-            .font(.system(size: 15))
+            .font(.system(size: bodySize))
             .lineLimit(1)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
-        .frame(height: 40)
+        .frame(height: fieldHeight)
         .background(IntroStyle.text.opacity(0.055), in: .capsule)
     }
 
@@ -83,10 +90,10 @@ struct BrowseForMeDemo: View {
         Button(action: replay) {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 22)
+                    .font(.system(size: bodySize, weight: .semibold))
+                    .frame(minWidth: 22)
                 Text("Browse for Me")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: bodySize, weight: .semibold))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Color(uiColor: Palette.accentOnPaper))
@@ -101,19 +108,27 @@ struct BrowseForMeDemo: View {
         .accessibilityIdentifier("introBrowseDemo")
     }
 
-    /// The pages it reads: an open ring while reading, then the number the points cite.
+    /// The pages it reads: an open ring while reading, then the number the points cite. Where the
+    /// three don't fit in a row (large text on a narrow phone) they keep only their numbers.
     private var sourceChips: some View {
+        ViewThatFits(in: .horizontal) {
+            chipRow(sites: true)
+            chipRow(sites: false)
+        }
+    }
+
+    private func chipRow(sites: Bool) -> some View {
         HStack(spacing: 6) {
             ForEach(Array(Self.sources.enumerated()), id: \.offset) { index, site in
                 HStack(spacing: 5) {
                     ZStack {
                         if index < sourcesRead {
                             Text("\(index + 1)")
-                                .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                .font(.system(size: numberSize, weight: .bold).monospacedDigit())
                                 // The sheet's own color: white by day, night blue on the lighter
                                 // night Lagoon.
                                 .foregroundStyle(Color(uiColor: IntroPaper.sheet))
-                                .frame(width: 15, height: 15)
+                                .frame(width: dotSize, height: dotSize)
                                 .background(Color(uiColor: Palette.accentOnPaper), in: .circle)
                                 .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
                         } else {
@@ -123,13 +138,16 @@ struct BrowseForMeDemo: View {
                                 .transition(.opacity)
                         }
                     }
-                    .frame(width: 15, height: 15)
-                    Text(site)
-                        .font(.system(size: 11, weight: .semibold))
-                        .lineLimit(1)
+                    .frame(width: dotSize, height: dotSize)
+                    if sites {
+                        Text(site)
+                            .font(.system(size: chipSize, weight: .semibold))
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
                 }
                 .padding(.leading, 4)
-                .padding(.trailing, 8)
+                .padding(.trailing, sites ? 8 : 4)
                 .padding(.vertical, 4)
                 .background(IntroStyle.text.opacity(0.055), in: .capsule)
                 .opacity(index < sourcesShown ? 1 : 0)
@@ -148,9 +166,8 @@ struct BrowseForMeDemo: View {
                         .frame(width: 4, height: 4)
                         .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
                     Text("\(point.text)\(citations(point.sources))")
-                        .font(.system(size: 13))
+                        .font(.system(size: pointSize))
                         .fixedSize(horizontal: false, vertical: true)
-                        .lineLimit(2)
                 }
                 .opacity(index < pointsShown ? 1 : 0)
                 .offset(y: index < pointsShown || reduceMotion ? 0 : 6)
@@ -160,7 +177,7 @@ struct BrowseForMeDemo: View {
 
     private func citations(_ numbers: [Int]) -> Text {
         Text(" " + numbers.map(String.init).joined(separator: " "))
-            .font(.system(size: 9, weight: .bold))
+            .font(.system(size: numberSize - 1, weight: .bold))
             .foregroundStyle(Color(uiColor: Palette.accentOnPaper))
             .baselineOffset(5)
     }

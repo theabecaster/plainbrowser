@@ -368,6 +368,9 @@ private struct BrowseForMeStep: View {
             .padding(.top, 10)
             .entrance(1)
         BrowseForMeDemo(model: model)
+            // It grows with the text up to the largest standard size; past it the card would push
+            // its own answer off the step (VoiceOver reads its label at any size).
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .padding(.top, 18)
             .entrance(2)
         status

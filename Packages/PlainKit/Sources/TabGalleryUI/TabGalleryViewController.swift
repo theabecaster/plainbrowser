@@ -1135,6 +1135,10 @@ final class GalleryScrollView: UIScrollView {
         return super.gestureRecognizerShouldBegin(gesture)
     }
 
+    /// A card's × is a control, which a scroll view never cancels by default: a sideways drag that
+    /// starts on it must still scroll.
+    override func touchesShouldCancel(in view: UIView) -> Bool { true }
+
     /// Cards overlap in the cascade; the one drawn on top (highest z) takes the touch, whatever
     /// the order of the subviews.
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {

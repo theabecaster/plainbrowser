@@ -106,6 +106,15 @@ struct TabGalleryMetrics: Equatable {
     static let faviconSize: CGFloat = 20
     /// The gap between the title row and its card.
     static let headerGap: CGFloat = 8
+    /// The × on a card: a plate this wide inside a `Metrics.tapTarget` hit area, its glyph this
+    /// big. Small enough to stay quiet next to the title, as Safari's.
+    static let closePlateSide: CGFloat = 24
+    static let closeGlyphSize: CGFloat = 10
+    /// The plate's gap to the edge of the card's shown part (the title row's own inset).
+    static let closeInset: CGFloat = 2
+    /// A card shows its × while at least this much of it is uncovered: the focused cascade card
+    /// has the next card over its trailing 22%, and still needs a close target.
+    static let closeMinimumShownFraction: CGFloat = 0.5
     /// The most grid rows a page shows.
     static let maxGridRows = 3
 

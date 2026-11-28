@@ -61,9 +61,6 @@ final class TabCardView: UIView {
 
     static let selectionWidth: CGFloat = 2
     private static let iconGap: CGFloat = 8
-    /// The plate's side and its gap to the card's edge; the hit target is `Metrics.tapTarget`.
-    private static let closePlateSide: CGFloat = 24
-    private static let closeInset: CGFloat = 2
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -111,12 +108,12 @@ final class TabCardView: UIView {
 
         closeButton.addSubview(closePlate)
         closePlate.isUserInteractionEnabled = false
-        closePlate.layer.cornerRadius = Self.closePlateSide / 2
+        closePlate.layer.cornerRadius = TabGalleryMetrics.closePlateSide / 2
         closePlate.addSubview(closeGlyph)
         closeGlyph.isUserInteractionEnabled = false
         closeGlyph.contentMode = .center
         closeGlyph.image = UIImage(
-            systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .bold)
+            systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: TabGalleryMetrics.closeGlyphSize, weight: .bold)
         )
         closeButton.accessibilityIdentifier = "closeTab"
         closeButton.addAction(UIAction { [weak self] _ in self?.onClose?() }, for: .touchUpInside)
@@ -231,9 +228,21 @@ final class TabCardView: UIView {
         if abs(iconAlpha - faviconView.alpha) > 0.01 || (iconAlpha != faviconView.alpha && (iconAlpha == 0 || iconAlpha == 1)) {
             faviconView.alpha = iconAlpha
         }
-        // Only a card with its whole title row showing has a ×: a covered corner offers no target.
-        closeButton.isHidden = !(alpha > 0.5 && width >= size.width - 1)
-        let maskWidth = max(Self.iconGap + MetricsValues.favicon, width - Self.iconGap)
+        // The × sits at the edge of the part of the card that shows (the next card covers the rest
+        // of a cascade card), and goes when less than half of the card shows: a covered corner
+        // offers no target. The title row stops before it.
+        let shownEdge = min(width, size.width)
+        let showsClose = alpha > 0.5 && shownEdge >= size.width * TabGalleryMetrics.closeMinimumShownFraction
+        closeButton.isHidden = !showsClose
+        if showsClose {
+            let x = shownEdge - closeButton.bounds.width
+            if abs(closeButton.frame.minX - x) > 0.25 { closeButton.frame.origin.x = x }
+        }
+        var maskWidth = max(Self.iconGap + MetricsValues.favicon, width - Self.iconGap)
+        if showsClose {
+            let titleEnd = shownEdge - TabGalleryMetrics.closeInset - TabGalleryMetrics.closePlateSide - Spacing.xs
+            maskWidth = max(Self.iconGap + MetricsValues.favicon, min(maskWidth, titleEnd))
+        }
         if abs(maskWidth - visibleWidth) > 0.5 {
             visibleWidth = maskWidth
             CATransaction.begin()
@@ -335,15 +344,15 @@ final class TabCardView: UIView {
             titleX = privateIcon.frame.maxX + Spacing.xs
         }
         let titleHeight = ceil(titleLabel.font?.lineHeight ?? 18)
-        let plate = Self.closePlateSide
-        let titleEnd = width - Self.closeInset - plate - Spacing.xs
+        let plate = TabGalleryMetrics.closePlateSide
+        let titleEnd = width - TabGalleryMetrics.closeInset - plate - Spacing.xs
         titleLabel.frame = CGRect(x: titleX, y: (midY - titleHeight / 2).rounded(), width: max(0, titleEnd - titleX), height: titleHeight)
         // The target sits inside the card's bounds (touches outside them never reach it); the
         // plate sits at the target's trailing edge, centered on the title row.
         let target = min(Metrics.tapTarget, width)
         closeButton.frame = CGRect(x: width - target, y: 0, width: target, height: Metrics.tapTarget)
         closePlate.frame = CGRect(
-            x: target - Self.closeInset - plate, y: max(0, (midY - plate / 2).rounded()), width: plate, height: plate
+            x: target - TabGalleryMetrics.closeInset - plate, y: max(0, (midY - plate / 2).rounded()), width: plate, height: plate
         )
         closeGlyph.frame = closePlate.bounds
     }

@@ -144,17 +144,17 @@ final class TabsTests: XCTestCase {
         let gallery = openGallery(app)
         XCTAssertTrue(waitForTabCount(gallery, 3))
 
-        let close = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close Plain Test C")).firstMatch
+        // Page A's card is focused with two cards over it: its × shows in the part that is uncovered.
+        gallery.swipeRight(velocity: .fast)
+        let close = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close Plain Test A")).firstMatch
         XCTAssertTrue(close.waitForExistence(timeout: 2), "the card has a Close button")
         close.tap()
         XCTAssertTrue(waitForTabCount(gallery, 2), "the × closes the tab")
-        XCTAssertFalse(card(gallery, "Plain Test C").waitForExistence(timeout: 1), "the tapped card is the one that went")
+        XCTAssertFalse(card(gallery, "Plain Test A").waitForExistence(timeout: 1), "the tapped card is the one that went")
         XCTAssertTrue(card(gallery, "Plain Test B").exists)
 
-        gallery.swipeRight(velocity: .fast)
-        let first = card(gallery, "Plain Test A")
-        XCTAssertTrue(first.waitForExistence(timeout: 2))
-        first.swipeUp(velocity: .fast)
+        let last = card(gallery, "Plain Test B")
+        last.swipeUp(velocity: .fast)
         XCTAssertTrue(waitForTabCount(gallery, 1), "the flick closes a card too")
     }
 

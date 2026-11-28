@@ -22,7 +22,7 @@ extension BrowserViewController {
 
     /// True as long as `FixedChoices.passkeysEnabled` is off: with the entitlement, WebKit handles
     /// passkeys for every site and this toast never shows.
-    static let passkeysUnavailableMessage = "Passkeys will work once Apple approves Plain"
+    static let passkeysUnavailableMessage = "Passkeys aren't available in Plain yet. Use your password."
 }
 
 // MARK: - Links from other apps

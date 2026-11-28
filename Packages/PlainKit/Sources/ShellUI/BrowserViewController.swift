@@ -373,7 +373,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // page, `+TopBar`).
             duo.top.toastOverPill as NSLayoutConstraint,
             tabsUI.toast.centerXAnchor.constraint(equalTo: pill.centerXAnchor),
-            tabsUI.toast.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
+            tabsUI.toast.heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget),
             tabsUI.toast.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
         ] + capWidth(centerX: row.centerXAnchor, width: row.widthAnchor))
 

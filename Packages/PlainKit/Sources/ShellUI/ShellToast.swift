@@ -21,7 +21,10 @@ final class ShellToast: UIView {
         label.font = UIFont.preferredFont(forTextStyle: .subheadline)
         label.adjustsFontForContentSizeCategory = true
         label.textColor = Palette.textPrimary
-        label.lineBreakMode = .byTruncatingMiddle
+        // Two lines where one doesn't fit the pill's width ("Passkeys aren't available in Plain
+        // yet. Use your password." on the narrowest iPhone), never cut in the middle of a word.
+        label.numberOfLines = 2
+        label.lineBreakMode = .byTruncatingTail
         glass.contentView.addSubview(label)
 
         var configuration = UIButton.Configuration.plain()
@@ -48,20 +51,43 @@ final class ShellToast: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// Its width under Auto Layout: the message and the button, capped by the pill's width.
+    /// The width Auto Layout last gave it (the pill's, when the message is longer): the height
+    /// follows it, one line or two.
+    private var laidOutWidth = CGFloat.greatestFiniteMagnitude
+
+    /// Its size under Auto Layout: the message and the button on one line, capped by the pill's
+    /// width; taller when the cap wraps the message.
     override var intrinsicContentSize: CGSize {
-        sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: Metrics.tapTarget))
+        let width = sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: Metrics.tapTarget)).width
+        return CGSize(width: width, height: height(forWidth: min(width, laidOutWidth)))
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let labelSize = label.sizeThatFits(size)
-        let buttonWidth = button.isHidden ? 0 : button.sizeThatFits(size).width
-        let width = Spacing.l + ceil(labelSize.width) + (button.isHidden ? Spacing.l : Spacing.xs + ceil(buttonWidth) + Spacing.xs)
-        return CGSize(width: min(width, size.width), height: Metrics.tapTarget)
+        let labelSize = label.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: Metrics.tapTarget))
+        let width = Spacing.l + ceil(labelSize.width) + chromeWidth(size)
+        let fitted = min(width, size.width)
+        return CGSize(width: fitted, height: height(forWidth: fitted))
+    }
+
+    /// The room beside the message: the trailing inset, or the button and its insets.
+    private func chromeWidth(_ size: CGSize) -> CGFloat {
+        button.isHidden ? Spacing.l : Spacing.xs + ceil(button.sizeThatFits(size).width) + Spacing.xs
+    }
+
+    /// One line's height is the tap target's; two lines get the same padding as a row.
+    private func height(forWidth width: CGFloat) -> CGFloat {
+        let room = max(0, width - Spacing.l - chromeWidth(CGSize(width: width, height: Metrics.tapTarget)))
+        let text = label.sizeThatFits(CGSize(width: room, height: .greatestFiniteMagnitude)).height
+        return max(Metrics.tapTarget, ceil(text) + Spacing.s * 2)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        if bounds.width > 0, abs(bounds.width - laidOutWidth) > 0.5 {
+            laidOutWidth = bounds.width
+            // A capped width can wrap the message: ask again for the height.
+            if abs(height(forWidth: bounds.width) - bounds.height) > 0.5 { invalidateIntrinsicContentSize() }
+        }
         glass.frame = bounds
         let buttonWidth = button.isHidden ? 0 : ceil(button.sizeThatFits(bounds.size).width)
         button.frame = CGRect(x: bounds.width - Spacing.xs - buttonWidth, y: 0, width: buttonWidth, height: bounds.height)
@@ -86,6 +112,8 @@ final class ShellToast: UIView {
         self.action = action
         invalidateIntrinsicContentSize()
         setNeedsLayout()
+        superview?.layoutIfNeeded()
+        // A message that wraps at the width just given takes its height in a second pass.
         superview?.layoutIfNeeded()
         hideTask?.cancel()
         hideTask = Task { [weak self] in

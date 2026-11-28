@@ -84,8 +84,8 @@ them.
   - A passkey request a site makes anyway is refused at once with `NotAllowedError`, the error
     WebKit gives. WebKit itself answers only seconds later (**measured** on the simulator: about
     3 s for a request with a 5 s timeout), and a site's timeout is often a minute or more. The
-    site's own fallback then runs right away, and Plain shows one toast: "Passkeys will work once Apple approves
-    Plain". Once per site per launch, only for the page on screen, never for silent
+    site's own fallback then runs right away, and Plain shows one toast: "Passkeys aren't available in Plain yet. Use your password." (the
+    clarity audit: it says what the user can do, not why). Once per site per launch, only for the page on screen, never for silent
     (conditional) requests. Signpost `signIn.passkeyUnavailable`.
 - **Default browser, ready for the grant:** `CFBundleURLTypes` declares http and https, the scene
   delegate opens web links other apps hand over (at launch, while running, and while the first-run

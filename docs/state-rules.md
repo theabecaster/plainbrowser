@@ -361,7 +361,7 @@ has dark art; Night, Coral and Paper look the same in both.
 | While the gallery is up | The shell's toast hides; the gallery has its own Reopen toast. |
 | Camera / Microphone / Location is off for Plain — Settings | The page on screen asked for a feature iOS has off for Plain (WebKit denied it without asking). Once per site until the switch changes, in memory only; never right after the user said no in iOS's own prompt (that page was already loaded without the watch). "Location Services are off" when they are off for the phone. Screen Time: "… is restricted", no button. Never for background tabs. |
 | Saving to Photos is off for Plain — Settings | Save Image while Photos is off for Plain: every time (the user's own action), with the "nothing there" haptic. Screen Time: no button. |
-| Passkeys will work once Apple approves Plain | A page on screen asked for a passkey and Plain refused it (no web-browser entitlement yet, so WebKit would too). Once per site per launch; never for silent (conditional) requests or background tabs. Gone once `FixedChoices.passkeysEnabled` is on. |
+| Passkeys aren't available in Plain yet. Use your password. | A page on screen asked for a passkey and Plain refused it (no web-browser entitlement yet, so WebKit would too). Once per site per launch; never for silent (conditional) requests or background tabs. Gone once `FixedChoices.passkeysEnabled` is on. |
 
 ### Sheets (Sheet mode)
 

@@ -97,6 +97,8 @@ public struct ChromeState: Sendable, Equatable {
     public var others = 0
     /// Tabs in the on-screen tab's own list (regular or private), itself included.
     public var listCount = 0
+    /// Tabs of that list Close All Tabs would close: pinned tabs stay (`closeAllKeepsPinnedTabs`).
+    public var closableInList = 0
     /// The bar swipe has a neighbour on that side in `list`.
     public var hasPrevious = false
     public var hasNext = false
@@ -272,6 +274,10 @@ public struct ControlRules: Sendable, Equatable {
     /// On a private tab with another private page open: ends private browsing in one step, as
     /// Safari's and Chrome's Close All. With one, Close Tab already does it.
     public var menuCloseAllPrivateTabs: Bool { state.isPrivate && state.listCount >= 2 }
+    /// Close All Tabs under Close Tab, as Safari's tabs button offers it: on a regular tab, with two
+    /// or more tabs it would close (one is Close Tab's job). Confirmed first, as in the gallery's
+    /// More. A private list has its own Close All Private Tabs above.
+    public var menuCloseAllTabs: Bool { !state.isPrivate && state.closableInList >= 2 }
 
     // MARK: The page menu (§4)
 

@@ -196,6 +196,17 @@ final class SidePaneController: UIViewController {
     }
     #endif
 
+    /// Find is on screen with matches: ⌘G and ⌘⇧G step through them.
+    var findHasMatches: Bool {
+        section == .find && (sections[.find] as? SidePaneFind)?.hasMatches == true
+    }
+
+    /// The next or previous of Find's matches (⌘G, ⌘⇧G).
+    func findStep(by delta: Int) {
+        guard section == .find else { return }
+        _ = (sections[.find] as? SidePaneFind)?.step(by: delta)
+    }
+
     /// The first responder in the pane (Find's field), for moving focus in.
     func focusSection() {
         sections[section]?.focus()
@@ -499,6 +510,18 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
         reveal(next % result.matches.count)
         if isCurrent, next == result.matches.count { Haptic.selection.play(in: table) }
         return false
+    }
+
+    /// There are matches to step through (⌘G and ⌘⇧G, as Return).
+    var hasMatches: Bool { !result.matches.isEmpty }
+
+    /// The next (1) or previous (-1) match, wrapping around. False with no matches.
+    func step(by delta: Int) -> Bool {
+        let count = result.matches.count
+        guard count > 0 else { return false }
+        let start = current ?? (delta > 0 ? -1 : 0)
+        reveal(((start + delta) % count + count) % count)
+        return true
     }
 
     private func reveal(_ index: Int) {

@@ -45,6 +45,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let duo = DuoUIState()
     /// The side pane beside the page on a wide screen (`+SidePane`).
     let sidePaneUI = SidePaneUIState()
+    /// The keyboard shortcuts' focus, the system's undo for a close, the pinch to the overview
+    /// and the history menus (`+KeyCommands`, `+Gestures`).
+    let gestureUI = GestureUIState()
     /// Where the focused pane's tab is attached. The chrome, the bar swipe, the gallery's zoom and
     /// the reader all act on the focused pane.
     var webContainer: UIView { panes.slots[session.tabs.focusedPane].container }
@@ -140,6 +143,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Where a running Reduce Motion crossfade takes the bar.
     private var crossfadeTarget: CGFloat?
     private var pullTracker = PullToRefreshTracker()
+    /// The pull's haptics are readied for this pull (once, past half the threshold).
+    private var pullHapticPrepared = false
     private var suggestionTask: Task<Void, Never>?
     /// Runs when the presented feature sheet closes, by Done or by a swipe.
     private var sheetClosed: (() -> Void)?
@@ -215,6 +220,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor(editing: true) }
 
         buildButtons()
+        installGestures()
         updateButtons()
         layOut()
         updateBarMode()
@@ -632,6 +638,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         startSession()
         // After the first frame: whether the field's microphone can run here.
         prepareDictation()
+        // The keys (and the system's undo) have a home from launch on, unless the field has them.
+        claimKeyFocusIfFree()
     }
 
     /// Call when the address bar's data changed outside the shell (the database opened), so an
@@ -645,7 +653,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     // MARK: Address bar
 
-    private func pillTapped() {
+    func pillTapped() {
         // A collapsed bar first comes back, as Safari's does; the next tap edits. A bar already
         // springing back out takes the tap as an edit.
         let restingProgress = snap.isRunning ? snap.target : collapse.progress
@@ -733,6 +741,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Any end of editing settles the new tab; only the user's own close goes back first
         // (`dismissSearchSheet`, which reads it before ending).
         tabsUI.newTabReturn = nil
+        claimKeyFocusIfFree()
     }
 
     public func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -876,7 +885,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// A hardware keyboard: Command-L opens the search sheet (every browser's Open Location).
     /// Escape closes it (the field's own key, `AddressPill.onEscape`, and a key command for
     /// when the text system passes it on), and so does Command-period, iOS's other Cancel.
-    override public var keyCommands: [UIKeyCommand]? {
+    /// `keyCommands` (`+KeyCommands`) adds these to the browser's other shortcuts.
+    var searchKeyCommands: [UIKeyCommand]? {
         if isEditingAddress {
             let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancelPressed))
             escape.wantsPriorityOverSystemBehavior = true
@@ -1321,6 +1331,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         _ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>
     ) {
         guard scrollView === pageScrollView else { return }
+        pullHapticPrepared = false
         if pullTracker.released() {
             refresh()
         } else {
@@ -1398,13 +1409,22 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Off on Start, in the reader and on error pages, whose own button reloads (state rules §3).
         guard rules.pullToRefresh else { return }
         if distance > 0 { pullIndicator.follow(pull: distance, threshold: PullToRefreshTracker.threshold) }
-        if distance > PullToRefreshTracker.threshold / 2 { Haptic.selection.prepare() }
+        // Readied once per pull, when it passes half the threshold (haptics plan, §4).
+        if distance > PullToRefreshTracker.threshold / 2, !pullHapticPrepared {
+            pullHapticPrepared = true
+            Haptic.threshold.prepare(in: view)
+            Haptic.selection.prepare(in: view)
+        } else if distance <= 0 {
+            pullHapticPrepared = false
+        }
         switch pullTracker.pulled(distance) {
         case .armed:
-            Haptic.selection.play()
+            // Into the outcome: the threshold; back out of it: a tick (haptics plan, rule 4).
+            Haptic.threshold.play(in: view)
             Signposts.signposter.emitEvent(Signposts.pullToRefreshArm)
             pullIndicator.setArmed(true)
         case .disarmed:
+            Haptic.selection.play(in: view)
             pullIndicator.setArmed(false)
         case nil:
             break
@@ -1413,19 +1433,20 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     private func refresh() {
         Signposts.signposter.emitEvent(Signposts.pullToRefresh)
-        pullIndicator.hide()
+        // It spins in its one color until the load ends (`+Tab`, `tabChanged`).
+        pullIndicator.beginRefreshing()
         reloadPage()
     }
 
     // MARK: Buttons and page menu
 
-    private func goBack() {
+    func goBack() {
         guard canGoBack else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navBack)
         performBack()
     }
 
-    private func goForward() {
+    func goForward() {
         guard let tab = currentTab, !isShowingReader, tab.canGoForward else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navForward)
         dropLaunchCover(animated: true)
@@ -1660,7 +1681,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
+    func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
         Signposts.signposter.emitEvent(Signposts.favoriteToggle)
         Task { [weak self, data] in
             if await data.setFavorite(isFavorite, url: url, title: title) {
@@ -1683,7 +1704,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         )
     }
 
-    private func showHistory() {
+    func showHistory() {
         // Beside the page where the side pane can show; a sheet elsewhere.
         if currentRules().historyInSidePane { return openSidePane(.history) }
         let history = sheets.history(

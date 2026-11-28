@@ -482,6 +482,19 @@ public enum Signposts {
     /// is the state it rests in.
     public static let sidebarState: StaticString = "sidebar.state"
 
+    /// Event: a hardware keyboard shortcut acted (message: which one, `KeyShortcut.identifier`).
+    public static let keyShortcut: StaticString = "key.shortcut"
+    /// Event: a long press on Back or Forward listed the tab's history (message: back or forward).
+    public static let historyMenu: StaticString = "nav.historyMenu"
+    /// Event: a page picked from that list (message: the offset, negative is back).
+    public static let historyJump: StaticString = "nav.historyJump"
+    /// Event: a pinch in on a page at its smallest zoom opened the tab overview (wide screens).
+    public static let pinchToOverview: StaticString = "gallery.pinch"
+    /// Event: the system's undo (shake, three-finger swipe, ⌘Z) reopened the last closed tab.
+    public static let undoCloseTab: StaticString = "tab.undoClose"
+    /// Interval: the refresh arrow spinning after a pull, until the page's load ends.
+    public static let pullRefreshing: StaticString = "ptr.refreshing"
+
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {
         name.description

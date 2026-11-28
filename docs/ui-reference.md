@@ -41,6 +41,49 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - **Confirmations:** only for destructive actions that affect a lot, for example Clear History and Data or Close All Tabs.
 - **Gestures are shortcuts, never the only way.** Every gesture has a menu equivalent, and menus name the gesture where it helps ("Next Tab — or swipe the address bar").
 
+## Gestures and keys
+
+Safari's, so a Safari user's hands already know them (inventory and sources:
+docs/research/gestures.md). Each acts only where its control would (docs/state-rules.md,
+principle 3); with nothing to do a gesture bumps, a key does nothing.
+
+| Gesture or key | Does | Where | Same as |
+|---|---|---|---|
+| Swipe the address bar left / right | Next / previous tab; past the last, New Tab | Every bottom bar; the pill in the top bar | Tabs menu: Previous Tab, Next Tab |
+| Swipe up from the address bar | All tabs | Bottom bars (not the top bar, not with side tabs) | Tabs button, Show All Tabs |
+| Edge swipe from the leading edge | Back; on a link's first page, back to its opener | Every page | Back |
+| Edge swipe from the trailing edge | Forward while the page has somewhere forward; else, on the Duo's inner screen, opens the side pane | Every page | Forward; More: Show Side Pane |
+| Pull the page down | Reload: the arrow runs through the brand's colors, fills with Lagoon when armed (haptic) and spins until the load ends | Loaded pages, not the reader or an error | More: Reload |
+| Pinch in on a page at its smallest zoom | All tabs | The Duo's inner screen (Safari on iPad) | Show All Tabs |
+| Pinch, double tap | Zoom the page (WebKit) | Every page | More: Zoom |
+| Tap the status bar | Top of the page; with the bar hidden, the bar first | Every page | — |
+| Tap the bottom edge | The hidden bar back | While the bar is hidden | — |
+| Long press Back / Forward | The pages it can reach, nearest first | Where the page has history that way | — |
+| Long press Tabs | New Tab, New Private Tab, Previous / Next, Show All, Reopen Closed Tab, Archived Tabs, windows, Close Tab, Close All N Tabs (asks first) | Always | More, the gallery's More |
+| Long press the pill | The page sheet | A page | More |
+| Long press a link or image | Preview and its menu | Every page | — |
+| Swipe a card up | Close the tab (Reopen toast) | The gallery | The card's menu |
+| Shake, three-finger swipe left, ⌘Z | Undo Close Tab: the last hand close | After a close, outside a field | The Reopen toast; Reopen Closed Tab |
+| ⌘T / ⌘⇧N | New Tab (of the list on screen) / New Private Tab | Always | Tabs menu |
+| ⌘W / ⌘⇧T | Close Tab / Reopen Closed Tab | Where the menu offers them | Tabs menu |
+| ⌘L | The search field | Where the pill can open it | A tap on the pill |
+| ⌘R / ⌘. | Reload / Stop | A page | More |
+| ⌘[ / ⌘] | Back / Forward | Where the button is enabled | Back, Forward |
+| ⌘F, ⌘G, ⌘⇧G | Find on Page, Find Next, Find Previous | A page; ⌘G while the find bar is open | More: Find |
+| ⌘D / ⌘⇧D | Add to Favorites / Read Later | A page that can be kept | The page sheet |
+| ⌃Tab, ⌘⇧] / ⌃⇧Tab, ⌘⇧[ | Next / previous tab | With a tab that way | Bar swipe |
+| ⌘1 to ⌘8, ⌘9 | That tab of the list; ⌘9 the last | The list on screen | Tap a card |
+| ⌘⇧\ | All tabs; again, back to the page | Where Show All Tabs is | Show All Tabs |
+| ⌘⇧R | Reader on or off | Where Reader is offered | The page sheet |
+| ⌘+ ⌘− ⌘0 | Zoom in, out, actual size | A page | More: Zoom |
+| ⌘Y | History | Always (beside the page on the inner screen) | More: History |
+| Escape, ⌘. | Closes the search field; Escape also the overview | Only there; elsewhere the page's own | Swipe down, a tap on the page |
+| Space, ⇧Space, arrows, ⌘↑ ⌘↓ | Scroll the page (WebKit) | A page, with a hardware keyboard | — |
+
+Holding ⌘ lists the shortcuts where the system shows that overlay. VoiceOver and Switch Control
+get the bar's gestures as actions on the pill (Previous Tab, Next Tab, New Tab, Show All Tabs),
+and the two-finger scrub closes the search field or the overview.
+
 ## Chrome
 
 - The page gets the screen. Controls show only while they apply, for example the progress bar while loading or a "Reopen tab" toast after a close.

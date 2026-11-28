@@ -238,6 +238,10 @@ extension BrowserViewController {
         refreshNeighbourPreviews()
         updateButtons()
         syncPanes()
+        // The last tab's web view may have held the keys; the new page takes them.
+        claimKeyFocusIfFree()
+        // A refresh spinning for the tab left behind ends with it.
+        pullIndicator.endRefreshing()
     }
 
     /// Removes an empty tab the user left, with no Reopen: it never shows as a card or neighbour.
@@ -307,6 +311,7 @@ extension BrowserViewController {
     /// The chrome's private tint, and private suggestions (no remote ones) in the search field.
     func setPrivateChrome(_ isPrivate: Bool) {
         data.isPrivate = isPrivate
+        pullIndicator.isPrivate = isPrivate
         guard pill.isPrivateTint != isPrivate else { return }
         pill.isPrivateTint = isPrivate
         Motion.animate(Motion.quick) {
@@ -340,6 +345,8 @@ extension BrowserViewController {
                 if let tab = currentTab { engineUI.crashedTabs.remove(tab.id) }
             } else if old != nil {
                 pill.progressBar.finish()
+                pullIndicator.endRefreshing()
+                pullIndicator.prepareColors()
                 // A typed load that ended without a new page (it failed): later visits are links.
                 if let tab = currentTab { engineUI.typedVisitTabs.remove(tab.id) }
             }

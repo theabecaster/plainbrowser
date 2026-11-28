@@ -2764,3 +2764,52 @@ how the address was changed, so neither intent needs a second door.
 
 **Removed.** `SheetItem.currentPage`, `SearchPick.editAddress` and `.copyAddress`, the row's
 Copy accessory (`focus.copyAddress`) and its check mark, `SearchSheet.confirmCopied`.
+
+## Safari's gestures and keys (2026-11-27)
+
+Owner: "Like Safari, we should support all expected web browser gestures." Inventory, sources and
+before/after: docs/research/gestures.md; the table: docs/ui-reference.md, "Gestures and keys".
+
+- **Keyboard shortcuts are a table in BrowserCore** (`KeyShortcut`), each with its keys, its
+  title and `ControlRules.allows(_:)`, which asks the predicate of the control it stands for
+  (⌘[ is Back's `isEnabled`, ⌘W the tabs menu's Close Tab, ⌘⇧\ Show All Tabs). Tested on macOS.
+  The shell's `keyCommands` are built once; `canPerformAction` asks the rule when a key comes in,
+  so nothing is computed per frame. Over the gallery only the tab keys, ⌘⇧\ and Escape act; under
+  a sheet none.
+- **The keys need a home.** UIKit sends keys from the first responder up, and after a close or
+  with the field gone nothing holds them. `claimKeyFocusIfFree` gives them to the page's web view
+  while a hardware keyboard is attached (`GCKeyboard`), so Space and the arrows scroll as in
+  Safari, else to the browser (`canBecomeFirstResponder`), and never takes them from a field, a
+  page's form or a sheet. It runs on the next turn, after UIKit settles. GameController is
+  Apple's, already on the device; it is read only there.
+- **Undo Close Tab is the system's undo** (`undoManager` on the browser, one level): shake, the
+  three-finger swipe and ⌘Z reopen the last hand close, the same batch as the Reopen toast. The
+  field and a page's form keep their own undo, as they come first in the responder chain.
+- **History on a long press of Back and Forward** (`Tab.historySteps`, `go(to:)`, which refuses a list that changed under the menu):
+  the menu is a deferred element built when it opens, set on the button only while the page has
+  history that way, so the plain tap never changes and the menu is never empty.
+- **Close All N Tabs joins the tabs menu**, as in Safari, confirmed first with the count
+  (`ControlRules.menuCloseAllTabs`, two or more it would close; pinned tabs stay).
+- **The trailing edge is the page's swipe forward first** (`FixedChoices.forwardSwipeBeforeSidePane`).
+  The side pane's edge swipe begins only where forward has nothing to do. Rejected: the pane
+  always winning (a Safari user's forward swipe silently did something else on the inner screen);
+  a two-stage edge (invisible difference); the pane only from More (the swipe in is how the pane
+  feels attached to the edge). Back's edge already reads this way.
+- **Pinch in to the overview, inner screen only**, as Safari keeps it to the iPad. A watcher
+  recognizer (no touches cancelled, simultaneous with all) that starts only at the page's
+  smallest zoom and acts at release below 70% (`pinchToOverviewScale`). The page is put back to
+  its size before its card takes the picture.
+- **Pull to refresh's colors** (owner): a loop through `Palette.pullCycle` in OKLab, held in a
+  lightness band per appearance, its phase `turns × fraction²` so it speeds up near the threshold;
+  armed fills with Lagoon (violet in a private tab), released spins in that color until the load
+  ends (at most 1.5 s). Reduce Motion: one color, no spin. Tables built once; a callback is a
+  lookup.
+- **The refresh arrow is drawn, not a symbol** (owner: it "spins weird"): `arrow.clockwise`'s
+  image box isn't centered on its circle, so turning it wobbled, and the system's Rotate effect
+  can't follow a pull. A `CAShapeLayer` arc on a true circle plus an arrowhead layer, as the
+  mask of the colored view: the arc grows with the pull, the spin turns about the circle's own
+  center (docs/research/gestures.md, "The refresh arrow").
+- **Not done:** dragging links out of a page on iPhone-class screens (WebKit keeps its drag
+  interaction off there; turning it on needs SPI), drops onto the strip and rail (the strip
+  lane's), and Safari's sideways card swipe (Plain's cards swipe up, Arc's way, decided
+  earlier).

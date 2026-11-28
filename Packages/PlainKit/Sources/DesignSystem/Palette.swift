@@ -177,6 +177,18 @@ public enum Palette {
     public static let focusRim: [UIColor] = [mint, accent]
     /// The load-progress bar, start to end. It ends in a coral tip.
     public static let progress: [UIColor] = [mint, accent, coral]
+    /// Pull to refresh's color loop: dawn teal, Lagoon, the icon's violet bloom, Curl Coral, the
+    /// order the icon's dawn runs (the shell keeps each in a lightness band that reads on its
+    /// ground).
+    public static let pullCycle: [UIColor] = [mint, accent, BrandArt.bloomViolet, coral]
+    /// The same loop in a private tab: its dusk violets and the sky's blue.
+    public static let privatePullCycle: [UIColor] = [BrandArt.bloomViolet, BrandArt.dawnViolet, Mark.sky[1]]
+    /// An armed pull's fill in a private tab, where a regular tab's is Lagoon: the violet bloom,
+    /// deep enough for the white arrow on it (`privateAccent` is the light mark on glass).
+    public static let privatePullFill = BrandArt.bloomViolet
+    /// The pull's one color under Reduce Motion in a private tab: deep by day, a light step by
+    /// night for contrast.
+    public static let privatePullRest = UIColor(light: BrandArt.dawnViolet, dark: UIColor(rgb: 0xB3A4FF))
 }
 
 extension UIColor {

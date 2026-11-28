@@ -92,7 +92,8 @@ page stays in the mode of the screen it was opened on.
 4. **The switch is a reload in place under the page's own picture.** The picture
    (`snapshotView`) covers the web view; the reload runs with the new mode; when it finishes
    Plain resets the zoom WebKit restored from the old layout, scrolls the element that was at the
-   top (the first one under the bar that scrolls with the page, so not a sticky or fixed header)
+   top before the change (read at its first notice, the safe area changing, because the unfold
+   reflows the page before it announces the resize) (the first one under the bar that scrolls with the page, so not a sticky or fixed header)
    back to the top (by id, else by its path in the document, else the same scroll fraction),
    waits two frames, then crossfades (0.2 s). The picture never stays longer than 2.5 s. No
    history entry is added.

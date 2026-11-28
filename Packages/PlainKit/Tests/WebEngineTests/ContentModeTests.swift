@@ -99,6 +99,33 @@ struct ContentModeTests {
         #expect(afterUnfold.hasPrefix("Para 60") || afterUnfold.hasPrefix("Para 59") || afterUnfold.hasPrefix("Para 61"))
     }
 
+    /// The Duo's unfold: the safe area makes the page wider (and reflows it) a few frames before
+    /// the resize is announced. The place put back is the one read at that first notice.
+    @Test func unfoldKeepsThePlaceReadBeforeTheFirstReflow() async throws {
+        let harness = try await Harness(paneSize: Self.outer)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/long", in: tab)
+        #expect(tab.contentMode == .mobile)
+        _ = try await harness.evaluate("document.querySelectorAll('p')[59].scrollIntoView(); 1", in: tab)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(try await topParagraph(harness, tab).hasPrefix("Para 60"))
+
+        // The first notice, then the wider page, then the announced resize.
+        harness.pool.panesMayChange()
+        harness.container.frame.size = CGSize(width: 520, height: Self.outer.height)
+        harness.container.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(150))
+        report("top paragraph after the first reflow \(try await topParagraph(harness, tab))")
+        fold(harness, to: Self.inner)
+        try await waitForMode(.desktop, tab, harness)
+        try await settle(tab, harness)
+        let after = try await topParagraph(harness, tab)
+        report("top paragraph after unfold \(after)")
+        #expect(after.hasPrefix("Para 60") || after.hasPrefix("Para 59") || after.hasPrefix("Para 61"))
+    }
+
     @Test func theProbeAnswers() async throws {
         let harness = try await Harness(paneSize: Self.inner)
         defer { harness.cleanUp() }

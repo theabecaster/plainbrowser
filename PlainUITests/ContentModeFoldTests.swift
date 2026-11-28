@@ -20,6 +20,8 @@ final class ContentModeFoldTests: XCTestCase {
         app.launchArguments += ["-PlainInMemoryStore"]
         app.launch()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        // Every test starts on the outer screen; one that failed while open leaves the Duo open.
+        if app.windows.firstMatch.frame.width >= 500 { fold(app, "Closed") }
         try XCTSkipUnless(app.windows.firstMatch.frame.width < 500, "starts on the outer screen")
         return app
     }

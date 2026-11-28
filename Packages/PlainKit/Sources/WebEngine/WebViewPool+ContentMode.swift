@@ -26,6 +26,10 @@ final class ContentModeCoordinator {
     var pendingDeadline: ContinuousClock.Instant?
     /// Counts pane changes (a fold, a drag), not their passes: a place read belongs to one.
     var changeID = 0
+    /// A pane change is under way: from its first notice (`panesMayChange()`, `panesWillChange()`)
+    /// until the check that follows it runs. Every notice in between belongs to the same change,
+    /// so the place read at the first one (before any reflow) is the one a switch puts back.
+    var changeOpen = false
 }
 
 /// A tab's mode bookkeeping, kept on its slot.
@@ -88,6 +92,13 @@ struct ContentModeProbe: Sendable {
         anchorText = anchor?["text"] as? String ?? ""
     }
 
+    /// The anchor, for the log: its id, or that it is found by its path. Never its text: a page's
+    /// words are the user's.
+    var anchorLabel: String {
+        guard anchorPath != nil else { return isScrolled ? "none (fraction)" : "none (top)" }
+        return anchorID.map { "#\($0)" } ?? "by path"
+    }
+
     /// The arguments of `ContentModeScripts.restore`.
     func restoreArguments(top: Double) -> [String: Any] {
         var anchor: Any = NSNull()
@@ -147,17 +158,21 @@ extension WebViewPool {
 
     // MARK: Events from the shell
 
+    /// The first sign that a pane's size is changing, before its web view has the new size: the
+    /// safe area or the layout changed (`BrowserViewController.notePaneSizes`). A fold starts
+    /// this way: the system changes the safe area (and so the page's width) a few frames before
+    /// it announces the window's resize, and a place read after that is the reflowed page's.
+    /// Reads each reader's place and checks the pages once things settle; a resize that follows
+    /// (`panesWillChange()`) holds that check and keeps the place.
+    public func panesMayChange() {
+        guard FixedChoices.contentModeFollowsFold else { return }
+        readPlaces(notice: "may")
+        if !modeChecks.panesChanging { scheduleContentModeCheck(after: FixedChoices.contentModeSettleDelay) }
+    }
+
     /// A pane is about to change size (a fold, an unfold, a rotation): checks wait for it.
     public func panesWillChange() {
-        // Where each reader is, before the change reflows the pages (once per change: a fold's
-        // several passes, a drag, read the place it started from). One message per page on screen.
-        if !modeChecks.panesChanging { modeChecks.changeID += 1 }
-        if FixedChoices.contentModeFollowsFold {
-            for slot in attachedSlots()
-            where !slot.contentMode.readsPlace || slot.contentMode.placeChange != modeChecks.changeID {
-                readPlace(of: slot)
-            }
-        }
+        if FixedChoices.contentModeFollowsFold { readPlaces(notice: "will") }
         modeChecks.panesChanging = true
         _ = modeChecks.debounce.paneDidChange()
         modeChecks.pending?.cancel()
@@ -169,6 +184,7 @@ extension WebViewPool {
     /// closed). The pages on screen are checked `FixedChoices.contentModeSettleDelay` later, unless
     /// another change comes first.
     public func panesDidChange() {
+        WebViewPool.contentModeLogger.notice("panes did change (change \(self.modeChecks.changeID))")
         modeChecks.panesChanging = false
         scheduleContentModeCheck(after: FixedChoices.contentModeSettleDelay)
     }
@@ -185,9 +201,28 @@ extension WebViewPool {
             try? await Task.sleep(until: deadline, clock: .continuous)
             guard !Task.isCancelled, let self, modeChecks.debounce.isCurrent(generation) else { return }
             modeChecks.pendingDeadline = nil
+            // Settled: the next notice starts another change, with its own places.
+            modeChecks.changeOpen = false
             for slot in attachedSlots() {
                 await checkContentMode(of: slot, generation: generation)
             }
+        }
+    }
+
+    /// Where each reader is, before the change reflows the pages: once per change (a fold's
+    /// several notices and passes, a drag, read the place it started from). One message per page
+    /// on screen, sent before the web view gets its new size, so the page answers from the
+    /// layout the reader saw.
+    private func readPlaces(notice: String) {
+        if !modeChecks.changeOpen {
+            modeChecks.changeOpen = true
+            modeChecks.changeID += 1
+            Signposts.signposter.emitEvent(Signposts.contentModePaneChange, "\(notice)")
+            WebViewPool.contentModeLogger.notice("pane change \(self.modeChecks.changeID) begins (\(notice, privacy: .public))")
+        }
+        let change = modeChecks.changeID
+        for slot in attachedSlots() where !slot.contentMode.readsPlace || slot.contentMode.placeChange != change {
+            readPlace(of: slot)
         }
     }
 
@@ -200,12 +235,28 @@ extension WebViewPool {
         let token = slot.contentMode.placeToken
         let zoom = max(webView.scrollView.zoomScale, 0.01)
         let top = Double(webView.obscuredContentInsets.top / zoom)
+        let change = modeChecks.changeID
+        let bounds = webView.bounds.size
+        let offset = webView.scrollView.contentOffset.y
+        Signposts.signposter.emitEvent(Signposts.contentModePlace, "request")
+        WebViewPool.contentModeLogger.notice(
+            "place request (change \(change)): view \(Int(bounds.width))x\(Int(bounds.height)) offset \(Int(offset)) top \(Int(top))"
+        )
         webView.callAsyncJavaScript(
             ContentModeScripts.place, arguments: ["topInset": top], in: nil, in: UserScripts.world
         ) { [weak slot] result in
             guard let slot, slot.contentMode.placeToken == token, slot.webView.url == url,
-                  let answer = (try? result.get()) as? [String: Any] else { return }
-            slot.contentMode.placeBeforeChange = ContentModeProbe(answer)
+                  let answer = (try? result.get()) as? [String: Any] else {
+                WebViewPool.contentModeLogger.notice("place reply (change \(change)) dropped")
+                return
+            }
+            let place = ContentModeProbe(answer)
+            Signposts.signposter.emitEvent(Signposts.contentModePlace, "reply")
+            let width = answer["width"] as? Int ?? -1, scrollY = answer["y"] as? Int ?? -1
+            WebViewPool.contentModeLogger.notice(
+                "place reply (change \(change)): page width \(width) scrollY \(scrollY) anchor \(place.anchorLabel, privacy: .public)"
+            )
+            slot.contentMode.placeBeforeChange = place
         }
     }
 
@@ -238,6 +289,9 @@ extension WebViewPool {
     }
 
     private func checkContentMode(of slot: Slot, generation: Int) async {
+        // A pane change that came while an earlier page was being checked has read new places:
+        // this check is not theirs to use up.
+        guard modeChecks.debounce.isCurrent(generation) else { return }
         guard let tab = slot.tab, slot.container != nil, slot.contentMode.running == nil, !slot.isRestoring,
               let url = slot.webView.url
         else { return }
@@ -307,6 +361,13 @@ extension WebViewPool {
             // needs no restore: the reload starts there.
             let saved = slot.contentMode.placeChange == modeChecks.changeID ? slot.contentMode.placeBeforeChange : nil
             let place = saved ?? answer
+            let source = saved != nil ? "read before the change" : "read now"
+            let anchor = place?.anchorLabel ?? "none", current = answer?.anchorLabel ?? "none"
+            WebViewPool.contentModeLogger.notice("""
+                switch to \(target.rawValue, privacy: .public) (change \(self.modeChecks.changeID)): \
+                view \(Int(webView.bounds.width)) top \(Int(top)) place \(source, privacy: .public) \
+                anchor \(anchor, privacy: .public) now at \(current, privacy: .public)
+                """)
             forgetPlace(of: slot)
             let restore = place.flatMap { $0.isScrolled ? $0.restoreArguments(top: top) : nil } ?? [:]
             beginSwitch(slot, to: target, restore: restore, generation: generation)
@@ -362,6 +423,7 @@ extension WebViewPool {
         }
         // The navigation delegate gives the reload the mode the pane wants now.
         change.navigation = webView.reload()
+        WebViewPool.contentModeLogger.notice("reload start: \(target.rawValue, privacy: .public) covered \(cover != nil)")
         if change.navigation == nil {
             Task { [weak self, weak slot] in
                 guard let self, let slot else { return }
@@ -386,7 +448,14 @@ extension WebViewPool {
                 _ = await withWebKitTimeout(fallback: ()) { done in
                     webView.callAsyncJavaScript(
                         ContentModeScripts.restore, arguments: change.restore, in: nil, in: UserScripts.world
-                    ) { _ in done(()) }
+                    ) { result in
+                        let scrollY = ((try? result.get()) as? NSNumber)?.intValue ?? -1
+                        Signposts.signposter.emitEvent(Signposts.contentModeRestore, "\(scrollY)")
+                        WebViewPool.contentModeLogger.notice(
+                            "restore: scrollY \(scrollY) view \(Int(webView.bounds.width)) offset \(Int(webView.scrollView.contentOffset.y))"
+                        )
+                        done(())
+                    }
                 }
             }
         }
@@ -437,7 +506,11 @@ extension WebViewPool {
     /// The page committed: it is in the mode its navigation was given.
     func contentModeDidCommit(_ slot: Slot) {
         // A new page (or the switch's own reload) has nothing to do with a place read before.
-        if slot.contentMode.running == nil { forgetPlace(of: slot) }
+        if slot.contentMode.running == nil {
+            forgetPlace(of: slot)
+        } else {
+            WebViewPool.contentModeLogger.notice("reload commit")
+        }
         // A new document starts with nothing typed. Back or forward may show a cached one that
         // was typed in: it says so again (`pageshow`), and until then the flag errs on keeping.
         if !slot.contentMode.pendingIsBackForward { slot.contentMode.subframeTyped = false }
@@ -455,6 +528,7 @@ extension WebViewPool {
         if let change = slot.contentMode.running {
             // Only the reload's own finish ends the switch; another navigation's is not its page.
             guard change.navigation === navigation else { return }
+            WebViewPool.contentModeLogger.notice("reload finish: restore \(!change.restore.isEmpty)")
             Task { [weak self, weak slot] in
                 guard let self, let slot else { return }
                 await finishSwitch(slot, restoring: true, outcome: "painted")

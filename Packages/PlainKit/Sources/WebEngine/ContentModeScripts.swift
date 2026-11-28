@@ -127,7 +127,8 @@ nonisolated enum ContentModeScripts {
     /// page), so a switch afterwards puts back the place the reader saw, not the reflowed one.
     static let place = """
         \(placeSource)
-        return { anchor, fraction: range > 0 ? scrollY / range : 0, scrolled: scrollY > 0 };
+        return { anchor, fraction: range > 0 ? scrollY / range : 0, scrolled: scrollY > 0,
+          width: innerWidth, y: Math.round(scrollY) };
         """
 
     /// Puts the page back where `probe` found it: the anchor's element under the top edge when

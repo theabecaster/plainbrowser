@@ -3697,6 +3697,17 @@ Research and sources: `docs/research/content-mode.md`.
   fades the picture without restoring. A reload adds no history entry. Leaving the screen, moving
   to another pane or closing ends a switch at once; a fold during a switch checks again once it
   settles. A tab attached right after a fold never shortens the fold's settle time.
+- **The place is read at the first notice of a change, before any reflow.** On the Duo an unfold
+  changes the safe area first (the outer screen's page goes from 382 to 466 pt wide and reflows)
+  and announces the resize about 30 ms later, so a place read at `viewWillTransition` was the
+  reflowed page's: the paragraph that had moved under the top edge, 16 paragraphs on in the test
+  page, and the reload put that one back. The shell now tells the pool from
+  `viewSafeAreaInsetsDidChange` and before a layout is applied (`notePaneSizes`,
+  `WebViewPool.panesMayChange()`), in the same turn and before the web view has its new size, so
+  the page answers from the layout the reader saw. One read per change: every later notice of
+  the same change (the resize, its passes) keeps it, until the check that follows has run.
+  Rejected: an anchor kept up to date on every scroll end (a page script and work on each scroll
+  for every page, for a fold that is rare), and reading at the resize's start (too late, above).
 - **`Tab.contentMode` is the mode of the page that shows**, set when a navigation commits (it was
   set when it started, so a failed or download navigation could flip Desktop Site's checkmark).
   A page from the back-forward cache keeps the mode it was loaded in: after a back or forward,
@@ -3708,6 +3719,10 @@ Research and sources: `docs/research/content-mode.md`.
   honors the meta viewport in both modes, so the switch matters only for sites that serve by user
   agent, and that can't be told cheaply.
 - **Perf cost:** nothing at launch, on scroll or during the fold's animation. A settled pane
-  change compares two values per attached tab. Only a page in the wrong mode runs the probe (one
-  IPC) and the reload. Signposts: `contentMode.switch` (interval, reload to crossfade) and
-  `contentMode.kept` (event, with the reason).
+  change compares two values per attached tab, after one message per page on screen at its start
+  (the place). A safe area change costs one layout decision (`DuoLayout`, no views touched).
+  Only a page in the wrong mode runs the probe (one IPC) and the reload. Signposts:
+  `contentMode.switch` (interval, reload to crossfade), `contentMode.kept` (event, with the
+  reason), `contentMode.paneChange`, `contentMode.place` and `contentMode.restore` (events). The
+  same steps are in the log (categories `contentMode` and `duo`), with sizes and the anchor's id,
+  never a page's text or address.

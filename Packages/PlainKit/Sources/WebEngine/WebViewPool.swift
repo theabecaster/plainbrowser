@@ -591,6 +591,7 @@ public final class WebViewPool {
         slot.lastUse = tick()
         let webView = slot.webView
         if webView.superview !== container {
+            WebViewPool.contentModeLogger.notice("web view attach: \(Int(container.bounds.width))x\(Int(container.bounds.height))")
             cancelSwitch(slot)
             webView.frame = container.bounds
             webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -615,6 +616,7 @@ public final class WebViewPool {
     public func detach(_ tab: Tab) {
         guard let slot = slots[tab.id], slot.container != nil else { return }
         thumbnails.capture(slot.webView, for: tab)
+        WebViewPool.contentModeLogger.notice("web view detach")
         cancelSwitch(slot)
         slot.webView.removeFromSuperview()
         slot.container = nil

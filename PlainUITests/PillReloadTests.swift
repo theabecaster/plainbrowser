@@ -328,8 +328,24 @@ final class PillReloadCaptureTests: XCTestCase {
         app.buttons["back"].tap()
         pause(1)
 
-        // In a dark row, a light-only page offers dark pages: taken, Page Appearance shows at the
+        // Plain dark, a light-only page offers dark pages: taken, Page Appearance shows at the
         // leading end beside Reload.
+        if more.waitForExistence(timeout: 2) {
+            more.tap()
+            let settings = app.buttons["menu.settings"]
+            if !settings.waitForExistence(timeout: 2) { more.tap() }
+            if settings.waitForExistence(timeout: 3) {
+                settings.tap()
+                let row = app.buttons["settings.appearance"]
+                if row.waitForExistence(timeout: 3) {
+                    pause(2)
+                    row.tap()
+                    if app.buttons["Dark"].waitForExistence(timeout: 2) { app.buttons["Dark"].tap() }
+                }
+                if app.buttons["Done"].waitForExistence(timeout: 2) { app.buttons["Done"].tap() }
+                pause(1)
+            }
+        }
         open(app, server.address("/light-site"))
         _ = app.webViews.staticTexts["Light Only"].waitForExistence(timeout: 15)
         let suggestion = app.buttons["darkPagesSuggestion.turnOn"]

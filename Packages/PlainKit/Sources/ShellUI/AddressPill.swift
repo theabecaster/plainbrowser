@@ -302,6 +302,9 @@ final class AddressPill: UIView {
             if ceil(measured.size().width) > hostRoom { wanted = compact }
         }
         if hostLabel.attributedText != wanted { hostLabel.attributedText = wanted }
+        // The short form's symbol is the warning: a long host loses its middle, never the symbol.
+        let mode: NSLineBreakMode = wanted == compact || isPrivateTint ? .byTruncatingMiddle : .byTruncatingHead
+        if hostLabel.lineBreakMode != mode { hostLabel.lineBreakMode = mode }
     }
 
     /// The top bar's pill, which a side pane or a sidebar can make narrow: there a warning that
@@ -422,6 +425,9 @@ final class AddressPill: UIView {
             ? Self.compactNotSecureText(for: url, font: hostLabel.font).map { isPrivateTint ? Self.privateMarked($0, onPage: true) : $0 }
             : nil
         hostLabel.attributedText = text
+        // The full text's truncation (`fitHostText` changes it for the short form).
+        let mode: NSLineBreakMode = isPrivateTint ? .byTruncatingMiddle : .byTruncatingHead
+        if hostLabel.lineBreakMode != mode { hostLabel.lineBreakMode = mode }
         fitHostText()
         // VoiceOver hears a mode as the pill shows it ("Reader, https://…"), without the private
         // mark's attachment character: the label already says Private.

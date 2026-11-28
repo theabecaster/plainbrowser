@@ -48,13 +48,14 @@ the state of the app."
    it (switching tabs, opening a page in another tab, the gallery) drops it with no Reopen. New Tab
    on an empty tab reuses it. The gallery therefore never shows a blank card, and the swipe never
    lands on one.
-8. **At most one New Tab button on screen, and none on an empty tab.** The bar has no New Tab
-   button: on a page, New Tab is one tap into the switcher, as in Safari and Arc. The new-tab
-   affordances are: the gallery's "+", the
-   card past the last tab (a gesture), New Tab in the tabs menu and New Private Tab in More. No
-   two of the buttons show at once. The two cards are places, where the next tab would sit, not
-   buttons: the one-card gallery shows its card next to the bar's "+", which keeps the bar's
-   shape. A menu item that repeats the button it opened from is fine.
+8. **At most one New Tab button on screen, and none on an empty tab.** On a page the bar's "+"
+   is the one (owner, 2026-11-27: "a quick way to open a new tab instead of having to open the
+   tab switcher"; docs/research/new-tab.md); while the gallery is up, the gallery's "+". The
+   other ways are shortcuts, not buttons: the card past the last tab (a gesture), the "+"'s long
+   press (the other kind), New Tab in the tabs menu, New Private Tab in More and ⌘T. The strip
+   on the inner screen has no "+" of its own, and the sidebar's New Tab shows only while the bar
+   has none. The card past the last tab is a place, where the next tab would sit. A menu item
+   that repeats the button it opened from is fine.
 
 Sources behind these choices are in section 9.
 
@@ -82,7 +83,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | State | Face | Tap | Why |
 |---|---|---|---|
 | `others ≥ 1` | Tabs (`square.on.square`) | Gallery | There is somewhere to switch to. |
-| `others = 0`, `page` | Tabs (`square.on.square`) | Gallery: this tab's card alone, centered, with the same page-to-card motion as the swipe up | Owner, 2026-11-27: "Not having a tabs button when there's only one tab is weird too — match the behavior to what dragging the URL bar up does now." Was "+" (New Tab) until then. New Tab is the switcher's "+", one tap further, and the tabs menu's New Tab and More's New Private Tab as before. |
+| `others = 0`, `page` | Tabs (`square.on.square`) | Gallery: this tab's card alone, centered, with the same page-to-card motion as the swipe up | Owner, 2026-11-27: "Not having a tabs button when there's only one tab is weird too — match the behavior to what dragging the URL bar up does now." Was "+" (New Tab) until then. New Tab is the bar's "+" beside it (2026-11-27, new-tab lane), with the tabs menu's New Tab and More's New Private Tab as before. |
 | `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) stay in More (section 4) and show as shortcuts on the start screen, so none of them is ever out of reach. |
 | Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. The sidebar's New Tab follows principle 8 (hidden on an empty tab). |
 
@@ -118,12 +119,12 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Control | Start | Page | Hide or dim | Why |
 |---|---|---|---|---|
 | Back | — | shown; dim when there is nothing to go back to | Dim inside Page | The most used button, leftmost; its place is muscle memory. Safari and Arc both keep Back in reach. On Start there is no page and no history. |
-| Forward | — | hidden in place until there is somewhere forward | Hide (slot kept) | Rarely available. Safari 26 shows Forward only after Back is used (MacRumors). The slot is kept, so Tabs, Share and More never move. On the Duo's vertical bar: dim. In the inner screen's top bar Back and Forward have their own capsule, which holds only what shows and grows away from Back, so nothing else moves. |
+| Forward | — | hidden in place until there is somewhere forward | Hide (slot kept) | Rarely available. Safari 26 shows Forward only after Back is used (MacRumors). The slot is kept, so Tabs, New Tab and More never move. On the Duo's vertical bar: dim. In the inner screen's top bar Back and Forward have their own capsule, which holds only what shows and grows away from Back, so nothing else moves. |
 | Back in special pages | | Reader: closes the reader. A child tab's first page: closes the tab and returns to its opener. | | One Back for "go to what I was looking at". |
-| Share | — | shown when the tab has an address | Hide on Start | Nothing to share on Start. On a failed page it shares the address that was tried. |
+| New Tab ("+", Share's slot until 2026-11-27) | — | shown on every page (loading, failed, crashed, the reader, private) | Hide on Start | On Start the tab is already a new tab. A tap opens the kind on screen with the keyboard up; a long press, the other kind. A New Tab opened from a page goes back to it when the user closes its field (swipe down, tap beside the rows) with nothing typed or opened (`dismissSearchByUser`), not from the gallery, and only in the same pane. Share is the page sheet's last tile (§4). |
 | More (page menu) | shown | shown | Never hidden | History, Settings and Edit Favorites apply everywhere. |
 | Tabs slot | see above | see above | | |
-| Bar shape | beside the pill: the bar shrinks to a round glass button (More), or a capsule (Tabs and More), at the pill's trailing end, and the pill takes the rest of the row at the bottom (`ControlRules.barBesidePill`) | under the pill, full width | Changes between modes only | A full-width bar holding one button read as unfinished. Start is its own mode, so the bar may change shape (principle 5); the Duo's vertical bar packs its items itself. On a wide screen (the Duo's inner screen) the bar is the top bar in every mode: Back and Forward at the row's leading end, Tabs, Share and More at its trailing end, the pill between; a capsule with nothing to show (Back and Forward on Start) leaves no empty glass. |
+| Bar shape | beside the pill: the bar shrinks to a round glass button (More), or a capsule (Tabs and More), at the pill's trailing end, and the pill takes the rest of the row at the bottom (`ControlRules.barBesidePill`) | under the pill, full width | Changes between modes only | A full-width bar holding one button read as unfinished. Start is its own mode, so the bar may change shape (principle 5); the Duo's vertical bar packs its items itself. On a wide screen (the Duo's inner screen) the bar is the top bar in every mode: Back and Forward at the row's leading end, Tabs, New Tab and More at its trailing end, the pill between; a capsule with nothing to show (Back and Forward on Start) leaves no empty glass. |
 | Pill | placeholder "Search or enter address" | host, "Not Secure —" first on http, mixed content or a passed certificate; on a failed page the address that was tried | Never hidden by a mode; while reading it may sink away (below) | The one way to search. |
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
@@ -131,7 +132,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Start screen shortcuts (under the Search button) | Private Tab always (Regular Tab on an empty private tab: it leaves private browsing, so it says where it goes); Reopen Closed Tab with `closed`; Archived Tabs with `archived`. Only while the keyboard is down. | — | | Small, quiet, one tap: the tabs items in plain sight when no switcher shows (owner). |
 | Pull to refresh | off | on a loaded or loading page; off on failed and crashed pages (their Try Again / Reload owns it) and in the reader | Off | Nothing to reload on Start; a second reload control next to Try Again is noise. |
 | Bar swipe sideways | to neighbours in `list` | to neighbours in `list` | Rubber-band with no neighbour | The same gesture as on a page. Leaving an empty tab drops it. |
-| New Tab card past the last tab | never | when the tab has an address and is last in `list` | Not offered | Swiping past an empty tab would make a second empty tab. |
+| New Tab card past the last tab | never | when the tab has an address and is last in `list` | Not offered | Swiping past an empty tab would make a second empty tab. It commits only while armed (80 pt, `threshold` haptic; a tick if pulled back under 70 pt) and only when the finger lets go: a touch the system cancels springs back. |
 | Collapsed pill | n/a | taps only | | It sits in the home-indicator zone. |
 
 ### Chrome while reading: expanded, pill, hidden
@@ -166,7 +167,7 @@ The top bar on the Duo's inner screen changes no inset at all (below). Under Red
 and revealing are a crossfade.
 
 **Compact height (an iPhone on its side).** Expanded is one bottom row: Back and Forward in a
-capsule at the leading end, the pill, then Tabs, Share and More in a capsule at the trailing end
+capsule at the leading end, the pill, then Tabs, New Tab and More in a capsule at the trailing end
 (the top bar's two capsules, at the bottom). The leading capsule keeps both slots and the pill a
 fixed place, so Forward coming and going hides in place and moves nothing. Pill and Hidden are as above: the capsules drop and fade, the pill shrinks
 into the home-indicator zone, then sinks away. The start screen keeps its own row (More beside the
@@ -174,7 +175,7 @@ pill); editing lifts the pill above the keyboard, full width, as everywhere.
 
 **Duo inner screen (top bar).** The same three states drive the top bar. Where the status items
 keep to a corner (the Duo's inner screen) the row sits on their row, clear of the corner, and the
-page runs to the top edge: Expanded is the row (Back/Forward, the pill, Tabs/Share/More) and the
+page runs to the top edge: Expanded is the row (Back/Forward, the pill, Tabs/New Tab/More) and the
 strip, and a fresh page's first line starts under them; Pill shrinks the address in place on the
 row, buttons and strip faded; Hidden lifts it off the top edge. The page's top inset is the same in
 every state (`obscuredContentInsets.top` 0): the bar floats over the page, so the page and any
@@ -408,7 +409,7 @@ apply only to what it leaves open.
 Rows are states, columns are controls. Cells use the terms in section 2. A state not listed
 combines its base state with the rows that modify it (for example, private + loading).
 
-| State | Back | Fwd | Tabs slot | Share | More | Swipe up | Bar swipe | New Tab card | Pull to refresh | Progress | Start screen |
+| State | Back | Fwd | Tabs slot | New Tab | More | Swipe up | Bar swipe | New Tab card | Pull to refresh | Progress | Start screen |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | First run (no tabs, keyboard up) | — | — | — | — | — | off | off | — | off | — | ✓ (behind the field) |
 | Launch with a last tab, picture standing in | as the saved tab | as the saved tab | as the saved tab | ✓ | ✓ | waits for the tab | waits for the tab | — | off | — | — |

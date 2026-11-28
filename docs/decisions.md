@@ -2453,3 +2453,33 @@ field in the simulator, so Escape is unverified there; Command-period closes.
 ## A close button on every tab card (2026-11-27)
 
 The owner asked for a close button besides the swipe. Each card gets a × in its title row's trailing corner: a 24 pt plate inside a 44 pt target, drawn without a glass view (one per card would cost every scroll frame). It calls the card's existing close hook, so the motion, haptic, signpost and Reopen toast are the swipe's own. It lives in the card's body, outside the masked title row, so the mask never clips it; it sits at the edge of the part of the card that shows, so the focused cascade card (the next card over its trailing 22%) keeps one, and a card covered by more than half hides it. The gallery's scroll view cancels touches on it, so a sideways drag that starts on the × still scrolls.
+
+## New Tab in the bar, in Share's slot (2026-11-27)
+
+Owner: "a quick way to open a new tab instead of having to open the tab switcher. But I don't want
+to overload the interface." Research, options and the Codex review: docs/research/new-tab.md.
+
+- **Chosen: the bar's Share slot is New Tab ("+")** on every layout: Back, Forward, Tabs, New Tab,
+  More (phone bar, landscape row, the Duo's vertical bar, the inner screen's trailing capsule).
+  Share was the bar's one duplicate (the page sheet's last tile). Safari 26's default layout and
+  Chrome keep Share out of the bar; Chrome, Firefox and Brave put "+" in it. The bar stays at five
+  (Hoober: more than four or five items on a phone bar is trouble), with Tabs still in the
+  middle. Cost: Share is two taps (More, Share) instead of one.
+- **Same predicate as Share had** (`ControlRules.newTab`: shown on every page, hidden on Start),
+  so the bar's shape, the start screen's beside-the-pill bar and the vertical bar's packing are
+  unchanged.
+- **Tap: the kind on screen; long press: the other kind.** As the swipe past the last tab, a
+  private page's "+" stays private. No haptic on the tap (the haptics plan's rule 1).
+- **A stray "+" costs nothing.** Closing an untouched New Tab's field by hand (swipe down, tap
+  beside the rows) goes back to the page it came from; the empty tab drops (principle 7). Only
+  that close, only with an empty field, only in the same pane, never from the gallery. Any load
+  or other end of editing settles the new tab (`NewTabReturn`, `dismissSearchByUser`).
+- **One New Tab button:** the strip's "+" on the inner screen is gone (the bar's sits right above
+  it, and with one tab there was no strip, so no "+"); the sidebar's New Tab shows only while the
+  bar has none.
+- **Settings stays in the page sheet.** It never had a bar slot, so moving it frees nothing.
+- **The New Tab card's haptics follow the haptics plan:** `threshold` at 80 pt, a tick back under
+  70 pt, a silent commit; it commits only armed and only on a finger let go (a cancelled touch
+  used to be able to commit an armed card).
+- **Perf:** no launch work (the button is built with the other four), nothing per frame. The tap
+  runs the existing `openNewTab`, so `newTabMs` measures it; the perf test now taps "+".

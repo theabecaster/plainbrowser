@@ -49,11 +49,11 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   gaps between capsules, so they float apart.
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
-  pill in a fixed place, Tabs, Share and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
+  pill in a fixed place, Tabs, New Tab and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
 - **Tab cards carry a ×:** top-trailing in the title row, a 24 pt plate (ink veil; the private violet on private cards) inside a 44 pt target, a bold 10 pt glyph in secondary text. A tap closes the tab with the same lift-and-fade as the flick, and a soft haptic. The target never takes a lift or a sideways scroll: a drag that starts on it still lifts or scrolls. VoiceOver: "Close <title>", right after its card.
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
-  Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, Share and
-  More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
+  Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, New Tab
+  and More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
   Layout Above adds a 34 pt strip under the bar from the second tab. Where the status items keep
   to a corner (the inner screen) the bar sits on their row, and nothing of Plain's is behind it:
   no band, backing, blur or header-colored fill at the top in any state, only the floating
@@ -66,6 +66,11 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   down from it, with Cancel beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab,
   17% with the strip; nothing while reading.
 - Plus buttons act at once when there is one obvious action, and become a menu only when there is a real choice.
+- **The bar's buttons** (every layout): Back, Forward, Tabs, New Tab ("+") and More. New Tab opens a
+  tab of the kind on screen with the keyboard up; its long press offers the other kind. Share is
+  the page sheet's last tile, not a bar button (Safari 26 and Chrome keep it out of the bar too).
+  New Tab hides on the start screen, which is already a new tab. A New Tab whose field the user
+  closes untouched goes back to the page it came from (docs/research/new-tab.md).
 
 ## State rules
 
@@ -83,8 +88,8 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - The bar changes shape only between modes (start screen, page, search, gallery). Inside a mode a
   control dims or hides in place, so nothing moves under the thumb. Menus leave out items that do
   not apply and dim items at a limit.
-- Empty tabs are never left behind, and there is at most one New Tab button on screen, none on an
-  empty tab.
+- Empty tabs are never left behind, and there is at most one New Tab button on screen: the bar's
+  "+" on a page (the gallery's "+" while the gallery is up), none on an empty tab.
 
 ## Empty and first-run states
 

@@ -70,7 +70,17 @@ nonisolated enum ContentModeScripts {
           return false;
         };
         const edge = Math.max(0, topInset) + 1;
-        let el = document.elementFromPoint(innerWidth / 2, Math.min(edge, innerHeight - 1));
+        // The first element under the edge that scrolls with the page: a sticky or fixed header
+        // (or anything inside one) stays put, so it can't tell where the reader was.
+        const pinned = (node) => {
+          for (let n = node; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+            const position = getComputedStyle(n).position;
+            if (position === 'fixed' || position === 'sticky') return true;
+          }
+          return false;
+        };
+        let el = document.elementsFromPoint(innerWidth / 2, Math.min(edge, innerHeight - 1))
+          .find((node) => !pinned(node)) || null;
         let anchor = null;
         if (el && el !== document.body && el !== document.documentElement) {
           const rect = el.getBoundingClientRect();

@@ -107,9 +107,13 @@ final class ShellToast: UIView {
         glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
     }
 
-    /// Shows `message` with an optional button, replacing a toast already up.
-    func show(_ message: String, button title: String? = nil, action: (() -> Void)? = nil) {
+    /// Shows `message` with an optional button, replacing a toast already up. `haptic` is the
+    /// haptic of the event the toast reports (a download done, a translation that failed): it
+    /// plays here, as the toast comes on screen, so an outcome that waited behind a sheet plays
+    /// when it is seen (docs/ui-reference.md, "Haptics", rule 10). A toast plays nothing by itself.
+    func show(_ message: String, button title: String? = nil, haptic: Haptic? = nil, action: (() -> Void)? = nil) {
         Signposts.signposter.emitEvent(Signposts.toast)
+        haptic?.play(in: self)
         willShow?()
         label.text = message
         button.configuration?.title = title

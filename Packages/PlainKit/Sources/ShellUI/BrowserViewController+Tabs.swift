@@ -393,8 +393,7 @@ extension BrowserViewController {
         case .backgroundTab:
             let new = session.tabs.newTab(opener: tab, inBackground: true)
             new.load(url)
-            Haptic.tap.play()
-            tabsUI.toast.show("Opened in background", button: "Show") { [weak self, weak new] in
+            tabsUI.toast.show("Opened in background", button: "Show", haptic: .tap) { [weak self, weak new] in
                 guard let self, let new, session.tabs.entry(new.id) != nil else { return }
                 show(new)
             }

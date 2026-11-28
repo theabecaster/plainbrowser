@@ -17,9 +17,8 @@ extension BrowserViewController {
         let root = navigationController ?? self
         guard !isShowingGallery, root.presentedViewController == nil,
               tab === currentTab || isShownInOtherPane(tab.id) else { return false }
-        tabsUI.toast.show(Self.passkeysUnavailableMessage)
-        // The soft refusal bump: the sign-in the user just tried did not happen.
-        Haptic.nothingThere.play()
+        // The soft refusal bump, with the toast: the sign-in the user just tried did not happen.
+        tabsUI.toast.show(Self.passkeysUnavailableMessage, haptic: .nothingThere)
         return true
     }
 

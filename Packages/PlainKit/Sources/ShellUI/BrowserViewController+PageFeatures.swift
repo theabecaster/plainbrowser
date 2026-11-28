@@ -219,8 +219,7 @@ extension BrowserViewController {
             }
             guard let file, !data.isEmpty else {
                 // The user waited for it: the warning, with the sentence that says so.
-                Haptic.failed.play()
-                return self.tabsUI.toast.show("This page couldn't be saved as a PDF")
+                return self.tabsUI.toast.show("This page couldn't be saved as a PDF", haptic: .failed)
             }
             let sheet = UIActivityViewController(activityItems: [file], applicationActivities: nil)
             sheet.completionWithItemsHandler = { _, _, _, _ in
@@ -270,14 +269,12 @@ extension BrowserViewController {
             // The outcome plays with its toast, not when the file lands: behind a sheet or the
             // gallery the toast waits, and so does the haptic (docs/ui-reference.md, "Haptics").
             showToastWhenFree { [weak self] in
-                Haptic.success.play()
-                self?.tabsUI.toast.show(message, button: "Show") { [weak self] in self?.showDownloads() }
+                self?.tabsUI.toast.show(message, button: "Show", haptic: .success) { [weak self] in self?.showDownloads() }
             }
         case .failed:
             let message = "\(download.filename) didn't download"
             showToastWhenFree { [weak self] in
-                Haptic.failed.play()
-                self?.tabsUI.toast.show(message, button: "Show") { [weak self] in self?.showDownloads() }
+                self?.tabsUI.toast.show(message, button: "Show", haptic: .failed) { [weak self] in self?.showDownloads() }
             }
         case .inProgress, .cancelled:
             break

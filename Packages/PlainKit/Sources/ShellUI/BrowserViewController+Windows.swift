@@ -19,8 +19,8 @@ extension BrowserViewController {
     func openNewWindow(_ url: URL?, isPrivate: Bool) {
         guard canOpenNewWindow else { return Haptic.nothingThere.play() }
         Windows.openNew(url: url, isPrivate: isPrivate) { [weak self] in
-            Haptic.nothingThere.play()
-            self?.showToastWhenFree { [weak self] in self?.tabsUI.toast.show("A new window can't open here") }
+            // The bump plays with the toast that says why, when it shows.
+            self?.showToastWhenFree { [weak self] in self?.tabsUI.toast.show("A new window can't open here", haptic: .nothingThere) }
         }
     }
 

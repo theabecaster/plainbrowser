@@ -260,7 +260,11 @@ final class AddressPill: UIView {
         fitHostText()
         // Without the private mark's attachment character: the label already says Private.
         accessibilityValue = url?.absoluteString ?? text.string.replacingOccurrences(of: "\u{FFFC} ", with: "")
+        onDisplay(url, notSecure)
     }
+
+    /// The page's address changed (the top band's host follows it).
+    var onDisplay: (URL?, Bool) -> Void = { _, _ in }
 
     /// The query a page searches for when it is the search engine's results page (the shell
     /// answers from Settings' engine), so the pill reads what was searched, as Safari's does.
@@ -350,6 +354,12 @@ final class AddressPill: UIView {
         if let symbol { text.append(NSAttributedString(attachment: NSTextAttachment(image: symbol))) }
         text.append(NSAttributedString(string: " " + name, attributes: [.foregroundColor: Palette.textPrimary]))
         return text
+    }
+
+    /// The soft ground under the glass: off on the top band, whose glass already keeps the host
+    /// legible (`ButtonBar.setScrimShown`).
+    func setScrimShown(_ shown: Bool) {
+        if scrim.isHidden == shown { scrim.isHidden = !shown }
     }
 
     /// Paper glass, or the private look while a private tab is on screen: deep violet glass drawn

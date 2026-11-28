@@ -50,11 +50,20 @@ public enum Palette {
     /// Something that sits on the background: a favorite's tile, a pressed row.
     public static let surface = UIColor(light: .white, dark: UIColor(rgb: 0x16344A))
 
-    /// The tint mixed into Liquid Glass on floating controls: Paper, so the URL pill reads as the
-    /// "paper-tinted glass capsule" of the brand. Strong enough that the host stays legible over
-    /// body text scrolling underneath.
+    /// The tint mixed into Liquid Glass on floating controls: Paper's warmth in light, Deep
+    /// Lagoon's navy in dark. Light enough that the glass still refracts and blurs the page and
+    /// shows its specular rim (owner, 2026-11-27: "more Apple-glass-like", keeping Plain's
+    /// colors); the soft ground under each control (`ChromeScrim`) keeps the host legible over
+    /// body text scrolling underneath. Was 0.88 / 0.84, which read as a paper fill.
     public static let glassTint = UIColor(
-        light: UIColor(rgb: 0xFFF6E6, alpha: 0.88), dark: UIColor(rgb: 0x16344A, alpha: 0.84)
+        light: UIColor(rgb: 0xFFF6E6, alpha: 0.55), dark: UIColor(rgb: 0x16344A, alpha: 0.6)
+    )
+
+    /// The tint of the glass band across the top of a wide screen (the Duo's inner screen) behind
+    /// the floating controls and, while reading, under the host: the same colors as `glassTint`,
+    /// a little lighter, so the capsules on it read as their own layer, as Safari's do on its band.
+    public static let bandGlassTint = UIColor(
+        light: UIColor(rgb: 0xFFF6E6, alpha: 0.3), dark: UIColor(rgb: 0x16344A, alpha: 0.42)
     )
 
     /// A lighter tint for glass that floats over the Paper background itself (the tab gallery's
@@ -71,6 +80,12 @@ public enum Palette {
     /// lilac read as Paper in light mode. White text on it is above 10:1.
     public static let privateGlassTint = UIColor(
         light: UIColor(rgb: 0x2E2560, alpha: 0.9), dark: UIColor(rgb: 0x3A2D7A, alpha: 0.86)
+    )
+
+    /// The top band's private tint: `privateGlassTint`'s deep violet, a little lighter, so the
+    /// capsules on it read as their own layer; drawn dark like them (`TopBand.setPrivate`).
+    public static let privateBandGlassTint = UIColor(
+        light: UIColor(rgb: 0x2E2560, alpha: 0.72), dark: UIColor(rgb: 0x3A2D7A, alpha: 0.64)
     )
 
     /// The private mark (`hand.raised.fill`) on the private glass and the start screen: a light

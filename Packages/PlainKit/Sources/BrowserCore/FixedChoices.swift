@@ -614,9 +614,15 @@ public enum FixedChoices {
     /// The top bar's address pill at its widest: about Safari's address field there. Wider, an
     /// address reads as a sentence across the screen and the buttons drift from it.
     public static let topBarPillMaxWidth: Double = 560
-    /// The top bar's pill while reading, relative to its resting size: the address stays readable
-    /// (about 31 pt high) and the chrome drops under 9% of the inner screen.
-    public static let topBarCollapsedScale: Double = 0.7
+    /// The top bar's address while reading, relative to its resting size: the pill's text
+    /// (Body, 17 pt by default) shrinks into the collapsed band's host (13 pt, Footnote's size),
+    /// about Safari's host on the Duo's inner screen (12 to 13 pt in the owner's recording). The
+    /// host's font is the pill's times this, so the two match at every text size.
+    public static let topBarCollapsedScale: Double = 13.0 / 17.0
+    /// The collapsed top band's height under a status bar that spans the width (iPad-size windows,
+    /// the simulator's window): the host's row. Safari's collapsed band on the inner screen is
+    /// 45 pt with the status bar hidden, its host 23 pt high at 15 to 38 (owner's recording).
+    public static let topBandHostRow: Double = 30
     /// The room Plain leaves for the status bar's time beside a camera the status items wrap, used
     /// only where the system reports the camera (an occlusion region inside the top safe area) but
     /// no corner-adaptive guide says how far the items reach. It is an allowance for the time's

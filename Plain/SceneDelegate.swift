@@ -300,6 +300,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if let delay = value(after: "-PlainSidebarWalk").flatMap(Double.init) { browser.debugSidebarWalk(after: delay) }
         browser.debugSidePane(value(after: "-PlainSidePane"), find: value(after: "-PlainFind"))
         browser.debugNewWindow(value(after: "-PlainNewWindow"))
+        browser.debugTopWalk(value(after: "-PlainTopWalk"), step: value(after: "-PlainTopWalkStep").flatMap(Double.init))
         #endif
     }
 

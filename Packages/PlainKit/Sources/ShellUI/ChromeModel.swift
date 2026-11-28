@@ -398,6 +398,8 @@ enum ChromeRevealReason: String {
     case pageTop = "page top"
     case pageEnd = "page end"
     case edgeTap = "edge tap"
+    /// A tap on the collapsed top band (the Duo's inner screen).
+    case bandTap = "band tap"
     case statusBar = "status bar"
     case keyboard
     case find

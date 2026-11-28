@@ -37,6 +37,18 @@ final class TopBarLayout {
     var stripEnds: [NSLayoutConstraint] = []
     var isPillOnTop = false
     var isBarOnTop = false
+    /// The glass band behind the row and the strip, and the host while reading (`TopBand`). Over
+    /// the pages (their width), under the strip, the chrome and the search sheet.
+    let band = TopBand()
+    /// The band's height: the expanded chrome's bottom (`TopChromeGeometry.expandedBandBottom`).
+    var bandHeight: NSLayoutConstraint!
+    /// The band's share of the gallery's fade (1 with no gallery), and the find bar standing in
+    /// for the bar: with editing, what `updateTopBandAlpha` reads.
+    var galleryFade: CGFloat = 1
+    var isHiddenForFind = false
+    /// The strip's share the page's scroll position allows, last applied
+    /// (`TopChromeGeometry.stripReveal`).
+    var stripReveal: CGFloat = 1
 }
 
 // MARK: - The top bar (wide screens)
@@ -127,6 +139,42 @@ extension BrowserViewController {
         ]
         top.leadingClearance = [pillClearLeading, barClearLeading]
         top.trailingClearance = [pillClearTrailing, barClearTrailing]
+        installTopBand()
+    }
+
+    /// The band's opacity from everything that takes the bar away: the find bar, the gallery's
+    /// fade. One place, so neither undoes the other. Editing keeps it: on the top bar the field
+    /// widens in its row, on the band (the search sheet's dropdown).
+    func updateTopBandAlpha() {
+        let top = duo.top
+        let alpha = top.isHiddenForFind ? 0 : top.galleryFade
+        if top.band.alpha != alpha { top.band.alpha = alpha }
+    }
+
+    /// The band goes over the pages, across their width (beside the sidebar and the side pane),
+    /// from the top edge. Hidden until a top bar shows (`applyTopBarPlacement`).
+    private func installTopBand() {
+        let band = duo.top.band
+        band.translatesAutoresizingMaskIntoConstraints = false
+        band.isHidden = true
+        view.insertSubview(band, aboveSubview: panes.view)
+        duo.top.bandHeight = band.heightAnchor.constraint(equalToConstant: 0)
+        // The host sits where the pill's text was, so the address reads as one text shrinking.
+        let hostOnPill = band.hostCapsule.centerXAnchor.constraint(equalTo: pill.centerXAnchor)
+        hostOnPill.priority = .defaultHigh
+        // Never wider than the pill, which keeps clear of the status items (a long host truncates).
+        let hostInPill = [
+            band.hostCapsule.leadingAnchor.constraint(greaterThanOrEqualTo: pill.leadingAnchor),
+            band.hostCapsule.trailingAnchor.constraint(lessThanOrEqualTo: pill.trailingAnchor),
+        ]
+        NSLayoutConstraint.activate([
+            band.topAnchor.constraint(equalTo: view.topAnchor),
+            band.leadingAnchor.constraint(equalTo: panes.view.leadingAnchor),
+            band.trailingAnchor.constraint(equalTo: panes.view.trailingAnchor),
+            duo.top.bandHeight,
+            hostOnPill,
+        ] + hostInPill)
+        band.onTap = { [weak self] in self?.revealChrome(.bandTap) }
     }
 
     // MARK: The status zone
@@ -179,7 +227,10 @@ extension BrowserViewController {
     func applyTopBarPlacement(_ geometry: TopChromeGeometry?, layout: DuoLayout) {
         let top = duo.top
         placeSidebarRows(geometry, layout: layout)
+        if top.band.isHidden != (geometry == nil) { top.band.isHidden = geometry == nil }
         guard let geometry else { return }
+        Self.set(top.bandHeight, geometry.expandedBandBottom)
+        Self.set(top.band.hostCenterY, geometry.hostCenterY)
         Self.set(top.pillTop, geometry.rowTop)
         Self.set(top.barTop, geometry.rowTop)
         Self.set(top.stripTop, geometry.stripTop)
@@ -320,45 +371,96 @@ extension BrowserViewController {
         if !chromeOnTop {
             buttonBar.transform = .identity
         }
+        pill.setScrimShown(!chromeOnTop)
+        buttonBar.setScrimShown(!chromeOnTop)
+        settleHiddenChromeForTopBar()
     }
 
     // MARK: Collapse and insets
 
-    /// Places the top bar for collapse `progress` with transform and alpha only: the pill shrinks
-    /// up under the status bar, the buttons and the strip rise and fade.
+    /// Places the top bar for collapse `progress` with transform and alpha only: the band's glass
+    /// rises to the slim band, the pill's text shrinks into the host on the status row while the
+    /// pill fades, the buttons and the strip rise and fade. The band never goes: past the pill
+    /// (a hidden rest left from the bottom bar, before the fold) it stays as it is at 1.
     func applyTopBarCollapse(_ progress: CGFloat, geometry: TopChromeGeometry) {
         let editing = isEditingAddress
+        let reading = min(progress, ChromeRest.pill.progress)
         if editing {
             // The pill is the open sheet's field, in place: only the bar's buttons stay hidden.
             pill.transform = .identity
             pill.isCompact = false
         } else {
-            let move = geometry.pillTransform(progress: progress)
+            let move = geometry.pillTransform(progress: reading)
             pill.transform = CGAffineTransform(translationX: 0, y: move.translationY).scaledBy(x: move.scale, y: move.scale)
             pill.isCompact = progress > 0
         }
-        // Reading on, the tucked address rises off the top edge as its text fades (docs/state-rules.md,
-        // "Chrome while reading"); the top bar is clear of the home-indicator zone, so it may go.
-        pill.alpha = editing ? 1 : ChromeGeometry.pillAlpha(progress: progress)
-        let isGone = !editing && progress >= ChromeRest.hidden.progress
+        applyTopBand(geometry, reading: editing ? 0 : reading, reveal: editing ? 1 : currentStripReveal(geometry))
+        pill.alpha = editing ? 1 : TopChromeGeometry.pillAlpha(progress: reading)
+        // Collapsed, the band is the address for VoiceOver (`TopBand`).
+        let isGone = !editing && reading >= 0.5
         if pill.accessibilityElementsHidden != isGone { pill.accessibilityElementsHidden = isGone }
-        let alpha = ChromeGeometry.barAlpha(progress: progress)
-        buttonBar.transform = CGAffineTransform(translationX: 0, y: geometry.buttonsTranslation(progress: progress))
+        let alpha = ChromeGeometry.barAlpha(progress: reading)
+        buttonBar.transform = CGAffineTransform(translationX: 0, y: geometry.buttonsTranslation(progress: reading))
         if !editing { buttonBar.alpha = alpha }
-        if let strip = duo.strip?.view {
-            strip.transform = CGAffineTransform(translationX: 0, y: geometry.stripTranslation(progress: progress))
-            strip.alpha = alpha
-            // A hidden strip takes no taps meant for the page under it.
-            strip.isUserInteractionEnabled = alpha > 0.5
+    }
+
+    /// The band and the strip for the bar's collapse (`reading`, 0 to 1) and the strip's share
+    /// the pages' scroll positions allow (`reveal`): the strip (and the band under it) shows only
+    /// while the page's top is in view, since mid-page a fixed header rests at the slim band's
+    /// bottom, which the strip would cover (`TopChromeGeometry.stripReveal`). Transform and alpha
+    /// only; touches nothing the search sheet owns (the pill, the buttons).
+    private func applyTopBand(_ geometry: TopChromeGeometry, reading: CGFloat, reveal: CGFloat) {
+        duo.top.stripReveal = reveal
+        let stripProgress = TopChromeGeometry.stripProgress(collapse: reading, reveal: reveal)
+        // The host takes over from the pill where the pill is: its center (on the status row in
+        // the status zone, moving to the host's row under a full-width status bar) and its size.
+        let pillCenter = geometry.rowTop + TopChromeGeometry.rowHeight / 2 + geometry.pillTransform(progress: reading).translationY
+        duo.top.band.apply(
+            progress: reading, translation: geometry.bandTranslation(progress: stripProgress),
+            pillSize: pill.bounds.size, pillCenterOffset: pillCenter - geometry.hostCenterY
+        )
+        guard let strip = duo.strip?.view else { return }
+        let stripAlpha = ChromeGeometry.barAlpha(progress: stripProgress)
+        strip.transform = CGAffineTransform(translationX: 0, y: geometry.stripTranslation(progress: stripProgress))
+        strip.alpha = stripAlpha
+        // A hidden strip takes no taps meant for the page under it.
+        strip.isUserInteractionEnabled = stripAlpha > 0.5
+    }
+
+    /// How much of the strip the pages' scroll positions allow (`TopChromeGeometry.stripReveal`):
+    /// 1 at a page's top, 0 once it has scrolled the strip's height. The band spans both panes of
+    /// a split, so the lower of the two: a pane mid-page keeps the strip off its fixed header.
+    func currentStripReveal(_ geometry: TopChromeGeometry) -> CGFloat {
+        guard geometry.stripHeight > 0 else { return 1 }
+        var reveal = pageScrollView.map { geometry.stripReveal(offset: $0.contentOffset.y) } ?? 1
+        let panes = session.tabs.panes
+        for index in shownPanes where index != session.tabs.focusedPane {
+            guard let id = panes[index], let tab = session.tabs.existingTab(id),
+                  let scrollView = session.pool.scrollView(for: tab) else { continue }
+            reveal = min(reveal, geometry.stripReveal(offset: scrollView.contentOffset.y))
         }
+        return reveal
+    }
+
+    /// A page scrolled under the top bar (or the page on screen changed: another tab, the
+    /// reader): the strip follows the pages' tops in and out, frame by frame (transform and alpha
+    /// only), whatever the bar's state. Left alone while the search sheet holds the bar.
+    func topBarPageDidScroll(_ geometry: TopChromeGeometry) {
+        guard geometry.stripHeight > 0, duo.strip != nil, !isEditingAddress, !sheetUI.isLaidOutOpen else { return }
+        let reveal = currentStripReveal(geometry)
+        guard abs(reveal - duo.top.stripReveal) > 0.001 else { return }
+        applyTopBand(geometry, reading: min(collapseProgress, ChromeRest.pill.progress), reveal: reveal)
     }
 
     /// The page's insets under the top bar. They never follow the bar's resting state: the
-    /// obscured top is the status items' strip in every state (`TopChromeGeometry.obscuredInset`),
-    /// so a collapse or a reveal changes nothing in the page and nothing in it can jump. The
+    /// obscured top is the collapsed glass band's bottom in every state
+    /// (`TopChromeGeometry.obscuredInset`), so a collapse or a reveal changes nothing in the page
+    /// and nothing in it can jump. The
     /// viewport insets span that to the expanded bar, so CSS `svh`/`lvh` stay put. They change
     /// only with the layout (a fold, a rotation, the strip coming or going).
     func applyTopBarInsets(_ geometry: TopChromeGeometry) {
+        // The page on screen may have changed (another tab, the reader): the strip follows its top.
+        defer { topBarPageDidScroll(geometry) }
         if let tab = currentTab { applyTopBarInsets(geometry, to: tab) }
         let insets = topBarInsets(geometry)
         engineUI.reader.setInsets(obscured: insets.obscured, minimumViewport: insets.minimum, maximumViewport: insets.maximum)
@@ -391,7 +493,7 @@ extension BrowserViewController {
     private func topBarInsets(_ geometry: TopChromeGeometry) -> (obscured: UIEdgeInsets, minimum: UIEdgeInsets, maximum: UIEdgeInsets) {
         (UIEdgeInsets(top: geometry.obscuredInset, left: 0, bottom: pageBottomInset, right: 0),
          UIEdgeInsets(top: geometry.obscuredInset, left: 0, bottom: pageBottomInset, right: 0),
-         UIEdgeInsets(top: geometry.expandedInset, left: 0, bottom: pageBottomInset, right: 0))
+         UIEdgeInsets(top: geometry.maximumViewportInset, left: 0, bottom: pageBottomInset, right: 0))
     }
 
     /// Where a page's top rests: under the expanded top bar, so its first lines show below it and

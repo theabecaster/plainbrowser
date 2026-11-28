@@ -26,6 +26,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     /// Holds the tabs and fades the edge a scrolled tab leaves under, so a cut-off tab reads as
     /// "more this way" rather than a broken fragment.
     private let fade = UIView()
+    private let glass = Glass.makeView(shape: .rounded(Radius.large))
     private let fadeMask = CAGradientLayer()
     private var fadedEdges: (leading: Bool, trailing: Bool) = (false, false)
     private static let fadeLength: CGFloat = 40
@@ -58,6 +59,19 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     public var onPreferredWidthChange: (() -> Void)?
     private var hasPrivateTabs = false
 
+    /// The strip's glass: Paper, or the private violet drawn dark while a private tab is on
+    /// screen, as the top bar's capsules and band are, so the top reads as one private context
+    /// (the private mode lane's look; the plates resolve their dark colors on it).
+    public func setPrivate(_ isPrivate: Bool) {
+        loadViewIfNeeded()
+        let effect = UIGlassEffect(style: .regular)
+        effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
+        glass.effect = effect
+        let style: UIUserInterfaceStyle = isPrivate ? .dark : .unspecified
+        view.overrideUserInterfaceStyle = style
+        glass.overrideUserInterfaceStyle = style
+    }
+
     public init(dataSource: any SideTabsDataSource) {
         self.dataSource = dataSource
         super.init(nibName: nil, bundle: nil)
@@ -75,7 +89,6 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         view.backgroundColor = .clear
         view.accessibilityIdentifier = "tabStrip"
         // One glass surface under the tabs: it floats over the page with the top bar.
-        let glass = Glass.makeView(shape: .rounded(Radius.large))
         glass.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(glass)
         NSLayoutConstraint.activate([

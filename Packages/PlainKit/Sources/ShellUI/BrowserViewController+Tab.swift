@@ -311,6 +311,8 @@ extension BrowserViewController {
         pill.isPrivateTint = isPrivate
         Motion.animate(Motion.quick) {
             self.pill.setPrivate(isPrivate)
+            self.duo.top.band.setPrivate(isPrivate)
+            self.duo.strip?.setPrivate(isPrivate)
             self.buttonBar.setPrivate(isPrivate)
             self.tabsUI.toast.setPrivate(isPrivate)
             // The strip under the status bar too, so the whole screen says private, quietly.
@@ -501,7 +503,9 @@ extension BrowserViewController {
         // accessibility tree: the glass exposes its controls even inside a hidden content view.
         // The gallery hides the same container; it cannot open while the find bar is up.
         if !hidden { chromeGlass.isHidden = isShowingGallery }
-        Motion.animate(Motion.quick, changes: { content.alpha = alpha }) { [weak self] in
+        // The top band holds nothing while the find bar stands in for the bar.
+        duo.top.isHiddenForFind = hidden
+        Motion.animate(Motion.quick, changes: { content.alpha = alpha; self.updateTopBandAlpha() }) { [weak self] in
             guard let self, content.alpha == 0, engineUI.findWatch != nil else { return }
             chromeGlass.isHidden = true
         }

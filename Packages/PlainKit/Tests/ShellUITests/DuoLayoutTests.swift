@@ -396,54 +396,114 @@ struct TopChromeGeometryTests {
         #expect(951 - bar.rowClearance.trailing == 820)
     }
 
-    @Test func devicePageStartsUnderTheRowWithoutABand() {
+    @Test func devicePageStartsUnderTheBand() {
         let bar = Self.device()
-        // Was 132 pt (81 pt band + 51 pt row). Safari: 84 pt.
-        #expect(bar.expandedInset == 72.5)
+        // Was 132 pt (81 pt band + 51 pt row), then 72.5 with the page under the controls.
+        // Safari: 132 pt at rest with its strip, 45 pt collapsed (its status bar hidden).
+        #expect(bar.expandedInset == 73)
         #expect(bar.expandedInset <= 84)
         // The strip starts under the status items (69), not beside them.
         let strip = Self.device(strip: Self.strip)
         #expect(strip.stripTop == 79, "10 pt under the items")
         #expect(strip.expandedInset == 79 + Self.strip + 4)
-        #expect(bar.obscuredInset < bar.expandedInset, "WebKit wants the largest viewport inset strictly larger")
-        // 10.8% of the screen at rest (Safari 12.6%), 17.5% with the strip.
+        for bar in [bar, strip] {
+            #expect(bar.obscuredInset < bar.maximumViewportInset, "WebKit wants the largest viewport inset strictly larger")
+        }
+        // 10.9% of the screen at rest, 17.5% with the strip, 10.9% while reading.
         #expect(bar.chromeShare(of: Self.landscape, collapsed: false) < 0.11)
         #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.18)
-        #expect(bar.chromeShare(of: Self.landscape, collapsed: true) < 0.11)
+        #expect(strip.chromeShare(of: Self.landscape, collapsed: true) < 0.11)
     }
 
-    @Test func deviceLeavesNoBandAtTheTopInAnyState() {
-        // Owner, on the device: "The bar under the URL text field is still there when the text
-        // field is present, and the transition to the no-bar state is terrible." In the status
-        // zone the page's obscured top inset is 0 in every state, with or without the strip, so
-        // WebKit fills no band of a fixed header's color behind the controls at rest, and a
-        // collapse or a reveal changes nothing in the page (no jump). The page's first line at
-        // rest still starts under the controls: that is the scroll range's start.
+    @Test func pageTopBoundaryIsTheCollapsedBandInEveryState() {
+        // Owner, on the device: "now the top of pages goes under the text field … I like that
+        // Safari leaves the URL text field there in a smaller version, with just the shrunken
+        // base URL, and that sets a boundary there." The page's obscured top is the collapsed
+        // glass band's bottom (the status row's, + 4), in every state, with or without the strip:
+        // a fixed header rests under the band, a collapse or a reveal changes nothing in the page
+        // (no jump), and whatever WebKit paints above such a header is behind the band's glass.
         let portrait = TopChromeGeometry(
             width: 669, safeTop: 81, corner: CGRect(x: 546, y: 24, width: 100, height: 45), stripHeight: 0
         )
         for bar in [Self.device(), Self.device(strip: Self.strip), portrait] {
-            #expect(bar.obscuredInset == 0)
-            #expect(bar.chromeShare(of: Self.landscape, collapsed: true) == 0)
-            #expect(bar.expandedInset == bar.expandedBottom)
-            #expect(bar.expandedInset > bar.obscuredInset, "WebKit wants the largest viewport inset strictly larger")
+            #expect(bar.obscuredInset == 73, "the status items' bottom (69) + 4")
+            #expect(bar.obscuredInset == bar.collapsedBandBottom)
+            #expect(bar.expandedInset == bar.expandedBandBottom)
+            #expect(bar.expandedInset >= bar.obscuredInset)
+            #expect(bar.bandTranslation(progress: 1) == bar.collapsedBandBottom - bar.expandedBandBottom)
+            #expect(bar.bandTranslation(progress: 2) == bar.bandTranslation(progress: 1), "the band never goes")
         }
-        #expect(Self.device().expandedInset == 72.5)
-        // Under a full-width status bar (no corner: iPad-size windows) the page keeps clear of the
-        // status bar in every state, and of nothing more.
-        #expect(Self.simulator().obscuredInset == Self.simulator().safeTop)
+        // One tab: the expanded and the collapsed band are the same; only the controls change.
+        #expect(Self.device().bandTranslation(progress: 1) == 0)
+        // With the strip the band's bottom rises 44 pt, from under the strip (10 pt under the
+        // status items, then the strip, then 4) to the status row's.
+        #expect(Self.device(strip: Self.strip).bandTranslation(progress: 1) == -(Self.strip + 10))
+        // Under a full-width status bar the band is the host's row under it.
+        let simulator = Self.simulator()
+        #expect(simulator.obscuredInset == simulator.safeTop + CGFloat(FixedChoices.topBandHostRow))
+        #expect(simulator.obscuredInset < simulator.expandedInset)
     }
 
-    @Test func deviceCollapseShrinksTheAddressInPlaceThenLiftsItOff() {
+    @Test func deviceCollapseShrinksTheAddressIntoTheHostOnTheStatusRow() {
         let bar = Self.device(strip: Self.strip)
         let collapsed = bar.pillTransform(progress: 1)
-        #expect(collapsed.translationY == 0, "the address stays on the status row")
+        #expect(collapsed.translationY == 0, "the host sits on the status row")
         #expect(collapsed.scale == TopChromeGeometry.compactScale)
-        #expect(bar.collapsedBottom <= bar.rowBottom)
-        let hidden = bar.pillTransform(progress: 2)
-        let center = bar.rowTop + TopChromeGeometry.rowHeight / 2 + hidden.translationY
-        #expect(abs(center + bar.collapsedPillHeight / 2 + ChromeGeometry.hiddenClearance) < 0.001)
+        #expect(bar.hostCenterY == bar.rowTop + TopChromeGeometry.rowHeight / 2)
+        #expect(bar.hostCenterY < bar.collapsedBandBottom, "the host is inside the band")
+        // Past the pill nothing changes: under a top bar the chrome never hides.
+        #expect(bar.pillTransform(progress: 2) == collapsed)
         #expect(bar.stripTranslation(progress: 1) < 0 && bar.buttonsTranslation(progress: 1) < 0)
+        // The pill's text and the host cross only while both are faint, and the host's size is
+        // the pill's text size at every step.
+        #expect(TopChromeGeometry.pillAlpha(progress: 0) == 1 && TopChromeGeometry.pillAlpha(progress: 0.4) == 0)
+        #expect(TopChromeGeometry.hostAlpha(progress: 0) == 0 && TopChromeGeometry.hostAlpha(progress: 0.4) == 1)
+        // One pill shrinking: the host's capsule starts at the pill's size and ends at its own,
+        // the text at the pill's text size, and the two crossfade at the same place.
+        let pill = CGSize(width: 560, height: 44)
+        let host = CGSize(width: 150, height: 29)
+        #expect(TopChromeGeometry.hostShellSize(progress: 0, pill: pill, host: host) == pill)
+        #expect(TopChromeGeometry.hostShellSize(progress: 1, pill: pill, host: host) == host)
+        for step in 0...10 {
+            let p = CGFloat(step) / 10
+            #expect(abs(TopChromeGeometry.pillAlpha(progress: p) + TopChromeGeometry.hostAlpha(progress: p) - 1) < 0.0001)
+            let pillTextScale = bar.pillTransform(progress: p).scale
+            #expect(abs(TopChromeGeometry.hostScale(progress: p) * TopChromeGeometry.compactScale - pillTextScale) < 0.0001)
+        }
+        #expect(TopChromeGeometry.hostScale(progress: 1) == 1)
+    }
+
+    @Test func stripShowsOnlyWhileThePageTopIsInView() {
+        // Mid-page a fixed header rests at the slim band's bottom (73): the strip (79–113) would
+        // cover it, so it follows the page's top in and out (design review, round 1).
+        let bar = Self.device(strip: Self.strip)
+        #expect(bar.stripReveal(offset: -bar.expandedInset) == 1, "at the page's top")
+        #expect(bar.stripReveal(offset: -bar.obscuredInset) == 0, "scrolled the strip's height")
+        #expect(bar.stripReveal(offset: 900) == 0, "mid-page")
+        #expect(abs(bar.stripReveal(offset: -(bar.obscuredInset + bar.expandedInset) / 2) - 0.5) < 0.0001)
+        // The band's bottom follows the page's top 1:1 over that travel.
+        let offset: CGFloat = -100
+        let q = TopChromeGeometry.stripProgress(collapse: 0, reveal: bar.stripReveal(offset: offset))
+        #expect(abs(bar.expandedBandBottom + bar.bandTranslation(progress: q) - (-offset)) < 0.0001)
+        // Collapsed, the strip stays gone at the top too; expanded mid-page, it stays gone.
+        #expect(TopChromeGeometry.stripProgress(collapse: 1, reveal: 1) == 1)
+        #expect(TopChromeGeometry.stripProgress(collapse: 0, reveal: 0) == 1)
+        #expect(TopChromeGeometry.stripProgress(collapse: 0, reveal: 1) == 0)
+        // Without a strip there is nothing to reveal.
+        #expect(Self.device().stripReveal(offset: 900) == 1)
+    }
+
+    @Test func bandShowsTheBaseDomain() {
+        #expect(TopBandHost.baseDomain("www.apple.com") == "apple.com")
+        #expect(TopBandHost.baseDomain("WWW.Apple.com.") == "apple.com")
+        #expect(TopBandHost.baseDomain("apple.com") == "apple.com")
+        // The site, never the hosting service or a guessed registrable domain.
+        #expect(TopBandHost.baseDomain("alice.github.io") == "alice.github.io")
+        #expect(TopBandHost.baseDomain("developer.apple.com") == "developer.apple.com")
+        #expect(TopBandHost.baseDomain("news.bbc.co.uk") == "news.bbc.co.uk")
+        #expect(TopBandHost.baseDomain("127.0.0.1") == "127.0.0.1")
+        #expect(TopBandHost.baseDomain("localhost") == "localhost")
+        #expect(TopBandHost.baseDomain("www.") == "www")
     }
 
     @Test func stripNeverRisesOverTheStatusCorner() {
@@ -472,9 +532,8 @@ struct TopChromeGeometryTests {
         ))
         let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: 0)
         #expect(bar.rowTop == 18.5)
-        #expect(bar.obscuredInset == 0, "the page runs to the top edge under the floating bar")
-        #expect(bar.expandedInset == 81)
-        #expect(bar.expandedInset <= 84)
+        #expect(bar.obscuredInset == 85, "the band reaches under the corner")
+        #expect(bar.expandedInset == 85)
         #expect(951 - bar.rowClearance.trailing == 816 - TopChromeGeometry.cornerGap)
         // The strip starts under that corner (85), never beside it, and so spans the lane: a strip
         // cut short where the status items begin read as broken on the device.
@@ -505,14 +564,16 @@ struct TopChromeGeometryTests {
         #expect(strip.expandedInset == 74 + Self.strip + 4)
     }
 
-    @Test func fullWidthStatusBarTucksThePillUnderIt() {
+    @Test func fullWidthStatusBarTucksTheHostUnderIt() {
         let bar = Self.simulator(strip: Self.strip)
         let collapsed = bar.pillTransform(progress: 1)
         let center = bar.rowTop + TopChromeGeometry.rowHeight / 2 + collapsed.translationY
-        #expect(abs(center - bar.collapsedPillHeight / 2 - 24) < 0.001, "the collapsed pill's top meets the status bar")
-        // The page keeps clear of the status bar in every state; the bar floats over it.
-        #expect(bar.obscuredInset == 24)
+        #expect(center == bar.hostCenterY)
+        #expect(bar.hostCenterY == 24 + CGFloat(FixedChoices.topBandHostRow) / 2, "in the host's row under the status bar")
+        // The page's boundary is the slim band under the status bar in every state.
+        #expect(bar.obscuredInset == 54)
         #expect(bar.obscuredInset < bar.expandedInset)
+        #expect(bar.bandTranslation(progress: 1) == 54 - bar.expandedInset)
     }
 
     @Test func portraitUsesTheSameRules() {
@@ -521,7 +582,7 @@ struct TopChromeGeometryTests {
         #expect(band.expandedInset == 130)
         // A corner there: on its row, clear of it.
         let corner = TopChromeGeometry(width: 669, safeTop: 81, corner: CGRect(x: 546, y: 24, width: 100, height: 45), stripHeight: 0)
-        #expect(corner.rowTop == 24.5 && corner.expandedInset == 72.5)
+        #expect(corner.rowTop == 24.5 && corner.expandedInset == 73)
         #expect(669 - corner.rowClearance.trailing == 538)
         #expect(corner.chromeShare(of: Self.portrait, collapsed: false) < 0.08)
     }

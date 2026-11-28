@@ -8,12 +8,13 @@ import Foundation
 //
 // Where the system keeps its status items to a corner (the Duo's inner screen: clock and battery in
 // the top-trailing corner of an 81 pt safe area), the row sits in that zone, on the status items'
-// row and clear of their corner, and the page runs to the top edge under it. Where the status bar
-// spans the width, the row sits under it. Either way the bar floats over the page like the bottom
-// pill does on a phone: it moves by transform and alpha only, and the page's top
-// `obscuredContentInsets` never follows it (`TopChromeGeometry.obscuredInset`). Decisions:
-// docs/decisions.md, "Duo inner screen: the bar in the status row" and "The page's top inset
-// never follows the bar".
+// row and clear of their corner. Where the status bar spans the width, the row sits under it.
+// Either way the capsules float on a band of glass across the top (`TopBand`), which shrinks to a
+// slim band with the host while reading; everything moves by transform and alpha only, and the
+// page's top `obscuredContentInsets` never follows the bar: it is the slim band's bottom in every
+// state (`TopChromeGeometry.obscuredInset`). Decisions: docs/decisions.md, "Duo inner screen: the
+// bar in the status row", "The page's top inset never follows the bar" and "Duo inner screen: a
+// glass band with the host while reading".
 
 /// The corner the system's status items keep to, read from the root view's safe area and its
 /// corner-adaptive variant (`UIView.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))`,
@@ -316,27 +317,99 @@ struct TopChromeGeometry: Equatable {
         (stripHeight > 0 ? stripTop + stripHeight : rowBottom) + Self.gap
     }
 
-    /// The collapsed pill's height.
-    var collapsedPillHeight: CGFloat { Self.rowHeight * Self.compactScale }
-
-    /// The collapsed pill's center: in place on the status row, or tucked under a full-width
-    /// status bar.
-    var collapsedCenter: CGFloat {
-        isInStatusZone ? rowTop + Self.rowHeight / 2 : safeTop + collapsedPillHeight / 2
+    /// The collapsed band's bottom: the page's top boundary while reading, and its obscured top
+    /// in every state (`obscuredInset`). In the status zone it is the status row's (the row's or
+    /// the status items', whichever is lower) + `gap`, so the band reads as one with the status
+    /// items and the host sits on their row; under a full-width status bar, the host's row
+    /// (`FixedChoices.topBandHostRow`) under it. Safari's collapsed band on the inner screen: 45 pt,
+    /// with the status bar hidden (docs/research/safari-duo-top.md).
+    var collapsedBandBottom: CGFloat {
+        guard let corner else { return safeTop + CGFloat(FixedChoices.topBandHostRow) }
+        return max(rowBottom, corner.maxY) + Self.gap
     }
 
-    /// The collapsed pill's bottom.
-    var collapsedBottom: CGFloat { collapsedCenter + collapsedPillHeight / 2 }
+    /// The expanded band's bottom: the glass behind the row, and the strip under it when it
+    /// shows. Never above the collapsed band's.
+    var expandedBandBottom: CGFloat { max(expandedBottom, collapsedBandBottom) }
 
-    /// The pill's vertical translation and scale at collapse `progress` (0 expanded, 1 collapsed,
-    /// 2 hidden), for a transform about its center. Past 1 the pill rises off the top edge,
-    /// `ChromeGeometry.hiddenClearance` past it, as the bottom pill sinks off the bottom.
+    /// The host's vertical center in the collapsed band: on the status row in the status zone,
+    /// in the middle of the host's row under a full-width status bar.
+    var hostCenterY: CGFloat {
+        isInStatusZone ? rowTop + Self.rowHeight / 2 : safeTop + CGFloat(FixedChoices.topBandHostRow) / 2
+    }
+
+    /// The band's vertical translation at collapse `progress`: its bottom edge rises from the
+    /// expanded chrome's bottom to the collapsed band's (none when they are the same: one tab, the
+    /// status zone). Past 1 the band stays: under a top bar the chrome never hides
+    /// (docs/state-rules.md, "Duo inner screen (top bar)").
+    func bandTranslation(progress: CGFloat) -> CGFloat {
+        -(expandedBandBottom - collapsedBandBottom) * min(max(progress, 0), 1)
+    }
+
+    /// How much of the strip a page scrolled to `offset` (its scroll view's `contentOffset.y`)
+    /// allows: 1 while the page's top is in view (it starts under the strip, at `expandedInset`),
+    /// 0 once it has scrolled the strip's height and its top is at the slim band's bottom
+    /// (`obscuredInset`), in between in step with the page. Mid-page the strip would cover a
+    /// fixed or sticky header, which rests at the slim band's bottom, and moving the page's inset
+    /// with the strip would make the header jump (design review): so mid-page the bar comes back
+    /// without the strip, as with one tab, and the strip comes back with the page's top. 1 without
+    /// a strip.
+    func stripReveal(offset: CGFloat) -> CGFloat {
+        let travel = expandedInset - obscuredInset
+        guard stripHeight > 0, travel > 0 else { return 1 }
+        return min(max((-offset - obscuredInset) / travel, 0), 1)
+    }
+
+    /// The strip's (and the band's lower part's) progress toward gone: the bar's collapse, or the
+    /// page's scroll past its top (`stripReveal`), whichever is further.
+    static func stripProgress(collapse: CGFloat, reveal: CGFloat) -> CGFloat {
+        max(min(max(collapse, 0), 1), 1 - min(max(reveal, 0), 1))
+    }
+
+    /// The pill's vertical translation and scale at collapse `progress` (0 expanded, 1 collapsed),
+    /// for a transform about its center: its text shrinks to the host's size and moves to the
+    /// host's row while the pill fades (`pillAlpha`), so the address reads as one text growing
+    /// small. Past 1 nothing changes: the band stays.
     func pillTransform(progress: CGFloat) -> (translationY: CGFloat, scale: CGFloat) {
         let p = min(max(progress, 0), 1)
         let scale = 1 - (1 - Self.compactScale) * p
         let restCenter = rowTop + Self.rowHeight / 2
-        let rise = (collapsedBottom + ChromeGeometry.hiddenClearance) * min(max(progress - 1, 0), 1)
-        return ((collapsedCenter - restCenter) * p - rise, scale)
+        return ((hostCenterY - restCenter) * p, scale)
+    }
+
+    /// The pill's opacity: gone by 40% of the collapse, handing over to the host's capsule and
+    /// text, which sit exactly where the pill's shell and text are at every step
+    /// (`hostShellSize`, `hostScale`), so the crossfade reads as one pill shrinking.
+    static func pillAlpha(progress: CGFloat) -> CGFloat {
+        1 - hostAlpha(progress: progress)
+    }
+
+    /// The host's opacity in the band: the pill's, mirrored, over the first 40% of the collapse.
+    static func hostAlpha(progress: CGFloat) -> CGFloat {
+        smoothstep(0, 0.4, progress)
+    }
+
+    /// The host capsule's on-screen size at `progress`: the pill's (`pill`, as the pill itself
+    /// shrinks) at 0, its own (`host`) at 1, in between linearly.
+    static func hostShellSize(progress: CGFloat, pill: CGSize, host: CGSize) -> CGSize {
+        let p = min(max(progress, 0), 1)
+        let s = 1 - (1 - compactScale) * p
+        return CGSize(
+            width: pill.width * s * (1 - p) + host.width * p,
+            height: pill.height * s * (1 - p) + host.height * p
+        )
+    }
+
+    /// The host's scale at `progress`, relative to its own (collapsed) size: the pill's text
+    /// size at that moment, so the host grows out of it on the way back.
+    static func hostScale(progress: CGFloat) -> CGFloat {
+        let p = min(max(progress, 0), 1)
+        return (1 - (1 - compactScale) * p) / compactScale
+    }
+
+    private static func smoothstep(_ from: CGFloat, _ to: CGFloat, _ value: CGFloat) -> CGFloat {
+        let t = min(max((value - from) / (to - from), 0), 1)
+        return t * t * (3 - 2 * t)
     }
 
     /// The buttons' rise at `progress`: half a row, while they fade (`ChromeGeometry.barAlpha`).
@@ -354,28 +427,25 @@ struct TopChromeGeometry: Equatable {
     }
 
     /// The page's obscured top inset (`obscuredContentInsets.top`), the same in every state of
-    /// the bar: in the status zone nothing, under a full-width status bar that bar. The bar
-    /// floats over the page and leaves it no inset of its own: a fixed or sticky header keeps to
-    /// the top edge (or under the status bar) whatever the bar does, except at the page's top,
-    /// where it rests under the expanded controls with the page and rides up with it (WebKit
-    /// keeps the layout viewport inside the document while the page sits above its origin). WebKit, which
-    /// fills an obscured inset above such a header with the header's color (its fixed color
-    /// extension, `WKWebView.h`: it "adjusts how fixed and sticky elements are rendered near
-    /// edges with non-zero obscured insets"), paints no band behind the controls, and nothing
-    /// jumps when they go or come back, because nothing changes. The page's first line still
-    /// starts under the controls: that is the scroll range's start (`expandedInset`,
-    /// `setPageTopStart`, `UIScrollView.keepPageTopUnderBar`). Decision: docs/decisions.md,
-    /// "The page's top inset never follows the bar".
-    var obscuredInset: CGFloat {
-        isInStatusZone ? 0 : safeTop
-    }
+    /// the bar: the collapsed band's bottom. The band is glass and always there under a top bar,
+    /// so the page's top boundary is its bottom edge, as in Safari: a fixed or sticky header rests
+    /// under the band mid-page, never under the controls alone, and whatever WebKit paints in the
+    /// inset above such a header (its fixed color extension, `WKWebView.h`: it "adjusts how fixed
+    /// and sticky elements are rendered near edges with non-zero obscured insets") is behind the
+    /// band's glass, which it tints, as Safari's is. Nothing changes when the bar collapses or
+    /// comes back, so nothing in the page can jump. At the page's top the first line starts under
+    /// the expanded chrome (`expandedInset`, `setPageTopStart`, `UIScrollView.keepPageTopUnderBar`).
+    /// Decisions: docs/decisions.md, "Duo inner screen: a glass band with the host while reading".
+    var obscuredInset: CGFloat { collapsedBandBottom }
 
     /// The expanded chrome's height over the page: where the page's first line rests (the scroll
-    /// range's start) and the largest viewport inset (`maximumViewportInset`), never equal to
-    /// the obscured one (WebKit wants the maximum viewport inset strictly larger). In the status
-    /// zone never above the corner's bottom, so the page's first line at rest starts clear of the
-    /// clock.
-    var expandedInset: CGFloat { max(expandedBottom, corner?.maxY ?? 0, obscuredInset + 1) }
+    /// range's start). In the status zone never above the corner's bottom, so the page's first
+    /// line at rest starts clear of the clock; never above the obscured inset.
+    var expandedInset: CGFloat { max(expandedBandBottom, corner?.maxY ?? 0) }
+
+    /// The largest viewport inset (`maximumViewportInset`, CSS `svh`): the expanded chrome, and
+    /// strictly larger than the obscured inset, as WebKit wants.
+    var maximumViewportInset: CGFloat { max(expandedInset, obscuredInset + 1) }
 
     /// The share of `screen` the chrome covers at rest (`collapsed` false) or while reading: the
     /// page's first line at rest, its obscured inset while reading, across the full width. For
@@ -383,5 +453,20 @@ struct TopChromeGeometry: Equatable {
     func chromeShare(of screen: CGSize, collapsed: Bool) -> CGFloat {
         guard screen.width > 0, screen.height > 0 else { return 0 }
         return (collapsed ? obscuredInset : expandedInset) / screen.height
+    }
+}
+
+/// What the collapsed top band says (`TopBand`): the page's site, nothing else.
+enum TopBandHost {
+    /// `host` as Safari shows it while reading: without "www." and a trailing dot, no scheme,
+    /// path or query ("www.apple.com" reads "apple.com", as in the owner's recording). Never cut
+    /// to the registrable domain: without the public suffix list that makes "alice.github.io"
+    /// read "github.io", the hosting service instead of the site (Codex review), and Safari keeps
+    /// "developer.apple.com" whole too.
+    static func baseDomain(_ host: String) -> String {
+        var host = host.lowercased()
+        if host.hasSuffix(".") { host.removeLast() }
+        if host.hasPrefix("www."), host.count > 4 { host.removeFirst(4) }
+        return host
     }
 }

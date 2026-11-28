@@ -1,4 +1,5 @@
 import BrowserCore
+import DesignSystem
 import Foundation
 import Observation
 import PerfSignposts
@@ -74,6 +75,8 @@ public final class SettingsModel {
         guard isLoaded, engine != settings.searchEngine else { return }
         settings.searchEngine = engine
         save()
+        // The checkmark moved: a tick (docs/ui-reference.md, "Haptics").
+        Haptic.selection.play()
     }
 
     public func setTabLayout(_ layout: TabLayout) {
@@ -106,9 +109,12 @@ public final class SettingsModel {
             customTemplate = engine.template
             settings.searchEngine = engine
             save()
+            Haptic.selection.play()
             return true
         } catch {
             customError = Wording.message(for: error)
+            // Refused at once, and the footer says why.
+            Haptic.nothingThere.play()
             return false
         }
     }
@@ -137,6 +143,8 @@ public final class SettingsModel {
         let state = Signposts.signposter.beginInterval(Signposts.clearBrowsingData)
         do {
             try await clearer.clearHistoryAndData()
+            // It worked, and the wait is over (a failure's alert is its own feedback).
+            Haptic.success.play()
         } catch {
             errorMessage = Wording.clearFailed
         }

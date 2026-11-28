@@ -45,6 +45,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let duo = DuoUIState()
     /// The side pane beside the page on a wide screen (`+SidePane`).
     let sidePaneUI = SidePaneUIState()
+    /// The keyboard shortcuts' focus, the system's undo for a close, the pinch to the overview
+    /// and the history menus (`+KeyCommands`, `+Gestures`).
+    let gestureUI = GestureUIState()
     /// Where the focused pane's tab is attached. The chrome, the bar swipe, the gallery's zoom and
     /// the reader all act on the focused pane.
     var webContainer: UIView { panes.slots[session.tabs.focusedPane].container }
@@ -215,6 +218,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor(editing: true) }
 
         buildButtons()
+        installGestures()
         updateButtons()
         layOut()
         updateBarMode()
@@ -632,6 +636,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         startSession()
         // After the first frame: whether the field's microphone can run here.
         prepareDictation()
+        // The keys (and the system's undo) have a home from launch on, unless the field has them.
+        claimKeyFocusIfFree()
     }
 
     /// Call when the address bar's data changed outside the shell (the database opened), so an
@@ -645,7 +651,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     // MARK: Address bar
 
-    private func pillTapped() {
+    func pillTapped() {
         // A collapsed bar first comes back, as Safari's does; the next tap edits. A bar already
         // springing back out takes the tap as an edit.
         let restingProgress = snap.isRunning ? snap.target : collapse.progress
@@ -733,6 +739,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Any end of editing settles the new tab; only the user's own close goes back first
         // (`dismissSearchSheet`, which reads it before ending).
         tabsUI.newTabReturn = nil
+        claimKeyFocusIfFree()
     }
 
     public func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -1413,19 +1420,20 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     private func refresh() {
         Signposts.signposter.emitEvent(Signposts.pullToRefresh)
-        pullIndicator.hide()
+        // It spins in its one color until the load ends (`+Tab`, `tabChanged`).
+        pullIndicator.beginRefreshing()
         reloadPage()
     }
 
     // MARK: Buttons and page menu
 
-    private func goBack() {
+    func goBack() {
         guard canGoBack else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navBack)
         performBack()
     }
 
-    private func goForward() {
+    func goForward() {
         guard let tab = currentTab, !isShowingReader, tab.canGoForward else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navForward)
         dropLaunchCover(animated: true)
@@ -1660,7 +1668,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
+    func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
         Signposts.signposter.emitEvent(Signposts.favoriteToggle)
         Task { [weak self, data] in
             if await data.setFavorite(isFavorite, url: url, title: title) {
@@ -1683,7 +1691,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         )
     }
 
-    private func showHistory() {
+    func showHistory() {
         // Beside the page where the side pane can show; a sheet elsewhere.
         if currentRules().historyInSidePane { return openSidePane(.history) }
         let history = sheets.history(

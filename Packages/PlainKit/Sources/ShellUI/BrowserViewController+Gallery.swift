@@ -264,6 +264,7 @@ extension BrowserViewController: GalleryHost {
         updatePageState()
         showPendingToast()
         tabsUI.tip.showIfPossible(in: self)
+        claimKeyFocusIfFree()
     }
 
     /// Ends a running transition where it was heading, without running its end (the caller
@@ -336,7 +337,10 @@ extension BrowserViewController: GalleryHost {
     func galleryCloseTab(_ id: TabID) {
         let wasShown = currentTab?.id == id
         if wasShown { clearPage() }
+        let before = session.tabs.lastClosedBatchID
         session.tabs.close(id)
+        // The gallery offers its own Reopen; the system's undo reopens the same card.
+        if let batch = session.tabs.lastClosedBatchID, batch != before { registerUndoClose(batch) }
         if wasShown, let next = session.tabs.selected { show(next) }
     }
 

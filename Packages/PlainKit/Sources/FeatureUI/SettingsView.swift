@@ -29,7 +29,7 @@ public struct SettingsView: View {
                         }
                         .disabled(!model.isLoaded)
                     } footer: {
-                        Text(Wording.searchEngineFooter).foregroundStyle(.secondary)
+                        Text(Wording.searchEngineFooter).settingsFooter()
                     }
 
                     Section {
@@ -43,7 +43,7 @@ public struct SettingsView: View {
                         .accessibilityIdentifier("settings.tabLayout")
                     } footer: {
                         Text(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
-                            .foregroundStyle(.secondary)
+                            .settingsFooter()
                     }
 
                     Section {
@@ -55,7 +55,7 @@ public struct SettingsView: View {
                         .pickerStyle(.menu)
                         .disabled(!model.isLoaded)
                     } footer: {
-                        Text(model.settings.archiveAfter.footer).foregroundStyle(.secondary)
+                        Text(model.settings.archiveAfter.footer).settingsFooter()
                     }
 
                     Section {
@@ -68,7 +68,7 @@ public struct SettingsView: View {
                         .disabled(!model.isLoaded)
                         .accessibilityIdentifier("settings.appearance")
                     } footer: {
-                        Text(model.settings.appearance.footer).foregroundStyle(.secondary)
+                        Text(model.settings.appearance.footer).settingsFooter()
                     }
 
                     Section {
@@ -100,7 +100,7 @@ public struct SettingsView: View {
                             Text(Wording.clearConfirmMessage)
                         }
                     } footer: {
-                        Text(Wording.clearFooter).foregroundStyle(.secondary)
+                        Text(Wording.clearFooter).settingsFooter()
                     }
 
                     Section {
@@ -192,6 +192,17 @@ struct SearchEngineView: View {
         }
         .paperSheet()
         .sheetTitle("Search Engine")
+    }
+}
+
+private extension Text {
+    /// A section footer as wide as the list: next to a menu picker the system sized the footer to
+    /// an earlier width, and "Tabs you haven't opened in a week move to the archive." broke under
+    /// the picker's value (clarity audit 23).
+    func settingsFooter() -> some View {
+        foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

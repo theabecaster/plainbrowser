@@ -271,7 +271,14 @@ final class PageSheetController: UIViewController {
                     button.accessibilityLabel = action.title
                 }
                 button.configuration?.baseForegroundColor = Palette.ink
-                button.isEnabled = !action.attributes.contains(.disabled)
+                if action.image == nil {
+                    // The percent always reads in ink: at 100% it has nothing to reset, so it takes
+                    // no tap and reads as text, never dimmed to near nothing.
+                    button.isUserInteractionEnabled = !action.attributes.contains(.disabled)
+                    if action.attributes.contains(.disabled) { button.accessibilityTraits = .staticText }
+                } else {
+                    button.isEnabled = !action.attributes.contains(.disabled)
+                }
                 Self.identify(button, as: action)
                 return button
             })
@@ -281,6 +288,9 @@ final class PageSheetController: UIViewController {
             Self.pin(row, in: card, inset: 0)
             card.heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget + Spacing.xs).isActive = true
             card.maximumContentSizeCategory = Self.gridLimit
+            // VoiceOver hears "Zoom" entering the row, then Zoom Out, the percent and Zoom In.
+            card.accessibilityContainerType = .semanticGroup
+            card.accessibilityLabel = String(localized: "Zoom")
             return card
         }
     }

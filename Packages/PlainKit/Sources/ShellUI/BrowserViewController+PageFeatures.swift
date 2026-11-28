@@ -22,7 +22,8 @@ extension BrowserViewController {
     /// detent, as a slider's), in the action that redraws it.
     func zoomActions(for tab: Tab) -> [UIAction] {
         let zoomOut = UIAction(
-            title: "Zoom Out", image: UIImage(systemName: "minus"), attributes: tab.canZoomOut ? [] : [.disabled]
+            // The magnifier says zoom without a word beside it (clarity audit 21).
+            title: "Zoom Out", image: UIImage(systemName: "minus.magnifyingglass"), attributes: tab.canZoomOut ? [] : [.disabled]
         ) { [weak tab] _ in
             tab?.zoomOut()
             Self.playZoomStep(tab)
@@ -35,9 +36,9 @@ extension BrowserViewController {
             Self.playZoomStep(tab)
         }
         percent.accessibilityIdentifier = "menu.zoomReset"
-        percent.accessibilityLabel = "Zoom \(tab.zoomPercent)%, Actual Size"
+        percent.accessibilityLabel = tab.zoomPercent == 100 ? "Zoom, 100%" : "Zoom, \(tab.zoomPercent)%, Actual Size"
         let zoomIn = UIAction(
-            title: "Zoom In", image: UIImage(systemName: "plus"), attributes: tab.canZoomIn ? [] : [.disabled]
+            title: "Zoom In", image: UIImage(systemName: "plus.magnifyingglass"), attributes: tab.canZoomIn ? [] : [.disabled]
         ) { [weak tab] _ in
             tab?.zoomIn()
             Self.playZoomStep(tab)

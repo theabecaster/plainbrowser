@@ -873,32 +873,42 @@ Research and sources: docs/research/dark-mode.md.
   page tiles the same pixels as a CSS `background-image`.
 - **Recipe:** a 256 px tile (about 85 pt at 3x), three layers on a torus so tiles meet without a
   seam, added to the base in 8-bit levels: *formation* (value noise on 16 and 8 px lattices,
-  σ 0.45 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 2.2) and *fibres* (220 short,
-  tapered, nearly straight strands, 8–32 px, on a jittered grid so none cluster, 3.5–8.5 levels,
+  σ 0.45 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 2.2) and *fibres* (600 short,
+  tapered, gently wandering strands, 8–32 px, on a jittered grid so none cluster, 2.1–5.3 levels,
   60 % darker, 40 % lighter). The fibre field is high-passed (minus a 25 px box blur, twice), so
   where strands gather there is no soft cloud for the eye to find again one tile over. Night paper
-  on Deep Lagoon is weaker (σ 0.28 / 1.1, 190 strands, 3.3–7 levels, mostly lighter). Day shadows
-  move blue most and red least (warm; red is already 255, so it barely moves and its average stays
-  put); night highlights move blue most (a cool sheen). A ±1 level triangular dither hides 8-bit
-  steps. The sheet averages to `Palette.background`, so it still matches the launch screen.
-  Tests hold it there: every channel's mean within 0.5 levels; luma σ between 1.8 and 2.8 levels
-  by day and 1.2 and 1.9 by night, 99.9 % of pixels within 14 (day) / 11 (night) levels; an
-  arm's-length blur (about 4 pt) leaves under 0.5 / 0.3 levels, so the tile never shows as a grid;
-  no seam step larger than any step inside the tile.
+  on Deep Lagoon is weaker (σ 0.28 / 1.1, 520 strands at 2.0–4.3 levels, mostly lighter). Day
+  shadows move blue most and red least (warm; red is already 255, so it barely moves and its
+  average stays put); night highlights move blue most (a cool sheen). A ±1 level triangular
+  dither hides 8-bit steps. The sheet averages to `Palette.background`, so it still matches the
+  launch screen. Tests hold it there: every channel's mean within 0.5 levels; luma σ between 1.8
+  and 2.8 levels by day and 1.2 and 1.9 by night, 99.9 % of pixels within 12 (day) / 10 (night)
+  levels; an arm's-length blur (about 4 pt) leaves under 0.5 / 0.3 levels, so the tile never
+  shows as a grid; no seam step larger than any step inside the tile.
 - **Raised 2026-11-27 (owner: "The paper texture is barely visible, fix it.").** The first recipe
   (formation 0.45, tooth 1.0, 121 strands at 1.2–3.2 levels; night 0.25 / 0.5, 100 at 1.2–2.6)
-  measured luma σ 1.16 levels by day and 0.77 by night: about 1.6 % and 1.0 % of a full-range noise
-  overlay, under the 2.5 % floor below. Most of that was the tooth and the dither, a pixel or two
-  across, which at 3x is under what the eye resolves at arm's length; the strands, which carry the
-  "paper" read, were below the tooth. Now σ 2.31 / 1.55 (about 3.1 % / 2.1 %), the strands raised
-  about 2.7×, the tooth 2.2×, the formation unchanged so the repeat stays hidden. Chosen from a
-  strip of the first recipe, about 1.5×, 2× and 2.6× (σ), in the app on the start screen and in
-  Settings, light and dark: the strongest that still read as material, not dirt, with no grid when
-  tiled over a large area. Secondary text barely moves: at glyph scale (the paper averaged over
-  5 × 5 px) the worst `Palette.inkSecondary` goes 6.28 → 6.21:1 by day and 9.14 → 8.87:1 by night,
-  the system's secondary label 3.31 → 3.28:1 and 5.72 → 5.60:1 (3.35 and 5.79 on flat paper). Tile
-  size, memory and drawing are unchanged; the high pass adds well under a millisecond to the
-  off-main generation.
+  measured luma σ 1.16 levels by day and 0.77 by night: about 1.6 % and 1.0 % of a full-range
+  noise overlay, under the 2.5 % floor below. Most of that was the tooth and the dither, a pixel or
+  two across, which at 3x is under what the eye resolves at arm's length; the strands, which carry
+  the "paper" read, sat below the tooth. Now σ 2.31 / 1.52 (about 3.1 % / 2.1 %): the tooth 2.2×,
+  about five times the strands' total ink, the formation unchanged so the repeat stays hidden.
+  Chosen from a strip in the app (start screen and Settings, light and dark, full screen and 1:1):
+  the first recipe, then about 1.5×, 2× and 2.6× its σ. 1.5× was still close to barely visible;
+  2.6× turned Settings' ground mottled and the strands scratch-like. At 2× the design review
+  (Codex) found the material right but a faint lattice of recurring strand clusters when the tile
+  was repeated over a screen, clearest at night, so the same strength now comes from 600 faint,
+  gently wandering strands instead of 220 stronger, straighter ones: no single strand is a
+  landmark (the strongest arm's-length spot at night drops about 30 %). Secondary text barely
+  moves: at glyph scale (the paper averaged over 5 × 5 px) the worst `Palette.inkSecondary` goes
+  6.28 → 6.21:1 by day and 9.14 → 9.02:1 by night, the system's secondary label 3.31 → 3.28:1 and
+  5.72 → 5.67:1 (3.35 and 5.79 on flat paper). Tile size, memory and drawing are unchanged.
+- **Why these numbers:** grain guides put "material, not dirt" at roughly 2.5–12 % noise opacity
+  and warn that more reads as dirt ([shadcn grain](https://www.shadcn.io/background/grain),
+  [Magic UI noise](https://magicui.design/docs/components/noise-texture)). iOS 7 Notes' visible
+  paper is the failure to avoid ([iDownloadBlog](https://www.idownloadblog.com/?p=269870)). The
+  same level step is a far larger relative contrast on navy, so night paper is weaker. Low
+  frequencies show a tile's repeat first, so the formation stays small; the fibres carry the
+  "paper" read.
 - **Why a pattern color, not a layer or a shader:** an opaque pattern in `backgroundColor` adds no
   layer, no blending and no offscreen pass (those come from masks, shadows without a path and
   blur: [Apple, render-phase hitches](https://developer.apple.com/videos/play/tech-talks/10857)),

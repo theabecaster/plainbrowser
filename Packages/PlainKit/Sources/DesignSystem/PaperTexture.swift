@@ -44,11 +44,11 @@ public nonisolated enum PaperTexture {
 
         static let day = Recipe(
             base: (255, 246, 230), channel: (0.45, 1.0, 1.2),
-            formation: 0.45, tooth: 2.2, fibres: 220, fibreStrength: -8.5 ... -3.5, fibreContrary: 0.4
+            formation: 0.45, tooth: 2.2, fibres: 600, fibreStrength: -5.3 ... -2.1, fibreContrary: 0.4
         )
         static let night = Recipe(
             base: (10, 33, 51), channel: (0.75, 0.9, 1.0),
-            formation: 0.28, tooth: 1.1, fibres: 190, fibreStrength: 3.3 ... 7.0, fibreContrary: 0.25
+            formation: 0.28, tooth: 1.1, fibres: 520, fibreStrength: 2.0 ... 4.3, fibreContrary: 0.25
         )
     }
 
@@ -139,7 +139,8 @@ public nonisolated enum PaperTexture {
         let n = side
         var field = [Double](repeating: 0, count: n * n)
         // Strands start on a jittered grid, not at random: even spacing leaves no cluster for the
-        // eye to find again one tile over.
+        // eye to find again one tile over. Many faint strands rather than a few strong ones, for
+        // the same reason: no single strand stands out enough to be a landmark.
         let grid = Int(Double(recipe.fibres).squareRoot().rounded(.up))
         let cell = Double(n) / Double(grid)
         for index in 0 ..< recipe.fibres {
@@ -153,14 +154,15 @@ public nonisolated enum PaperTexture {
             let range = recipe.fibreStrength
             var strength = range.lowerBound + random.unit() * (range.upperBound - range.lowerBound)
             if random.unit() < recipe.fibreContrary { strength *= -0.6 }
-            let bend = (random.unit() - 0.5) * 0.012
+            // A gentle, wandering curve: dead-straight strands read as scratches.
+            let bend = (random.unit() - 0.5) * 0.036
             var travelled = 0.0
             while travelled < length {
                 // Strands fade in and out at their ends instead of stopping bluntly.
                 let t = travelled / length
                 let taper = sin(t * .pi)
                 splat(&field, x, y, strength * taper)
-                angle += bend + (random.unit() - 0.5) * 0.05
+                angle += bend + (random.unit() - 0.5) * 0.15
                 x += cos(angle) * 0.5
                 y += sin(angle) * 0.5
                 travelled += 0.5

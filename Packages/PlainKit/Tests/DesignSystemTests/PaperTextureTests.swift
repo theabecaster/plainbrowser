@@ -46,7 +46,7 @@ final class PaperTextureTests: XCTestCase {
             let spread = l.map { abs($0 - mean) }.sorted()
             let p999 = spread[Int(Double(spread.count) * 0.999)]
             let deviation = (l.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(l.count)).squareRoot()
-            XCTAssertLessThan(p999, sheet == .day ? 14 : 11, "\(sheet) 99.9th percentile")
+            XCTAssertLessThan(p999, sheet == .day ? 12 : 10, "\(sheet) 99.9th percentile")
             XCTAssertLessThan(deviation, sheet == .day ? 2.8 : 1.9, "\(sheet) standard deviation")
             XCTAssertGreaterThan(deviation, sheet == .day ? 1.8 : 1.2, "\(sheet) visible as paper")
         }

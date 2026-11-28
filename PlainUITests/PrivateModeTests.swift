@@ -73,8 +73,9 @@ final class PrivateModeTests: XCTestCase {
 
     // MARK: Tests
 
-    /// Entering private shows everywhere the user looks: the start screen's "Private" title and
-    /// its way back, the pill's label, the switcher's selected Private side with both counts.
+    /// Entering private shows everywhere the user looks: the pill's label and the switcher's
+    /// selected Private side with both counts (the start screen: `testStartScreenLeavesPrivate`;
+    /// New Private Tab from a page closes back to it untouched, so it is reached from the start).
     func testPrivateIsVisibleEverywhere() throws {
         let app = try launch()
         go(app, to: "/a")
@@ -82,11 +83,6 @@ final class PrivateModeTests: XCTestCase {
         XCTAssertEqual(app.buttons["addressPill"].label, "Address")
 
         tabsMenu(app, pick: "New Private Tab")
-        closeSearch(app)
-        XCTAssertTrue(app.staticTexts["start.privateTitle"].waitForExistence(timeout: 2), "the start screen says Private")
-        XCTAssertTrue(app.buttons["start.regularTab"].exists, "and how to leave")
-        XCTAssertEqual(app.buttons["addressPill"].label, "Private Address")
-
         go(app, to: "/b")
         waitForPage(app, "Page B")
         XCTAssertEqual(app.buttons["addressPill"].label, "Private Address")
@@ -121,12 +117,14 @@ final class PrivateModeTests: XCTestCase {
         XCTAssertEqual(app.buttons["addressPill"].label, "Address", "out of private")
     }
 
-    /// The start screen of an empty private tab leaves private in one tap, and says so.
+    /// The start screen of an empty private tab says Private, and leaves private in one tap.
     func testStartScreenLeavesPrivate() throws {
         let app = try launch()
         closeSearch(app)
         app.buttons["start.privateTab"].tap()
         closeSearch(app)
+        XCTAssertTrue(app.staticTexts["start.privateTitle"].waitForExistence(timeout: 2), "the start screen says Private")
+        XCTAssertTrue(app.buttons["start.regularTab"].exists, "and how to leave")
         XCTAssertEqual(app.buttons["addressPill"].label, "Private Address")
         app.buttons["start.regularTab"].tap()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 2))

@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import PerfSignposts
 import SwiftUI
@@ -34,6 +35,10 @@ final class CardDrag: NSObject, UIGestureRecognizerDelegate {
     private var takeUp: CGFloat = 0
     /// The last release's velocity in pt/s (negative up), for a throw that follows it.
     private var releaseVelocity: CGFloat = 0
+    /// The close line (`CardSwipe.closeFraction` of the card, measured up): `.threshold` lifting
+    /// past it, `.selection` dragging back under it (docs/ui-reference.md, "Haptics", rule 4).
+    /// The close itself plays `.close` as the card starts flying (the gallery's `closeTab`).
+    private var closeLatch = ThresholdLatch(threshold: .infinity, hysteresis: FixedChoices.hapticThresholdHysteresis)
 
     init(body: UIView, closeHeight: @escaping () -> CGFloat) {
         self.body = body
@@ -79,10 +84,18 @@ final class CardDrag: NSObject, UIGestureRecognizerDelegate {
             // Grabbed where it is on screen, even mid-spring.
             startOffset = CardSwipe.translation(forOffset: driver.stop(), cardHeight: closeHeight())
             takeUp = translation
-            Haptic.close.prepare()
-            set(offset(for: translation))
+            Haptic.threshold.prepare(in: body)
+            Haptic.close.prepare(in: body)
+            let offset = offset(for: translation)
+            set(offset)
+            // Grabbed mid-flight past the line: no threshold of its own.
+            closeLatch.threshold = CardSwipe.closeFraction * closeHeight()
+            closeLatch.sync(-offset)
         case .changed:
-            set(offset(for: translation))
+            let offset = offset(for: translation)
+            set(offset)
+            // After the frame is applied, from the card's on-screen offset.
+            closeLatch.update(-offset)?.play(in: body)
         case .ended:
             release(at: offset(for: translation), velocity: gesture.velocity.y, canClose: true)
         case .cancelled, .failed:
@@ -109,10 +122,14 @@ final class CardDrag: NSObject, UIGestureRecognizerDelegate {
     private func release(at offset: CGFloat, velocity: CGFloat, canClose: Bool) {
         guard let body else { return }
         releaseVelocity = velocity
+        let wasArmed = closeLatch.isArmed
+        closeLatch.reset()
         if canClose, CardSwipe.shouldClose(translation: offset, velocity: velocity, cardHeight: closeHeight()) {
             onClose?()
             return
         }
+        // Armed, then sent back by a flick down: it crossed back out as the spring starts.
+        if wasArmed { Haptic.selection.play(in: body) }
         Signposts.signposter.emitEvent(Signposts.galleryCardKept)
         releaseVelocity = 0
         let back = { [weak self] in

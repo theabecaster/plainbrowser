@@ -55,16 +55,17 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, Share and
   More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
   Layout Above adds a 34 pt strip under the bar from the second tab. Where the status items keep
-  to a corner (the inner screen) the bar sits on their row, and nothing of Plain's is behind it:
-  no band, backing, blur or header-colored fill at the top in any state, only the floating
-  glass. At a page's top a site's fixed header rests under the bar and rides up with the page
-  to the top edge; mid-page it stays at the top edge under the bar, and nothing in the page moves
-  when the bar collapses or comes back. While
-  reading, the address shrinks in place and then lifts away, the buttons and strip fade, and the
-  page runs to the top edge under the status items. The page's first line starts under the bar
-  and slides under it. To type an address, the pill stays in the bar and the search sheet grows
-  down from it, with Cancel beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab,
-  17% with the strip; nothing while reading.
+  to a corner (the inner screen) the bar sits on their row. Behind the row and the strip is one
+  band of Liquid Glass across the pages, from the top edge, as Safari has there; the capsules
+  float on it. While reading the band rises to the status row's height and shows only the site's
+  host in a small glass capsule where the address was ("apple.com"), clear of the status items; a
+  tap on it brings the bar back. The page's top boundary is the band's bottom in every state: a
+  site's fixed header rests under it and nothing in the page moves when the bar collapses or
+  comes back; the strip shows while the page's top is in view, so it never covers a header
+  mid-page. The page's first line starts under the expanded band and slides under the glass. To
+  type an address, the pill stays in the bar and the search sheet grows down from it, with Cancel
+  beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab, 17% with
+  the strip at a page's top; 11% while reading.
 - Plus buttons act at once when there is one obvious action, and become a menu only when there is a real choice.
 
 ## State rules

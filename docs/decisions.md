@@ -1231,6 +1231,8 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   pill (1 to 2) the tucked address rises off the top edge (`TopChromeGeometry.pillTransform`) and
   the top inset goes to `hiddenInset` (0); the viewport range is hidden to expanded there too. The
   top bar is clear of the home-indicator zone, so it hides fully like the bottom pill.
+  **Superseded** by "Duo inner screen: a glass band with the host while reading": under a top bar
+  the chrome never hides; the slim glass band with the host stays.
 - **Performance** (iPhone 17 simulator, Release, 25 scripted swipes on the long test page; the
   simulator has no hitch data, so two proxies). The shell's work per scroll callback
   (`toolbar.scrollStep` signpost, ~3,500 callbacks): before mean 6.7–8.0 µs, p95 5.8–9.1 µs, max
@@ -1437,7 +1439,10 @@ simulator's 24 pt status bar had hidden this.
 - **Reading state:** in the zone the address shrinks in place (70%) on the row, the buttons and
   strip rise and fade; hidden lifts it off the top edge. Under a short status bar the pill tucks
   under it as before.
-- **No band at the top in any state (2026-11-27, follow-up).** Owner, on the device with this build: "when
+- **No band at the top in any state (2026-11-27, follow-up).** **Superseded** by "Duo inner
+  screen: a glass band with the host while reading": the owner asked for Safari's glass band
+  and slim host bar; what he rejected here was a band of a header's color with nothing in it.
+  Owner, on the device with this build: "when
   I scroll, the text field and buttons hide properly but the bar stays … I don't like that bar
   that stays there. Do we even need it at all? When the text field and buttons are showing I
   think it might look fine without that bar, so let's get rid of it all." The band while reading
@@ -1900,6 +1905,10 @@ bar above every page. Research: docs/research/inset-fill.md.
   the bar. When the bar came to rest collapsed the inset went to 0 in one step, so the header
   jumped 72.5 pt and the fill vanished after the controls had gone: the transition. On phones the
   panes started under the status bar and the root view's paper showed above them.
+- **Updated** by "Duo inner screen: a glass band with the host while reading": the obscured top
+  under the top bar is now the collapsed glass band's bottom (73 pt on the device), still the
+  same in every state, so still nothing jumps; the header's color fill sits behind the band's
+  glass.
 - **Chosen: the bar floats over the page and gives it no inset of its own.** Under the top bar
   the obscured top is the status items' strip in every state (`TopChromeGeometry.obscuredInset`):
   0 in the status zone, the status bar's height under a full-width status bar. No public API turns
@@ -2492,3 +2501,53 @@ interactions are in docs/research/haptics.md; the rules are in docs/ui-reference
 - **Tests:** `-PlainHapticLog` (isolated runs only) records every play on a hidden element the UI
   tests read (HapticsTests), and unit tests use `Haptic.recorder`. The perf gate never passes it,
   so the recorder stays nil there.
+
+
+## Duo inner screen: a glass band with the host while reading (2026-11-27)
+
+Owner, on the build where the page ran under the floating controls: "now the top of pages goes
+under the text field. Look at what Safari does … I like that Safari leaves the URL text field
+there in a smaller version, with just the shrunken base URL, and that sets a boundary there. And
+I like that they use glass for the background bar." And: "Keeping our color scheme, make that
+whole toolbar and the URL text field etc. more Apple-glass-like." Safari's frames, measured:
+docs/research/safari-duo-top.md.
+
+- **Chosen: one band of Liquid Glass behind the top bar** (`TopBand`), across the pages from the
+  top edge, under the strip and the capsules. At rest it reaches under the row (73 pt on the
+  device) or the strip (111 pt); the capsules keep floating on it, so Plain keeps its look and the
+  page under the controls reads as intentional, blurred under glass, as in Safari. Of the two
+  options in the brief (start the page below the controls, or glass behind them) the band is
+  the cleaner: a page always scrolls under the controls mid-page, so only glass makes that read
+  as a boundary; the first line at a page's top still starts below the band (the scroll range's
+  start, unchanged).
+- **While reading the band stays, slim** (supersedes "Scroll chrome: expanded, pill, hidden" and
+  "the bar in the status row" for the top bar): its bottom rises to the status row's (the row's
+  or the status items' bottom + 4 pt: 73 pt on the device, the same as at rest with one tab), the
+  pill's text shrinks into the site's base domain ("apple.com", `TopBandHost.baseDomain`) on the
+  status row where the address was, clear of the status items, and the capsules and the strip
+  rise and fade. Hidden is gone under a top bar: the slim band is the boundary Safari keeps. A
+  tap anywhere on the collapsed band brings the bar back (one interruptible spring,
+  `Motion.toolbarSnap`, the same driver as every reveal); VoiceOver reads it as the address.
+- **The page's top inset never follows the bar, still** (keeps "The page's top inset never
+  follows the bar", with a new value): the obscured top is the collapsed band's bottom (73 pt) in
+  every state, no longer 0. So a fixed or sticky header rests under the band mid-page, never
+  under the controls alone, and never moves when the bar collapses or comes back; WebKit's color
+  fill above such a header is behind the band's glass, which it tints, as Safari's band takes the
+  page's color. The scroll range still starts under the expanded band (`expandedInset`), and
+  `keepPageTopUnderBar` still moves WebKit's own move to its top on to it, now only where the
+  strip makes the two differ (111 against 73).
+- **Not taken from Safari:** hiding the status items while collapsed (its slim band is 45 pt
+  because the status bar goes; the owner asked for the host clear of the status items, so the
+  band is the status row's height); the host's own capsule (a third layer of glass); the timed
+  morph (Plain's bar follows the finger 1:1 and springs, as on every screen); moving the page's
+  inset with the band (WebKit relayouts fixed elements on every inset change, the jump the
+  owner rejected).
+- **Glass, more Apple-like, Plain's colors:** the floating controls' tint is lighter
+  (`Palette.glassTint` Paper at 0.55 in light, Deep Lagoon at 0.6 in dark, was 0.88 and 0.84;
+  private violet at 0.6 and 0.64), and the soft ground under each control (`ChromeScrim`) is
+  0.5 / 0.62 (was 0.82 / 0.92), so the glass refracts and blurs the page and shows its rim
+  instead of reading as a paper fill. The band's tint is a step lighter again
+  (`bandGlassTint`, 0.42 / 0.5) so the capsules on it read as their own layer. Shared by the
+  outer screen and phones (one pill, one button bar).
+- **Editing and Find:** the band fades with the capsules, so an empty band never stays at the
+  top.

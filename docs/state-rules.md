@@ -172,19 +172,29 @@ fixed place, so Forward coming and going hides in place and moves nothing. Pill 
 into the home-indicator zone, then sinks away. The start screen keeps its own row (More beside the
 pill); editing lifts the pill above the keyboard, full width, as everywhere.
 
-**Duo inner screen (top bar).** The same three states drive the top bar. Where the status items
-keep to a corner (the Duo's inner screen) the row sits on their row, clear of the corner, and the
-page runs to the top edge: Expanded is the row (Back/Forward, the pill, Tabs/Share/More) and the
-strip, and a fresh page's first line starts under them; Pill shrinks the address in place on the
-row, buttons and strip faded; Hidden lifts it off the top edge. The page's top inset is the same in
-every state (`obscuredContentInsets.top` 0): the bar floats over the page, so the page and any
-fixed header run to the top edge under the status items, a collapse or reveal moves nothing in
-the page, and WebKit fills no band of a header's color behind the controls. In no state does a
-band, backing or scroll edge effect sit at the top, only the floating glass (owner, 2026-11-27:
-"I don't like that bar that stays there", "that bar needs to be removed"). Under a full-width
-status bar the row sits under it, the page's top inset is the status bar in every state, Pill
-tucks the address under the status bar, and Hidden leaves only the status bar. Same triggers and
-the same never-hidden list.
+**Duo inner screen (top bar).** Two of the three states drive the top bar: under it the chrome
+never hides, because the slim band is the page's top boundary while reading (owner, 2026-11-27:
+"I like that Safari leaves the URL text field there in a smaller version, with just the shrunken
+base URL, and that sets a boundary there"; docs/research/safari-duo-top.md).
+
+| State | On screen | Page's top |
+|---|---|---|
+| Expanded | a glass band across the pages from the top edge to under the row (and the strip, from the second tab), with the floating capsules on it: Back/Forward, the pill, Tabs/Share/More | a fresh page's first line starts under the band (`contentInset.top`, the expanded band's bottom); it scrolls under the glass |
+| Pill (reading) | the band's bottom rises to the status row's (73 pt on the device); the pill's text shrinks into the site's base domain ("apple.com") on the status row, clear of the status items; the capsules and the strip rise and fade | the band's bottom |
+
+- The page's obscured top (`obscuredContentInsets.top`) is the collapsed band's bottom in both
+  states: a fixed or sticky header rests under the band mid-page and never moves when the bar
+  collapses or comes back. Whatever WebKit paints above such a header is behind the glass.
+- Gets to Pill and back as on every screen: 1:1 with the finger over 56 pt, a release snaps to the
+  nearer state or follows a clear flick; any reveal brings Expanded back with one interruptible
+  spring. A tap anywhere on the collapsed band is a reveal; VoiceOver reads the collapsed band as
+  the address (a double tap shows the toolbar).
+- Hidden is never reached under a top bar. A bar the outer screen left hidden rests at Pill when
+  the Duo unfolds.
+- Editing (the pill above the keyboard) and Find fade the band with the capsules: an empty band
+  never stays at the top.
+- Under a full-width status bar (iPad-size windows) the band runs from the top edge to under the
+  row; while reading it is the status bar plus a 30 pt host row.
 
 ## 4. The page sheet (More, and a long press on the pill)
 

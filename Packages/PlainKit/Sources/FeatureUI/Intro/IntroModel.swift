@@ -113,12 +113,15 @@ final class IntroModel {
 
     func skip() {
         Signposts.signposter.emitEvent(Signposts.introSkip, "\(self.step?.rawValue ?? "splash", privacy: .public)")
-        finish()
+        finish(completed: false)
     }
 
-    func finish() {
+    /// Ends the intro. Let's Go plays the one success that marks a completion, as the dissolve
+    /// starts; Skip, Not Now and Set as Default (which leaves for Settings) end it silently.
+    func finish(completed: Bool = true) {
         guard !didFinish else { return }
         didFinish = true
+        if completed { Haptic.success.play() }
         go(to: nil)
         onFinish?()
     }
@@ -144,10 +147,15 @@ final class IntroModel {
         let previous = icon
         icon = choice
         isChangingIcon = true
+        // The check moves to the tile: a tick. A refusal puts it back with a bump.
+        Haptic.selection.play()
         Task {
             let changed = await AppIcons.set(choice)
             isChangingIcon = false
-            if !changed { icon = previous }
+            if !changed {
+                icon = previous
+                Haptic.nothingThere.play()
+            }
         }
     }
 

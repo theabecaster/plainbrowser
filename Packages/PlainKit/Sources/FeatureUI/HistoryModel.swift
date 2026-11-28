@@ -1,4 +1,5 @@
 import BrowserCore
+import DesignSystem
 import Foundation
 import Observation
 import PerfSignposts
@@ -114,12 +115,17 @@ public final class HistoryModel {
     public func clear(_ range: HistoryClearRange) async {
         let state = Signposts.signposter.beginInterval(Signposts.historyClear)
         defer { Signposts.signposter.endInterval(Signposts.historyClear, state) }
+        let cleared: Bool
         do {
             try await store.clearHistory(since: range.start(now: now(), calendar: calendar))
+            cleared = true
         } catch {
             errorMessage = Wording.historyEditFailed
+            cleared = false
         }
         await reload()
+        // With the rows gone: "All History" can take a moment, and the dialog asked first.
+        if cleared { Haptic.success.play() }
     }
 
     // MARK: Loading

@@ -152,6 +152,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // A window an isolated test run asks for is marked, so the owner never sees it.
         SceneState.sessionDidConnect(session, isNewWindow: newWindowRequest != nil)
         _ = services.database
+        // The haptic timing from FixedChoices (docs/research/haptics.md §3.2). Once is enough; it is cheap.
+        HapticSetup.configure()
         let arguments = ProcessInfo.processInfo.arguments
         #if DEBUG
         if arguments.contains("-PlainPreviewEmptyTabCard") {
@@ -666,6 +668,8 @@ enum TestIsolationMarker {
         marker.accessibilityValue = value
         window.addSubview(marker)
         markers.add(marker)
+        // `-PlainHapticLog`: the haptics the UI tests read (HapticsTests).
+        HapticSetup.installLog(in: window)
     }
 
     /// The database is attached: every marker, now and later, says so.

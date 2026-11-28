@@ -11,7 +11,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - Labels are Title Case nouns ("Search Engine", "Clear History and Data").
 - A row that doesn't apply on this screen stays, disabled, keeping its value, and its footer says why and what to use instead (Tab Layout on a narrow screen: "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs.").
 
-**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, cookie banners are rejected, translation is on the device, PDFs are Letter or A4 by region, haptics follow iOS, text follows Dynamic Type, the archive default is a week and archived tabs leave after 30 days, Appearance starts on System, and dark pages is on.
+**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, cookie banners are rejected, translation is on the device, PDFs are Letter or A4 by region, haptics follow iOS (System Haptics, no switch of Plain's), text follows Dynamic Type, the archive default is a week and archived tabs leave after 30 days, Appearance starts on System, and dark pages is on.
 
 ## Options live on the object
 
@@ -105,7 +105,32 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - Corner radii of 6–10 pt for controls and chips. Grouped paper rows in sheets are exempt: they keep the system's inset-grouped radius (about 26 pt), the iOS look (lead's call, 2026-11-27). Liquid Glass only on floating controls, built with one shared helper.
 - **Sheet headers stay.** Every sheet's title and Done (and Back on a pushed screen) sit in a header pinned above the list (`sheetTitle` in `FeatureUI/Style.swift`), never in the system's bar, which hides on scroll at a compact height (the Duo's outer screen). A list's search field is its first row and scrolls away with the rows.
 - Motion vocabulary: `.snappy(0.15–0.3)` for most changes, `.spring(0.32–0.42, bounce 0–0.12)` for gesture-driven moves, `.easeInOut(0.2)` crossfade under Reduce Motion. The full table is in the plan.
-- One `Haptic` enum: `tap`, `selection`, `threshold`, `success`, and a rate-limited "nothing there" bump.
+- **Haptics** (docs/research/haptics.md has the research and the full inventory). One `Haptic` enum, eight kinds, each with one meaning:
+
+  | Kind | Feel | Meaning | Examples |
+  |---|---|---|---|
+  | `selection` (the tick) | selection | a value or state changed in place, or a gesture crossed back over its threshold | zoom step, reorder slot, a toggle, Find wrapping to the first match, un-arming a swipe |
+  | `tap` (the commit) | light impact | an action committed whose result is small, off-screen or delayed | background tab, download started, zoom back to 100%, a flick that commits without arming |
+  | `threshold` | medium impact, 0.7 | a gesture crossed into a new outcome while the finger is down | bar swipe past half, the New Tab card at 80 pt, swipe up past the commit line, a card past its close line |
+  | `drop` | rigid impact, 0.6 | a dragged item landed in a new place | gallery reorder drop |
+  | `close` | soft impact | something went away | a tab, a pane, a profile |
+  | `success` | notification success | it worked, and the result is invisible or ends a wait | Copy Link, favorite, download finished, Clear History done, the intro finished |
+  | `failed` | notification warning | a task the user started and waited for did not work | download or PDF failed |
+  | `nothingThere` | soft impact, 0.5, at most once a second | instant refusal, nothing to do | Return in an empty field, a swipe with nowhere to go, Find with no matches |
+
+  Rules:
+  1. A haptic marks a moment, not a tap. A button whose result is on screen (Back, Tabs, Reload, Share, Done, a sheet opening) plays nothing.
+  2. Outcomes after a wait, or invisible ones, get `success` or `failed`. Instant visible outcomes get nothing.
+  3. One haptic per gesture outcome. A threshold announced while the finger was down makes the release silent; a flick that commits without arming plays once, as the spring starts.
+  4. Thresholds play both ways: `threshold` crossing in, `selection` crossing back, with 10 pt of hysteresis (`ThresholdLatch`, `FixedChoices.hapticThresholdHysteresis`).
+  5. Never during scrolling, momentum, chrome collapse or reveal.
+  6. No error pattern, and nothing when a confirmation dialog appears: the haptic comes with the destructive choice.
+  7. System controls keep their own haptic (context menus, button menus, pickers, `Toggle`, swipe actions, drag lift), and Plain never adds a second.
+  8. Nothing from key commands, the pointer or hover (`Haptic.withoutFeedback`).
+  9. Reduce Motion keeps haptics: they play with the crossfade.
+  10. Nothing from the background: an outcome plays with its toast when the toast appears. Two haptics inside 60 ms are one event, and the first wins (`FixedChoices.hapticMinimumGap`).
+  11. iOS mutes haptics while the microphone or camera records, and Plain keeps it that way.
+  12. A new haptic adds a row to the inventory in docs/research/haptics.md, and its check to docs/research/haptics-checklist.md.
 
 ## Wording
 

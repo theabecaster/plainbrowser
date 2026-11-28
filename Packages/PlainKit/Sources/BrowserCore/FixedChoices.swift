@@ -47,6 +47,24 @@ public enum FixedChoices {
     /// Page zoom and desktop/mobile site are remembered per site, automatically.
     public static let perSiteChoicesRemembered = true
 
+    // MARK: Haptics (docs/ui-reference.md, "Haptics"; docs/research/haptics.md)
+
+    /// Two haptics closer than this are one event: the first, synced to the visual, wins. 60 ms is
+    /// under one tap's duration and over the gap between two calls for the same moment (a profile
+    /// create's success and the list's tick).
+    public static let hapticMinimumGap: TimeInterval = 0.06
+    /// A refusal repeated faster than this stays silent, so a held or repeated press never buzzes.
+    public static let hapticNothingThereGap: TimeInterval = 1
+    /// Hysteresis on a gesture threshold, in points, so a finger resting on the line never chatters.
+    public static let hapticThresholdHysteresis: CGFloat = 10
+    /// The same hysteresis for a threshold measured in progress (0 to 1), such as the swipe up
+    /// into the switcher: about 10 pt of a bar's travel.
+    public static let hapticProgressHysteresis: CGFloat = 0.03
+    /// A download's start plays its tap this long after it starts, and only while it still runs:
+    /// most small files are done sooner, and then their success is the one haptic. The start has
+    /// nothing on screen to keep in sync with, so the wait costs nothing.
+    public static let hapticDownloadStartDelay: Duration = .milliseconds(150)
+
     // MARK: Launch and return (docs/research/launch.md)
 
     /// Away this long or longer, Plain opens to a fresh search over the last tab instead of the

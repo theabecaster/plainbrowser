@@ -25,6 +25,10 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     private let driver = SpringDriver(spring: Motion.tabSwitchSpring, restDistance: CGFloat(Signposts.visualSettle))
     private var swipe: Swipe?
     private var galleryTransition: TabGalleryTransition?
+    /// The swipe up's commit line (`FixedChoices.gallerySwipeCommit`), both ways.
+    private var galleryLatch = ThresholdLatch(
+        threshold: CGFloat(FixedChoices.gallerySwipeCommit), hysteresis: FixedChoices.hapticProgressHysteresis
+    )
     private var mode = Mode.none
     private var startOffset: CGFloat = 0
     private var recognizers: [UIPanGestureRecognizer] = []
@@ -50,8 +54,10 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         var attachedLive = false
         let preview = UIView()
         var offset: CGFloat = 0
-        /// Past the commit point, for the threshold haptic.
-        var isArmed = false
+        /// The commit line (half the width toward a neighbour, `newTabSwipeThreshold` for the
+        /// New Tab card): `.threshold` crossing in, `.selection` crossing back (docs/ui-reference.md,
+        /// "Haptics", rules 3 and 4).
+        var latch = ThresholdLatch(threshold: .infinity, hysteresis: FixedChoices.hapticThresholdHysteresis)
         /// The finger left and the page is settling toward `target`.
         var target: CGFloat?
 
@@ -108,6 +114,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
                 }
             } else if rules.swipeUpOpensGallery {
                 mode = .gallery
+                galleryLatch.reset()
+                Haptic.threshold.prepare(in: view)
                 galleryTransition = browser.presentGallery(source: "swipe", interactive: true)
             } else {
                 beginBump(vertical: true)
@@ -139,13 +147,21 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     /// transition decides the shape and, on release, where it lands.
     private func trackGallery(_ translation: CGPoint) {
         guard let browser, let transition = galleryTransition else { return }
-        browser.setChromeGalleryProgress(transition.track(translation: translation))
+        let progress = transition.track(translation: translation)
+        browser.setChromeGalleryProgress(progress)
+        // After the frame is applied: the haptic lands with the page reaching the commit size.
+        // Under Reduce Motion nothing moves, and this is the only cue that release will open it.
+        galleryLatch.update(progress)?.play(in: browser.view)
     }
 
     private func releaseGallery(velocity: CGPoint) {
         guard let browser, let transition = galleryTransition else { return }
         galleryTransition = nil
         let opens = transition.release(velocity: velocity) == .gallery
+        // Already announced while the finger was down: silent. A flick that opened it without
+        // ever arming commits with a tap as the spring starts; armed and flicked back, a tick.
+        if opens != galleryLatch.isArmed { (opens ? Haptic.tap : Haptic.selection).play(in: browser.view) }
+        galleryLatch.reset()
         browser.setChromeHiddenForGallery(opens, animated: true)
     }
 
@@ -154,7 +170,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     private func beginBump(vertical: Bool) {
         mode = .bump
         bumpVertical = vertical
-        Haptic.nothingThere.prepare()
+        Haptic.nothingThere.prepare(in: browser?.view)
     }
 
     /// The page lifts (or slides) a few points with heavy resistance, never far.
@@ -170,7 +186,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
 
     private func releaseBump() {
         guard let browser else { return }
-        Haptic.nothingThere.play()
+        Haptic.nothingThere.play(in: browser.view)
         Signposts.signposter.emitEvent(Signposts.tabSwipeEnd, "bump")
         let container = browser.webContainer
         Motion.animate(Motion.tabSwitch) { container.transform = .identity }
@@ -181,10 +197,20 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     private func beginTabSwipe() {
         mode = .tabs
         if let swipe {
-            // A finger on a settling page takes it from where it is on screen.
-            startOffset = driver.stop()
+            // A finger on a settling page takes it from where it is on screen. With nothing beside
+            // it (the New Tab card, or nothing) the page is rubber-banded while a finger holds it,
+            // so the spot on screen is turned back into the finger travel that shows it there.
+            let shown = driver.stop()
+            if swipe.neighbour == nil, let browser {
+                startOffset = travel(showing: shown, width: browser.webContainer.bounds.width)
+            } else {
+                startOffset = shown
+            }
             swipe.target = nil
             swipe.offset = startOffset
+            // The latch takes the state the page is in, silently: a grab past the line plays no
+            // threshold of its own, and a release from here judges against where it was grabbed.
+            if let browser, let value = latchValue(swipe, browser: browser) { swipe.latch.sync(value) }
             return
         }
         guard let browser, let current = browser.currentTab else {
@@ -202,7 +228,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         swipe.preview.isHidden = true
         browser.pageClip.insertSubview(swipe.preview, aboveSubview: browser.webContainer)
         self.swipe = swipe
-        Haptic.selection.prepare()
+        Haptic.threshold.prepare(in: browser.view)
+        Haptic.selection.prepare(in: browser.view)
     }
 
     /// Moves the page to `offset` (negative toward the next tab), preparing the neighbour on the
@@ -213,18 +240,35 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         if side != swipe.side { prepare(side: side) }
         swipe.offset = offset
         apply(swipe, browser: browser)
-        // The threshold haptic: crossing into (not back out of) the commit zone.
+        // The threshold haptics, from what is on screen after the transform (never the raw
+        // finger): `.threshold` crossing into the commit zone, `.selection` crossing back out.
+        guard let value = latchValue(swipe, browser: browser) else { return swipe.latch.reset() }
+        swipe.latch.update(value)?.play(in: browser.view)
+    }
+
+    /// How far into its commit zone the page is on screen, with the latch's line set for what is
+    /// beside it: half the width toward a neighbour, `newTabSwipeThreshold` for the New Tab card.
+    /// nil with nothing beside it.
+    private func latchValue(_ swipe: Swipe, browser: BrowserViewController) -> CGFloat? {
         let width = browser.webContainer.bounds.width
-        let armed: Bool
+        let shown = displayed(swipe.offset, swipe: swipe, width: width)
         if swipe.neighbour != nil {
-            armed = abs(offset) > width / 2
-        } else if swipe.isNewTabCard {
-            armed = -displayed(offset, swipe: swipe, width: width) >= FixedChoices.newTabSwipeThreshold
-        } else {
-            armed = false
+            swipe.latch.threshold = width / 2
+            return abs(shown)
         }
-        if armed, !swipe.isArmed { Haptic.selection.play() }
-        swipe.isArmed = armed
+        if swipe.isNewTabCard {
+            swipe.latch.threshold = CGFloat(FixedChoices.newTabSwipeThreshold)
+            return -shown
+        }
+        return nil
+    }
+
+    /// The finger travel that `displayed` shows at `shown` where nothing is beside the page: the
+    /// rubber band's inverse.
+    private func travel(showing shown: CGFloat, width: CGFloat) -> CGFloat {
+        let width = max(width, 1)
+        let band = min(abs(shown) / width, 0.99)
+        return (shown < 0 ? -1 : 1) * band / (1 - band) * width / 0.55
     }
 
     /// The page's on-screen offset: 1:1 toward a neighbour, rubber-banded where there is none.
@@ -317,6 +361,17 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
                   velocity < FixedChoices.galleryFlickSpeed {
             target = -width
         }
+        // One haptic per outcome, as the spring starts (docs/ui-reference.md, "Haptics", rule 3):
+        // armed and committing is already announced; a flick that commits without arming ticks
+        // (a new tab: taps); armed and springing back crosses back out with a tick.
+        let commits = target != 0
+        if commits != swipe.latch.isArmed {
+            (commits && swipe.isNewTabCard ? Haptic.tap : Haptic.selection).play(in: browser.view)
+        } else if !commits, swipe.side != 0, swipe.neighbour == nil, !swipe.isNewTabCard {
+            // Rubber-banded against nothing: the "nothing there" bump as the band springs back.
+            Haptic.nothingThere.play(in: browser.view)
+        }
+        swipe.latch.reset()
         swipe.settleInterval = Signposts.signposter.beginInterval(Signposts.tabSwipeSettle)
         settle(to: target, velocity: velocity)
     }
@@ -355,7 +410,8 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         self.swipe = nil
         let signposter = Signposts.signposter
         if target != 0, let neighbour = swipe.neighbour {
-            Haptic.selection.play()
+            // No haptic here: the release played it as the spring started (or the menu's Next
+            // Tab, whose result is on screen, plays none).
             let cover = swipe.attachedLive ? nil : swipe.preview.subviews.first
             // The neighbour's web view moves from the preview to the page container (no reload).
             let handoff = signposter.beginInterval(Signposts.tabSwipeHandoff)
@@ -366,15 +422,13 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             if let settle = swipe.settleInterval { signposter.endInterval(Signposts.tabSwipeSettle, settle) }
             signposter.emitEvent(Signposts.tabSwipeEnd, "switched")
         } else if target != 0, swipe.isNewTabCard {
-            Haptic.tap.play()
             reset(swipe, browser: browser, detachingNeighbour: false)
             browser.openNewTabFromSwipe()
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)
             if let settle = swipe.settleInterval { signposter.endInterval(Signposts.tabSwipeSettle, settle) }
             signposter.emitEvent(Signposts.tabSwipeEnd, "newTab")
         } else {
-            // Rubber-banded against nothing: the "nothing there" haptic, as for any no-op gesture.
-            if swipe.side != 0, swipe.neighbour == nil, !swipe.isNewTabCard { Haptic.nothingThere.play() }
+            // Against nothing, the release already played the "nothing there" bump.
             reset(swipe, browser: browser, detachingNeighbour: true)
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)
             if let settle = swipe.settleInterval { signposter.endInterval(Signposts.tabSwipeSettle, settle) }

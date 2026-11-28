@@ -87,13 +87,13 @@ private struct StepView: View {
             VStack(spacing: 4) {
                 Button {
                     DefaultBrowserPrompts.openSettings()
-                    model.finish()
+                    model.finish(completed: false)
                 } label: {
                     IntroButtonLabel(title: "Set as Default Browser")
                 }
                 .introPrimaryButton()
                 .accessibilityIdentifier("introSetDefault")
-                Button("Not Now") { model.finish() }
+                Button("Not Now") { model.finish(completed: false) }
                     .font(.body.weight(.semibold))
                     .foregroundStyle(IntroStyle.text.opacity(0.7))
                     .frame(maxWidth: .infinity, minHeight: 44)

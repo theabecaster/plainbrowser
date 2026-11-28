@@ -1,4 +1,5 @@
 #if os(iOS)
+import DesignSystem
 import SwiftUI
 
 /// Settings > App Icon: the four colorways, the current one checked. Picking one changes the Home
@@ -15,7 +16,14 @@ struct AppIconView: View {
                         guard choice != current else { return }
                         let previous = current
                         current = choice
-                        Task { if await !AppIcons.set(choice) { current = previous } }
+                        // As the intro's tiles (`IntroModel.pick`): a tick, a bump on a refusal.
+                        Haptic.selection.play()
+                        Task {
+                            if await !AppIcons.set(choice) {
+                                current = previous
+                                Haptic.nothingThere.play()
+                            }
+                        }
                     } label: {
                         HStack(spacing: 14) {
                             Group {

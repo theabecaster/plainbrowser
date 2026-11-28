@@ -185,6 +185,11 @@ extension BrowserViewController {
         panes.show(shown, primaryWidth: primaryWidth)
         updatePaneLooks()
         session.pool.defaultPaneSize = layout.focusedPaneFrame.size
+        // A pane's size changed without a window resize (a split, the side pane): its page may
+        // switch between desktop and mobile once it settles. A resize says so at its completion.
+        if let previous, !duo.isResizing, previous.paneFrames.map(\.size) != layout.paneFrames.map(\.size) {
+            session.pool.panesDidChange()
+        }
         // A pane that just came on screen or left it (a fold, a split opening).
         if previous?.splitShown != layout.splitShown || previous == nil { syncPanes() }
         // The Tabs button and the swipe up follow whether the sidebar is on screen (one tab: it
@@ -456,7 +461,8 @@ extension BrowserViewController {
     /// frame once: inside the transition the root view already has `size`, the layout is decided
     /// for it and laid out in one pass (the web views follow their pane by autoresizing). The page
     /// insets wait for the completion. No snapshot cover: WebKit scales its tiles, then reflows.
-    /// Desktop or mobile stays what it was at navigation start.
+    /// Desktop or mobile: the pool holds its checks until the completion, then each page on
+    /// screen follows its pane's new size once it settles (`WebViewPool.panesDidChange()`).
     func windowWillResize(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
         let signposter = Signposts.signposter
         if let interval = duo.resizeInterval { signposter.endInterval(Signposts.foldTransition, interval, "replaced") }
@@ -471,6 +477,7 @@ extension BrowserViewController {
         // A drag or settle of the side pane's divider stops: the window's width rides the
         // transition, mapped to the new bounds (`SidePaneDividerGeometry.rest(for:)`).
         sidePaneUI.divider?.cancel()
+        session.pool.panesWillChange()
         coordinator.animate(alongsideTransition: { [weak self] _ in
             guard let self else { return }
             updateDuoLayout()
@@ -488,6 +495,7 @@ extension BrowserViewController {
                 signposter.endInterval(Signposts.foldTransition, interval)
                 duo.resizeInterval = nil
             }
+            session.pool.panesDidChange()
         })
     }
 }

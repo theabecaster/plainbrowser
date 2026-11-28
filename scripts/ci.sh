@@ -86,11 +86,18 @@ cleanup_remote() {
   (( keep || ! pushed )) && return 0
   # Only while the branch is still this run's commit: a newer scripts/ci.sh for the lane keeps its own.
   git push -q --force-with-lease="refs/heads/${branch}:${commit}" origin ":refs/heads/${branch}" 2>/dev/null || true
-  if [[ $(git ls-remote origin "refs/heads/${branch}" 2>/dev/null | cut -f1) == $commit ]]; then
-    print -u2 "ci: could not delete $branch; delete it with: git push origin --delete $branch"
+  local left
+  if ! left=$(git ls-remote origin "refs/heads/${branch}" 2>/dev/null); then
+    print -u2 "ci: could not check that $branch is gone; check: git ls-remote origin refs/heads/$branch"
+  elif [[ ${left%%[[:space:]]*} == $commit ]]; then
+    print -u2 "ci: could not delete $branch; delete it with: git push --force-with-lease=refs/heads/$branch:$commit origin :refs/heads/$branch"
   fi
   # Interrupted before the run was found: look for it once more.
-  [[ -n ${run:-} ]] || run=$(find_run 6) || { print -u2 "ci: no run found for ${commit:0:10} to clean up; check: gh run list -R $repo --branch $branch"; return 0; }
+  [[ -n ${run:-} ]] || run=$(find_run 6 || true)
+  if [[ -z $run ]]; then
+    print -u2 "ci: no run found for ${commit:0:10} to clean up; check: gh run list -R $repo --branch $branch"
+    return 0
+  fi
   # A run still going (ci.sh interrupted) can't be deleted: cancel it and wait for it to stop.
   if [[ $(gh run view $run -R $repo --json status -q .status 2>/dev/null) != completed ]]; then
     gh run cancel $run -R $repo >/dev/null 2>&1 || true

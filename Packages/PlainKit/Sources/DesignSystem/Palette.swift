@@ -183,10 +183,12 @@ public enum Palette {
     public static let pullCycle: [UIColor] = [mint, accent, BrandArt.bloomViolet, coral]
     /// The same loop in a private tab: its dusk violets and the sky's blue.
     public static let privatePullCycle: [UIColor] = [BrandArt.bloomViolet, BrandArt.dawnViolet, Mark.sky[1]]
-    /// A private tab's one accent where a regular tab's is Lagoon (an armed pull): the violet bloom.
-    public static let privateAccent = BrandArt.bloomViolet
-    /// That violet for a symbol on glass: deep by day, a light step by night for contrast.
-    public static let privateAccentOnGlass = UIColor(light: BrandArt.dawnViolet, dark: UIColor(rgb: 0xB3A4FF))
+    /// An armed pull's fill in a private tab, where a regular tab's is Lagoon: the violet bloom,
+    /// deep enough for the white arrow on it (`privateAccent` is the light mark on glass).
+    public static let privatePullFill = BrandArt.bloomViolet
+    /// The pull's one color under Reduce Motion in a private tab: deep by day, a light step by
+    /// night for contrast.
+    public static let privatePullRest = UIColor(light: BrandArt.dawnViolet, dark: UIColor(rgb: 0xB3A4FF))
 }
 
 extension UIColor {

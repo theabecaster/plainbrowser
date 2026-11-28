@@ -252,8 +252,8 @@ final class PullIndicator: UIView {
 enum PullTint {
     static let stops = Palette.pullCycle
     static let privateStops = Palette.privatePullCycle
-    static let privateFill = Palette.privateAccent
-    static let privateRest = Palette.privateAccentOnGlass
+    static let privateFill = Palette.privatePullFill
+    static let privateRest = Palette.privatePullRest
 
     /// Lightness bands so every color holds about 3:1 on the indicator's ground: white by day
     /// (OKLab L at most 0.62), the dark surface by night (at least 0.74).

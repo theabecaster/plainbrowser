@@ -343,13 +343,14 @@ final class StateRulesTests: XCTestCase {
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 3))
     }
 
-    /// The start screen's mark keeps an empty field company only while the field has nothing of
-    /// its own to show (first run); rows, the field's own or suggestions, never draw over it.
+    /// The open search sheet is never empty and never draws over the start screen's mark: on a
+    /// first run its one sentence shows and the mark steps back; rows do the same.
     func testStartScreenYieldsToSuggestions() throws {
         let app = try launch()
         let field = app.textFields["searchField"]
         let mark = app.images["startMark"]
-        XCTAssertTrue(mark.waitForExistence(timeout: 2), "first run: the mark shows above the empty field")
+        XCTAssertTrue(app.buttons["focus.hint"].waitForExistence(timeout: 2) || app.staticTexts["focus.hint"].exists, "first run: the sheet says what will show")
+        XCTAssertTrue(mark.waitForNonExistence(timeout: 2), "the mark steps back for the sheet")
         go(app, to: "/a")
         waitForPage(app, "Page A")
         tabsMenu(app, pick: "New Tab")

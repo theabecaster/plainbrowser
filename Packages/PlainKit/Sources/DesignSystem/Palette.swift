@@ -126,6 +126,28 @@ public enum Palette {
             : UIColor(rgb: 0x0A2133, alpha: high ? 0.38 : 0.12)
     }
 
+    /// The search sheet's card: paper over a blur of the page, so it reads as Plain's paper with
+    /// the page's colors faintly through it (Arc Search's frosted sheet, in paper). Opaque paper
+    /// under Increase Contrast.
+    public static let sheetTint = UIColor { traits in
+        let high = traits.accessibilityContrast == .high
+        return traits.userInterfaceStyle == .dark
+            ? UIColor(rgb: 0x11293D, alpha: high ? 1 : 0.78)
+            : UIColor(rgb: 0xFFFBF4, alpha: high ? 1 : 0.8)
+    }
+
+    /// The search sheet's handle: quiet ink, about 3:1 on the card (it is the one visible way out).
+    public static let sheetGrabber = UIColor { traits in
+        let high = traits.accessibilityContrast == .high
+        return traits.userInterfaceStyle == .dark
+            ? UIColor(rgb: 0xFFF6E6, alpha: high ? 0.75 : 0.5)
+            : UIColor(rgb: 0x0A2133, alpha: high ? 0.65 : 0.42)
+    }
+
+    /// Over the page while the search sheet is open: the page stays sharp and readable, a step
+    /// dimmer, so the sheet is in front and the page is clearly a place to tap back to.
+    public static let sheetScrim = UIColor(light: UIColor(rgb: 0x0A2133, alpha: 0.22), dark: UIColor(rgb: 0x000000, alpha: 0.36))
+
     /// Lagoon Blue for actions and checkmarks on paper: a step deeper by day (`#2366F0`, 4.7:1 on
     /// the card, where Lagoon itself gives 4.1:1) and the lighter glass step by night.
     public static let accentOnPaper = UIColor.anyThread { traits in

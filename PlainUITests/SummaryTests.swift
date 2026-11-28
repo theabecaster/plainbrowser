@@ -188,7 +188,7 @@ final class SummaryTests: XCTestCase {
     }
 }
 
-private extension XCUIElement {
+extension XCUIElement {
     func clearText() {
         guard let value = value as? String, !value.isEmpty else { return }
         tap()

@@ -17,6 +17,10 @@ final class AddressFocusState {
     /// Copy button while it still shows that address. Otherwise a search over a page opens a new
     /// tab (`LaunchUIState.isFreshSearch`).
     var isEditingPage = false
+    /// Browse for Me was armed from the empty field's button: Return browses instead of searching.
+    var browseArmed = false
+    /// The field's microphone: speech to text on the phone only.
+    let dictation = FieldDictation()
     /// Bumped by every visit noted in memory, so a read that started before it never replaces it.
     var visitGeneration = 0
 }
@@ -24,7 +28,7 @@ final class AddressFocusState {
 // MARK: - The focused field's content
 
 extension BrowserViewController {
-    /// The rows above the empty (or untouched) field, nearest first. Built from memory only: the
+    /// The rows under the empty (or untouched) field, nearest first. Built from memory only: the
     /// focus snapshot, the closed stack and the pasteboard check already made.
     func focusItems() -> [SheetItem] {
         let signposter = Signposts.signposter
@@ -66,12 +70,11 @@ extension BrowserViewController {
             .prefix(FixedChoices.focusRecentPages)
         items += recent.map { SheetItem.recent(url: $0.url, title: $0.title) }
         items += closed
-        // First run, nothing kept yet: one sentence says what will show here, above the page's own
-        // row (the start screen has its own sentence).
-        let showsStart = tab.map { session.tabs.isEmpty($0.id) } ?? true
+        // First run, nothing kept yet: one sentence says what will show here, so the sheet is never
+        // an empty card (on the start screen too: the sheet covers its mark and sentence).
         let keepsNothing = recent.isEmpty && closed.isEmpty && focusUI.content.favorites.isEmpty
             && focusUI.content.unread.isEmpty
-        if keepsNothing, !showsStart, focusUI.copiedLink.offer(excluding: page) == nil {
+        if keepsNothing, focusUI.copiedLink.offer(excluding: page) == nil {
             items.append(.hint(String(localized: "Pages you visit and your favorites show up here.")))
         }
         return items
@@ -188,7 +191,7 @@ extension BrowserViewController {
         focusUI.isEditingPage = true
         launchUI.isFreshSearch = false
         pill.textField.text = url.absoluteString
-        pill.setCopyShown(true)
+        updateFieldAccessory()
         if isEditingAddress {
             pill.textField.selectAll(nil)
             queryChanged()

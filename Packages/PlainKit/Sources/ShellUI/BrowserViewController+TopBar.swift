@@ -10,10 +10,6 @@ final class TopBarLayout {
     var pillHeight: NSLayoutConstraint!
     /// The toast just above the pill (bottom row), or low on the page (top bar).
     var toastOverPill: NSLayoutConstraint!
-    /// The search sheet's content ends above the pill; with the pill in the top bar (the sheet is
-    /// closed then) it rests on the safe area's bottom instead, so the two never conflict.
-    var sheetOverPill: NSLayoutConstraint!
-    var sheetLow: NSLayoutConstraint!
     var toastLow: NSLayoutConstraint!
     /// The pull indicator's top: under the top bar when it shows.
     var pullIndicatorTop: NSLayoutConstraint!
@@ -22,6 +18,9 @@ final class TopBarLayout {
     var pill: [NSLayoutConstraint] = []
     /// The pill between the two button capsules (only with the bar in the view).
     var pillBetweenButtons: [NSLayoutConstraint] = []
+    /// The pill as the open search sheet's field: room kept beside it for Cancel, clear of the
+    /// lane's end and of the status corner (constants set in `applyTopBarPlacement`).
+    var pillOpen: [NSLayoutConstraint] = []
     /// The buttons spanning the row, their capsules at its ends.
     var bar: [NSLayoutConstraint] = []
     /// The strip's top under the bar, from the root view's top.
@@ -46,7 +45,7 @@ final class TopBarLayout {
 /// Tabs, Share and More at its trailing end, and the tab strip (Tab Layout: Above, two or more
 /// tabs) under it. The system's vertical bar is off there, so the page gets the full width.
 /// The bar floats over the page and shrinks to the address while reading. To edit the address the
-/// pill still rises above the keyboard with the search sheet, as everywhere else.
+/// pill stays in its row, widens into the field, and the search sheet grows down from it (`+SearchSheet`).
 extension BrowserViewController {
     /// The top bar holds the chrome now (`DuoLayout.chromeOnTop`).
     var chromeOnTop: Bool { duo.layout?.chromeOnTop ?? false }
@@ -68,8 +67,6 @@ extension BrowserViewController {
         top.pillHeight = pill.heightAnchor.constraint(equalToConstant: ChromeGeometry.pillHeight)
         top.toastOverPill = tabsUI.toast.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s)
         top.toastLow = tabsUI.toast.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -Spacing.s)
-        top.sheetOverPill = sheet.content.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s)
-        top.sheetLow = sheet.content.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -Spacing.s)
         top.pullIndicatorTop = pullIndicator.topAnchor.constraint(equalTo: panes.view.topAnchor, constant: Spacing.s)
 
         // As wide as the room between the capsules allows (up to its cap), then as near the
@@ -101,6 +98,12 @@ extension BrowserViewController {
             pill.trailingAnchor.constraint(
                 lessThanOrEqualTo: buttonBar.trailingAnchor, constant: -(ButtonBar.splitTrailingWidth + gap)
             ),
+        ]
+        // Open, the pill is the search sheet's field: free of the capsules (they fade), as wide
+        // as its cap, with Cancel's room beside it.
+        top.pillOpen = [
+            pill.trailingAnchor.constraint(lessThanOrEqualTo: lane.trailingAnchor),
+            pill.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor),
         ]
         // The capsules sit at the lane's ends unless the status corner is in the way; then the
         // one on its side stops short of it.
@@ -182,6 +185,9 @@ extension BrowserViewController {
         let clearance = geometry.rowClearance
         for constraint in top.leadingClearance { Self.set(constraint, clearance.leading) }
         for constraint in top.trailingClearance { Self.set(constraint, -clearance.trailing) }
+        let cancelRoom = sheet.cancelWidth + SearchSheet.dropdownMargin
+        Self.set(top.pillOpen[0], -(Spacing.m + cancelRoom))
+        Self.set(top.pillOpen[1], -(clearance.trailing + cancelRoom))
     }
 
     /// The rail's first row sits on the top bar's row where the status zone beside it is empty
@@ -274,16 +280,16 @@ extension BrowserViewController {
 
     /// Puts the pill and the buttons in the top bar, or gives them back to the bottom row. The
     /// caller (`updatePillRestConstraint`) owns the bottom row's constraints.
-    func setTopBarConstraints(pill pillOnTop: Bool, bar barOnTop: Bool) {
+    func setTopBarConstraints(pill pillOnTop: Bool, bar barOnTop: Bool, open: Bool) {
         let top = duo.top
         if top.isPillOnTop != pillOnTop {
             top.isPillOnTop = pillOnTop
             if pillOnTop {
-                NSLayoutConstraint.deactivate([top.toastOverPill, top.sheetOverPill])
-                NSLayoutConstraint.activate(top.pill + [top.toastLow, top.sheetLow])
+                NSLayoutConstraint.deactivate([top.toastOverPill])
+                NSLayoutConstraint.activate(top.pill + [top.toastLow])
             } else {
-                NSLayoutConstraint.deactivate(top.pill + [top.toastLow, top.sheetLow])
-                NSLayoutConstraint.activate([top.toastOverPill, top.sheetOverPill])
+                NSLayoutConstraint.deactivate(top.pill + [top.toastLow])
+                NSLayoutConstraint.activate([top.toastOverPill])
             }
             top.pillHeight.constant = pillOnTop ? TopChromeGeometry.rowHeight : ChromeGeometry.pillHeight
         }
@@ -291,9 +297,13 @@ extension BrowserViewController {
             top.isBarOnTop = barOnTop
             barOnTop ? NSLayoutConstraint.activate(top.bar) : NSLayoutConstraint.deactivate(top.bar)
         }
-        let between = pillOnTop && barOnTop
+        let between = pillOnTop && barOnTop && !open
         if top.pillBetweenButtons.first?.isActive != between {
             between ? NSLayoutConstraint.activate(top.pillBetweenButtons) : NSLayoutConstraint.deactivate(top.pillBetweenButtons)
+        }
+        let field = pillOnTop && open
+        if top.pillOpen.first?.isActive != field {
+            field ? NSLayoutConstraint.activate(top.pillOpen) : NSLayoutConstraint.deactivate(top.pillOpen)
         }
     }
 
@@ -318,7 +328,7 @@ extension BrowserViewController {
     func applyTopBarCollapse(_ progress: CGFloat, geometry: TopChromeGeometry) {
         let editing = isEditingAddress
         if editing {
-            // The pill is above the keyboard: only the bar's buttons stay hidden at the top.
+            // The pill is the open sheet's field, in place: only the bar's buttons stay hidden.
             pill.transform = .identity
             pill.isCompact = false
         } else {

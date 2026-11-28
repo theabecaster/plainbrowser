@@ -66,7 +66,9 @@ final class AddressFocusTests: XCTestCase {
         XCTAssertTrue(back.isEnabled)
         back.tap()
         waitForPage(app, "Page A")
-        XCTAssertFalse(app.buttons["forward"].isEnabled, "Page A's own tab never went to B")
+        // Forward shows only where there is somewhere to go (a phone's bar leaves it out).
+        let forward = app.buttons["forward"]
+        XCTAssertFalse(forward.exists && forward.isEnabled, "Page A's own tab never went to B")
     }
 
     func testEditingTheAddressLoadsInTheSameTab() throws {

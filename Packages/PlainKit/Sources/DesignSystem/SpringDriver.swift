@@ -32,6 +32,16 @@ public final class SpringDriver {
     private var startTime: TimeInterval = 0
     private var duration: TimeInterval = 0
     private var lastTime: TimeInterval = 0
+    /// The spring's clock starts at the first frame the link delivers, not at the call
+    /// (`animate(fromFirstFrame:)`).
+    private var awaitsFirstFrame = false
+    /// The running motion shows every part of itself: a frame that comes late moves the spring on
+    /// by `longestStep` at most (`animate(fromFirstFrame:)`).
+    private var showsWholeMotion = false
+    /// The most a whole-motion spring advances in one frame: two 60 Hz frames. A stall on the main
+    /// thread (the keyboard arriving or leaving) then stretches the motion a little instead of
+    /// cutting to its end.
+    private static let longestStep: TimeInterval = 1 / 30
     private var onFrame: ((CGFloat) -> Void)?
     private var completion: (() -> Void)?
 
@@ -58,6 +68,10 @@ public final class SpringDriver {
     ///   - velocity: the starting velocity in value units per second (a gesture's release).
     ///   - spring: this motion's spring, when it is not the driver's own (a calmer exit than the
     ///     snap, for example). A retarget starts from the current velocity either way.
+    ///   - fromFirstFrame: the spring's time starts at the first frame after the call, so work
+    ///     done in the same turn (a layout, the keyboard starting) never eats the start of the
+    ///     motion, and a frame that comes late later on moves it on by two frames' time at most:
+    ///     the whole motion is shown, never cut to its end.
     ///   - view: the view whose display paces the frames.
     ///   - onFrame: applies a value; runs once per frame, and once with `target` at the end.
     ///   - completion: runs when the spring settles (or comes to rest, with `restDistance`), not
@@ -66,11 +80,14 @@ public final class SpringDriver {
     /// Under Reduce Motion, or with the view off screen, the value jumps to `target`; under Reduce
     /// Motion the caller wraps the call in `Motion.crossfade`.
     public func animate(
-        to target: CGFloat, velocity: CGFloat? = nil, spring: Spring? = nil, in view: UIView,
+        to target: CGFloat, velocity: CGFloat? = nil, spring: Spring? = nil, fromFirstFrame: Bool = false,
+        in view: UIView,
         onFrame: @escaping (CGFloat) -> Void, completion: (() -> Void)? = nil
     ) {
         let now = CACurrentMediaTime()
-        let startVelocity = velocity ?? self.velocity(at: now)
+        // A whole-motion spring's clock is its own (stalls are skipped): its velocity is the last
+        // frame's, not the wall clock's.
+        let startVelocity = velocity ?? (showsWholeMotion ? self.velocity : self.velocity(at: now))
         self.spring = spring ?? defaultSpring
         self.onFrame = onFrame
         self.completion = completion
@@ -83,6 +100,8 @@ public final class SpringDriver {
         initialVelocity = startVelocity
         startTime = now
         lastTime = now
+        awaitsFirstFrame = fromFirstFrame && link == nil
+        showsWholeMotion = fromFirstFrame
         duration = self.spring.settlingDuration(target: target - origin, initialVelocity: startVelocity, epsilon: 0.001)
         if link == nil {
             let link = UIUpdateLink(view: view)
@@ -117,7 +136,19 @@ public final class SpringDriver {
     }
 
     private func step(to time: TimeInterval) {
+        if awaitsFirstFrame {
+            // The motion begins now: this frame shows its start.
+            awaitsFirstFrame = false
+            startTime = time
+            lastTime = time
+            onFrame?(value)
+            return
+        }
         let previousTime = lastTime
+        if showsWholeMotion, time - previousTime > Self.longestStep {
+            // A late frame: the spring's clock skips the stall.
+            startTime += time - previousTime - Self.longestStep
+        }
         lastTime = max(time, startTime)
         let elapsed = lastTime - startTime
         guard elapsed < duration else {
@@ -156,6 +187,7 @@ public final class SpringDriver {
     }
 
     private func endLink() {
+        awaitsFirstFrame = false
         link?.isEnabled = false
         link = nil
     }

@@ -2824,11 +2824,12 @@ limits: docs/research/perf-pass-3.md.
   only) launches a bare UIKit screen, one text field with the address field's traits and two
   buttons, measured by the same signposts and metrics as Plain (`testReference*`, run with
   `TEST_RUNNER_PLAIN_PERF_REFERENCE=1`; the gate prints them as report-only). A budget below the
-  reference on the same device can't be met by any app; above it, the gap is Plain's.
+  reference on the same device would need UIKit or the keyboard to do less than they do for a bare
+  screen; above it, the gap is Plain's.
 - **Cookie banner rules are indexed by host and compiled on first use.** Every frame used to run
   all 882 regular expressions, all compiled at the first page. Now an address looks up its host
-  suffixes and runs only those rules plus the 35 the index can't read: per frame O(U + labels +
-  k) instead of O(R), and flat as the rules grow (31 vs 373 µs at 882 rules, 35 vs 6,609 µs at
+  suffixes and runs only those rules plus the 35 the index can't read: per frame O(labels + C log C)
+  for its C = 35 + k candidates instead of O(R), and flat as the rules grow while C stays fixed (31 vs 373 µs at 882 rules, 35 vs 6,609 µs at
   13,587). Equal to the full check on every rule's host and its look-alikes (a test, ~187k
   checks). Memory at ten tabs: 68.6 vs 71.3 MB on the simulator.
 - **The warm web view is made again after a tab takes it**, `EngineChoices.rewarmDelay` after

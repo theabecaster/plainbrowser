@@ -4,7 +4,7 @@
 UIKit, the system keyboard and the test runner. On the simulator Plain sits 23–31 ms above a bare
 UIKit field for the time before the keyboard rises, ~90 ms above it for the field-focused launch,
 and holds 69 MB at ten tabs against the bare screen's 33 MB. This pass cuts the cookie banner
-engine's per-frame work from O(rules) to O(labels), its memory by 2.6 MB, and New Tab's web view
+engine's per-frame work from O(rules) to the address's few candidates, its memory by 2.6 MB, and New Tab's web view
 creation out of the tap, and adds a reference that measures the floor on the Duo. Whether 150 ms
 launches and 510 ms focus are reachable on the Duo at all is the device run's answer (section 6).
 
@@ -44,7 +44,8 @@ complexity), and which honest change closes the gap.
   UIKit screen with one text field (the address field's input traits) and two buttons, measured
   by the same signposts (`PerfTests.testReferenceLaunch`, `testReferenceFocus`, run with
   `TEST_RUNNER_PLAIN_PERF_REFERENCE=1`). It is what UIKit and the system keyboard alone take on
-  that device; a budget below it can't be met by any app.
+  that device under the same harness: a budget below it would need UIKit or the keyboard to do
+  less than they do for a bare screen, which no app controls.
 
 ## 2. Results by metric
 
@@ -174,7 +175,7 @@ the shape is the point). `ComplexityCurveTests` runs with `PLAIN_CURVES=1`.
 | Tab session read at launch (`loadTabSession`, off main) | open tabs | O(n) | 10: 0.80 ms, 100: 1.64, 1,000: 10.3 | Linear, off the main thread |
 | `TabStore(session:)` on the main thread | open tabs | O(n) | 10: 0.034 ms, 100: 0.158, 1,000: 1.37 | Linear; under the 5 ms budget at 1,000 |
 | Closing one tab (`TabStore.close`) | tabs in the window | O(n) per close (list `firstIndex`/`removeAll`, the session snapshot) | with the session snapshot each close builds: 5 closes at 10 tabs 0.07 ms, 50 at 100: 2.0 ms, 500 at 1,000: 162 ms (0.32 ms each) | O(n²) only when closing one by one; Close All and archiving already batch (`closeTabs`) |
-| Cookie banner rules per frame | R rules | before O(R) regex matches; now O(U + labels + k), U = 35 unindexed | see below | Changed this pass |
+| Cookie banner rules per frame | R rules | before O(R) regex matches; now O(labels + C log C) for the C = U + k candidates (U = 35 unindexed, k the host's own rules), flat while C stays fixed | see below | Changed this pass |
 
 **Follow-up for the history query (not changed in this pass).** The slow keystrokes at 100k are the
 first two or three letters, where the `MATCH` yields tens of thousands of rows only to keep 32.
@@ -187,7 +188,7 @@ keystroke O(L / selectivity) with the current plan as the bound. It changes the 
 inputs, not the ranking, but needs its own ranking-equivalence tests, so it is left for a pass of
 its own.
 
-### Cookie banner rules: O(rules) per frame to O(labels + k)
+### Cookie banner rules: O(rules) per frame to O(labels + C log C)
 
 Every main frame and every subframe asks `CookieBannerRules` which site rules match its address
 (`page`, `init` and `frame` messages). Before, that was 882 `NSRegularExpression` matches per
@@ -224,7 +225,7 @@ line break (ICU's `$` also matches before a final one) takes the full check.
 ## 4. Changes
 
 1. **Cookie banner rules: a host index, patterns compiled on first use**
-   (`ContentBlocking/CookieBanners.swift`, section 3). Per frame O(U + labels + k) instead of
+   (`ContentBlocking/CookieBanners.swift`, section 3). Per frame O(labels + C log C), C = U + k candidates, instead of
    O(R); ten-tab memory 71.3 → 68.6 MB (interleaved, 2 rounds of 5, both rounds; job A).
 2. **The warm web view is made again after a tab takes it** (`WebViewPool.scheduleRewarm`,
    `EngineChoices.rewarmDelay`): a New Tab after the first no longer runs `WKWebView.init` and its

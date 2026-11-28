@@ -532,8 +532,8 @@ public final class CookieBanners {
 /// A frame's address is checked against a host index, not against every pattern: almost every
 /// pattern is `^https?://`, an optional subdomain group, a literal host and `/`
 /// (`HostKeys.keys(for:)`), so only rules keyed by one of the address's host suffixes, plus the
-/// few patterns the index can't read, run their regular expression. That is O(labels + k) per
-/// frame instead of O(rules), and each pattern is compiled the first time it runs, so the ICU
+/// few patterns the index can't read, run their regular expression. That is O(labels + C log C) per
+/// frame for its C candidates (the unindexed ones and the host's own) instead of O(rules), and each pattern is compiled the first time it runs, so the ICU
 /// programs of the ~880 sites the user never visits are never built (docs/research/perf-pass-3.md).
 struct CookieBannerRules: Sendable {
     struct Specific: Sendable {

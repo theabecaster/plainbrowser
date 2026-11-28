@@ -94,7 +94,7 @@ final class StateRulesTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [tried], timeout: 10), .completed, "the pill shows the address that was tried")
     }
 
-    /// Nothing open: no switcher, no Back, Forward or Share; More and the shortcuts reach the rest.
+    /// Nothing open: no switcher, no Back, Forward or New Tab; More and the shortcuts reach the rest.
     func testEmptyStartScreenHasNoSwitcher() throws {
         let app = try launch()
         closeSearch(app)
@@ -102,7 +102,7 @@ final class StateRulesTests: XCTestCase {
         XCTAssertFalse(app.buttons["tabs"].exists, "nothing to switch to and already in a new tab")
         XCTAssertFalse(app.buttons["back"].exists)
         XCTAssertFalse(app.buttons["forward"].exists)
-        XCTAssertFalse(app.buttons["share"].exists)
+        XCTAssertFalse(app.buttons["newTab"].exists, "already in a new tab")
         XCTAssertTrue(app.buttons["more"].exists)
         if !app.toolbars.firstMatch.exists {
             // The glass bar: More is a round button beside the pill, not a full-width bar.

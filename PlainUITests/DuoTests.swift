@@ -207,9 +207,11 @@ final class DuoTests: XCTestCase {
         rows.matching(NSPredicate(format: "label == 'Plain Test B'")).firstMatch.tap()
         waitForPill(app, showing: "/b")
 
-        // New Tab from the strip goes straight to the search field.
+        // New Tab is the top bar's "+" over the strip (the strip has none of its own), straight to
+        // the search field.
         chooseTabLayout(app, "Above")
-        app.buttons["tabStrip.newTab"].tap()
+        XCTAssertFalse(app.buttons["tabStrip.newTab"].exists, "one New Tab button on screen")
+        app.buttons["newTab"].firstMatch.tap()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 3))
     }
 }

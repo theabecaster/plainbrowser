@@ -435,13 +435,11 @@ final class PerfTests: XCTestCase {
         return frame
     }
 
-    /// The tabs slot's long-press menu, then its New Tab (a regular tab; More's tab item opens a
-    /// private one), by identifier, so it works in every layout.
+    /// The bar's New Tab button (a regular tab from a regular page), by identifier, so it works in
+    /// every layout. `tab.newReady` starts in `openNewTab` as it did from the tabs menu, so the
+    /// numbers compare with the rows before the button.
     private func openNewTab(_ app: XCUIApplication) {
-        let tabs = app.buttons["tabs"]
-        XCTAssertTrue(tabs.waitForExistence(timeout: 3))
-        tabs.press(forDuration: 1)
-        let newTab = app.buttons["menu.newTab"]
+        let newTab = app.buttons["newTab"].firstMatch
         XCTAssertTrue(newTab.waitForExistence(timeout: 3))
         newTab.tap()
     }

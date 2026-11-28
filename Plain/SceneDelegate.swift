@@ -292,6 +292,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         )
         browser.debugSidePane(value(after: "-PlainSidePane"), find: value(after: "-PlainFind"))
         browser.debugNewWindow(value(after: "-PlainNewWindow"))
+        browser.debugTopWalk(value(after: "-PlainTopWalk"), step: value(after: "-PlainTopWalkStep").flatMap(Double.init))
         #endif
     }
 

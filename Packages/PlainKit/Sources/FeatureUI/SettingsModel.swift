@@ -266,7 +266,7 @@ extension Appearance {
         switch self {
         case .system: "Plain and websites follow your iPhone's light or dark setting."
         case .light: "Plain and websites stay light."
-        case .dark: "Plain and websites stay dark."
+        case .dark: "Plain stays dark, and so do websites with a dark design."
         }
     }
 }

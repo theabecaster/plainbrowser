@@ -51,7 +51,9 @@ final class DarkPagesSuggestionView: UIView {
         message.text = String(localized: "Darken websites that have no dark mode of their own?")
         message.font = .preferredFont(forTextStyle: .subheadline)
         message.adjustsFontForContentSizeCategory = true
-        message.textColor = Palette.textSecondary
+        // The ink, not the secondary grey: on glass the grey read as disabled. The title's weight
+        // carries the hierarchy.
+        message.textColor = Palette.textPrimary
         message.numberOfLines = 0
 
         configure(noThanks, title: String(localized: "No Thanks"), color: Palette.textPrimary, weight: .regular, id: "darkPagesSuggestion.noThanks")

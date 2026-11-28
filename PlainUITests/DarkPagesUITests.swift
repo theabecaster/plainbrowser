@@ -194,14 +194,18 @@ final class DarkPagesUITests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
-    /// The largest screen (the Duo's inner one when open).
+    /// Every screen (the Duo has two, and the one that is off is black); the matrix keeps the one
+    /// that shows something.
     private func shot(_ name: String) {
-        let shots = XCUIScreen.screens.map { $0.screenshot() }
-        let screenshot = shots.max { $0.image.size.width * $0.image.size.height < $1.image.size.width * $1.image.size.height }
-        let attachment = XCTAttachment(screenshot: screenshot ?? XCUIScreen.main.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        for screen in XCUIScreen.screens {
+            let image = screen.screenshot()
+            let size = image.image.size
+            let suffix = XCUIScreen.screens.count > 1 ? "-\(Int(size.width))x\(Int(size.height))" : ""
+            let attachment = XCTAttachment(screenshot: image)
+            attachment.name = "\(name)\(suffix)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 
     func testOwnDarkDesignShowsNoIndicatorOrSuggestion() throws {

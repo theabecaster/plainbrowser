@@ -278,7 +278,6 @@ extension BrowserViewController {
             wide,
             card.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
             card.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
-            card.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -Spacing.l * 2),
             onTop
                 ? card.topAnchor.constraint(equalTo: pill.bottomAnchor, constant: Spacing.s)
                 : card.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s),

@@ -48,20 +48,45 @@ nonisolated public struct OKLab: Sendable, Equatable {
         b = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
     }
 
-    /// Back to sRGB, clamped into the gamut.
-    public var srgb: SRGB {
+    /// Linear sRGB, unclamped: outside 0...1 the color is outside the sRGB gamut.
+    private var linear: (red: Double, green: Double, blue: Double) {
         let l = pow(lightness + 0.3963377774 * a + 0.2158037573 * b, 3)
         let m = pow(lightness - 0.1055613458 * a - 0.0638541728 * b, 3)
         let s = pow(lightness - 0.0894841775 * a - 1.2914855480 * b, 3)
+        return (
+            4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+            -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+            -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+        )
+    }
+
+    /// The color can be shown in sRGB as it is.
+    public var isInGamut: Bool {
+        let c = linear
+        return [c.red, c.green, c.blue].allSatisfy { $0 >= -0.0001 && $0 <= 1.0001 }
+    }
+
+    /// The same lightness and hue with as much of its chroma as sRGB can show: a color moved to a
+    /// lightness its hue can't reach there gives up saturation, never lightness (clamping each
+    /// channel would change both).
+    public var intoGamut: OKLab {
+        guard !isInGamut else { return self }
+        var low = 0.0, high = 1.0
+        for _ in 0..<20 {
+            let mid = (low + high) / 2
+            if OKLab(lightness: lightness, a: a * mid, b: b * mid).isInGamut { low = mid } else { high = mid }
+        }
+        return OKLab(lightness: lightness, a: a * low, b: b * low)
+    }
+
+    /// Back to sRGB, clamped into the gamut.
+    public var srgb: SRGB {
+        let c = linear
         func gamma(_ c: Double) -> Double {
             let v = c <= 0.0031308 ? 12.92 * c : 1.055 * pow(c, 1 / 2.4) - 0.055
             return min(max(v, 0), 1)
         }
-        return SRGB(
-            red: gamma(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
-            green: gamma(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
-            blue: gamma(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
-        )
+        return SRGB(red: gamma(c.red), green: gamma(c.green), blue: gamma(c.blue))
     }
 
     public func mixed(with other: OKLab, _ t: Double) -> OKLab {
@@ -89,7 +114,7 @@ nonisolated public struct ColorCycle: Sendable, Equatable {
             let to = (from + 1) % labs.count
             var color = labs[from].mixed(with: labs[to], position - position.rounded(.down))
             color.lightness = min(max(color.lightness, lightness.lowerBound), lightness.upperBound)
-            return color.srgb
+            return color.intoGamut.srgb
         }
     }
 

@@ -63,7 +63,7 @@ public enum Palette {
     /// the floating controls and, while reading, under the host: the same colors as `glassTint`,
     /// a little lighter, so the capsules on it read as their own layer, as Safari's do on its band.
     public static let bandGlassTint = UIColor(
-        light: UIColor(rgb: 0xFFF6E6, alpha: 0.42), dark: UIColor(rgb: 0x16344A, alpha: 0.5)
+        light: UIColor(rgb: 0xFFF6E6, alpha: 0.3), dark: UIColor(rgb: 0x16344A, alpha: 0.42)
     )
 
     /// A lighter tint for glass that floats over the Paper background itself (the tab gallery's
@@ -82,7 +82,7 @@ public enum Palette {
 
     /// The top band's private tint (`bandGlassTint`'s violet).
     public static let privateBandGlassTint = UIColor(
-        light: UIColor(rgb: 0xE4E0F2, alpha: 0.46), dark: UIColor(rgb: 0x2A2445, alpha: 0.54)
+        light: UIColor(rgb: 0xE4E0F2, alpha: 0.36), dark: UIColor(rgb: 0x2A2445, alpha: 0.46)
     )
 
     /// The tab gallery's background while it shows private tabs.

@@ -278,6 +278,12 @@ final class ButtonBar: UIView {
         scrim.isPrivate = isPrivate
     }
 
+    /// The soft ground under the capsules: off on the top band, whose glass already keeps the
+    /// symbols legible, so the capsules there show the glass's own refraction (design review).
+    func setScrimShown(_ shown: Bool) {
+        if scrim.isHidden == shown { scrim.isHidden = !shown }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         updateScrim()

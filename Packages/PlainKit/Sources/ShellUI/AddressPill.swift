@@ -258,6 +258,12 @@ final class AddressPill: UIView {
         return NSAttributedString(string: placeholder, attributes: [.foregroundColor: Palette.textSecondary])
     }
 
+    /// The soft ground under the glass: off on the top band, whose glass already keeps the host
+    /// legible (`ButtonBar.setScrimShown`).
+    func setScrimShown(_ shown: Bool) {
+        if scrim.isHidden == shown { scrim.isHidden = !shown }
+    }
+
     /// The glass tint: Paper, or the quiet private tint while a private tab is on screen.
     func setPrivate(_ isPrivate: Bool) {
         let effect = UIGlassEffect(style: .regular)

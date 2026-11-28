@@ -18,7 +18,10 @@ import UIKit
 final class TopBand: UIView {
     /// One rectangle of Liquid Glass, the page's width (`Glass.makeView`).
     let glass = Glass.makeView(shape: .rounded(0), tint: Palette.bandGlassTint)
-    /// The site's host while reading, without "www." ("apple.com").
+    /// The address while reading: a small glass capsule (Safari's "smaller version" of the field,
+    /// owner) holding the site's host, without "www." ("apple.com"). Bare text on the band read as
+    /// an empty status bar (design review).
+    let hostCapsule = Glass.makeView(shape: .capsule, tint: Palette.glassTint)
     let hostLabel = UILabel()
     /// A tap on the collapsed band.
     var onTap: () -> Void = {}
@@ -40,18 +43,25 @@ final class TopBand: UIView {
         hostLabel.adjustsFontForContentSizeCategory = false
         hostLabel.textColor = Palette.textPrimary
         hostLabel.isAccessibilityElement = false
-        hostLabel.alpha = 0
+        hostCapsule.translatesAutoresizingMaskIntoConstraints = false
+        hostCapsule.isUserInteractionEnabled = false
+        hostCapsule.alpha = 0
         // In the glass, so it takes the glass's light or dark look over the page.
-        glass.contentView.addSubview(hostLabel)
-        hostCenterY = hostLabel.centerYAnchor.constraint(equalTo: topAnchor)
+        glass.contentView.addSubview(hostCapsule)
+        hostCapsule.contentView.addSubview(hostLabel)
+        hostCenterY = hostCapsule.centerYAnchor.constraint(equalTo: topAnchor)
         NSLayoutConstraint.activate([
             glass.topAnchor.constraint(equalTo: topAnchor),
             glass.bottomAnchor.constraint(equalTo: bottomAnchor),
             glass.leadingAnchor.constraint(equalTo: leadingAnchor),
             glass.trailingAnchor.constraint(equalTo: trailingAnchor),
             hostCenterY,
-            hostLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: Spacing.l),
-            hostLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Spacing.l),
+            hostCapsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: Spacing.l),
+            hostCapsule.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Spacing.l),
+            hostLabel.leadingAnchor.constraint(equalTo: hostCapsule.contentView.leadingAnchor, constant: Self.hostPadding.width),
+            hostLabel.trailingAnchor.constraint(equalTo: hostCapsule.contentView.trailingAnchor, constant: -Self.hostPadding.width),
+            hostLabel.topAnchor.constraint(equalTo: hostCapsule.contentView.topAnchor, constant: Self.hostPadding.height),
+            hostLabel.bottomAnchor.constraint(equalTo: hostCapsule.contentView.bottomAnchor, constant: -Self.hostPadding.height),
         ])
         updateFont()
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (band: TopBand, _) in band.updateFont() }
@@ -63,6 +73,10 @@ final class TopBand: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    /// Around the host inside its capsule: about Safari's (its capsule is 23 pt high around
+    /// 12 to 13 pt text).
+    static let hostPadding = CGSize(width: 12, height: 5)
 
     /// The host's font: the pill's (Body, capped like it at the largest non-accessibility size)
     /// times `TopChromeGeometry.compactScale`, so the pill's text shrinks exactly into it.
@@ -99,6 +113,9 @@ final class TopBand: UIView {
         let effect = UIGlassEffect(style: .regular)
         effect.tintColor = isPrivate ? Palette.privateBandGlassTint : Palette.bandGlassTint
         glass.effect = effect
+        let capsule = UIGlassEffect(style: .regular)
+        capsule.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
+        hostCapsule.effect = capsule
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
     }
 
@@ -108,8 +125,8 @@ final class TopBand: UIView {
     func apply(progress: CGFloat, translation: CGFloat) {
         glass.transform = CGAffineTransform(translationX: 0, y: translation)
         let scale = TopChromeGeometry.hostScale(progress: progress)
-        hostLabel.transform = CGAffineTransform(translationX: 0, y: -translation).scaledBy(x: scale, y: scale)
-        hostLabel.alpha = TopChromeGeometry.hostAlpha(progress: progress)
+        hostCapsule.transform = CGAffineTransform(translationX: 0, y: -translation).scaledBy(x: scale, y: scale)
+        hostCapsule.alpha = TopChromeGeometry.hostAlpha(progress: progress)
         let collapsed = progress >= 0.5
         guard collapsed != isCollapsed else { return }
         isCollapsed = collapsed

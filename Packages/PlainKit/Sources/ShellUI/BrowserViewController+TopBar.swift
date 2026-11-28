@@ -45,6 +45,9 @@ final class TopBarLayout {
     /// for the bar: with editing, what `updateTopBandAlpha` reads.
     var galleryFade: CGFloat = 1
     var isHiddenForFind = false
+    /// The strip's share the page's scroll position allows, last applied
+    /// (`TopChromeGeometry.stripReveal`).
+    var stripReveal: CGFloat = 1
 }
 
 // MARK: - The top bar (wide screens)
@@ -156,7 +159,7 @@ extension BrowserViewController {
         view.insertSubview(band, aboveSubview: panes.view)
         duo.top.bandHeight = band.heightAnchor.constraint(equalToConstant: 0)
         // The host sits where the pill's text was, so the address reads as one text shrinking.
-        let hostOnPill = band.hostLabel.centerXAnchor.constraint(equalTo: pill.centerXAnchor)
+        let hostOnPill = band.hostCapsule.centerXAnchor.constraint(equalTo: pill.centerXAnchor)
         hostOnPill.priority = .defaultHigh
         NSLayoutConstraint.activate([
             band.topAnchor.constraint(equalTo: view.topAnchor),
@@ -362,6 +365,8 @@ extension BrowserViewController {
         if !chromeOnTop {
             buttonBar.transform = .identity
         }
+        pill.setScrimShown(!chromeOnTop)
+        buttonBar.setScrimShown(!chromeOnTop)
         settleHiddenChromeForTopBar()
     }
 
@@ -383,7 +388,13 @@ extension BrowserViewController {
             pill.transform = CGAffineTransform(translationX: 0, y: move.translationY).scaledBy(x: move.scale, y: move.scale)
             pill.isCompact = progress > 0
         }
-        duo.top.band.apply(progress: editing ? 0 : reading, translation: geometry.bandTranslation(progress: editing ? 0 : reading))
+        // The strip (and the band under it) shows only while the page's top is in view: mid-page a
+        // fixed header rests at the slim band's bottom, which the strip would cover
+        // (`TopChromeGeometry.stripReveal`).
+        let reveal = editing ? 1 : currentStripReveal(geometry)
+        duo.top.stripReveal = reveal
+        let stripProgress = TopChromeGeometry.stripProgress(collapse: editing ? 0 : reading, reveal: reveal)
+        duo.top.band.apply(progress: editing ? 0 : reading, translation: geometry.bandTranslation(progress: stripProgress))
         pill.alpha = editing ? 1 : TopChromeGeometry.pillAlpha(progress: reading)
         // Collapsed, the band is the address for VoiceOver (`TopBand`).
         let isGone = !editing && reading >= 0.5
@@ -392,11 +403,28 @@ extension BrowserViewController {
         buttonBar.transform = CGAffineTransform(translationX: 0, y: geometry.buttonsTranslation(progress: reading))
         if !editing { buttonBar.alpha = alpha }
         if let strip = duo.strip?.view {
-            strip.transform = CGAffineTransform(translationX: 0, y: geometry.stripTranslation(progress: reading))
-            strip.alpha = alpha
+            let stripAlpha = ChromeGeometry.barAlpha(progress: stripProgress)
+            strip.transform = CGAffineTransform(translationX: 0, y: geometry.stripTranslation(progress: stripProgress))
+            strip.alpha = stripAlpha
             // A hidden strip takes no taps meant for the page under it.
-            strip.isUserInteractionEnabled = alpha > 0.5
+            strip.isUserInteractionEnabled = stripAlpha > 0.5
         }
+    }
+
+    /// How much of the strip the page's scroll position allows (`TopChromeGeometry.stripReveal`),
+    /// from the page on screen: 1 at its top, 0 once it has scrolled the strip's height.
+    func currentStripReveal(_ geometry: TopChromeGeometry) -> CGFloat {
+        guard geometry.stripHeight > 0, let scrollView = pageScrollView else { return 1 }
+        return geometry.stripReveal(offset: scrollView.contentOffset.y)
+    }
+
+    /// A page scroll under the top bar: the strip follows the page's top in and out, frame by
+    /// frame (transform and alpha only), whatever the bar's state.
+    func topBarPageDidScroll(_ geometry: TopChromeGeometry) {
+        guard geometry.stripHeight > 0, duo.strip != nil else { return }
+        let reveal = currentStripReveal(geometry)
+        guard abs(reveal - duo.top.stripReveal) > 0.001 else { return }
+        applyTopBarCollapse(collapseProgress, geometry: geometry)
     }
 
     /// The page's insets under the top bar. They never follow the bar's resting state: the

@@ -1205,6 +1205,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             let previousY = lastPageOffsetY.object(forKey: scrollView)?.doubleValue
             lastPageOffsetY.setObject(NSNumber(value: Double(scrollView.contentOffset.y)), forKey: scrollView)
             if scrollView.keepPageTopUnderBar(webKitTop: top.obscuredInset, previousY: previousY.map { CGFloat($0) }) { return }
+            if scrollView === pageScrollView { topBarPageDidScroll(top) }
         }
         guard scrollView === pageScrollView, !isEditingAddress else { return }
         let signposter = Signposts.signposter

@@ -332,6 +332,26 @@ struct TopChromeGeometry: Equatable {
         -(expandedBandBottom - collapsedBandBottom) * min(max(progress, 0), 1)
     }
 
+    /// How much of the strip a page scrolled to `offset` (its scroll view's `contentOffset.y`)
+    /// allows: 1 while the page's top is in view (it starts under the strip, at `expandedInset`),
+    /// 0 once it has scrolled the strip's height and its top is at the slim band's bottom
+    /// (`obscuredInset`), in between in step with the page. Mid-page the strip would cover a
+    /// fixed or sticky header, which rests at the slim band's bottom, and moving the page's inset
+    /// with the strip would make the header jump (design review): so mid-page the bar comes back
+    /// without the strip, as with one tab, and the strip comes back with the page's top. 1 without
+    /// a strip.
+    func stripReveal(offset: CGFloat) -> CGFloat {
+        let travel = expandedInset - obscuredInset
+        guard stripHeight > 0, travel > 0 else { return 1 }
+        return min(max((-offset - obscuredInset) / travel, 0), 1)
+    }
+
+    /// The strip's (and the band's lower part's) progress toward gone: the bar's collapse, or the
+    /// page's scroll past its top (`stripReveal`), whichever is further.
+    static func stripProgress(collapse: CGFloat, reveal: CGFloat) -> CGFloat {
+        max(min(max(collapse, 0), 1), 1 - min(max(reveal, 0), 1))
+    }
+
     /// The pill's vertical translation and scale at collapse `progress` (0 expanded, 1 collapsed),
     /// for a transform about its center: its text shrinks to the host's size and moves to the
     /// host's row while the pill fades (`pillAlpha`), so the address reads as one text growing

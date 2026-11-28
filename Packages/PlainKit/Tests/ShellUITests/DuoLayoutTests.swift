@@ -397,6 +397,26 @@ struct TopChromeGeometryTests {
         #expect(TopChromeGeometry.hostScale(progress: 1) == 1)
     }
 
+    @Test func stripShowsOnlyWhileThePageTopIsInView() {
+        // Mid-page a fixed header rests at the slim band's bottom (73): the strip (73–111) would
+        // cover it, so it follows the page's top in and out (design review, round 1).
+        let bar = Self.device(strip: Self.strip)
+        #expect(bar.stripReveal(offset: -bar.expandedInset) == 1, "at the page's top")
+        #expect(bar.stripReveal(offset: -bar.obscuredInset) == 0, "scrolled the strip's height")
+        #expect(bar.stripReveal(offset: 900) == 0, "mid-page")
+        #expect(abs(bar.stripReveal(offset: -(bar.obscuredInset + bar.expandedInset) / 2) - 0.5) < 0.0001)
+        // The band's bottom follows the page's top 1:1 over that travel.
+        let offset: CGFloat = -100
+        let q = TopChromeGeometry.stripProgress(collapse: 0, reveal: bar.stripReveal(offset: offset))
+        #expect(abs(bar.expandedBandBottom + bar.bandTranslation(progress: q) - (-offset)) < 0.0001)
+        // Collapsed, the strip stays gone at the top too; expanded mid-page, it stays gone.
+        #expect(TopChromeGeometry.stripProgress(collapse: 1, reveal: 1) == 1)
+        #expect(TopChromeGeometry.stripProgress(collapse: 0, reveal: 0) == 1)
+        #expect(TopChromeGeometry.stripProgress(collapse: 0, reveal: 1) == 0)
+        // Without a strip there is nothing to reveal.
+        #expect(Self.device().stripReveal(offset: 900) == 1)
+    }
+
     @Test func bandShowsTheBaseDomain() {
         #expect(TopBandHost.baseDomain("www.apple.com") == "apple.com")
         #expect(TopBandHost.baseDomain("WWW.Apple.com.") == "apple.com")

@@ -551,7 +551,7 @@ final class PageReportedMetric: NSObject, XCTMetric, @unchecked Sendable {
     /// Shared by every copy XCTest makes.
     private final class Box: @unchecked Sendable {
         let lock = NSLock()
-        var values: [(at: Date, value: Double)] = []
+        var values: [(at: Date, ticks: UInt64, value: Double)] = []
     }
 
     private struct NoValue: Error {}
@@ -576,7 +576,7 @@ final class PageReportedMetric: NSObject, XCTMetric, @unchecked Sendable {
     /// has no measurement, which fails it).
     func record(_ value: Double?) {
         guard let value else { return }
-        box.lock.withLock { box.values.append((Date(), value)) }
+        box.lock.withLock { box.values.append((Date(), mach_absolute_time(), value)) }
     }
 
     func copy(with zone: NSZone? = nil) -> Any {
@@ -586,8 +586,15 @@ final class PageReportedMetric: NSObject, XCTMetric, @unchecked Sendable {
     func reportMeasurements(
         from startTime: XCTPerformanceMeasurementTimestamp, to endTime: XCTPerformanceMeasurementTimestamp
     ) throws -> [XCTPerformanceMeasurement] {
-        let span = startTime.date...endTime.date
-        guard let value = box.lock.withLock({ box.values.last { span.contains($0.at) }?.value }) else { throw NoValue() }
+        // The span in the runner's own clock (mach ticks) first; the dates as a second way, for
+        // a timestamp whose ticks read 0.
+        let ticks = startTime.absoluteTime...max(startTime.absoluteTime, endTime.absoluteTime)
+        let dates = startTime.date...max(startTime.date, endTime.date)
+        let value = box.lock.withLock {
+            (startTime.absoluteTime > 0 ? box.values.last { ticks.contains($0.ticks) } : nil)
+                ?? box.values.last { dates.contains($0.at) }
+        }?.value
+        guard let value else { throw NoValue() }
         return [XCTPerformanceMeasurement(identifier: identifier, displayName: displayName, doubleValue: value, unitSymbol: "ms")]
     }
 }

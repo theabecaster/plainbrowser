@@ -195,7 +195,10 @@ for m in $METRICS; do
     value[$m]="n/a"
     line=$(printf '%-44s %8s' "$label" "n/a")"   (device only)"
   elif [[ $v == "—" ]]; then
-    failures+="$m: no measurement"
+    # Why: the test's first failure lines from the run's log (a device run's cause is there only).
+    t=$(budget $m test); t=${${t#*/}%\(\)}
+    why=$(grep -hE "error: -\[PlainUITests\.PerfTests $t\] : " build/perf/$stamp*.log 2>/dev/null | sed -E 's/.*\] : //' | sort -u | head -2 | tr '\n' ';' || true)
+    failures+="$m: no measurement${why:+ ($why)}"
   elif [[ $MODE == device ]]; then
     fail=$(budget $m fail)
     target=$(budget $m target)

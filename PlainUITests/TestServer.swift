@@ -260,10 +260,12 @@ final class TestServer: @unchecked Sendable {
             return ("200 OK", html("Plain Bakery", body))
         case "/paint-start":
             // The tap: the link's touchend (the finger lifting), or its click when no touch came.
-            let script = "<script>sessionStorage.removeItem('plainTap');"
-                + "const mark = () => { if (!sessionStorage.getItem('plainTap')) "
-                + "sessionStorage.setItem('plainTap', String(performance.timeOrigin + performance.now())); };"
+            // Its time rides in the link's address (and in sessionStorage, a second way), so the
+            // next page has it whatever the browser does with a tab's storage.
+            let script = "<script>sessionStorage.removeItem('plainTap'); let tapped = 0;"
                 + "const go = document.getElementById('go');"
+                + "const mark = () => { if (tapped) return; tapped = performance.timeOrigin + performance.now();"
+                + " go.href = '/paint-target?tap=' + tapped; sessionStorage.setItem('plainTap', String(tapped)); };"
                 + "go.addEventListener('touchend', mark, { passive: true }); go.addEventListener('click', mark);</script>"
             let link = "<a id=\"go\" href=\"/paint-target\" style=\"display:block;font-size:32px;padding:48px 0\">Open Paint Target</a>"
             return ("200 OK", html("Plain Paint Start", "<h1>Paint Start</h1>" + link + script))
@@ -271,7 +273,8 @@ final class TestServer: @unchecked Sendable {
             // First contentful paint, from the tap noted on the start page. Without Paint Timing,
             // the second animation frame after this script stands in ("raf"). The last word is
             // the tap's own time, so each report reads differently from the one before.
-            let script = "<script>const tap = Number(sessionStorage.getItem('plainTap') || 0);"
+            let script = "<script>const tap = Number(new URLSearchParams(location.search).get('tap')"
+                + " || sessionStorage.getItem('plainTap') || 0);"
                 + "sessionStorage.removeItem('plainTap'); let done = false;"
                 + "const show = (t, how) => { if (done) return; done = true; document.getElementById('paint').textContent ="
                 + " tap ? `Paint ${(t - tap).toFixed(1)} ${how} ${Math.round(tap) % 1000000}` : 'Paint none'; };"

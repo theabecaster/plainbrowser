@@ -50,11 +50,20 @@ public enum Palette {
     /// Something that sits on the background: a favorite's tile, a pressed row.
     public static let surface = UIColor(light: .white, dark: UIColor(rgb: 0x16344A))
 
-    /// The tint mixed into Liquid Glass on floating controls: Paper, so the URL pill reads as the
-    /// "paper-tinted glass capsule" of the brand. Strong enough that the host stays legible over
-    /// body text scrolling underneath.
+    /// The tint mixed into Liquid Glass on floating controls: Paper's warmth in light, Deep
+    /// Lagoon's navy in dark. Light enough that the glass still refracts and blurs the page and
+    /// shows its specular rim (owner, 2026-11-27: "more Apple-glass-like", keeping Plain's
+    /// colors); the soft ground under each control (`ChromeScrim`) keeps the host legible over
+    /// body text scrolling underneath. Was 0.88 / 0.84, which read as a paper fill.
     public static let glassTint = UIColor(
-        light: UIColor(rgb: 0xFFF6E6, alpha: 0.88), dark: UIColor(rgb: 0x16344A, alpha: 0.84)
+        light: UIColor(rgb: 0xFFF6E6, alpha: 0.55), dark: UIColor(rgb: 0x16344A, alpha: 0.6)
+    )
+
+    /// The tint of the glass band across the top of a wide screen (the Duo's inner screen) behind
+    /// the floating controls and, while reading, under the host: the same colors as `glassTint`,
+    /// a little lighter, so the capsules on it read as their own layer, as Safari's do on its band.
+    public static let bandGlassTint = UIColor(
+        light: UIColor(rgb: 0xFFF6E6, alpha: 0.42), dark: UIColor(rgb: 0x16344A, alpha: 0.5)
     )
 
     /// A lighter tint for glass that floats over the Paper background itself (the tab gallery's
@@ -68,7 +77,12 @@ public enum Palette {
     /// The glass tint of the chrome while a private tab is on screen: a quiet dusk violet instead
     /// of Paper, so private browsing is plain to see without a banner or badge.
     public static let privateGlassTint = UIColor(
-        light: UIColor(rgb: 0xE4E0F2, alpha: 0.9), dark: UIColor(rgb: 0x2A2445, alpha: 0.86)
+        light: UIColor(rgb: 0xE4E0F2, alpha: 0.6), dark: UIColor(rgb: 0x2A2445, alpha: 0.64)
+    )
+
+    /// The top band's private tint (`bandGlassTint`'s violet).
+    public static let privateBandGlassTint = UIColor(
+        light: UIColor(rgb: 0xE4E0F2, alpha: 0.46), dark: UIColor(rgb: 0x2A2445, alpha: 0.54)
     )
 
     /// The tab gallery's background while it shows private tabs.

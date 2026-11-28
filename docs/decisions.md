@@ -3434,6 +3434,11 @@ Focus (its brand), Brave, and the gradient-violet look the owner calls AI slop. 
   Private keeps `hand.raised.slash`, the phone's design); a smaller start screen (the phone's
   design, unchanged); the pale capsule on the outer screen's private page is the system's own
   vertical bar, which Plain can't tint (its panel behind it is Night).
+- **Design review round 2: "Ship."** Taken: no hand on each strip tab (the strip lists one mode;
+  the marks cost the titles their room), and a private tab's title off screen is white at 78%
+  (`privateInactiveTitle`). Not taken: the start screen's sentence ("Plain keeps no history of
+  private tabs.") stays the phone's. Code review: round 1, five findings fixed; round 2, three
+  fixed; round 3 clean.
 - **Not colour alone:** Night, the hand mark and the word "Private" before the host, the titled
   start screen and the named, filled switch side say it together (NN/g: two cues at least). Why
   not black like Safari: a dark page or the dark app would look private; Night is warmer and

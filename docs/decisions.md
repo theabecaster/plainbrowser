@@ -924,6 +924,17 @@ Research and sources: docs/research/dark-mode.md.
   appearance, instead of a ~70 KB PNG per sheet in the app and the reader, and one source for both.
   Until a tile is ready the surface is the flat color the tile averages to, so the swap can't be
   seen.
+- **Checked again with the raised recipe (2026-11-28).** Two perf gates showed "main to search
+  field focused" 20–100 % slower on a loaded test Mac, so it was measured directly. Generation:
+  1.37 → 2.38 ms per tile (optimized, on a Mac); in the app on the Duo simulator (the `paper.tile`
+  signpost, 7 launches a round) 1.5–2.1 → 2.4–6.1 ms, on a background thread, starting 200–700 ms
+  after `main` and done 100–500 ms before the field is focused; the main thread never waits for it
+  (it shows the flat color until then), and making the pattern color takes 0.6–1.1 ms on the main
+  thread (`paper.pattern`). End to end, interleaved on one simulator, 15 launches each: field
+  focused median 604 ms old, 579 ms new; at low load 398 ms old, 315 ms new; link paint 55 / 56 ms.
+  The earlier gaps were load. A baked PNG was tried as the alternative: reading and decoding it
+  from the bundle on a cold launch took 16–42 ms (still off the main thread) and would add about
+  148 KB to the app (82 KB day, 66 KB night), so the tile stays generated.
 - **CSS:** a tiled PNG, not SVG `feTurbulence`, which re-runs the filter on repaint and pinned the
   CPU while scrolling ([Mozilla 422371](https://bugzilla.mozilla.org/show_bug.cgi?id=422371),
   [WebKit 287982](https://bugs.webkit.org/show_bug.cgi?id=287982)). The background scrolls with

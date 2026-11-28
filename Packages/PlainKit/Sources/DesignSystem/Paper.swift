@@ -131,7 +131,9 @@ private final class Tiles {
             make(sheet)
             return nil
         }
+        let state = Signposts.signposter.beginInterval(Signposts.paperPattern)
         let pattern = UIColor(patternImage: UIImage(cgImage: image, scale: scale, orientation: .up))
+        Signposts.signposter.endInterval(Signposts.paperPattern, state)
         patterns[key] = pattern
         return pattern
     }

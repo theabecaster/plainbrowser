@@ -2709,6 +2709,7 @@ what the field is (`AddressFieldIntent`, BrowserCore, unit-tested):
 | Covers the whole text (typing over the selection, a paste over it, dictation into it), or the field is cleared (the × or deleting everything) | A new query | A new tab whose opener is the page, as before |
 | Covers part of it: the caret was put in the address (a tap into the text, a moved selection) and something changed there | An edit of this page | The same tab |
 | None (the address untouched) | The page's address | Loads it again in the same tab (Safari's Return on an unchanged address) |
+| None, and a row or a favorite is picked | Somewhere new | A new tab, as a typed query (what the empty field did before) |
 
 The rule reads only the span the change replaces (`textField(_:shouldChangeCharactersIn:)`):
 `range` from 0 to the text's length is a replace; anything else is an edit. The selection state
@@ -2721,12 +2722,14 @@ shows only in the empty field, so its text is always a new query.
 
 - **Copy** shows only while the field holds the untouched address; replaced or cleared, the
   field's other options (microphone, Browse for Me, ×) follow their rules at once. Copy writes
-  the address (`copyPageAddress`), the glyph turns into a check for 1.2 s, the success haptic
+  the address the field shows (`copyFieldAddress`; the page may have moved on behind the sheet),
+  the glyph turns into a check for 1.2 s, the success haptic
   plays and VoiceOver hears "Copied". Another page then offers it as Open Copied Link.
 - **VoiceOver** reads the field's value as the address, with the hint "Type to search in a new
-  tab; edit to change this page" while it is untouched.
+  tab; edit to change this page" while it is untouched (from the page sheet's Edit: "Edit to
+  change this page; clear it to search in a new tab").
 - **The page sheet's host** opens the same field with the caret at the address's end, not
-  selected: the door named Edit edits. Cleared, it is a new query, as anywhere.
+  selected (set explicitly, whatever the field kept): the door named Edit edits. Cleared, it is a new query, as anywhere.
 - **No page address, no change:** a new tab, the start screen, a new private tab and the fresh
   search after four hours away open empty. On the engine's results page the query comes back
   selected and refines in place, as before.

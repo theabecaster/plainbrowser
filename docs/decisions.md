@@ -2087,7 +2087,7 @@ The shell and engine items left from docs/research/ux-audit.md.
 - **Lead's calls:** the intro's "Made for iPhone Duo" row shows only where the window can be a
   foldable's (`IntroRules.showsUnfoldRow`: a vertical bar edge, or both size classes regular;
   Plain is iPhone-only), never from the device model. An empty private tab's shortcut says
-  "Regular Tab", since it leaves private browsing.
+  "Regular Tab", since it leaves private browsing (later "Leave Private": "Private mode you can't miss").
 - **Sheets' empty states** are `PaperEmptyState`: symbol and sentence in ink secondary, body text.
 ## Duo inner screen: the strip runs under the status items, the buttons sit beside them (2026-11-27)
 
@@ -2482,7 +2482,7 @@ modes: two visual cues, named modes, a labelled exit).
   night's violet glow, "Private" with the mark as its title over "Plain keeps no history of
   private tabs." (was "A private tab: Plain keeps no history of it.", which the title now says),
   and its shortcut back reads **"Leave
-  Private"** (`hand.raised.slash`; was "New Tab", UX audit item 26: it turns this tab regular).
+  Private"** (`hand.raised.slash`; was "New Tab", then "Regular Tab" from the shell polish lane, UX audit item 26: it turns this tab regular, and "Regular" is a word no other control says; the identifier stays `start.regularTab`).
   More's top item reads the same there. The status bar is light over it.
 - **The switcher's control is "Private | Tabs"** (`GalleryModeSwitch`), in the bar where the hand
   glyph was: two named sides, Private leading as in Safari, each with its count ("Private 2",

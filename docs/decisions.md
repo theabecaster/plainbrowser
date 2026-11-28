@@ -3726,3 +3726,39 @@ Research and sources: `docs/research/content-mode.md`.
   reason), `contentMode.paneChange`, `contentMode.place` and `contentMode.restore` (events). The
   same steps are in the log (categories `contentMode` and `duo`), with sizes and how the anchor is
   found, never a page's text, ids or address (a debug build names the anchor's id).
+
+## Corners concentric with the display (2026-11-28)
+
+Owner, on the iPhone Duo: the outer screen's side-bar panel "has a background that gets its
+corners cut off by the screen's physical round corners ... only the corner area on the right
+side. On screenshots the issue isn't visible." The panel had fixed 28 pt corners 6 pt from a
+59 pt display corner; concentric would be 53.
+
+- **Chosen: UIKit's concentric corners** (`UICornerConfiguration.corners(radius:
+  .containerConcentric(minimum:))`, iOS 26, public), as `Glass.Shape.concentric`. Apple's rule
+  (WWDC25 "Get to know the new design system") is fixed, capsule or concentric, with a capsule
+  and extra margin near a phone's edges; UIKit works the radius out per corner from the display's
+  own corners, so every device is right without a table of radii (measured: docs/research/notes.md,
+  "Concentric corners"). The display's radius is never read from private API.
+- **The side-bar panel** (`VerticalBarBacking`): the backing now covers the screen with concentric
+  corners of its own (it draws nothing), so it reads the display's radius at each corner and is
+  the panel's container. The panel's outer corners resolve to the display's radius less 6 pt; the
+  page side keeps 28. A corner is at most half the panel's width (36 pt in the 84 pt column), so
+  where that is less than concentric the panel's ends move in from the top and bottom until the
+  corner sits inside the display's, at most 18 pt (`FixedChoices.verticalBarPanelEndInsetLimit`).
+  That is the system capsule's own answer in the same bar (24 pt from the bottom), and keeps 6 pt
+  of glass under it. The shadow's path follows the four radii.
+- **Split panes** on the inner screen: their corners are concentric with a 10 pt minimum, so the
+  outer bottom corners take the display's radius and the focus ring runs along the screen's edge
+  instead of being cut by it; the corners at the gutter and under the top bar stay 10 pt.
+- **Audited and left alone** (masked captures on the SE, 13 mini, 17, 18 Pro Max portrait and
+  landscape, and both Duo screens): the phones' pill and button bar, the switcher's bar and toasts
+  are capsules with margin and clear the corners; the top band, sidebar, rail, side pane and the
+  search sheet's bottom run edge to edge with square corners, which the screen rounds itself; the
+  tab strip, the search dropdown and the Page Appearance card sit away from any corner.
+- **Not chosen:** a fixed radius per device (breaks on the next device, and needs private API to
+  read the display's radius); running the panel off the screen's edge (the owner asked for a
+  floating panel); a custom mask path on the glass (glass takes its shape only from
+  `cornerConfiguration`).
+- **Cost:** resolved by UIKit on layout; the panel's frame and shadow path change only when the
+  column or the display's corners do. No per-frame work.

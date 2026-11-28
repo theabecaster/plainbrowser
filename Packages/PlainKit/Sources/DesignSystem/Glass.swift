@@ -11,6 +11,11 @@ public enum Glass {
     public enum Shape {
         case capsule
         case rounded(CGFloat)
+        /// Corners concentric with the container (for chrome near the screen's edges, the
+        /// display's own rounded corners): each corner is the container's radius there less the
+        /// view's distance from it, never under `minimum` and never past half the view's short
+        /// side. UIKit resolves it per corner and per device (docs/ui-reference.md, "Corners").
+        case concentric(minimum: CGFloat)
     }
 
     /// A glass background for a floating control. Put the control's content in `contentView`.
@@ -27,6 +32,7 @@ public enum Glass {
         switch shape {
         case .capsule: view.cornerConfiguration = .capsule()
         case .rounded(let radius): view.cornerConfiguration = .uniformCorners(radius: .fixed(radius))
+        case .concentric(let minimum): view.cornerConfiguration = .corners(radius: .containerConcentric(minimum: minimum))
         }
         return view
     }

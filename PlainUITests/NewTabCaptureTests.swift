@@ -64,17 +64,17 @@ final class NewTabCaptureTests: XCTestCase {
     }
 
     /// Closes the search sheet by hand, as a person would on any screen: its grabber, or Cancel
-    /// where the field sits in the top bar (the Duo's inner screen).
+    /// where the field sits in the top bar (the Duo's inner screen). Waits for one of them to be
+    /// tappable, then for the field to let go of the keyboard.
     private func closeSheet(_ app: XCUIApplication) {
         let grabber = app.buttons["search.close"]
         let cancel = app.buttons["search.cancel"]
-        if grabber.exists, grabber.isHittable {
-            grabber.tap()
-        } else if cancel.exists, cancel.isHittable {
-            cancel.tap()
-        } else {
-            app.swipeDown(velocity: .fast)
-        }
+        let ready = NSPredicate { _, _ in grabber.isHittable || cancel.isHittable }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: ready, object: nil)], timeout: 3), .completed)
+        (grabber.isHittable ? grabber : cancel).tap()
+        let field = app.textFields["searchField"]
+        let closed = NSPredicate { _, _ in !(field.exists && field.hasKeyboardFocus) }
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: closed, object: nil)], timeout: 3), .completed)
     }
 
     private func pause(_ seconds: TimeInterval) {

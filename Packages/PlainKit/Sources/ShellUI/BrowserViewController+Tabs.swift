@@ -175,8 +175,8 @@ extension BrowserViewController {
     /// nothing opened, the page comes back and the empty tab, left, drops by itself (state rules,
     /// principle 7), so a stray "+" or swipe costs nothing. Arc's search over a page works the same
     /// way. Typed text keeps the new tab; so does the field closing for any other reason
-    /// (backgrounding, a sheet, the gallery, a pane). `pending` and `untouched` are read before
-    /// the field ends, which clears the way back.
+    /// (backgrounding, a sheet, the gallery, a pane). Called before the field ends (which clears
+    /// the way back), so the closing sheet lands on the page.
     func returnFromUntouchedNewTab(_ pending: NewTabReturn?, untouched: Bool) {
         guard untouched, let pending, currentTab?.id == pending.made, session.tabs.isEmpty(pending.made),
               session.tabs.focusedPane == pending.pane,

@@ -5,6 +5,8 @@ Inputs: 7 research reports (WebKit performance, motion/feel, feature completenes
 
 ## 1. Bottom line
 
+North star (owner, 2026-11-28): Plain is to mobile browsers what Ghostty is to desktop terminals. Fast, native and feature-rich, with no trade-off between them: every interaction measured and best in class, iOS's own UI and conventions, power without settings, and obsessive polish of look, feel and motion.
+
 Build a UIKit-shell browser on `WKWebView`, designed Duo-first, with performance gates that fail the build on regressions.
 Overnight target: a daily-usable v0.1 on the Duo (search-first launch, tabs, gestures, Duo split tabs, blocking, history, all P0 edge cases).
 Reader, translation, AI, widgets and polish come in follow-up passes after you test it.

@@ -2353,3 +2353,100 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
   the splash is the flat art with its own soft shadows) and the tinted and clear icon
   appearances (the app cannot read which one the Home Screen uses; the splash shows the
   colorway's own art).
+
+
+## Search sheet: the pill grows into it (2026-11-27)
+
+Owner, on TestFlight: "I don't like the way the address bar expands out. Really look at what Arc
+does. It's not even clear how I dismiss the one you implemented. I like how the bar/text field
+ends up at the top, and I like how the transition grows into the expanded thing. And also the
+options on the text field and the sizing of the text field." The field rests at the bottom as
+before; expanded, it goes to the top. Arc Search's expand was read frame by frame from the owner's
+recording; the spec, the frames, the transition table and the reasons are in
+docs/research/arc-address-expand.md. This supersedes the layout in "Address focus and the page
+sheet" (the field above the keyboard, rows hanging over it, a paper veil): the two intents, the
+rows' content and the copied-link rules there stand.
+
+**What changed.**
+
+- **One sheet, one motion.** A tap grows the pill into a paper card over the dimmed, still sharp
+  page: the pill rides up to the card's top (18.7% down the screen, Arc's place) and is the field;
+  rows run top down under it; the card runs to the bottom edge behind the keyboard. One progress
+  value (0 rest, 1 open) on `SpringDriver` with `Motion.searchSheet` (0.28 s, no bounce: Arc's
+  move measured at 90% in ~170 ms, no overshoot). The open layout is made once, before the first
+  frame; frames set transforms and opacities only. Closing is the same motion backwards, and the
+  resting constraints come back at progress 0, where the motion left the pill.
+- **The field no longer follows the keyboard.** `keyboardLayoutGuide` only bounds the rows now
+  (whole rows only, as before, cut at the keyboard instead of the top).
+- **Rows top down.** Favorites sit between the field and the rows while the field is empty;
+  Browse for Me's row is the first place under the field while typing; the best suggestion is the
+  first row. The paper "plate" behind the rows is gone: the card is the surface.
+- **The veil is a dim.** `FrostView` was 70% paper over the whole page; it is now a light dim
+  (`Palette.sheetScrim`), because the card carries the content and the page above it should stay
+  readable as the place to go back to.
+- **The way out.** The handle at the card's top (tap, or the swipe it marks), an interactive swipe
+  down on the card or the field, a tap on the dimmed page; Cancel beside the field under a top
+  bar. Why the handle and not Cancel on phones: research note §4.
+- **Under a top bar (Duo inner).** The pill stays in the bar's row and widens into the field (up
+  to `FixedChoices.topBarPillMaxWidth`, with Cancel's room kept beside it; the bar's buttons fade,
+  so it need not stay between them); the card grows down from it (a clip whose height follows the
+  progress; its content is pinned to the top and never lays out). Before, the pill left the bar
+  for the keyboard and came back, a jump across the screen.
+- **The motion shows all of itself.** `SpringDriver.animate(fromFirstFrame:)`: the spring's clock
+  starts at the first frame after the tap and a late frame moves it on by 1/30 s at most, so the
+  keyboard's start (a stall of several frames on the main thread) stretches the motion a little
+  instead of cutting to its end.
+- **Hardware keyboard.** Command-L opens the sheet; Escape or Command-period closes it.
+- **Field options.** Microphone (on-device dictation, `FieldDictation`; Speech and the microphone
+  are asked for on the first tap; `NSSpeechRecognitionUsageDescription` added) and Browse for Me
+  (arms Return) in the empty field; the system clear button once typed; Copy as before.
+  `FixedChoices.dictationQuietEnd` = 2 s.
+
+**Considered and not taken.**
+
+- *A Cancel button beside the field on phones.* Clear, but it narrows the field the owner asked to
+  keep at Arc's size, and puts a second control beside the field's own ×.
+- *Animating constraints inside the keyboard's animation (as before).* The keyboard's curve is not
+  Arc's move, it cannot be caught mid-flight, and it lays out every frame.
+- *Masking a full-screen surface from the pill's outline to the card.* A mask over a blur costs an
+  offscreen pass per frame; a translation costs nothing, and the card below the pill's row is
+  hidden by its own opacity ramp for the first frames.
+- *Moving the field on the inner screen.* It is already at the top; moving it anywhere would be
+  the jump the owner objected to.
+- *Server dictation.* Never: speech stays on the phone or the microphone is not offered.
+
+**Costs.** Closing lays the root view out twice more at its start (once resting, once open) to
+read where the pill will rest; both passes run in the same turn and nothing is shown between
+them. The card is a blur under the keyboard for as long as the sheet is open (one more blurred
+surface than before; the paper veil had none).
+
+**Checked (simulators, 2026-11-27).** Captures read for each; the UI tests in
+`PlainUITests/SearchSheetTests.swift`.
+
+- Duo outer (466×678), dark and light: rest, first frames, open, typing, armed, closed, page
+  sheet, edit address. 60 fps strips of the open and the close beside Arc's (research note §5).
+  `SearchSheetTests` 9 of 9, `AddressFocusTests` 6 of 6, and the suggestion, state-rule, summary
+  and feature-sheet tests that touch the sheet.
+- iPhone 17e (390×844), light and dark: portrait, landscape (the sheet starts under the safe
+  area), a rotation while open (lays out again, then closes to the resting pill), Dynamic Type
+  at accessibility XL and at XXXL, Reduce Motion (a crossfade, no movement; 9 of 9).
+- iPhone 18 Pro Max, light and dark: 10 of 10.
+- Duo inner, the real inner screen (Device Hub), dark, with the status corner: landscape
+  stills (the field widens in its row and stops short of the clock, Cancel beside it, the card
+  grows down, the page dimmed on both sides, a tap opens and Cancel closes to the resting bar),
+  `SearchSheetTests` 7 of 10 (the three swipe tests skip: a top bar's sheet has no swipe),
+  split panes and the side pane, portrait, book pose, and a fold while open: inner, closed (the
+  outer screen's sheet with its handle), book pose, open again, rotated, each laid out again,
+  then closed to the resting bar. Also the simulator's resizable window (951×669, 669×951,
+  475×669) driven from the keyboard, light and dark.
+- After the merge with dev's one-row bar for a phone on its side: rest, open, typing and closed
+  on the iPhone 17e in landscape.
+- `urlBar.ready`, simulator, Debug: 501–570 ms after the first run (863 ms cold); the device
+  gate decides.
+
+**Known.** `LaunchTests.testLongAwayOpensSearchOverTheLastTab` reads the first screenshot; on a
+loaded host the launch picture is sometimes not decoded by then (it fades in a moment later, as
+designed) and the test fails. Command-L depends on the browser being in the responder chain; in
+UI test runs it missed two opens right after a page load. XCUITest's Escape never reached the
+field in the simulator, so Escape is unverified there; Command-period closes.
+

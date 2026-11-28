@@ -419,3 +419,31 @@ had excluded a site (see Migration); profile-scoped site choices (kept shared, a
   defaults read.
 - Captures: iPhone 17, 13 mini, the Duo's outer screen (and its inner screen in the top bar):
   the card, the indicator on and off, the crossfade frames, Site Settings, Settings.
+
+## 7. Page appearance rework (2026-11-28)
+
+The owner then asked for Dark, Light or Off for websites, apart from Plain's theme, with the first
+choice carrying to other sites. The rules are in docs/decisions.md, "Page appearance". What changed
+in the code:
+
+- BrowserCore: `PageAppearance` and `PageAppearanceChoices` (the default, each site's own, the
+  learning rule) replace the switch and the on/off sites; `ControlRules.pageAppearanceIndicator`
+  and `pageAppearanceMenu`.
+- Storage: the `sitePageAppearance` table (migration v11 moves the sites turned off before in as
+  Off) and the `pageAppearance` setting.
+- WebEngine: each web view gets its site's scheme (`traitOverrides.userInterfaceStyle`) at the
+  main-frame decision, on a policy change and on a change of Plain's colors; a navigation that
+  never commits gives it back. The engine reports sites made only in dark (`lightless`).
+- ShellUI: the glyph and its menu in the pill, the same menu in Site Settings, the first pick's
+  toast with This Site Only, Use for All Sites; the policy store keeps the default and the sites.
+
+Verification: `swift test` all suites pass; WebEngineTests/DarkPagesTests 28/28 (with two new
+tests: Dark in a light Plain darkens only that site; Light in a dark Plain shows the site's light
+design, and a site's own choice survives a default change); DarkPagesUITests 6/6 (both learning
+paths). Captures read on the iPhone 17, 13 mini and Duo outer, all three states in both of Plain's
+themes. Codex: compile pass clean; code review 5 blocking, fixed; design review 2 blocking (the
+Appearance footers, fixed; the status bar strip, kept and recorded in decisions.md).
+
+Open: on the Duo inner simulator the suggestion card did not show in the capture run, so the
+inner screen was not captured. Likely the scene-activation or keyboard check in
+`showDarkPagesSuggestion`; to check on the device.

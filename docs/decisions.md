@@ -3459,10 +3459,6 @@ limits: docs/research/perf-pass-3.md.
   the keystroke's rows are not moved ahead of the main queue's accessibility work (they would
   reach the screen in the same commit: a metric game); fewer kept web views and smaller pictures
   (little memory for a visible or felt loss).
-||||||| parent of b4a7b122 (Private as a clear mode on wide screens, in Night and Horizon: one mode per strip, sidebar and split, a Private | Tabs switch where the list lives, violet replaced)
-
-||||||| parent of 7359c9f6 (Private as a clear mode on wide screens, in Night and Horizon: one mode per strip, sidebar and split, a Private | Tabs switch where the list lives, violet replaced)
-
 ## Private as a clear mode on wide screens, in Night and Horizon (2026-11-28)
 
 Owner, on TestFlight: "Private mode on regular phone screens and the Duo outer screen is great and

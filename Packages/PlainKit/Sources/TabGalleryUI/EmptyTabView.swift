@@ -116,7 +116,9 @@ public final class EmptyTabView: UIView {
         label.text = String(localized: "Start with a search or an address.")
         label.font = UIFont.preferredFont(forTextStyle: .body)
         label.adjustsFontForContentSizeCategory = true
-        label.textColor = Palette.textSecondary
+        // Plain's own secondary ink: the system's secondary label is 3.35:1 on day paper, below
+        // 4.5:1 for body text; the ink keeps it on the textured paper, its glow and private paper.
+        label.textColor = Palette.inkSecondary
         label.textAlignment = .center
         label.numberOfLines = 0
 

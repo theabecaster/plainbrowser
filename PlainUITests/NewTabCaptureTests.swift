@@ -24,7 +24,7 @@ final class NewTabCaptureTests: XCTestCase {
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         // The start screen, field closed: no "+" (already a new tab).
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        closeSheet(app)
         pause(1.2)
         shot("nt-0-start-no-plus")
         app.buttons["addressPill"].tap()
@@ -57,12 +57,24 @@ final class NewTabCaptureTests: XCTestCase {
         // A stray "+": the field closed untouched goes back to the page, with frames of the way.
         plus.tap()
         pause(1)
-        app.swipeDown(velocity: .fast)
+        closeSheet(app)
         for frame in 1...4 { shot("nt-6-cancel-\(frame)") }
-        pause(1)
-        if field.exists, field.hasKeyboardFocus { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap() }
-        pause(1)
+        pause(1.5)
         shot("nt-7-back-on-page")
+    }
+
+    /// Closes the search sheet by hand, as a person would on any screen: its grabber, or Cancel
+    /// where the field sits in the top bar (the Duo's inner screen).
+    private func closeSheet(_ app: XCUIApplication) {
+        let grabber = app.buttons["search.close"]
+        let cancel = app.buttons["search.cancel"]
+        if grabber.exists, grabber.isHittable {
+            grabber.tap()
+        } else if cancel.exists, cancel.isHittable {
+            cancel.tap()
+        } else {
+            app.swipeDown(velocity: .fast)
+        }
     }
 
     private func pause(_ seconds: TimeInterval) {

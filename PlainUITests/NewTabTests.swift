@@ -31,6 +31,20 @@ final class NewTabTests: XCTestCase {
         XCTAssertTrue(app.webViews.staticTexts[heading].firstMatch.waitForExistence(timeout: 10), "page \"\(heading)\" did not show")
     }
 
+    /// Closes the search sheet by hand, as a person would on any screen: its grabber, or Cancel
+    /// where the field sits in the top bar (the Duo's inner screen).
+    private func closeSheet(_ app: XCUIApplication) {
+        let grabber = app.buttons["search.close"]
+        let cancel = app.buttons["search.cancel"]
+        if grabber.exists, grabber.isHittable {
+            grabber.tap()
+        } else if cancel.exists, cancel.isHittable {
+            cancel.tap()
+        } else {
+            app.swipeDown(velocity: .fast)
+        }
+    }
+
     /// The new tab's field has the keyboard, and it is empty: a new tab, not this page's address.
     private func expectNewTabField(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
         let field = app.textFields["searchField"]
@@ -69,9 +83,7 @@ final class NewTabTests: XCTestCase {
         expectNewTabField(app)
         // A stray "+": closing the field with nothing typed brings Page A back, and no empty tab
         // is left behind.
-        app.swipeDown(velocity: .fast)
-        let field = app.textFields["searchField"]
-        if field.exists, field.hasKeyboardFocus { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap() }
+        closeSheet(app)
         XCTAssertTrue(app.webViews.staticTexts["Page A"].firstMatch.waitForExistence(timeout: 3), "Page A came back")
         let pill = app.buttons["addressPill"]
         XCTAssertEqual(pill.value as? String, "http://" + server.address("/a"))
@@ -82,9 +94,11 @@ final class NewTabTests: XCTestCase {
     func testNoNewTabButtonOnTheStartScreen() throws {
         let app = try launch()
         // First run: the field is up over the start screen; close it.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        closeSheet(app)
         XCTAssertTrue(app.buttons["more"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.buttons["newTab"].exists, "already in a new tab")
+        // Hidden in place (the top bar keeps its slot): not on screen to tap.
+        let plus = app.buttons["newTab"].firstMatch
+        XCTAssertFalse(plus.exists && plus.isHittable, "already in a new tab")
     }
 
     func testBarPlusLongPressOpensTheOtherKind() throws {

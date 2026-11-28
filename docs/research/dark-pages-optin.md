@@ -366,3 +366,31 @@ gated on the policy; private choices kept private; a 44 pt target; the off state
 worded buttons in a card; a bounded, cancellable crossfade; lazy reconcile of hidden tabs;
 versioned migration; the Appearance footer. Not taken: keeping dark pages on for upgraders who
 had excluded a site (see Migration); profile-scoped site choices (kept shared, as today).
+
+## 5. Implementation (2026-11-27)
+
+- **BrowserCore:** `DarkPagesChoices` (switch plus on/off sites, off wins a conflict),
+  `DarkPagesSiteChoice`, `DarkPagesSuggestion` with `Moment` and `DarkPagesSuggestionStore`
+  (user defaults, with a session counter that survives relaunch); `ControlRules.darkPages`
+  (checkmark item) and `ControlRules.darkPagesIndicator`. Tests: `DarkPagesRulesTests`.
+- **Storage:** `BrowserSettings.darkPages` (key absent reads as off), table `darkPagesOn`
+  (`v11.darkPagesOn`), `darkPagesSiteChoices()` and `setDarkPagesChoice(_:forSite:)` in one
+  transaction.
+- **WebEngine:** the script carries `ENABLED`, `ON_SITES`, `OFF_SITES`; a page dark pages doesn't
+  apply to gets no guard and no twins, only the resumable light check (`lightCheck`: meta, root
+  `color-scheme` and background, five samples with one style read per step, then the dark-rule
+  scan), in 4 ms slices while visible, cancelled by any change of choice or colors, run again on a
+  back-forward restore and on a same-document address change. `setChoice(applies, siteOff)`
+  answers after two frames with the document's token. The pool applies a change to the panes on
+  screen at once (each in parallel, a later caller waits for the same answers), catches up hidden
+  tabs as they attach (a revision per web view), and drops reports from a document that left.
+- **ShellUI:** `StorageSiteDarkPagesStore` owns the policy with a property-list launch copy;
+  every window's pool observes it. `AddressPill` has the indicator and a VoiceOver stand-in for
+  the address button. `DarkPagesSuggestionView` is the card. `BrowserViewController+DarkPages`
+  holds the switch, the toggle, the crossfade and the suggestion's moment and validity.
+  The suggestion's Turn On goes through `FeatureSheets.setDarkPages`, the Settings model's own
+  write queue, which now saves each change over what is stored (field by field), so another
+  window's open Settings never writes an old switch back.
+- **Codex code review:** round 1, 9 blocking, all fixed; round 2, 4 blocking, all fixed (see
+  above). Not changed: same-site stale reports (one process delivers in order; the commit resets
+  the state before the new page's first report).

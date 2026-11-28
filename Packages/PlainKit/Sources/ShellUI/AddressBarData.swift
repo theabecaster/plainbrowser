@@ -108,6 +108,9 @@ public protocol AddressBarData: AnyObject {
     /// Settings > Appearance, once the saved settings are read; nil before (the windows keep
     /// the launch copy, `AppAppearance`).
     var appearance: Appearance? { get }
+    /// Settings > Appearance > Dark Pages, once the saved settings are read; nil before (the engine
+    /// keeps the launch copy, `StorageSiteDarkPagesStore`).
+    var darkPages: Bool? { get }
     /// `observer` runs on the main thread each time the settings in effect change (read at launch,
     /// or saved). Every window adds one: the data is the app's.
     func observeSettings(_ observer: @escaping () -> Void)
@@ -119,6 +122,7 @@ extension AddressBarData {
     }
 
     public func forgetProfile(_ id: ProfileID) async {}
+    public var darkPages: Bool? { nil }
     public func prepareForTyping() {}
     public func firstFrameDidCommit() {}
 
@@ -147,6 +151,7 @@ public final class LiveAddressBarData: AddressBarData {
     public var archiveAfter: ArchiveAfter? { hasSettings ? settings.archiveAfter : nil }
     public var tabLayout: TabLayout? { hasSettings ? settings.tabLayout : nil }
     public var appearance: Appearance? { hasSettings ? settings.appearance : nil }
+    public var darkPages: Bool? { hasSettings ? settings.darkPages : nil }
     private var settingsObservers: [() -> Void] = []
     private var hasFirstFrame = false
     private var preconnectAfterFirstFrame = false

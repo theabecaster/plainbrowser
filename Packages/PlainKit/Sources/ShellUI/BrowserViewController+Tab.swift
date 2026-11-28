@@ -352,6 +352,7 @@ extension BrowserViewController {
             }
         }
         if old != nil, old?.canTranslate == false, new.canTranslate { offerTranslationOnce() }
+        darkPagesPageChanged(from: old, to: new)
         updateButtons()
         updatePageState()
         updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
@@ -694,6 +695,9 @@ struct TabSnapshot: Equatable {
     var canTranslate: Bool
     /// Translated text is on screen (the pill's "Translated —").
     var isTranslated: Bool
+    /// What Dark Pages does on the page, and the document that said so.
+    var darkPages: DarkPagesState
+    var darkPagesDocument: String?
 
     init(_ tab: Tab) {
         url = tab.url
@@ -706,6 +710,8 @@ struct TabSnapshot: Equatable {
         isAwaitingResubmit = tab.isAwaitingResubmit
         canTranslate = tab.translationTarget != nil && tab.translation == .original
         isTranslated = tab.translation == .translated
+        darkPages = tab.darkPages
+        darkPagesDocument = tab.darkPagesDocument
     }
 
     /// The load failed and nothing newer is loading.

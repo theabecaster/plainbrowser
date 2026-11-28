@@ -35,8 +35,8 @@ public final class AppStores {
         blocker = ContentBlocker(allowListStore: StorageSiteAllowListStore(database: database))
     }
 
-    /// Loads the per-site choices once; later windows wait for the same load. Returns whether any
-    /// site has dark pages off (the pool then checks its pages).
+    /// Loads the per-site choices once; later windows wait for the same load. Returns whether Dark
+    /// Pages' policy changed from its launch copy (the pools then update their pages).
     func loadSiteChoices() async -> Bool {
         if let loading { return await loading.value }
         let task = Task { [contentModes, pageZooms, darkPages, cookieBannerSites] in

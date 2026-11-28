@@ -82,6 +82,16 @@ public final class FeatureSheets {
         { [addressBar] in await addressBar.flush() }
     }
 
+    /// Dark Pages' switch from outside Settings (the suggestion's Turn On), through the same
+    /// owner and write queue as Settings itself: saved, applied here and handed to every other
+    /// window, and an open (or later) Settings sheet shows it.
+    func setDarkPages(_ on: Bool) async {
+        guard let model = makeSettingsModel() else { return }
+        await model.load()
+        model.setDarkPages(on)
+        await model.waitForSaves()
+    }
+
     func makeSettingsModel() -> SettingsModel? {
         if let settingsModel { return settingsModel }
         guard let database else { return nil }

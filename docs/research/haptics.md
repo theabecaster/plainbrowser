@@ -364,6 +364,7 @@ Columns: interaction | haptic | exact moment | strength | where (file, function)
 | …drop | **add** `.drop` | `didReorder(_:)` (diffable reorder transaction) | rigid 0.6 | `SideTabsViewController.swift` `didReorder`, strip equivalent | S |
 | Link or tab dropped on the strip or sidebar (opens a tab) | **add** `.drop` | in the drop handler | rigid 0.6 | I `TabDrag.swift`, strip and sidebar drop | I |
 | Sidebar resize drag crosses rail ↔ titles | **add** `.threshold` into expanded, `.selection` back to rail. Key it to the existing `showsTitles` flip | `sidebarResized` `.changed`, when `duo.sidebar?.showsTitles` changes value | medium / tick | `ShellUI/BVC+SideTabs.swift` `sidebarResized` | S |
+| …a flick carries the titles past where the finger left them | **add** `.tap` in (a commit that never armed), `.selection` out | `.ended`, as the spring starts | light / tick | same | — |
 | Sidebar resize release / flick to a state | none: the spring settles where already announced. A flick that changes state without crossing: `.tap` | `.ended` | light | same | S |
 | Sidebar titles toggle button (S) | keep S's `.selection`: a toggle | — | tick | S `onToggleTitles` | S |
 | Side pane divider passes a rest (Narrow, Half, Two Thirds) | **add** `.selection` | when the divider is 4 pt past the rest; not when it leaves the rest it started on | tick | `ShellUI/SidePaneDivider.swift` `SidePaneDividerDrag.move` | divider |
@@ -703,6 +704,41 @@ Each phase runs `scripts/perf-gate.sh` and the HapticsTests before it lands on `
 - I: link-drop `.drop`, `BrowserCommands` key paths in `withoutFeedback`.
 - `BVC+Summaries.swift`: summary done and failed. I's 3-line edit there is small, so this could
   also be done in Phase 1. Check that it rebases cleanly.
+
+**Phases 3–5 as landed (2026-11-28).** The rows above, re-found in the code after the lanes
+merged. Where the code had moved on:
+- **Already done by the lanes:** `showList(tick:)` and the profile create and delete haptics, the
+  bar's Close All `.close`, `perform(_ shortcut:)` in `withoutFeedback`, the pull's threshold,
+  tick and hysteresis, the search sheet's silent swipe down, its microphone tap and Browse for Me
+  tick, strip and sidebar reorder ticks and drop, Page Appearance's tick (it replaced the Dark
+  Pages toggle), Reload Without Cache's tap.
+- **Toasts carry their cause's haptic:** `ShellToast.show(_:button:haptic:action:)` plays it on
+  the toast's window as the toast comes on screen. Download finished and failed, Save as PDF
+  failed, translation failed (now `.failed`), the passkey refusal, the Photos refusal, a new
+  window refused and Open in Background play through it.
+- **Try Again that fails again** uses `RetryWatch` (`ChromeModel.swift`) instead of a
+  `retryingTab` id: it counts failed loads (`Tab.loadFailures`, so a failure that one
+  observation folds with its start is still seen) and matches the retried address (another
+  address typed meanwhile is not the retry). Silent while the gallery or a sheet covers the page.
+- **Site toggles:** Desktop Site, Content Blocking and Cookie Banner Blocking tick before the
+  reload.
+- **Reopen** plays `.tap`: the gallery's menu and toast, the bar's toast, the tabs menu, More
+  and the start screen. ⌘⇧T stays silent (`withoutFeedback`).
+- **Close Pane** `.close`; the gallery's Close All `.close` once, on the destructive choice; the
+  pill's long press on its window at the finger.
+- **Sidebar resize:** `.threshold` as the titles come in, `.selection` as they go (the band of
+  `FixedChoices.sidebarTitlesTick`), and a flick that carries them in plays `.tap` at the
+  spring's start (rule 3: a commit that never armed). The strip and the sidebar play one `.drop`
+  per reorder, on their window, and each destination tick at the finger.
+- **Summary and Browse for Me** end with `.success` or `.failed` (`SummaryStage.outcomeHaptic`),
+  the first time, only while the summary sheet is up.
+- **Skipped, no such UI:** a link or tab dropped on the strip or sidebar to open it (no drop
+  handler takes outside items; local reorders only), and `ShellUI/BrowserCommands.swift` (there
+  is none: every key command goes through `performShortcut`, `sidePaneKeyCommands` or the search
+  field's Escape, already silent).
+- **Left for the private-mode lane:** private-mode entry and exit (the gallery's and the
+  strip's and sidebar's Private switch tick, New Private Tab and Leave Private, Close All Private
+  Tabs from the tabs menu, the start screen's Private Tab). Their haptics stay as they are.
 
 **Hand-offs to send to running lanes now (cheapest, no conflicts later):**
 - **G (gestures):**

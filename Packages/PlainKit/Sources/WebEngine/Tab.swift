@@ -78,6 +78,9 @@ public final class Tab: Identifiable {
     public internal(set) var contentMode = ContentMode.mobile
     /// The last main-frame load error, cleared when the next navigation starts.
     public internal(set) var loadError: LoadError?
+    /// Counts the main-frame loads that failed, so a failure is seen even when its start and end
+    /// reach the shell in one observation (the error page's Try Again).
+    public internal(set) var loadFailures = 0
     /// Bumped when a new thumbnail is stored; read it with `WebViewPool.thumbnail(for:)`.
     public internal(set) var thumbnailRevision = 0
     /// A restored form result is waiting: history is back but the page is not loaded. The shell

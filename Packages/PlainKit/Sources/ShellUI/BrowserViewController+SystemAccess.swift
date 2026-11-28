@@ -18,8 +18,8 @@ extension BrowserViewController {
         if features == [.photos] {
             // Save Image is the user's own action: it is always answered, here with why.
             guard let notice = SystemAccessRules.photosNotice(monitor.access(.photos)) else { return }
-            Haptic.nothingThere.play()
-            showNotice(notice)
+            // The refusal bump plays with the toast that says why, when it shows.
+            showNotice(notice, haptic: .nothingThere)
             return
         }
         let access = { monitor.access($0) }
@@ -47,14 +47,14 @@ extension BrowserViewController {
     // MARK: Showing
 
     /// The line as a toast over the chrome, with Settings when Plain's page there can help.
-    func showNotice(_ notice: SystemAccessNotice) {
+    func showNotice(_ notice: SystemAccessNotice, haptic: Haptic? = nil) {
         Signposts.signposter.emitEvent(Signposts.systemAccessNotice, "\(notice.message, privacy: .public)")
         showToastWhenFree { [weak self] in
             guard let self else { return }
             if notice.opensSettings {
-                tabsUI.toast.show(notice.message, button: FixedChoices.switchedOffToastButton) { Self.openSettings() }
+                tabsUI.toast.show(notice.message, button: FixedChoices.switchedOffToastButton, haptic: haptic) { Self.openSettings() }
             } else {
-                tabsUI.toast.show(notice.message)
+                tabsUI.toast.show(notice.message, haptic: haptic)
             }
         }
     }

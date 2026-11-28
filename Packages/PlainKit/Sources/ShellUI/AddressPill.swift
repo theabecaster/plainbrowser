@@ -983,7 +983,8 @@ final class AddressPill: UIView {
 
     @objc private func pressed(_ press: UILongPressGestureRecognizer) {
         guard press.state == .began, !isEditing, !isCompact else { return }
-        Haptic.threshold.play()
+        // On the pill's window, where the finger is (haptics plan, §4.1).
+        Haptic.threshold.play(in: self, at: press.location(in: self))
         onLongPress()
     }
 }

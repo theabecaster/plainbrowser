@@ -345,7 +345,8 @@ extension BrowserViewController {
             duo.isDraggingSidebar = true
             duo.sidebarDragStart = widthConstraint.constant
             duo.dragShowsTitles = layout.sidebar == .expanded
-            Haptic.selection.prepare()
+            Haptic.threshold.prepare(in: view)
+            Haptic.selection.prepare(in: view)
             // Where it will open over the bar, it is over it from the first point of the drag.
             if layout.expandedSidebarCoversChrome, layout.widestSidebar == .expanded { raiseSidebarOverChrome(true) }
         case .changed:
@@ -354,13 +355,14 @@ extension BrowserViewController {
             widthConstraint.constant = width
             let rail = SidebarState.rail.width
             let open = min(max((width - rail) / (SidebarState.expanded.width - rail), 0), 1)
-            // One tick as the titles come in or go, not a chatter at the edge: they count as
-            // showing past `sidebarTitlesTickOn` of the way and as gone under `...TickOff`.
+            // The threshold as the titles come in, a tick as they go (haptics plan, rule 4), not a
+            // chatter at the edge: they count as showing past `sidebarTitlesTick.on` of the way and
+            // as gone under `.off`.
             let flips = duo.dragShowsTitles
                 ? open < CGFloat(FixedChoices.sidebarTitlesTick.off) : open > CGFloat(FixedChoices.sidebarTitlesTick.on)
             if flips {
                 duo.dragShowsTitles.toggle()
-                Haptic.selection.play()
+                (duo.dragShowsTitles ? Haptic.threshold : Haptic.selection).play(in: view)
             }
             UIView.animate(Motion.sidebarTrack) {
                 self.duo.sidebarScrim?.alpha = open
@@ -372,10 +374,11 @@ extension BrowserViewController {
             let width = widthConstraint.constant
             let target = drag.restingState(width: width, velocity: layout.sidebarOnRight ? -velocity : velocity)
             let flicked = abs(velocity) > 600
-            // A flick that carries the titles in or out past where the finger left them.
+            // A flick that carries the titles in or out past where the finger left them: once, as
+            // the spring starts, a light tap in (a commit that never armed) and a tick out.
             if (target == .expanded) != duo.dragShowsTitles, target != .hidden || duo.dragShowsTitles {
                 duo.dragShowsTitles = target == .expanded
-                Haptic.selection.play()
+                (duo.dragShowsTitles ? Haptic.tap : Haptic.selection).play(in: view)
             }
             setSidebar(target, flicked: flicked)
         }

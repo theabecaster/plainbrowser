@@ -289,8 +289,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         session.summaries.onAvailabilityChange = { [weak self] in self?.summaryAvailabilityChanged() }
         session.pool.onTranslationFailed = { [weak self] tab in
             guard let self, tab === self.currentTab else { return }
-            Haptic.nothingThere.play()
-            self.showToastWhenFree { [weak self] in self?.tabsUI.toast.show("This page couldn't be translated") }
+            // The user waited for the translation: the warning, with its toast (haptics plan, §4.2).
+            self.showToastWhenFree { [weak self] in self?.tabsUI.toast.show("This page couldn't be translated", haptic: .failed) }
         }
         session.pool.onMemoryWarning = { [weak self] in
             self?.tabsUI.previews = [:]

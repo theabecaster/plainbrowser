@@ -22,8 +22,8 @@ extension BrowserViewController {
         }
     }
 
-    /// "Turn Off Dark Pages for This Site" while Plain darkens the page, "Turn On" while the user
-    /// has it off here; `item` is the state rules' answer (`ControlRules.darkPages`, §4).
+    /// "Dark Pages", checked while Plain darkens the page, unchecked while the user has it off
+    /// here; `item` is the state rules' answer (`ControlRules.darkPages`, §4).
     func darkPagesMenuItems(for tab: Tab, item: DarkPagesItem) -> [UIMenuElement] {
         let off: Bool
         switch item {
@@ -31,10 +31,7 @@ extension BrowserViewController {
         case .turnOn: off = true
         case .hidden: return []
         }
-        let item = UIAction(
-            title: off ? "Turn On Dark Pages for This Site" : "Turn Off Dark Pages for This Site",
-            image: UIImage(systemName: off ? "moon" : "sun.max")
-        ) { [weak tab] _ in
+        let item = UIAction(title: "Dark Pages", image: UIImage(systemName: "moon"), state: off ? .off : .on) { [weak tab] _ in
             tab?.setDarkPagesOff(!off)
         }
         item.accessibilityIdentifier = "menu.darkPages"

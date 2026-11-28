@@ -718,7 +718,7 @@ final class ClarityCaptureTests: XCTestCase {
             if tap(app.buttons["menu.siteSettings"], or: nil) {
                 pause(1)
                 shot("misc-11-dark-site-settings")
-                if tapLabel(app, "Turn Off Dark Pages") || tap(app.buttons["menu.darkPages"], or: nil) {
+                if tap(app.buttons["menu.darkPages"], or: nil) {
                     pause(1.5)
                     shot("misc-12-dark-pages-off")
                 } else {

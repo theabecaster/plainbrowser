@@ -112,7 +112,7 @@ final class ShellFixesCaptureTests: XCTestCase {
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 2))
         field.typeText("http://127.0.0.1:\(port)/nothing\n")
-        XCTAssertTrue(app.staticTexts["The site isn't answering."].waitForExistence(timeout: 6))
+        XCTAssertTrue(app.staticTexts["The site refused the connection."].waitForExistence(timeout: 6))
         pause(0.8)
         screen("all-6-refused")
         // 7. An empty sheet.

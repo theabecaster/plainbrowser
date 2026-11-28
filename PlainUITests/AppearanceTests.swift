@@ -63,8 +63,12 @@ final class AppearanceTests: XCTestCase {
     }
 
     /// The page menu's items, by label, while it is open.
-    private func menuHas(_ app: XCUIApplication, _ label: String) -> Bool {
-        app.buttons[label].waitForExistence(timeout: 1)
+    /// Site Settings' Dark Pages item: nil when the menu leaves it out, else whether it is checked.
+    private func darkPages(_ app: XCUIApplication) -> Bool? {
+        let item = app.buttons["menu.darkPages"]
+        guard item.waitForExistence(timeout: 1) else { return nil }
+        XCTAssertEqual(item.label, "Dark Pages")
+        return item.isSelected
     }
 
     private func openPageMenu(_ app: XCUIApplication) {
@@ -106,28 +110,27 @@ final class AppearanceTests: XCTestCase {
         let app = try launch()
         go(app, to: "/light-site", heading: "Light Only")
         openPageMenu(app)
-        XCTAssertFalse(menuHas(app, "Turn Off Dark Pages for This Site"), "a light app darkens nothing")
+        XCTAssertNil(darkPages(app), "a light app darkens nothing")
         closeMenu(app)
 
         chooseAppearance(app, "Dark")
         openPageMenu(app)
-        XCTAssertTrue(menuHas(app, "Turn Off Dark Pages for This Site"), "the light-only page is darkened")
-        app.buttons["Turn Off Dark Pages for This Site"].tap()
+        XCTAssertEqual(darkPages(app), true, "the light-only page is darkened")
+        app.buttons["menu.darkPages"].tap()
 
         // Remembered for the site: another page on it opens with dark pages off.
         go(app, to: "/light-site-2", heading: "Light Only")
         openPageMenu(app)
-        XCTAssertTrue(menuHas(app, "Turn On Dark Pages for This Site"))
-        app.buttons["Turn On Dark Pages for This Site"].tap()
+        XCTAssertEqual(darkPages(app), false)
+        app.buttons["menu.darkPages"].tap()
         openPageMenu(app)
-        XCTAssertTrue(menuHas(app, "Turn Off Dark Pages for This Site"), "back on, at once")
+        XCTAssertEqual(darkPages(app), true, "back on, at once")
         closeMenu(app)
 
         // A site with its own dark design is left alone: nothing to turn off.
         go(app, to: "/dark-site", heading: "Own Dark Design")
         openPageMenu(app)
-        XCTAssertFalse(menuHas(app, "Turn Off Dark Pages for This Site"))
-        XCTAssertFalse(menuHas(app, "Turn On Dark Pages for This Site"))
+        XCTAssertNil(darkPages(app))
         closeMenu(app)
         chooseAppearance(app, "System")
     }
@@ -164,10 +167,10 @@ final class AppearanceTests: XCTestCase {
         }
         run("darkened")
         openPageMenu(app)
-        app.buttons["Turn Off Dark Pages for This Site"].tap()
+        app.buttons["menu.darkPages"].tap()
         run("off")
         openPageMenu(app)
-        app.buttons["Turn On Dark Pages for This Site"].tap()
+        app.buttons["menu.darkPages"].tap()
         run("darkened-again")
         chooseAppearance(app, "System")
     }
@@ -185,7 +188,7 @@ final class AppearanceTests: XCTestCase {
         go(app, to: "/light-site", heading: "Light Only")
         if darkPagesOff {
             openPageMenu(app)
-            app.buttons["Turn Off Dark Pages for This Site"].tap()
+            app.buttons["menu.darkPages"].tap()
         }
         Thread.sleep(forTimeInterval: 1)
         let web = app.webViews.firstMatch
@@ -225,11 +228,11 @@ final class AppearanceTests: XCTestCase {
         openPageMenu(app)
         Thread.sleep(forTimeInterval: 0.8)
         shot("a6-page-menu-dark-pages")
-        app.buttons["Turn Off Dark Pages for This Site"].tap()
+        app.buttons["menu.darkPages"].tap()
         Thread.sleep(forTimeInterval: 1)
         shot("a7-light-site-dark-pages-off")
         openPageMenu(app)
-        app.buttons["Turn On Dark Pages for This Site"].tap()
+        app.buttons["menu.darkPages"].tap()
         go(app, to: "/dark-site", heading: "Own Dark Design")
         Thread.sleep(forTimeInterval: 1)
         shot("a8-own-dark-design")

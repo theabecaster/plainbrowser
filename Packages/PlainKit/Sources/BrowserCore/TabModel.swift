@@ -185,6 +185,8 @@ public enum TabChange: Sendable, Equatable {
     case unarchive([TabID])
     /// Delete these archived tabs; nil deletes the whole archive.
     case deleteArchived([TabID]?)
+    /// Delete archived tabs (of every profile) that moved to the archive before this date.
+    case pruneArchive(archivedBefore: Date)
     /// A profile was deleted: its archived tabs go with it (its open and recently closed tabs
     /// already left the session).
     case deleteProfile(ProfileID)

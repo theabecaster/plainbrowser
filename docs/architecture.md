@@ -279,6 +279,7 @@ exactly what the app emits.
 | `gallery.show` / `gallery.openTab` | interval | page zooms into its card / card grows into its page, until settled |
 | `gallery.cardClose` / `gallery.scroll` / `gallery.reload` | interval | a card closed until reflowed / one scroll / a list applied |
 | `archive.show` / `tab.privateMode` / `toast.show` | event | Archive screen / private toggle in the gallery / a toast |
+| `archive.load` | interval | Archive screen: read the archive (or a search) and group it into sections |
 | `split.open` / `split.close` | interval | Open in Other Pane (page, link, gallery, sidebar) / Close Pane, until the panes show |
 | `split.swap` / `pane.focus` | event | Swap Panes / the focused pane changed (message: pane) |
 | `fold.transition` | interval | `viewWillTransition(to:with:)` (fold, unfold, rotation) → its completion, insets applied (message: target size) |
@@ -310,7 +311,11 @@ exactly what the app emits.
 5. **Auto-archive:** at launch and on each foreground, `archiveIdleTabs(after: settings.archiveAfter)`
    moves tabs not on screen for the interval to the archive, never pinned, visible, private or in-use
    tabs. Archived rows keep their state file; `searchArchivedTabs` (FTS5, title + address) and
-   `archivedTabs` read it on demand. The archive keeps the newest 1,000.
+   `archivedTabs` read it on demand. With each pass and on background, `pruneArchive()` deletes
+   archived tabs older than 30 days (`FixedChoices.archivedTabLifetime`) with their state files, in
+   the writer's chain off main; History keeps their pages. The newest 1,000 is the cap beside it.
+   The Archive screen reads the whole archive (search: the best 200) and groups it into Today,
+   Yesterday, This Week and Earlier off main (`ArchiveModel.group`).
 
 ## Web engine
 

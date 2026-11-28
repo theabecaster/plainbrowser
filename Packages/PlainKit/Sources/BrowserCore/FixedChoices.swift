@@ -436,8 +436,16 @@ public enum FixedChoices {
     /// rides out a passing lock without holding later saves for long.
     public static let tabWriteAttempts = 3
     public static let tabWriteRetryDelay = Duration.milliseconds(100)
-    /// Archived tabs kept; the oldest are deleted beyond it, with their state files (a few KB
-    /// each). Months of tabs at the 1-day default, and the size the archive search is tested on.
+    /// How long a tab stays in the archive before it clears itself, with its state file; the page
+    /// stays in History. One archive that tidies itself, not a second place for stale tabs to
+    /// learn (docs/decisions.md, "The archive clears itself after 30 days"). With the week
+    /// default a tab is gone about five weeks after it was last opened, past Safari's longest
+    /// Close Tabs choice (a month, and its tabs close outright); Arc's archive kept everything
+    /// until it was cleared by hand, which is the pile this avoids.
+    public static let archivedTabLifetime: TimeInterval = 30 * 24 * 3600
+    /// The archive's safety net beside its 30 days: past this many tabs the oldest go, with their
+    /// state files (a few KB each). Far more than 30 days of ordinary browsing, the size the
+    /// archive search and the Archive screen are tested on, and what bounds every pruning pass.
     public static let archivedTabLimit = 1_000
     /// Archive search results shown per query: more than fits on screen, cheap to fetch.
     public static let archiveSearchLimit = 200

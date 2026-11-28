@@ -395,6 +395,12 @@ final class RecordingPersistence: TabPersistence {
         #expect(persistence.recorded == [.deleteArchived([id]), .deleteArchived(nil)])
     }
 
+    @Test func pruningAsksForTabsArchivedOver30DaysAgo() {
+        let store = makeStore()
+        store.pruneArchive()
+        #expect(persistence.recorded == [.pruneArchive(archivedBefore: clock.now.addingTimeInterval(-30 * 86_400))])
+    }
+
     // MARK: Pages, thumbnails, persistence
 
     @Test func pageAndThumbnailUpdatesArePersistedOnlyWhenChanged() {

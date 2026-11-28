@@ -14,7 +14,7 @@ import Synchronization
 /// another in the order they were started. Call `flush()` when the app moves to the background.
 ///
 /// After a write, state files of tabs no row names any more (closed tabs that fell off the
-/// recently closed stack, archived tabs deleted or over the cap) are deleted.
+/// recently closed stack, archived tabs deleted, past their 30 days or over the cap) are deleted.
 ///
 /// Each `AppDatabase` has exactly one, `AppDatabase.tabSession`.
 public final class TabSessionWriter: TabPersistence {
@@ -187,6 +187,18 @@ public final class TabSessionWriter: TabPersistence {
                     ?? String.fetchAll(db, sql: "SELECT id FROM \(Schema.tab) WHERE isArchived")
                 try deleteRows(doomed, archived: true, in: db)
                 candidates.formUnion(doomed.compactMap(UUID.init(uuidString:)))
+            case .pruneArchive(let cutoff):
+                // Bounded by the archive's cap; the (isArchived, archivedAt) index finds them.
+                let expired = try String.fetchAll(
+                    db,
+                    sql: """
+                    SELECT id FROM \(Schema.tab) WHERE isArchived
+                      AND (archivedAt < ? OR (archivedAt IS NULL AND lastActiveAt < ?))
+                    """,
+                    arguments: [cutoff, cutoff]
+                )
+                try deleteRows(expired, archived: true, in: db)
+                candidates.formUnion(expired.compactMap(UUID.init(uuidString:)))
             case .deleteProfile(let profile):
                 let doomed = try String.fetchAll(
                     db, sql: "SELECT id FROM \(Schema.tab) WHERE isArchived AND profileID = ?", arguments: [profile.uuidString]

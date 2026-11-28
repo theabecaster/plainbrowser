@@ -1,3 +1,4 @@
+import PerfSignposts
 import XCTest
 
 /// Walks the shell through its states with pauses, attaching a screenshot of each, for design
@@ -832,6 +833,123 @@ final class CaptureTests: XCTestCase {
             pause(1.5)
             shot("h5-archive")
         }
+    }
+
+    /// The Archive in its sections (the seed fills Today, Yesterday, This Week and Earlier): at
+    /// rest, scrolled to the footer, and searching.
+    func testCaptureArchive() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedArchive"]
+        app.launch()
+        openArchive(app, server)
+        pause(1.5)
+        shot("a1-archive")
+        app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        pause(1.5)
+        shot("a2-archive-footer")
+        app.collectionViews.firstMatch.swipeDown(velocity: .fast)
+        pause(1)
+        let search = app.searchFields.firstMatch
+        if search.waitForExistence(timeout: 2) {
+            search.tap()
+            search.typeText("apple")
+            pause(1.5)
+            shot("a3-archive-searching")
+        }
+    }
+
+    /// The Archive opened over a full archive (1,000 tabs over 30 days): the read and the
+    /// sections (`archive.load`) and the wall clock from the tap to the first row, five times.
+    func testMeasureFullArchiveOpen() throws {
+        try measureArchiveOpen(seed: "-PlainSeedFullArchive")
+    }
+
+    /// The same over the small seed (7 tabs): what opening costs without the archive's size.
+    func testMeasureSmallArchiveOpen() throws {
+        try measureArchiveOpen(seed: "-PlainSeedArchive")
+    }
+
+    private func measureArchiveOpen(seed: String) throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", seed]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/a") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
+        let load = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.archiveLoad)
+        )
+        let options = XCTMeasureOptions()
+        options.iterationCount = 5
+        options.invocationOptions = [.manuallyStart, .manuallyStop]
+        measure(metrics: [load, XCTClockMetric()], options: options) {
+            app.buttons["more"].tap()
+            let item = app.buttons["more.archivedTabs"]
+            XCTAssertTrue(item.waitForExistence(timeout: 3))
+            startMeasuring()
+            item.tap()
+            XCTAssertTrue(app.buttons.matching(identifier: "archiveRow").firstMatch.waitForExistence(timeout: 5))
+            stopMeasuring()
+            shot("m-archive\(seed)")
+            app.navigationBars.buttons["Done"].tap()
+            XCTAssertTrue(app.otherElements["archiveSheet"].waitForNonExistence(timeout: 3))
+        }
+    }
+
+    /// Hitches while flinging through a full archive's sections (1,000 rows), five times.
+    func testMeasureFullArchiveScroll() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let server = try TestServer()
+        try server.start()
+        defer { server.stop() }
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainSeedFullArchive"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/a") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10))
+        app.buttons["more"].tap()
+        app.buttons["more.archivedTabs"].tap()
+        let list = app.collectionViews.firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(identifier: "archiveRow").firstMatch.waitForExistence(timeout: 5))
+        let scroll = XCTMeasureOptions()
+        scroll.iterationCount = 5
+        scroll.invocationOptions = [.manuallyStop]
+        measure(metrics: [XCTHitchMetric(application: app), XCTOSSignpostMetric.scrollingAndDecelerationMetric], options: scroll) {
+            list.swipeUp(velocity: .fast)
+            list.swipeUp(velocity: .fast)
+            stopMeasuring()
+            list.swipeDown(velocity: .fast)
+            list.swipeDown(velocity: .fast)
+        }
+        for _ in 0 ..< 6 { list.swipeUp(velocity: .fast) }
+        pause(1)
+        shot("m-full-archive-scrolled")
+    }
+
+    /// Opens a page, then the Archive from the page sheet.
+    private func openArchive(_ app: XCUIApplication, _ server: TestServer) {
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(server.address("/a") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 20))
+        pause(1)
+        app.buttons["more"].tap()
+        let item = app.buttons["more.archivedTabs"]
+        XCTAssertTrue(item.waitForExistence(timeout: 3))
+        item.tap()
+        XCTAssertTrue(app.otherElements["archiveSheet"].waitForExistence(timeout: 3))
     }
 
     private func pause(_ seconds: TimeInterval) {

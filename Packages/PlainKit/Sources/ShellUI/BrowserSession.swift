@@ -123,9 +123,10 @@ public final class BrowserSession {
         tabs.releaseWindow()
     }
 
-    /// Writes the tab list now. The pool saves each tab's page state on its own when the app
-    /// resigns active.
+    /// Writes the tab list now, with archived tabs past their 30 days cleared. The pool saves
+    /// each tab's page state on its own when the app resigns active.
     public func saveTabs() async {
+        tabs.pruneArchive()
         await tabs.flush()
     }
 

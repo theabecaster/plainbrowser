@@ -23,6 +23,8 @@ public enum KeyShortcut: Sendable, Hashable {
     /// answer with its own (empty) undo.
     case undoCloseTab
     case openLocation, reload, stop
+    /// Reload Without Cache: Safari's ⌥⌘R (Chrome's ⇧⌘R is Reader here, as in Safari).
+    case reloadFromOrigin
     case back, forward
     case find, findNext, findPrevious
     case addFavorite, readLater
@@ -40,7 +42,7 @@ public enum KeyShortcut: Sendable, Hashable {
     public static let all: [KeyShortcut] = [
         .newTab, .newPrivateTab, .closeTab, .reopenClosedTab, .undoCloseTab,
         .nextTab, .previousTab, .showAllTabs,
-        .openLocation, .reload, .stop, .back, .forward,
+        .openLocation, .reload, .reloadFromOrigin, .stop, .back, .forward,
         .find, .findNext, .findPrevious,
         .addFavorite, .readLater, .reader,
         .zoomIn, .zoomOut, .actualSize,
@@ -57,6 +59,7 @@ public enum KeyShortcut: Sendable, Hashable {
         case .undoCloseTab: [("z", .command)]
         case .openLocation: [("l", .command)]
         case .reload: [("r", .command)]
+        case .reloadFromOrigin: [("r", [.command, .option])]
         case .stop: [(".", .command)]
         case .back: [("[", .command)]
         case .forward: [("]", .command)]
@@ -91,6 +94,7 @@ public enum KeyShortcut: Sendable, Hashable {
         case .undoCloseTab: "Undo Close Tab"
         case .openLocation: "Open Location"
         case .reload: "Reload Page"
+        case .reloadFromOrigin: "Reload Without Cache"
         case .stop: "Stop Loading"
         case .back: "Back"
         case .forward: "Forward"
@@ -147,6 +151,7 @@ extension ControlRules {
         case .undoCloseTab: return !state.isEditing
         case .openLocation: return true
         case .reload: return !state.isEditing && reload == .reload
+        case .reloadFromOrigin: return reloadFromOrigin
         case .stop: return !state.isEditing && reload == .stop
         case .back: return !state.isEditing && back.isEnabled
         case .forward: return !state.isEditing && forward.isEnabled

@@ -131,6 +131,19 @@ and the two-finger scrub closes the search field or the overview.
   beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab, 17.5% with
   the strip at a page's top; 11% while reading.
 - Plus buttons act at once when there is one obvious action, and become a menu only when there is a real choice.
+- **Reload lives in the pill** (every layout): at the resting pill's trailing end on a page,
+  `arrow.clockwise` in ink; while the page loads it is Stop (`xmark`, Safari's in-field X: inside
+  the address nothing else can close), with the progress along the bottom. A tap reloads or stops
+  (no haptic: the progress answers). A long press is a menu with one item, Reload Without Cache
+  ("Gets everything again from the site"; `tap` when chosen, since on screen it looks like any
+  reload); VoiceOver reads "Reload" or "Stop" after the address and offers Reload Without Cache as
+  an action. Not on the start screen, error pages (Try Again), the reader, the open field, or the
+  collapsed pill and slim band, which are the host alone. The host stays centred in the capsule.
+- **More is `ellipsis`** (every layout: the phone bar, the Duo's vertical bar, the inner screen's
+  trailing capsule; the gallery's More too): the sign Safari 26, Chrome and Apple's own apps use
+  for "more things here". The page sheet it opens holds the page's tools and the app's places,
+  Settings among them as a captioned `gearshape` chip. A gear on the button would hide Find, Share
+  and Reader behind a picture of Settings (docs/decisions.md, "More looks like More").
 - **The bar's buttons** (every layout): Back, Forward, Tabs, New Tab ("+") and More. New Tab opens a
   tab of the kind on screen with the keyboard up; its long press offers the other kind. Share is
   the page sheet's last tile, not a bar button (Safari 26 and Chrome keep it out of the bar too).
@@ -183,7 +196,7 @@ and the two-finger scrub closes the search field or the overview.
   | Kind | Feel | Meaning | Examples |
   |---|---|---|---|
   | `selection` (the tick) | selection | a value or state changed in place, or a gesture crossed back over its threshold | zoom step, reorder slot, a toggle, Find wrapping to the first match, un-arming a swipe |
-  | `tap` (the commit) | light impact | an action committed whose result is small, off-screen or delayed | background tab, download started, zoom back to 100%, a flick that commits without arming |
+  | `tap` (the commit) | light impact | an action committed whose result is small, off-screen or delayed | background tab, download started, zoom back to 100%, a flick that commits without arming, Reload Without Cache |
   | `threshold` | medium impact, 0.7 | a gesture crossed into a new outcome while the finger is down | bar swipe past half, the New Tab card at 80 pt, swipe up past the commit line, a card past its close line |
   | `drop` | rigid impact, 0.6 | a dragged item landed in a new place | gallery reorder drop |
   | `close` | soft impact | something went away | a tab, a pane, a profile |

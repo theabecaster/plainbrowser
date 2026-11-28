@@ -458,6 +458,16 @@ extension BrowserViewController {
         }
     }
 
+    /// Reload Without Cache: the page and everything on it from the site again. Only where Reload
+    /// itself shows (`ControlRules.reloadFromOrigin`), so never under the reader.
+    func reloadPageFromOrigin() {
+        guard currentRules().reloadFromOrigin else { return Haptic.nothingThere.play() }
+        // On screen it looks like any reload, so `tap` says the stronger one was taken.
+        Haptic.tap.play()
+        dropLaunchCover(animated: true)
+        currentTab?.reloadFromOrigin()
+    }
+
     /// Find on Page: in the reader while it shows, else on the page (`Tab.beginFind`, which emits
     /// the signpost itself).
     func findOnPage() {

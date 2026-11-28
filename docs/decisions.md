@@ -3355,3 +3355,93 @@ the selected icon properly."
   now guarded by a test.
 - **Perf:** no new framework is loaded; a configuration flag and an Info.plist key. Launch and
   memory budgets are untouched by construction.
+## Reload in the pill (2026-11-28)
+
+Owner, on TestFlight: "the resting address field should have a reload button that turns into an
+X/stop while loading … Holding it should hard refresh, like Chrome on desktop with
+Shift-Command-R. … Do the same on the inner screen and iPad layouts."
+
+- **Chosen: Reload inside the resting pill, at its trailing end, on every layout** (the phone's
+  bottom pill, the Duo's outer screen beside the vertical bar, the inner screen's top bar).
+  Safari's field has it in the same place; Chrome keeps it in the bar or the omnibox. It sits
+  inside the glass (no new capsule, nothing moves), `arrow.clockwise` in ink, a 44 pt target 2 pt
+  in from the capsule's end. The host keeps the glyph's room at both ends, so it stays centred
+  (Safari's); on the 13 mini (pill about 351 pt) that leaves about 250 pt of host, on the Duo's
+  outer screen (466 pt wide) more. Reload in the page sheet's address row stays: on phones the
+  sheet covers the pill, and the row is the sheet's mirror of the bar (Back, Forward), as in Arc.
+- **Stop is an X there** (`xmark`): inside the address nothing else can close, so Safari's X reads
+  as Stop; in the sheet's corner Stop stays `stop.circle` (an X there reads "close the sheet").
+  The progress bar keeps running along the pill's bottom under it.
+- **Where it shows: pull to refresh's predicate** (`ControlRules.pillReload`), so the button and
+  the gesture never disagree. Not on Start; not on failed, crashed or resend pages (Try Again or
+  Reload is the page's one button, a second beside it is noise); not in the reader (the article
+  is already what the page has, and reloading it re-renders the same text; Back leaves it); not in
+  the open field. Private tabs keep it (nothing about a reload is remembered). The collapsed
+  pill and the inner screen's slim band are the host alone: the glyph fades out over the first
+  third of the collapse (alpha only) and stops taking touches as soon as the collapse starts, so a
+  tap there still only brings the bar back. While the launch picture stands in, it shows as the
+  bar will (no pop after the restore); a tap before the tab is back does nothing.
+- **Hold: a menu with one item, "Reload Without Cache"** (subtitle "Gets everything again from
+  the site"), not a hold that acts on its own. A press that reloads differently from a tap is
+  invisible and easy to trigger by accident; a menu names what the hold does, which is how people
+  learn it (Chrome desktop's reload menu with DevTools open: Normal Reload, Hard Reload, Empty
+  Cache and Hard Reload; Safari for iOS's long press on Reload offered Reload Without Content
+  Blockers and Request Desktop Website). The pill's own long press (the page sheet) is unchanged
+  everywhere else on the pill.
+- **What "hard" means in Plain: WebKit's reload from the origin** (`WKWebView.reloadFromOrigin()`,
+  Safari's "Reload Page From Origin", ⌥⌘R). WebKit asks for the page with `Cache-Control:
+  no-cache` and `Pragma: no-cache` and fetches its subresources again instead of revalidating
+  them; a plain reload sends `Cache-Control: max-age=0` and revalidates (WebCore
+  `FrameLoader::updateRequestAndAddExtraFields`). That is Chrome's Hard Reload (⇧⌘R). Stronger
+  public options exist and are left out: `WKWebsiteDataStore.removeData(ofTypes: [disk cache,
+  memory cache, fetch cache, service workers], for: records)` is Chrome's "Empty Cache and Hard
+  Reload", but it works per site record (every tab of that site, both panes), is async, and
+  removing service workers loses a site's offline data; that is Clear History and Data's job. A
+  page whose own service worker answers from its cache can still show cached files after a hard
+  reload, as in Safari.
+- **Haptics follow the haptics plan, not a tap per press:** Reload and Stop play nothing (rule 1:
+  the progress bar answers, as the sheet's Reload); the long press gets the system menu's own
+  haptic (rule 7, so no `threshold` of Plain's on top); choosing Reload Without Cache plays `tap`,
+  since on screen it looks exactly like a reload.
+- **VoiceOver:** with Reload showing, the resting pill is a group, as with Page Appearance:
+  Page Appearance (when it shows), the address (the stand-in, one button as before: "Address",
+  the URL, the same hint, the bar's gesture actions), then "Reload" or "Stop", whose actions
+  include Reload Without Cache. Left to right, as they sit. With neither glyph the pill is the one
+  button it was. All go while the bar is collapsed.
+- **Beside Page Appearance:** the moon, sun or slashed circle at the leading end (46 pt) and
+  Reload at the trailing end (50 pt) leave the host the middle. The host is centred while it fits
+  there and shifts toward the free side before it truncates (its centre is a 740 constraint,
+  under its compression resistance); a Not Secure word gives way to its symbol beside either
+  glyph before the host loses a letter.
+- **Keys:** ⌘R (Reload) and ⌘. (Stop) are the keys lane's (`KeyShortcuts`). Reload Without
+  Cache is `KeyShortcut.reloadFromOrigin`, Safari's ⌥⌘R, not Chrome's ⇧⌘R, which Plain gives to
+  Reader as Safari does; it follows the glyph's rule (`ControlRules.reloadFromOrigin`) and is
+  listed in the ⌘ overlay. The pill's VoiceOver actions from that lane (Previous and Next Tab,
+  New Tab, Show All Tabs) are the address element's.
+- **iPad:** Plain is an iPhone app (`TARGETED_DEVICE_FAMILY` 1); the inner screen's top bar is
+  the wide layout, and the same pill code serves an iPad layout when one lands.
+- **Perf:** the button is made the first time a page shows (a start-screen launch builds
+  nothing more), changes only between faces, and the collapse sets one alpha per frame, guarded
+  by equality.
+
+## More looks like More (2026-11-28)
+
+Owner, on TestFlight: "the settings icon on the side bar or other regular phone screens should
+make more sense that it's settings." The button is More (the page sheet: page tools, then
+History, Reading List, Favorites, Settings), drawn as `line.3.horizontal.circle`, which reads as
+a hamburger or a sliders-like settings glyph and says neither "more" nor "settings".
+
+- **Chosen: `ellipsis`** in every bar (phones, the Duo's vertical bar, the inner screen's trailing
+  capsule), the empty states that draw it ("Tap … on a page, then Favorite.") and, already, the
+  gallery's More. Safari 26 draws its page menu as "…" in glass, Chrome's menu is "…", and
+  Apple's HIG names the ellipsis the More button; Plain's own gallery used it, so More now has
+  one symbol (the wording rule: the same action has the same symbol everywhere).
+- **Not a gear:** Settings is one of 15 or so items there, and most visits are for the page
+  (Find, Reader, Share, Copy Link). A gear would promise Settings and hide the page's tools behind
+  it; a separate gear button would be a sixth bar button for a screen opened rarely. Settings in
+  the sheet stays a captioned `gearshape` chip, so once the sheet is open it is where it looks
+  like it is (Chrome's "…" menu keeps Settings the same way).
+- **Not `ellipsis.circle`:** the design audit asked for a non-ellipsis More because the vertical
+  bar's own overflow is an ellipsis. More overflows first (`visibilityPriority`), so when it does,
+  the system's "…" takes its place and holds it: there is still one ellipsis on screen. The
+  circled form is the pre-glass style; inside a glass capsule it is a ring in a ring.

@@ -268,6 +268,9 @@ Columns: interaction | haptic | exact moment | strength | where (file, function)
 | Copy Link with no address | keep `.nothingThere` | on the tap | soft | same | — |
 | Reload | none: progress shows, and Safari plays none | — | — | `BVC.swift` reload action → `BVC+Tab.swift` `reloadPage` | — |
 | Stop | none: the progress bar stops | — | — | `BVC.swift` stop action | K edits icon |
+| The pill's Reload and Stop (2026-11-28) | none, as the sheet's: the progress answers | — | — | `AddressPill.reloadTapped` → `BVC.swift` `pill.onReload` / `onStop` | — |
+| The pill Reload's long press (its menu opens) | the system's context-menu haptic; Plain adds none (rule 7) | — | system | `AddressPill` `reloadMenu` | — |
+| Reload Without Cache (chosen) | `.tap`: on screen it looks like any reload, so the stronger one is otherwise invisible | as the reload starts | light | `BVC+Tab.swift` `reloadPageFromOrigin` | — |
 | Back / Forward in the address row | as §4.1 | — | — | `pageSheet.back/forward` | — |
 | Find on Page | none: the find bar or side pane opens | — | — | `BVC+Tab.swift` `findOnPage` | — |
 | Show Reader | none: the reader slides in | — | — | `BVC+Tab.swift` `openReader` | — |

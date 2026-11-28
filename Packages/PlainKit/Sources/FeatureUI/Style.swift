@@ -299,7 +299,7 @@ struct PaperEmptyState: View {
 /// a first-time user knows the button by its picture, and nothing on screen is called "the page
 /// menu".
 extension Wording {
-    private static var more: Image { Image(systemName: "line.3.horizontal.circle") }
+    private static var more: Image { Image(systemName: "ellipsis") }
     static var favoritesEmptySymbol: Text { Text("Tap \(more) on a page, then Favorite.") }
     static var readingListEmptySymbol: Text { Text("Tap \(more) on a page, then Read Later.") }
 }

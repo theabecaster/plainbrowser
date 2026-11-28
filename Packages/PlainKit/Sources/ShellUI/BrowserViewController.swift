@@ -216,6 +216,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             guard let self else { return }
             self.showPageSheet(from: self.pill)
         }
+        // Reload in the pill (docs/decisions.md, "Reload in the pill").
+        pill.onReload = { [weak self] in
+            Signposts.signposter.emitEvent(Signposts.reload, "pill")
+            self?.reloadPage()
+        }
+        pill.onStop = { [weak self] in
+            Signposts.signposter.emitEvent(Signposts.reload, "pill stop")
+            self?.currentTab?.stopLoading()
+        }
+        pill.onReloadFromOrigin = { [weak self] in
+            Signposts.signposter.emitEvent(Signposts.reload, "pill from origin")
+            self?.reloadPageFromOrigin()
+        }
 
         sheet.onPick = { [weak self] pick in
             guard let self, !self.handleFocusPick(pick) else { return }
@@ -1162,6 +1175,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             .scaledBy(x: pillMove.scale, y: pillMove.scale)
         pill.alpha = ChromeGeometry.pillAlpha(progress: progress)
         pill.isCompact = progress > 0
+        pill.setCollapse(progress)
         let isGone = progress >= ChromeRest.hidden.progress
         if pill.accessibilityElementsHidden != isGone { pill.accessibilityElementsHidden = isGone }
         guard !usesVerticalBar else { return }

@@ -783,6 +783,19 @@ public final class WebViewPool {
         }
     }
 
+    /// `Tab.reloadFromOrigin`: after any restore, so the restored page is the one asked for again.
+    func reloadFromOrigin(_ tab: Tab) {
+        guard tab.pool === self else { return }
+        tab.set(\.isAwaitingResubmit, false)
+        perform(in: tab) { webView in
+            if webView.url == nil, let url = tab.url {
+                webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData))
+            } else {
+                webView.reloadFromOrigin()
+            }
+        }
+    }
+
     /// Runs `work` on the tab's web view, creating and restoring it if the tab was discarded, and
     /// after any pending restore, so a command lands on top of the restored history.
     func perform(in tab: Tab, _ work: @escaping (WKWebView) -> Void) {

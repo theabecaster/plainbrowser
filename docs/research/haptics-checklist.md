@@ -34,6 +34,7 @@ two-hit pattern. A *bump* is a faint soft impact, at most one a second.
 - [ ] `[run 1]` Copy Link: success. Favorite on and off: success each time. Read Later: success. (Unchanged, but now on the window's generator.)
 - [ ] `[later]` Desktop Site, Blocking, Cookie Banner Blocking, Dark Pages: a tick, then the reload.
 - [ ] `[run 1]` Reload, Stop, Find, Reader, Share: no haptic.
+- [ ] `[later]` The pill's Reload and Stop: no haptic. Its long press: the system menu's own, once. Reload Without Cache: one light tap as the page reloads.
 - [ ] `[run 1]` Save as PDF that fails: a warning with the "couldn't be saved" toast.
 - [ ] `[later]` Translation fails: a warning with its toast. Close Pane: a soft close.
 

@@ -164,6 +164,8 @@ extension BrowserViewController {
             }
         case .reload:
             reloadPage()
+        case .reloadFromOrigin:
+            reloadPageFromOrigin()
         case .stop:
             currentTab?.stopLoading()
         case .back:

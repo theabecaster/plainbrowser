@@ -232,7 +232,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | Print, Save as PDF (share sheet) | — | — | shown (http(s) or a PDF; Save as PDF not on a PDF, which has Save PDF to Files) | — | — | shown (prints the article) | In the share sheet as Plain's own actions, wherever Share opens it (page menu, the inner screen's Share button). Nothing finished to print while loading; an error page is Plain's message, not the site's. |
 | Share, Copy Link | — | shown | shown | shown (the address tried) | shown | shown (the page's address) | |
 | Zoom row (magnifier −, %, magnifier +) | — | shown | shown; − / + dim at the ends; the % always in ink, a tap resets it, no tap at 100 % | — | — | — | Zoom acts on the page, which is hidden under the reader. VoiceOver hears the row as "Zoom". |
-| Desktop Site (checked while on) | — | http(s) | http(s) | http(s) | — | — | A remembered Desktop Site choice can be why a page fails, so the switch back stays (it retries the load). Under the reader it would act out of sight. Site Settings' items are named for the thing they control and checked while it is on; a tap switches it (clarity audit 20). |
+| Desktop Site (checked while on) | — | http(s) | http(s) | http(s) | — | — | A remembered Desktop Site choice can be why a page fails, so the switch back stays (it retries the load). Under the reader it would act out of sight. Site Settings' items are named for the thing they control and checked while it is on; a tap switches it (clarity audit 20). Checked when the page that shows is the desktop site (set when a page commits, corrected for a page from the back-forward cache), so after a fold it reads what the page is, not what the next page will be. A choice is remembered for the site and wins over the fold (§7). |
 | Content Blocking (checked while on) | — | http(s), regular tabs | http(s), regular tabs | http(s), regular tabs (blocking can cause the failure) | — | — | Private tabs: hidden (the allow-list is saved to disk). |
 | Cookie Banner Blocking (checked while on) | — | http(s) | http(s) | — | — | — | In Site Settings. Applies by reloading. Private tabs: shown, kept for the private session only. Off for a site stops answering its banner; the cookie list's hiding follows the blocking switch. |
 | Page Appearance (Site Settings, a submenu) | — | as Loaded | On every web page, in any colors of Plain's: the control's menu (Dark, Light, Off; Use for All Sites) | — | — | — | The way in while the pill shows no control (the page as made). Hidden on error pages and under the reader. Private tabs: shown, kept for the private session only, never the default. |
@@ -436,7 +436,15 @@ apply only to what it leaves open.
    stays on the page it was showing, with that page's address and controls; a tab that had no
    page goes back to Start. Stopped after commit: the partly loaded page counts as loaded, with
    its own address.
-8. **Typing in a page's form** is not editing the address. The keyboard brings the whole bar
+8. **A fold, an unfold, a split or the side pane** changes a pane's size: each page on screen
+   then follows its pane (desktop when its shorter side is at least 600 pt, else mobile) once the
+   change has settled for 0.45 s, by a reload under its own picture that keeps the scroll place.
+   A page keeps its mode, without asking, while anything would be lost: typed text, a changed
+   choice or a focused field, a form result, media, picture in picture, fullscreen, camera or
+   microphone, a download, Find, a translation. Its next navigation gets the new mode. Hidden
+   tabs follow when they come back on screen. Desktop Site chosen for the site wins over all of it.
+   (docs/decisions.md, "Desktop or mobile across the fold".)
+9. **Typing in a page's form** is not editing the address. The keyboard brings the whole bar
    back (from the pill or hidden), then covers it; the bar
    comes back when the keyboard leaves. Bar gestures need the bar on screen, so they wait.
 

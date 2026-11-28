@@ -246,7 +246,8 @@ Each entry: what was chosen, and why. Newest last.
   errors come from navigation delegates. Progress is outside observation (`Tab.onProgress`).
 - **Desktop or mobile is decided at navigation start** from the pane (container bounds, else
   `defaultPaneSize`): shorter side ≥ 600 pt is desktop (Duo inner screen yes; outer screen, split
-  half, phone landscape no). Never switched on resize. Desktop mode also sets `customUserAgent`
+  half, phone landscape no). Never switched on resize (superseded 2026-11-27: the page on screen
+  follows the fold, see "Desktop or mobile across the fold"). Desktop mode also sets `customUserAgent`
   to Mac Safari's, because WebKit appends `applicationNameForUserAgent` (`Mobile/15E148`) even in
   desktop mode (measured).
 - **Navigation handlers split by concern**, after DuckDuckGo's `apple-browsers` navigation
@@ -632,8 +633,9 @@ Each entry: what was chosen, and why. Newest last.
   simulator: 951x669 to 466x678 and back). Inside its animation the layout is decided for the
   final bounds and laid out once (web views follow their pane by autoresizing, one frame each);
   page insets wait for the completion. Partly folding has no size change: it reaches the layout
-  through the reserved regions (`updateViewConstraints`). Desktop or mobile stays the choice made
-  at navigation start; a tab opened into a pane is attached before it loads, so the choice uses
+  through the reserved regions (`updateViewConstraints`). Desktop or mobile is chosen at
+  navigation start, then follows the pane once the fold settles (superseded 2026-11-27, see
+  "Desktop or mobile across the fold"); a tab opened into a pane is attached before it loads, so the choice uses
   that pane's width.
 - **Per-window state** (superseded 2026-11-27 by "Open in New Window: one tab store, a scene per
   window"). Each scene keeps its `TabStore` window id and its sidebar state in
@@ -3657,3 +3659,45 @@ a hamburger or a sliders-like settings glyph and says neither "more" nor "settin
   bar's own overflow is an ellipsis. More overflows first (`visibilityPriority`), so when it does,
   the system's "…" takes its place and holds it: there is still one ellipsis on screen. The
   circled form is the pre-glass style; inside a glass capsule it is a ring in a ring.
+## Desktop or mobile across the fold (2026-11-27)
+
+Supersedes "Never switched on resize" in "Desktop or mobile is decided at navigation start".
+Research and sources: `docs/research/content-mode.md`.
+
+- **The page on screen follows the fold.** Open, pages are the desktop site; closed, the mobile
+  site; a split half or a narrow side-pane page is mobile. A navigation still takes the mode for
+  its pane when it starts. When a pane's size changes afterwards (fold, unfold, a split or the
+  side pane), the shell tells the pool (`panesWillChange()` at the transition's start,
+  `panesDidChange()` at its completion or after a layout that changed a pane's size), and each
+  page on screen whose wanted mode differs switches `FixedChoices.contentModeSettleDelay`
+  (0.45 s) later. Another change in the meantime starts the wait again, so a fold then a quick
+  unfold does nothing. A per-site Desktop Site choice always wins, open or closed.
+- **Only when nothing is lost** (`ContentModeRules`): not on a form result, while media plays
+  (or picture in picture, fullscreen, camera or microphone), while a download from the tab runs,
+  with Find open or the page translated, and not when the page reports typed text, a changed
+  choice or checkbox, or focus in a field (one page script, `ContentModeScripts.probe`, run only
+  for a page that needs the other mode; a page that does not answer in 400 ms keeps its mode).
+  A loading page is checked again when its load ends. A kept page switches on its next
+  navigation. No prompt: the owner asked for no surprises, and a question at every fold is one.
+- **The switch is a reload in place under the page's picture.** The pool (which owns the web
+  view) puts `snapshotView(afterScreenUpdates: false)` over it in its container, reloads (the
+  navigation delegate gives the reload the new mode), and on `didFinish` resets the zoom WebKit
+  restored from the old layout, scrolls the element that was under the top edge back there (by
+  id, else child-index path with the same text, else the scroll fraction), waits two frames and
+  crossfades for `contentModeCrossfade` (0.2 s). `contentModeCoverLimit` (2.5 s) caps the
+  picture on a slow network; a failed reload just fades it. A reload adds no history entry.
+  Leaving the screen, moving to another pane or closing ends a switch at once.
+- **`Tab.contentMode` is the mode of the page that shows**, set when a navigation commits (it was
+  set when it started, so a failed or download navigation could flip Desktop Site's checkmark).
+  A page from the back-forward cache keeps the mode it was loaded in: after a back or forward,
+  and in every check, the page's `navigator.platform` (`MacIntel` only in desktop mode, per
+  document) corrects it, so Desktop Site's state and the next check match what is on screen.
+- **Hidden tabs switch lazily**, when they are attached again (`contentModeAttachDelay`, 0.15 s,
+  after the layout that sizes the pane), by the same rules. Nothing runs for tabs off screen.
+- **Responsive pages are not skipped** (`contentModeSkipsResponsivePages`): on an iPhone, WebKit
+  honors the meta viewport in both modes, so the switch matters only for sites that serve by user
+  agent, and that can't be told cheaply.
+- **Perf cost:** nothing at launch, on scroll or during the fold's animation. A settled pane
+  change compares two values per attached tab. Only a page in the wrong mode runs the probe (one
+  IPC) and the reload. Signposts: `contentMode.switch` (interval, reload to crossfade) and
+  `contentMode.kept` (event, with the reason).

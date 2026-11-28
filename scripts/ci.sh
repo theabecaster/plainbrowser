@@ -74,7 +74,17 @@ cleanup_remote() {
   (( keep )) && return
   # Only while the branch is still this run's commit: a newer scripts/ci.sh for the lane keeps its own.
   git push -q --force-with-lease="refs/heads/${branch}:${commit}" origin ":refs/heads/${branch}" 2>/dev/null || true
-  [[ -n ${run:-} ]] && gh run delete $run -R $repo >/dev/null 2>&1 || true
+  [[ -n ${run:-} ]] || return 0
+  # A run still going (ci.sh interrupted) can't be deleted: cancel it and wait for it to stop.
+  if [[ $(gh run view $run -R $repo --json status -q .status 2>/dev/null) != completed ]]; then
+    gh run cancel $run -R $repo >/dev/null 2>&1 || true
+    for i in {1..30}; do
+      [[ $(gh run view $run -R $repo --json status -q .status 2>/dev/null) == completed ]] && break
+      sleep 10
+    done
+  fi
+  gh run delete $run -R $repo >/dev/null 2>&1 \
+    || print -u2 "ci: could not delete run $run; delete it with: gh run delete $run -R $repo"
 }
 trap 'cleanup_remote; rm -rf $tmp' EXIT
 trap 'exit 130' INT TERM

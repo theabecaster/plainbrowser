@@ -394,3 +394,28 @@ had excluded a site (see Migration); profile-scoped site choices (kept shared, a
 - **Codex code review:** round 1, 9 blocking, all fixed; round 2, 4 blocking, all fixed (see
   above). Not changed: same-site stale reports (one process delivers in order; the commit resets
   the state before the new page's first report).
+- **Codex code review round 3:** 2 blocking (another window's Settings could write an old value
+  back; a failed settings read replaced the launch copy), both fixed: each change is applied over
+  what is stored in one write transaction (`AppDatabase.updateSettings`), and an unread settings
+  store leaves the shell's settings unread. Codex design review: round 1, 3 blocking (the card's
+  sentence too dim, the Appearance footer promising dark websites, the status bar during the
+  crossfade); the first two fixed, the third is iOS's own sampling of what is under the status bar
+  (Plain sets no style), which settles within the 0.25 s fade. Round 2: none.
+
+## 6. Verification (2026-11-28, simulators on the test Macs)
+
+- `swift test`: every suite passes, with `DarkPagesRulesTests` (choices, toggle, the suggestion's
+  states: never asked, ignored then another site next session, declined, accepted, light colors
+  and private never, the Settings switch) and the storage and Settings model tests.
+- `WebEngineTests/DarkPagesTests`: 26 of 26, with the off-by-default cases (only reported, the
+  switch on darkens without a reload, a site on and off by hand, own dark designs native, light
+  colors read nothing, a check lost to a light/dark switch comes back).
+- `PlainUITests/DarkPagesUITests`: 5 of 5 (Turn On darkens and the indicator toggles per site;
+  No Thanks is final; ignored comes back on another site next session; light colors show nothing;
+  an own dark design shows nothing), and `AppearanceTests` relaunch.
+- Script per page, `/big` (6,300 elements, 24,000 rules) and `/apple-big`, medians of 7 on a
+  loaded test Mac: dark pages off for the site (the light check) 4 ms and 1 ms; light colors
+  0 ms; darkened 53-74 ms and 44-59 ms (the engine as before). Nothing new at launch beyond one
+  defaults read.
+- Captures: iPhone 17, 13 mini, the Duo's outer screen (and its inner screen in the top bar):
+  the card, the indicator on and off, the crossfade frames, Site Settings, Settings.

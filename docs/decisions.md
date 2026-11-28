@@ -901,9 +901,9 @@ below; its engine, suggestion and per-site memory stay.
   broken site to be fixable without undoing that; the alternative (every pick sets the default)
   turns a one-site fix into a global change, and the opposite (every pick per site) never learns.
   The first pick is the only one that carries, it says so, and it can be undone in one tap.
-- **The control shows whose choice it is.** The menu's subtitle reads "This site only", "Default
-  for all sites" or "As each site was made"; VoiceOver reads "Dark, this site" / "Dark, all
-  sites". The checked item is what the page shows.
+- **The control shows whose choice it is.** The menu's title reads "Page Appearance · This
+  Site" or "Page Appearance · All Sites" (plain "Page Appearance" while nothing is chosen);
+  VoiceOver reads "Dark, this site" / "Dark, all sites". The checked item is what the page shows.
 - **Where it lives.** A glyph at the pill's leading edge while Plain changes the page (Dark or
   Light), or while this site is Off against a default (the way back). Its tap opens a menu, not a
   cycle: with three states a cycle makes the user tap through a state they don't want (Light

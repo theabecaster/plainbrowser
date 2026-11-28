@@ -63,10 +63,14 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
     /// A finger has the divider, or it is settling.
     var isActive: Bool { drag != nil || driver.isRunning }
 
-    /// Unused while the pane is slid as a card; kept so the root's layout hooks read one flag.
-    private(set) var isTracking = false
     /// The pane has been laid out as the card the move slides (once per move).
     private var isLaidOutAsCard = false
+    /// Clips the sliding card to the pages' span.
+    private let cardMask: CALayer = {
+        let layer = CALayer()
+        layer.backgroundColor = UIColor.black.cgColor
+        return layer
+    }()
 
     init(browser: BrowserViewController, pane: SidePaneController) {
         self.browser = browser
@@ -264,6 +268,12 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
             browser.view.layoutIfNeeded()
         }
         pane?.view.transform = CGAffineTransform(translationX: x - span.lowerBound, y: 0)
+        // The card ends at the pages' span (a Right sidebar lies past it): a mask, no layout.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        cardMask.frame = CGRect(x: 0, y: -1000, width: max(0, span.upperBound - x), height: 100_000)
+        CATransaction.commit()
+        if pane?.view.layer.mask !== cardMask { pane?.view.layer.mask = cardMask }
         if let column = browser.sidePaneUI.dragColumn, let layout = browser.duo.layout { place(column: column, layout: layout) }
         setArmed(close: closeArmed, takeOver: takeOverArmed)
         #if DEBUG
@@ -360,15 +370,18 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
     /// The settle reached its rest: what it still owes is committed and the moving parts go.
     private func finish() {
         guard let browser, let pending else { return }
-        // What is still owed (the commits clear their flags in `self.pending`).
-        commitPage(pending.outcome)
-        if pending.outcome == .close {
-            browser.sidePaneDidCloseFromDivider()
-        } else {
-            commitPane()
-        }
+        // What is still owed goes into the one layout of the rest (`endMove`): the window's width
+        // for the page, the column for the pane, together, so nothing lays out twice.
+        let owesPage = self.pending?.commitsPage == true
+        if owesPage { applyToWindow(pending.outcome) }
+        if pending.outcome == .close { browser.sidePaneDidCloseFromDivider() }
         self.pending = nil
+        let signposter = Signposts.signposter
+        let interval = signposter.beginInterval(
+            Signposts.sidePaneCommit, id: signposter.makeSignpostID(), "\(owesPage ? "page+pane" : "pane")"
+        )
         endMove()
+        signposter.endInterval(Signposts.sidePaneCommit, interval)
         if let settleInterval {
             Signposts.signposter.endInterval(Signposts.sidePaneSettle, settleInterval)
             self.settleInterval = nil
@@ -389,6 +402,17 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         pending?.commitsPage = false
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.sidePaneCommit, id: signposter.makeSignpostID(), "page")
+        applyToWindow(outcome)
+        browser.updateDuoLayout()
+        // One real layout: the bar takes its new lane (gliding), the page its new frame.
+        browser.view.setNeedsLayout()
+        Motion.animate(Motion.sidePaneArm, changes: { browser.view.layoutIfNeeded() })
+        signposter.endInterval(Signposts.sidePaneCommit, interval)
+    }
+
+    /// The window's state takes `outcome` (no layout): its width, or the pane over the whole width.
+    private func applyToWindow(_ outcome: SidePaneDividerOutcome) {
+        guard let browser else { return }
         switch outcome {
         case .rest(let width):
             // A split's one rest is the split line: the window's own width stays as it was.
@@ -396,15 +420,10 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
             browser.sidePaneUI.takesOver = false
         case .takeOver:
             browser.sidePaneUI.takesOver = true
+            browser.expandChrome(animated: true)
         case .close:
             break
         }
-        browser.updateDuoLayout()
-        if outcome == .takeOver { browser.expandChrome(animated: true) }
-        // One real layout: the bar takes its new lane (gliding), the page its new frame.
-        browser.view.setNeedsLayout()
-        Motion.animate(Motion.sidePaneArm, changes: { browser.view.layoutIfNeeded() })
-        signposter.endInterval(Signposts.sidePaneCommit, interval)
     }
 
     /// The pane's content takes the column's width (one layout pass for the section).
@@ -431,6 +450,7 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         guard let browser else { return }
         browser.sidePaneUI.dragColumn = nil
         isLaidOutAsCard = false
+        pane?.view.layer.mask = nil
         browser.sidePaneUI.revealsPage = false
         pane?.unfreezeContent()
         pane?.view.alpha = 1
@@ -666,6 +686,13 @@ extension BrowserViewController {
     func sidePaneDidCloseFromDivider() {
         sidePaneUI.controller?.view.isHidden = true
         sidePaneUI.controller?.view.alpha = 1
+        // Hidden at the column it would open into, so the next open slides in from the edge as
+        // it does after any close (the move left it laid out as a card).
+        if let column = sidePaneColumnIfOpened() {
+            sidePaneUI.leading?.constant = column.minX
+            sidePaneUI.width?.constant = column.width
+        }
+        sidePaneUI.controller?.view.transform = .identity
         if let interval = sidePaneUI.closeInterval {
             Signposts.signposter.endInterval(Signposts.sidePaneClose, interval)
             sidePaneUI.closeInterval = nil

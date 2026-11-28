@@ -1795,11 +1795,13 @@ windows. Research, the full behavior and the measurements: `docs/research/resiza
   header follows; its content is frozen at its width, `freezeContent`), the page keeps its frame
   under the pane or shows its own `underPageBackgroundColor` past its edge, and each side commits
   once per settle: the growing side as the settle starts (its new part is under the other side),
-  the shrinking one as it ends. A frame of the drag or the settle sets only the pane's two
-  constants, the strip and the handle: the root's Duo pass is skipped while the divider tracks
-  (`isTracking`), so the bar, the header's place and the page wait for the rest, where one real
-  layout glides them there (first measurement, with the bar following: 3.3 to 4.4 ms p95 of main
-  thread work per frame, which this removes). Signposts `sidePane.drag`, `sidePane.settle`,
+  the shrinking one at the rest, in the one layout that also gives the pane its column. While
+  it moves the pane is a card as wide as the pages, laid out once per move (header and content
+  frozen) and slid by a transform, clipped to the pages by a mask: a frame changes no constraint
+  and runs no layout. The bar, the header's place and the page wait for the rest and glide there.
+  (Main thread work per frame on the simulator, `-PlainMeasureDivider`: 3.3 to 4.4 ms p95 with the
+  bar's lane following and a root layout per frame, 1.5 to 2.2 ms with the root's Duo pass
+  skipped, then the card: see docs/research/resizable-pane.md, "Results".) Signposts `sidePane.drag`, `sidePane.settle`,
   `sidePane.commit`, `sidePane.width`; Debug `-PlainMeasureDivider` logs frame times and the main
   thread's work per frame, `-PlainDividerLive` resizes the page every frame for comparison.
 - **Haptics and motion:** a tick at each rest passed (not when leaving the rest it started on), the

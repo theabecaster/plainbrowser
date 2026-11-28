@@ -42,6 +42,9 @@ Each entry: what was chosen, and why. Newest last.
 - **Why:** launch is search-first and budgeted at 300 ms. A gradient-and-mark launch screen
   (Brand/identity.md) would flash into a different-looking first frame. Revisit in polish, with the
   first frame designed to match.
+- **Still so with the launch splash** (2026-11-27, "Launch splash: through the P"): the launch
+  screen cannot follow the chosen icon, so it stays this plain color and iOS's own crossfade
+  brings the icon's world in.
 
 ## Signpost names in their own module (2026-11-26)
 
@@ -2226,3 +2229,124 @@ users have things turned off", "don't be too annoying", following credible sourc
 - **`decide` refuses a switched-off feature too.** On a simulator WebKit's stand-in cameras skip
   its authorization check and reach Plain's delegate; should WebKit ever ask first on a device,
   the same holds: no question of Plain's for a feature that is off, nothing remembered, one line.
+## Launch splash: through the P (2026-11-27)
+
+Owner: "Look at the intro animation Pteron has. I want something unique for our app that's
+similar, for the startup. Keep it fast of course. Maybe we go into the hole of the P of our logo.
+The splash screen is our logo in the middle, on a background with the user's chosen app icon's
+background gradient, and the logo's theme matches the chosen icon. Then going into the app,
+follow the same performant Looney-Tunes-like animation (iris-out), and follow patterns like the
+GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs/state-rules.md,
+"Launch splash"; code in `FeatureUI/Splash`; numbers in `FixedChoices` ("Launch splash").
+
+- **The splash is the icon the user tapped.** The icon's field (its two-color fill from (0.2, 0)
+  to (0.8, 1) and its two blooms, stretched over the screen as the icon's square is), with the
+  Stem mark centred on it at 152 pt, in that icon's colors: cream paper, the coral fold and the
+  dawn for Dawn (and Dawn's dark art when iOS is dark); the night sky and moon for Night; the
+  Lagoon fold on coral for Coral; the ink ring on cream for Paper. `SplashTheme` holds the
+  generator's values (Brand/tools/gen_icon.py) and a test reads the generator's file to hold
+  them to it; the shapes are `StemGeometry`, the generator's port the intro already used. It
+  follows `AppIcons.current` and the system's light or dark (as the icon and the launch screen
+  do), not the app's Appearance setting.
+- **No flash from the launch screen: it stays plain paper, and iOS's own fade carries the
+  splash in.** iOS cannot vary the launch screen by alternate icon: `UILaunchScreen` and launch
+  storyboards are static (colors and images may follow light and dark, nothing the app chose);
+  `UILaunchScreens` picks a screen by the URL scheme that launched the app, not by icon; and
+  writing into the system's launch-snapshot cache is undocumented and breaks. So one launch
+  screen has to serve four worlds. Showing the default icon's world there would be right for
+  Dawn and a flash of the wrong world for Night, Coral and Paper. A neutral base is right for
+  all four: the launch screen stays `LaunchBackground` (paper; Deep Lagoon when iOS is dark,
+  which is Dawn's dark field's own first color), and the app's first frame is the whole splash.
+  iOS does not cut from the launch screen to that frame, it crossfades. Measured on the
+  iPhone 17 simulator (iOS 27.2) frame by frame at 60 fps: 14 to 15 frames, about 0.24 s, from
+  paper to the full splash, with no frame of anything else (the strip is in the lane's
+  captures, `dawn-light-handoff.png`). The splash reads as developing on the paper. The dive
+  never starts inside that fade (`splashHandoff`, 0.3 s after the first frame).
+  Rejected: our own reveal animation on top (a second fade after the system's, more time for
+  nothing), and a per-icon launch screen (not possible).
+- **The dive (0.66 s): into the P's counter.** The counter is the ring's window less the part
+  the icon's coral fold lies over, a circle with a bite out of its top right. Three things
+  happen, each with a reason:
+  1. *The dawn clears* (0–0.12 s): the dawn in the window comes a little nearer and fades. The
+     mark's window is "a window onto the web"; now it is one, and the app is behind it.
+  2. *The window's cut edge turns back* (0.02–0.26 s), underside up: the icon's fold, all the
+     way round. The fold line moves 8 pt out from the edge and the paper inside it wraps round
+     a small roll (1.8 pt, flattening as the camera closes in) and lies back over the ring,
+     showing the paper's underside in the fold's own color (coral; Lagoon blue for Coral). It
+     is kept narrow, a third of the ring's band, so the icon's own fold stays the one strong
+     accent (design review: a thicker roll read as an inflated tube). Under the fold that is
+     already there the edge stays down, and the roll tapers to nothing over thirty-four degrees
+     on either side. This is Plain's
+     own touch: the brand's one gesture (Brand/identity.md: "its edge folds once as the first
+     page loads"), it says the sheet is paper with a back, and the rolled rim is a real lit edge
+     that marks the opening against any page, a cream page under the Paper icon included.
+  3. *The camera goes through* (0.10–0.66 s): everything scales about the centre of the largest
+     circle in the opening until the opening has cleared the screen in every direction
+     (`SplashGeometry.clearingScale`, from the opening's reach in 180 directions; about 9x on a
+     phone, 11x on the Duo's inner screen), evenly in log scale with an eased exponent, so it
+     opens gently, rushes through the edges and lands. The rim, nearer the eye, grows a little
+     faster (perspective, eye at 500 pt). The app settles from 1.08x to its size as it is
+     uncovered. The sheet's shadow lies in the opening, under its top-left edge only, until
+     the hole is half open (no dimming over the whole opening: it read as dirty glass).
+  Total from first movement to the app filling the screen: 0.66 s. It starts 0.55 s after the
+  process started (`splashMinimumTime`), or 0.3 s after the first frame if that is later.
+- **Pteron's techniques, not its effect.** From Pteron's sticker peel
+  (`StickerPeelRenderer`): the kit (device, shaders compiled from source, pipelines, textures,
+  index buffer) is built once off the main thread from the moment the scene connects; the
+  renderer draws its still first frame off the main thread and the main thread presents it in
+  the same transaction that hides the Core Animation layers, so the swap is atomic and the
+  first GPU frame is the same pixels; a render thread clocked by a `CAMetalDisplayLink`
+  (80–120 Hz) draws the rest, so main-thread work while the browser starts cannot stall it;
+  4x MSAA and depth in memoryless targets; the mesh is bent in the vertex shader from one
+  `vertex_id`-indexed buffer; every frame's target time, lead, CPU encode and GPU time are
+  kept and logged at the end (`launch.splashFrames`). From `LaunchHoleDepth`: the hole reads as
+  a hole (a shadow inside, lit from the top left). From `LaunchClearing`: the hole's last scale
+  comes from its reach in each direction. What is Plain's own: the whole sheet is one mesh (a
+  ring of 52 x 161 vertices around the counter, dense where the rim rolls), not a sticker on a
+  background; the opening's edge is worked out per pixel from the shapes themselves (the
+  window's circle and the fold's two edges), so it is sharp at 11x where a scaled bitmap is
+  soft; and the rim is real geometry with a lit front and a colored back.
+- **One-time pictures.** The field (256 x 256, stretched; it has no detail), the mark (its box
+  and 32 pt of shadow room, at the screen's scale) and the dawn are drawn once with Core
+  Graphics off the main thread (`SplashArt`). They depend only on the icon and the screen's
+  scale, so they are drawn before any window has a size. The same bitmaps are the layers'
+  contents and the GPU's textures. No image file is decoded at launch.
+- **The fallback is Core Animation.** If the renderer is not ready 80 ms before the dive
+  (`splashRendererLead`), or Metal fails, the dive is a plain iris scheduled whole on the
+  render server: the dawn fades, the three layers scale about the pivot with the same zoom
+  curve, and a depth bitmap in the opening (shadow and a lit rim, `SplashIrisArt`) stands in
+  for the rolled rim. No roll, same timing. The dive never waits for a shader. (Should even the
+  iris's own pictures be missing, the splash fades.)
+- **The app never waits for the splash.** The browser is built exactly as before, in the same
+  turn, and is in the same first frame under the splash; the search field takes focus before
+  that frame as it always did. The splash is a second window above it. The first touch ends the splash
+  (a 0.12 s fade) and does nothing else: a tap on something that cannot be seen must not act
+  on it (it closed the search when it fell on the search sheet's empty space). Later touches
+  go through to the app while the splash fades.
+  Typing, a link from another app, a rotation or a fold end it too; leaving the foreground
+  removes it at once with nothing drawn in the background.
+- **The keyboard waits for the dive.** On a search-first launch the field is first responder
+  under the splash, but iOS draws the keyboard above every window an app has (checked on the
+  simulator: a window at alert level sits under it), so it would lie over the icon's world.
+  The field gets an empty input view until 0.6 s into the dive (`splashKeyboardAt`), then the
+  keyboard rises as the dive lands; a touch brings it at once
+  (`holdLaunchKeyboard`, `releaseLaunchKeyboard`). Focus itself, and so the `launch`
+  interval, is unchanged.
+- **What the launch numbers mean with a splash.** `launch.firstFrame` is still `main` to the
+  first display-link callback after the first window showed, and that frame now has the browser
+  and the splash in it: the splash's main-thread work (its window, five layers, the icon read:
+  `launch.splashBuild`) is inside the interval and inside the 150/300 ms budget. The first frame
+  never waits for the splash's pictures: if they are not drawn when the window is made, that
+  launch has no splash (`launch.splash` event "missed"). `launch` still
+  ends when the field is first responder. The perf launch tests pass `-PlainSplash`, so the gate
+  measures the launch people get. Not in either: the splash's time on screen, which is by
+  design and has its own intervals (`launch.splash`, `launch.splashDive`).
+- **When it plays:** cold launches from the Home Screen or the switcher, the first run
+  included (the dive opens onto the intro). Not on a return from the background, not for a
+  second window, and not when a link, a widget, a shortcut, Spotlight or Handoff started the
+  app: the page comes first. Reduce Motion: the splash, then a 0.2 s crossfade.
+- **No haptic, no sound:** it plays on every cold launch; a tick each time would wear.
+- **Not done:** the icon's Liquid Glass lighting (the system adds it to the Home Screen icon;
+  the splash is the flat art with its own soft shadows) and the tinted and clear icon
+  appearances (the app cannot read which one the Home Screen uses; the splash shows the
+  colorway's own art).

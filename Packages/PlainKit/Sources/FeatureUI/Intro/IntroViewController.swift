@@ -139,7 +139,20 @@ public final class IntroViewController: UIViewController {
 
     @objc private func firstFrameDidCommit(_ link: CADisplayLink) {
         link.invalidate()
-        playSplash()
+        firstFrameCommitted = true
+        if !waitsForLaunchSplash { playSplash() }
+    }
+
+    /// The launch splash covers the intro's first frame (docs/state-rules.md, "Launch splash"):
+    /// the mark waits to assemble until the dive opens onto it. Set before the view appears.
+    public var waitsForLaunchSplash = false
+    private var firstFrameCommitted = false
+
+    /// The launch splash is opening (or gone): the mark assembles now.
+    public func launchSplashIsOpening() {
+        guard waitsForLaunchSplash else { return }
+        waitsForLaunchSplash = false
+        if firstFrameCommitted, !isSplashing, mark.isHidden { playSplash() }
     }
 
     override public var preferredStatusBarStyle: UIStatusBarStyle { .default }

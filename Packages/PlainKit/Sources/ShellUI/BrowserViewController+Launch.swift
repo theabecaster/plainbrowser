@@ -40,6 +40,8 @@ final class LaunchUIState {
     var isFreshSearch = false
     /// Between the page and the search sheet: the page shows through, dimmed and blurred.
     let frost = FrostView()
+    /// The launch splash covers the first screen: the field's keyboard waits for it to open.
+    var keyboardHeld = false
 }
 
 // MARK: - Launch and return (docs/state-rules.md, "Launch and return")
@@ -47,6 +49,24 @@ final class LaunchUIState {
 extension BrowserViewController {
     /// Whether this launch opens with the search field focused.
     var launchOpensSearch: Bool { launchUI.plan.opening != .lastTab }
+
+    /// The launch splash is over the first screen (docs/state-rules.md, "Launch splash"). The
+    /// search field still takes focus before the first frame, so typing reaches it and the
+    /// `launch` interval means what it always did, but its keyboard stays down: iOS draws the
+    /// keyboard above every window of the app, and it would lie over the splash. An empty input
+    /// view stands in until `releaseLaunchKeyboard`. Call before the view appears.
+    public func holdLaunchKeyboard() {
+        launchUI.keyboardHeld = true
+        pill.textField.inputView = UIView()
+    }
+
+    /// The splash is opening (or gone): the keyboard rises, if the field still has focus.
+    public func releaseLaunchKeyboard() {
+        guard launchUI.keyboardHeld else { return }
+        launchUI.keyboardHeld = false
+        pill.textField.inputView = nil
+        pill.textField.reloadInputViews()
+    }
 
     /// Before the first layout: the last tab's picture and bar, or the fresh search's frost.
     func prepareLaunch() {

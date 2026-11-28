@@ -65,12 +65,19 @@ final class CornerTests: XCTestCase {
 
     /// Concentric against a container with known corners, as the split panes and the panel use
     /// it: each corner is the container's less the distance, with the minimum away from it.
-    func testConcentricInsideAConfiguredContainer() {
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+    /// UIKit resolves it only in a window (a detached view reads the minimum everywhere).
+    func testConcentricInsideAConfiguredContainer() async throws {
+        let window = try XCTUnwrap(UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }.first)
+        let root = try XCTUnwrap(window.rootViewController?.view)
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 300, height: 400))
         container.cornerConfiguration = .corners(radius: .fixed(40))
-        let child = UIView(frame: CGRect(x: 0, y: 100, width: 200, height: 500))
+        let child = UIView(frame: CGRect(x: 0, y: 100, width: 150, height: 300))
         child.cornerConfiguration = .corners(radius: .containerConcentric(minimum: 10))
         container.addSubview(child)
+        root.addSubview(container)
+        defer { container.removeFromSuperview() }
+        try await Task.sleep(for: .milliseconds(300))
         container.layoutIfNeeded()
         XCTAssertEqual(child.effectiveRadius(corner: .bottomLeft), 40, accuracy: 0.5, "flush with the container's corner")
         XCTAssertEqual(child.effectiveRadius(corner: .topLeft), 10, accuracy: 0.5, "away from it: the minimum")

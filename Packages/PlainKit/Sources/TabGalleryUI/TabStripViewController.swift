@@ -160,6 +160,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
                       let section = transaction.finalSnapshot.sectionIdentifier(containingItem: id),
                       let index = transaction.finalSnapshot.itemIdentifiers(inSection: section).firstIndex(of: id) else { continue }
                 Signposts.signposter.emitEvent(Signposts.galleryReorder, "strip")
+                // The drop (`.threshold` until the haptics lane adds a drop of its own).
+                Haptic.threshold.play()
                 dataSource.moveTab(id, to: index)
             }
             reloadTabs()
@@ -322,6 +324,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         guard let id = diffable.itemIdentifier(for: indexPath) else { return [] }
         let item = UIDragItem(itemProvider: NSItemProvider())
         item.localObject = id
+        dragDestination = nil
+        Haptic.selection.prepare()
         return [item]
     }
 
@@ -333,8 +337,16 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
               let source = diffable.snapshot().sectionIdentifier(containingItem: id),
               let destination = destinationIndexPath, destination.section == source
         else { return UICollectionViewDropProposal(operation: .forbidden) }
+        // A tick as the dragged tab reaches each new place (not the one it started from).
+        if destination != dragDestination {
+            if dragDestination != nil { Haptic.selection.play() }
+            dragDestination = destination
+        }
         return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
     }
+
+    /// Where the tab being dragged would land now, to tick once per new place.
+    private var dragDestination: IndexPath?
 
     /// The diffable data source performs local moves itself (`reorderingHandlers`).
     public func collectionView(_ collectionView: UICollectionView, performDropWith coordinator: any UICollectionViewDropCoordinator) {}

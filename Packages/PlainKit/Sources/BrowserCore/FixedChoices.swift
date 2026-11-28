@@ -538,6 +538,11 @@ public enum FixedChoices {
     /// desktop-width page) and Left or Right means the same thing in both orientations. Only the
     /// rail docks there; Expanded floats.
     public static let sidebarRailMinimumPageWidth: Double = 600
+    /// A drag on the sidebar ticks once when the titles come in and once when they go: in past
+    /// 0.6 of the way from the rail to the titled width (the titles are readable from about
+    /// there, `SideTabMetrics.titleAlpha`), out under 0.4. The band between keeps a finger
+    /// resting at the edge from ticking again and again.
+    public static let sidebarTitlesTick: (on: Double, off: Double) = (0.6, 0.4)
     /// The narrowest lane the top bar keeps beside a floating expanded sidebar. With less (the
     /// inner screen's portrait would leave 409 pt, and the status corner takes more) the sidebar
     /// opens over the bar's leading end instead, as a drawer does, until a tab is picked.

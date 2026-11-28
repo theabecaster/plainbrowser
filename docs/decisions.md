@@ -2517,3 +2517,8 @@ like separate things; they're just part of the whole bar."
   the list is there or gone inside one crossfade; the strip's width follows its tabs off screen
   too; only the top bar packs its trailing capsule (a phone's one bottom row keeps its slots),
   and only the top bar's pill shortens "Not Secure".
+- **Haptics for the tab lists** (app-wide plan): Show Titles keeps its tick; a drag on the sidebar
+  ticks once as the titles come in and once as they go, with a band between
+  (`FixedChoices.sidebarTitlesTick`: in past 0.6 of the way, out under 0.4) so the edge never
+  chatters; a tab dragged to reorder in the strip or the sidebar ticks at each new place and
+  lands with `.threshold` (a drop of its own comes with the haptics lane).

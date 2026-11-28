@@ -282,6 +282,8 @@ extension BrowserViewController {
         case .began:
             duo.isDraggingSidebar = true
             duo.sidebarDragStart = widthConstraint.constant
+            duo.dragShowsTitles = layout.sidebar == .expanded
+            Haptic.selection.prepare()
             // Where it will open over the bar, it is over it from the first point of the drag.
             if layout.expandedSidebarCoversChrome, layout.widestSidebar == .expanded { raiseSidebarOverChrome(true) }
         case .changed:
@@ -290,6 +292,14 @@ extension BrowserViewController {
             widthConstraint.constant = width
             let rail = SidebarState.rail.width
             let open = min(max((width - rail) / (SidebarState.expanded.width - rail), 0), 1)
+            // One tick as the titles come in or go, not a chatter at the edge: they count as
+            // showing past `sidebarTitlesTickOn` of the way and as gone under `...TickOff`.
+            let flips = duo.dragShowsTitles
+                ? open < CGFloat(FixedChoices.sidebarTitlesTick.off) : open > CGFloat(FixedChoices.sidebarTitlesTick.on)
+            if flips {
+                duo.dragShowsTitles.toggle()
+                Haptic.selection.play()
+            }
             UIView.animate(Motion.sidebarTrack) {
                 self.duo.sidebarScrim?.alpha = open
                 self.duo.sidebar?.visibleWidth = width
@@ -300,6 +310,11 @@ extension BrowserViewController {
             let width = widthConstraint.constant
             let target = drag.restingState(width: width, velocity: layout.sidebarOnRight ? -velocity : velocity)
             let flicked = abs(velocity) > 600
+            // A flick that carries the titles in or out past where the finger left them.
+            if (target == .expanded) != duo.dragShowsTitles, target != .hidden || duo.dragShowsTitles {
+                duo.dragShowsTitles = target == .expanded
+                Haptic.selection.play()
+            }
             setSidebar(target, flicked: flicked)
         }
     }

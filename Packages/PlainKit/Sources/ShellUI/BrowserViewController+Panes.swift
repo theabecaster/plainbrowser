@@ -49,6 +49,8 @@ final class DuoUIState {
     /// What dims the page and the bar under the drawer while the sidebar is over the chrome.
     var sidebarScrim: UIView?
     var sidebarDragStart: CGFloat = 0
+    /// Whether the titles count as showing during a drag on the sidebar, for its one tick.
+    var dragShowsTitles = false
     var sidebarInterval: OSSignpostIntervalState?
     /// Settings > Tab Layout, once the saved settings are read.
     var tabLayout: TabLayout = FixedChoices.defaultTabLayout

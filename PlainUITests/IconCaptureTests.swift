@@ -1,14 +1,16 @@
 import XCTest
 
 /// What iOS really draws for each App Icon choice, beside what Plain shows of it: for every
-/// choice, in the simulator's light and dark appearance, the Home Screen icon after Settings >
+/// choice, in the simulator's current appearance, the Home Screen icon after Settings >
 /// App Icon changed it, the launch splash on the next cold launch, Settings > App Icon after that
 /// relaunch, and the intro's mark and icon step. For design review of the icons
 /// (docs/decisions.md, "App icons: the Home Screen shows the picker's art").
 ///
 /// Screenshots only, on request (`PLAIN_CAPTURE=1`, like CaptureTests) and on a simulator only:
 /// it changes the real Home Screen icon (`-PlainRealAppIcon`, a Debug simulator hook in
-/// `AppIcons`). Export the attachments with `xcrun xcresulttool export attachments`.
+/// `AppIcons`). Set the appearance first with `xcrun simctl ui <udid> appearance dark|light` and
+/// name the shots with `TEST_RUNNER_PLAIN_CAPTURE_TAG` (`XCUIDevice.appearance` did not reach
+/// SpringBoard on iOS 27.2). Export the attachments with `xcrun xcresulttool export attachments`.
 @MainActor
 final class IconCaptureTests: XCTestCase {
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -21,20 +23,14 @@ final class IconCaptureTests: XCTestCase {
         #elseif !DEBUG
         throw XCTSkip("the real-icon hook is Debug only")
         #else
-        // A new simulator's Home Screen icons are on Automatic, so they follow the appearance set
-        // here; a simulator set to Tinted or Clear would not show the dark rendition.
+        // A new simulator's Home Screen icons are on Automatic, so they follow the system's
+        // appearance; a simulator set to Tinted or Clear would not show the dark rendition.
         continueAfterFailure = true
         #endif
     }
 
-    func testCaptureIconsLight() { capture(.light, tag: "light") }
-
-    func testCaptureIconsDark() { capture(.dark, tag: "dark") }
-
-    private func capture(_ appearance: XCUIDevice.Appearance, tag: String) {
-        XCUIDevice.shared.appearance = appearance
-        defer { XCUIDevice.shared.appearance = .light }
-        pause(1)
+    func testCaptureIcons() {
+        let tag = ProcessInfo.processInfo.environment["PLAIN_CAPTURE_TAG"] ?? "current"
         for choice in choices {
             // 1. Settings > App Icon picks it, as a person would.
             let app = launch([])

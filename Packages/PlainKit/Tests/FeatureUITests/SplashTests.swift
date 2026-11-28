@@ -71,6 +71,8 @@ import Testing
         #expect(Set(themes.map { "\($0.field)" }).count == themes.count)
         #expect(SplashTheme.theme(for: .coral).curl != SplashTheme.dawn.curl)
         #expect(SplashTheme.paper.paper != SplashTheme.dawn.paper)
+        // Only Paper's ring is ink: the intro's mark gives it a halo of its cream field.
+        #expect(AppIconChoice.allCases.filter { SplashTheme.theme(for: $0).hasInkRing } == [.paper])
     }
 
     @Test func statusBarTextSuitsTheField() {

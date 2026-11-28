@@ -2720,7 +2720,9 @@ the selected icon properly."
   (`StemMarkView`), the default-browser step's mark and the empty-tab card's mark wore Dawn's
   colors whatever the icon was; they now wear the current icon's (`SplashTheme`, the generator's
   values, the same the splash uses), and the intro's marks follow a pick on the icon step. With
-  Dawn picked every mark is exactly what it was. The intro's own backdrop (the dawn that grows
+  Dawn picked every mark is exactly what it was. Paper's ink ring lost its edge on the intro's
+  dark paper (design review), so an ink ring gets a soft glow of its own cream field around it
+  (`SplashTheme.hasInkRing`); paper rings get none. The intro's own backdrop (the dawn that grows
   behind the mark, the paper) is the intro's design, not the icon's, and stays.
 - **Guarded against drift.** `AppIconDocumentTests` reads the repository: every choice is a
   document project.yml compiles under the name the picker sets, with a preview; every

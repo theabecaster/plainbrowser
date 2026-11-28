@@ -64,6 +64,9 @@ nonisolated struct SplashTheme: Equatable, Sendable {
 
     static let curlStops: [CGFloat] = [0, 0.18, 0.6, 1]
 
+    /// A dark (ink) ring, as Paper's, rather than cream paper: it needs a light edge on dark ground.
+    var hasInkRing: Bool { paper[1].luminance < 0.2 }
+
     /// The status bar's text over the field's top edge: light on a dark field.
     var statusBarIsLight: Bool { field[0].luminance < 0.35 }
 

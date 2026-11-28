@@ -174,8 +174,8 @@ Simulator builds sign without a team, and the group works there too. Tests:
   Spotlight, screenshots only, with `TEST_RUNNER_PLAIN_CAPTURE=1` (like `CaptureTests`). Simulators
   only. The app runs isolated, so the Home Screen widget shows its empty face; the faces with
   favorites come from `SystemIntegrationTests`.
-- `PlainUITests/IconCaptureTests`: for each App Icon choice, light and dark, the real Home Screen
-  icon after Settings > App Icon changed it, the splash on the next cold launch, Settings > App
+- `PlainUITests/IconCaptureTests`: for each App Icon choice, in the appearance `simctl ui` set,
+  the real Home Screen icon after Settings > App Icon changed it, the splash on the next cold launch, Settings > App
   Icon after that relaunch and the intro. With `TEST_RUNNER_PLAIN_CAPTURE=1`, simulators only. It
   changes the real icon through `-PlainRealAppIcon`, a Debug, simulator-only hook in `AppIcons`;
   without it an isolated run never changes the Home Screen icon. Put the Home Screen shots beside

@@ -36,6 +36,9 @@ final class StemMarkView: UIView {
     private let bowlStroke = CAShapeLayer()
     /// The ring's soft shadow on the paper under it, so cream paper holds its edge on cream paper.
     private let shade = CALayer()
+    /// A soft glow of the icon's own field color around an ink ring (Paper), so the dark ring holds
+    /// its edge on dark paper as it does on the icon's cream. Off for paper rings.
+    private let halo = CALayer()
     private let shadowed: Bool
     /// The icon whose colors the mark wears.
     private(set) var theme: SplashTheme
@@ -86,11 +89,16 @@ final class StemMarkView: UIView {
         let c = StemGeometry.center
         let r = StemGeometry.inner + 10
 
+        // A shadow path, not the layers' alpha: no offscreen pass.
+        let outline = CGMutablePath()
+        outline.addPath(g.paper)
+        outline.addPath(g.flap)
+        halo.frame = full
+        halo.shadowPath = outline
+        halo.shadowRadius = 22
+        halo.shadowOffset = .zero
+        canvas.addSublayer(halo)
         if shadowed {
-            // A shadow path, not the layers' alpha: no offscreen pass.
-            let outline = CGMutablePath()
-            outline.addPath(g.paper)
-            outline.addPath(g.flap)
             shade.frame = full
             shade.shadowPath = outline
             shade.shadowColor = BrandArt.ink.cgColor
@@ -249,6 +257,8 @@ final class StemMarkView: UIView {
         planet.colors = t.planet.map(\.cgColor)
         flapShadow.shadowColor = t.flapShade.cgColor
         flapBack.colors = t.curl.map(\.cgColor)
+        halo.shadowColor = t.field[0].cgColor
+        halo.shadowOpacity = t.hasInkRing ? 0.7 : 0
         for fill in paperFills {
             fill.body.colors = t.paper.map(\.cgColor)
             fill.light.colors = [UIColor.white.withAlphaComponent(t.highlight).cgColor, UIColor.white.withAlphaComponent(0).cgColor]
@@ -264,7 +274,7 @@ final class StemMarkView: UIView {
         pending = []
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for layer in [stage, canvas, viewLayer, sky, glow, sun, ringGroup, flap, flapShadow, stemStroke, bowlStroke, shade] as [CALayer] {
+        for layer in [stage, canvas, viewLayer, sky, glow, sun, ringGroup, flap, flapShadow, stemStroke, bowlStroke, shade, halo] as [CALayer] {
             layer.removeAllAnimations()
         }
         ringGroup.mask = nil
@@ -342,6 +352,7 @@ final class StemMarkView: UIView {
         add(basic("opacity", from: 0, to: 1, at: foldStart + 0.32, duration: 0.2), to: flapShadow)
         // The ring's shadow comes as the paper lands.
         add(basic("opacity", from: 0, to: 1, at: foldStart, duration: 0.45), to: shade)
+        add(basic("opacity", from: 0, to: 1, at: foldStart, duration: 0.45), to: halo)
 
         // The drawing mask must be gone before the flap swings inside the band.
         // The swing stays inside the stroke's wide band until well past a quarter turn.

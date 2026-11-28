@@ -114,6 +114,51 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
     }
 }
 
+/// A list row's text: the title, the address under it and when, at the trailing end. From the
+/// first accessibility text size the time goes under the address and the title may take two
+/// lines: beside a large time the title was cut to a word ("The Verg…", clarity audit 14).
+struct TimedRowLabel: View {
+    let title: String
+    let detail: String
+    let time: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).foregroundStyle(.primary).lineLimit(2)
+                if !detail.isEmpty { detailText }
+                timeText
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundStyle(.primary).lineLimit(1)
+                    if !detail.isEmpty { detailText }
+                }
+                Spacer(minLength: 0)
+                timeText
+            }
+        }
+    }
+
+    private var detailText: some View {
+        Text(detail)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+    }
+
+    private var timeText: some View {
+        Text(time)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+    }
+}
+
 /// Done, in the header's trailing corner.
 struct SheetDone: View {
     var onDone: (() -> Void)?

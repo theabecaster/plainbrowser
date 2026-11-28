@@ -48,7 +48,10 @@ public struct HistoryView: View {
     private var sheetBody: some View {
         NavigationStack {
             list(searchRow: true)
-                .sheetTitle("History", onDone: onDone) { clearMenu }
+                .sheetTitle("History", onDone: onDone) {
+                    // An empty history has nothing to search or clear: the empty state alone.
+                    if !isEmptyHistory { clearMenu }
+                }
         }
     }
 
@@ -56,24 +59,31 @@ public struct HistoryView: View {
     /// row with the search field and Clear on the same paper as the rows.
     private var paneBody: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search History", text: $model.query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                }
-                .padding(.horizontal, 10)
-                .frame(minHeight: 36)
-                .background(Style.card, in: Capsule())
-                clearMenu
-                    .font(.subheadline)
-            }
-            .padding(.horizontal, 12)
+            if !isEmptyHistory { paneSearchRow }
             list(searchRow: false)
         }
         .background { PaperBackground().ignoresSafeArea() }
+    }
+
+    /// No history at all (not a search that found nothing): no search field and no Clear.
+    private var isEmptyHistory: Bool { model.isLoaded && !model.hasHistory }
+
+    private var paneSearchRow: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search History", text: $model.query)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 36)
+            .background(Style.card, in: Capsule())
+            clearMenu
+                .font(.subheadline)
+        }
+        .padding(.horizontal, 12)
     }
 
     /// Clear the last hour, today or everything, each confirmed.
@@ -83,13 +93,11 @@ public struct HistoryView: View {
             Button("Today") { pendingClear = .today }
             Button("All History", role: .destructive) { pendingClear = .all }
         }
-        // Dims only when history itself is empty, not when a search finds nothing.
-        .disabled(model.isLoaded && !model.hasHistory)
     }
 
     private func list(searchRow: Bool) -> some View {
         List {
-            if searchRow { SheetSearchRow(prompt: "Search History", text: $model.query) }
+            if searchRow, !isEmptyHistory { SheetSearchRow(prompt: "Search History", text: $model.query) }
             ForEach(model.days) { day in
                 Section(day.title) {
                     ForEach(day.rows) { row in
@@ -156,24 +164,8 @@ struct HistoryRowView: View {
 
     var body: some View {
         Button(action: open) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.title)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(row.address)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                Spacer(minLength: 0)
-                Text(row.visitedAt, format: .dateTime.hour().minute())
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            .contentShape(.rect)
+            TimedRowLabel(title: row.title, detail: row.address, time: row.visitedAt.formatted(.dateTime.hour().minute()))
+                .contentShape(.rect)
         }
         .tint(.primary)
     }

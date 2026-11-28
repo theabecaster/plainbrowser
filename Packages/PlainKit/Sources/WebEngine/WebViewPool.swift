@@ -159,7 +159,7 @@ public final class WebViewPool {
     ///   - pageZooms: remembered page zoom per site.
     ///   - passkeysEnabled: whether the app has the web-browser entitlement, so WebKit can use
     ///     passkeys. Tests pass both.
-    ///   - darkPages: the sites where the user turned dark pages off.
+    ///   - darkPages: Dark Pages' switch and the sites with a choice of their own.
     ///   - translator: Translate Page's engine (Apple's Translation framework, from the shell).
     ///   - profileStore: the website data store of each profile but Personal (whose store is
     ///     `dataStore`): its own, so profiles never share cookies or logins.
@@ -281,13 +281,19 @@ public final class WebViewPool {
         if !accessWatch.isEmpty { controller.addUserScript(AccessRequestWatch.script) }
     }
 
-    /// Dark pages for the tabs of one kind, built from its sites list once per change of the list.
+    /// Dark pages for the tabs of one kind, built from its choices once per change of them.
     private func darkPagesScript(isPrivate: Bool) -> WKUserScript {
-        let store = isPrivate ? privateDarkPages() : darkPages
-        if let cached = darkPagesScripts[isPrivate], cached.sites == store.offSites { return cached.script }
-        let script = DarkPages.userScript(offSites: store.offSites)
-        darkPagesScripts[isPrivate] = (store.offSites, script)
+        let choices = darkPagesChoices(isPrivate: isPrivate)
+        if let cached = darkPagesScripts[isPrivate], cached.choices == choices { return cached.script }
+        let script = DarkPages.userScript(choices: choices)
+        darkPagesScripts[isPrivate] = (choices, script)
         return script
+    }
+
+    /// The switch and the sites' choices for one kind of tab (private tabs: the session's own
+    /// site choices over the regular ones).
+    public func darkPagesChoices(isPrivate: Bool) -> DarkPagesChoices {
+        (isPrivate ? privateDarkPages() : darkPages).choices
     }
 
     /// The engine for a same-origin frame that asked for it (`DarkPages.frameScript`).
@@ -295,12 +301,49 @@ public final class WebViewPool {
         darkPagesScript(isPrivate: isPrivate).source
     }
 
-    /// The dark-pages script per kind of tab (regular, private), with the list it was built from.
-    private var darkPagesScripts: [Bool: (sites: Set<String>, script: WKUserScript)] = [:]
+    /// The dark-pages script per kind of tab (regular, private), with the choices it was built from.
+    private var darkPagesScripts: [Bool: (choices: DarkPagesChoices, script: WKUserScript)] = [:]
 
-    /// The list of sites where dark pages are off changed (the shell's stored list arrived after
-    /// launch): every web view gets the new list from its next page on.
-    public func darkPagesSitesDidChange() {
+    /// Bumped by every change of Dark Pages' choices; each web view remembers the one its page
+    /// was told (`Slot.darkPagesRevision`), so a tab off screen catches up as it comes on screen.
+    private var darkPagesRevision = 0
+
+    /// Dark Pages' choices changed (the switch, a site's choice, or the stored copy read after
+    /// launch): every web view's next page gets them, and the pages on screen take them now,
+    /// without a reload. Returns once the pages on screen have drawn the change (for the
+    /// crossfade); pages off screen take it when they come on screen.
+    @discardableResult
+    public func darkPagesChoicesDidChange() async -> Bool {
+        // Every window's pool hears every change, and the acting pool asks too: a policy already
+        // applied is not applied twice.
+        let current = [false: darkPagesChoices(isPrivate: false), true: darkPagesChoices(isPrivate: true)]
+        if current != appliedDarkPagesChoices {
+            appliedDarkPagesChoices = current
+            rebuildDarkPagesScripts()
+            darkPagesRevision += 1
+            // Every pane on screen at once, each answering for itself; a caller that comes later
+            // for the same choices waits for these same answers.
+            let updates = slots.values.filter { $0.container != nil }.map { slot in
+                Task { await self.applyDarkPagesChoice(to: slot, waiting: true) != nil }
+            }
+            darkPagesApplying = Task {
+                var answered = true
+                for update in updates {
+                    if await !update.value { answered = false }
+                }
+                return answered
+            }
+        }
+        return await darkPagesApplying?.value ?? true
+    }
+
+    /// The choices the scripts were last built from, per kind of tab.
+    private var appliedDarkPagesChoices: [Bool: DarkPagesChoices] = [:]
+    /// The pages on screen taking the newest choices, until they answered.
+    private var darkPagesApplying: Task<Bool, Never>?
+
+    /// Swaps the dark-pages script in every controller for one built from the current choices.
+    private func rebuildDarkPagesScripts() {
         darkPagesScripts = [:]
         var controllers: [(WKUserContentController, Bool)] = slots.values.map { ($0.controller, $0.tab?.isPrivate ?? false) }
         if let warm { controllers.append((warm.controller, false)) }
@@ -312,6 +355,34 @@ public final class WebViewPool {
             others.forEach(controller.addUserScript)
             controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
         }
+    }
+
+    /// Tells `slot`'s page the current choice for its site. `waiting`: answers once the page drew
+    /// it, with its document's token (nil without an engine or a site).
+    @discardableResult
+    private func applyDarkPagesChoice(to slot: Slot, waiting: Bool) async -> String? {
+        slot.darkPagesRevision = darkPagesRevision
+        guard let tab = slot.tab, let site = NavigationRules.siteKey(for: tab.url) else { return nil }
+        let choices = darkPagesChoices(isPrivate: tab.isPrivate)
+        let applies = choices.applies(to: site), siteOff = choices.choice(for: site) == .off
+        guard waiting else {
+            slot.webView.evaluateJavaScript(
+                DarkPages.setChoiceSource(applies: applies, siteOff: siteOff), in: nil, in: UserScripts.world
+            ) { _ in }
+            return nil
+        }
+        let result = try? await slot.webView.callAsyncJavaScript(
+            DarkPages.setChoiceBody(applies: applies, siteOff: siteOff), arguments: [:], in: nil, contentWorld: UserScripts.world
+        )
+        // An answer from the page this tab shows now, not one that went away meanwhile.
+        guard let document = result as? String, slot.tab?.darkPagesDocument == document else { return nil }
+        return document
+    }
+
+    /// A tab coming on screen catches up with changes made while it was off screen.
+    private func catchUpDarkPages(_ slot: Slot) {
+        guard slot.darkPagesRevision != darkPagesRevision else { return }
+        Task { await applyDarkPagesChoice(to: slot, waiting: false) }
     }
 
     private func makeWebView(configuration: WKWebViewConfiguration, controller: WKUserContentController) -> WKWebView {
@@ -435,6 +506,7 @@ public final class WebViewPool {
             webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             container.addSubview(webView)
         }
+        catchUpDarkPages(slot)
         if slot.needsReload, isAppActive {
             slot.needsReload = false
             reloadAfterCrash(slot, tab: tab)
@@ -688,28 +760,35 @@ public final class WebViewPool {
         slots[tab.id]?.container != nil
     }
 
-    /// Turns dark pages off (or back on) for the tab's site, remembered like the other per-site
-    /// choices, and applies it to the page on screen at once, without a reload. Other tabs get it
-    /// from their next page on.
-    func setDarkPagesOff(_ off: Bool, for tab: Tab) {
-        guard tab.pool === self, let site = NavigationRules.siteKey(for: tab.url) else { return }
+    /// Sets Dark Pages' choice for the tab's site (the indicator, Site Settings), remembered like
+    /// the other per-site choices (a private tab's for its session only), and applies it to the
+    /// pages on screen at once, without a reload. Returns once they drew it.
+    @discardableResult
+    func setDarkPagesChoice(_ choice: DarkPagesSiteChoice, for tab: Tab, source: String = "menu") async -> Bool {
+        guard tab.pool === self, let site = NavigationRules.siteKey(for: tab.url) else { return false }
         let store = tab.isPrivate ? privateDarkPages() : darkPages
-        store.setDarkPagesOff(off, forSite: site)
-        Signposts.signposter.emitEvent(Signposts.darkPagesToggle, "\(off ? "off" : "on")")
-        if let webView = slots[tab.id]?.webView {
-            webView.evaluateJavaScript(DarkPages.setOffSource(off), in: nil, in: UserScripts.world) { _ in }
-        }
-        // Private tabs read the regular list too, so a regular change reaches them as well.
-        darkPagesSitesDidChange()
+        store.setChoice(choice, forSite: site)
+        Signposts.signposter.emitEvent(
+            Signposts.darkPagesToggle, "\(source, privacy: .public) \(choice.rawValue, privacy: .public)"
+        )
+        // Private tabs read the regular choices too, so a regular change reaches them as well.
+        return await darkPagesChoicesDidChange()
     }
 
-    /// A page reports whether its script has dark pages off. A page kept from before the user
-    /// changed the site's choice (the back-forward cache) gets the current choice.
-    func reconcileDarkPages(pageIsOff: Bool, in tab: Tab) {
-        guard let site = NavigationRules.siteKey(for: tab.url), let webView = slots[tab.id]?.webView else { return }
-        let off = (tab.isPrivate ? privateDarkPages() : darkPages).offSites.contains(site)
-        guard off != pageIsOff else { return }
-        webView.evaluateJavaScript(DarkPages.setOffSource(off), in: nil, in: UserScripts.world) { _ in }
+    /// A page reports the choice its script holds. A page kept from before a change (the
+    /// back-forward cache, or one that loaded while the change was on its way) gets the current one.
+    func reconcileDarkPages(applies: Bool, siteOff: Bool, in tab: Tab) {
+        guard let site = NavigationRules.siteKey(for: tab.url), let slot = slots[tab.id] else { return }
+        let choices = darkPagesChoices(isPrivate: tab.isPrivate)
+        guard choices.applies(to: site) != applies || (choices.choice(for: site) == .off) != siteOff else { return }
+        Task { await applyDarkPagesChoice(to: slot, waiting: false) }
+    }
+
+    /// The page's address changed without a new document (a single-page app): a page dark pages
+    /// doesn't apply to checks itself again.
+    func darkPagesAddressChanged(in slot: Slot) {
+        guard let tab = slot.tab, tab.darkPages != .darkened, tab.darkPages != .inactive || !tab.isLoading else { return }
+        slot.webView.evaluateJavaScript(DarkPages.recheckSource, in: nil, in: UserScripts.world) { _ in }
     }
 
     func setContentModeOverride(_ mode: ContentMode?, for tab: Tab) {
@@ -1435,9 +1514,14 @@ extension WebViewPool {
             Task { [weak self] in await self?.refreshMediaPlayback() }
         }
 
-        /// The page's dark-pages script reported. A darkened page's own background is light, so the
-        /// area past its edges (overscroll) takes the darkened color instead of the page's.
-        func receiveDarkPagesState(_ state: DarkPagesState) {
+        /// The choices revision this page was last told (`WebViewPool.darkPagesRevision`).
+        var darkPagesRevision = 0
+
+        /// The page's dark-pages script reported (`document`: its token; nil when the shell resets
+        /// the state for a new document). A darkened page's own background is light, so the area
+        /// past its edges (overscroll) takes the darkened color instead of the page's.
+        func receiveDarkPagesState(_ state: DarkPagesState, document: String? = nil) {
+            tab?.set(\.darkPagesDocument, document)
             tab?.set(\.darkPages, state)
             let darkens = state == .darkened
             guard darkens != darkensOverscroll else { return }
@@ -1469,9 +1553,11 @@ extension WebViewPool {
             observations = [
                 webView.observe(\.url, options: .new) { [weak self] webView, _ in
                     MainActor.assumeIsolated {
-                        guard let tab = self?.tab, let url = webView.url else { return }
+                        guard let self, let tab = self.tab, let url = webView.url else { return }
+                        let sameDocument = tab.url != nil && tab.url != url && !webView.isLoading
                         tab.set(\.url, url)
-                        self?.handler.updateSecurity(of: webView)
+                        if sameDocument { tab.pool?.darkPagesAddressChanged(in: self) }
+                        self.handler.updateSecurity(of: webView)
                     }
                 },
                 webView.observe(\.title, options: .new) { [weak self] webView, _ in
@@ -1623,9 +1709,14 @@ extension WebViewPool {
                 }
                 guard message.frameInfo.isMainFrame, let body = message.body as? [String: Any],
                       let raw = body["state"] as? String, let state = DarkPagesState(rawValue: raw) else { return }
-                slot?.receiveDarkPagesState(state)
-                if let tab = slot?.tab, let off = body["off"] as? Bool {
-                    tab.pool?.reconcileDarkPages(pageIsOff: off, in: tab)
+                // A report from a document that already left. A same-site page runs in the same
+                // process, whose messages arrive in order: the old page's before the new one's
+                // commit, which resets the state. A cross-site navigation runs in another process,
+                // so its last words can arrive after the new page committed: dropped here.
+                if let host = message.webView?.url?.host(), host != message.frameInfo.securityOrigin.host { return }
+                slot?.receiveDarkPagesState(state, document: body["doc"] as? String)
+                if let tab = slot?.tab, let applies = body["applies"] as? Bool, let siteOff = body["siteOff"] as? Bool {
+                    tab.pool?.reconcileDarkPages(applies: applies, siteOff: siteOff, in: tab)
                 }
                 return
             }

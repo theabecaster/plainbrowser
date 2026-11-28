@@ -98,8 +98,12 @@ public final class Tab: Identifiable {
     /// The page is using the camera or microphone.
     public internal(set) var isCapturingMedia = false
     /// What dark pages does on the page now: nothing (light colors, or not a web page), the
-    /// site's own dark design, Plain's darkening, or off for this site by the user's choice.
+    /// site's own dark design, Plain's darkening, off for this site by the user's choice, or
+    /// available (the page could use it, the switch is off).
     public internal(set) var darkPages = DarkPagesState.inactive
+    /// The token of the document `darkPages` was reported by, so a delayed action (the
+    /// suggestion) can tell it is still the same page. Nil until the page reports.
+    public internal(set) var darkPagesDocument: String?
     /// The page's language once recognized (`PageTranslation`); nil until then, or when it can't
     /// be told.
     public internal(set) var pageLanguage: Locale.Language?
@@ -221,10 +225,21 @@ public final class Tab: Identifiable {
         await pool?.slot(for: self)?.refreshMediaPlayback()
     }
 
-    /// The page menu's "Turn Off / Turn On Dark Pages for This Site": remembered for the site,
-    /// applied to this page at once without a reload.
-    public func setDarkPagesOff(_ off: Bool) {
-        pool?.setDarkPagesOff(off, for: self)
+    /// The indicator's and Site Settings' tap: Dark Pages off for this site where it applies, on
+    /// where it doesn't (`DarkPagesChoices.toggled`). Remembered for the site (a private tab's for
+    /// its session), applied to the pages on screen at once without a reload; returns once they
+    /// drew it, so the shell's crossfade can end.
+    @discardableResult
+    public func toggleDarkPages(source: String = "menu") async -> Bool {
+        guard let pool, let site = NavigationRules.siteKey(for: url) else { return false }
+        let choice = pool.darkPagesChoices(isPrivate: isPrivate).toggled(for: site)
+        return await pool.setDarkPagesChoice(choice, for: self, source: source)
+    }
+
+    /// Sets the site's choice directly.
+    @discardableResult
+    public func setDarkPagesChoice(_ choice: DarkPagesSiteChoice) async -> Bool {
+        await pool?.setDarkPagesChoice(choice, for: self) ?? false
     }
 
     /// The page menu's "Translate Page": into `translationTarget`, on the device. The system may

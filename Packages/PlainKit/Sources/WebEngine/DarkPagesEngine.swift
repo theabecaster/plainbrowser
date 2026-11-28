@@ -48,6 +48,8 @@ extension DarkPages {
         const LOGO_CLEAR = \(FixedChoices.darkPagesLogoClearShare), LOGO_COLORED = \(FixedChoices.darkPagesLogoColoredShare), LOGO_WHITE = \(FixedChoices.darkPagesLogoWhiteShare);
         const LATE_HOST_CHECKS = [\(FixedChoices.darkPagesLateComponentChecks.map(String.init).joined(separator: ","))];
         const WATCH_DELAY = \(FixedChoices.darkPagesWatchDelay), SHEET_CHECK = \(FixedChoices.darkPagesSheetCheckInterval);
+        const CHECK_DELAY = \(FixedChoices.darkPagesCheckDelay), CHECK_SLICE = \(FixedChoices.darkPagesCheckSlice);
+        const LIGHT_SAMPLES = \(FixedChoices.darkPagesLightSamplesNeeded);
         """
     }
 
@@ -57,7 +59,15 @@ extension DarkPages {
     const ATTR = 'data-plain-dark';
     const dark = matchMedia('(prefers-color-scheme: dark)');
     // In a same-origin frame the top page's engine (TOP) decides: its site's switch and verdict.
-    let off = TOP ? TOP.off : OFF_SITES.has(site);
+    // `off`: dark pages doesn't apply here (the switch is off and the site has no choice, or the
+    // user turned the site off); `siteOff`: the latter, by hand.
+    let siteOff = OFF_SITES.has(site);
+    let off = TOP ? TOP.off : !(ON_SITES.has(site) || (!siteOff && ENABLED));
+    // Whether a page dark pages doesn't apply to could use it: null until checked (`checkLight`),
+    // then true or false. A page that was darkened is known to be light.
+    let light = null;
+    // This document's token: the shell takes reports and answers only for the current document.
+    const DOC = Math.random().toString(36).slice(2) + Date.now().toString(36);
     let verdict = null;   // 'darken' or 'native' once judged; null while the page is still loading
     let settled = false;  // judged for good after the page's load event
     let posted = '';
@@ -1520,12 +1530,13 @@ extension DarkPages {
 
     // MARK: Judging
 
-    // The state for the app's page menu, and whether this page has dark pages off: the app
-    // corrects a page that kept an old choice (one restored from the back-forward cache).
+    // The state for the app (the indicator, Site Settings, the suggestion), with the choice this
+    // page holds: the app corrects a page that kept an old choice (one restored from the
+    // back-forward cache, one that loaded before a change), and the document's token.
     const post = (state, force) => {
       if (TOP || (state === posted && !force)) return;
       posted = state;
-      try { webkit.messageHandlers.\#(DarkPages.handlerName).postMessage({ state, off }); } catch (e) {}
+      try { webkit.messageHandlers.\#(DarkPages.handlerName).postMessage({ state, applies: !off, siteOff, doc: DOC }); } catch (e) {}
     };
 
     // Rules that apply in dark mode, in the style sheets this page can read: its own, the
@@ -1561,6 +1572,115 @@ extension DarkPages {
         if (!ours.has(s) && visitSheet(s)) return true;
       }
       return false;
+    };
+
+    // The same scan, resumable: it yields after every rule so the light check can stop at its
+    // slice's end and go on in the next task. Returns true for a dark rule.
+    function* darkRuleScan() {
+      let read = 0;
+      function* visitSheet(s) {
+        if (s.media && DARK_QUERY.test(s.media.mediaText)) return true;
+        let rules = null;
+        try { rules = s.cssRules; } catch (e) { return false; }
+        return rules ? yield* visit(rules) : false;
+      }
+      function* visit(rules) {
+        for (let i = 0; i < rules.length; i++) {
+          const rule = rules[i];
+          if (++read > MAX_RULES) return false;
+          yield;
+          const type = rule.type;
+          if (type === 1) { if (rule.cssRules.length && (yield* visit(rule.cssRules))) return true; continue; }
+          if (type === 4 && DARK_QUERY.test(rule.media.mediaText)) return true;
+          if (type === 3) { if (rule.styleSheet && (yield* visitSheet(rule.styleSheet))) return true; continue; }
+          if (rule.conditionText && DARK_QUERY.test(rule.conditionText)) return true;
+          if (rule.cssRules && (yield* visit(rule.cssRules))) return true;
+        }
+        return false;
+      }
+      for (const s of Array.from(document.styleSheets)) {
+        if (yield* visitSheet(s)) return true;
+        if (read > MAX_RULES) return false;
+      }
+      for (const s of document.adoptedStyleSheets) {
+        if (!ours.has(s) && (yield* visitSheet(s))) return true;
+      }
+      return false;
+    }
+
+    // The light check, for a page dark pages doesn't apply to: whether it could use it, read
+    // without touching it (no guard, no twins, no sheet of Plain's). After load and a beat
+    // (CHECK_DELAY), only while the page is visible, in slices of CHECK_SLICE ms. Stricter than
+    // `judge`: the root's background and a sample of what shows must both be light, so a page
+    // this passes is darkened when the user turns it on. Any change of choice cancels it.
+    let checkRun = 0;
+    let checkPending = 0; // the run in flight, 0 when none
+    const MEDIA = new Set(['img', 'video', 'canvas', 'picture', 'svg', 'iframe', 'embed', 'object']);
+    // What shows at (x, y): the first opaque background up its ancestors (resumable, one style
+    // read per step); a picture counts as neither light nor dark.
+    function* sampleAt(x, y) {
+      let el = document.elementFromPoint(x, y);
+      for (let depth = 0; el && depth < 40; depth++, el = el.parentElement) {
+        if (MEDIA.has(el.localName)) return 'media';
+        const cs = getComputedStyle(el);
+        const c = parseColor(cs.backgroundColor);
+        if (c && c[3] >= 0.5) return luminance(c) >= LIGHT ? 'light' : 'dark';
+        if (cs.backgroundImage && cs.backgroundImage.includes('url(')) return 'media';
+        yield;
+      }
+      return 'light'; // the white canvas
+    }
+    // The whole check, resumable: it yields after every sample and every rule, and returns
+    // whether the page could use dark pages (light, no dark design of its own).
+    function* lightCheck() {
+      const meta = document.querySelector('meta[name="color-scheme" i]');
+      if (/\b(dark|only)\b/.test((meta && meta.content) || '')) return false;
+      const rootStyle = getComputedStyle(document.documentElement);
+      if (/\b(dark|only)\b/.test(rootStyle.colorScheme || '')) return false;
+      let color = parseColor(rootStyle.backgroundColor);
+      if ((!color || color[3] < 0.5) && document.body) color = parseColor(getComputedStyle(document.body).backgroundColor);
+      if (color && color[3] >= 0.5 && luminance(color) < LIGHT) return false;
+      yield;
+      const w = innerWidth, h = innerHeight;
+      let lightCount = 0;
+      for (const [fx, fy] of [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
+        if ((yield* sampleAt(w * fx, h * fy)) === 'light') lightCount++;
+        yield;
+      }
+      if (lightCount < LIGHT_SAMPLES) return false;
+      return !(yield* darkRuleScan());
+    }
+    // Forgets a check in flight (a change of choice or of colors): the next render starts anew.
+    const cancelCheck = () => { checkRun++; checkPending = 0; };
+    const checkLight = () => {
+      if (TOP || !off || !dark.matches || light !== null || (checkPending && checkPending === checkRun)) return;
+      const run = ++checkRun;
+      checkPending = run;
+      const current = () => run === checkRun && off && dark.matches;
+      const finish = (value) => { if (!current()) return; checkPending = 0; light = value; render(); };
+      let scan = null;
+      // One slice of at most CHECK_SLICE ms; a hidden page waits until it shows again.
+      const slice = () => {
+        if (!current()) return;
+        if (document.visibilityState === 'hidden') {
+          document.addEventListener('visibilitychange', slice, { once: true });
+          return;
+        }
+        if (!document.body) return finish(false);
+        if (!scan) scan = lightCheck();
+        const end = now() + CHECK_SLICE;
+        let result = null;
+        timed(() => {
+          for (;;) {
+            const r = scan.next();
+            if (r.done) { result = r.value === true; return; }
+            if (now() > end) return;
+          }
+        });
+        if (result === null) setTimeout(slice, 0); else finish(result);
+      };
+      const later = () => setTimeout(slice, CHECK_DELAY);
+      if (document.readyState === 'complete') later(); else addEventListener('load', later, { once: true });
     };
 
     // 'native' when the page has a dark design, asks never to be darkened, is already dark,
@@ -1657,8 +1777,12 @@ extension DarkPages {
         }
       }
       if (TOP) return;
-      post(!dark.matches ? 'inactive' : off ? '\#(DarkPagesState.offForSite.rawValue)'
+      // Off: what the light check found (a darkened page turned off is known to be light).
+      const offState = light === true ? (siteOff ? '\#(DarkPagesState.offForSite.rawValue)' : '\#(DarkPagesState.available.rawValue)')
+        : light === false ? 'native' : 'inactive';
+      post(!dark.matches ? 'inactive' : off ? offState
         : verdict === 'darken' ? 'darkened' : verdict === 'native' ? 'native' : 'inactive');
+      if (off && dark.matches && light === null) checkLight();
       // Same-origin frames follow; frames that were there before the page turned dark get the
       // engine now.
       for (const [doc, follow] of followers) {
@@ -1740,7 +1864,32 @@ extension DarkPages {
       if (verdict === null && dark.matches && !off) requestAnimationFrame(frame);
     });
     globalThis.__plainDarkPages = {
-      setOff(value) { if (off !== value) { off = value; refresh(); } else { post(posted, true); } },
+      // The app's choice for this page: whether dark pages applies, and whether the user turned
+      // the site off by hand. Turning a darkened page off keeps what the judgement learned (the
+      // page is light), so the indicator stays, off, without a second look.
+      setChoice(applies, isSiteOff) {
+        const value = !applies;
+        const changedSite = siteOff !== isSiteOff;
+        siteOff = isSiteOff;
+        if (off !== value) {
+          if (value && verdict === 'darken') light = true;
+          off = value;
+          cancelCheck();
+          refresh();
+        } else if (changedSite) {
+          render();
+        } else {
+          post(posted, true);
+        }
+      },
+      // The address changed without a new document (a single-page app): look again.
+      recheck() {
+        if (!off || TOP) return;
+        light = null;
+        cancelCheck();
+        render();
+      },
+      get doc() { return DOC; },
       // For same-origin frames: the page's switch, its state ('off', null while judging,
       // 'darken' or 'native'), whether a new frame should ask for the engine, and following.
       get off() { return off; },
@@ -1801,7 +1950,13 @@ extension DarkPages {
         return results;
       },
     };
-    dark.addEventListener('change', refresh);
+    // Colors changed: a check in flight is forgotten; back in dark, a page dark pages doesn't
+    // apply to is looked at again (it may have changed meanwhile), unless it was darkened before.
+    dark.addEventListener('change', () => {
+      cancelCheck();
+      if (dark.matches && off && verdict !== 'darken') light = null;
+      refresh();
+    });
     if (TOP) {
       // The frame's own guard (frameScript) gives way to the engine's in this same task.
       const early = globalThis.__plainDarkFrameGuard;
@@ -1813,7 +1968,13 @@ extension DarkPages {
     }
     document.addEventListener('DOMContentLoaded', () => { stats.dcl = now(); decide(document.readyState === 'complete'); });
     addEventListener('load', () => { settled = false; decide(true); });
-    addEventListener('pageshow', (e) => { if (e.persisted) post(posted, true); });
+    // Back from the back-forward cache: report again (the app corrects an old choice), and a page
+    // dark pages doesn't apply to is checked again.
+    addEventListener('pageshow', (e) => {
+      if (!e.persisted) return;
+      if (off && !TOP && verdict !== 'darken') { cancelCheck(); light = null; render(); }
+      post(posted, true);
+    });
     render();
     if (dark.matches && !off) requestAnimationFrame(frame);
     """#

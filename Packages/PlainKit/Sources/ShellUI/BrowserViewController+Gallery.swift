@@ -118,7 +118,7 @@ extension BrowserViewController: GalleryHost {
 
         // The page zooms into its card; an empty tab has no card, so the gallery fades in, and so
         // it does over the side pane with the whole width (the page is out of sight).
-        guard let tab = currentTab, !panes.view.isHidden, tab.isPrivate == tabs.isShowingPrivateTabs,
+        guard let tab = currentTab, !(duo.layout?.sidePaneTakesOver ?? false), tab.isPrivate == tabs.isShowingPrivateTabs,
               tab.isPrivate || tab.profileID == tabs.shownProfile, !session.tabs.isEmpty(tab.id),
               let snapshot = webContainer.snapshotView(afterScreenUpdates: false)
         else {

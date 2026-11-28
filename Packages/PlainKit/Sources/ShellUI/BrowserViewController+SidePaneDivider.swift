@@ -63,9 +63,10 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
     /// A finger has the divider, or it is settling.
     var isActive: Bool { drag != nil || driver.isRunning }
 
-    /// A frame of the drag or the settle is being applied: the root view's layout pass places only
-    /// the pane (its two constants), nothing else (`BrowserViewController.viewWillLayoutSubviews`).
+    /// Unused while the pane is slid as a card; kept so the root's layout hooks read one flag.
     private(set) var isTracking = false
+    /// The pane has been laid out as the card the move slides (once per move).
+    private var isLaidOutAsCard = false
 
     init(browser: BrowserViewController, pane: SidePaneController) {
         self.browser = browser
@@ -121,7 +122,7 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         handle.frame = CGRect(
             x: grip - strip.minX - target / 2, y: (column.height - handleHeight) / 2, width: target, height: handleHeight
         )
-        handle.update(value: valueText(layout: layout), takesOver: layout.sidePaneTakesOver)
+        if !isActive { handle.update(value: valueText(layout: layout), takesOver: layout.sidePaneTakesOver) }
         stripView.isHidden = false
     }
 
@@ -238,8 +239,7 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         // The page's background beyond the frame it keeps, while it grows.
         // In a split the page the pane serves is the first pane; the second is out of sight.
         let covers = browser.duo.layout?.sidePaneCoversSecondPane == true
-        let pageEnd = browser.panes.view.isHidden ? span.lowerBound
-            : covers ? (browser.duo.layout?.paneFrames.first?.maxX ?? span.lowerBound) : browser.panes.view.frame.maxX
+        let pageEnd = covers ? (browser.duo.layout?.paneFrames.first?.maxX ?? span.lowerBound) : browser.panes.view.frame.maxX
         if x > pageEnd + 0.5 {
             fill.frame = CGRect(x: pageEnd, y: 0, width: x - pageEnd, height: browser.view.bounds.height)
             fill.isHidden = false
@@ -256,12 +256,15 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         // Only what moves: the pane's two constants (one incremental solve; its header lays out,
         // its content is frozen), the strip and the handle. The bar, the header's top and the
         // page stay as they are until the divider rests, so the root's own pass does nothing else.
-        if let leading = browser.sidePaneUI.leading, leading.constant != x { leading.constant = x }
-        if let width = browser.sidePaneUI.width, width.constant != span.upperBound - x { width.constant = span.upperBound - x }
+        // The pane: a card as wide as the pages, laid out once when the move began, slid by a
+        // transform. No constraint, no layout pass: only the transform and a few frames change.
+        if !isLaidOutAsCard {
+            isLaidOutAsCard = true
+            browser.view.setNeedsLayout()
+            browser.view.layoutIfNeeded()
+        }
+        pane?.view.transform = CGAffineTransform(translationX: x - span.lowerBound, y: 0)
         if let column = browser.sidePaneUI.dragColumn, let layout = browser.duo.layout { place(column: column, layout: layout) }
-        isTracking = true
-        browser.view.layoutIfNeeded()
-        isTracking = false
         setArmed(close: closeArmed, takeOver: takeOverArmed)
         #if DEBUG
         meter?.record(work: CACurrentMediaTime() - started)
@@ -421,12 +424,13 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
     private var pixelInset: CGFloat { 1 / max(browser?.traitCollection.displayScale ?? 2, 1) }
 
     /// The span the running drag or settle works in, nil at rest.
-    var activeSpan: ClosedRange<CGFloat>? { isActive ? geometry?.span : nil }
+    var activeSpan: ClosedRange<CGFloat>? { isActive || pending != nil ? geometry?.span : nil }
 
     /// Back to rest: the layout places everything again.
     private func endMove(relayout: Bool = true) {
         guard let browser else { return }
         browser.sidePaneUI.dragColumn = nil
+        isLaidOutAsCard = false
         browser.sidePaneUI.revealsPage = false
         pane?.unfreezeContent()
         pane?.view.alpha = 1

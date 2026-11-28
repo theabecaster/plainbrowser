@@ -1795,8 +1795,11 @@ windows. Research, the full behavior and the measurements: `docs/research/resiza
   header follows; its content is frozen at its width, `freezeContent`), the page keeps its frame
   under the pane or shows its own `underPageBackgroundColor` past its edge, and each side commits
   once per settle: the growing side as the settle starts (its new part is under the other side),
-  the shrinking one as it ends. The bar's lane follows the divider (at least the page's minimum
-  wide; the whole span once take-over arms). Signposts `sidePane.drag`, `sidePane.settle`,
+  the shrinking one as it ends. A frame of the drag or the settle sets only the pane's two
+  constants, the strip and the handle: the root's Duo pass is skipped while the divider tracks
+  (`isTracking`), so the bar, the header's place and the page wait for the rest, where one real
+  layout glides them there (first measurement, with the bar following: 3.3 to 4.4 ms p95 of main
+  thread work per frame, which this removes). Signposts `sidePane.drag`, `sidePane.settle`,
   `sidePane.commit`, `sidePane.width`; Debug `-PlainMeasureDivider` logs frame times and the main
   thread's work per frame, `-PlainDividerLive` resizes the page every frame for comparison.
 - **Haptics and motion:** a tick at each rest passed (not when leaving the rest it started on), the

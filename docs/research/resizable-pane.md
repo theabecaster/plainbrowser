@@ -178,7 +178,8 @@ take-over: the next open is beside the page. A relaunch restores both the width 
   same spring, to the span's leading edge; closing is the same spring to the trailing edge. Under
   Reduce Motion each settle is a 0.2 s crossfade.
 - Armed: the pane being closed turns see-through (55%); the page about to be covered dims under
-  the gallery's ink veil, and the top bar slides across to span the pane (`Motion.sidePaneArm`).
+  the gallery's ink veil (`Motion.sidePaneArm`). The top bar holds still while the divider moves
+  and glides to its new lane (over the page, or across the pane) once, at the rest.
 - Handle: a 4 × 36 pt capsule in tertiary ink with a 1 pt paper edge, on the existing hairline,
   vertically centered, inside a 44 × 88 pt target; 6 × 44 pt and secondary ink under the pointer;
   6 × 52 pt while dragged; the accent once a line is armed. No glass: it is part of the seam, not a

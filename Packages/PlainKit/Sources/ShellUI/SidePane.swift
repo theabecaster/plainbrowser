@@ -51,11 +51,17 @@ final class SidePaneController: UIViewController {
     /// (`freezeContent`), so Reader, Find and History lay out once per settle, not per frame.
     private var contentTrailing: NSLayoutConstraint!
     private var contentWidth: NSLayoutConstraint!
+    /// The header's trailing edge, swapped for its width while the divider moves: the pane is then
+    /// a card the width of the pages, slid by a transform, and nothing in it lays out per frame.
+    private var headerTrailing: NSLayoutConstraint!
+    private var headerWidth: NSLayoutConstraint!
     /// The content's top: under the header at rest; held where it is while the divider moves (the
     /// header may step under the top bar mid-drag), so the content's height never changes then.
     private var contentUnderHeader: NSLayoutConstraint!
     private var contentTop: NSLayoutConstraint!
     private var expandShown: NSLayoutConstraint!
+    /// The expand button reads Show Page (a plain button: a selected system button draws a plate).
+    private var showsTakeOver = false
     private var expandHidden: NSLayoutConstraint!
 
     override func viewDidLoad() {
@@ -115,7 +121,6 @@ final class SidePaneController: UIViewController {
             header.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Spacing.m),
             // Never narrower than the pane at its minimum: a divider dragged past it clips the header
             // instead of breaking its constraints.
-            header.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Spacing.s).withPriority(.required - 1),
             header.widthAnchor.constraint(greaterThanOrEqualToConstant: CGFloat(FixedChoices.sidePaneMinimumWidth) - Spacing.m - Spacing.s),
             header.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
             picker.leadingAnchor.constraint(equalTo: header.leadingAnchor),
@@ -138,6 +143,10 @@ final class SidePaneController: UIViewController {
         contentUnderHeader.isActive = true
         contentTop = content.topAnchor.constraint(equalTo: view.topAnchor)
         contentWidth = content.widthAnchor.constraint(equalToConstant: 0)
+        headerTrailing = header.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Spacing.s)
+            .withPriority(.required - 1)
+        headerTrailing.isActive = true
+        headerWidth = header.widthAnchor.constraint(equalToConstant: 0)
         expandShown = picker.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor, constant: -Spacing.xs)
         expandHidden = picker.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -Spacing.s)
         expandHidden.isActive = true
@@ -150,16 +159,20 @@ final class SidePaneController: UIViewController {
         guard !contentWidth.isActive else { return }
         contentWidth.constant = content.bounds.width
         contentTop.constant = content.frame.minY
+        headerWidth.constant = header.bounds.width
         contentTrailing.isActive = false
         contentUnderHeader.isActive = false
+        headerTrailing.isActive = false
         contentWidth.isActive = true
         contentTop.isActive = true
+        headerWidth.isActive = true
     }
 
     /// While frozen, the content takes `width` now (a settle that widens the pane: one layout pass,
     /// at the start, and the column uncovers it as it moves).
     func setFrozenContentWidth(_ width: CGFloat) {
         guard isViewLoaded, contentWidth.isActive, contentWidth.constant != width else { return }
+        headerWidth.constant += width - contentWidth.constant
         contentWidth.constant = width
     }
 
@@ -168,8 +181,10 @@ final class SidePaneController: UIViewController {
         guard isViewLoaded, contentWidth.isActive else { return }
         contentWidth.isActive = false
         contentTop.isActive = false
+        headerWidth.isActive = false
         contentTrailing.isActive = true
         contentUnderHeader.isActive = true
+        headerTrailing.isActive = true
     }
 
     /// The content's width now (frozen or not).
@@ -184,15 +199,14 @@ final class SidePaneController: UIViewController {
             expandHidden.isActive = !available
             expandShown.isActive = available
         }
-        if expandButton.isSelected != active { setExpandLook(takesOver: active) }
+        if showsTakeOver != active { setExpandLook(takesOver: active) }
     }
 
     private func setExpandLook(takesOver: Bool) {
-        expandButton.isSelected = takesOver
+        showsTakeOver = takesOver
         let symbol = takesOver ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
         let image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(weight: .semibold))
         expandButton.setImage(image, for: .normal)
-        expandButton.setImage(image, for: .selected)
         expandButton.accessibilityLabel = takesOver ? String(localized: "Show Page") : String(localized: "Full Width")
     }
 

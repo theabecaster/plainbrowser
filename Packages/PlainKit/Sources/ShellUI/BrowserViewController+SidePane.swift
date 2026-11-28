@@ -164,14 +164,26 @@ extension BrowserViewController {
         guard let column else {
             if !sidePaneUI.isAnimating { controller.view.isHidden = true }
             panes.slots[1].view.isHidden = false
-            if panes.view.isHidden { panes.view.isHidden = false }
+            if panes.view.accessibilityElementsHidden { panes.view.accessibilityElementsHidden = false }
             sidePaneUI.divider?.place(column: nil, layout: layout)
             return
         }
         controller.view.isHidden = false
-        setConstant(sidePaneUI.leading, column.minX)
-        setConstant(sidePaneUI.width, column.width)
-        controller.setHeaderTop(sidePaneHeaderTop(column: column, layout: layout))
+        if let span = sidePaneUI.divider?.activeSpan, sidePaneUI.dragColumn != nil {
+            // The divider is moving: the pane is a card as wide as the pages, laid out once and slid
+            // into the column by a transform (`SidePaneDividerController.apply`); its header and
+            // content are frozen, so no frame inside it changes per frame.
+            setConstant(sidePaneUI.leading, span.lowerBound)
+            setConstant(sidePaneUI.width, span.upperBound - span.lowerBound)
+            controller.view.transform = CGAffineTransform(translationX: column.minX - span.lowerBound, y: 0)
+        } else {
+            if !sidePaneUI.isAnimating, controller.view.transform != .identity, sidePaneUI.dragColumn == nil {
+                controller.view.transform = .identity
+            }
+            setConstant(sidePaneUI.leading, column.minX)
+            setConstant(sidePaneUI.width, column.width)
+            controller.setHeaderTop(sidePaneHeaderTop(column: column, layout: layout))
+        }
         // Partly folded, a gap (the fold) lies between the page and the pane.
         controller.setSeparatorHidden(
             layout.sidePaneDockWidth > column.width + 0.5 && sidePaneUI.dragColumn == nil && !layout.sidePaneTakesOver
@@ -180,8 +192,10 @@ extension BrowserViewController {
         // A covered second pane keeps its page, out of sight (no touches, no drawing); with the
         // whole width every page does, at the frame it keeps for coming back.
         panes.slots[1].view.isHidden = sidePaneUI.isRequested && layout.sidePaneCoversSecondPane
+        // The pages stay drawn under the opaque pane (a hidden web view stops painting and comes
+        // back blank for a moment); only VoiceOver leaves them.
         let hidesPages = sidePaneUI.isRequested && layout.sidePaneTakesOver && !sidePaneUI.revealsPage
-        if panes.view.isHidden != hidesPages { panes.view.isHidden = hidesPages }
+        if panes.view.accessibilityElementsHidden != hidesPages { panes.view.accessibilityElementsHidden = hidesPages }
         sidePaneUI.divider?.place(column: sidePaneUI.isRequested ? column : nil, layout: layout)
     }
 
@@ -296,7 +310,7 @@ extension BrowserViewController {
             if let width, let rest = SidePaneWidth(rawValue: width) { sidePaneUI.restWidth = rest }
             openSidePane(section)
             if width == "full" {
-                try? await Task.sleep(for: .seconds(0.6))
+                for _ in 0..<50 where !sidePaneDividerMayAct { try? await Task.sleep(for: .milliseconds(100)) }
                 toggleSidePaneTakeOver()
             }
             if let find, section == .find {

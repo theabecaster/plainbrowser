@@ -1102,7 +1102,9 @@ public final class WebViewPool {
 
     /// Notes that `site` asked for `features` while they were off for Plain.
     private func noteAskedWhileOff(_ features: [SystemFeature], site: String, isPrivate: Bool) {
-        let permissions = SitePermission.allCases.filter { $0.systemFeature.map(features.contains) == true }
+        let permissions = SitePermission.allCases.filter { permission in
+            permission.systemFeature.map { features.contains($0) } == true
+        }
         askedWhileOff[Self.answersKey(site, isPrivate: isPrivate), default: []].formUnion(permissions)
     }
 

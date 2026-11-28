@@ -1412,19 +1412,19 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Readied once per pull, when it passes half the threshold (haptics plan, §4).
         if distance > PullToRefreshTracker.threshold / 2, !pullHapticPrepared {
             pullHapticPrepared = true
-            Haptic.threshold.prepare()
-            Haptic.selection.prepare()
+            Haptic.threshold.prepare(in: view)
+            Haptic.selection.prepare(in: view)
         } else if distance <= 0 {
             pullHapticPrepared = false
         }
         switch pullTracker.pulled(distance) {
         case .armed:
             // Into the outcome: the threshold; back out of it: a tick (haptics plan, rule 4).
-            Haptic.threshold.play()
+            Haptic.threshold.play(in: view)
             Signposts.signposter.emitEvent(Signposts.pullToRefreshArm)
             pullIndicator.setArmed(true)
         case .disarmed:
-            Haptic.selection.play()
+            Haptic.selection.play(in: view)
             pullIndicator.setArmed(false)
         case nil:
             break

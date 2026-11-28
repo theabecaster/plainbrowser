@@ -130,9 +130,8 @@ extension BrowserViewController {
         guard let id = command.propertyList as? String, let shortcut = KeyShortcut(identifier: id),
               allowsShortcut(shortcut) else { return }
         Signposts.signposter.emitEvent(Signposts.keyShortcut, "\(id, privacy: .public)")
-        // haptics plan: withoutFeedback. Keys play no haptic (rule 8): wrap this call in
-        // `Haptic.withoutFeedback { }` once the haptics lane adds it.
-        perform(shortcut)
+        // Keys play no haptic (docs/ui-reference.md, "Haptics": a keyboard means a desk or stand).
+        Haptic.withoutFeedback { perform(shortcut) }
     }
 
     /// Does what the control the shortcut stands for does, through the same path.
@@ -270,9 +269,9 @@ extension BrowserViewController {
         Signposts.signposter.emitEvent(Signposts.undoCloseTab)
         if isShowingGallery { dismissGalleryFading() }
         guard !session.tabs.reopenClosed(batch).isEmpty, let tab = session.tabs.selected else {
-            // The bump is for shake and the three-finger swipe; from ⌘Z the haptics lane's
-            // `withoutFeedback` silences it (haptics plan, §4.12).
-            return Haptic.nothingThere.play()
+            // The bump is for shake and the three-finger swipe; ⌘Z runs inside
+            // `Haptic.withoutFeedback` and stays silent.
+            return Haptic.nothingThere.play(in: view)
         }
         tabsUI.toast.hide(animated: true)
         endAddressEditing()

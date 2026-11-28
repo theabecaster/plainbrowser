@@ -116,7 +116,7 @@ extension BrowserViewController {
     /// bring the batch back.
     private func closeAllTabs(private isPrivate: Bool) {
         // Once for the batch, on the destructive choice (haptics plan, §4: Close All).
-        Haptic.close.play()
+        Haptic.close.play(in: view)
         let before = session.tabs.lastClosedBatchID
         galleryCloseAll(private: isPrivate, profile: session.tabs.activeProfile)
         if currentTab == nil {

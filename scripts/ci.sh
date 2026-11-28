@@ -96,12 +96,12 @@ gh run view $run -R $repo --json jobs -q '.jobs[] | "\(.conclusion // .status)\t
   | column -t -s $'\t' || true
 # Each Smoke job's summary and slowest tests.
 gh run view $run -R $repo --log 2>/dev/null \
-  | grep -E $'^smoke [^\t]*\tSmoke\t.*(Succeeded|Failed|passed, [0-9]+ failed|[0-9]+s (Failed|Expected))' \
+  | grep -E $'^smoke [^\t]*\t[^\t]*\t.*(Passed: |Failed: |[0-9]+s Failed )' \
   | sed -E $'s/\t[^\t]*\t[0-9TZ:.-]+ /: /' | head -80 || true
 # What did not pass there (failed, timed out, or never ran): the hosted runners are slow (3 cores)
 # and nothing is retried, so confirm these on a test Mac before treating them as failures.
 reruns=$(gh run view $run -R $repo --log 2>/dev/null \
-  | awk -F'\t' '$2 == "Smoke" && match($3, /rerun: -only-testing:[A-Za-z0-9_\/]+/) { print $1 "\t" substr($3, RSTART + 7, RLENGTH - 7) }' \
+  | awk -F'\t' '$1 ~ /^smoke / && match($3, /rerun: -only-testing:[A-Za-z0-9_\/]+/) { print $1 "\t" substr($3, RSTART + 7, RLENGTH - 7) }' \
   | sort -u) || reruns=""
 if [[ -n $reruns ]]; then
   print "ci: did not pass on the hosted runners; rerun these on a test Mac (per device):"

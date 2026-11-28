@@ -227,7 +227,11 @@ final class AddressPill: UIView {
             for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: "Search or enter address"
         )
         accessibilityValue = url?.absoluteString ?? hostLabel.text
+        onDisplay(url, notSecure)
     }
+
+    /// The page's address changed (the top band's host follows it).
+    var onDisplay: (URL?, Bool) -> Void = { _, _ in }
 
     /// The query a page searches for when it is the search engine's results page (the shell
     /// answers from Settings' engine), so the pill reads what was searched, as Safari's does.

@@ -198,6 +198,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.onBrowse = { [weak self] in self?.toggleBrowseArmed() }
         pill.onMic = { [weak self] in self?.toggleDictation() }
         pill.onEscape = { [weak self] in self?.dismissSearchSheet(.escape) }
+        pill.onDisplay = { [weak self] url, notSecure in self?.duo.top.band.display(url: url, notSecure: notSecure) }
         pill.searchQuery = { [weak self] url in self?.data.searchEngine.query(inResults: url) }
         pill.onLongPress = { [weak self] in
             guard let self else { return }
@@ -1050,8 +1051,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// The page is long enough for the bar to hide: at least two screens, so the hidden bar has
     /// a page to give back, and the page's end (where the bar returns) is not already in sight.
     /// Measured on the content, not the scroll range, which the resting bar's inset changes.
+    /// Under a top bar the chrome never hides: the slim glass band with the host is the page's top
+    /// boundary while reading (docs/state-rules.md, "Duo inner screen (top bar)").
     private func pageAllowsHiding(_ scrollView: UIScrollView) -> Bool {
-        rules.chromeMayHide && scrollView.contentSize.height >= 2 * scrollView.bounds.height
+        rules.chromeMayHide && !chromeOnTop && scrollView.contentSize.height >= 2 * scrollView.bounds.height
+    }
+
+    #if DEBUG
+    /// The top bar walk's collapse (`debugTopWalk`): the snap a release mid-page starts.
+    func debugSettleCollapse(at target: CGFloat) {
+        settleCollapse(at: target, animated: true)
+    }
+    #endif
+
+    /// A hidden bar the top bar now holds (a fold to the inner screen while reading) rests at the
+    /// slim band instead: under a top bar nothing hides.
+    func settleHiddenChromeForTopBar() {
+        guard chromeOnTop, collapse.rest == .hidden || (snap.isRunning && snap.target > ChromeRest.pill.progress) else { return }
+        settleCollapse(at: ChromeRest.pill.progress, animated: false)
     }
 
     /// The offset at which the page's end reaches the screen's bottom edge: from there on the bar

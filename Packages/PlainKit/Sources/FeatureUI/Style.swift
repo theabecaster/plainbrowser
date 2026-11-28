@@ -99,7 +99,7 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
         // Each side takes the same share of the width, so the title stays centered whatever the
         // two sides hold, and takes the room left before it truncates.
         HStack(spacing: 8) {
-            ZStack { Color.clear.frame(height: 1); leading }.frame(maxWidth: .infinity, alignment: .leading)
+            ZStack { Color.clear.frame(height: 1); side(leading) }.frame(maxWidth: .infinity, alignment: .leading)
             Text(title)
                 .font(.system(.headline, design: .serif))
                 .foregroundStyle(Style.ink)
@@ -107,7 +107,7 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .accessibilityAddTraits(.isHeader)
                 .layoutPriority(1)
-            ZStack { Color.clear.frame(height: 1); trailing }.frame(maxWidth: .infinity, alignment: .trailing)
+            ZStack { Color.clear.frame(height: 1); side(trailing) }.frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(minHeight: 44)
         .padding(.horizontal, 16)
@@ -117,6 +117,16 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Style.hairline).frame(height: 0.5)
         }
+    }
+
+    /// A side's buttons keep one line at their full width and stop growing where the title does;
+    /// the title truncates first. At the accessibility sizes Done wrapped a letter or two per
+    /// line ("D / on / e") beside "Archived Tabs".
+    private func side(_ content: some View) -> some View {
+        content
+            .lineLimit(1)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .fixedSize()
     }
 }
 

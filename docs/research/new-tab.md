@@ -207,3 +207,42 @@ specified and verified."
 | Strip "+" vs sidebars and split | Yes | The sidebar's New Tab shows only while the bar has none; in a split the one bar spans both panes. |
 | Docs drift (state rules, ui-reference still say Share) | Yes | Updated with the implementation. |
 | Polish: no badge or tip; accept Share's extra tap explicitly | Yes | No tip or badge; Share's 1 to 2 taps is stated above. |
+
+## Results
+
+### Tap counts, before and after (from a page)
+
+| Path | Before | After |
+|---|---|---|
+| New Tab, phone and Duo outer | 2 taps (Tabs, then the switcher's "+"), or a long press + 1 tap, or the swipe on the last tab only | **1 tap** ("+"); the others stay |
+| New Tab, Duo inner, one tab | 2 taps (no strip, so no strip "+") | **1 tap** |
+| New Tab, Duo inner, two or more tabs | 1 tap (the strip's "+") | 1 tap (the bar's "+", above where the strip's was) |
+| New Private Tab | 2 taps (More, New Private Tab) or a long press on Tabs + 1 tap | the same, plus a long press on "+" + 1 tap |
+| Undo a stray New Tab | close the field, then find the page again (Tabs, its card): 3+ taps | close the field: back on the page |
+| Share | 1 tap | 2 taps (More, Share) |
+| Settings | 2 taps (More, Settings) | 2 taps, unchanged |
+
+### Verification
+
+- `swift test`: 206 tests pass (new: `newTabButtonShowsOnEveryPageAndNeverOnStart`,
+  `newTabButtonAndTheSwipePastTheLastTabAgreeOnPages`). `check-isolation.zsh`: ok.
+- UI tests (`NewTabTests`: the tap, the long press, the swipe past the last tab, the untouched
+  return, no "+" on Start; plus the touched `StateRulesTests`, `DuoTests` and `TabsTests`) pass on
+  iPhone 17, iPhone 13 mini and the Duo's outer screen. On the inner screen the first run's tests
+  closed the sheet with a tap that dev's new top-bar field no longer takes; the close now uses the
+  sheet's grabber or Cancel.
+- `scripts/matrix.sh --quick`: all five rows pass.
+- Perf gate (simulator, the same test Mac, one after the other): New Tab to keyboard 549.8 ms
+  before, 484.4 ms after (target 510, fail 600); the after run passed every metric. Part of the
+  gain is the test's own path: before it opened the tabs menu first, whose closing overlapped the
+  interval.
+
+### Implementation review (Codex)
+
+- Code round 1: blocking, two stale UI tests (fixed); polish, the hysteresis into
+  `FixedChoices` (done).
+- Code round 2 (after the rebase onto the new search sheet): no blocking finding. Polish: return
+  before the sheet collapses so it lands on the page's pill (done); a sturdier close in the tests
+  (done).
+- Design round 1: "Visually approve." Polish: the long-press menu's lifted backing looks muddy over
+  text; it is the system's button-menu lift, as on Tabs, so it goes to the polish backlog.

@@ -289,7 +289,17 @@ branch. This branch's own launch-path change is one argument check, and each cha
 measured against its own A/B. Pill focus now spends 113 ms before the keyboard starts against
 the bare field's 47.5, more than in pass 2. Because the rewarm can land during a focus right after
 a load, it now also waits out any keyboard rise or fall (`isKeyboardMoving`,
-`EngineChoices.rewarmRetry`), and job H checks focus and New Tab with that.
+`EngineChoices.rewarmRetry`). Job H, with that, on a quiet host (this Mac's slot, load ~10):
+
+| | Plain | Reference |
+|---|---|---|
+| Pill tap to keyboard at rest | 467.9 ms (keyboard start 66.5) | 448.6 ms (keyboard start 59.3) |
+| New Tab to keyboard at rest | 484.0 ms (keyboard start 77.2) | |
+| Memory, ten tabs | 56.2 MB | |
+
+On a quiet machine Plain's focus is within ~19 ms of the bare field (7 ms before the keyboard
+starts). The ten-tab footprint differs by host (56 MB here, 68–69 on the test Macs, same build),
+so memory is only compared within one run.
 
 ## 6. Device run requested
 

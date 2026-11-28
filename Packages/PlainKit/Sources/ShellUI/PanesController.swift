@@ -81,9 +81,15 @@ final class PaneSlot: UIViewController {
         let half = split ? PaneMetrics.gutter / 2 : 0
         clipInsets[1].constant = gutterOnLeading ? half : 0
         clipInsets[2].constant = gutterOnTrailing ? half : 0
-        let radius = split ? Radius.large : 0
-        clip.layer.cornerRadius = radius
-        ring.layer.cornerRadius = radius
+        // A split pane's corners are concentric with the display's: the outer bottom corners,
+        // which meet the screen's own round corners, take the display's radius, so the focus
+        // ring follows the glass edge of the screen instead of being cut by it (owner, 2026-11-28;
+        // docs/ui-reference.md, "Corners"); the rest, away from any display corner, stay at
+        // `Radius.large`. UIKit resolves each corner on layout, per device.
+        let corners: UICornerConfiguration = split
+            ? .corners(radius: .containerConcentric(minimum: Radius.large)) : .corners(radius: .fixed(0))
+        clip.cornerConfiguration = corners
+        ring.cornerConfiguration = corners
         ring.alpha = split && focused ? 1 : 0
     }
 }

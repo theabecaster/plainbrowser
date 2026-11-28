@@ -638,8 +638,21 @@ public enum FixedChoices {
     /// against the page (owner, 2026-11-28: "more like Apple glass, so the change from the page to
     /// it is less abrupt"). Small enough that the bar's own capsule keeps its room.
     public static let verticalBarPanelInset: Double = 6
-    /// Its corner radius: about concentric with the outer screen's display corners at that inset.
+    /// Its corners: concentric with the display's corners (UIKit's `.containerConcentric`, the
+    /// display's radius less the inset, resolved per device), never under this. Owner, on the
+    /// Duo, 2026-11-28: the fixed 28 pt corners were cut off by the screen's round corners, "only
+    /// the corner area on the right side". The corners facing the page, far from any display
+    /// corner, take this minimum.
     public static let verticalBarPanelRadius: Double = 28
+    /// The most the panel's ends may move in from the top and bottom of the screen. A panel as
+    /// narrow as the column can't round its outer corners to the display's radius less the inset
+    /// (a corner is at most half the panel's width: 36 pt on the Duo's outer screen against 53),
+    /// so its ends move in until the rounder corner sits inside the display's corner, the way
+    /// the system's own capsule in that bar sits 24 pt above the bottom (Apple: "use a capsule
+    /// with extra margin" near a phone's screen edge). At most 18 pt, which keeps 6 pt of glass
+    /// below the system's capsule. On the Duo the gap at the corner is then about 5 pt against
+    /// 6 along the edges.
+    public static let verticalBarPanelEndInsetLimit: Double = 18
     /// The panel's shadow: lifts it off the paper so the page meets a raised glass edge rather
     /// than a flat change of colour, strongest over a dark page (design review). Blur radius, then
     /// opacity in light mode and in dark mode or a private tab, where a faint one vanishes.

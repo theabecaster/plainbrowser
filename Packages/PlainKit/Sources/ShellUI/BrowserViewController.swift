@@ -641,7 +641,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
         verticalBarBacking.place(column: CGRect(
             x: onTrailing ? bounds.width - width : 0, y: 0, width: width, height: bounds.height
-        ))
+        ), in: bounds)
     }
 
     /// Off where the top bar holds the buttons (`+TopBar`): the Duo's inner screen, as Safari.

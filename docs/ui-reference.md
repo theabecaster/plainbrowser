@@ -97,7 +97,24 @@ and the two-finger scrub closes the search field or the overview.
 - **The Duo's outer screen keeps the system's vertical bar** beside the page (status items, then
   Back, Forward, Tabs, New Tab and More in one capsule). Behind it Plain puts one floating panel of
   its glass (paper, navy in dark mode, Night in a private tab), 6 pt in from the page and the
-  screen's edges with round corners; the page never runs under it.
+  screen's edges with round corners; the page never runs under it. Its corners follow the
+  "Corners" rule: concentric with the display, and where the column is too narrow for that its
+  ends move in from the top and bottom (18 pt on the Duo), like the system's capsule beside it.
+- **Corners near the screen's corners follow the display's.** The real screen's corners are round
+  (about 55 to 62 pt; the Duo's outer screen 59 on its free side and 8 at the hinge; square on an
+  iPhone SE), and a screenshot hides them. Chrome whose edge comes near a display corner takes one
+  of Apple's three shapes, never a fixed radius that the screen cuts off:
+  - A capsule with extra margin (the phones' pill and button bar, the switcher's bar, toasts):
+    already clear of the corners.
+  - Concentric (`UICornerConfiguration.corners(radius: .containerConcentric(minimum:))`, or
+    `Glass.Shape.concentric`): the display's radius less the distance to it, worked out by UIKit
+    per corner and per device. The minimum is the radius the shape takes away from the corners.
+    Used by the Duo's side-bar panel and split panes (their outer bottom corners take the
+    display's radius, so the focus ring follows the screen's edge).
+  - Edge to edge with square corners (the top band, the side pane, the sidebar, the search sheet's
+    bottom): the screen's own corner rounds it.
+  Checked with the display's mask on: `xcrun simctl io <udid> screenshot --mask=black`
+  (`CornerCaptureTests`; docs/research/notes.md, "Concentric corners").
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
   pill in a fixed place, Tabs, New Tab and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.

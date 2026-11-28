@@ -2470,10 +2470,10 @@ to overload the interface." Research, options and the Codex review: docs/researc
   unchanged.
 - **Tap: the kind on screen; long press: the other kind.** As the swipe past the last tab, a
   private page's "+" stays private. No haptic on the tap (the haptics plan's rule 1).
-- **A stray "+" costs nothing.** Closing an untouched New Tab's field by hand (swipe down, tap
-  beside the rows) goes back to the page it came from; the empty tab drops (principle 7). Only
-  that close, only with an empty field, only in the same pane, never from the gallery. Any load
-  or other end of editing settles the new tab (`NewTabReturn`, `dismissSearchByUser`).
+- **A stray "+" costs nothing.** Closing an untouched New Tab's search sheet by hand (a swipe down, a tap on the
+  page, the grabber, Cancel, Escape) goes back to the page it came from; the empty tab drops
+  (principle 7). Only that close, only with an empty field, only in the same pane, never from the gallery. Any load
+  or other end of editing settles the new tab (`NewTabReturn`, `dismissSearchSheet`, `returnFromUntouchedNewTab`).
 - **One New Tab button:** the strip's "+" on the inner screen is gone (the bar's sits right above
   it, and with one tab there was no strip, so no "+"); the sidebar's New Tab shows only while the
   bar has none.

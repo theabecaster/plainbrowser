@@ -113,7 +113,7 @@ field; two targets inside one capsule are small and fight the sideways swipe. Re
   on a private one. The tabs menu still has both. "Plus buttons act at once when there is one
   obvious action" (ui-reference): the tap is that action, the menu is the shortcut.
 - **A stray "+" costs nothing.** A New Tab opened over a page goes back to that page when the user
-  closes its field (a swipe down, a tap beside the rows) with nothing typed and nothing opened; the
+  closes its field (a swipe down, a tap on the page, the grabber, Cancel, Escape) with nothing typed and nothing opened; the
   empty tab is dropped (principle 7). Arc's search over a page works the same way. Anything else
   keeps the new tab: typed text, any load (Return, a suggestion, a favorite, Open Copied Link),
   Browse for Me, and the field ending for any other reason (backgrounding, a sheet, the gallery,
@@ -194,7 +194,7 @@ specified and verified."
 
 | Finding | Taken? | What changed |
 |---|---|---|
-| "Untouched" undefined; backgrounding and other field ends must not return | Yes | Returns only on the user's own close (swipe down, tap beside the rows) with an empty field; every other end settles the new tab. |
+| "Untouched" undefined; backgrounding and other field ends must not return | Yes | Returns only on the user's own close (a swipe down, a tap on the page, the grabber, Cancel, Escape) with an empty field; every other end settles the new tab. |
 | Favorites and paste-and-go race the dismissal | Already safe | `load` clears the way back before it ends editing, synchronously. |
 | Split panes: bind the return to its pane | Yes | Pane recorded; no return if focus moved or the page is in the other pane. |
 | Gallery "+": the way back is ambiguous | Yes | No way back from the gallery. |

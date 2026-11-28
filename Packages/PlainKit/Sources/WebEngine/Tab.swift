@@ -12,6 +12,9 @@ public struct HistoryStep: Sendable, Equatable {
     public let url: URL
     /// Steps from the page on screen: -1 is the page Back opens, 1 the one Forward opens.
     public let offset: Int
+    /// The history entry itself (WebKit keeps one object per entry), so a pick never opens
+    /// another entry that came to sit at the same offset, even one with the same address.
+    let entry: ObjectIdentifier
 }
 
 /// How much a tab costs right now (docs/plan.md, "Engine rules" 2).
@@ -178,7 +181,10 @@ public final class Tab: Identifiable {
         guard let list = pool?.existingWebView(for: self)?.backForwardList else { return [] }
         let items = forward ? Array(list.forwardList.prefix(limit)) : Array(list.backList.reversed().prefix(limit))
         return items.enumerated().map { index, item in
-            HistoryStep(title: item.title ?? "", url: item.url, offset: forward ? index + 1 : -(index + 1))
+            HistoryStep(
+                title: item.title ?? "", url: item.url, offset: forward ? index + 1 : -(index + 1),
+                entry: ObjectIdentifier(item)
+            )
         }
     }
 
@@ -187,7 +193,8 @@ public final class Tab: Identifiable {
     /// different one must never open.
     public func go(to step: HistoryStep) {
         pool?.perform(in: self) { webView in
-            guard let item = webView.backForwardList.item(at: step.offset), item.url == step.url else { return }
+            guard let item = webView.backForwardList.item(at: step.offset), ObjectIdentifier(item) == step.entry,
+                  item.url == step.url else { return }
             webView.go(to: item)
         }
     }

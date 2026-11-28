@@ -346,6 +346,7 @@ extension BrowserViewController {
             } else if old != nil {
                 pill.progressBar.finish()
                 pullIndicator.endRefreshing()
+                pullIndicator.prepareColors()
                 // A typed load that ended without a new page (it failed): later visits are links.
                 if let tab = currentTab { engineUI.typedVisitTabs.remove(tab.id) }
             }

@@ -98,6 +98,13 @@ final class PullIndicator: UIView {
         isPrivate ? PullTint.privateRest : Palette.accentOnGlass
     }
 
+    /// Builds this palette's color table ahead of a pull (a page finished loading), so the
+    /// pull's first scroll callback only indexes it.
+    func prepareColors() {
+        guard !Motion.prefersCrossfade else { return }
+        _ = PullTint.table(isPrivate: isPrivate, dark: traitCollection.userInterfaceStyle == .dark)
+    }
+
     func setArmed(_ armed: Bool) {
         guard !isRefreshing, armed != isArmed else { return }
         isArmed = armed
@@ -176,8 +183,9 @@ enum PullTint {
     private static let dayBand = 0.0...0.62
     private static let nightBand = 0.74...1.0
 
-    /// Built on first use, one palette and appearance at a time: the first pull in a light
-    /// regular tab makes 96 samples (well under a millisecond), never all four loops at once.
+    /// Built on first use, one palette and appearance at a time (96 samples), never all four
+    /// loops at once; `PullIndicator.prepareColors` builds the one in use when a page finishes
+    /// loading, so a pull's scroll callbacks only index it.
     private static var cycles: [Int: ColorCycle] = [:]
     private static var tables: [Int: [CGColor]] = [:]
 

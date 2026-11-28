@@ -16,7 +16,9 @@ final class IntroModel {
     }
 
     /// The steps in order. Browse for Me only where Apple Intelligence can run (`IntroSetup`),
-    /// decided once before the first step; the default-browser step only when its prompts are on.
+    /// decided once before the first step; the icon step only where the icon can change
+    /// (`AppIconSupport`: not for an iPhone app on a Mac); the default-browser step only when its
+    /// prompts are on.
     private(set) var steps: [Step]
     /// The step on screen; nil during the splash and after the intro ends.
     private(set) var step: Step?
@@ -48,9 +50,21 @@ final class IntroModel {
     @ObservationIgnored var onFinish: (() -> Void)?
     @ObservationIgnored private var didFinish = false
 
-    init(defaultBrowserStep: Bool, icon: AppIconChoice) {
-        steps = Step.allCases.filter { $0 != .browseForMe && ($0 != .defaultBrowser || defaultBrowserStep) }
+    init(defaultBrowserStep: Bool, iconStep: Bool, icon: AppIconChoice) {
+        steps = Self.initialSteps(defaultBrowserStep: defaultBrowserStep, iconStep: iconStep)
         self.icon = icon
+    }
+
+    /// The steps before the model's answer (Browse for Me is added by `setAIAvailability`).
+    static func initialSteps(defaultBrowserStep: Bool, iconStep: Bool) -> [Step] {
+        Step.allCases.filter { step in
+            switch step {
+            case .browseForMe: false
+            case .icon: iconStep
+            case .defaultBrowser: defaultBrowserStep
+            case .promise, .inside, .blocking: true
+            }
+        }
     }
 
     /// What the Browse for Me step asks of the user now; nil when the step is left out.
@@ -160,6 +174,7 @@ final class IntroModel {
     }
 
     func loadPreviews() async {
+        guard steps.contains(.icon) else { return }
         for choice in AppIconChoice.allCases where iconPreviews[choice] == nil {
             iconPreviews[choice] = await AppIcons.preview(choice)
         }

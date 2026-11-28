@@ -7,7 +7,8 @@ import SwiftUI
 import UIKit
 
 /// The first-run intro: the Stem mark assembles on paper and the dawn opens behind it, then the steps (promise, what's
-/// inside, icon, blocking demo, Browse for Me where Apple Intelligence can run, and the
+/// inside, icon where it can change,
+/// blocking demo, Browse for Me where Apple Intelligence can run, and the
 /// default-browser step when its prompts are on). Finishing
 /// or skipping dissolves it into the search field. See docs/research/intro.md.
 ///
@@ -20,6 +21,7 @@ public final class IntroViewController: UIViewController {
 
     private let model = IntroModel(
         defaultBrowserStep: DefaultBrowserPrompts.isEnabled(),
+        iconStep: AppIcons.isSupported,
         icon: AppIcons.current
     )
     private let dawn = DawnView()

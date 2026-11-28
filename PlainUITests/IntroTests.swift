@@ -11,6 +11,8 @@ final class IntroTests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication.isolated()
         app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro"] + extra
+        // The icon step's walk-throughs assume the icon can change, whatever the simulator says.
+        if !extra.contains("-PlainAlternateIcons") { app.launchArguments += ["-PlainAlternateIcons", "on"] }
         app.launch()
         return app
     }
@@ -98,6 +100,53 @@ final class IntroTests: XCTestCase {
         again.launchArguments += ["-PlainTestStore", "-PlainRespectIntroSeen"]
         again.launch()
         assertSearchFieldFocused(again)
+    }
+
+    /// Where the icon can't change (an iPhone app on a Mac; `-PlainAlternateIcons off` here), the
+    /// intro has no icon step: "What's inside" goes straight on to the blocking demo, and Settings
+    /// has no App Icon row.
+    func testNoIconPickerWhereTheIconCannotChange() {
+        let app = launch(["-PlainAlternateIcons", "off"])
+        tapNext(app, step: "promise")
+        XCTAssertTrue(app.otherElements["intro.inside"].waitForExistence(timeout: 5), "no What's inside step")
+        tapNext(app, step: "inside")
+        XCTAssertTrue(app.otherElements["intro.blocking"].waitForExistence(timeout: 5), "the blocking demo does not follow What's inside")
+        XCTAssertFalse(app.otherElements["intro.icon"].exists, "the icon step showed")
+        XCTAssertFalse(app.buttons["introIcon.Dawn"].exists, "an icon tile showed")
+        let go = app.buttons["introLetsGo"]
+        XCTAssertTrue(go.waitForExistence(timeout: 5))
+        go.tap()
+        assertSearchFieldFocused(app)
+
+        // Settings: the other rows, no App Icon.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        let more = app.buttons["more"]
+        XCTAssertTrue(more.waitForExistence(timeout: 3))
+        more.tap()
+        let settings = app.buttons["menu.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Appearance'")).firstMatch.waitForExistence(timeout: 5),
+                      "Settings did not open")
+        XCTAssertFalse(app.buttons["settingsAppIcon"].exists, "Settings offers App Icon where the icon can't change")
+    }
+
+    /// Where it can change, Settings has the App Icon row (the counterpart of the test above).
+    func testSettingsOffersAppIconWhereTheIconCanChange() {
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainAlternateIcons", "on"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        if field.waitForExistence(timeout: 5), field.hasKeyboardFocus {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        }
+        let more = app.buttons["more"]
+        XCTAssertTrue(more.waitForExistence(timeout: 3))
+        more.tap()
+        let settings = app.buttons["menu.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+        XCTAssertTrue(app.buttons["settingsAppIcon"].waitForExistence(timeout: 5), "no App Icon row in Settings")
     }
 
     func testDefaultBrowserStepWhenPromptsAreOn() {
@@ -227,7 +276,7 @@ final class IntroCaptureTests: XCTestCase {
     func testCaptureIntro() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
         let app = XCUIApplication.isolated()
-        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainForceDefaultBrowserPrompts"]
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainForceDefaultBrowserPrompts", "-PlainAlternateIcons", "on"]
         app.launch()
         pause(0.5)
         shot("0-splash", app)
@@ -278,7 +327,7 @@ final class IntroCaptureTests: XCTestCase {
         let state = environment["PLAIN_CAPTURE_AI"] ?? "available"
         let tag = environment["PLAIN_CAPTURE_TAG"] ?? "shot"
         let app = XCUIApplication.isolated()
-        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainAIAvailability", state]
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainAIAvailability", state, "-PlainAlternateIcons", "on"]
         app.launch()
         let next = app.buttons["introNext"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))

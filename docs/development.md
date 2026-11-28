@@ -6,11 +6,12 @@ Xcode 27.2+, XcodeGen (`brew install xcodegen`) and `jq`. Every script runs from
 
 | Command | What it does |
 |---|---|
-| `scripts/build.sh` | `xcodegen generate`, then a Debug simulator build of the app and UI tests (no simulator needed). Log: `build/build.log`. |
-| `scripts/test.sh` | `swift test` for PlainKit on macOS, then the Smoke test plan on the `plain-duo` (iPhone Duo) and `plain-17` (iPhone 17) simulators. It creates them when missing and deletes them afterwards; `KEEP_SIMS=1` keeps them. `PLAIN_SIM_PREFIX=plain-x` renames them (`plain-x-duo`, `plain-x-17`) so parallel runs don't share simulators. |
+| `scripts/build.sh` | `xcodegen generate`, then a Debug simulator build of the app and UI tests (no simulator needed), for this Mac's architecture only (arm64). Log: `build/build.log`. |
+| `scripts/test.sh` | `swift test` for PlainKit on macOS, then the Smoke test plan on the `plain-duo` (iPhone Duo) and `plain-17` (iPhone 17) simulators. It makes them when missing (clones of the Mac's simulator templates, see "Simulators") and deletes them afterwards; `KEEP_SIMS=1` keeps them. `PLAIN_SIM_PREFIX=plain-x` renames them (`plain-x-duo`, `plain-x-17`) so parallel runs don't share simulators. |
 | `scripts/perf-gate.sh` | The perf tests (Perf test plan, Release). Simulator by default; `--device` for the phone. Appends a row to `docs/perf-log.md`. See below. |
 | `scripts/install-duo.sh [--no-launch] [build]` | Release build for the device as "Plain Dev" (`dev.abrahamgonzalez.plainbrowser.dev`), installed beside the TestFlight app, never over it, then launch. `perf-gate.sh --device` uses the same id. Best effort: an install that fails (phone locked or unreachable) prints a note and exits 0; launch is skipped on a locked phone. `--no-launch` installs only. |
 | `scripts/matrix.sh [--quick\|--full] [--rows <ids>] [--out <dir>] [--host <name>\|--local] [-only-testing:<test>]` | The device matrix (`docs/device-matrix.md`): the capture tests, and the UI tests you name, on one `plain-matrix-<row>` simulator per screen class and setting, one at a time; a contact sheet per screen in `<out>/sheets/`. Runs on the test Mac (`PLAIN_TEST_HOST`) when one is set; see "Test Macs". |
+| `scripts/ci.sh [--tests '<test> ...'] [--matrix quick\|full] [--rows <ids>] [--no-smoke] [--no-unit]` | The same checks on GitHub's free hosted runners instead of a test Mac: `swift test`, the Smoke plan sharded over several runners on the Duo and iPhone 17 simulators, and, when asked, matrix rows (one runner each; sheets made here in `build/ci-matrix`). Pushes HEAD's tree as one parentless commit to `ci/<lane>`, waits, then deletes the branch and the run. See "GitHub Actions". |
 | `scripts/shot.sh <name>` | Screenshots every active display of the device into `build/shots/<name>-<display>.png`. |
 
 Package tests alone: `cd Packages/PlainKit && swift test`.
@@ -65,8 +66,9 @@ scripts/matrix.sh --quick --local                   # on this Mac, outside the s
   snapshot there, since the scripts call git. The lane is `PLAIN_LANE`, or the checkout's folder
   name, so parallel worktrees don't share a folder.
 - It runs the command in a login shell (for Homebrew's PATH) in one of the host's two job slots
-  (`/usr/bin/lockf` on `/tmp/plain-sim-1.lock` and `/tmp/plain-sim-2.lock`): a free slot if there
-  is one, else it waits for slot 1. Expect to queue behind other lanes.
+  (`/usr/bin/lockf` on `/tmp/plain-sim-1.lock` and `/tmp/plain-sim-2.lock`): whichever frees
+  first, polled every 20 s. While another lane's priority mark (`/tmp/plain-priority.<lane>`,
+  under 3 hours old) is on the host, it waits. Expect to queue behind other lanes.
 - `scripts/matrix.sh` pulls `build/matrix-out` back into `--out`: shots, sheets, logs and
   `summary.txt`, without the result bundles. A host without ImageMagick makes no sheets; the Mac
   that pulls the results makes them.
@@ -80,6 +82,30 @@ scripts/matrix.sh --quick --local                   # on this Mac, outside the s
   ~/plain-lanes/<lane>'`).
 
 The test Macs need Xcode with the iOS 27.2 runtimes (and the Duo's), XcodeGen and jq.
+
+## GitHub Actions
+
+`.github/workflows/ci.yml` runs on GitHub's standard hosted runners (`xcode-27`: Xcode 27.2,
+the iOS 27.2 and iPhone Duo runtimes, 3-core M1, 7 GB). They are free for a public repository;
+never use a larger runner label (`-large`, `-xlarge`), which is billed. Why and the numbers:
+`docs/research/build-test-speed.md`.
+
+- It runs only on a push to a `ci/**` branch, never on pull requests, so a fork can't start it,
+  and it has no secrets: nothing there signs, uploads or reaches the device.
+- `scripts/ci.sh` is the way in. It pushes one commit with no parents (HEAD's tree, plus
+  `.github/ci-request.json` with the options) by "Plain CI" to `ci/<lane>`, so no history and no
+  author email goes up; uncommitted changes are not included. It waits for the run, prints each
+  job's result and the Smoke tests' times, brings matrix rows back into `build/ci-matrix` (sheets
+  made here), and deletes the branch and the run (`--keep` keeps them).
+- The default run: `swift test`, then the Smoke plan on the Duo and the iPhone 17, three runners
+  each (`scripts/lib/smoke-shards.zsh` splits it by test class and checks that every class is in
+  exactly one shard). Same tests and time limits as `scripts/test.sh`. `--tests` runs only the
+  tests you name; `--matrix quick|full` (with `--rows`, `--matrix-tests`) adds matrix rows.
+- Logs and artifacts are public while the run exists. Print and upload only what the repository
+  already shows. Failure results are kept 3 days at most.
+- What stays on the test Macs and this Mac: anything that needs Device Hub (the Duo's real inner
+  screen; hosted matrix rows use the resizable window), the perf gate, the device, signing and
+  TestFlight (`plain-release.zsh`).
 
 ## Device setup
 
@@ -200,6 +226,19 @@ Create your own, named `plain-*`, and never touch others: other agents share the
 scripts use `plain-duo`, `plain-17` and `plain-perf-duo`; set `PLAIN_SIM_PREFIX` (e.g. `plain-r`) to
 get your own set. Delete yours when you finish
 (`xcrun simctl delete <udid>`).
+
+Templates: a brand-new simulator spends its first boot setting itself up, minutes of CPU on a
+loaded test Mac. `scripts/test.sh` and `scripts/matrix.sh` therefore make their simulators with
+`sim_new` (`scripts/lib/sim.zsh`): a clone of `plain-template-v1-<device type>-<runtime>`, a
+simulator made once per Mac, booted once until its setup was done, and shut down. Each clone is
+its own full copy; nothing boots or changes a template after it is made, so no state is shared
+between jobs. Your own scripts can do the same: `source scripts/lib/sim.zsh; udid=$(sim_new
+plain-<you>-17 com.apple.CoreSimulator.SimDeviceType.iPhone-17
+com.apple.CoreSimulator.SimRuntime.iOS-27-2)`, then `sim_boot $udid`. The templates stay on the
+Mac on purpose: never delete a `plain-template-*` simulator in your cleanup (it is remade on
+demand if you do, at the cost of one first boot). `PLAIN_SIM_TEMPLATES=0` makes every simulator
+from scratch, as before. The perf gate keeps making its own simulator from scratch, so its
+numbers stay comparable with the earlier rows of `docs/perf-log.md`.
 
 Duo simulator: device type `iPhone Duo`, runtime `com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4`.
 Set the fold state from the Device Hub (Closed / Partially Open / Open); `simctl` has no command

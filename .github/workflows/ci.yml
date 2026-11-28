@@ -44,7 +44,7 @@ jobs:
       rows: ${{ steps.plan.outputs.rows }}
       matrix_tests: ${{ steps.plan.outputs.matrix_tests }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - id: plan
@@ -95,12 +95,12 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: swift test (PlainKit)
         working-directory: Packages/PlainKit
-        run: swift test 2>&1 | tail -40; exit ${PIPESTATUS[0]}
+        run: swift test
 
   smoke:
     needs: plan
@@ -118,7 +118,7 @@ jobs:
       SHARD: ${{ matrix.shard }}
       OF: ${{ matrix.of }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: XcodeGen
@@ -160,7 +160,7 @@ jobs:
           exit $rc
       - name: Keep the failure's results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-${{ matrix.device }}-${{ matrix.shard }}
           path: |
@@ -182,7 +182,7 @@ jobs:
       ROW: ${{ matrix.row }}
       MATRIX_TESTS: ${{ needs.plan.outputs.matrix_tests }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: XcodeGen
@@ -197,7 +197,7 @@ jobs:
         # summary.txt says so. The sheets are made where the rows are brought together (scripts/ci.sh).
         run: |
           PLAIN_SIM_TEMPLATES=0 PLAIN_MATRIX_ON_HOST=1 scripts/matrix.sh --rows $ROW --resizable ${=MATRIX_TESTS} --out build/matrix-out
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: matrix-${{ matrix.row }}

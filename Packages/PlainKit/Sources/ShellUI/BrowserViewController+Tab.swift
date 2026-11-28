@@ -338,11 +338,12 @@ extension BrowserViewController {
 
     /// Follows the tab's observed state: the pill, the buttons, progress and the page's state.
     private func tabChanged(from old: TabSnapshot?, to new: TabSnapshot) {
-        // Try Again that failed again: the warning, as the error page shows again.
+        // Try Again that failed again: the warning, as the error page shows again, unless the
+        // gallery or a sheet covers it.
         if engineUI.retry.update(
-            tab: old == nil ? nil : currentTab?.id, isLoading: new.isLoading, isFailed: new.isFailed,
-            errorChanged: old?.loadError != new.loadError
-        ) {
+            tab: old == nil ? nil : currentTab?.id, isLoading: new.isLoading, failures: new.loadFailures,
+            failedAddress: new.loadError?.url
+        ), !isShowingGallery, presentedViewController == nil {
             Haptic.failed.play(in: view)
         }
         if old?.shownAddress != new.shownAddress || old?.security != new.security || old?.isFailed != new.isFailed {
@@ -417,7 +418,7 @@ extension BrowserViewController {
             let tryAgain = { [weak self, weak tab] in
                 Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again")
                 guard let tab else { return }
-                self?.engineUI.retry.begin(tab.id)
+                self?.engineUI.retry.begin(tab.id, address: retry, failures: tab.loadFailures)
                 if let retry { tab.load(retry) } else { tab.reload() }
             }
             let access = session.pool.systemAccess
@@ -729,6 +730,7 @@ struct TabSnapshot: Equatable {
     var canGoForward: Bool
     var security: SecurityState
     var loadError: LoadError?
+    var loadFailures: Int
     var isAwaitingResubmit: Bool
     /// The page is in a language the user doesn't read (Translate Page applies).
     var canTranslate: Bool
@@ -748,6 +750,7 @@ struct TabSnapshot: Equatable {
         canGoForward = tab.canGoForward
         security = tab.security
         loadError = tab.loadError
+        loadFailures = tab.loadFailures
         isAwaitingResubmit = tab.isAwaitingResubmit
         canTranslate = tab.translationTarget != nil && tab.translation == .original
         isTranslated = tab.translation == .translated

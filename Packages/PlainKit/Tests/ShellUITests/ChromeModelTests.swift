@@ -436,37 +436,49 @@ struct PullToRefreshTests {
 /// Try Again that fails again: the warning once, when the retried load ends (haptics plan, §4.7).
 struct RetryWatchTests {
     let tab = UUID()
+    let page = URL(string: "http://127.0.0.1:9/nothing")!
 
     @Test func warnsOnceWhenTheRetriedLoadFailsAgain() {
         var watch = RetryWatch()
-        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == false, "no Try Again yet")
-        watch.begin(tab)
-        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == false, "the old failure, before the load starts")
-        #expect(watch.update(tab: tab, isLoading: true, isFailed: false) == false)
-        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == true)
+        #expect(watch.update(tab: tab, isLoading: false, failures: 1, failedAddress: page) == false, "no Try Again yet")
+        watch.begin(tab, address: page, failures: 1)
+        #expect(watch.update(tab: tab, isLoading: false, failures: 1, failedAddress: page) == false,
+                "the old failure, before the load starts")
+        #expect(watch.update(tab: tab, isLoading: true, failures: 1, failedAddress: nil) == false)
+        #expect(watch.update(tab: tab, isLoading: false, failures: 2, failedAddress: page) == true)
         #expect(watch.tab == nil)
-        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == false, "once")
+        #expect(watch.update(tab: tab, isLoading: false, failures: 3, failedAddress: page) == false, "once")
+    }
+
+    @Test func aFailureSeenWithoutItsLoadStillCounts() {
+        var watch = RetryWatch()
+        watch.begin(tab, address: page, failures: 1)
+        #expect(watch.update(tab: tab, isLoading: false, failures: 2, failedAddress: page) == true)
     }
 
     @Test func aRetryThatLoadsIsSilent() {
         var watch = RetryWatch()
-        watch.begin(tab)
-        _ = watch.update(tab: tab, isLoading: true, isFailed: false)
-        #expect(watch.update(tab: tab, isLoading: false, isFailed: false) == false)
+        watch.begin(tab, address: page, failures: 1)
+        _ = watch.update(tab: tab, isLoading: true, failures: 1, failedAddress: nil)
+        #expect(watch.update(tab: tab, isLoading: false, failures: 1, failedAddress: nil) == false)
         #expect(watch.tab == nil, "the load ended: the watch with it")
+        #expect(watch.update(tab: tab, isLoading: false, failures: 2, failedAddress: page) == false, "a later failure")
+    }
+
+    @Test func anotherAddressFailingIsNotTheRetry() {
+        var watch = RetryWatch()
+        watch.begin(tab, address: page, failures: 1)
+        let typed = URL(string: "http://127.0.0.1:9/other")!
+        #expect(watch.update(tab: tab, isLoading: false, failures: 2, failedAddress: typed) == false)
+        #expect(watch.tab == nil)
     }
 
     @Test func anotherTabOnScreenEndsTheWatch() {
         var watch = RetryWatch()
-        watch.begin(tab)
-        _ = watch.update(tab: tab, isLoading: true, isFailed: false)
-        #expect(watch.update(tab: UUID(), isLoading: false, isFailed: true) == false)
-        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == false, "back on the tab: the watch is gone")
-    }
-
-    @Test func aNewFailureCountsEvenIfTheLoadWasNeverSeen() {
-        var watch = RetryWatch()
-        watch.begin(tab)
-        #expect(watch.update(tab: tab, isLoading: false, isFailed: true, errorChanged: true) == true)
+        watch.begin(tab, address: page, failures: 1)
+        _ = watch.update(tab: tab, isLoading: true, failures: 1, failedAddress: nil)
+        #expect(watch.update(tab: UUID(), isLoading: false, failures: 0, failedAddress: nil) == false)
+        #expect(watch.update(tab: tab, isLoading: false, failures: 2, failedAddress: page) == false,
+                "back on the tab: the watch is gone")
     }
 }

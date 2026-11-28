@@ -178,6 +178,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         let error = error as NSError
         if NavigationRules.isCertificateError(error), let tab, let pool {
             tab.set(\.loadError, LoadError(error))
+            tab.loadFailures += 1
             pool.handleCertificateError(error, in: tab)
             return
         }
@@ -193,6 +194,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func report(_ error: NSError) {
         guard !NavigationRules.isSilentError(error) else { return }
         tab?.set(\.loadError, LoadError(error))
+        tab?.loadFailures += 1
     }
 
     private func endRestore() {

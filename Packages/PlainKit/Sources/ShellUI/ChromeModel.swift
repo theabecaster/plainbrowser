@@ -397,33 +397,43 @@ struct PullToRefreshTracker: Equatable {
 
 /// Try Again on an error page, watched until its load ends: one that fails again gets the warning
 /// haptic (haptics plan, §4.7), since the same sentence coming back is no answer by itself. The
-/// watch is for one tab and one load: another tab on screen, or the load ending either way, ends it.
+/// watch is for one tab and one address: another tab on screen, a load that ends without failing,
+/// or a failure of another address (a new one typed meanwhile) ends it silently.
 struct RetryWatch: Equatable {
     private(set) var tab: UUID?
+    private var address: URL?
+    private var failures = 0
     private var started = false
 
-    /// Try Again was tapped on `tab`'s error page.
-    mutating func begin(_ tab: UUID) {
+    /// Try Again was tapped on `tab`'s error page, loading `address` again; `failures` is the
+    /// tab's failed-load count then.
+    mutating func begin(_ tab: UUID, address: URL?, failures: Int) {
         self.tab = tab
+        self.address = address
+        self.failures = failures
         started = false
     }
 
-    /// The on-screen tab's state changed (`tab` nil: none on screen). true once, when the
-    /// retried load ended in a failure. `errorChanged`: the failure is not the one before, so a
-    /// load ran even if its loading state was never seen.
-    mutating func update(tab id: UUID?, isLoading: Bool, isFailed: Bool, errorChanged: Bool = false) -> Bool {
+    /// The on-screen tab's state changed (`tab` nil: none on screen). true once, when the retried
+    /// address failed again. A failure is told by the count, not the loading state, which one
+    /// observation can miss when a load fails at once.
+    mutating func update(tab id: UUID?, isLoading: Bool, failures: Int, failedAddress: URL?) -> Bool {
         guard let tab else { return false }
         guard id == tab else {
             self.tab = nil
             return false
         }
+        if failures != self.failures {
+            self.tab = nil
+            return failedAddress == address
+        }
         if isLoading {
             started = true
-            return false
+        } else if started {
+            // It loaded.
+            self.tab = nil
         }
-        guard started || errorChanged else { return false }
-        self.tab = nil
-        return isFailed
+        return false
     }
 }
 

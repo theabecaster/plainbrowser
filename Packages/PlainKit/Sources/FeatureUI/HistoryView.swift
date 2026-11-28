@@ -110,6 +110,7 @@ public struct HistoryView: View {
                                 Button("Delete", role: .destructive) {
                                     Task { await model.delete(row) }
                                 }
+                                .tint(Style.destructive)
                             }
                             .contextMenu {
                                 Button("Open", systemImage: "arrow.up.forward.app") { open(row) }

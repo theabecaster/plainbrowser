@@ -862,8 +862,10 @@ final class ClarityCaptureTests: XCTestCase {
         dismissMenu(app)
         pause(0.8)
         XCUIDevice.shared.orientation = .landscapeLeft
-        pause(1.5)
-        if link.waitForExistence(timeout: 3) {
+        pause(2.5)
+        // A rotation can leave the web view's links out of the tree for a moment: load again.
+        if !link.waitForExistence(timeout: 3) { go(app, "/a", "Page A") }
+        if link.waitForExistence(timeout: 5) {
             link.press(forDuration: 1.2)
             pause(1.5)
             shot("misc-01b-link-menu-landscape")

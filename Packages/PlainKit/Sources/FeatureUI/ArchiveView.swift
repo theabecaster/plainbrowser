@@ -27,6 +27,7 @@ public struct ArchiveView: View {
                             ArchiveRowView(row: row, period: section.period) { model.restore(row) }
                                 .swipeActions {
                                     Button("Delete", role: .destructive) { model.delete(row) }
+                                        .tint(Style.destructive)
                                 }
                                 .contextMenu {
                                     Button("Open", systemImage: "arrow.up.forward.app") { model.restore(row) }

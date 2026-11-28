@@ -117,6 +117,7 @@ public struct FavoritesEditor: View {
         }
         .swipeActions(edge: .trailing) {
             Button("Delete", role: .destructive) { delete(favorite) }
+                .tint(Style.destructive)
         }
         .contextMenu {
             Button("Open", systemImage: "arrow.up.forward.app") { onOpen(favorite.url) }

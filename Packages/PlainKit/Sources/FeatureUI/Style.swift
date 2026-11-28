@@ -11,6 +11,9 @@ enum Style {
     /// Text on paper, and its supporting step.
     static let ink = Color(uiColor: Palette.ink)
     static let inkSecondary = Color(uiColor: Palette.inkSecondary)
+    /// A swipe's Delete: the system's red, which the sheets' accent tint would otherwise turn
+    /// Lagoon blue, making a destructive action look like the main one.
+    static let destructive = Color(uiColor: .systemRed)
     /// A card of rows, and the hairline between them.
     static let card = Color(uiColor: Palette.paperCard)
     static let hairline = Color(uiColor: Palette.paperHairline)

@@ -475,3 +475,6 @@ Newest feature last.
 - **Private search sheet.** In light mode the focused field of a private tab sits on the warm
   paper sheet; a private tint for the sheet would carry the mode into that state (design review,
   private mode lane). The sheet is the search-bar lane's; do it with them.
+- **Private, Duo inner: the tab strip stays paper under the violet top bar;** a matching private
+  treatment would read as one context (design review round 2). The strip is the Duo top-bar
+  lane's.

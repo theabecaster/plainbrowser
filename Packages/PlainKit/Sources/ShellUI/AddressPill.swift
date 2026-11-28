@@ -345,10 +345,16 @@ final class AddressPill: UIView {
         let mark = UIImageView(image: UIImage(systemName: "hand.raised.fill"))
         mark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body, scale: .small)
         mark.tintColor = Palette.privateAccent
-        mark.contentMode = .left
+        mark.contentMode = .center
         mark.isAccessibilityElement = false
-        mark.frame = CGRect(x: 0, y: 0, width: mark.intrinsicContentSize.width + Spacing.m, height: Metrics.tapTarget)
-        return mark
+        // In a wrapper: the field sizes an image view to its image, which ran the mark into the
+        // caret (design review). The wrapper keeps the gap.
+        let size = mark.intrinsicContentSize
+        let wrapper = UIView(frame: CGRect(x: 0, y: 0, width: size.width + Spacing.m, height: Metrics.tapTarget))
+        mark.frame = CGRect(x: 0, y: ((Metrics.tapTarget - size.height) / 2).rounded(), width: size.width, height: size.height)
+        wrapper.addSubview(mark)
+        wrapper.isUserInteractionEnabled = false
+        return wrapper
     }
 
     // MARK: Bar swipe

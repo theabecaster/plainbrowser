@@ -106,7 +106,7 @@ extension BrowserViewController {
             .back: rules.back,
             .forward: rules.forward,
             .tabs: tabsSlot,
-            .share: rules.share,
+            .newTab: rules.newTab,
             .more: rules.more,
         ]
         for (kind, rule) in visibility {
@@ -117,7 +117,8 @@ extension BrowserViewController {
             if item.isEnabled != applied.isEnabled { item.isEnabled = applied.isEnabled }
         }
         applyTabsFace()
-        duo.sidebar?.setNewTabShown(rules.menuNewTab)
+        // One New Tab button on screen (principle 8): the sidebar's only while the bar has none.
+        duo.sidebar?.setNewTabShown(rules.menuNewTab && !rules.newTab.isVisible)
         if !tabsUI.start.isHidden { applyStartShortcuts() }
         applyToolbarItems()
         updateBarShapeIfNeeded()

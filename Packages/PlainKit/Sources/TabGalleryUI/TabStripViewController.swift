@@ -6,8 +6,9 @@ import UIKit
 
 /// Tab Layout: Above. A compact strip of tabs under the top bar, as Safari has on the Duo's inner
 /// screen and on iPad: the tabs share the row's width (`FixedChoices.tabStripItemWidth`), and past
-/// the narrowest it scrolls sideways; the focused pane's tab is marked, New Tab (+) at the end
-/// (a long press offers New Private Tab). Tap a tab to show it, long press for Open in Other Pane
+/// the narrowest it scrolls sideways; the focused pane's tab is marked. New Tab is the top bar's
+/// "+" right above the strip's end, the one New Tab button on screen (docs/research/new-tab.md).
+/// Tap a tab to show it, long press for Open in Other Pane
 /// and Close Tab, drag to reorder; the focused tab also has a close button. Private tabs follow the
 /// regular ones, tinted. It floats over the page with the bar; the host hides it with the bar.
 ///
@@ -18,7 +19,6 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     private let dataSource: any SideTabsDataSource
     private var collectionView: UICollectionView!
     private var diffable: UICollectionViewDiffableDataSource<Int, UUID>!
-    private let newTabButton = UIButton(type: .system)
     private var items: [UUID: TabGalleryItem] = [:]
     private var focusedID: UUID?
     private var otherID: UUID?
@@ -94,34 +94,15 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         view.addSubview(fade)
         fade.addSubview(collectionView)
 
-        newTabButton.setImage(
-            UIImage(systemName: "plus", withConfiguration: UIImage.SymbolConfiguration(textStyle: .headline)), for: .normal
-        )
-        newTabButton.tintColor = Palette.accent
-        newTabButton.accessibilityIdentifier = "tabStrip.newTab"
-        newTabButton.accessibilityLabel = "New Tab"
-        newTabButton.addAction(UIAction { [weak self] _ in self?.dataSource.newTab(private: false) }, for: .primaryActionTriggered)
-        newTabButton.menu = UIMenu(children: [
-            UIAction(title: "New Private Tab", image: UIImage(systemName: "hand.raised")) { [weak self] _ in
-                self?.dataSource.newTab(private: true)
-            },
-        ])
-        newTabButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(newTabButton)
-
         NSLayoutConstraint.activate([
             fade.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            fade.trailingAnchor.constraint(equalTo: newTabButton.leadingAnchor),
+            fade.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             fade.topAnchor.constraint(equalTo: view.topAnchor, constant: -Self.touchOutset),
             fade.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: Self.touchOutset),
             collectionView.leadingAnchor.constraint(equalTo: fade.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: fade.trailingAnchor),
             collectionView.topAnchor.constraint(equalTo: fade.topAnchor),
             collectionView.bottomAnchor.constraint(equalTo: fade.bottomAnchor),
-            newTabButton.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            newTabButton.centerYAnchor.constraint(equalTo: collectionView.centerYAnchor),
-            newTabButton.widthAnchor.constraint(equalToConstant: Metrics.tapTarget),
-            newTabButton.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
         ])
 
         diffable = UICollectionViewDiffableDataSource<Int, UUID>(collectionView: collectionView) { [weak self] collectionView, indexPath, id in

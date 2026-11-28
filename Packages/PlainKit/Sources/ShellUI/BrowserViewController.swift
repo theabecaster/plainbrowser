@@ -435,16 +435,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 button.preferredMenuElementOrder = .fixed
                 item = UIBarButtonItem(primaryAction: action, menu: tabsMenu())
                 item.preferredMenuElementOrder = .fixed
-            case .share:
-                button.addAction(UIAction { [weak self, weak button] _ in
-                    guard let button else { return }
-                    self?.share(from: button)
-                }, for: .primaryActionTriggered)
-                item = UIBarButtonItem(title: kind.title, image: UIImage(systemName: kind.symbol))
-                item.primaryAction = UIAction(title: kind.title, image: UIImage(systemName: kind.symbol)) { [weak self, weak item] _ in
-                    guard let item else { return }
-                    self?.share(from: item)
+            case .newTab:
+                // A tap opens a tab of the kind on screen, as the swipe past the last tab does; a
+                // long press offers the other kind (docs/research/new-tab.md).
+                let action = UIAction(title: kind.title, image: UIImage(systemName: kind.symbol)) { [weak self] _ in
+                    self?.newTabButtonTapped()
                 }
+                button.addAction(action, for: .primaryActionTriggered)
+                button.menu = newTabButtonMenu()
+                button.showsMenuAsPrimaryAction = false
+                item = UIBarButtonItem(primaryAction: action, menu: newTabButtonMenu())
             case .back, .forward:
                 let action = UIAction(title: kind.title, image: UIImage(systemName: kind.symbol)) { [weak self] _ in
                     kind == .back ? self?.goBack() : self?.goForward()
@@ -454,7 +454,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             }
             item.axisBehavior = .verticalPreferred
             // Back, Forward and Tabs overflow last (docs/research/design-audit.md, Duo).
-            item.visibilityPriority = kind == .share ? .low : (kind == .more ? .standard : .high)
+            item.visibilityPriority = kind == .more ? .standard : .high
             item.accessibilityIdentifier = kind.identifier
             item.isEnabled = false
             barItems[kind] = item
@@ -702,6 +702,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         updateFieldAccessory()
         updateStartForTyping(query: "")
         applyEditingLayout(false, animated: true)
+        // Any end of editing settles the new tab; only the user's own close goes back first
+        // (`dismissSearchSheet`, which reads it before ending).
+        tabsUI.newTabReturn = nil
     }
 
     public func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -893,6 +896,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Loads `url` in the tab on screen. `.typed` when the address bar asked for it: that visit
     /// then weighs more in ranking.
     func load(_ url: URL, kind: VisitKind = .link) {
+        // The new tab is being used: its field closing no longer goes back.
+        tabsUI.newTabReturn = nil
         // A new address replaces the page the launch picture shows.
         dropLaunchCover(animated: true)
         let tab = tabForSubmittedAddress()

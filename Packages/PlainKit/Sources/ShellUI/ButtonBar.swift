@@ -3,8 +3,8 @@ import BrowserCore
 import DesignSystem
 import UIKit
 
-/// The page's buttons: Back, Forward, Tabs (the gallery; a long press for the tab menu), Share and
-/// More (the page menu).
+/// The page's buttons: Back, Forward, Tabs (the gallery; a long press for the tab menu), New Tab (a
+/// long press for a tab of the other kind) and More (the page menu, which holds Share).
 ///
 /// Where the system has a vertical bar (the iPhone Duo's outer screen), they are the navigation
 /// controller's toolbar items with `.verticalPreferred`, so the system places them in its side
@@ -12,14 +12,14 @@ import UIKit
 /// collapses with the pill as the page scrolls. A system toolbar would change the page's safe
 /// area as it hides, which relayouts the page; this bar moves by transform only.
 enum PageButton: CaseIterable {
-    case back, forward, tabs, share, more
+    case back, forward, tabs, newTab, more
 
     var symbol: String {
         switch self {
         case .back: "chevron.backward"
         case .forward: "chevron.forward"
         case .tabs: "square.on.square"
-        case .share: "square.and.arrow.up"
+        case .newTab: "plus"
         case .more: "line.3.horizontal.circle"
         }
     }
@@ -29,7 +29,7 @@ enum PageButton: CaseIterable {
         case .back: "Back"
         case .forward: "Forward"
         case .tabs: "Tabs"
-        case .share: "Share"
+        case .newTab: "New Tab"
         case .more: "More"
         }
     }
@@ -39,7 +39,7 @@ enum PageButton: CaseIterable {
         case .back: "back"
         case .forward: "forward"
         case .tabs: "tabs"
-        case .share: "share"
+        case .newTab: "newTab"
         case .more: "more"
         }
     }
@@ -60,7 +60,7 @@ final class ButtonBar: UIView {
     private(set) var besideWidth: NSLayoutConstraint!
 
     /// The top bar's shape (a wide screen): Back and Forward in a capsule at the row's leading
-    /// end, Tabs, Share and More in one at its trailing end, the pill between them, where Safari
+    /// end, Tabs, New Tab and More in one at its trailing end, the pill between them, where Safari
     /// has them on the Duo's inner screen and on iPad. The leading capsule holds only what shows
     /// and grows away from Back (Forward comes in to its right), so Back never moves; the trailing
     /// capsule keeps every slot. The pill keeps its place either way.
@@ -75,7 +75,7 @@ final class ButtonBar: UIView {
     private var splitConstraints: [NSLayoutConstraint] = []
     private var leadingWidth: NSLayoutConstraint?
     /// The buttons in the trailing capsule of the split shape.
-    static let trailingKinds: [PageButton] = [.tabs, .share, .more]
+    static let trailingKinds: [PageButton] = [.tabs, .newTab, .more]
     /// The width of each capsule of the split shape: one 44 pt slot per button.
     static var splitLeadingWidth: CGFloat { slot * CGFloat(PageButton.allCases.count - trailingKinds.count) }
     static var splitTrailingWidth: CGFloat { slot * CGFloat(trailingKinds.count) }

@@ -266,6 +266,8 @@ public enum Signposts {
     /// rest under the new tab's focused search field (`keyboardDidShow`; `OpenIntervals`). The perf
     /// gate's `newTabMs`.
     public static let newTabReady: StaticString = "tab.newReady"
+    /// Event: the bar's New Tab button, tapped ("tap") or its long-press menu's other kind ("menu").
+    public static let barNewTab: StaticString = "bar.newTab"
     /// Interval: closing a tab (button, flick in the gallery, `window.close()`), until the next
     /// tab is on screen.
     public static let tabClose: StaticString = "tab.close"

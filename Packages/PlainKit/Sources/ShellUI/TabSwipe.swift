@@ -121,7 +121,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             }
         case .ended, .cancelled, .failed:
             switch mode {
-            case .tabs: release(velocity: pan.state == .ended ? velocity.x : 0)
+            case .tabs: release(velocity: pan.state == .ended ? velocity.x : 0, ended: pan.state == .ended)
             case .gallery: releaseGallery(velocity: pan.state == .ended ? velocity : .zero)
             case .bump: releaseBump()
             case .none: break
@@ -215,17 +215,33 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         apply(swipe, browser: browser)
         // The threshold haptic: crossing into (not back out of) the commit zone.
         let width = browser.webContainer.bounds.width
+        let wasArmed = swipe.isArmed
         let armed: Bool
         if swipe.neighbour != nil {
             armed = abs(offset) > width / 2
         } else if swipe.isNewTabCard {
-            armed = -displayed(offset, swipe: swipe, width: width) >= FixedChoices.newTabSwipeThreshold
+            // The New Tab card (haptics plan): `threshold` as it arms, a tick as it disarms, with
+            // hysteresis so a finger resting on the line never chatters. The release commits on
+            // exactly this state, so what the finger felt is what happens.
+            let pulled = -displayed(offset, swipe: swipe, width: width)
+            let line = CGFloat(FixedChoices.newTabSwipeThreshold)
+            armed = wasArmed ? pulled >= line - Self.cardHysteresis : pulled >= line
         } else {
             armed = false
         }
-        if armed, !swipe.isArmed { Haptic.selection.play() }
+        if armed != wasArmed {
+            if swipe.isNewTabCard {
+                (armed ? Haptic.threshold : Haptic.selection).play()
+            } else if armed {
+                Haptic.selection.play()
+            }
+        }
         swipe.isArmed = armed
     }
+
+    /// Points under the New Tab card's line before an armed card disarms (the haptics plan's
+    /// 8–12 pt hysteresis).
+    private static let cardHysteresis: CGFloat = 10
 
     /// The page's on-screen offset: 1:1 toward a neighbour, rubber-banded where there is none.
     private func displayed(_ offset: CGFloat, swipe: Swipe, width: CGFloat) -> CGFloat {
@@ -303,7 +319,9 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         return view
     }
 
-    private func release(velocity: CGFloat) {
+    /// `ended` false (the system cancelled the touch): the New Tab card never commits; only a
+    /// finger let go opens a tab.
+    private func release(velocity: CGFloat, ended: Bool = true) {
         guard let swipe, let browser else { return }
         let width = browser.webContainer.bounds.width
         // Where a flick would carry the page with UIScrollView's normal deceleration.
@@ -313,8 +331,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         if swipe.neighbour != nil, swipe.side != 0, abs(projected) > width / 2,
            (projected < 0) == (swipe.side > 0) {
             target = -CGFloat(swipe.side) * width
-        } else if swipe.isNewTabCard, -displayed(swipe.offset, swipe: swipe, width: width) >= FixedChoices.newTabSwipeThreshold,
-                  velocity < FixedChoices.galleryFlickSpeed {
+        } else if swipe.isNewTabCard, swipe.isArmed, ended, velocity < FixedChoices.galleryFlickSpeed {
             target = -width
         }
         swipe.settleInterval = Signposts.signposter.beginInterval(Signposts.tabSwipeSettle)
@@ -366,7 +383,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             if let settle = swipe.settleInterval { signposter.endInterval(Signposts.tabSwipeSettle, settle) }
             signposter.emitEvent(Signposts.tabSwipeEnd, "switched")
         } else if target != 0, swipe.isNewTabCard {
-            Haptic.tap.play()
+            // Silent: the card only commits armed, and arming already played `threshold`.
             reset(swipe, browser: browser, detachingNeighbour: false)
             browser.openNewTabFromSwipe()
             signposter.endInterval(Signposts.tabSwipe, swipe.interval)

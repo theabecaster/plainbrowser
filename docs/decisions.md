@@ -2834,7 +2834,8 @@ limits: docs/research/perf-pass-3.md.
   checks). Memory at ten tabs: 68.6 vs 71.3 MB on the simulator.
 - **The warm web view is made again after a tab takes it**, `EngineChoices.rewarmDelay` after
   the take, in the default run loop mode (not during a scroll or a tracked gesture; an animation
-  may still run, as for the gallery's spare), only while active and not after a memory warning.
+  may still run, as for the gallery's spare), never while the keyboard rises or falls, only while
+  active and not after a memory warning.
   So a New Tab that comes a second or more after the last one makes no `WKWebView` in its tap.
 - **The address field keeps its prediction traits** (inline predictions, Writing Tools, grammar
   outside private tabs). Turning them off saved no time and, once one outlier run was repeated,

@@ -265,6 +265,32 @@ line break (ICU's `$` also matches before a final one) takes the full check.
   classes, `dlopen` of private frameworks, reading or patching Apple internals. They could fail
   App Review and are not used.
 
+### The simulator gate on the final code (job G)
+
+`TEST_RUNNER_PLAIN_PERF_REFERENCE=1 scripts/perf-gate.sh`, m6desk, load 60, the branch on
+origin/dev `3ca5656` (its row was not committed; the lead logs the device row):
+
+| Metric | This branch | Previous sim row (pass 2, `bed7c69`, another base) | Reference (report only) |
+|---|---|---|---|
+| Launch, first frame | 666.5 (RSD 11.9%) | 639.4 | focused 1,032.9; unfocused 379.6 |
+| Launch, field focused | 386.4 (RSD 21.1%) | 316 | focused 513.9; unfocused 290.3 |
+| Launch, last tab | 458.6 | 386.6 | |
+| Pill tap to keyboard | 517.4 (keyboard start 113.0) | 484.2 | 437.8 (keyboard start 47.5) |
+| New Tab to keyboard | 455.6 (RSD 0.3%; keyboard start 63.9) | 465.7 | 437.8 |
+| Keystroke to suggestions | 4.3 | 3.8 | 2.7 |
+| Link tap to first paint | 71 (RSD 62.7%) | 55 | |
+| Memory, ten tabs | 67.6 MB (lean field 67.3) | 58.5 | 34.9 MB |
+| Gallery / swipe / card | 526.9 / 291 / 519.2 | 483 / 294.6 / 518.1 | |
+
+The gate failed its 20% simulator ratchet on the field-focused launch (RSD 21%) and link paint
+(RSD 63%). The previous row is pass 2's branch, before about forty commits of origin/dev
+(gestures, the page's address in the field, new tab, private mode), so it does not isolate this
+branch. This branch's own launch-path change is one argument check, and each change above was
+measured against its own A/B. Pill focus now spends 113 ms before the keyboard starts against
+the bare field's 47.5, more than in pass 2. Because the rewarm can land during a focus right after
+a load, it now also waits out any keyboard rise or fall (`isKeyboardMoving`,
+`EngineChoices.rewarmRetry`), and job H checks focus and New Tab with that.
+
 ## 6. Device run requested
 
 On the Duo, Plain Dev, the phone awake and unlocked:

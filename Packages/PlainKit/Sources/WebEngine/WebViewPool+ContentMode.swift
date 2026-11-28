@@ -198,8 +198,10 @@ extension WebViewPool {
         }
     }
 
-    /// The change is over for this page (checked, switched or kept): the next one reads afresh.
-    private func forgetPlace(of slot: Slot) {
+    /// The change is over for this page (checked, switched or kept), or the page left the screen
+    /// (`detach`, teardown): the next change reads afresh. A page moved to another pane during a
+    /// fold keeps it: that move is part of the change the place was read for.
+    func forgetPlace(of slot: Slot) {
         slot.contentMode.readsPlace = false
         slot.contentMode.placeToken += 1
         slot.contentMode.placeBeforeChange = nil
@@ -389,9 +391,8 @@ extension WebViewPool {
     }
 
     /// Ends a switch at once: the tab left the screen, moved to another pane or its web view is
-    /// going away. A place read for it is forgotten too: it belongs to where the page was.
+    /// going away.
     func cancelSwitch(_ slot: Slot) {
-        forgetPlace(of: slot)
         guard let change = slot.contentMode.running else { return }
         change.deadline?.cancel()
         slot.contentMode.running = nil

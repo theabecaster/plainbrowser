@@ -2522,3 +2522,18 @@ like separate things; they're just part of the whole bar."
   (`FixedChoices.sidebarTitlesTick`: in past 0.6 of the way, out under 0.4) so the edge never
   chatters; a tab dragged to reorder in the strip or the sidebar ticks at each new place and
   lands with `.threshold` (a drop of its own comes with the haptics lane).
+- **Design review, round 2** (Codex, on captures of the real inner screen): a private tab in the
+  strip carries a small hand before its title (the strip has no "Private" header, and the tab
+  on screen is a white card like any other); VoiceOver reads "Private" first. Left for the
+  backlog: a more solid card for the tab on screen, the private strip's glass tint over a
+  saturated page, and a clipped first plate where five tabs overflow in portrait.
+- **Rows are touched on their tile.** A sidebar row is as wide as the titled sidebar and clipped
+  by the rail, so its middle lies under the page: VoiceOver, Switch Control and UI tests
+  activated the page instead (found by `DuoTests` on the real inner screen). Each row's
+  `accessibilityActivationPoint` is its tile's middle.
+- **Measured** (simulator, 50 tabs, 4,000 pt/s in 120 Hz steps, `SideTabsViewTests`): the rail
+  costs 1.0 to 2.2 ms of main-thread work per frame at the 95th percentile and the strip 0.9 to
+  2.0 ms, against the 8.3 ms a 120 Hz frame has; no site icon is read on the main thread while
+  scrolling. The longest single step was 2 to 6 ms on a quiet host and 42 to 64 ms once in a run
+  on a loaded one (the host, not the list: it moved between the rail and the strip from run to
+  run). To confirm on the device with Instruments.

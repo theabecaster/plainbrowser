@@ -359,8 +359,10 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
             Haptic.threshold.play()
             dataSource.moveTab(id, to: index)
         }
-        // The store may keep pinned tabs first: show its order.
-        reloadTabs()
+        // The store may keep pinned tabs first: show its order. After the reorder has been
+        // committed: a snapshot applied inside the handler raises in UIKit (the strip crashed so
+        // on TestFlight).
+        DispatchQueue.main.async { [weak self] in self?.reloadTabs() }
     }
 
     // MARK: UICollectionViewDelegate

@@ -186,6 +186,17 @@ final class SideTabCell: UICollectionViewCell {
         closeButton.isUserInteractionEnabled = alpha > 0.5
     }
 
+    /// Where VoiceOver, Switch Control and UI tests touch the row: its tile, which shows in the
+    /// rail too. The row is as wide as the titled sidebar, so its middle is under the page while
+    /// the rail clips it, and a touch there went to the page.
+    override var accessibilityActivationPoint: CGPoint {
+        get {
+            let tile = SideTabMetrics.tileFrame(rowHeight: bounds.height)
+            return UIAccessibility.convertToScreenCoordinates(tile, in: self).center
+        }
+        set {}
+    }
+
     override var isHighlighted: Bool {
         didSet {
             guard isHighlighted != oldValue else { return }
@@ -244,6 +255,9 @@ final class SideActionRow: UIControl {
         accessibilityTraits = .button
         showsLargeContentViewer = true
         addInteraction(UILargeContentViewerInteraction())
+        // A plain control sends no primary action of its own (only UIButton does): a touch that
+        // ends inside is the row's action. Without this New Tab and Show Titles took no taps.
+        addAction(UIAction { [weak self] _ in self?.sendActions(for: .primaryActionTriggered) }, for: .touchUpInside)
         set(symbolName: symbolName, title: title)
     }
 
@@ -274,6 +288,17 @@ final class SideActionRow: UIControl {
         label.alpha = SideTabMetrics.titleAlpha(visibleWidth: width)
     }
 
+    /// Where VoiceOver, Switch Control and UI tests touch the row: its tile, which shows in the
+    /// rail too. The row is as wide as the titled sidebar, so its middle is under the page while
+    /// the rail clips it, and a touch there went to the page.
+    override var accessibilityActivationPoint: CGPoint {
+        get {
+            let tile = SideTabMetrics.tileFrame(rowHeight: bounds.height)
+            return UIAccessibility.convertToScreenCoordinates(tile, in: self).center
+        }
+        set {}
+    }
+
     override var isHighlighted: Bool {
         didSet {
             guard isHighlighted != oldValue else { return }
@@ -294,5 +319,11 @@ final class SideActionRow: UIControl {
         let x = SideTabMetrics.rail
         label.frame = CGRect(x: x, y: 0, width: max(0, bounds.width - x - Spacing.m), height: bounds.height)
     }
+}
+#endif
+
+#if canImport(UIKit)
+private extension CGRect {
+    var center: CGPoint { CGPoint(x: midX, y: midY) }
 }
 #endif

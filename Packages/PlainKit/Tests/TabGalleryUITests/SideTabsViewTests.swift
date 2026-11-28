@@ -137,6 +137,29 @@ final class SideTabsViewTests: XCTestCase {
         XCTAssertEqual(data.loads, 0, "icons in memory are assigned, never read, during a scroll")
     }
 
+    /// New Tab and Show Titles are plain controls: a touch that ends inside is their action.
+    func testTheSidebarsOwnRowsAnswerATouch() throws {
+        let data = FakeSideTabs(count: 3, cached: true)
+        let sidebar = showSidebar(data, width: SidebarState.rail.width)
+        sidebar.canShowTitles = true
+        var toggles = 0
+        sidebar.onToggleTitles = { toggles += 1 }
+        func control(_ identifier: String, in view: UIView) -> UIControl? {
+            if let control = view as? UIControl, control.accessibilityIdentifier == identifier { return control }
+            for child in view.subviews { if let found = control(identifier, in: child) { return found } }
+            return nil
+        }
+        let titles = try XCTUnwrap(control("sideTabs.titles", in: sidebar.view))
+        titles.sendActions(for: .touchUpInside)
+        XCTAssertEqual(toggles, 1, "Show Titles answers a tap")
+        let newTab = try XCTUnwrap(control("sideTabs.newTab", in: sidebar.view))
+        newTab.sendActions(for: .touchUpInside)
+        XCTAssertEqual(data.newTabs, 1, "New Tab answers a tap")
+        // VoiceOver and UI tests touch a row on its tile, which shows in the rail too.
+        let point = sidebar.view.convert(titles.accessibilityActivationPoint, from: nil)
+        XCTAssertLessThan(point.x, SidebarState.rail.width)
+    }
+
     /// The strip is as wide as its tabs (the host sizes it to `preferredWidth`), and the tabs
     /// fill it: when it grows for a new tab, each keeps its resting width in the same pass.
     func testTheStripsTabsFillItWhenItGrows() {
@@ -249,7 +272,8 @@ private final class FakeSideTabs: SideTabsDataSource {
     func selectTab(_ id: UUID) { focusedTabID = id }
     func closeTab(_ id: UUID) { regularTabs.removeAll { $0.id == id } }
     func moveTab(_ id: UUID, to index: Int) {}
-    func newTab(private isPrivate: Bool) {}
+    private(set) var newTabs = 0
+    func newTab(private isPrivate: Bool) { newTabs += 1 }
     func openInOtherPane(_ id: UUID) {}
 }
 #endif

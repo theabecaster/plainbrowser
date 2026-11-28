@@ -148,7 +148,7 @@ public final class TabGalleryViewController: UIViewController {
         root.addSubview(emptyView)
 
         bottomBar.newTabButton.addAction(UIAction { [weak self] _ in self?.newTab() }, for: .primaryActionTriggered)
-        bottomBar.privateButton.addAction(UIAction { [weak self] _ in self?.togglePrivate() }, for: .primaryActionTriggered)
+        bottomBar.modeSwitch.onSelect = { [weak self] isPrivate in self?.showPrivate(isPrivate) }
         bottomBar.showsPrivateButton = dataSource.supportsPrivateTabs
         bottomBar.doneButton.addAction(UIAction { [weak self] _ in self?.done() }, for: .primaryActionTriggered)
         bottomBar.menuButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
@@ -228,7 +228,7 @@ public final class TabGalleryViewController: UIViewController {
         // Floating controls center on the safe area: on the Duo's outer screen the system's
         // vertical bar takes one side.
         let midX = (safe.left + (bounds.width - safe.right)) / 2
-        let barSize = bottomBar.sizeThatFits(bounds.size)
+        let barSize = bottomBar.fit(width: bounds.width - safe.left - safe.right - Spacing.l * 2)
         let barBottom = bounds.height - max(safe.bottom, Spacing.l)
         bottomBar.frame = CGRect(
             x: (midX - barSize.width / 2).rounded(), y: barBottom - barSize.height,
@@ -553,8 +553,15 @@ public final class TabGalleryViewController: UIViewController {
         if backdrop.contentView.backgroundColor != dim || isShowingPrivate != isPrivate {
             isShowingPrivate = isPrivate
             backdrop.contentView.backgroundColor = dim
-            bottomBar.setPrivate(isPrivate)
             emptyView.setPrivate(isPrivate)
+        }
+        // The switch names both lists with their counts; only a new digit count lays out again.
+        if dataSource.supportsPrivateTabs, bottomBar.setMode(
+            isPrivate: isPrivate,
+            regularCount: isPrivate ? dataSource.cardCount(private: false) : items.count,
+            privateCount: isPrivate ? items.count : dataSource.cardCount(private: true)
+        ) {
+            view.setNeedsLayout()
         }
         let isEmpty = items.isEmpty
         // VoiceOver hears how many tabs there are, cards off screen included.
@@ -610,7 +617,7 @@ public final class TabGalleryViewController: UIViewController {
         guard let item = items[id] else { return }
         card.configure(
             item: item, isSelected: id == selectedID, hidesThumbnail: id == hiddenThumbnailID,
-            showsPrivateBadge: !dataSource.isShowingPrivateTabs, marksSelection: selectionRingWidth > 0
+            marksSelection: selectionRingWidth > 0
         )
         card.onOpen = { [weak self] in self?.open(id) }
         card.onClose = { [weak self] in self?.closeTab(id) }
@@ -692,10 +699,10 @@ public final class TabGalleryViewController: UIViewController {
         dataSource.newTab()
     }
 
-    /// Regular or private tabs: the cards cross-fade to the other list, which opens on its
-    /// selected tab.
-    private func togglePrivate() {
-        let isPrivate = !dataSource.isShowingPrivateTabs
+    /// Private or regular tabs from the switch: the cards cross-fade to that list, which opens on
+    /// its selected tab. The side already shown does nothing.
+    private func showPrivate(_ isPrivate: Bool) {
+        guard isPrivate != dataSource.isShowingPrivateTabs else { return }
         Signposts.signposter.emitEvent(Signposts.privateMode, "\(isPrivate ? "on" : "off")")
         Haptic.selection.play()
         toast.hide(animated: true)
@@ -704,9 +711,10 @@ public final class TabGalleryViewController: UIViewController {
     }
 
     /// The shell changed which list the data source shows (another profile's, from the
-    /// switcher): the cards cross-fade to it, as for the private toggle.
-    public func showList() {
-        Haptic.selection.play()
+    /// switcher): the cards cross-fade to it, as for the private toggle. `tick: false` where the
+    /// caller already played a haptic (deleting a profile), so it never fires twice.
+    public func showList(tick: Bool = true) {
+        if tick { Haptic.selection.play() }
         toast.hide(animated: true)
         crossfadeToList()
     }
@@ -778,7 +786,9 @@ public final class TabGalleryViewController: UIViewController {
         let count = galleryState.closableCount
         let offersReopen = GalleryRules(galleryState).reopenToastAfterClose
         let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        let title = count == 1 ? "Close 1 Tab" : "Close All \(count) Tabs"
+        let title = galleryState.isPrivateList
+            ? (count == 1 ? "Close Private Tab" : "Close All \(count) Private Tabs")
+            : (count == 1 ? "Close 1 Tab" : "Close All \(count) Tabs")
         sheet.addAction(UIAlertAction(title: title, style: .destructive) { [weak self] _ in
             guard let self else { return }
             Signposts.signposter.emitEvent(Signposts.galleryCloseAll)
@@ -822,10 +832,14 @@ public final class TabGalleryViewController: UIViewController {
             elements.append(profile)
         }
         guard rules.closeAllTabs else { return elements }
-        let closeAll = UIAction(title: "Close All Tabs", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
+        let closeAll = UIAction(
+            title: rules.state.isPrivateList ? "Close All Private Tabs" : "Close All Tabs",
+            image: UIImage(systemName: "xmark"), attributes: .destructive
+        ) { [weak self] _ in
             guard let self else { return }
             confirmCloseAll(from: bottomBar.menuButton)
         }
+        closeAll.accessibilityIdentifier = "gallery.closeAll"
         elements.append(UIMenu(options: .displayInline, children: [closeAll]))
         return elements
     }

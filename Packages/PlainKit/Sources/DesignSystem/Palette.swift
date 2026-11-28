@@ -65,13 +65,27 @@ public enum Palette {
 
     // MARK: Private browsing
 
-    /// The glass tint of the chrome while a private tab is on screen: a quiet dusk violet instead
-    /// of Paper, so private browsing is plain to see without a banner or badge.
+    /// The glass tint of the chrome while a private tab is on screen: a deep dusk violet in both
+    /// appearances, drawn with the dark style (light text and glyphs), as Safari darkens its bar.
+    /// Owner, 2026-11-27: "it's hard to tell when you are in it and when you're not"; the old
+    /// lilac read as Paper in light mode. White text on it is above 10:1.
     public static let privateGlassTint = UIColor(
-        light: UIColor(rgb: 0xE4E0F2, alpha: 0.9), dark: UIColor(rgb: 0x2A2445, alpha: 0.86)
+        light: UIColor(rgb: 0x2E2560, alpha: 0.9), dark: UIColor(rgb: 0x3A2D7A, alpha: 0.86)
     )
 
-    /// The tab gallery's background while it shows private tabs.
+    /// The private mark (`hand.raised.fill`) on the private glass and the start screen: a light
+    /// violet, 5:1 or more on `privateGlassTint`.
+    public static let privateAccent = UIColor(rgb: 0xC2B4FF)
+
+    /// The tab switcher's selected Private segment: white text on it is about 5:1.
+    public static let privateSelection = UIColor(rgb: 0x6E5AE6)
+
+    /// The tab switcher's selected Tabs segment (on the always-dark gallery) and the text on it.
+    public static let galleryModeLight = UIColor(rgb: 0xF4F1EA)
+    public static let galleryModeInk = UIColor(rgb: 0x0A2133)
+
+    /// The tab gallery's background while it shows private tabs, the private start screen (always
+    /// drawn dark) and the strip behind the status bar.
     public static let privateBackground = UIColor(light: UIColor(rgb: 0xEEEBF6), dark: UIColor(rgb: 0x15122A))
 
     /// Lagoon Blue for text and symbols on glass: in dark mode a lighter step of the same blue,

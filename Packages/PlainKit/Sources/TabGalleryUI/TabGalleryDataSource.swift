@@ -118,6 +118,9 @@ public protocol TabGalleryDataSource: AnyObject {
     var isShowingPrivateTabs: Bool { get }
     /// The private toggle. The gallery reads `tabs` again after it.
     func setShowingPrivateTabs(_ isPrivate: Bool)
+    /// Cards in the regular list (of the shown profile) or the private one, for the switcher's
+    /// "Private | Tabs" control. Cheap: called on every reload.
+    func cardCount(private isPrivate: Bool) -> Int
 
     /// Whether the gallery menu offers the archive.
     var canShowArchive: Bool { get }
@@ -148,6 +151,7 @@ extension TabGalleryDataSource {
     public var supportsPrivateTabs: Bool { false }
     public var isShowingPrivateTabs: Bool { false }
     public func setShowingPrivateTabs(_ isPrivate: Bool) {}
+    public func cardCount(private isPrivate: Bool) -> Int { isPrivate == isShowingPrivateTabs ? tabs.count : 0 }
     public var canShowArchive: Bool { false }
     public func showArchive() {}
     public func returnToPage() {}

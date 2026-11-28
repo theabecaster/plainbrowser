@@ -37,6 +37,8 @@ final class TabsUIState {
     let start = EmptyTabView()
     /// The start screen's shortcuts as last applied, so they are rebuilt only when they change.
     var startShortcuts: [StartShortcut]?
+    /// The private start screen is on screen: drawn dark, it wants the light status bar.
+    var prefersLightStatusBar = false
     /// A toast that waits while the gallery or a sheet is up (it could not act from there); the
     /// newest one shows when they close.
     var pendingToast: (() -> Void)?
@@ -467,9 +469,12 @@ extension BrowserViewController: GalleryHost {
         if showsStart, !isEditingAddress, start.isReceded { start.setReceded(false, animated: true) }
         if showsStart {
             applyStartShortcuts()
-            // An empty private tab says what it is; with profiles, the window's is named.
+            // An empty private tab says what it is, on the private dusk; with profiles, the
+            // window's is named.
+            start.setPrivate(currentTab?.isPrivate == true)
             updateStartScreenMessage()
         }
+        updateStatusBarForStart()
         // Over a blank tab's web view, under the page-state message.
         if showsStart {
             webContainer.bringSubviewToFront(start)
@@ -492,6 +497,19 @@ extension BrowserViewController: GalleryHost {
         if !recedes, !isEditingAddress, let tab = currentTab,
            !session.tabs.isEmpty(tab.id) || engineUI.typedVisitTabs.contains(tab.id) { return }
         start.setReceded(recedes, animated: true)
+        updateStatusBarForStart()
+    }
+
+    /// The clock and battery stay light while the dark private start screen is what shows under
+    /// them; once it recedes for suggestions the sheet's paper is, and the system's style returns.
+    func updateStatusBarForStart() {
+        let start = tabsUI.start
+        // Not where the system's vertical bar holds the status items (the Duo's outer screen):
+        // they sit on that bar's own light strip there, not over the start screen.
+        let light = !start.isHidden && start.isPrivate && !start.isReceded && !usesVerticalBar
+        guard light != tabsUI.prefersLightStatusBar else { return }
+        tabsUI.prefersLightStatusBar = light
+        setNeedsStatusBarAppearanceUpdate()
     }
 
     /// The start screen's shortcuts under the mark (state rules §3): a private tab always, Reopen
@@ -507,9 +525,12 @@ extension BrowserViewController: GalleryHost {
                     [weak self] in self?.openNewTab(private: true)
                 }
             case .regularTab:
-                // Only on an empty private tab: it leaves private browsing, so it says where it
-                // goes (state rules §3).
-                EmptyTabView.Shortcut(id: "start.regularTab", title: String(localized: "Regular Tab"), symbol: "plus") {
+                // An empty private tab: this turns it into a regular one, so it says where it
+                // goes (UX audit item 26), with the switcher's word for the other side.
+                EmptyTabView.Shortcut(
+                    id: "start.regularTab", title: String(localized: "Leave Private"),
+                    accessibilityLabel: String(localized: "Leave Private Browsing"), symbol: "hand.raised.slash"
+                ) {
                     [weak self] in self?.openNewTab(private: false)
                 }
             case .reopenClosedTab:

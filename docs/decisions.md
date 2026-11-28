@@ -2087,7 +2087,7 @@ The shell and engine items left from docs/research/ux-audit.md.
 - **Lead's calls:** the intro's "Made for iPhone Duo" row shows only where the window can be a
   foldable's (`IntroRules.showsUnfoldRow`: a vertical bar edge, or both size classes regular;
   Plain is iPhone-only), never from the device model. An empty private tab's shortcut says
-  "Regular Tab", since it leaves private browsing.
+  "Regular Tab", since it leaves private browsing (later "Leave Private": "Private mode you can't miss").
 - **Sheets' empty states** are `PaperEmptyState`: symbol and sentence in ink secondary, body text.
 ## Duo inner screen: the strip runs under the status items, the buttons sit beside them (2026-11-27)
 
@@ -2522,3 +2522,61 @@ to overload the interface." Research, options and the Codex review: docs/researc
   used to be able to commit an armed card).
 - **Perf:** no launch work (the button is built with the other four), nothing per frame. The tap
   runs the existing `openNewTab`, so `newTabMs` measures it; the perf test now taps "+".
+
+## Private mode you can't miss (2026-11-27)
+
+Owner, on TestFlight: "It's a bit confusing how to turn off private mode, and it's also hard to
+tell when you are in it and when you're not." And: don't change the design drastically; Arc is
+confusing here too. Research: docs/research/private-mode.md (Safari, Chrome, Firefox, NN/g on
+modes: two visual cues, named modes, a labelled exit).
+
+- **Two cues on the pill, wherever it is** (bottom on phones and the Duo's outer screen, the top
+  bar on the inner screen): the glass turns a deep dusk violet in light and dark alike
+  (`Palette.privateGlassTint`, drawn with the dark style so text and glyphs are light; white text
+  above 10:1), and the private mark (`hand.raised.fill`, `Palette.privateAccent`) leads the host
+  and the field, with the word "Private" before the host on a page ("✋ Private  apple.com";
+  design review: the mark alone asked people to guess; not over the placeholder, which the empty
+  private tab's own screen explains). The buttons' glass and the toast follow. Was a lilac tint
+  that read as Paper in light mode. Violet, not Safari's black: a dark page or the dark app never
+  looks private. The mark and word are the pill's content, like "Not Secure —", not a badge:
+  nothing is added over the page. A long host loses its middle, never the mark.
+- **The glass is told it is dark.** Liquid Glass picks light or dark content from what is
+  behind it, so over a white page it drew dark text and glyphs on the violet. The effect views
+  get `overrideUserInterfaceStyle = .dark`, the pill's text is resolved for dark, and the bar's
+  glyphs are white (dimmed 45% when disabled) while private.
+- **The keyboard** is dark in a private tab, and the field also predicts, rewrites and
+  grammar-checks nothing (it never corrected or spell-checked). iOS has no "don't learn" flag, so
+  Plain claims nothing about learning. Page fields are WebKit's: no public control.
+- **The start screen of an empty private tab** is drawn dark on the private dusk with the
+  night's violet glow, "Private" with the mark as its title over "Plain keeps no history of
+  private tabs." (was "A private tab: Plain keeps no history of it.", which the title now says),
+  and its shortcut back reads **"Leave
+  Private"** (`hand.raised.slash`; was "New Tab", then "Regular Tab" from the shell polish lane, UX audit item 26: it turns this tab regular, and "Regular" is a word no other control says; the identifier stays `start.regularTab`).
+  More's top item reads the same there. The status bar is light over it.
+- **The switcher's control is "Private | Tabs"** (`GalleryModeSwitch`), in the bar where the hand
+  glyph was: two named sides, Private leading as in Safari, each with its count ("Private 2",
+  "Tabs 3"; no number at zero). The shown side sits on a filled capsule: violet for Private, warm
+  light for Tabs, so the mode reads at a glance and the way back is the other word, one tap.
+  Tapping the shown side does nothing. It drops the numbers before the bar would outgrow the
+  screen (Duo outer screen, large text), never the words; its text stops at Extra Large, with the
+  Large Content Viewer past it. Private cards carry the mark in every list.
+- **Close All Private Tabs** is in the switcher's More menu whenever the private list has a card
+  (the regular list keeps its two-card rule), and in the tabs menu on a private page with
+  another private page open. Its confirmation counts them; nothing comes back. Afterwards the
+  switcher moves to the regular list (never an empty switcher; the switch lands on Tabs), and
+  the tabs menu shows the regular tab seen last, else the search field.
+- **The change of mode is one quick material change**, no new motion: the chrome's tint and
+  style change in `Motion.quick`; the switcher's cards, backdrop and switch cross-fade as the
+  private toggle did. Nothing is laid out again on a mode change besides the pill's text and,
+  when a count gains a digit, the switch's width.
+- **Profiles:** private is one mode for every profile, as before. "Tabs" counts the shown
+  profile's tabs; the profile switcher still hides over the private list.
+- **Relaunch:** private tabs are never kept, so the app always comes back out of private.
+- **Not now:** a Face ID lock for private tabs and closing them on leaving the app (Safari,
+  Firefox). Both add a setting or change behaviour the owner didn't ask for
+  (docs/polish-backlog.md).
+- **Design review calls not taken:** "Private | Regular" instead of "Private | Tabs" (Safari's
+  words are Private and Tabs, and "regular" is jargon nobody else in the app says); a private
+  colour for the focused search sheet (it belongs to the search-bar lane; the field there is
+  violet with the mark, over a dark keyboard, and the row above it says private tabs keep no
+  history; in the polish backlog).

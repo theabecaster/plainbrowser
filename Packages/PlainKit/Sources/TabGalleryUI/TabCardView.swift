@@ -32,7 +32,7 @@ final class TabCardView: UIView {
     private let imageView = UIImageView()
     private let placeholderIcon = UIImageView()
     private let faviconView = UIImageView()
-    private let privateIcon = UIImageView(image: UIImage(systemName: "eye.slash.fill"))
+    private let privateIcon = UIImageView(image: UIImage(systemName: "hand.raised.fill"))
     private let titleLabel = UILabel()
     /// The × in the title row's trailing corner: a 44 pt target around a small plate. It is not
     /// inside the title row (that row is masked and only as tall as the text); the gallery lists
@@ -98,7 +98,7 @@ final class TabCardView: UIView {
         header.addSubview(faviconView)
 
         privateIcon.contentMode = .scaleAspectFit
-        privateIcon.tintColor = Palette.textSecondary
+        privateIcon.tintColor = Palette.privateAccent
         privateIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)
         header.addSubview(privateIcon)
 
@@ -144,8 +144,8 @@ final class TabCardView: UIView {
 
     // MARK: Content
 
-    /// - Parameter showsPrivateBadge: false where the whole list is private (its tint says so);
-    ///   VoiceOver still hears "Private".
+    /// - Parameter showsPrivateBadge: the private mark before a private card's title (the gallery
+    ///   shows it on every private card, so a card says what it is wherever it is seen).
     /// - Parameter marksSelection: whether the active tab gets its ring (the grid only).
     func configure(
         item: TabGalleryItem, isSelected: Bool, hidesThumbnail: Bool, showsPrivateBadge: Bool = true, marksSelection: Bool = true

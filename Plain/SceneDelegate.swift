@@ -286,10 +286,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // A window made by Open in New Window shows its own page, not the launch's.
         guard newWindowRequest == nil else { return }
         let pages = value(after: "-PlainOpen")?.split(separator: ",").compactMap { URL(string: String($0)) } ?? []
-        browser.debugSetUp(
-            open: pages, split: arguments.contains("-PlainSplit"), tabLayout: value(after: "-PlainTabLayout"),
-            sidebar: value(after: "-PlainSidebar")
-        )
+        if arguments.contains("-PlainPrivate") {
+            browser.debugOpenPrivate(pages)
+        } else {
+            browser.debugSetUp(
+                open: pages, split: arguments.contains("-PlainSplit"), tabLayout: value(after: "-PlainTabLayout"),
+                sidebar: value(after: "-PlainSidebar")
+            )
+        }
         browser.debugSidePane(value(after: "-PlainSidePane"), find: value(after: "-PlainFind"))
         browser.debugNewWindow(value(after: "-PlainNewWindow"))
         #endif

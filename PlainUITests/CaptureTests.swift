@@ -271,7 +271,7 @@ final class CaptureTests: XCTestCase {
         app.buttons["tabs"].tap()
         pause(1.5)
         shot("t6-private-gallery")
-        app.buttons["galleryPrivate"].tap()
+        app.buttons["galleryRegular"].tap()
         pause(1)
 
         // The archive from the gallery's menu.

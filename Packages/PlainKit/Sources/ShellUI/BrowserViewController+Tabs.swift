@@ -104,21 +104,49 @@ extension BrowserViewController {
                 self?.closeTab(tab, offerReopen: true)
             }
             close.accessibilityIdentifier = "menu.closeTab"
-            sections.append(UIMenu(options: .displayInline, children: [close]))
+            var closes: [UIMenuElement] = [close]
+            if rules.menuCloseAllPrivateTabs {
+                let all = UIAction(
+                    title: "Close All Private Tabs", image: UIImage(systemName: "hand.raised.slash"), attributes: .destructive
+                ) { [weak self] _ in self?.closeAllPrivateTabs() }
+                all.accessibilityIdentifier = "menu.closeAllPrivateTabs"
+                closes.append(all)
+            }
+            sections.append(UIMenu(options: .displayInline, children: closes))
         }
         return sections
+    }
+
+    /// Close All Private Tabs from the tabs menu: every private tab goes (none come back) and the
+    /// screen returns to the regular tab seen last, else the search field, as after the last
+    /// private tab's close.
+    func closeAllPrivateTabs() {
+        let wasShown = currentTab?.isPrivate == true
+        if wasShown { clearPage() }
+        session.tabs.closeAll(private: true)
+        tabsUI.toast.hide(animated: true)
+        guard wasShown else { return updateButtons() }
+        if let regular = session.tabs.mostRecent(private: false) {
+            show(session.tabs.tab(regular))
+        } else if let next = session.tabs.selected, !next.isPrivate {
+            show(next)
+        } else {
+            beginAddressEditing()
+        }
     }
 
     /// The tabs menu's other items for More's top section, in every state where they apply
     /// (docs/state-rules.md §4): one visible tap away, not only behind the long press.
     func tabItemsForMore(_ rules: ControlRules) -> [UIMenuElement] {
         let opensPrivate = rules.moreNewTabOpensPrivate
+        // On an empty private tab it turns this tab regular: "Leave Private", as the start screen.
         let newTab = UIAction(
-            title: opensPrivate ? "New Private Tab" : "New Tab", image: UIImage(systemName: opensPrivate ? "hand.raised" : "plus")
+            title: opensPrivate ? "New Private Tab" : "Leave Private",
+            image: UIImage(systemName: opensPrivate ? "hand.raised" : "hand.raised.slash")
         ) { [weak self] _ in
             self?.openNewTab(private: opensPrivate)
         }
-        newTab.accessibilityIdentifier = opensPrivate ? "more.newPrivateTab" : "more.newTab"
+        newTab.accessibilityIdentifier = opensPrivate ? "more.newPrivateTab" : "more.leavePrivate"
         var items: [UIMenuElement] = [newTab]
         if rules.moreReopenClosedTab { items.append(reopenClosedTabAction(identifier: "more.reopenClosedTab")) }
         if rules.moreArchivedTabs { items.append(archivedTabsAction(identifier: "more.archivedTabs")) }

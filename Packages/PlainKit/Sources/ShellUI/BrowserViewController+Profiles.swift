@@ -46,11 +46,11 @@ extension BrowserViewController {
         if tabsUI.start.message != message { tabsUI.start.message = message }
     }
 
-    /// The start screen's sentence: an empty private tab says what it is (the start screen
-    /// otherwise looks the same, with only the glass tinted: no badge, docs/ui-reference.md); with
-    /// two or more profiles a regular one names the window's profile.
+    /// The start screen's sentence: an empty private tab says what it keeps (the screen is dark
+    /// and titled "Private"); with two or more profiles a regular one names the window's profile.
     var startScreenMessage: String {
-        if currentTab?.isPrivate == true { return String(localized: "A private tab: Plain keeps no history of it.") }
+        // Under the "Private" title (EmptyTabView.setPrivate), so it needn't say private twice.
+        if currentTab?.isPrivate == true { return String(localized: "Plain keeps no history of private tabs.") }
         let tabs = session.tabs
         guard tabs.profiles.count > 1, let name = tabs.store.profile(tabs.activeProfile)?.name else {
             return String(localized: "Start with a search or an address.")
@@ -101,12 +101,12 @@ extension BrowserViewController {
     }
 
     /// The switcher lists `profile`'s tabs; the window keeps its profile until one is opened.
-    private func showProfile(_ profile: ProfileID) {
+    private func showProfile(_ profile: ProfileID, tick: Bool = true) {
         guard let galleryTabs = tabsUI.galleryTabs, galleryTabs.shownProfile != profile || galleryTabs.isShowingPrivateTabs
         else { return }
         Signposts.signposter.emitEvent(Signposts.profileShow)
         galleryTabs.setShowingProfile(profile)
-        tabsUI.gallery?.showList()
+        tabsUI.gallery?.showList(tick: tick)
     }
 
     // MARK: New, rename, delete
@@ -125,7 +125,7 @@ extension BrowserViewController {
             Signposts.signposter.emitEvent(Signposts.profileCreate)
             Haptic.success.play()
             // Its empty list, with the switcher: the next tab opened there is the new profile's.
-            showProfile(id)
+            showProfile(id, tick: false)
             tabsUI.gallery?.reloadTabs(animated: false)
         }
     }
@@ -169,7 +169,7 @@ extension BrowserViewController {
         session.tabs.deleteProfile(id)
         if wasShown, let next = session.tabs.selected { show(next) }
         tabsUI.galleryTabs?.setShowingProfile(session.tabs.activeProfile)
-        tabsUI.gallery?.showList()
+        tabsUI.gallery?.showList(tick: false)
         updateStartScreen()
         updateStartScreenMessage()
         // The tab list without the profile is written first, so a crash from here on never brings

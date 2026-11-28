@@ -2,19 +2,19 @@
 import DesignSystem
 import UIKit
 
-/// The gallery's floating bar: the gallery menu, the private toggle, New Tab and Done, on one
-/// glass capsule. A control the state rules leave out is taken out of the row and the capsule
+/// The gallery's floating bar: the gallery menu, the Private | Tabs switch, New Tab and Done, on
+/// one glass capsule. A control the state rules leave out is taken out of the row and the capsule
 /// fits the rest, centered (UX audit, 2026-11-27: a hidden-in-place More left the row
 /// off-centre). Text is capped at the pill's size; a long press shows the Large Content Viewer.
 final class GalleryBottomBar: UIView {
     let menuButton = UIButton(type: .system)
-    let privateButton = UIButton(type: .system)
+    let modeSwitch = GalleryModeSwitch()
     let newTabButton = UIButton(type: .system)
     let doneButton = UIButton(type: .system)
-    /// Whether the private toggle shows (the data source supports private tabs).
+    /// Whether the Private | Tabs switch shows (the data source supports private tabs).
     var showsPrivateButton = false {
         didSet {
-            privateButton.isHidden = !showsPrivateButton
+            modeSwitch.isHidden = !showsPrivateButton
             setNeedsLayout()
         }
     }
@@ -58,22 +58,20 @@ final class GalleryBottomBar: UIView {
         doneButton.configuration = done
         doneButton.accessibilityIdentifier = "galleryDone"
 
-        privateButton.accessibilityLabel = "Private"
-        privateButton.accessibilityIdentifier = "galleryPrivate"
-        privateButton.isHidden = true
-        setPrivate(false)
+        modeSwitch.isHidden = true
 
         // The glyphs are the label color (white on the always-dark gallery), so they read as
         // active on the dark glass; Done keeps the accent as the bar's one main action.
-        for button in [menuButton, privateButton, newTabButton] {
+        for button in [menuButton, newTabButton] {
             button.tintColor = Palette.textPrimary
         }
         doneButton.tintColor = Palette.accentOnGlass
-        for button in [menuButton, privateButton, newTabButton, doneButton] {
+        for button in [menuButton, newTabButton, doneButton] {
             button.showsLargeContentViewer = true
             button.largeContentTitle = button.accessibilityLabel
             glass.contentView.addSubview(button)
         }
+        glass.contentView.addSubview(modeSwitch)
         doneButton.largeContentTitle = "Done"
     }
 
@@ -145,32 +143,20 @@ final class GalleryBottomBar: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    /// The private toggle's look: on, a filled hand on a light disc (the selected state, as a
-    /// selected bar button in the system's glass bars); off, the hand's outline like its
-    /// neighbours (UX audit, 2026-11-27: the two looked alike).
-    func setPrivate(_ isPrivate: Bool) {
-        let symbols = UIImage.SymbolConfiguration(textStyle: .body, scale: .large)
-        var configuration = isPrivate ? UIButton.Configuration.filled() : UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: isPrivate ? "hand.raised.fill" : "hand.raised", withConfiguration: symbols)
-        configuration.cornerStyle = .capsule
-        configuration.contentInsets = .zero
-        if isPrivate {
-            configuration.baseBackgroundColor = Palette.textPrimary
-            configuration.baseForegroundColor = Palette.privateBackground
-        } else {
-            configuration.baseForegroundColor = Palette.textPrimary
-        }
-        privateButton.configuration = configuration
-        privateButton.accessibilityValue = isPrivate ? "On" : "Off"
-        privateButton.accessibilityTraits = isPrivate ? [.button, .selected] : .button
+    /// The switch's side and counts. Returns whether its width may have changed.
+    @discardableResult
+    func setMode(isPrivate: Bool, regularCount: Int, privateCount: Int) -> Bool {
+        let changed = modeSwitch.set(isPrivate: isPrivate, regularCount: regularCount, privateCount: privateCount)
+        if changed { setNeedsLayout() }
+        return changed
     }
 
     /// The controls in the row, in order, with their widths.
-    private func row(fitting size: CGSize) -> [(UIButton, CGFloat)] {
-        var row: [(UIButton, CGFloat)] = []
+    private func row(fitting size: CGSize) -> [(UIView, CGFloat)] {
+        var row: [(UIView, CGFloat)] = []
         let side = Metrics.tapTarget
         if showsMenu { row.append((menuButton, side)) }
-        if showsPrivateButton { row.append((privateButton, side)) }
+        if showsPrivateButton { row.append((modeSwitch, modeSwitch.sizeThatFits(size).width)) }
         if showsNewTab { row.append((newTabButton, side)) }
         if showsDone {
             // At the largest text "Done" truncates rather than push the capsule off the screen.
@@ -180,10 +166,34 @@ final class GalleryBottomBar: UIView {
         return row
     }
 
+    /// The space between two controls: the glyphs' usual gap, closer beside the switch, whose
+    /// capsule is its own edge.
+    private func gap(_ a: UIView, _ b: UIView) -> CGFloat {
+        a === modeSwitch || b === modeSwitch ? Spacing.s : Spacing.xl
+    }
+
+    private func width(of row: [(UIView, CGFloat)]) -> CGFloat {
+        var width = Self.padding * 2 + row.reduce(0) { $0 + $1.1 }
+        for index in row.indices.dropFirst() { width += gap(row[index - 1].0, row[index].0) }
+        return width
+    }
+
+    /// Fits the bar into `width`: the switch drops its counts before the bar outgrows the screen
+    /// (the Duo's outer screen, the largest text). Measured first; the switch changes only when
+    /// the answer does. Returns the bar's size.
+    func fit(width available: CGFloat) -> CGSize {
+        let size = CGSize(width: available, height: Self.height)
+        if showsPrivateButton {
+            let counted = modeSwitch.fittingWidth(showingCounts: true)
+            let withCounts = row(fitting: size).map { $0.0 === modeSwitch ? ($0.0, counted) : $0 }
+            let fits = width(of: withCounts) <= available
+            if modeSwitch.showsCounts != fits { modeSwitch.showsCounts = fits }
+        }
+        return sizeThatFits(size)
+    }
+
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let row = row(fitting: size)
-        let width = Self.padding * 2 + row.reduce(0) { $0 + $1.1 } + Spacing.xl * CGFloat(max(0, row.count - 1))
-        return CGSize(width: max(width, Self.height), height: Self.height)
+        CGSize(width: max(width(of: row(fitting: size)), Self.height), height: Self.height)
     }
 
     override func layoutSubviews() {
@@ -192,14 +202,142 @@ final class GalleryBottomBar: UIView {
         let side = Metrics.tapTarget
         let y = ((bounds.height - side) / 2).rounded()
         var x = Self.padding
-        for (button, width) in row(fitting: bounds.size) {
-            button.frame = CGRect(x: x, y: y, width: width, height: side)
-            x += width + Spacing.xl
+        var previous: UIView?
+        for (view, width) in row(fitting: bounds.size) {
+            if let previous { x += gap(previous, view) }
+            view.frame = CGRect(x: x, y: y, width: width, height: side)
+            x += width
+            previous = view
         }
     }
 
     /// "Done" never takes more than this, in points.
     private static let maxDoneWidth: CGFloat = 120
+}
+
+/// The switcher's two lists as one two-state control, Safari's "Private | N Tabs": Private on the
+/// leading side (Safari's order), each side named, with its count. The side shown sits on a
+/// filled capsule: violet for Private, light for Tabs, so the mode reads from across the room and
+/// the way back is the other word, one tap away (owner, 2026-11-27: "confusing how to turn off
+/// private mode"; NN/g: name the modes, show the active one, keep the exit labelled).
+final class GalleryModeSwitch: UIView {
+    let privateSide = UIButton(type: .custom)
+    let tabsSide = UIButton(type: .custom)
+    private let thumb = UIView()
+    private(set) var isPrivate = false
+    private var counts = (regular: 0, private: 0)
+    /// The counts show while the bar fits them (`GalleryBottomBar`); the words always do.
+    var showsCounts = true {
+        didSet { if showsCounts != oldValue { applyTitles() } }
+    }
+    /// A side was tapped: true for Private.
+    var onSelect: (Bool) -> Void = { _ in }
+
+    private static let sideInset: CGFloat = 12
+    private static let minSide: CGFloat = 64
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        // The bar's cap (AddressPill) would push the capsule off the Duo's outer screen; the Large
+        // Content Viewer shows the words big.
+        maximumContentSizeCategory = .extraLarge
+        thumb.layer.cornerCurve = .continuous
+        thumb.isUserInteractionEnabled = false
+        addSubview(thumb)
+        for (button, isPrivateSide) in [(privateSide, true), (tabsSide, false)] {
+            button.showsLargeContentViewer = true
+            button.addAction(UIAction { [weak self] _ in self?.onSelect(isPrivateSide) }, for: .primaryActionTriggered)
+            addSubview(button)
+        }
+        privateSide.accessibilityIdentifier = "galleryPrivate"
+        privateSide.accessibilityLabel = String(localized: "Private")
+        privateSide.largeContentTitle = String(localized: "Private")
+        tabsSide.accessibilityIdentifier = "galleryRegular"
+        tabsSide.accessibilityLabel = String(localized: "Tabs")
+        tabsSide.largeContentTitle = String(localized: "Tabs")
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (view: GalleryModeSwitch, _) in
+            view.applyTitles()
+        }
+        applyTitles()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// Which side shows, and how many cards each list has. Changes nothing when nothing changed;
+    /// returns whether the switch's width changed (a count gained a digit, or came or went).
+    @discardableResult
+    func set(isPrivate: Bool, regularCount: Int, privateCount: Int) -> Bool {
+        guard isPrivate != self.isPrivate || regularCount != counts.regular || privateCount != counts.private else { return false }
+        // The counted width too: while the counts are hidden, a shorter count may let them back.
+        let before = (fittingWidth(showingCounts: showsCounts), fittingWidth(showingCounts: true))
+        self.isPrivate = isPrivate
+        counts = (regularCount, privateCount)
+        applyTitles()
+        setNeedsLayout()
+        return (fittingWidth(showingCounts: showsCounts), fittingWidth(showingCounts: true)) != before
+    }
+
+    private func title(privateSide isPrivateSide: Bool, showingCounts: Bool) -> NSAttributedString {
+        let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traitCollection)
+        let selected = isPrivateSide == isPrivate
+        let count = isPrivateSide ? counts.private : counts.regular
+        // On the light Tabs capsule the text is dark; everywhere else light on the dark glass.
+        let color: UIColor = selected && !isPrivateSide ? Palette.galleryModeInk : .white
+        let title = NSMutableAttributedString(
+            string: isPrivateSide ? String(localized: "Private") : String(localized: "Tabs"),
+            attributes: [.font: font.withWeight(.semibold), .foregroundColor: color]
+        )
+        if showingCounts, count > 0 {
+            let digits = UIFont.monospacedDigitSystemFont(ofSize: font.pointSize, weight: .regular)
+            title.append(NSAttributedString(
+                string: " \(count)", attributes: [.font: digits, .foregroundColor: color.withAlphaComponent(0.72)]
+            ))
+        }
+        return title
+    }
+
+    private func applyTitles() {
+        for (button, isPrivateSide) in [(privateSide, true), (tabsSide, false)] {
+            let count = isPrivateSide ? counts.private : counts.regular
+            button.setAttributedTitle(title(privateSide: isPrivateSide, showingCounts: showsCounts), for: .normal)
+            button.accessibilityValue = count == 1 ? String(localized: "1 tab") : String(localized: "\(count) tabs")
+            button.accessibilityTraits = isPrivateSide == isPrivate ? [.button, .selected] : .button
+        }
+        thumb.backgroundColor = isPrivate ? Palette.privateSelection : Palette.galleryModeLight
+    }
+
+    private static func sideWidth(_ title: NSAttributedString) -> CGFloat {
+        max(minSide, ceil(title.size().width) + sideInset * 2)
+    }
+
+    private func sideWidth(_ button: UIButton) -> CGFloat {
+        Self.sideWidth(button.attributedTitle(for: .normal) ?? NSAttributedString())
+    }
+
+    /// The switch's width with or without the counts, measured without changing what it shows.
+    func fittingWidth(showingCounts: Bool) -> CGFloat {
+        Self.sideWidth(title(privateSide: true, showingCounts: showingCounts))
+            + Self.sideWidth(title(privateSide: false, showingCounts: showingCounts))
+    }
+
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        CGSize(width: sideWidth(privateSide) + sideWidth(tabsSide), height: Metrics.tapTarget)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let privateWidth = sideWidth(privateSide)
+        // Private leads: on the right in a right-to-left language.
+        let rightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let tabsWidth = max(0, bounds.width - privateWidth)
+        privateSide.frame = CGRect(x: rightToLeft ? tabsWidth : 0, y: 0, width: privateWidth, height: bounds.height)
+        tabsSide.frame = CGRect(x: rightToLeft ? 0 : privateWidth, y: 0, width: tabsWidth, height: bounds.height)
+        let selected = isPrivate ? privateSide.frame : tabsSide.frame
+        let thumbFrame = selected.insetBy(dx: 0, dy: Spacing.xxs)
+        if thumb.frame != thumbFrame { thumb.frame = thumbFrame }
+        thumb.layer.cornerRadius = thumbFrame.height / 2
+    }
 }
 
 /// "Reopen Tab", shown only after a close and gone a few seconds later (docs/ui-reference.md).

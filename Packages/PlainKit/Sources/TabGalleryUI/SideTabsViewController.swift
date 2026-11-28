@@ -289,15 +289,15 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     }
 
     private func didReorder(_ transaction: NSDiffableDataSourceTransaction<Int, UUID>) {
-        for change in transaction.difference {
-            guard case let .insert(_, id, _) = change,
-                  let section = transaction.finalSnapshot.sectionIdentifier(containingItem: id),
-                  let index = transaction.finalSnapshot.itemIdentifiers(inSection: section).firstIndex(of: id) else { continue }
+        for move in TabListReorder.moves(in: transaction) {
             Signposts.signposter.emitEvent(Signposts.galleryReorder, "sidebar")
-            dataSource.moveTab(id, to: index)
+            Haptic.drop.play()
+            dataSource.moveTab(move.id, to: move.index)
         }
-        // The store may keep pinned tabs first: show its order.
-        reloadTabs()
+        // The store may keep pinned tabs first: show its order. After the reorder has been
+        // committed: a snapshot applied inside the handler raises in UIKit (the strip crashed so
+        // on TestFlight).
+        DispatchQueue.main.async { [weak self] in self?.reloadTabs() }
     }
 
     // MARK: UICollectionViewDelegate

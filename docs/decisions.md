@@ -2248,12 +2248,12 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
 - **The splash is the icon the user tapped.** The icon's field (its two-color fill from (0.2, 0)
   to (0.8, 1) and its two blooms, stretched over the screen as the icon's square is), with the
   Stem mark centred on it at 152 pt, in that icon's colors: cream paper, the coral fold and the
-  dawn for Dawn (and Dawn's dark art when iOS is dark); the night sky and moon for Night; the
+  dawn for Dawn (light and dark alike since 2026-11-28, "App icons: the Home Screen shows the
+  picker's art"); the night sky and moon for Night; the
   Lagoon fold on coral for Coral; the ink ring on cream for Paper. `SplashTheme` holds the
   generator's values (Brand/tools/gen_icon.py) and a test reads the generator's file to hold
   them to it; the shapes are `StemGeometry`, the generator's port the intro already used. It
-  follows `AppIcons.current` and the system's light or dark (as the icon and the launch screen
-  do), not the app's Appearance setting.
+  follows `AppIcons.current`, not the app's Appearance setting.
 - **No flash from the launch screen: it stays plain paper, and iOS's own fade carries the
   splash in.** iOS cannot vary the launch screen by alternate icon: `UILaunchScreen` and launch
   storyboards are static (colors and images may follow light and dark, nothing the app chose);
@@ -2813,3 +2813,48 @@ before/after: docs/research/gestures.md; the table: docs/ui-reference.md, "Gestu
   interaction off there; turning it on needs SPI), drops onto the strip and rail (the strip
   lane's), and Safari's sideways card swipe (Plain's cards swipe up, Arc's way, decided
   earlier).
+## App icons: the Home Screen shows the picker's art (2026-11-28)
+
+Owner, on TestFlight (iPhone Duo): "The icon picker is broken: the only icon that is accurate to
+how the UI shows it is the [Night] one. I'd like the actual icons to match the design the app
+shows. Don't change the designs in the app. And also the splash and intro screens should follow
+the selected icon properly."
+
+- **Cause: dark Home Screen renditions iOS made up.** The wiring was right: project.yml compiles
+  all four `.icon` documents, `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` names the three
+  alternates, and on a light Home Screen every icon is its tile. On a dark Home Screen (the
+  system's dark mode with icons on Automatic, or Dark) iOS draws each icon's dark rendition, and
+  only Dawn's document had dark art. For an Icon Composer document with no dark fill iOS keeps
+  the layers and puts its own near-black field under them: Coral and Paper turned into a black
+  icon with a coral or cream smudge in the top-left corner, Night (already a dark field) looked
+  nearly right, and Dawn showed its designed dark art (Deep Lagoon field, dimmer paper), a
+  different picture from its tile. Hence "only Night is accurate". Seen in ictool's Dark
+  renditions and on the iPhone 17 simulator's Home Screen (`IconCaptureTests`).
+- **Fix: one picture per icon, light and dark.** The tiles are the design (owner: don't change
+  the app's designs), so the icons follow them. `gen_icon.py` now writes every document's dark
+  fill as its default fill and gives no layer a dark image, so the dark rendition is the default
+  one. Dawn's dark art is gone (its three `-dark.svg` files and the generator's dark sky, bloom
+  and field); the default and tinted art of all four are byte for byte what they were, so the
+  previews (`icon_previews.sh`, the Default rendition) did not change. Tinted and clear stay
+  shared and monochrome: iOS draws those in one tint from the shared tinted art whichever icon
+  was picked, so there is no color to match.
+- **The splash and the intro follow.** The splash dropped Dawn's dark world (`SplashTheme.dawnDark`
+  and the `dark:` parameter): every icon's splash is its tile, light and dark. The intro's mark
+  (`StemMarkView`), the default-browser step's mark and the empty-tab card's mark wore Dawn's
+  colors whatever the icon was; they now wear the current icon's (`SplashTheme`, the generator's
+  values, the same the splash uses), and the intro's marks follow a pick on the icon step. With
+  Dawn picked every mark is exactly what it was. Paper's ink ring lost its edge on the intro's
+  dark paper (design review), so an ink ring gets a soft glow of its own cream field around it
+  (`SplashTheme.hasInkRing`); paper rings get none. The intro's own backdrop (the dawn that grows
+  behind the mark, the paper) is the intro's design, not the icon's, and stays.
+- **Guarded against drift.** `AppIconDocumentTests` reads the repository: every choice is a
+  document project.yml compiles under the name the picker sets, with a preview; every
+  document's dark fill is its default fill and no layer has dark art; and each document's
+  field, paper, fold and dawn colors are its `SplashTheme`'s. `SplashTests` holds `SplashTheme`
+  to the generator's file. `IconCaptureTests` (on request, simulator only) photographs the real
+  Home Screen icon, the splash, Settings > App Icon after a relaunch and the intro for each
+  choice, light and dark; it changes the real icon through `-PlainRealAppIcon`, a Debug,
+  simulator-only hook in `AppIcons` that an isolated run otherwise never does.
+- **Rejected:** previews that change with the system's appearance (would change the app's
+  design, and the owner asked for the opposite), and designed dark art for each alternate (four
+  pictures per surface to keep in step for no gain the owner asked for).

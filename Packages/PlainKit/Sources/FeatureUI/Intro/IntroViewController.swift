@@ -89,6 +89,8 @@ public final class IntroViewController: UIViewController {
         steps.didMove(toParent: self)
 
         mark.accessibilityIdentifier = "introMark"
+        // The mark wears the Home Screen icon's colors, as the splash before it did.
+        mark.apply(SplashTheme.theme(for: model.icon))
         view.addSubview(mark)
 
         // Only for the splash; it never takes a touch from the steps' buttons.
@@ -242,6 +244,8 @@ public final class IntroViewController: UIViewController {
         } else if let step {
             dawn.apply(scene(step), animation: IntroMotion.dawnStep)
         }
+        // A pick on the icon step recolors the mark for a return to the promise step.
+        mark.apply(SplashTheme.theme(for: model.icon))
         switch step {
         case .promise: moveMark(to: .promise)
         default: moveMark(to: .gone)

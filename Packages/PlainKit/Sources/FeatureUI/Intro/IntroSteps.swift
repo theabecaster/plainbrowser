@@ -77,7 +77,7 @@ private struct StepView: View {
         case .icon: IconStep(model: model)
         case .blocking: BlockingStep(model: model)
         case .browseForMe: BrowseForMeStep(model: model)
-        case .defaultBrowser: DefaultBrowserStep()
+        case .defaultBrowser: DefaultBrowserStep(icon: model.icon)
         }
     }
 
@@ -416,10 +416,13 @@ private struct BrowseForMeStep: View {
 }
 
 private struct DefaultBrowserStep: View {
+    /// The icon picked on the icon step: the mark wears its colors.
+    let icon: AppIconChoice
+
     var body: some View {
         VStack(spacing: 0) {
             // The mark rests on the window's sill, like the promise step's.
-            StemMark()
+            StemMark(icon: icon)
                 .frame(width: IntroLayout.markSize, height: IntroLayout.markSize)
                 .padding(.top, -(IntroLayout.markSize / 2 + IntroLayout.markLift))
                 .entrance(1)
@@ -518,10 +521,14 @@ extension View {
 }
 
 /// The static Stem mark, for SwiftUI, with its paper shadow so the ring holds its edge on paper.
+/// It wears `icon`'s colors: the Home Screen icon's.
 struct StemMark: UIViewRepresentable {
     var shadowed = true
-    func makeUIView(context: Context) -> StemMarkView { StemMarkView(shadowed: shadowed) }
-    func updateUIView(_ view: StemMarkView, context: Context) {}
+    var icon: AppIconChoice
+    func makeUIView(context: Context) -> StemMarkView {
+        StemMarkView(shadowed: shadowed, theme: SplashTheme.theme(for: icon))
+    }
+    func updateUIView(_ view: StemMarkView, context: Context) { view.apply(SplashTheme.theme(for: icon)) }
 }
 
 enum IntroStyle {

@@ -556,9 +556,8 @@ final class AddressPill: UIView {
         copyButton.accessibilityLabel = copied ? String(localized: "Copied") : String(localized: "Copy Link")
     }
 
-    /// Hides the field's selection and caret while the sheet grows (`true`), and shows them once
-    /// it is at rest (`false`). The selection itself is there throughout: only its highlight
-    /// waits, so the text sitting in the field does not flash a highlight mid-motion.
+    /// Hides the field's caret while the sheet grows (`true`), and shows it once it is at rest
+    /// (`false`), so nothing but the text rides with the field.
     func holdSelectionHighlight(_ hold: Bool) {
         textField.tintColor = hold ? .clear : nil
     }

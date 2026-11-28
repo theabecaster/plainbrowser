@@ -692,11 +692,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         data.prepareForTyping()
         sheet.session += 1
         applyEditingLayout(true, animated: didFocusAtLaunch)
-        if !(textField.text ?? "").isEmpty, focusUI.selectsAllOnOpen {
-            textField.selectAll(nil)
-            // Selected from the first frame, so a keystroke during the open replaces it; the
-            // highlight shows once the field is at rest (`searchSheetDidSettleOpen`).
-            if sheetUI.driver.value < 1 { pill.holdSelectionHighlight(true) }
+        if let text = textField.text, !text.isEmpty, focusUI.selectsAllOnOpen {
+            if sheetUI.driver.value < 1 {
+                // Selected once the field is at rest (`searchSheetDidSettleOpen`); until then a
+                // keystroke replaces it all the same, and no caret rides along.
+                focusUI.pendingSelection = text
+                pill.holdSelectionHighlight(true)
+            } else {
+                textField.selectAll(nil)
+            }
         } else if !focusUI.selectsAllOnOpen {
             // The page sheet's Edit: the caret at the end, whatever the field kept from before.
             let end = textField.endOfDocument
@@ -715,6 +719,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         data.cancelSuggestions()
         sheet.session += 1
         focusUI.intent = nil
+        focusUI.pendingSelection = nil
         pill.holdSelectionHighlight(false)
         focusUI.browseArmed = false
         focusUI.dictation.stop()
@@ -754,6 +759,21 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func textField(
         _ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String
     ) -> Bool {
+        if let opened = focusUI.pendingSelection {
+            focusUI.pendingSelection = nil
+            if textField.text == opened, textField.markedTextRange == nil {
+                // Typed before the selection was drawn: it replaces the whole text, as it would
+                // have over the selection.
+                let length = (opened as NSString).length
+                if let intent = focusUI.intent, let address = focusUI.openedAddress {
+                    setFieldIntent(intent.after(replacing: 0..<length, of: length, result: string, pageAddress: address))
+                }
+                pill.holdSelectionHighlight(false)
+                textField.text = string
+                queryChanged()
+                return false
+            }
+        }
         guard let intent = focusUI.intent, let address = focusUI.openedAddress else { return true }
         let text = (textField.text ?? "") as NSString
         guard range.location != NSNotFound, NSMaxRange(range) <= text.length else { return true }

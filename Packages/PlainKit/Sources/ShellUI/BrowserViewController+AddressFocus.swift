@@ -23,6 +23,10 @@ final class AddressFocusState {
     /// The field's text is selected as it opens (the pill); the page sheet's Edit puts the caret
     /// at the end instead.
     var selectsAllOnOpen = true
+    /// The field's text waits to be selected until the sheet is at rest (a selection drawn mid-
+    /// motion shows its handles riding along). Meanwhile the text counts as selected: a
+    /// keystroke replaces all of it. Holds the text as it opened.
+    var pendingSelection: String?
     /// Browse for Me was armed from the empty field's button: Return browses instead of searching.
     var browseArmed = false
     /// The field's microphone: speech to text on the phone only.

@@ -2733,11 +2733,14 @@ shows only in the empty field, so its text is always a new query.
 - **No page address, no change:** a new tab, the start screen, a new private tab and the fresh
   search after four hours away open empty. On the engine's results page the query comes back
   selected and refines in place, as before.
-- **The motion.** The text is set before the first frame of the spring and selected in the same
-  turn, so a keystroke during the open already replaces it. While the sheet grows, the field's
-  tint is clear (no highlight, no caret); at rest (`searchSheetDidSettleOpen`) the tint comes
-  back and the highlight appears in place. Nothing in the field changes text or scroll after the
-  first frame.
+- **The motion.** The text is set before the first frame of the spring and does not change or
+  scroll after it. The selection is made at rest (`searchSheetDidSettleOpen`): a selection made
+  in the first frame drew its handles riding up with the field, black mid-motion and blue at
+  rest (frame strip, iPhone 17); hiding it with a clear tint hid the highlight but not the
+  handles. Until then the field's tint is clear (no caret rides along), and the text counts as
+  selected: a keystroke during the open replaces all of it (`pendingSelection`), as it would
+  over the selection. A keystroke that starts marked text (an input method composing) in that
+  first third of a second is left to UIKit and counts as an edit at the caret.
 
 **Validated against the references.** Safari (iOS 26/27): on a page the field shows the URL
 selected and typing replaces it; Return goes in the same tab, and there is no Copy in the field

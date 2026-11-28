@@ -177,10 +177,14 @@ extension BrowserViewController {
         }, completion: finish)
     }
 
-    /// The open is over: the field is at rest, so its selection shows (it was there, unseen,
-    /// during the motion).
+    /// The open is over: the field is at rest, so its text is selected now (during the motion a
+    /// keystroke replaced it all the same) and the caret shows.
     private func searchSheetDidSettleOpen() {
         pill.holdSelectionHighlight(false)
+        if let opened = focusUI.pendingSelection {
+            focusUI.pendingSelection = nil
+            if pill.textField.text == opened { pill.textField.selectAll(nil) }
+        }
     }
 
     /// The close is over: the pill goes back to the resting layout, exactly where the motion

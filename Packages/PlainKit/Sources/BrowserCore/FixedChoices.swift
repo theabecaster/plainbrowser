@@ -170,9 +170,11 @@ public enum FixedChoices {
     /// page with tens of thousands of rules never holds a frame for it.
     public static let darkPagesCheckSlice = 4.0
     /// Points of the viewport the light check samples (each the first opaque background up its
-    /// ancestors; a picture, video or canvas is not light): the center and the four quarter
-    /// points. A page counts as mostly light when at least this many show a light background, so
-    /// a white root under a dark app shell, or a page of dark pictures, is not offered. The
+    /// ancestors): the center and the four quarter points. A picture, video or canvas is neither
+    /// light nor dark and leaves the vote. A page counts as mostly light when at least this many of
+    /// the other points show a light background (all of them when fewer are left, and at least
+    /// two), so a white root under a dark app shell, or a page that is all pictures, is not
+    /// offered, while a full-width picture on a wide screen (the Duo's inner screen) is. The
     /// darkening's own judgement reads only the root, so anything this check passes is darkened
     /// when turned on.
     public static let darkPagesLightSamplesNeeded = 3

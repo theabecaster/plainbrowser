@@ -183,6 +183,43 @@ final class DarkPagesUITests: XCTestCase {
         XCTAssertTrue(suggestion(app).waitForExistence(timeout: suggestionWait), "ignored: it comes back next time")
     }
 
+    /// The Duo's inner screen (TestFlight lane capture, 2026-11-28: the card never showed there,
+    /// as its light check let a full-width picture outvote the page): with two tabs the card shows
+    /// once, under the top bar and the tab strip, centered on the pill, in the upper half.
+    /// Elsewhere (an iPhone, the outer screen) it skips.
+    func testInnerScreenSuggestionShowsOnceUnderTheTopBarAndStrip() throws {
+        let app = try launch()
+        let window = app.windows.firstMatch.frame
+        try XCTSkipUnless(window.width >= 900, "needs the Duo's inner screen in landscape (window is \(Int(window.width)) pt wide)")
+        chooseAppearance(app, "Dark")
+        // A first tab with a dark design of its own (nothing to suggest), then the light page in a
+        // second, so the strip shows.
+        go(app, to: server.address("/dark-site"), heading: "Own Dark Design")
+        app.buttons["newTab"].firstMatch.tap()
+        go(app, to: server.address("/light-site"), heading: "Light Only")
+        let strip = app.otherElements["tabStrip"]
+        XCTAssertTrue(strip.waitForExistence(timeout: 3), "two tabs: the strip shows")
+        XCTAssertTrue(suggestion(app).waitForExistence(timeout: suggestionWait), "a light page in dark colors suggests it")
+        Thread.sleep(forTimeInterval: 0.6)
+        let words = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Dark Pages.'"))
+        XCTAssertEqual(words.count, 1, "one card, in the window looked at")
+        // The card's glass, padding and all; its sentence and buttons where VoiceOver shows no frame.
+        let container = app.otherElements["darkPagesSuggestion"]
+        let card = container.exists ? container.frame
+            : words.firstMatch.frame.union(suggestion(app).frame).union(app.buttons["darkPagesSuggestion.noThanks"].frame)
+        let pill = app.buttons["addressPill"].frame
+        XCTAssertGreaterThanOrEqual(card.minY, pill.maxY, "under the top bar's row: \(card) vs pill \(pill)")
+        XCTAssertGreaterThanOrEqual(card.minY, strip.frame.maxY, "not over the strip: \(card) vs strip \(strip.frame)")
+        XCTAssertLessThan(card.maxY, window.midY, "by the bar, high on the screen")
+        XCTAssertEqual(card.midX, pill.midX, accuracy: 24, "centered on the pill")
+        XCTAssertTrue(window.contains(card))
+        shot("dp-inner-suggestion")
+        // Left alone it goes, and not again in this session.
+        XCTAssertTrue(suggestion(app).waitForNonExistence(timeout: 14))
+        go(app, to: otherSite("/light-site"), heading: "Light Only")
+        XCTAssertFalse(suggestion(app).waitForExistence(timeout: 6), "once a session")
+    }
+
     func testLightColorsSuggestNothing() throws {
         let app = try launch()
         go(app, to: server.address("/light-site"), heading: "Light Only")

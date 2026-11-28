@@ -1660,12 +1660,16 @@ extension DarkPages {
       if (color && color[3] >= 0.5 && luminance(color) < LIGHT) return false;
       yield;
       const w = innerWidth, h = innerHeight;
-      let lightCount = 0;
+      // A picture is neither light nor dark, so it leaves the vote: on a wide screen a full-width
+      // picture covers most points, and the page around it decides.
+      let lightCount = 0, shown = 0;
       for (const [fx, fy] of [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
-        if ((yield* sampleAt(w * fx, h * fy)) === 'light') lightCount++;
+        const s = yield* sampleAt(w * fx, h * fy);
+        if (s !== 'media') shown++;
+        if (s === 'light') lightCount++;
         yield;
       }
-      if (lightCount < LIGHT_SAMPLES) return false;
+      if (shown < 2 || lightCount < Math.min(LIGHT_SAMPLES, shown)) return false;
       return !(yield* darkRuleScan());
     }
     // Forgets a check in flight (a change of choice or of colors): the next render starts anew.

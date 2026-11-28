@@ -248,6 +248,36 @@ final class PrivateModeTests: XCTestCase {
         shot("p3-private-start")
     }
 
+    /// The start screen and the private one, for the sentence's ink on paper (design review), with
+    /// `PLAIN_CAPTURE=1` only. Every screen: the Duo's inner one is not `XCUIScreen.main`.
+    func testCaptureStartScreens() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
+        let app = try launch()
+        // The inner screen's search sheet closes with Cancel beside its field.
+        let close = {
+            if app.buttons["Cancel"].waitForExistence(timeout: 1) { app.buttons["Cancel"].tap() } else { self.closeSearch(app) }
+        }
+        close()
+        pause(1)
+        shotScreens("st-1-start")
+        app.buttons["start.privateTab"].tap()
+        close()
+        XCTAssertTrue(app.staticTexts["start.privateTitle"].waitForExistence(timeout: 2))
+        pause(1)
+        shotScreens("st-2-private-start")
+    }
+
+    private func shotScreens(_ name: String) {
+        for screen in XCUIScreen.screens {
+            let image = screen.screenshot()
+            let size = image.image.size
+            let attachment = XCTAttachment(screenshot: image)
+            attachment.name = XCUIScreen.screens.count > 1 ? "\(name)-\(Int(size.width))x\(Int(size.height))" : name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+
     private func pause(_ seconds: TimeInterval) {
         Thread.sleep(forTimeInterval: seconds)
     }

@@ -125,6 +125,17 @@ struct DarkPagesTests {
         let other = "127.0.0.1:\(port)"
         switch path {
         case "/light": return .html(page(style: base, body: lightBody))
+        // A picture across the width over the center and the top quarter points, as a hero shows
+        // on a wide screen (the Duo's inner screen); white below it.
+        case "/light-hero":
+            return .html(page(style: base, body: "<img src=\"/grey-photo.png\" style=\"display:block;width:100%;height:45vh;margin-top:15vh\">"
+                + (1...20).map { "<p>Paragraph \($0) of a light page.</p>" }.joined()))
+        // A white root under a dark app shell that fills the screen.
+        case "/dark-shell":
+            return .html(page(style: base, body: "<div style=\"position:fixed;inset:0;background:#141414;color:#eee\"><p>app</p></div>"))
+        // Pictures everywhere the check looks.
+        case "/all-pictures":
+            return .html(page(style: base, body: "<img src=\"/grey-photo.png\" style=\"position:fixed;inset:0;width:100%;height:100%\">"))
         case "/unstyled": return .html(page(style: "", body: "<p id=text>No colors at all</p>"))
         case "/apple": return .html(fixture("apple-like"))
         case "/apple-big": return .html(bigApplePage)
@@ -912,6 +923,21 @@ struct DarkPagesTests {
         let tab = harness.pool.makeTab()
         harness.pool.attach(tab, to: harness.container)
         for path in ["/dark-media", "/dark-meta", "/already-dark", "/dark-property"] {
+            try await harness.load(path, in: tab)
+            try await waitUntil("checked \(path)") { tab.darkPages == .native }
+        }
+    }
+
+    /// Pictures leave the light check's vote: a light page whose hero covers most sample points is
+    /// still offered (the Duo's inner screen), a dark shell or a screen of pictures is not.
+    @Test func offByDefaultPicturesLeaveTheLightCheck() async throws {
+        let harness = try await makeHarness(style: .dark, darkPages: InMemoryPageAppearanceStore())
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/light-hero", in: tab)
+        try await waitUntil("a light page behind its hero") { tab.darkPages == .available }
+        for path in ["/dark-shell", "/all-pictures"] {
             try await harness.load(path, in: tab)
             try await waitUntil("checked \(path)") { tab.darkPages == .native }
         }

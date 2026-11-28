@@ -400,10 +400,25 @@ extension BrowserViewController {
             wide,
             card.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
             card.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
-            onTop
-                ? card.topAnchor.constraint(equalTo: pill.bottomAnchor, constant: Spacing.s)
-                : card.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s),
         ]
+        if onTop {
+            // Under the whole top chrome: the row (pill and button capsules), the glass band
+            // behind them and the tab strip when they show, as close under the lowest as it can be.
+            var above: [NSLayoutYAxisAnchor] = [pill.bottomAnchor]
+            if duo.top.isBarOnTop { above.append(buttonBar.bottomAnchor) }
+            if let strip = duo.strip?.view, !strip.isHidden, strip.alpha > 0.01 { above.append(strip.bottomAnchor) }
+            let close = card.topAnchor.constraint(equalTo: pill.bottomAnchor, constant: Spacing.s)
+            close.priority = .defaultLow
+            darkPagesUI.placement += above.map { card.topAnchor.constraint(greaterThanOrEqualTo: $0, constant: Spacing.s) } + [close]
+            // The band's glass moves by transform (it rises with the strip): under where it shows.
+            let band = duo.top.band
+            if band.superview === view, !band.isHidden, band.alpha > 0.01 {
+                let risen = min(0, band.glass.transform.ty)
+                darkPagesUI.placement.append(card.topAnchor.constraint(greaterThanOrEqualTo: band.bottomAnchor, constant: Spacing.s + risen))
+            }
+        } else {
+            darkPagesUI.placement.append(card.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s))
+        }
         card.slideOffset = onTop ? -12 : 12
         NSLayoutConstraint.activate(darkPagesUI.placement)
         view.layoutIfNeeded()

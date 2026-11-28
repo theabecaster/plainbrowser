@@ -850,6 +850,29 @@ final class ClarityCaptureTests: XCTestCase {
         }
     }
 
+    /// The link menu with its preview, upright and on its side: the whole menu on screen.
+    func test16LinkMenu() {
+        let app = launch()
+        go(app, "/a", "Page A")
+        let link = app.webViews.links["Go to B"]
+        guard link.waitForExistence(timeout: 5) else { return }
+        link.press(forDuration: 1.2)
+        pause(1.5)
+        shot("misc-01-link-menu")
+        dismissMenu(app)
+        pause(0.8)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        pause(1.5)
+        if link.waitForExistence(timeout: 3) {
+            link.press(forDuration: 1.2)
+            pause(1.5)
+            shot("misc-01b-link-menu-landscape")
+            dismissMenu(app)
+        }
+        XCUIDevice.shared.orientation = .portrait
+        pause(1)
+    }
+
     // MARK: Driving
 
     private var extraArguments: [String] {

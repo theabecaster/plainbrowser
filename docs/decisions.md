@@ -3686,7 +3686,8 @@ Research and sources: `docs/research/content-mode.md`.
 - **The switch is a reload in place under the page's picture.** The pool (which owns the web
   view) puts `snapshotView(afterScreenUpdates: false)` over it in its container, reloads (the
   navigation delegate gives the reload the new mode), and on `didFinish` resets the zoom WebKit
-  restored from the old layout, scrolls the element that was under the top edge back there (by
+  restored from the old layout, scrolls the element that was under the top edge (skipping sticky
+  and fixed headers, which stay put) back there (by
   id, else child-index path with the same text, else the scroll fraction), waits two frames and
   crossfades for `contentModeCrossfade` (0.2 s). `contentModeCoverLimit` (2.5 s) caps the
   picture on a slow network; the place is still put back when that page finishes unless the user

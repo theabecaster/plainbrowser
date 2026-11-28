@@ -11,7 +11,21 @@ desktop: the inner screen yes; the outer screen, a split half, a phone in landsc
 never changed on a resize. Measured on the iPhone Duo simulator with Device Hub folding it
 (captures: `before/` in the lane's capture folder):
 
-<!-- OBSERVED -->
+- **The page on screen never followed the fold.** A page opened on the outer screen stayed the
+  mobile site after unfolding: its phone layout stretched over the inner screen
+  (`before-stills`: "MOBILE · A" on the open Duo). A page opened while unfolded stayed the desktop
+  site after folding ("DESKTOP · B" on the outer screen). Only the next navigation picked the mode
+  for the new screen, so the same tab changed mode on a link tap rather than on the fold: the
+  owner's "it's weird now".
+- **No reload on fold or unfold, so nothing was lost**, but nothing was fixed either: scroll,
+  typed text and video stayed, in the wrong mode.
+- **The Desktop Site checkmark followed the navigation's start, not the page**: a navigation that
+  failed or became a download still flipped it.
+- **Back and forward** could bring back a page from the back-forward cache in its old mode while
+  the tab claimed the other one.
+- On an iPhone, WebKit's desktop mode keeps the meta viewport (below), so a responsive page in
+  desktop mode on the outer screen still lays out at 382 pt; the weirdness shows on sites that
+  serve another page by user agent, which is most big sites.
 
 ## What desktop mode changes in WebKit
 
@@ -78,7 +92,8 @@ page stays in the mode of the screen it was opened on.
 4. **The switch is a reload in place under the page's own picture.** The picture
    (`snapshotView`) covers the web view; the reload runs with the new mode; when it finishes
    Plain resets the zoom WebKit restored from the old layout, scrolls the element that was at the
-   top back to the top (by id, else by its path in the document, else the same scroll fraction),
+   top (the first one under the bar that scrolls with the page, so not a sticky or fixed header)
+   back to the top (by id, else by its path in the document, else the same scroll fraction),
    waits two frames, then crossfades (0.2 s). The picture never stays longer than 2.5 s. No
    history entry is added.
 5. **Hidden tabs switch when they come on screen**, by the same rules. Each pane follows its own

@@ -3366,7 +3366,7 @@ Shift-Command-R. … Do the same on the inner screen and iPad layouts."
   Safari's field has it in the same place; Chrome keeps it in the bar or the omnibox. It sits
   inside the glass (no new capsule, nothing moves), `arrow.clockwise` in ink, a 44 pt target 2 pt
   in from the capsule's end. The host keeps the glyph's room at both ends, so it stays centred
-  (Safari's); on the 13 mini (pill about 351 pt) that leaves about 250 pt of host, on the Duo's
+  (Safari's); on the 13 mini (pill about 351 pt) that leaves about 285 pt of host (255 beside Page Appearance), on the Duo's
   outer screen (466 pt wide) more. Reload in the page sheet's address row stays: on phones the
   sheet covers the pill, and the row is the sheet's mirror of the bar (Back, Forward), as in Arc.
 - **Stop is an X there** (`xmark`): inside the address nothing else can close, so Safari's X reads

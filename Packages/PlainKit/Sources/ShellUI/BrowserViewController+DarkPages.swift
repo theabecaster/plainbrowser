@@ -23,6 +23,8 @@ final class DarkPagesUIState {
     let suggestions = DarkPagesSuggestionStore()
     /// This window's scene leaving the foreground hides the card.
     var sceneObserver: (any NSObjectProtocol)?
+    /// The chrome redraws on every change of the page appearance policy.
+    var followsPolicy = false
 }
 
 /// The app sessions the suggestion counts in: one per launch, one more per return from the
@@ -60,6 +62,11 @@ extension BrowserViewController {
     /// takes the default page appearance. A default chosen anywhere answers the suggestion.
     func applyDarkPagesSetting() {
         DarkPagesSessions.start(darkPagesUI.suggestions)
+        if !darkPagesUI.followsPolicy {
+            // Any change of the policy (this window, another, Settings) redraws the control.
+            darkPagesUI.followsPolicy = true
+            session.stores.darkPages.observe { [weak self] in self?.updateButtons() }
+        }
         guard let appearance = data.pageAppearance else { return }
         session.stores.darkPages.setDefault(appearance)
         if appearance != nil { darkPagesUI.suggestions.answer(true) }
@@ -107,7 +114,9 @@ extension BrowserViewController {
     /// A pick from the menu (docs/decisions.md, "Page appearance"): the first pick ever becomes
     /// the default for every site, with a toast to keep it for this site only; after that, a
     /// pick is for this site. A private tab's picks stay in the private session and never set
-    /// the default. A tick and a crossfade either way.
+    /// the default. A tick and a crossfade either way. The policy changes at once, in memory
+    /// (`StoragePageAppearanceStore`, one owner), for the site picked on; the default is saved
+    /// behind it like a Settings change.
     func choosePageAppearance(_ appearance: PageAppearance, for tab: Tab, source: String) {
         guard let site = tab.siteKey else { return }
         Haptic.selection.play(in: view)
@@ -115,46 +124,56 @@ extension BrowserViewController {
         var choices = tab.pageAppearanceChoices
         if tab.isPrivate {
             let own: PageAppearance? = appearance == choices.appearance(for: site) && !choices.hasOwnChoice(site) ? nil : appearance
-            crossfadeDarkPages(for: tab) { [weak tab] in await tab?.setPageAppearance(own, source: source) ?? false }
+            applyPageAppearance(for: tab, site: site, isPrivate: true, own: own, source: source)
             return
         }
         darkPagesUI.suggestions.answer(true)
         switch choices.choose(appearance, for: site) {
         case .becameDefault(let previous):
-            crossfadeDarkPages(for: tab) { [weak self, weak tab] in
-                guard let self else { return false }
-                await self.sheets.setDefaultPageAppearance(appearance)
-                await tab?.setPageAppearance(nil, source: source)
-                return await self.session.pool.darkPagesChoicesDidChange()
-            }
-            showToastWhenFree { [weak self, weak tab] in
+            applyPageAppearance(for: tab, site: site, isPrivate: false, own: nil, newDefault: .some(appearance), source: source)
+            showToastWhenFree { [weak self] in
                 guard let self else { return }
                 self.tabsUI.toast.show(
                     String(localized: "\(AddressPill.title(appearance)) is now the default for websites"),
                     button: String(localized: "This Site Only")
                 ) { [weak self, weak tab] in
-                    guard let self, let tab else { return }
+                    guard let self else { return }
                     self.keepPageAppearanceForThisSite(appearance, tab: tab, site: site, previous: previous)
                 }
             }
         case .thisSite:
-            let own = choices.sites[site]
-            crossfadeDarkPages(for: tab) { [weak tab] in await tab?.setPageAppearance(own, source: source) ?? false }
+            applyPageAppearance(for: tab, site: site, isPrivate: false, own: choices.sites[site], source: source)
         }
     }
 
-    /// "This Site Only" on the first pick's toast: the default goes back, the pick stays here.
-    private func keepPageAppearanceForThisSite(_ appearance: PageAppearance, tab: Tab, site: String, previous: PageAppearance?) {
-        Haptic.selection.play(in: view)
-        var choices = tab.pageAppearanceChoices
-        choices.keepForThisSiteOnly(appearance, site: site, previous: previous)
-        let own = choices.sites[site]
-        crossfadeDarkPages(for: tab) { [weak self, weak tab] in
+    /// Puts a change in effect at once (the site's own choice, and the default when given), then
+    /// crossfades the panes showing the site, and saves the default like a Settings change.
+    private func applyPageAppearance(
+        for tab: Tab?, site: String, isPrivate: Bool, own: PageAppearance?, newDefault: PageAppearance?? = nil, source: String
+    ) {
+        if let newDefault, !isPrivate { session.stores.darkPages.setDefault(newDefault) }
+        let change: () async -> Bool = { [weak self] in
             guard let self else { return false }
-            await tab?.setPageAppearance(own, source: "thisSiteOnly")
-            await self.sheets.setDefaultPageAppearance(previous)
-            return await self.session.pool.darkPagesChoicesDidChange()
+            return await self.session.pool.setPageAppearance(own, forSite: site, isPrivate: isPrivate, source: source)
         }
+        if let tab, tab.siteKey == site {
+            crossfadeDarkPages(for: tab, change: change)
+        } else {
+            Task { _ = await change() }
+        }
+        if let newDefault, !isPrivate {
+            Task { [weak self] in await self?.sheets.setDefaultPageAppearance(newDefault) }
+        }
+        updateButtons()
+    }
+
+    /// "This Site Only" on the first pick's toast: the default goes back, the pick stays on the
+    /// site it was made on (wherever the tab went since).
+    private func keepPageAppearanceForThisSite(_ appearance: PageAppearance, tab: Tab?, site: String, previous: PageAppearance?) {
+        Haptic.selection.play(in: view)
+        var choices = session.stores.darkPages.choices
+        choices.keepForThisSiteOnly(appearance, site: site, previous: previous)
+        applyPageAppearance(for: tab, site: site, isPrivate: false, own: choices.sites[site], newDefault: .some(previous), source: "thisSiteOnly")
     }
 
     /// "Use for All Sites": what this site shows becomes the default; other sites keep their own.
@@ -164,12 +183,7 @@ extension BrowserViewController {
         var choices = tab.pageAppearanceChoices
         choices.useForAllSites(from: site)
         let appearance = choices.defaultAppearance
-        crossfadeDarkPages(for: tab) { [weak self, weak tab] in
-            guard let self else { return false }
-            await self.sheets.setDefaultPageAppearance(appearance)
-            await tab?.setPageAppearance(nil, source: "useForAll")
-            return await self.session.pool.darkPagesChoicesDidChange()
-        }
+        applyPageAppearance(for: tab, site: site, isPrivate: false, own: nil, newDefault: .some(appearance), source: "useForAll")
         if let appearance {
             showToastWhenFree { [weak self] in
                 self?.tabsUI.toast.show(String(localized: "\(AddressPill.title(appearance)) is now the default for websites"))

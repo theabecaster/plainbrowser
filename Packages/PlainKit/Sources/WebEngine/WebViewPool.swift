@@ -797,7 +797,13 @@ public final class WebViewPool {
     @discardableResult
     func setPageAppearance(_ appearance: PageAppearance?, for tab: Tab, source: String = "menu") async -> Bool {
         guard tab.pool === self, let site = NavigationRules.siteKey(for: tab.url) else { return false }
-        let store = tab.isPrivate ? privatePageAppearance() : darkPages
+        return await setPageAppearance(appearance, forSite: site, isPrivate: tab.isPrivate, source: source)
+    }
+
+    /// The same for a site named by the caller (an action that may run after the tab moved on).
+    @discardableResult
+    public func setPageAppearance(_ appearance: PageAppearance?, forSite site: String, isPrivate: Bool, source: String) async -> Bool {
+        let store = isPrivate ? privatePageAppearance() : darkPages
         store.setAppearance(appearance, forSite: site)
         Signposts.signposter.emitEvent(
             Signposts.darkPagesToggle, "\(source, privacy: .public) \(appearance?.rawValue ?? "default", privacy: .public)"

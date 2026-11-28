@@ -1533,10 +1533,14 @@ extension DarkPages {
     // The state for the app (the indicator, Site Settings, the suggestion), with the choice this
     // page holds: the app corrects a page that kept an old choice (one restored from the
     // back-forward cache, one that loaded before a change), and the document's token.
+    let postedLightless = null;
     const post = (state, force) => {
-      if (TOP || (state === posted && !force)) return;
+      if (TOP) return;
+      const noLight = lightless();
+      if (state === posted && noLight === postedLightless && !force) return;
       posted = state;
-      try { webkit.messageHandlers.\#(DarkPages.handlerName).postMessage({ state, applies: !off, siteOff, doc: DOC, lightless: lightless() }); } catch (e) {}
+      postedLightless = noLight;
+      try { webkit.messageHandlers.\#(DarkPages.handlerName).postMessage({ state, applies: !off, siteOff, doc: DOC, lightless: noLight }); } catch (e) {}
     };
     // A site made only in dark (a `color-scheme` of dark alone, or a dark page while the colors
     // are light): Light has nothing to show it in, so the app offers it disabled there.
@@ -1544,6 +1548,9 @@ extension DarkPages {
       const meta = document.querySelector('meta[name="color-scheme" i]');
       const scheme = (meta && meta.content) || '';
       if (/\bdark\b/.test(scheme) && !/\blight\b/.test(scheme)) return true;
+      if (!document.documentElement) return false;
+      const rootScheme = getComputedStyle(document.documentElement).colorScheme || '';
+      if (/\bdark\b/.test(rootScheme) && !/\blight\b/.test(rootScheme) && !enabled) return true;
       if (dark.matches || !document.body) return false;
       let c = parseColor(getComputedStyle(document.documentElement).backgroundColor);
       if (!c || c[3] < 0.5) c = parseColor(getComputedStyle(document.body).backgroundColor);
@@ -1979,6 +1986,10 @@ extension DarkPages {
     }
     document.addEventListener('DOMContentLoaded', () => { stats.dcl = now(); decide(document.readyState === 'complete'); });
     addEventListener('load', () => { settled = false; decide(true); });
+    // In light colors nothing is judged, but whether the site is made only in dark is told once
+    // its styles are in (Light is offered or not by it).
+    document.addEventListener('DOMContentLoaded', () => { if (!dark.matches) post(posted); });
+    addEventListener('load', () => { if (!dark.matches) post(posted); });
     // Back from the back-forward cache: report again (the app corrects an old choice), and a page
     // dark pages doesn't apply to is checked again.
     addEventListener('pageshow', (e) => {

@@ -104,9 +104,20 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         switch decision {
         case .allow: decisionHandler(.allow)
-        case .download: decisionHandler(.download)
-        case .cancel: decisionHandler(.cancel)
+        case .download:
+            restorePageStyle(webView)
+            decisionHandler(.download)
+        case .cancel:
+            restorePageStyle(webView)
+            decisionHandler(.cancel)
         }
+    }
+
+    /// A main-frame navigation that won't commit (stopped, failed, a download): the page still on
+    /// screen gets its own site's scheme back (the decision gave the web view the destination's).
+    private func restorePageStyle(_ webView: WKWebView) {
+        guard let tab, let pool else { return }
+        pool.applyInterfaceStyle(to: webView, site: NavigationRules.siteKey(for: webView.url ?? tab.url), isPrivate: tab.isPrivate)
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
@@ -161,6 +172,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
     ) {
         signposter.webView(webView, didFailProvisionalNavigation: navigation, withError: error)
         endRestore()
+        restorePageStyle(webView)
         let error = error as NSError
         if NavigationRules.isCertificateError(error), let tab, let pool {
             tab.set(\.loadError, LoadError(error))

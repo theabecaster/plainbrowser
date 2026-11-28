@@ -142,6 +142,7 @@ and are now made independent of it:
 | A keystroke's database read starts inside the keystroke (`Task.immediate`) | `search.suggestions` | read starts at 0.07 ms instead of after UIKit's turn; A/B under load 200–450: median 7.6 vs 8.0 ms |
 | `urlBar.keyboardStart`, `tab.newKeyboardStart` | focus and new tab breakdown | new: the app's and the system's part before the keyboard rises |
 | Link paint: tap time in the link's address, iterations matched on the runner's clock, the gate prints why a metric has no value | `linkPaintMs` on the device | measures on the simulator as before (55 ms); the device decides |
+| `testSummaryStart` runs one unmeasured summary first and skips when the on-device model writes nothing (it failed every lane's gate on the test Macs at its 60 s wait) | the gate, report-only metric | no budget; warm runs only |
 
 Simulator gate before and after, same test Mac (m6desk), each row's own load:
 

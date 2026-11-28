@@ -2353,7 +2353,6 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
   the splash is the flat art with its own soft shadows) and the tinted and clear icon
   appearances (the app cannot read which one the Home Screen uses; the splash shows the
   colorway's own art).
-||||||| parent of 8710666 (Site icons: fetched once per site off the main thread, stored per profile, memory only for private tabs; the sidebar becomes a rail of icons that widens to titles and stays in portrait)
 ## Duo inner screen: the sidebar, in both orientations (2026-11-27)
 
 Owner, on the Duo: "The Duo inner screen sidebars need some love and proper design, and I think we

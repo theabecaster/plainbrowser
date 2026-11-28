@@ -468,7 +468,6 @@ Newest feature last.
   background the app, so Save Image and the summary-ends test skip there.
 - **Clear History and Data keeps site permissions** (docs/privacy.md says site settings are
   deleted with it); pre-existing, found while reading the code.
-||||||| parent of 8710666 (Site icons: fetched once per site off the main thread, stored per profile, memory only for private tabs; the sidebar becomes a rail of icons that widens to titles and stays in portrait)
 ## Duo inner sidebar and site icons (2026-11-27)
 
 - **The widgets still show letters:** the icon would have to be written into the shared

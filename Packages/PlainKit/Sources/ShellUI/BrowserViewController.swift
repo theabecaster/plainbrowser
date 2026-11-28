@@ -1478,7 +1478,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             action.accessibilityIdentifier = "menu.reload"
             reload = action
         case .stop:
-            let action = UIAction(title: "Stop", image: UIImage(systemName: "xmark")) { [weak tab] _ in
+            // Not an X: in a sheet's top corner an X reads as "close the sheet" (clarity audit 8).
+            let action = UIAction(title: "Stop", image: UIImage(systemName: "stop.circle")) { [weak tab] _ in
                 Signposts.signposter.emitEvent(Signposts.reload, "stop")
                 tab?.stopLoading()
             }

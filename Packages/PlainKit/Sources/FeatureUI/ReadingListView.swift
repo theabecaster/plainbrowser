@@ -20,6 +20,7 @@ public struct ReadingListView: View {
     public var body: some View {
         NavigationStack {
             List {
+                SheetSearchRow(prompt: "Search Reading List", text: $model.query)
                 if !model.unread.isEmpty {
                     Section {
                         rows(model.unread)
@@ -45,13 +46,7 @@ public struct ReadingListView: View {
                     }
                 }
             }
-            // As History: the field sits under the title and scrolls away with the rows.
-            .searchable(
-                text: $model.query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search Reading List"
-            )
-            .scrollEdgeEffectStyle(.hard, for: .top)
-            .sheetTitle("Reading List")
-            .toolbar { DoneButton(onDone: onDone) }
+            .sheetTitle("Reading List", onDone: onDone)
             .alert(model.errorMessage ?? "", isPresented: Binding(
                 get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } }
             )) {

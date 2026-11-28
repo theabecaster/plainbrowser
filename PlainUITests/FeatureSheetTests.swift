@@ -93,7 +93,7 @@ final class FeatureSheetTests: XCTestCase {
         duck.tap()
         // Back to Settings. On the Duo the sheet's back button sits in the vertical bar.
         let back = app.otherElements["settingsSheet"].buttons["BackButton"]
-        if back.exists { back.tap() } else { app.navigationBars["Search Engine"].buttons.firstMatch.tap() }
+        if back.exists { back.tap() } else { app.buttons["BackButton"].firstMatch.tap() }
         XCTAssertTrue(app.buttons["Search Engine, DuckDuckGo"].waitForExistence(timeout: 2), "the row shows the new value")
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["addressPill"].waitForExistence(timeout: 3))
@@ -144,7 +144,7 @@ final class FeatureSheetTests: XCTestCase {
         let edit = app.buttons["Edit Favorites"]
         XCTAssertTrue(edit.waitForExistence(timeout: 3))
         edit.tap()
-        XCTAssertTrue(app.navigationBars["Favorites"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Favorites"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Plain Test A"].exists)
         app.buttons["Done"].tap()
         // The field comes back, favorites and all.

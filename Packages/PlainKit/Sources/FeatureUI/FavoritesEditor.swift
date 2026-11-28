@@ -56,8 +56,7 @@ public struct FavoritesEditor: View {
                     PaperEmptyState(message: Wording.favoritesEmpty, systemImage: "star", symbolMessage: Wording.favoritesEmptySymbol)
                 }
             }
-            .sheetTitle("Favorites")
-            .toolbar { DoneButton(onDone: onDone) }
+            .sheetTitle("Favorites", onDone: onDone)
             .alert("Rename Favorite", isPresented: Binding(
                 get: { renaming != nil }, set: { if !$0 { renaming = nil } }
             ), presenting: renaming) { favorite in

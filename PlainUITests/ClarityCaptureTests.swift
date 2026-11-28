@@ -829,6 +829,28 @@ final class ClarityCaptureTests: XCTestCase {
         (environment["PLAIN_CLARITY_ARGS"] ?? "").split(separator: " ").map(String.init) + (inner ? ["-PlainIgnoreOcclusions"] : [])
     }
 
+    /// Every sheet's title and Done stay on screen while its list scrolls (the Duo's outer screen
+    /// is where the system's bar used to hide).
+    func test15PinnedHeaders() {
+        let app = launch(["-PlainSeedFavorites", "-PlainSeedHistory", "-PlainSeedArchive"])
+        go(app, "/article", "The Quiet Page")
+        pause(1.5)
+        for (item, name) in [("menu.history", "history"), ("more.archivedTabs", "archive"), ("menu.settings", "settings"),
+                             ("menu.editFavorites", "favorites")] {
+            openSheet(app)
+            guard tap(app.buttons[item], or: nil) else { dismissSheet(app); continue }
+            pause(1.5)
+            shot("pinned-\(name)-1-top")
+            app.swipeUp(velocity: .slow)
+            pause(1.5)
+            shot("pinned-\(name)-2-scrolled")
+            app.swipeUp(velocity: .slow)
+            pause(1.5)
+            shot("pinned-\(name)-3-scrolled-more")
+            done(app)
+        }
+    }
+
     private func launch(_ arguments: [String] = [], wait: Bool = true) -> XCUIApplication {
         let app = XCUIApplication.isolated()
         app.launchArguments += arguments + extraArguments

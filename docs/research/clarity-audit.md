@@ -262,6 +262,13 @@ change to make. Captures: `clarity/<config>/<shot>.jpg` in the session scratchpa
     drop the lead word's text for its symbol, or truncate the host, never the word.
     [inner-port-stills/still-pane-find, still-pane-reader]
 
+28. **Fixed. On the Duo's outer screen a scrolled sheet lost its title and Done** (Settings,
+    History, Archive; the summary sheet before it): the system hides a sheet's bar on scroll at
+    a compact height, so nothing said which sheet this was or how to leave it. Every sheet now
+    has its title, Done and Back in a header pinned above the list; the search field is the
+    list's first row. [before: duo-pinned-a/pinned-settings-2-scrolled; after: duo-pinned-b,
+    i17-pinned]
+
 ### Checked and clear
 
 The intro's steps and Skip; the start screen's sentence, Search and captioned shortcuts; the

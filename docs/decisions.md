@@ -988,16 +988,19 @@ Research: docs/research/browse-for-me.md.
   6–10 pt rule, as for the system menus): matching it would mean drawing every card by hand.
 - **Ink caveat:** the sheet's ink foreground replaces the system's footer gray and a button's
   tint, so footers, values (`ValueLabel`), Clear History and Use Custom Engine name their color.
-- **Search field:** History's and Archive's search sits at the top, under the title, and
-  scrolls away with the rows (`.searchable(placement: .navigationBarDrawer(displayMode:
-  .automatic))`; pull down to bring it back), as in Safari's history. The system's floating bottom
-  field showed a ghost of the row behind its glass on paper, even with a hard bottom scroll edge
-  (follow-ups, 2026-11-27; lead's call). `.always` was tried: on iOS 27 the sheet's bar hides as the
-  list scrolls and the kept field floats over the rows as glass, with the same ghost. The list's
-  top scroll edge is hard, so rows under the bar fade out.
-- **Duo outer screen:** the bar's leading button moves to the side column there, which left the
-  system title off center ("Downloads"); the serif title is a `.principal` item, which the bar
-  centers.
+- **Pinned header:** the title, Done, Back and a sheet's leading control (History's Clear,
+  Downloads' Show in Files) sit in Plain's own header above the list (`sheetTitle`,
+  `SheetHeader`), with the system's bar hidden. At a compact height (the Duo's outer screen) the
+  system hides a sheet's bar as the list scrolls, and the title and Done went with it;
+  `toolbarVisibility(.visible, for: .navigationBar)` was tried and did not keep it (Settings
+  still lost its bar). The summary sheet uses the same header (lead's call, 2026-11-27).
+- **Search field:** History's, Archive's and Reading List's search is the list's first row
+  (`SheetSearchRow`), under the header, and scrolls away with the rows, as in Safari's history.
+  Before the pinned header it was `.searchable(placement: .navigationBarDrawer)`; the system's
+  floating bottom field showed a ghost of the row behind its glass on paper (follow-ups,
+  2026-11-27; lead's call).
+- **Duo outer screen:** the header's two sides take equal shares of the width, so the title is
+  centered whatever they hold.
 - **Accessibility:** Increase Contrast drops the texture (as everywhere), lifts the cards to white
   / `#1A3850`, and strengthens hairlines (38–42 %) and supporting text (88–90 %). Reduce
   Transparency drops the texture. The cards are opaque either way.

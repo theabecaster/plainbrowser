@@ -114,8 +114,7 @@ public struct SettingsView: View {
                 .paperRows()
             }
             .paperSheet()
-            .sheetTitle("Settings")
-            .toolbar { DoneButton(onDone: onDone) }
+            .sheetTitle("Settings", onDone: onDone)
             .alert(model.errorMessage ?? "", isPresented: Binding(
                 get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } }
             )) {

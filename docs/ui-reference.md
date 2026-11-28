@@ -100,7 +100,8 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - One accent color (Lagoon Blue, from `Brand/identity.md`) and semantic colors from `DesignSystem`. No hard-coded colors in features.
 - System text styles with Dynamic Type. Tap targets are at least 44 pt (the tappable area, not only the frame around it).
 - Text inside fixed-height chrome (the address pill) stops growing at the largest non-accessibility size, as Safari's field does; everything else grows The page sheet's grids of captioned cells (address row, tiles, chips, zoom) keep the default size, as a tab bar's items do, and show large on a long press.
-- Corner radii of 6–10 pt. Liquid Glass only on floating controls, built with one shared helper.
+- Corner radii of 6–10 pt for controls and chips. Grouped paper rows in sheets are exempt: they keep the system's inset-grouped radius (about 26 pt), the iOS look (lead's call, 2026-11-27). Liquid Glass only on floating controls, built with one shared helper.
+- **Sheet headers stay.** Every sheet's title and Done (and Back on a pushed screen) sit in a header pinned above the list (`sheetTitle` in `FeatureUI/Style.swift`), never in the system's bar, which hides on scroll at a compact height (the Duo's outer screen). A list's search field is its first row and scrolls away with the rows.
 - Motion vocabulary: `.snappy(0.15–0.3)` for most changes, `.spring(0.32–0.42, bounce 0–0.12)` for gesture-driven moves, `.easeInOut(0.2)` crossfade under Reduce Motion. The full table is in the plan.
 - One `Haptic` enum: `tap`, `selection`, `threshold`, `success`, and a rate-limited "nothing there" bump.
 

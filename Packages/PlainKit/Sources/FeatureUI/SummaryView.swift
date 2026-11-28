@@ -86,7 +86,7 @@ public struct SummaryView: View {
         // Duo's outer screen (compact height) a sheet's bar scrolled away with the summary and
         // took Done with it (design review, 2026-11-27).
         VStack(spacing: 0) {
-            SummaryHeader(title: sheetTitle, onDone: model.onDone)
+            SheetHeader(title: sheetTitle, leading: EmptyView(), trailing: SheetDone(onDone: model.onDone))
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
@@ -285,42 +285,6 @@ public struct SummaryView: View {
             }
         }
         .padding(.top, 4)
-    }
-}
-
-/// The sheet's header: its serif title centered, as every sheet's, and the one Done at the end.
-/// Opaque paper, outside the scroll view, so it stays put and the text never shows through it.
-private struct SummaryHeader: View {
-    let title: String
-    let onDone: () -> Void
-
-    var body: some View {
-        // A hidden copy of Done on the leading side keeps the title centered at any text size,
-        // and the title takes whatever room is left before it truncates.
-        HStack(spacing: 8) {
-            done.hidden().accessibilityHidden(true)
-            Spacer(minLength: 0)
-            Text(title)
-                .font(.system(.headline, design: .serif))
-                .foregroundStyle(Style.ink)
-                .lineLimit(1)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                .accessibilityAddTraits(.isHeader)
-                .layoutPriority(1)
-            Spacer(minLength: 0)
-            done
-        }
-        .frame(minHeight: 44)
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 6)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Style.hairline).frame(height: 0.5)
-        }
-    }
-
-    private var done: some View {
-        Button("Done", action: onDone).buttonStyle(.glass).foregroundStyle(Style.accent)
     }
 }
 

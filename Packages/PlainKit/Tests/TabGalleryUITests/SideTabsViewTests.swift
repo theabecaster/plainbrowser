@@ -203,7 +203,9 @@ final class SideTabsViewTests: XCTestCase {
         strip.onPreferredWidthChange = nil
         strip.view.frame.size.width = 500
         strip.view.layoutIfNeeded()
-        for width in tabWidths() { XCTAssertEqual(width, floor((500 - 6 - switchWidth - 2 - 18) / 3), accuracy: 1) }
+        // The switch keeps its room, so a 500 pt strip holds three tabs at their narrowest (140).
+        let share = floor((500 - 6 - switchWidth - 2 - 18) / 3)
+        for width in tabWidths() { XCTAssertEqual(width, max(140, share), accuracy: 1) }
     }
 
     private func scrollCost(of scroll: UIScrollView, vertical: Bool) async throws -> (count: Int, p95: Duration, max: Duration) {

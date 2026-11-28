@@ -330,13 +330,15 @@ final class PrivateWideTests: XCTestCase {
     }
 
     private func shot(_ name: String) {
-        // The largest screen that shows something (the Duo's inner one when open).
-        let screens = XCUIScreen.screens.map { $0.screenshot() }
-        guard let image = screens.max(by: { $0.image.size.width * $0.image.size.height < $1.image.size.width * $1.image.size.height })
-        else { return }
-        let attachment = XCTAttachment(screenshot: image)
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        // Every screen, named with its size: the one that is off (the Duo's other screen, or a
+        // resizable display the app is not on) is black, and the sheets keep the one that shows.
+        for screen in XCUIScreen.screens {
+            let image = screen.screenshot()
+            let size = image.image.size
+            let attachment = XCTAttachment(screenshot: image)
+            attachment.name = XCUIScreen.screens.count > 1 ? "\(name)@\(Int(size.width))x\(Int(size.height))" : name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 }

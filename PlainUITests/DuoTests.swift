@@ -10,6 +10,8 @@ import XCTest
 final class DuoTests: XCTestCase {
     private var server: TestServer!
 
+    /// `-PlainTabLayout` closes the search field a first launch opens (it is for captures of a
+    /// layout), so a launch with it waits for the pill instead.
     private func launch(_ arguments: [String] = ["-PlainInMemoryStore"]) throws -> XCUIApplication {
         continueAfterFailure = false
         if server == nil {
@@ -20,7 +22,15 @@ final class DuoTests: XCTestCase {
         let app = XCUIApplication.isolated()
         app.launchArguments += arguments
         app.launch()
-        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        if arguments.contains("-PlainTabLayout") {
+            XCTAssertTrue(app.buttons["addressPill"].waitForExistence(timeout: 5))
+            // The layout is set a moment after launch, and closes the field then.
+            let field = app.textFields["searchField"]
+            let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !field.exists }, object: nil)
+            _ = XCTWaiter().wait(for: [closed], timeout: 6)
+        } else {
+            XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        }
         return app
     }
 
@@ -187,6 +197,81 @@ final class DuoTests: XCTestCase {
         let comesBack = NSPredicate { _, _ in back.exists && back.frame.minX > window.midX }
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: comesBack, object: nil)], timeout: 5), .completed,
                        "Right comes back after a relaunch")
+    }
+
+    private func wait(_ what: String, timeout: TimeInterval = 4, file: StaticString = #filePath, line: UInt = #line, until condition: @escaping () -> Bool) {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in condition() }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: timeout), .completed, what, file: file, line: line)
+    }
+
+    /// The sidebar is a rail of site icons that widens to titles (Show Titles at its foot), and
+    /// it stays through a rotation to portrait, where the titles open as a drawer over the page.
+    func testSidebarWidensToTitlesAndStaysInPortrait() throws {
+        let app = try launch(["-PlainInMemoryStore", "-PlainTabLayout", "left"])
+        try requireInnerLandscape(app)
+        go(app, to: "/a", heading: "Page A")
+        tabsMenu(app, pick: "New Tab")
+        go(app, to: "/b", heading: "Page B")
+        tabsMenu(app, pick: "New Tab")
+        go(app, to: "/a", heading: "Page A")
+        let sidebar = app.otherElements["sideTabs"]
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 5), "Left: the sidebar shows")
+        let rows = sidebar.descendants(matching: .any).matching(identifier: "sideTab")
+        wait("three tabs in the rail") { rows.count == 3 }
+        XCTAssertLessThan(sidebar.frame.width, 60, "it rests as a rail")
+        let page = app.webViews.firstMatch
+
+        let titles = app.buttons["sideTabs.titles"]
+        XCTAssertEqual(titles.label, "Show Titles")
+        titles.tap()
+        wait("the rail widened to titles") { sidebar.frame.width > 200 }
+        XCTAssertEqual(titles.label, "Hide Titles")
+        wait("the page docks beside the wide sidebar in landscape") { page.frame.minX >= sidebar.frame.maxX - 1 }
+        // A row's close button closes its tab.
+        let close = sidebar.buttons.matching(identifier: "sideTab.close")
+        XCTAssertEqual(close.count, 3)
+        close.element(boundBy: 0).tap()
+        wait("two tabs left") { rows.count == 2 }
+        titles.tap()
+        wait("back to the rail") { sidebar.frame.width < 60 }
+
+        XCUIDevice.shared.orientation = .portrait
+        addTeardownBlock { XCUIDevice.shared.orientation = .landscapeLeft }
+        let window = app.windows.firstMatch
+        let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in window.frame.width < 700 }, object: nil)
+        try XCTSkipUnless(XCTWaiter().wait(for: [rotated], timeout: 4) == .completed, "the simulator did not rotate the inner screen")
+        XCTAssertTrue(sidebar.exists, "portrait keeps the sidebar")
+        XCTAssertLessThan(sidebar.frame.width, 60)
+        XCTAssertFalse(app.otherElements["tabStrip"].exists, "Left is not the strip in portrait")
+        wait("the page sits beside the rail") { abs(page.frame.minX - sidebar.frame.maxX) < 2 }
+        let pageFrame = page.frame
+        titles.tap()
+        wait("the titles open as a drawer") { sidebar.frame.width > 200 }
+        XCTAssertEqual(page.frame, pageFrame, "the page keeps its frame under the drawer")
+        // A touch on the page closes the drawer.
+        page.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.6)).tap()
+        wait("the drawer closed") { sidebar.frame.width < 60 }
+    }
+
+    /// One tab has nothing to switch to: no sidebar and no strip until the second tab, and the
+    /// page has the whole width. The list leaves again with the last but one.
+    func testTabListShowsFromTheSecondTab() throws {
+        let app = try launch(["-PlainInMemoryStore", "-PlainTabLayout", "left"])
+        try requireInnerLandscape(app)
+        go(app, to: "/a", heading: "Page A")
+        let sidebar = app.otherElements["sideTabs"]
+        let window = app.windows.firstMatch
+        let page = app.webViews.firstMatch
+        XCTAssertFalse(sidebar.exists, "one tab: no sidebar")
+        XCTAssertFalse(app.otherElements["tabStrip"].exists, "one tab: no strip")
+        XCTAssertEqual(page.frame.width, window.frame.width, accuracy: 1, "the page has the whole width")
+        tabsMenu(app, pick: "New Tab")
+        go(app, to: "/b", heading: "Page B")
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 5), "the second tab brings the sidebar in")
+        wait("the page sits beside the rail") { abs(app.webViews.firstMatch.frame.minX - sidebar.frame.maxX) < 2 }
+        tabsMenu(app, pick: "Close Tab")
+        wait("back to one tab: the sidebar left") { !sidebar.exists }
+        wait("the page has the whole width again") { abs(app.webViews.firstMatch.frame.width - window.frame.width) < 1 }
     }
 
     func testSidebarAndStripListTheTabsAndSwitchThem() throws {

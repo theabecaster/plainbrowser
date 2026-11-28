@@ -32,6 +32,13 @@ extension AppDatabase {
         }
     }
 
+    public func removeFavicon(forHost host: String) async throws {
+        let key = host.lowercased()
+        try await writer.write { db in
+            _ = try Favicon.deleteOne(db, key: key)
+        }
+    }
+
     /// Drops icons not refreshed since `date`.
     public func removeFavicons(updatedBefore date: Date) async throws {
         try await writer.write { db in

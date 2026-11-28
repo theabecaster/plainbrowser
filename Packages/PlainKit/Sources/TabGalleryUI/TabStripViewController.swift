@@ -17,7 +17,7 @@ import UIKit
 public final class TabStripViewController: UIViewController, UICollectionViewDelegate,
     UICollectionViewDragDelegate, UICollectionViewDropDelegate {
     private let dataSource: any SideTabsDataSource
-    private var collectionView: UICollectionView!
+    private(set) var collectionView: UICollectionView!
     private var diffable: UICollectionViewDiffableDataSource<Int, UUID>!
     private var items: [UUID: TabGalleryItem] = [:]
     private var focusedID: UUID?
@@ -26,6 +26,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     /// Holds the tabs and fades the edge a scrolled tab leaves under, so a cut-off tab reads as
     /// "more this way" rather than a broken fragment.
     private let fade = UIView()
+    private let glass = Glass.makeView(shape: .rounded(Radius.large))
     private let fadeMask = CAGradientLayer()
     private var fadedEdges: (leading: Bool, trailing: Bool) = (false, false)
     private static let fadeLength: CGFloat = 40
@@ -40,6 +41,36 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     static var touchHeight: CGFloat { Metrics.tapTarget }
     static var touchOutset: CGFloat { max(0, (touchHeight - CGFloat(FixedChoices.tabStripHeight)) / 2) }
     private static let privateSection = 1
+    /// The gap between two tabs' plates: clear glass, so each plate reads as one tab.
+    static let tabGap: CGFloat = Spacing.xs + Spacing.xxs
+    private static let sectionInset = UIEdgeInsets(top: 0, left: Spacing.xxs, bottom: 0, right: Spacing.xs)
+
+    /// The strip's width with its tabs at their resting width
+    /// (`FixedChoices.tabStripRestingItemWidth`): the host makes the strip this wide, up to its
+    /// lane, so the strip grows with its tabs. New Tab is the top bar's "+", not the strip's.
+    public var preferredWidth: CGFloat {
+        let sections = CGFloat(hasPrivateTabs ? 2 : 1)
+        let inset = Self.sectionInset.left + Self.sectionInset.right
+        return sections * inset + CGFloat(max(1, items.count)) * (CGFloat(FixedChoices.tabStripRestingItemWidth) + Self.tabGap)
+    }
+
+    /// The number of tabs changed, so `preferredWidth` did: the host resizes the strip (inside
+    /// its spring) before the tabs' own change is shown.
+    public var onPreferredWidthChange: (() -> Void)?
+    private var hasPrivateTabs = false
+
+    /// The strip's glass: Paper, or the private violet drawn dark while a private tab is on
+    /// screen, as the top bar's capsules and band are, so the top reads as one private context
+    /// (the private mode lane's look; the plates resolve their dark colors on it).
+    public func setPrivate(_ isPrivate: Bool) {
+        loadViewIfNeeded()
+        let effect = UIGlassEffect(style: .regular)
+        effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint
+        glass.effect = effect
+        let style: UIUserInterfaceStyle = isPrivate ? .dark : .unspecified
+        view.overrideUserInterfaceStyle = style
+        glass.overrideUserInterfaceStyle = style
+    }
 
     public init(dataSource: any SideTabsDataSource) {
         self.dataSource = dataSource
@@ -58,7 +89,6 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         view.backgroundColor = .clear
         view.accessibilityIdentifier = "tabStrip"
         // One glass surface under the tabs: it floats over the page with the top bar.
-        let glass = Glass.makeView(shape: .rounded(Radius.large))
         glass.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(glass)
         NSLayoutConstraint.activate([
@@ -70,9 +100,9 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
 
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
-        layout.minimumLineSpacing = Spacing.xs
-        layout.minimumInteritemSpacing = Spacing.xs
-        layout.sectionInset = UIEdgeInsets(top: 0, left: Spacing.xxs, bottom: 0, right: Spacing.xs)
+        layout.minimumLineSpacing = Self.tabGap
+        layout.minimumInteritemSpacing = Self.tabGap
+        layout.sectionInset = Self.sectionInset
         layout.itemSize = CGSize(width: CGFloat(FixedChoices.tabStripItemWidth.minimum), height: Self.touchHeight)
         flow = layout
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
@@ -108,7 +138,9 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         diffable = UICollectionViewDiffableDataSource<Int, UUID>(collectionView: collectionView) { [weak self] collectionView, indexPath, id in
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: TabStripCell.reuseID, for: indexPath)
             if let self, let cell = cell as? TabStripCell, let item = items[id] {
-                cell.configure(item: item, isFocused: id == focusedID, isInOtherPane: id == otherID && id != focusedID)
+                cell.configure(
+                    item: item, isFocused: id == focusedID, isInOtherPane: id == otherID && id != focusedID, icons: dataSource
+                )
                 cell.onClose = { [weak self] in self?.close(id) }
             }
             return cell
@@ -131,6 +163,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateItemWidth()
+        collectionView.layoutIfNeeded()
+        updateSnapInset()
         if fadeMask.frame != fade.bounds {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
@@ -146,12 +180,63 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         if needsFocusScroll, collectionView.bounds.width > 0, let focusedID, let indexPath = diffable.indexPath(for: focusedID) {
             needsFocusScroll = false
             collectionView.layoutIfNeeded()
-            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: false)
+            scrollToFocused(indexPath, animated: false)
         }
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         updateFade(force: false)
+    }
+
+    /// A strip that scrolls comes to rest with a whole tab at its leading edge, never a sliver of
+    /// one (a cut plate read as a broken, empty tab; design review).
+    public func scrollViewWillEndDragging(
+        _ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>
+    ) {
+        guard let step = snapStep else { return }
+        targetContentOffset.pointee.x = snapped(targetContentOffset.pointee.x, step: step)
+    }
+
+    /// One tab and the gap after it, where the strip scrolls and holds one section; nil otherwise
+    /// (it fits, or the private section breaks the even steps). Left to right only: in right to
+    /// left the leading edge is the physical right, which these offsets don't measure from.
+    private var snapStep: CGFloat? {
+        guard !hasPrivateTabs, view.effectiveUserInterfaceLayoutDirection == .leftToRight,
+              collectionView.contentSize.width > collectionView.bounds.width + 1 else { return nil }
+        let step = flow.itemSize.width + Self.tabGap
+        return step > 0 ? step : nil
+    }
+
+    /// `x` on the nearest whole-tab offset, within the scroll range.
+    private func snapped(_ x: CGFloat, step: CGFloat) -> CGFloat {
+        let maxX = max(0, collectionView.contentSize.width + collectionView.contentInset.right - collectionView.bounds.width)
+        return min(max((x / step).rounded() * step, 0), maxX)
+    }
+
+    /// The end of the scroll range on a whole-tab offset too: a little clear glass after the last
+    /// tab, at most one tab's width, so the strip can rest with its first tab whole at either end.
+    private func updateSnapInset() {
+        var extra: CGFloat = 0
+        if let step = snapStep {
+            let maxX = collectionView.contentSize.width - collectionView.bounds.width
+            extra = (maxX / step).rounded(.up) * step - maxX
+        }
+        if abs(collectionView.contentInset.right - extra) > 0.5 { collectionView.contentInset.right = extra }
+    }
+
+    /// Scrolls the focused tab into view, centered as near as whole-tab offsets allow.
+    private func scrollToFocused(_ indexPath: IndexPath, animated: Bool) {
+        guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return }
+        updateSnapInset()
+        guard let step = snapStep else {
+            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
+            return
+        }
+        let width = collectionView.bounds.width
+        var x = snapped(frame.midX - width / 2, step: step)
+        if frame.maxX > x + width { x = snapped(x + step, step: step) }
+        if frame.minX < x { x = snapped(x - step, step: step) }
+        collectionView.setContentOffset(CGPoint(x: x, y: collectionView.contentOffset.y), animated: animated)
     }
 
     /// Fades an edge only while tabs continue past it. Changes the mask's colors only when an
@@ -176,9 +261,12 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     /// The tabs share the strip's width, between the narrowest and the widest a tab may be.
     private func updateItemWidth() {
         let count = max(1, items.count)
-        let available = collectionView.bounds.width
+        let sections = CGFloat(hasPrivateTabs ? 2 : 1)
+        // From the strip's own width: the tabs' view is laid out a pass later than the strip, so
+        // its bounds are still the old ones when the strip has just grown.
+        let available = view.bounds.width - sections * (Self.sectionInset.left + Self.sectionInset.right)
         guard available > 0 else { return }
-        let share = (available - CGFloat(count) * Spacing.xs) / CGFloat(count)
+        let share = (available - CGFloat(count) * Self.tabGap) / CGFloat(count)
         let limits = FixedChoices.tabStripItemWidth
         let width = floor(min(max(share, CGFloat(limits.minimum)), CGFloat(limits.maximum)))
         let size = CGSize(width: width, height: Self.touchHeight)
@@ -211,11 +299,32 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         items = next
         focusedID = focused
         otherID = other
-        if countChanged { updateItemWidth() }
-        diffable.apply(snapshot, animatingDifferences: old.numberOfItems > 0 && view.window != nil)
-        if focusMoved, let focused, let indexPath = diffable.indexPath(for: focused) {
-            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: view.window != nil)
+        let sectionsChanged = hasPrivateTabs == privateTabs.isEmpty
+        hasPrivateTabs = !privateTabs.isEmpty
+        if countChanged || sectionsChanged {
+            // The bar takes its new width first (the host lays it out), so the tabs keep theirs.
+            onPreferredWidthChange?()
+            updateItemWidth()
         }
+        let animated = old.numberOfItems > 0 && view.window != nil
+        // Once the new tabs are laid out: before that the focused tab has no place to scroll to
+        // (a restored session arrives after the strip's first layout).
+        diffable.apply(snapshot, animatingDifferences: animated) { [weak self] in
+            guard let self, focusMoved || countChanged else { return }
+            scrollFocusedIntoViewIfNeeded(animated: animated)
+        }
+    }
+
+    /// Brings the focused tab into view when any of it is outside the strip.
+    private func scrollFocusedIntoViewIfNeeded(animated: Bool) {
+        guard let focusedID, let indexPath = diffable.indexPath(for: focusedID), collectionView.bounds.width > 0 else {
+            needsFocusScroll = true
+            return
+        }
+        collectionView.layoutIfNeeded()
+        updateSnapInset()
+        if let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame, collectionView.bounds.contains(frame) { return }
+        scrollToFocused(indexPath, animated: animated)
     }
 
     private func close(_ id: UUID) {
@@ -262,6 +371,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         guard let id = diffable.itemIdentifier(for: indexPath) else { return [] }
         let item = UIDragItem(itemProvider: NSItemProvider())
         item.localObject = id
+        dragDestination = nil
+        Haptic.selection.prepare()
         return [item]
     }
 
@@ -273,8 +384,16 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
               let source = diffable.snapshot().sectionIdentifier(containingItem: id),
               let destination = destinationIndexPath, destination.section == source
         else { return UICollectionViewDropProposal(operation: .forbidden) }
+        // A tick as the dragged tab reaches each new place (not the one it started from).
+        if destination != dragDestination {
+            if dragDestination != nil { Haptic.selection.play() }
+            dragDestination = destination
+        }
         return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
     }
+
+    /// Where the tab being dragged would land now, to tick once per new place.
+    private var dragDestination: IndexPath?
 
     /// The diffable data source performs local moves itself (`reorderingHandlers`).
     public func collectionView(_ collectionView: UICollectionView, performDropWith coordinator: any UICollectionViewDropCoordinator) {}
@@ -294,34 +413,37 @@ final class TabStripCell: UICollectionViewCell {
     var onClose: (() -> Void)?
 
     private let highlight = UIView()
-    private let tile = UIView()
-    private let letter = UILabel()
-    private let symbol = UIImageView()
+    private let tile = SiteIconView(side: TabStripCell.tileSize, iconSide: TabStripCell.iconSize, radius: Radius.small)
     private let titleLabel = UILabel()
+    /// A private tab's hand, before its title: the strip has no section header to say so, and
+    /// the tab on screen is a white card like any other (design review, round 2).
+    private let privateMark = UIImageView(image: UIImage(
+        systemName: "hand.raised.fill", withConfiguration: UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small)
+    ))
     private let closeButton = UIButton(type: .system)
     private var isInOtherPane = false
-    private static let tileSize: CGFloat = 20
+    private var isOnScreen = false
+    /// The tab the cell shows: a change of its mark animates only for the same tab.
+    private var shownID: UUID?
+    private static let tileSize: CGFloat = 22
+    private static let iconSize: CGFloat = 16
+    /// The hairline around a tab that is not on screen.
+    private static let hairline: CGFloat = 0.5
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         highlight.layer.cornerRadius = Radius.large
         highlight.layer.cornerCurve = .continuous
         contentView.addSubview(highlight)
-        tile.layer.cornerRadius = Radius.small
-        tile.layer.cornerCurve = .continuous
         contentView.addSubview(tile)
-        letter.font = UIFont.preferredFont(forTextStyle: .caption1).withSize(13)
-        letter.textAlignment = .center
-        letter.textColor = Palette.textSecondary
-        tile.addSubview(letter)
-        symbol.contentMode = .center
-        symbol.tintColor = Palette.textSecondary
-        symbol.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption1)
-        tile.addSubview(symbol)
         titleLabel.font = UIFont.preferredFont(forTextStyle: .footnote)
         titleLabel.textColor = Palette.textPrimary
         titleLabel.lineBreakMode = .byTruncatingTail
         contentView.addSubview(titleLabel)
+        privateMark.tintColor = Palette.textSecondary
+        privateMark.contentMode = .center
+        privateMark.isHidden = true
+        contentView.addSubview(privateMark)
         closeButton.setImage(
             UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small)),
             for: .normal
@@ -338,23 +460,39 @@ final class TabStripCell: UICollectionViewCell {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    func configure(item: TabGalleryItem, isFocused: Bool, isInOtherPane: Bool) {
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        shownID = nil
+    }
+
+    func configure(item: TabGalleryItem, isFocused: Bool, isInOtherPane: Bool, icons: any SideTabsDataSource) {
+        let sameTab = shownID == item.id
+        shownID = item.id
         titleLabel.text = item.compactTitle
-        if let first = SideTabCell.siteName(of: item.host)?.first {
-            letter.text = String(first).uppercased()
-            symbol.image = nil
-        } else {
-            letter.text = nil
-            symbol.image = UIImage(systemName: item.isPrivate ? "hand.raised" : "globe")
+        titleLabel.font = UIFont.preferredFont(forTextStyle: .footnote).withWeight(isFocused ? .semibold : .regular)
+        tile.show(item, from: icons)
+        let changes = {
+            // Every tab is its own plate on the strip's glass, a gap of glass between two: the
+            // one on screen a solid card ringed in Lagoon, the others a veil with a hairline (a
+            // private tab on its dusk tint).
+            self.highlight.backgroundColor = isFocused
+                ? Palette.surface : (item.isPrivate ? Palette.privateTabPlate : Palette.tabPlate)
+            self.highlight.layer.borderWidth = isFocused ? 1.5 : (isInOtherPane ? 1 : Self.hairline)
+            self.closeButton.alpha = isFocused ? 1 : 0
         }
-        tile.backgroundColor = item.isPrivate ? Palette.privateBackground : Palette.surface
-        // On the strip's glass only the focused tab is a lifted card; the others are its text.
-        highlight.backgroundColor = isFocused ? Palette.surface : (item.isPrivate ? Palette.privateBackground : .clear)
-        highlight.layer.borderWidth = isFocused ? 1 : (isInOtherPane ? 1 : 0)
+        // The card fades from the tab left to the tab chosen; nothing moves.
+        if sameTab, isFocused != isOnScreen, window != nil {
+            Motion.animate(Motion.quick, changes: changes)
+        } else {
+            UIView.performWithoutAnimation(changes)
+        }
+        isOnScreen = isFocused
         self.isInOtherPane = isInOtherPane
+        titleLabel.textColor = isFocused ? Palette.textPrimary : Palette.textSecondary
         resolveBorder()
         closeButton.isHidden = !isFocused
-        accessibilityLabel = item.displayTitle
+        privateMark.isHidden = !item.isPrivate
+        accessibilityLabel = item.isPrivate ? "Private, \(item.displayTitle)" : item.displayTitle
         accessibilityValue = isFocused ? "Selected" : (isInOtherPane ? "In other pane" : nil)
         accessibilityTraits = isFocused ? [.button, .selected] : .button
         accessibilityCustomActions = [
@@ -367,7 +505,7 @@ final class TabStripCell: UICollectionViewCell {
     }
 
     private func resolveBorder() {
-        let color = isInOtherPane ? UIColor.separator : Palette.accentOnGlass
+        let color = isOnScreen ? Palette.accentOnGlass : (isInOtherPane ? UIColor.separator : Palette.tabPlateEdge)
         highlight.layer.borderColor = color.resolvedColor(with: traitCollection).cgColor
     }
 
@@ -379,11 +517,14 @@ final class TabStripCell: UICollectionViewCell {
         highlight.frame = visible
         let size = Self.tileSize
         tile.frame = CGRect(x: Spacing.s, y: (bounds.height - size) / 2, width: size, height: size)
-        letter.frame = tile.bounds
-        symbol.frame = tile.bounds
         let closeWidth: CGFloat = closeButton.isHidden ? 0 : Metrics.tapTarget
         closeButton.frame = CGRect(x: bounds.width - closeWidth, y: 0, width: closeWidth, height: bounds.height)
-        let titleX = tile.frame.maxX + Spacing.s
+        var titleX = tile.frame.maxX + Spacing.s
+        if !privateMark.isHidden {
+            let side: CGFloat = 12
+            privateMark.frame = CGRect(x: titleX, y: (bounds.height - side) / 2, width: side, height: side)
+            titleX = privateMark.frame.maxX + Spacing.xs
+        }
         titleLabel.frame = CGRect(
             x: titleX, y: 0, width: max(0, bounds.width - titleX - max(closeWidth, Spacing.s)), height: bounds.height
         )

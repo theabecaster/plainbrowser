@@ -173,7 +173,7 @@ extension BrowserViewController {
         addChild(controller)
         controller.view.translatesAutoresizingMaskIntoConstraints = false
         // Over the pages, the sidebar and the strip; under the chrome, the toast and the search sheet.
-        view.insertSubview(controller.view, aboveSubview: duo.strip?.view ?? duo.sidebar?.view ?? panes.view)
+        view.insertSubview(controller.view, aboveSubview: pageAreaTopView)
         let leading = controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor)
         let width = controller.view.widthAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([

@@ -10,8 +10,8 @@ public enum FixedChoices {
     public static let defaultSearchEngine = SearchEngine.google
     /// Tabs above the page, as Safari does on the Duo's inner screen: the strip sits under the
     /// top bar, shows only with two or more tabs, costs 34 pt and leaves the page its full width.
-    /// It looks the same in landscape and portrait (a sidebar does not fit beside a portrait
-    /// page), and it hides with the bar while reading.
+    /// It hides with the bar while reading. Left and Right show a rail of site icons instead, in
+    /// both orientations (`sidebarRailMinimumPageWidth`).
     public static let defaultTabLayout = TabLayout.above
     /// A week keeps the tabs you come back to across a few days at hand and still clears the
     /// clutter without asking (owner's choice, 2026-11-27; a day archived tabs people still wanted).
@@ -461,6 +461,30 @@ public enum FixedChoices {
     /// Site icons not refreshed in this long belong to sites no longer visited; a visit fetches
     /// the icon again.
     public static let faviconMaxAge: TimeInterval = 90 * 24 * 3600
+    /// A stored icon is fetched again on a visit once it is this old, so a site's new icon shows
+    /// within two weeks and a site still visited never reaches `faviconMaxAge`.
+    public static let faviconRefreshAge: TimeInterval = 14 * 24 * 3600
+    /// A site that gave no icon is asked again after this long (kept in memory only, so also on
+    /// the next launch).
+    public static let faviconRetryAge: TimeInterval = 24 * 3600
+    /// The side, in pixels, a tab's tile shows a site icon at: 20 pt at 3x. Icons are picked for
+    /// it (`FaviconRules.ranked`) and decoded at exactly the size a view shows.
+    public static let faviconPixelSize = 60
+    /// Icons are stored no larger than this, as PNG: the largest tile (28 pt at 3x) with room to
+    /// spare, a few kilobytes a site.
+    public static let faviconStoredPixelSize = 96
+    /// An icon download stops past this size: real icons are a few kilobytes, a multi-size .ico
+    /// a few hundred.
+    public static let faviconMaxBytes = 768 * 1024
+    /// How many of a page's icons are tried before giving up (`/favicon.ico` is always the last).
+    public static let faviconAttempts = 4
+    /// An icon request gives up after this long; the tile keeps the site's letter.
+    public static let faviconTimeout: TimeInterval = 8
+    /// Decoded icons kept in memory: about 300 at 60 px. The rest decode again from the database,
+    /// off the main thread.
+    public static let faviconMemoryBytes = 4 * 1024 * 1024
+    /// Private tabs' icons live in memory only, for this many sites at most.
+    public static let faviconPrivateSites = 64
     /// Daily maintenance (pruning, FTS and SQLite `optimize`) runs at most this often.
     public static let maintenanceInterval: TimeInterval = 24 * 3600
     /// After a clear, compaction (VACUUM) waits this long, so Clear History and Data (history,
@@ -544,6 +568,20 @@ public enum FixedChoices {
     /// on the window. Below it a phone-width page beside a sidebar reads as cramped, and sites
     /// switch to their mobile layout anyway.
     public static let sideTabsMinimumPageWidth: Double = 640
+    /// The narrowest page the sidebar's rail may leave. Lower than `sideTabsMinimumPageWidth`, so
+    /// the rail stays in the inner screen's portrait (669 pt: a 617 pt page beside it, still a
+    /// desktop-width page) and Left or Right means the same thing in both orientations. Only the
+    /// rail docks there; Expanded floats.
+    public static let sidebarRailMinimumPageWidth: Double = 600
+    /// A drag on the sidebar ticks once when the titles come in and once when they go: in past
+    /// 0.6 of the way from the rail to the titled width (the titles are readable from about
+    /// there, `SideTabMetrics.titleAlpha`), out under 0.4. The band between keeps a finger
+    /// resting at the edge from ticking again and again.
+    public static let sidebarTitlesTick: (on: Double, off: Double) = (0.6, 0.4)
+    /// The narrowest lane the top bar keeps beside a floating expanded sidebar. With less (the
+    /// inner screen's portrait would leave 409 pt, and the status corner takes more) the sidebar
+    /// opens over the bar's leading end instead, as a drawer does, until a tab is picked.
+    public static let topBarMinimumLane: Double = 520
     /// The sidebar's rail: site tiles only, one 44 pt target plus a 4 pt margin each side, close
     /// to Safari's vertical-tab strip. It is forced while a split shows or the screen is partly
     /// folded, where a wider sidebar would squeeze the pages.
@@ -558,6 +596,28 @@ public enum FixedChoices {
     /// narrowest about 14 characters of a title show, and past it the strip scrolls; the widest
     /// keeps two tabs from stretching across the whole screen.
     public static let tabStripItemWidth: (minimum: Double, maximum: Double) = (140, 280)
+    /// A tab's width while the strip is narrower than its lane: the strip is as wide as its tabs
+    /// (owner, on the Duo: "The whole bar should grow with the number of tabs it has"), so two
+    /// tabs make a compact bar and each new tab widens it, to the full lane at five on the inner
+    /// screen's landscape. About 18 characters of a title; past the lane the tabs narrow to the
+    /// minimum above, then scroll.
+    public static let tabStripRestingItemWidth: Double = 180
+    /// Between the status items' bottom and the strip under them (owner, on the Duo: "The tabs
+    /// bar should be below the status indicators; right now it's slightly under them"). The
+    /// items' backing reaches about 6 pt below the region the system reports for them, so the
+    /// 4 pt used between the row and the strip let the strip's edge slide under it.
+    public static let tabStripStatusGap: Double = 10
+    /// The glass panel behind the Duo outer screen's vertical bar: this far in from the page and
+    /// the screen's edges, so it floats as a panel (Apple's sidebars) rather than a slab cut
+    /// against the page (owner, 2026-11-28: "more like Apple glass, so the change from the page to
+    /// it is less abrupt"). Small enough that the bar's own capsule keeps its room.
+    public static let verticalBarPanelInset: Double = 6
+    /// Its corner radius: about concentric with the outer screen's display corners at that inset.
+    public static let verticalBarPanelRadius: Double = 28
+    /// The panel's shadow: lifts it off the paper so the page meets a raised glass edge rather
+    /// than a flat change of colour, strongest over a dark page (design review). Blur radius, then
+    /// opacity in light mode and in dark mode or a private tab, where a faint one vanishes.
+    public static let verticalBarPanelShadow: (radius: Double, light: Double, dark: Double) = (10, 0.14, 0.45)
     /// The top bar on a wide screen (the Duo's inner screen, iPad-size windows): one row of 44 pt
     /// controls under the status bar, as Safari puts it there. The page gets the full width and
     /// height under it, and the bar shrinks to the address while reading.
@@ -565,9 +625,15 @@ public enum FixedChoices {
     /// The top bar's address pill at its widest: about Safari's address field there. Wider, an
     /// address reads as a sentence across the screen and the buttons drift from it.
     public static let topBarPillMaxWidth: Double = 560
-    /// The top bar's pill while reading, relative to its resting size: the address stays readable
-    /// (about 31 pt high) and the chrome drops under 9% of the inner screen.
-    public static let topBarCollapsedScale: Double = 0.7
+    /// The top bar's address while reading, relative to its resting size: the pill's text
+    /// (Body, 17 pt by default) shrinks into the collapsed band's host (13 pt, Footnote's size),
+    /// about Safari's host on the Duo's inner screen (12 to 13 pt in the owner's recording). The
+    /// host's font is the pill's times this, so the two match at every text size.
+    public static let topBarCollapsedScale: Double = 13.0 / 17.0
+    /// The collapsed top band's height under a status bar that spans the width (iPad-size windows,
+    /// the simulator's window): the host's row. Safari's collapsed band on the inner screen is
+    /// 45 pt with the status bar hidden, its host 23 pt high at 15 to 38 (owner's recording).
+    public static let topBandHostRow: Double = 30
     /// The room Plain leaves for the status bar's time beside a camera the status items wrap, used
     /// only where the system reports the camera (an occlusion region inside the top safe area) but
     /// no corner-adaptive guide says how far the items reach. It is an allowance for the time's

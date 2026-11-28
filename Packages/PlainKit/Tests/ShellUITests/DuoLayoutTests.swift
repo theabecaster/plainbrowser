@@ -60,18 +60,58 @@ struct DuoLayoutTests {
         #expect(above.paneFrames == [Self.innerLandscape])
     }
 
-    @Test func innerPortraitHasNoSplitAndShowsTheStripForASidebar() {
-        // 669 pt wide: the rail would leave 617 pt, under the 640 pt minimum, and two panes would
-        // be 334 pt each. The strip fits, so Left and Right show it there.
-        for setting in [TabLayout.left, .right, .above] {
+    @Test func innerPortraitKeepsTheSidebarAsARail() {
+        // 669 pt wide: the rail leaves a 617 pt page, so Left and Right stay what they are in
+        // landscape (the owner: "in portrait the sidebar disappears"). Two panes would be 334 pt
+        // each, so no split.
+        for (setting, onRight) in [(TabLayout.left, false), (.right, true)] {
             let portrait = inner(layout: setting, panes: 2, area: Self.innerPortrait)
             #expect(portrait.tabLayoutAvailable)
-            #expect(portrait.tabLayout == .above)
-            #expect(portrait.showsStrip && !portrait.showsSidebar)
+            #expect(portrait.tabLayout == setting)
+            #expect(portrait.showsSidebar && !portrait.showsStrip)
+            #expect(portrait.sidebarOnRight == onRight)
+            #expect(portrait.sidebar == .rail)
+            #expect(portrait.sidebarDockWidth == Self.rail)
+            #expect(portrait.paneFrames == [CGRect(
+                x: onRight ? 0 : Self.rail, y: Self.statusBar, width: 669 - Self.rail, height: 951 - Self.statusBar
+            )])
+            #expect(portrait.paneFrames[0].width >= CGFloat(FixedChoices.sidebarRailMinimumPageWidth))
+            #expect(!portrait.splitAvailable)
         }
-        let portrait = inner(layout: .left, panes: 2, area: Self.innerPortrait)
-        #expect(!portrait.splitAvailable)
-        #expect(portrait.paneFrames.count == 1)
+        let above = inner(layout: .above, panes: 2, area: Self.innerPortrait)
+        #expect(above.tabLayout == .above)
+        #expect(above.showsStrip && !above.showsSidebar)
+        #expect(above.paneFrames.count == 1)
+    }
+
+    @Test func portraitExpandedOpensOverThePageAndTheBar() {
+        // 669 - 260 = 409 pt: no page fits beside Expanded and no bar either, so it floats over
+        // both; the page keeps the rail's width and the bar its lane.
+        for (setting, onRight) in [(TabLayout.left, false), (.right, true)] {
+            let rail = inner(layout: setting, sidebar: .rail, area: Self.innerPortrait)
+            #expect(rail.widestSidebar == .expanded)
+            #expect(!rail.sidebarFloats)
+            #expect(rail.expandedSidebarCoversChrome, "known before it widens, so the host can raise it first")
+            let expanded = inner(layout: setting, sidebar: .expanded, area: Self.innerPortrait)
+            #expect(expanded.sidebar == .expanded)
+            #expect(expanded.sidebarFloats)
+            #expect(expanded.expandedSidebarCoversChrome)
+            #expect(expanded.sidebarDockWidth == Self.rail)
+            #expect(expanded.paneFrames == rail.paneFrames, "the page never resizes for the drawer")
+            #expect(expanded.chromeLane == rail.chromeLane, "the bar keeps its lane under the drawer")
+            #expect(expanded.chromeLane == (onRight ? 0...(669 - Self.rail) : Self.rail...669))
+        }
+        // Landscape docks Expanded: nothing is covered.
+        #expect(!inner(layout: .left, sidebar: .expanded).expandedSidebarCoversChrome)
+        #expect(!inner(layout: .above, area: Self.innerPortrait).expandedSidebarCoversChrome)
+    }
+
+    @Test func aWindowTooNarrowForTheRailShowsTheStrip() {
+        // 640 pt: Tab Layout applies, but the rail would leave 588 pt.
+        let narrow = inner(layout: .left, area: CGRect(x: 0, y: 24, width: 640, height: 900))
+        #expect(narrow.tabLayoutAvailable)
+        #expect(narrow.tabLayout == .above)
+        #expect(narrow.showsStrip && !narrow.showsSidebar)
     }
 
     @Test func theStripShowsFromTheSecondTab() {
@@ -82,6 +122,35 @@ struct DuoLayoutTests {
         let two = inner(layout: .above, tabs: 2)
         #expect(two.showsStrip)
         #expect(two.stripHeight == CGFloat(FixedChoices.tabStripHeight))
+    }
+
+    @Test func theSidebarShowsFromTheSecondTab() {
+        for side in [TabLayout.left, .right] {
+            for area in [Self.innerLandscape, Self.innerPortrait] {
+                let one = inner(layout: side, sidebar: .expanded, tabs: 1, area: area)
+                #expect(one.tabLayout == side, "the layout in effect is still the setting")
+                #expect(!one.showsSidebar && !one.showsStrip, "one tab has nothing to switch to")
+                #expect(one.sidebar == .hidden && one.sidebarDockWidth == 0)
+                #expect(!one.sidebarFloats && !one.expandedSidebarCoversChrome)
+                #expect(one.paneFrames == [area], "the page has the whole width")
+                #expect(one.chromeLane == area.minX...area.maxX)
+                let two = inner(layout: side, sidebar: .rail, tabs: 2, area: area)
+                #expect(two.showsSidebar)
+                #expect(two.paneFrames[0].width == area.width - SidebarState.rail.width)
+            }
+        }
+    }
+
+    @Test func aSplitCountsTheRailTheSecondTabBrings() {
+        // Wide enough for two panes alone, not beside the rail: with one tab the rail is not on
+        // screen, but the split's second page would bring it, so the split is not offered.
+        let width = 2 * CGFloat(FixedChoices.splitMinimumPaneWidth) + Self.rail - 10
+        let area = CGRect(x: 0, y: 24, width: width, height: 900)
+        let one = inner(layout: .left, tabs: 1, area: area)
+        #expect(!one.showsSidebar)
+        #expect(!one.splitAvailable)
+        #expect(one.splitAvailable == inner(layout: .left, tabs: 2, area: area).splitAvailable)
+        #expect(inner(layout: .above, tabs: 1, area: area).splitAvailable)
     }
 
     @Test func compactHeightIsNeverWideEnough() {
@@ -327,54 +396,121 @@ struct TopChromeGeometryTests {
         #expect(951 - bar.rowClearance.trailing == 820)
     }
 
-    @Test func devicePageStartsUnderTheRowWithoutABand() {
+    @Test func devicePageStartsUnderTheBand() {
         let bar = Self.device()
-        // Was 132 pt (81 pt band + 51 pt row). Safari: 84 pt.
-        #expect(bar.expandedInset == 72.5)
+        // Was 132 pt (81 pt band + 51 pt row), then 72.5 with the page under the controls.
+        // Safari: 132 pt at rest with its strip, 45 pt collapsed (its status bar hidden).
+        #expect(bar.expandedInset == 73)
         #expect(bar.expandedInset <= 84)
         // The strip starts under the status items (69), not beside them.
         let strip = Self.device(strip: Self.strip)
-        #expect(strip.stripTop == 73)
-        #expect(strip.expandedInset == 73 + Self.strip + 4)
-        #expect(bar.obscuredInset < bar.expandedInset, "WebKit wants the largest viewport inset strictly larger")
-        // 10.8% of the screen at rest (Safari 12.6%), 16.5% with the strip.
+        #expect(strip.stripTop == 79, "10 pt under the items")
+        #expect(strip.expandedInset == 79 + Self.strip + 4)
+        for bar in [bar, strip] {
+            #expect(bar.obscuredInset < bar.maximumViewportInset, "WebKit wants the largest viewport inset strictly larger")
+        }
+        // 10.9% of the screen at rest, 17.5% with the strip, 10.9% while reading.
         #expect(bar.chromeShare(of: Self.landscape, collapsed: false) < 0.11)
-        #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.17)
-        #expect(bar.chromeShare(of: Self.landscape, collapsed: true) < 0.11)
+        #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.18)
+        #expect(strip.chromeShare(of: Self.landscape, collapsed: true) < 0.11)
     }
 
-    @Test func deviceLeavesNoBandAtTheTopInAnyState() {
-        // Owner, on the device: "The bar under the URL text field is still there when the text
-        // field is present, and the transition to the no-bar state is terrible." In the status
-        // zone the page's obscured top inset is 0 in every state, with or without the strip, so
-        // WebKit fills no band of a fixed header's color behind the controls at rest, and a
-        // collapse or a reveal changes nothing in the page (no jump). The page's first line at
-        // rest still starts under the controls: that is the scroll range's start.
+    @Test func pageTopBoundaryIsTheCollapsedBandInEveryState() {
+        // Owner, on the device: "now the top of pages goes under the text field … I like that
+        // Safari leaves the URL text field there in a smaller version, with just the shrunken
+        // base URL, and that sets a boundary there." The page's obscured top is the collapsed
+        // glass band's bottom (the status row's, + 4), in every state, with or without the strip:
+        // a fixed header rests under the band, a collapse or a reveal changes nothing in the page
+        // (no jump), and whatever WebKit paints above such a header is behind the band's glass.
         let portrait = TopChromeGeometry(
             width: 669, safeTop: 81, corner: CGRect(x: 546, y: 24, width: 100, height: 45), stripHeight: 0
         )
         for bar in [Self.device(), Self.device(strip: Self.strip), portrait] {
-            #expect(bar.obscuredInset == 0)
-            #expect(bar.chromeShare(of: Self.landscape, collapsed: true) == 0)
-            #expect(bar.expandedInset == bar.expandedBottom)
-            #expect(bar.expandedInset > bar.obscuredInset, "WebKit wants the largest viewport inset strictly larger")
+            #expect(bar.obscuredInset == 73, "the status items' bottom (69) + 4")
+            #expect(bar.obscuredInset == bar.collapsedBandBottom)
+            #expect(bar.expandedInset == bar.expandedBandBottom)
+            #expect(bar.expandedInset >= bar.obscuredInset)
+            #expect(bar.bandTranslation(progress: 1) == bar.collapsedBandBottom - bar.expandedBandBottom)
+            #expect(bar.bandTranslation(progress: 2) == bar.bandTranslation(progress: 1), "the band never goes")
         }
-        #expect(Self.device().expandedInset == 72.5)
-        // Under a full-width status bar (no corner: iPad-size windows) the page keeps clear of the
-        // status bar in every state, and of nothing more.
-        #expect(Self.simulator().obscuredInset == Self.simulator().safeTop)
+        // One tab: the expanded and the collapsed band are the same; only the controls change.
+        #expect(Self.device().bandTranslation(progress: 1) == 0)
+        // With the strip the band's bottom rises 44 pt, from under the strip (10 pt under the
+        // status items, then the strip, then 4) to the status row's.
+        #expect(Self.device(strip: Self.strip).bandTranslation(progress: 1) == -(Self.strip + 10))
+        // Under a full-width status bar the band is the host's row under it.
+        let simulator = Self.simulator()
+        #expect(simulator.obscuredInset == simulator.safeTop + CGFloat(FixedChoices.topBandHostRow))
+        #expect(simulator.obscuredInset < simulator.expandedInset)
+        // There the row reaches below the collapsed band: the strip going mid-page (the bar
+        // expanded) takes away only the strip's part, so the row stays on glass.
+        let simulatorStrip = Self.simulator(strip: Self.strip)
+        let midPage = simulatorStrip.expandedBandBottom + simulatorStrip.bandTranslation(reading: 0, strip: 1)
+        #expect(midPage >= simulatorStrip.rowBottom)
+        #expect(simulatorStrip.bandTranslation(reading: 1, strip: 1) == simulatorStrip.bandTranslation(progress: 1))
+        #expect(simulatorStrip.expandedBandBottom + simulatorStrip.bandTranslation(progress: 1) == simulatorStrip.collapsedBandBottom)
     }
 
-    @Test func deviceCollapseShrinksTheAddressInPlaceThenLiftsItOff() {
+    @Test func deviceCollapseShrinksTheAddressIntoTheHostOnTheStatusRow() {
         let bar = Self.device(strip: Self.strip)
         let collapsed = bar.pillTransform(progress: 1)
-        #expect(collapsed.translationY == 0, "the address stays on the status row")
+        #expect(collapsed.translationY == 0, "the host sits on the status row")
         #expect(collapsed.scale == TopChromeGeometry.compactScale)
-        #expect(bar.collapsedBottom <= bar.rowBottom)
-        let hidden = bar.pillTransform(progress: 2)
-        let center = bar.rowTop + TopChromeGeometry.rowHeight / 2 + hidden.translationY
-        #expect(abs(center + bar.collapsedPillHeight / 2 + ChromeGeometry.hiddenClearance) < 0.001)
+        #expect(bar.hostCenterY == bar.rowTop + TopChromeGeometry.rowHeight / 2)
+        #expect(bar.hostCenterY < bar.collapsedBandBottom, "the host is inside the band")
+        // Past the pill nothing changes: under a top bar the chrome never hides.
+        #expect(bar.pillTransform(progress: 2) == collapsed)
         #expect(bar.stripTranslation(progress: 1) < 0 && bar.buttonsTranslation(progress: 1) < 0)
+        // The pill's text and the host cross only while both are faint, and the host's size is
+        // the pill's text size at every step.
+        #expect(TopChromeGeometry.pillAlpha(progress: 0) == 1 && TopChromeGeometry.pillAlpha(progress: 0.4) == 0)
+        #expect(TopChromeGeometry.hostAlpha(progress: 0) == 0 && TopChromeGeometry.hostAlpha(progress: 0.4) == 1)
+        // One pill shrinking: the host's capsule starts at the pill's size and ends at its own,
+        // the text at the pill's text size, and the two crossfade at the same place.
+        let pill = CGSize(width: 560, height: 44)
+        let host = CGSize(width: 150, height: 29)
+        #expect(TopChromeGeometry.hostShellSize(progress: 0, pill: pill, host: host) == pill)
+        #expect(TopChromeGeometry.hostShellSize(progress: 1, pill: pill, host: host) == host)
+        for step in 0...10 {
+            let p = CGFloat(step) / 10
+            #expect(abs(TopChromeGeometry.pillAlpha(progress: p) + TopChromeGeometry.hostAlpha(progress: p) - 1) < 0.0001)
+            let pillTextScale = bar.pillTransform(progress: p).scale
+            #expect(abs(TopChromeGeometry.hostScale(progress: p) * TopChromeGeometry.compactScale - pillTextScale) < 0.0001)
+        }
+        #expect(TopChromeGeometry.hostScale(progress: 1) == 1)
+    }
+
+    @Test func stripShowsOnlyWhileThePageTopIsInView() {
+        // Mid-page a fixed header rests at the slim band's bottom (73): the strip (79–113) would
+        // cover it, so it follows the page's top in and out (design review, round 1).
+        let bar = Self.device(strip: Self.strip)
+        #expect(bar.stripReveal(offset: -bar.expandedInset) == 1, "at the page's top")
+        #expect(bar.stripReveal(offset: -bar.obscuredInset) == 0, "scrolled the strip's height")
+        #expect(bar.stripReveal(offset: 900) == 0, "mid-page")
+        #expect(abs(bar.stripReveal(offset: -(bar.obscuredInset + bar.expandedInset) / 2) - 0.5) < 0.0001)
+        // The band's bottom follows the page's top 1:1 over that travel.
+        let offset: CGFloat = -100
+        let q = TopChromeGeometry.stripProgress(collapse: 0, reveal: bar.stripReveal(offset: offset))
+        #expect(abs(bar.expandedBandBottom + bar.bandTranslation(progress: q) - (-offset)) < 0.0001)
+        // Collapsed, the strip stays gone at the top too; expanded mid-page, it stays gone.
+        #expect(TopChromeGeometry.stripProgress(collapse: 1, reveal: 1) == 1)
+        #expect(TopChromeGeometry.stripProgress(collapse: 0, reveal: 0) == 1)
+        #expect(TopChromeGeometry.stripProgress(collapse: 0, reveal: 1) == 0)
+        // Without a strip there is nothing to reveal.
+        #expect(Self.device().stripReveal(offset: 900) == 1)
+    }
+
+    @Test func bandShowsTheBaseDomain() {
+        #expect(TopBandHost.baseDomain("www.apple.com") == "apple.com")
+        #expect(TopBandHost.baseDomain("WWW.Apple.com.") == "apple.com")
+        #expect(TopBandHost.baseDomain("apple.com") == "apple.com")
+        // The site, never the hosting service or a guessed registrable domain.
+        #expect(TopBandHost.baseDomain("alice.github.io") == "alice.github.io")
+        #expect(TopBandHost.baseDomain("developer.apple.com") == "developer.apple.com")
+        #expect(TopBandHost.baseDomain("news.bbc.co.uk") == "news.bbc.co.uk")
+        #expect(TopBandHost.baseDomain("127.0.0.1") == "127.0.0.1")
+        #expect(TopBandHost.baseDomain("localhost") == "localhost")
+        #expect(TopBandHost.baseDomain("www.") == "www")
     }
 
     @Test func stripNeverRisesOverTheStatusCorner() {
@@ -385,12 +521,12 @@ struct TopChromeGeometryTests {
             let progress = CGFloat(step) / 10
             #expect(bar.stripTop + bar.stripTranslation(progress: progress) >= Self.deviceCluster.maxY)
         }
-        // A guide corner down to the safe area (0–81): the strip starts under it (85) and rises
-        // only to its bottom too.
+        // A guide corner down to the safe area (0–81): the strip starts under it (85), keeps the
+        // row's gap from it and so does not rise.
         let corner = CGRect(x: 816, y: 0, width: 135, height: 81)
         let beside = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: Self.strip)
         #expect(beside.stripTop == 85)
-        #expect(beside.stripTranslation(progress: 1) == -TopChromeGeometry.gap)
+        #expect(beside.stripTranslation(progress: 1) == 0)
         // Under a full-width status bar nothing is in the way.
         #expect(Self.simulator(strip: Self.strip).stripTranslation(progress: 1) == -48)
     }
@@ -403,9 +539,8 @@ struct TopChromeGeometryTests {
         ))
         let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: 0)
         #expect(bar.rowTop == 18.5)
-        #expect(bar.obscuredInset == 0, "the page runs to the top edge under the floating bar")
-        #expect(bar.expandedInset == 81)
-        #expect(bar.expandedInset <= 84)
+        #expect(bar.obscuredInset == 85, "the band reaches under the corner")
+        #expect(bar.expandedInset == 85)
         #expect(951 - bar.rowClearance.trailing == 816 - TopChromeGeometry.cornerGap)
         // The strip starts under that corner (85), never beside it, and so spans the lane: a strip
         // cut short where the status items begin read as broken on the device.
@@ -436,14 +571,16 @@ struct TopChromeGeometryTests {
         #expect(strip.expandedInset == 74 + Self.strip + 4)
     }
 
-    @Test func fullWidthStatusBarTucksThePillUnderIt() {
+    @Test func fullWidthStatusBarTucksTheHostUnderIt() {
         let bar = Self.simulator(strip: Self.strip)
         let collapsed = bar.pillTransform(progress: 1)
         let center = bar.rowTop + TopChromeGeometry.rowHeight / 2 + collapsed.translationY
-        #expect(abs(center - bar.collapsedPillHeight / 2 - 24) < 0.001, "the collapsed pill's top meets the status bar")
-        // The page keeps clear of the status bar in every state; the bar floats over it.
-        #expect(bar.obscuredInset == 24)
+        #expect(center == bar.hostCenterY)
+        #expect(bar.hostCenterY == 24 + CGFloat(FixedChoices.topBandHostRow) / 2, "in the host's row under the status bar")
+        // The page's boundary is the slim band under the status bar in every state.
+        #expect(bar.obscuredInset == 54)
         #expect(bar.obscuredInset < bar.expandedInset)
+        #expect(bar.bandTranslation(progress: 1) == 54 - bar.expandedInset)
     }
 
     @Test func portraitUsesTheSameRules() {
@@ -452,7 +589,7 @@ struct TopChromeGeometryTests {
         #expect(band.expandedInset == 130)
         // A corner there: on its row, clear of it.
         let corner = TopChromeGeometry(width: 669, safeTop: 81, corner: CGRect(x: 546, y: 24, width: 100, height: 45), stripHeight: 0)
-        #expect(corner.rowTop == 24.5 && corner.expandedInset == 72.5)
+        #expect(corner.rowTop == 24.5 && corner.expandedInset == 73)
         #expect(669 - corner.rowClearance.trailing == 538)
         #expect(corner.chromeShare(of: Self.portrait, collapsed: false) < 0.08)
     }
@@ -578,14 +715,14 @@ struct DuoInnerStatusRowTests {
         #expect(abs(row.trailingCapsule.midY - Self.landscape.items.midY) <= 0.5)
         // The address takes its full 560 pt (121–681), its end 6 pt before the capsule.
         #expect(row.pill.width == 560 && row.pill.minX == 121)
-        // The strip 12–939 at 74, under the items; the page's first line at 112.
-        #expect(bar.stripTop == 74)
-        #expect(bar.expandedInset == 112)
+        // The strip from 12 at 80, 10 pt under the items' row; the page's first line at 118.
+        #expect(bar.stripTop == 80)
+        #expect(bar.expandedInset == 118)
         // Margins that hug the items: the capsule at 823 (8 pt), the row on the items' row.
         let hugging = try Self.geometry(Self.landscape.with(hugging: true))
         let tight = hugging.rowFrames(lane: 0...951, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
         #expect(tight.trailingCapsule.maxX == 823)
-        #expect(hugging.rowTop == 26 && hugging.stripTop == 74 && hugging.expandedInset == 112)
+        #expect(hugging.rowTop == 26 && hugging.stripTop == 80 && hugging.expandedInset == 118)
     }
 
     @Test func portraitNumbers() throws {
@@ -595,6 +732,34 @@ struct DuoInnerStatusRowTests {
         #expect(row.trailingCapsule.maxX == 537)
         #expect(row.pill.minX == 106 && row.pill.maxX == 399)
         #expect(bar.stripFrame(lane: 0...669).maxX == 657)
+    }
+
+    /// Owner, on the device: "The tabs bar should be below the status indicators; right now
+    /// it's slightly under them."
+    @Test(arguments: screens) func theStripStartsBelowTheStatusItemsWithAGap(_ screen: Screen) throws {
+        let bar = try Self.geometry(screen)
+        let gap = CGFloat(FixedChoices.tabStripStatusGap)
+        #expect(bar.stripTop >= screen.items.maxY + gap, "the clock, the indicators and the battery ring end at 69")
+        #expect(bar.stripTop >= bar.rowBottom + TopChromeGeometry.gap, "and under the row")
+        #expect(bar.stripTop + Self.strip <= screen.safeTop + Self.strip, "no lower than a strip under the whole status zone")
+        // Leaving with the bar, it keeps the row's gap from them.
+        for step in 0...20 {
+            let top = bar.stripTop + bar.stripTranslation(progress: CGFloat(step) / 10)
+            #expect(top >= screen.items.maxY + TopChromeGeometry.gap)
+        }
+    }
+
+    @Test(arguments: screens) func theStripIsAsWideAsItsTabsUpToItsLane(_ screen: Screen) throws {
+        let bar = try Self.geometry(screen)
+        let lane = 0...screen.size.width
+        let margin = TopChromeGeometry.edgeMargin
+        let two = bar.stripFrame(lane: lane, contentWidth: 422)
+        #expect(two.minX == margin && two.width == 422, "two tabs: a compact bar from the leading margin")
+        let three = bar.stripFrame(lane: lane, contentWidth: 608)
+        #expect(three.minX == two.minX && three.width > two.width, "it grows at its end; the tabs keep their place")
+        let many = bar.stripFrame(lane: lane, contentWidth: 4000)
+        #expect(many == bar.stripFrame(lane: lane), "at most the lane")
+        #expect(many.maxX == screen.size.width - margin)
     }
 
     @Test func aCameraStillGivesTheCornerWhereNoStatusRegionIs() throws {
@@ -608,7 +773,7 @@ struct DuoInnerStatusRowTests {
         #expect(found.source == .camera)
         let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: found.rect, stripHeight: Self.strip)
         #expect(abs(951 - bar.rowClearance.trailing - 819.67) < 0.01, "12 pt before the time at 831.7")
-        #expect(abs(bar.stripTop - 73.83) < 0.01)
+        #expect(abs(bar.stripTop - 79.83) < 0.01)
         // With the status region too, the region wins.
         let both = try #require(StatusCorner.read(
             width: 951, safeTop: 82, safeLeft: 0, safeRight: 0, adaptedTop: 82, adaptedLeft: 0, adaptedRight: 0,

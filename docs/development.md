@@ -270,10 +270,13 @@ the `launch.splash` signpost's message and, in an isolated run, in the value of 
 "skipped", "left", "missed"), followed after a GPU dive by its frame timing. The same timing goes to the
 log: `log stream --level debug --predicate 'subsystem == "dev.abrahamgonzalez.plainbrowser" AND
 category == "launch"'` (on a simulator: `xcrun simctl spawn <udid> log stream ...`).
-Debug builds take `-PlainOpen <url>,<url>`, `-PlainSplit`, `-PlainTabLayout above|left|right` and
-`-PlainSidebar rail|expanded|hidden` (none saved) to reach a split or a tab layout for screenshots
-without driving the UI. `-PlainPrivate` opens an empty private tab, or `-PlainOpen`'s pages in
-private tabs. `-PlainSeedFavorites` and `-PlainSeedHistory` fill an isolated store for
+Debug builds take `-PlainOpen <url>,<url>`, `-PlainOpenPrivate <url>,<url>`, `-PlainSplit`,
+`-PlainTabLayout above|left|right` and `-PlainSidebar rail|expanded|hidden` (none saved) to reach
+a split or a tab layout for screenshots without driving the UI; more than four pages open one
+after another so each gets its title and site icon. `-PlainPrivate` opens an empty private tab,
+or `-PlainOpen`'s pages in private tabs. `-PlainSidebarWalk <seconds>` then walks the
+tab list through its motions (titles in and out, a tab picked, opened and closed, the sidebar
+hidden and back) for a screen recording. `-PlainSeedFavorites` and `-PlainSeedHistory` fill an isolated store for
 screenshots of the focused address bar (`FocusCaptureTests`, with `TEST_RUNNER_PLAIN_CAPTURE=1`;
 `TEST_RUNNER_PLAIN_CAPTURE_FAVORITES=1` and `TEST_RUNNER_PLAIN_CAPTURE_HISTORY=1` pick the seeds).
 On a Duo `XCUIScreen.main` is the outer screen; `XCUIScreen.screens` can list both screens,

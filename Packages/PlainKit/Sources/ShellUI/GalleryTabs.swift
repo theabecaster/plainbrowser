@@ -63,8 +63,14 @@ final class GalleryTabs: TabGalleryDataSource {
         await engineTabs.pool.thumbnails.thumbnail(for: id)
     }
 
-    /// No site icons are stored yet; the card shows its placeholder.
-    func favicon(for id: UUID) async -> UIImage? { nil }
+    /// The site's icon on a tile of its own (a dark mark shows on any card); nil until the site
+    /// has one, and the card shows its placeholder.
+    func favicon(for id: UUID) async -> UIImage? {
+        guard let site = FaviconService.site(of: engineTabs.existingTab(id)?.url ?? engineTabs.entry(id)?.url) else { return nil }
+        return await engineTabs.pool.favicons.icon(
+            site: site, scope: engineTabs.iconScope(of: id), pixelSize: FixedChoices.faviconPixelSize, plated: true
+        )?.image
+    }
 
     func selectTab(_ id: UUID) {
         host?.galleryOpenTab(id)

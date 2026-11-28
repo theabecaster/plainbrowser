@@ -61,6 +61,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let buttonBar = ButtonBar()
     let sheet = SearchSheet()
     let pullIndicator = PullIndicator()
+    /// The glass panel behind the system's vertical bar (the Duo's outer screen), under the panes.
+    let verticalBarBacking = VerticalBarBacking()
     /// The bottom-edge strip a hidden bar leaves behind (the home-indicator zone over the focused
     /// pane): a tap there brings the bar back. It takes touches only while the bar is hidden.
     private let revealEdge = UIView()
@@ -186,6 +188,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
+        verticalBarBacking.isHidden = true
+        verticalBarBacking.setPrivate(false)
+        view.insertSubview(verticalBarBacking, belowSubview: panes.view)
         for subview in [buttonBar, pill] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             chromeGlass.contentView.addSubview(subview)
@@ -203,6 +208,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.onBrowse = { [weak self] in self?.toggleBrowseArmed() }
         pill.onMic = { [weak self] in self?.toggleDictation() }
         pill.onEscape = { [weak self] in self?.dismissSearchSheet(.escape) }
+        pill.onDisplay = { [weak self] url, lead, isPrivate in self?.duo.top.band.display(url: url, lead: lead, isPrivate: isPrivate) }
         pill.searchQuery = { [weak self] url in self?.data.searchEngine.query(inResults: url) }
         pill.onLongPress = { [weak self] in
             guard let self else { return }
@@ -218,6 +224,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.onPan = { [weak self] pan in self?.searchSheetPanned(pan) }
         installSearchSheetGestures()
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor(editing: true) }
+        // A favorite shows its site's icon, from the window's profile's stored ones.
+        sheet.favoriteIcons = FavoriteIcons(
+            cached: { [weak self] url, pixelSize in
+                guard let self, let site = FaviconService.site(of: url) else { return nil }
+                return session.pool.favicons.cachedIcon(site: site, scope: .profile(session.tabs.activeProfile), pixelSize: pixelSize)
+            },
+            load: { [weak self] url, pixelSize in
+                guard let self, let site = FaviconService.site(of: url) else { return nil }
+                return await session.pool.favicons.icon(site: site, scope: .profile(session.tabs.activeProfile), pixelSize: pixelSize)
+            }
+        )
 
         buildButtons()
         installGestures()
@@ -242,6 +259,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        // A site's icon arrived: the lists that show it read their tabs again (once per turn).
+        session.pool.favicons.onChange = { [weak self] _ in self?.siteIconsDidChange() }
+        // The switcher's cards have no tile of their own: there a site's shape comes on one, light
+        // in both appearances (the cards' titles sit on the dimmed page either way).
+        let light = UITraitCollection(userInterfaceStyle: .light)
+        session.pool.favicons.plateColors = (
+            Palette.iconTileForDarkMark.resolvedColor(with: light).cgColor,
+            Palette.iconTileForLightMark.resolvedColor(with: light).cgColor
+        )
         wireProfiles()
         // Which private sites were told a feature is off ends with the private session.
         session.privateSessionDidEnd = { [weak self] in self?.engineUI.privateAccessNotices = SystemAccessNoticeMemory() }
@@ -568,6 +594,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        placeVerticalBarBacking()
         let next = ChromeGeometry(
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom,
             hasButtonBar: !usesVerticalBar && !usesSingleRow
@@ -583,6 +610,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         applyCollapse(collapse.progress)
         // During a fold or rotation the insets wait for the transition's completion.
         if !duo.isResizing { updatePageInsets() }
+    }
+
+    /// The vertical bar's column (the safe area's side the system's bar takes) gets its glass panel;
+    /// hidden wherever the bar is not in use.
+    private func placeVerticalBarBacking() {
+        let edge = traitCollection.verticalBarEdge
+        let safe = view.safeAreaInsets
+        let bounds = view.bounds
+        let onTrailing = (edge == .trailing) != (view.effectiveUserInterfaceLayoutDirection == .rightToLeft)
+        let width = onTrailing ? safe.right : safe.left
+        let shown = usesVerticalBar && width > 0
+        if verticalBarBacking.isHidden == shown { verticalBarBacking.isHidden = !shown }
+        guard shown else { return }
+
+        verticalBarBacking.place(column: CGRect(
+            x: onTrailing ? bounds.width - width : 0, y: 0, width: width, height: bounds.height
+        ))
     }
 
     /// Off where the top bar holds the buttons (`+TopBar`): the Duo's inner screen, as Safari.
@@ -935,6 +979,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
+        // The drawer over the bar steps back: the field and its rows take the screen.
+        collapseFloatingSidebar()
         focusUI.intent = nil
         focusUI.selectsAllOnOpen = true
         updateFieldAccessory()
@@ -1147,8 +1193,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// The page is long enough for the bar to hide: at least two screens, so the hidden bar has
     /// a page to give back, and the page's end (where the bar returns) is not already in sight.
     /// Measured on the content, not the scroll range, which the resting bar's inset changes.
+    /// Under a top bar the chrome never hides: the slim glass band with the host is the page's top
+    /// boundary while reading (docs/state-rules.md, "Duo inner screen (top bar)").
     private func pageAllowsHiding(_ scrollView: UIScrollView) -> Bool {
-        rules.chromeMayHide && scrollView.contentSize.height >= 2 * scrollView.bounds.height
+        rules.chromeMayHide && !chromeOnTop && scrollView.contentSize.height >= 2 * scrollView.bounds.height
+    }
+
+    #if DEBUG
+    /// The top bar walk's collapse (`debugTopWalk`): the snap a release mid-page starts.
+    func debugSettleCollapse(at target: CGFloat) {
+        settleCollapse(at: target, animated: true)
+    }
+    #endif
+
+    /// A hidden bar the top bar now holds (a fold to the inner screen while reading) rests at the
+    /// slim band instead: under a top bar nothing hides.
+    func settleHiddenChromeForTopBar() {
+        guard chromeOnTop, collapse.rest == .hidden || (snap.isRunning && snap.target > ChromeRest.pill.progress) else { return }
+        settleCollapse(at: ChromeRest.pill.progress, animated: false)
     }
 
     /// The offset at which the page's end reaches the screen's bottom edge: from there on the bar
@@ -1197,6 +1259,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             snap.jump(to: target)
             let crossfade = crossfades
             crossfadeTarget = target
+            // The top band is the chrome's sibling: it crossfades with it.
+            if chromeOnTop { Motion.crossfade(duo.top.band, changes: {}) }
             Motion.crossfade(chromeGlass, changes: {
                 self.collapse.place(at: target)
                 self.applyCollapse(target)
@@ -1283,6 +1347,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             let previousY = lastPageOffsetY.object(forKey: scrollView)?.doubleValue
             lastPageOffsetY.setObject(NSNumber(value: Double(scrollView.contentOffset.y)), forKey: scrollView)
             if scrollView.keepPageTopUnderBar(webKitTop: top.obscuredInset, previousY: previousY.map { CGFloat($0) }) { return }
+            topBarPageDidScroll(top)
         }
         guard scrollView === pageScrollView, !isEditingAddress else { return }
         let signposter = Signposts.signposter
@@ -1398,6 +1463,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// A status bar tap while the bar is hidden brings the bar back and keeps the reader's place;
     /// the next tap scrolls to the top (as in DuckDuckGo and Brave).
     public func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        // Under a top bar the bar comes back as the page scrolls up, so its top arrives under the
+        // whole bar (the strip comes in with it), never under the slim band with a gap above it.
+        if scrollView === pageScrollView, chromeOnTop, collapse.rest != .expanded {
+            revealChrome(.statusBar)
+            return true
+        }
         guard scrollView === pageScrollView, collapse.rest == .hidden else { return true }
         revealChrome(.statusBar)
         return false

@@ -196,6 +196,7 @@ extension BrowserViewController {
         ui.driver.jump(to: 0)
         sheet.setProgress(0)
         sheet.isHidden = true
+        verticalBarBacking.alpha = 1
         // The next open starts from an empty list: its rows are there on its first frame, with
         // nothing of this search to crossfade from.
         sheet.clear()
@@ -299,6 +300,9 @@ extension BrowserViewController {
         pill.alpha = 1
         pill.isCompact = false
         let barAlpha = SearchSheetGeometry.barAlpha(progress: p)
+        // The outer screen's bar panel fades with the bar's buttons: an empty panel beside the
+        // sheet read as an unused control (design review).
+        verticalBarBacking.alpha = barAlpha
         switch ui.style {
         case .dropdown:
             // The field widens in its row, from the pill between the bar's buttons.

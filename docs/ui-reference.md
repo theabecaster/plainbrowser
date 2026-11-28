@@ -93,6 +93,10 @@ and the two-finger scrub closes the search field or the overview.
   (`ChromeScrim`): the glass's own shape, its edge softened over 2 pt, nothing past it, inside
   the control so it moves and fades with it. Never a band, never a halo: the page shows in the
   gaps between capsules, so they float apart.
+- **The Duo's outer screen keeps the system's vertical bar** beside the page (status items, then
+  Back, Forward, Tabs, New Tab and More in one capsule). Behind it Plain puts one floating panel of
+  its glass (paper, navy in dark mode, violet in a private tab), 6 pt in from the page and the
+  screen's edges with round corners; the page never runs under it.
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
   pill in a fixed place, Tabs, New Tab and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
@@ -108,17 +112,23 @@ and the two-finger scrub closes the search field or the overview.
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, New Tab
   and More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
-  Layout Above adds a 34 pt strip under the bar from the second tab. Where the status items keep
-  to a corner (the inner screen) the bar sits on their row, and nothing of Plain's is behind it:
-  no band, backing, blur or header-colored fill at the top in any state, only the floating
-  glass. At a page's top a site's fixed header rests under the bar and rides up with the page
-  to the top edge; mid-page it stays at the top edge under the bar, and nothing in the page moves
-  when the bar collapses or comes back. While
-  reading, the address shrinks in place and then lifts away, the buttons and strip fade, and the
-  page runs to the top edge under the status items. The page's first line starts under the bar
-  and slides under it. To type an address, the pill stays in the bar and the search sheet grows
-  down from it, with Cancel beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab,
-  17% with the strip; nothing while reading.
+  Layout Above adds a 34 pt strip under the bar from the second tab; Left and Right show a 52 pt
+  rail of site icons beside the page instead, in landscape and portrait, which widens to titles
+  (a drag, or Show Titles at its foot). With one tab neither shows: the page has the room, and
+  the list comes in from its edge with the second tab. The strip is as wide as its tabs, from
+  the leading edge, up to the screen's width, and starts 10 pt under the status items. Every tab in a list is its own plate (the
+  one on screen a solid card ringed in Lagoon, the others a veil with a hairline). Where the status items keep
+  to a corner (the inner screen) the bar sits on their row. Behind the row and the strip is one
+  band of Liquid Glass across the pages, from the top edge, as Safari has there; the capsules
+  float on it, and it reaches under the strip when there is one. While reading the band rises to the status row's height and shows only the site's
+  host in a small glass capsule where the address was ("apple.com"), clear of the status items; a
+  tap on it brings the bar back. The page's top boundary is the band's bottom in every state: a
+  site's fixed header rests under it and nothing in the page moves when the bar collapses or
+  comes back; the strip shows while the page's top is in view, so it never covers a header
+  mid-page. Private, the band, the host capsule and the strip are the private violet glass, drawn dark. The page's first line starts under the expanded band and slides under the glass. To
+  type an address, the pill stays in the bar and the search sheet grows down from it, with Cancel
+  beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab, 17.5% with
+  the strip at a page's top; 11% while reading.
 - Plus buttons act at once when there is one obvious action, and become a menu only when there is a real choice.
 - **The bar's buttons** (every layout): Back, Forward, Tabs, New Tab ("+") and More. New Tab opens a
   tab of the kind on screen with the keyboard up; its long press offers the other kind. Share is
@@ -159,6 +169,7 @@ and the two-finger scrub closes the search field or the overview.
 ## Visual and motion
 
 - One accent color (Lagoon Blue, from `Brand/identity.md`) and semantic colors from `DesignSystem`. No hard-coded colors in features.
+- A tab is shown by its site's icon on a small lifted tile (the sidebar, the strip, the switcher's cards), the same tile for every site; a site without an icon shows its first letter in New York on that tile. The tab on screen is marked in Lagoon.
 - System text styles with Dynamic Type. Tap targets are at least 44 pt (the tappable area, not only the frame around it).
 - Lists of pages with a time (History, Archived Tabs) put the time under the title from the
   first accessibility size, where beside it the title was cut to a word.

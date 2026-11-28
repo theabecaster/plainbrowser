@@ -62,6 +62,8 @@ public final class WebViewPool {
 
     public let downloads: DownloadCoordinator
     public let thumbnails: ThumbnailService
+    /// Site icons for the tab lists (`FaviconService`).
+    public let favicons: FaviconService
 
     /// Made when the first web view is (the warm-up after the first frame): WebKit's
     /// preferences and the data store cost the launch's first frame several ms otherwise.
@@ -163,6 +165,8 @@ public final class WebViewPool {
     ///   - translator: Translate Page's engine (Apple's Translation framework, from the shell).
     ///   - profileStore: the website data store of each profile but Personal (whose store is
     ///     `dataStore`): its own, so profiles never share cookies or logins.
+    ///   - iconDatabases: each profile's database, where its site icons are stored; nil keeps
+    ///     icons in memory only.
     public init(
         dataStore: @autoclosure @escaping () -> WKWebsiteDataStore = AppWebsiteData.store,
         profileStore: @escaping (ProfileID) -> WKWebsiteDataStore = { AppWebsiteData.store(forProfile: $0) },
@@ -176,8 +180,10 @@ public final class WebViewPool {
         pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
         passkeysEnabled: Bool = FixedChoices.passkeysEnabled,
         darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore(),
-        translator: (any PageTranslator)? = nil
+        translator: (any PageTranslator)? = nil,
+        iconDatabases: FaviconService.Databases? = nil
     ) {
+        favicons = FaviconService(databases: iconDatabases)
         self.translator = translator
         self.passkeysEnabled = passkeysEnabled
         signInScripts = passkeysEnabled ? nil : SignInScripts()
@@ -516,6 +522,7 @@ public final class WebViewPool {
         askedWhileOff = askedWhileOff.filter { !$0.key.hasPrefix(Self.privateAnswersPrefix) }
         privateSessionGeneration += 1
         darkPagesScripts[true] = nil
+        favicons.endPrivateSession()
         Task { await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) }
     }
 
@@ -589,6 +596,7 @@ public final class WebViewPool {
         warm = nil
         onMemoryWarning?()
         thumbnails.dropMemoryCache()
+        favicons.dropMemoryCache()
         // No sessionStorage fetch: it would wake every suspended process at the worst moment.
         for slot in slots.values where slot.container == nil && !slot.isBusy(in: self) {
             discard(slot, fetchingSessionStorage: false)
@@ -1061,6 +1069,7 @@ public final class WebViewPool {
     /// the store's data (`AppWebsiteData.removeProfileData`).
     public func forgetProfile(_ profile: ProfileID) {
         profileStores[profile] = nil
+        favicons.forget(profile: profile)
     }
 
     private func tearDown(_ slot: Slot) {

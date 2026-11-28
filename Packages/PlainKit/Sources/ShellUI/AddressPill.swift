@@ -139,6 +139,7 @@ final class AddressPill: UIView {
         textField.autocorrectionType = .no
         textField.spellCheckingType = .no
         textField.smartInsertDeleteType = .no
+        if Self.leanFieldExperiment { applyPredictionTraits(lean: true) }
         textField.clearButtonMode = .whileEditing
         textField.enablesReturnKeyAutomatically = false
         textField.translatesAutoresizingMaskIntoConstraints = false
@@ -362,10 +363,27 @@ final class AddressPill: UIView {
         // already corrects and spell-checks nothing; private, it also predicts, rewrites and
         // grammar-checks nothing, and the keyboard is dark like the bar.
         textField.keyboardAppearance = isPrivate ? .dark : .default
-        textField.inlinePredictionType = isPrivate ? .no : .default
-        textField.writingToolsBehavior = isPrivate ? .none : .default
-        textField.grammarCheckingType = isPrivate ? .no : .default
+        applyPredictionTraits(lean: isPrivate || Self.leanFieldExperiment)
         if textField.isFirstResponder { textField.reloadInputViews() }
+    }
+
+    /// `-PlainPerfLeanField`, isolated test runs only: the field predicts, rewrites and
+    /// grammar-checks nothing outside private tabs too, so a device run can measure what those
+    /// traits cost the keyboard (`PerfTests.testMemoryWithTenTabsLeanField`). On one test Mac they
+    /// held 11 MB at ten tabs, on the other nothing (docs/research/perf-pass-3.md); whether the
+    /// address field gives them up is the owner's call once the device has answered.
+    static let leanFieldExperiment = TestIsolation.isActive
+        && ProcessInfo.processInfo.arguments.contains("-PlainPerfLeanField")
+
+    private func applyPredictionTraits(lean: Bool) {
+        textField.inlinePredictionType = lean ? .no : .default
+        textField.writingToolsBehavior = lean ? .none : .default
+        textField.grammarCheckingType = lean ? .no : .default
+        // The experiment also makes no smart quotes or dashes, as the measured side did.
+        if Self.leanFieldExperiment {
+            textField.smartQuotesType = .no
+            textField.smartDashesType = .no
+        }
     }
 
     /// The private mark at the field's leading edge while it edits in a private tab.

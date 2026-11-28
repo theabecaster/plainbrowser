@@ -148,6 +148,20 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             SceneState.destroy(session)
             return
         }
+        // The perf reference (isolated test runs only): a bare UIKit screen instead of the browser.
+        if PerfReference.isRequested(ProcessInfo.processInfo.arguments) {
+            let window = UIWindow(windowScene: windowScene)
+            window.rootViewController = PerfReferenceController {
+                guard !LaunchFirstFrame.launchEnded else { return }
+                LaunchFirstFrame.launchEnded = true
+                Signposts.signposter.endInterval(Signposts.launch, launchInterval, "reference")
+            }
+            window.makeKeyAndVisible()
+            TestIsolationMarker.install(in: window)
+            self.window = window
+            LaunchFirstFrame.endAtNextFrame()
+            return
+        }
         newWindowRequest = options.userActivities.lazy.compactMap(Windows.request(in:)).first
         // A window an isolated test run asks for is marked, so the owner never sees it.
         SceneState.sessionDidConnect(session, isNewWindow: newWindowRequest != nil)

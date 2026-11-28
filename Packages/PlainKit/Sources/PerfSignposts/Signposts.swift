@@ -95,6 +95,15 @@ public enum Signposts {
     /// `keyboardWillShow` (the shell's work, the commit of that frame and the keyboard's setup).
     /// The rest of `urlBar.ready` is the system keyboard's own rise. Reported beside `focusMs`.
     public static let urlBarKeyboardStart: StaticString = "urlBar.keyboardStart"
+    /// The reference screen's tap to keyboard at rest (`-PlainPerfReference`, test runs only): a
+    /// bare UIKit screen with one text field and a button, so `urlBar.ready` and `tab.newReady` can
+    /// be read against what UIKit alone takes on the same device (docs/research/perf-pass-3.md).
+    public static let referenceReady: StaticString = "reference.ready"
+    /// The reference screen's tap to `keyboardWillShow`, as `urlBar.keyboardStart`.
+    public static let referenceKeyboardStart: StaticString = "reference.keyboardStart"
+    /// The reference field's keystroke: `.editingChanged`, a hop off the main thread and back, as
+    /// `search.suggestions` without the database read or the rows.
+    public static let referenceKeystroke: StaticString = "reference.keystroke"
     /// Interval from a keystroke in the address bar to its local suggestions (history and
     /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
     public static let suggestionsShown: StaticString = "search.suggestions"

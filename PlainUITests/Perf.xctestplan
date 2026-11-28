@@ -32,7 +32,13 @@
         "PerfTests\/testNewTabToSearchField()",
         "PerfTests\/testMemoryWithTenTabs()",
         "PerfTests\/testHeavyPageScrollHitches()",
-        "PerfTests\/testSummaryStart()"
+        "PerfTests\/testSummaryStart()",
+        "PerfTests\/testReferenceLaunch()",
+        "PerfTests\/testReferenceLaunchUnfocused()",
+        "PerfTests\/testReferenceFocus()",
+        "PerfTests\/testReferenceKeystroke()",
+        "PerfTests\/testReferenceMemory()",
+        "PerfTests\/testMemoryWithTenTabsLeanField()"
       ],
       "target" : {
         "containerPath" : "container:Plain.xcodeproj",

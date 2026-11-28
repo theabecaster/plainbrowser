@@ -138,7 +138,7 @@ final class IconCaptureTests: XCTestCase {
             pause(0.8)
             swipes += 1
         }
-        guard icon.exists else {
+        guard icon.exists, icon.isHittable else {
             XCTFail("Plain is not on the Home Screen")
             return
         }

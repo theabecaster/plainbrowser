@@ -58,6 +58,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let buttonBar = ButtonBar()
     let sheet = SearchSheet()
     let pullIndicator = PullIndicator()
+    /// The glass panel behind the system's vertical bar (the Duo's outer screen), under the panes.
+    let verticalBarBacking = VerticalBarBacking()
     /// The bottom-edge strip a hidden bar leaves behind (the home-indicator zone over the focused
     /// pane): a tap there brings the bar back. It takes touches only while the bar is hidden.
     private let revealEdge = UIView()
@@ -181,6 +183,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
+        verticalBarBacking.isHidden = true
+        verticalBarBacking.setPrivate(false)
+        view.insertSubview(verticalBarBacking, belowSubview: panes.view)
         for subview in [buttonBar, pill] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             chromeGlass.contentView.addSubview(subview)
@@ -583,6 +588,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        placeVerticalBarBacking()
         let next = ChromeGeometry(
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom,
             hasButtonBar: !usesVerticalBar && !usesSingleRow
@@ -598,6 +604,22 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         applyCollapse(collapse.progress)
         // During a fold or rotation the insets wait for the transition's completion.
         if !duo.isResizing { updatePageInsets() }
+    }
+
+    /// The vertical bar's column (the safe area's side the system's bar takes) gets its glass panel;
+    /// hidden wherever the bar is not in use.
+    private func placeVerticalBarBacking() {
+        let edge = traitCollection.verticalBarEdge
+        let safe = view.safeAreaInsets
+        let bounds = view.bounds
+        let onTrailing = (edge == .trailing) != (view.effectiveUserInterfaceLayoutDirection == .rightToLeft)
+        let width = onTrailing ? safe.right : safe.left
+        let shown = usesVerticalBar && width > 0
+        if verticalBarBacking.isHidden == shown { verticalBarBacking.isHidden = !shown }
+        guard shown else { return }
+        verticalBarBacking.place(column: CGRect(
+            x: onTrailing ? bounds.width - width : 0, y: 0, width: width, height: bounds.height
+        ))
     }
 
     /// Off where the top bar holds the buttons (`+TopBar`): the Duo's inner screen, as Safari.

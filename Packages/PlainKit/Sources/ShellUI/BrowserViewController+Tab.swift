@@ -313,6 +313,7 @@ extension BrowserViewController {
             self.pill.setPrivate(isPrivate)
             self.duo.top.band.setPrivate(isPrivate)
             self.duo.strip?.setPrivate(isPrivate)
+            self.verticalBarBacking.setPrivate(isPrivate)
             self.buttonBar.setPrivate(isPrivate)
             self.tabsUI.toast.setPrivate(isPrivate)
             // The strip under the status bar too, so the whole screen says private, quietly.

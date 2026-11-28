@@ -2886,3 +2886,22 @@ docs/research/safari-duo-top.md.
   Find, the reader, Back, private, split, side pane, rail, one and many tabs, both orientations):
   docs/research/safari-duo-top.md. Not verified on the simulator: fold and rotation while
   collapsed, a link from another app, pull to refresh.
+
+## Duo outer screen: the vertical bar's column is a glass panel (2026-11-28)
+
+Owner: "The sidebar on the Duo outer screen should keep the theme colors we are using but be more
+like Apple glass, so the change from the page to it is less abrupt", then: "the page should still
+not show [through it], because it'll stay where it is now, but it'll transition better to the eye
+like that, working towards our premium, elegant feel."
+
+- **Chosen: one floating panel of Liquid Glass behind the system's vertical bar**
+  (`VerticalBarBacking`), in Plain's tint (`Palette.glassTint`; the private violet drawn dark in a
+  private tab), 6 pt in from the page and the screen's edges, 28 pt corners. The system draws the
+  bar's items (the status items and the buttons' capsule) but nothing behind them, so the column
+  showed the root view's paper, a flat slab cut straight against the page. Apple's own sidebars
+  float as inset glass panels; the page now meets a rounded glass edge with its rim light.
+- **The layout does not change:** the page ends where it did and nothing of it is behind the
+  column (owner). The panel sits under the panes, over the root background, in the safe area's
+  side the bar takes (`verticalBarEdge`, mirrored in right-to-left).
+- **Cost:** one effect view, placed on layout only; no per-frame work, nothing on the inner screen
+  or on phones (hidden wherever the vertical bar is off).

@@ -47,6 +47,10 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   (`ChromeScrim`): the glass's own shape, its edge softened over 2 pt, nothing past it, inside
   the control so it moves and fades with it. Never a band, never a halo: the page shows in the
   gaps between capsules, so they float apart.
+- **The Duo's outer screen keeps the system's vertical bar** beside the page (status items, then
+  Back, Forward, Tabs, New Tab and More in one capsule). Behind it Plain puts one floating panel of
+  its glass (paper, navy in dark mode, violet in a private tab), 6 pt in from the page and the
+  screen's edges with round corners; the page never runs under it.
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
   pill in a fixed place, Tabs, New Tab and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.

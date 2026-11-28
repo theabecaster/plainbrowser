@@ -528,10 +528,16 @@ public final class CookieBanners {
 /// autoconsent's rules, split by tools/autoconsent: `generic` for every main frame, and one
 /// self-contained ruleset per site-specific rule with the address pattern that selects it.
 /// Immutable after loading; matching runs off the main thread.
+///
+/// A frame's address is checked against a host index, not against every pattern: almost every
+/// pattern is `^https?://`, an optional subdomain group, a literal host and `/`
+/// (`HostKeys.keys(for:)`), so only rules keyed by one of the address's host suffixes, plus the
+/// few patterns the index can't read, run their regular expression. That is O(labels + k) per
+/// frame instead of O(rules), and each pattern is compiled the first time it runs, so the ICU
+/// programs of the ~880 sites the user never visits are never built (docs/research/perf-pass-3.md).
 struct CookieBannerRules: Sendable {
-    struct Specific: @unchecked Sendable {
-        /// `NSRegularExpression` is immutable and documented thread-safe.
-        let pattern: NSRegularExpression
+    struct Specific: Sendable {
+        let pattern: String
         let main: Bool
         let frame: Bool
         let json: String
@@ -541,6 +547,12 @@ struct CookieBannerRules: Sendable {
     /// The generic main-frame ruleset as JSON, sent as is.
     let generic: String
     let specific: [Specific]
+    /// Rule indexes by the literal host they need (`deezer.com`): a matching address's host is that
+    /// host or ends with `.` and it.
+    private let byHost: [String: [Int]]
+    /// Rules whose pattern the index can't read: checked for every address.
+    private let unindexed: [Int]
+    private let compiled: CompiledPatterns
 
     init(data: Data) throws {
         struct File: Decodable {
@@ -558,20 +570,50 @@ struct CookieBannerRules: Sendable {
         let file = try JSONDecoder().decode(File.self, from: data)
         version = file.version
         generic = file.generic
-        // autoconsent's patterns are JavaScript regular expressions; the few ICU can't read are
-        // skipped (their sites get the generic rules and the cosmetic list).
-        specific = file.specific.compactMap { entry in
-            guard let regex = try? NSRegularExpression(pattern: entry.p) else { return nil }
-            return Specific(pattern: regex, main: entry.m, frame: entry.f, json: entry.r)
+        specific = file.specific.map { Specific(pattern: $0.p, main: $0.m, frame: $0.f, json: $0.r) }
+        var byHost: [String: [Int]] = [:]
+        var unindexed: [Int] = []
+        for (index, rule) in specific.enumerated() {
+            guard let keys = HostKeys.keys(for: rule.pattern) else {
+                unindexed.append(index)
+                continue
+            }
+            for key in keys { byHost[key, default: []].append(index) }
         }
+        self.byHost = byHost
+        self.unindexed = unindexed
+        compiled = CompiledPatterns(count: specific.count)
     }
 
-    /// The rulesets whose pattern matches `url` and that run in this kind of frame.
+    /// The rulesets whose pattern matches `url` and that run in this kind of frame, in file order.
     func specificRules(for url: String, mainFrame: Bool) -> [String] {
+        // ICU's `$` also matches before a final line break, which the host suffixes don't model:
+        // such an address (never a real page's) takes the full check.
+        if url.contains(where: \.isNewline) { return scannedRules(for: url, mainFrame: mainFrame) }
+        var candidates = Set(unindexed)
+        for suffix in HostKeys.hostSuffixes(of: url) {
+            if let rules = byHost[String(suffix)] { candidates.formUnion(rules) }
+        }
+        return matches(url, among: candidates.sorted(), mainFrame: mainFrame)
+    }
+
+    /// Every pattern against `url`, without the index: the reference `specificRules` must equal.
+    func scannedRules(for url: String, mainFrame: Bool) -> [String] {
+        matches(url, among: Array(specific.indices), mainFrame: mainFrame)
+    }
+
+    /// How many patterns the index reads (the rest are checked for every address), for the tests.
+    var indexedCount: Int { specific.count - unindexed.count }
+
+    private func matches(_ url: String, among indexes: [Int], mainFrame: Bool) -> [String] {
         let range = NSRange(url.startIndex..., in: url)
-        return specific.compactMap { rule in
-            guard mainFrame ? rule.main : rule.frame else { return nil }
-            return rule.pattern.firstMatch(in: url, range: range) == nil ? nil : rule.json
+        return indexes.compactMap { index in
+            let rule = specific[index]
+            guard mainFrame ? rule.main : rule.frame,
+                  let regex = compiled.regex(index, pattern: rule.pattern),
+                  regex.firstMatch(in: url, range: range) != nil
+            else { return nil }
+            return rule.json
         }
     }
 
@@ -584,5 +626,192 @@ struct CookieBannerRules: Sendable {
         if components.host == "ccpa-notice.sp-prod.net" || components.host == "ccpa-pm.sp-prod.net" { return true }
         let paths: Set<String> = ["/index.html", "/privacy-manager/index.html", "/ccpa_pm/index.html", "/us_pm/index.html"]
         return paths.contains(components.path) && !query.isDisjoint(with: ["message_id", "requestUUID", "consentUUID"])
+    }
+}
+
+/// Each rule's ICU program, built the first time an address reaches its pattern. autoconsent's
+/// patterns are JavaScript regular expressions; the few ICU can't read never match (their sites
+/// get the generic rules and the cosmetic list), as when they were skipped at load.
+///
+/// `@unchecked Sendable`: every access to the arrays is under the lock. `NSRegularExpression` is
+/// immutable and documented thread-safe, so a built one is used outside it.
+private final class CompiledPatterns: @unchecked Sendable {
+    private let lock = NSLock()
+    private var regexes: [NSRegularExpression?]
+    private var tried: [Bool]
+
+    init(count: Int) {
+        regexes = Array(repeating: nil, count: count)
+        tried = Array(repeating: false, count: count)
+    }
+
+    func regex(_ index: Int, pattern: String) -> NSRegularExpression? {
+        lock.withLock {
+            if !tried[index] {
+                tried[index] = true
+                regexes[index] = try? NSRegularExpression(pattern: pattern)
+            }
+            return regexes[index]
+        }
+    }
+}
+
+/// The literal hosts a cookie banner rule's pattern needs, for `CookieBannerRules`' index.
+///
+/// A pattern is indexed only in this shape: a scheme (`^https?://`, `^https://`, `^http://`), at
+/// most one optional subdomain group from `subdomainGroups`, then a host made of literal
+/// characters, `\.` and groups of literal alternatives (`(nfl|49ers)`), then `/`, `(/|$)` or `$`,
+/// not quantified; no inline flags or lookarounds anywhere (`(?i)` would reach other alternatives).
+/// Each subdomain group matches nothing or a run that ends in `.` and holds no `/`, and the host
+/// holds no `/` either, so in an address the pattern matches, the text from `://` to the first `/`
+/// is that run and one spelling of the host: the host is that text or a suffix of it after a
+/// `.`. `hostSuffixes(of:)` lists exactly those suffixes, so looking each one up finds every rule
+/// that can match, and the rule's own pattern still decides. Anything else is not indexed and is
+/// checked against every address.
+enum HostKeys {
+    static let schemes = ["^https?://", "^https://", "^http://"]
+    /// The optional subdomain groups in autoconsent's rules, with their quantifiers.
+    static let subdomainGroups: [String] = [
+        "(www\\.)?", "(?:www\\.)?", "(www\\.|)?", "(www\\.|m\\.)?",
+        "(\\w+\\.)?", "(\\w+\\.)*", "(\\w+\\.)+",
+        "([\\w-]+\\.)?", "([\\w-]+\\.)*",
+        "([a-z0-9-]+\\.)?", "(?:[a-z0-9-]+\\.)?", "([a-z0-9-]+\\.)*",
+        "([a-z]*\\.)?", "([a-z]+\\.)?", "([a-z0-9.-]*\\.)?", "([.a-zA-Z0-9-]+\\.)?",
+        "(?:[^/]+\\.)?",
+    ]
+    /// A host with more spellings than this is left to the full check.
+    static let maxKeys = 64
+
+    /// The host's spellings (`["deezer.com"]`), or nil when the pattern is not in the indexed shape.
+    /// A pattern that is several alternatives at its top level (`^…\.de/|^…\.fr/`) is indexed only
+    /// when every one is, under all of their hosts.
+    static func keys(for pattern: String) -> [String]? {
+        guard !hasSpecialGroups(pattern) else { return nil }
+        let alternatives = topLevelAlternatives(of: pattern)
+        var keys: [String] = []
+        for alternative in alternatives {
+            guard let some = branchKeys(alternative) else { return nil }
+            keys += some
+        }
+        return keys
+    }
+
+    /// `pattern` split at each `|` outside parentheses and character classes.
+    static func topLevelAlternatives(of pattern: String) -> [Substring] {
+        var alternatives: [Substring] = []
+        var depth = 0, inClass = false, escaped = false
+        var start = pattern.startIndex
+        for index in pattern.indices {
+            let c = pattern[index]
+            if escaped {
+                escaped = false
+            } else if c == "\\" {
+                escaped = true
+            } else if inClass {
+                inClass = c != "]"
+            } else if c == "[" {
+                inClass = true
+            } else if c == "(" {
+                depth += 1
+            } else if c == ")" {
+                depth -= 1
+            } else if c == "|", depth == 0 {
+                alternatives.append(pattern[start..<index])
+                start = pattern.index(after: index)
+            }
+        }
+        return alternatives + [pattern[start...]]
+    }
+
+    private static func branchKeys(_ pattern: Substring) -> [String]? {
+        var rest = pattern
+        guard let scheme = schemes.first(where: { rest.hasPrefix($0) }) else { return nil }
+        rest = rest.dropFirst(scheme.count)
+        if let group = subdomainGroups.first(where: { rest.hasPrefix($0) }) { rest = rest.dropFirst(group.count) }
+        var keys = [""]
+        while !isHostEnd(rest) {
+            if rest.hasPrefix("\\.") {
+                keys = keys.map { $0 + "." }
+                rest = rest.dropFirst(2)
+            } else if let c = rest.first, isHostCharacter(c) {
+                keys = keys.map { $0 + String(c) }
+                rest = rest.dropFirst()
+            } else if rest.first == "(" {
+                var body = rest.dropFirst()
+                if body.hasPrefix("?:") { body = body.dropFirst(2) }
+                guard let close = body.firstIndex(of: ")") else { return nil }
+                let after = body[body.index(after: close)...]
+                // A quantified group is optional or repeated: not a literal part of the host.
+                if let next = after.first, "?*+{".contains(next) { return nil }
+                var spellings: [String] = []
+                for alternative in body[..<close].split(separator: "|", omittingEmptySubsequences: false) {
+                    guard let literal = literal(alternative), !literal.isEmpty else { return nil }
+                    spellings.append(literal)
+                }
+                keys = keys.flatMap { key in spellings.map { key + $0 } }
+                guard keys.count <= maxKeys else { return nil }
+                rest = after
+            } else {
+                return nil
+            }
+        }
+        // The host must end there for certain: a `/` or `(/|$)` that is itself optional or repeated
+        // (`\.com/?`) lets the host go on (`example.com.evil/`).
+        let terminator = rest.hasPrefix("(/|$)") ? rest.dropFirst(5) : rest.dropFirst()
+        if let next = terminator.first, "?*+{".contains(next) { return nil }
+        guard keys.allSatisfy({ !$0.isEmpty && !$0.hasPrefix(".") && !$0.hasSuffix(".") }) else { return nil }
+        return keys
+    }
+
+    /// Whether `pattern` has a group that is not a plain `(…)` or `(?:…)`: inline flags (`(?i)`,
+    /// which also reach later alternatives), lookarounds, named groups. Such a pattern is not indexed.
+    static func hasSpecialGroups(_ pattern: String) -> Bool {
+        var rest = Substring(pattern)
+        while let open = rest.range(of: "(?") {
+            rest = rest[open.upperBound...]
+            if rest.first != ":" { return true }
+        }
+        return false
+    }
+
+    /// The text from `://` to the first `/` (or the end), and each of its suffixes after a `.`.
+    static func hostSuffixes(of url: String) -> [Substring] {
+        let utf8 = url.utf8
+        guard let scheme = url.range(of: "://") else { return [] }
+        let start = scheme.upperBound
+        let end = utf8[start...].firstIndex(of: UInt8(ascii: "/")) ?? url.endIndex
+        var suffixes = [url[start..<end]]
+        var index = start
+        while let dot = utf8[index..<end].firstIndex(of: UInt8(ascii: ".")) {
+            index = utf8.index(after: dot)
+            suffixes.append(url[index..<end])
+        }
+        return suffixes
+    }
+
+    private static func isHostEnd(_ rest: Substring) -> Bool {
+        rest.first == "/" || rest == "$" || rest.hasPrefix("(/|$)")
+    }
+
+    private static func isHostCharacter(_ c: Character) -> Bool {
+        c.isASCII && (c.isLetter || c.isNumber || c == "-")
+    }
+
+    /// `alternative` as plain text (`\.` read as `.`), or nil when it holds anything else.
+    private static func literal(_ alternative: Substring) -> String? {
+        var text = ""
+        var rest = alternative
+        while let c = rest.first {
+            if rest.hasPrefix("\\.") {
+                text += "."
+                rest = rest.dropFirst(2)
+            } else if isHostCharacter(c) {
+                text.append(c)
+                rest = rest.dropFirst()
+            } else {
+                return nil
+            }
+        }
+        return text
     }
 }

@@ -10,6 +10,8 @@ import XCTest
 final class DuoTests: XCTestCase {
     private var server: TestServer!
 
+    /// `-PlainTabLayout` closes the search field a first launch opens (it is for captures of a
+    /// layout), so a launch with it waits for the pill instead.
     private func launch(_ arguments: [String] = ["-PlainInMemoryStore"]) throws -> XCUIApplication {
         continueAfterFailure = false
         if server == nil {
@@ -20,7 +22,15 @@ final class DuoTests: XCTestCase {
         let app = XCUIApplication.isolated()
         app.launchArguments += arguments
         app.launch()
-        XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        if arguments.contains("-PlainTabLayout") {
+            XCTAssertTrue(app.buttons["addressPill"].waitForExistence(timeout: 5))
+            // The layout is set a moment after launch, and closes the field then.
+            let field = app.textFields["searchField"]
+            let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !field.exists }, object: nil)
+            _ = XCTWaiter().wait(for: [closed], timeout: 6)
+        } else {
+            XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 5))
+        }
         return app
     }
 

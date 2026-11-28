@@ -218,7 +218,9 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     private func updateItemWidth() {
         let count = max(1, items.count)
         let sections = CGFloat(hasPrivateTabs ? 2 : 1)
-        let available = collectionView.bounds.width - sections * (Self.sectionInset.left + Self.sectionInset.right)
+        // From the strip's own width: the tabs' view is laid out a pass later than the strip, so
+        // its bounds are still the old ones when the strip has just grown.
+        let available = view.bounds.width - Metrics.tapTarget - sections * (Self.sectionInset.left + Self.sectionInset.right)
         guard available > 0 else { return }
         let share = (available - CGFloat(count) * Self.tabGap) / CGFloat(count)
         let limits = FixedChoices.tabStripItemWidth

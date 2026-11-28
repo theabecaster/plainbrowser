@@ -137,6 +137,49 @@ final class SideTabsViewTests: XCTestCase {
         XCTAssertEqual(data.loads, 0, "icons in memory are assigned, never read, during a scroll")
     }
 
+    /// The strip is as wide as its tabs (the host sizes it to `preferredWidth`), and the tabs
+    /// fill it: when it grows for a new tab, each keeps its resting width in the same pass.
+    func testTheStripsTabsFillItWhenItGrows() {
+        let data = FakeSideTabs(count: 2, cached: true)
+        let strip = TabStripViewController(dataSource: data)
+        let host = UIViewController()
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.addChild(strip)
+        host.view.addSubview(strip.view)
+        strip.didMove(toParent: host)
+        func tabWidths() -> [CGFloat] {
+            strip.collectionView.layoutIfNeeded()
+            return strip.collectionView.visibleCells.map(\.frame.width)
+        }
+        XCTAssertEqual(strip.preferredWidth, 422, "two tabs at 180 pt, their gaps and New Tab")
+        strip.view.frame = CGRect(x: 12, y: 80, width: strip.preferredWidth, height: 34)
+        strip.view.layoutIfNeeded()
+        XCTAssertEqual(tabWidths().count, 2)
+        for width in tabWidths() { XCTAssertEqual(width, 180, accuracy: 1) }
+
+        var resized = 0
+        strip.onPreferredWidthChange = {
+            resized += 1
+            // The host: the strip takes its new width, laid out at once.
+            strip.view.frame.size.width = strip.preferredWidth
+            strip.view.layoutIfNeeded()
+        }
+        data.regularTabs.append(TabGalleryItem(id: UUID(), title: "Third", url: URL(string: "https://third.example")))
+        strip.reloadTabs()
+        XCTAssertEqual(resized, 1)
+        XCTAssertEqual(strip.preferredWidth, 608)
+        strip.view.layoutIfNeeded()
+        XCTAssertEqual(tabWidths().count, 3)
+        for width in tabWidths() { XCTAssertEqual(width, 180, accuracy: 1, "a grown strip leaves no empty glass") }
+
+        // Past the lane the tabs share what there is, down to the narrowest.
+        strip.onPreferredWidthChange = nil
+        strip.view.frame.size.width = 500
+        strip.view.layoutIfNeeded()
+        for width in tabWidths() { XCTAssertEqual(width, floor((500 - 44 - 6 - 18) / 3), accuracy: 1) }
+    }
+
     private func scrollCost(of scroll: UIScrollView, vertical: Bool) async throws -> (count: Int, p95: Duration, max: Duration) {
         scroll.layoutIfNeeded()
         let end = vertical

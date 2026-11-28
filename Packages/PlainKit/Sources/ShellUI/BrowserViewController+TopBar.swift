@@ -161,13 +161,18 @@ extension BrowserViewController {
         // The host sits where the pill's text was, so the address reads as one text shrinking.
         let hostOnPill = band.hostCapsule.centerXAnchor.constraint(equalTo: pill.centerXAnchor)
         hostOnPill.priority = .defaultHigh
+        // Never wider than the pill, which keeps clear of the status items (a long host truncates).
+        let hostInPill = [
+            band.hostCapsule.leadingAnchor.constraint(greaterThanOrEqualTo: pill.leadingAnchor),
+            band.hostCapsule.trailingAnchor.constraint(lessThanOrEqualTo: pill.trailingAnchor),
+        ]
         NSLayoutConstraint.activate([
             band.topAnchor.constraint(equalTo: view.topAnchor),
             band.leadingAnchor.constraint(equalTo: panes.view.leadingAnchor),
             band.trailingAnchor.constraint(equalTo: panes.view.trailingAnchor),
             duo.top.bandHeight,
             hostOnPill,
-        ])
+        ] + hostInPill)
         band.onTap = { [weak self] in self?.revealChrome(.bandTap) }
     }
 
@@ -388,13 +393,7 @@ extension BrowserViewController {
             pill.transform = CGAffineTransform(translationX: 0, y: move.translationY).scaledBy(x: move.scale, y: move.scale)
             pill.isCompact = progress > 0
         }
-        // The strip (and the band under it) shows only while the page's top is in view: mid-page a
-        // fixed header rests at the slim band's bottom, which the strip would cover
-        // (`TopChromeGeometry.stripReveal`).
-        let reveal = editing ? 1 : currentStripReveal(geometry)
-        duo.top.stripReveal = reveal
-        let stripProgress = TopChromeGeometry.stripProgress(collapse: editing ? 0 : reading, reveal: reveal)
-        duo.top.band.apply(progress: editing ? 0 : reading, translation: geometry.bandTranslation(progress: stripProgress))
+        applyTopBand(geometry, reading: editing ? 0 : reading, reveal: editing ? 1 : currentStripReveal(geometry))
         pill.alpha = editing ? 1 : TopChromeGeometry.pillAlpha(progress: reading)
         // Collapsed, the band is the address for VoiceOver (`TopBand`).
         let isGone = !editing && reading >= 0.5
@@ -402,29 +401,48 @@ extension BrowserViewController {
         let alpha = ChromeGeometry.barAlpha(progress: reading)
         buttonBar.transform = CGAffineTransform(translationX: 0, y: geometry.buttonsTranslation(progress: reading))
         if !editing { buttonBar.alpha = alpha }
-        if let strip = duo.strip?.view {
-            let stripAlpha = ChromeGeometry.barAlpha(progress: stripProgress)
-            strip.transform = CGAffineTransform(translationX: 0, y: geometry.stripTranslation(progress: stripProgress))
-            strip.alpha = stripAlpha
-            // A hidden strip takes no taps meant for the page under it.
-            strip.isUserInteractionEnabled = stripAlpha > 0.5
-        }
     }
 
-    /// How much of the strip the page's scroll position allows (`TopChromeGeometry.stripReveal`),
-    /// from the page on screen: 1 at its top, 0 once it has scrolled the strip's height.
+    /// The band and the strip for the bar's collapse (`reading`, 0 to 1) and the strip's share
+    /// the pages' scroll positions allow (`reveal`): the strip (and the band under it) shows only
+    /// while the page's top is in view, since mid-page a fixed header rests at the slim band's
+    /// bottom, which the strip would cover (`TopChromeGeometry.stripReveal`). Transform and alpha
+    /// only; touches nothing the search sheet owns (the pill, the buttons).
+    private func applyTopBand(_ geometry: TopChromeGeometry, reading: CGFloat, reveal: CGFloat) {
+        duo.top.stripReveal = reveal
+        let stripProgress = TopChromeGeometry.stripProgress(collapse: reading, reveal: reveal)
+        duo.top.band.apply(progress: reading, translation: geometry.bandTranslation(progress: stripProgress))
+        guard let strip = duo.strip?.view else { return }
+        let stripAlpha = ChromeGeometry.barAlpha(progress: stripProgress)
+        strip.transform = CGAffineTransform(translationX: 0, y: geometry.stripTranslation(progress: stripProgress))
+        strip.alpha = stripAlpha
+        // A hidden strip takes no taps meant for the page under it.
+        strip.isUserInteractionEnabled = stripAlpha > 0.5
+    }
+
+    /// How much of the strip the pages' scroll positions allow (`TopChromeGeometry.stripReveal`):
+    /// 1 at a page's top, 0 once it has scrolled the strip's height. The band spans both panes of
+    /// a split, so the lower of the two: a pane mid-page keeps the strip off its fixed header.
     func currentStripReveal(_ geometry: TopChromeGeometry) -> CGFloat {
-        guard geometry.stripHeight > 0, let scrollView = pageScrollView else { return 1 }
-        return geometry.stripReveal(offset: scrollView.contentOffset.y)
+        guard geometry.stripHeight > 0 else { return 1 }
+        var reveal = pageScrollView.map { geometry.stripReveal(offset: $0.contentOffset.y) } ?? 1
+        let panes = session.tabs.panes
+        for index in shownPanes where index != session.tabs.focusedPane {
+            guard let id = panes[index], let tab = session.tabs.existingTab(id),
+                  let scrollView = session.pool.scrollView(for: tab) else { continue }
+            reveal = min(reveal, geometry.stripReveal(offset: scrollView.contentOffset.y))
+        }
+        return reveal
     }
 
-    /// A page scroll under the top bar: the strip follows the page's top in and out, frame by
-    /// frame (transform and alpha only), whatever the bar's state.
+    /// A page scrolled under the top bar (or the page on screen changed: another tab, the
+    /// reader): the strip follows the pages' tops in and out, frame by frame (transform and alpha
+    /// only), whatever the bar's state. Left alone while the search sheet holds the bar.
     func topBarPageDidScroll(_ geometry: TopChromeGeometry) {
-        guard geometry.stripHeight > 0, duo.strip != nil else { return }
+        guard geometry.stripHeight > 0, duo.strip != nil, !isEditingAddress, !sheetUI.isLaidOutOpen else { return }
         let reveal = currentStripReveal(geometry)
         guard abs(reveal - duo.top.stripReveal) > 0.001 else { return }
-        applyTopBarCollapse(collapseProgress, geometry: geometry)
+        applyTopBand(geometry, reading: min(collapseProgress, ChromeRest.pill.progress), reveal: reveal)
     }
 
     /// The page's insets under the top bar. They never follow the bar's resting state: the
@@ -434,6 +452,8 @@ extension BrowserViewController {
     /// viewport insets span that to the expanded bar, so CSS `svh`/`lvh` stay put. They change
     /// only with the layout (a fold, a rotation, the strip coming or going).
     func applyTopBarInsets(_ geometry: TopChromeGeometry) {
+        // The page on screen may have changed (another tab, the reader): the strip follows its top.
+        defer { topBarPageDidScroll(geometry) }
         if let tab = currentTab { applyTopBarInsets(geometry, to: tab) }
         let insets = topBarInsets(geometry)
         engineUI.reader.setInsets(obscured: insets.obscured, minimumViewport: insets.minimum, maximumViewport: insets.maximum)

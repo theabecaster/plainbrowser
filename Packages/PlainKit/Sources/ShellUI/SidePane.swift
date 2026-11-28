@@ -95,6 +95,10 @@ final class SidePaneController: UIViewController {
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
+        // The header over the content, on the pane's paper: while the divider moves the content
+        // holds its top and the header may step down under the top bar, over it.
+        Paper.apply(to: header)
+        view.bringSubviewToFront(header)
         for subview in [picker, expandButton, closeButton] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             header.addSubview(subview)

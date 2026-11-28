@@ -435,12 +435,12 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
             #endif
         }
         browser.view.setNeedsLayout()
+        browser.saveSidePaneState()
         // From inside a layout pass (a fold's regions changed) the pass in progress places it.
         guard relayout else { return }
         browser.view.layoutIfNeeded()
         browser.updatePageInsets()
         browser.updateButtons()
-        browser.saveSidePaneState()
     }
 
     /// Stops a drag or settle where it is and puts everything at the window's state at once: the

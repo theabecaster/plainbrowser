@@ -80,8 +80,11 @@ final class PaperTextureTests: XCTestCase {
         }
     }
 
-    /// Tiles meet without a seam: the step across the wrap edge is no larger than the step between
-    /// any two neighbouring columns or rows inside the tile.
+    /// Tiles meet without a seam: the step across the wrap edge is one more step like those inside
+    /// the tile. Every layer wraps, so the edge pair is statistically one of 256; with hundreds of
+    /// strands it can come out the largest by chance (night's does, about 3 standard deviations), so
+    /// the bound is 4.5 standard deviations above the mean inside step. A real seam (two unrelated
+    /// columns side by side) measures 6 to 8.
     func testTilesWithoutASeam() {
         for sheet in PaperTexture.Sheet.allCases {
             let l = luma(sheet)
@@ -91,10 +94,15 @@ final class PaperTextureTests: XCTestCase {
             func rowStep(_ a: Int, _ b: Int) -> Double {
                 (0 ..< side).reduce(0.0) { $0 + abs(l[a * side + $1] - l[b * side + $1]) } / Double(side)
             }
+            func bound(_ steps: [Double]) -> Double {
+                let mean = steps.reduce(0, +) / Double(steps.count)
+                let deviation = (steps.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(steps.count)).squareRoot()
+                return mean + 4.5 * deviation
+            }
             let inside = (0 ..< side - 1).map { columnStep($0, $0 + 1) }
             let insideRows = (0 ..< side - 1).map { rowStep($0, $0 + 1) }
-            XCTAssertLessThanOrEqual(columnStep(side - 1, 0), inside.max()!, "\(sheet) vertical seam")
-            XCTAssertLessThanOrEqual(rowStep(side - 1, 0), insideRows.max()!, "\(sheet) horizontal seam")
+            XCTAssertLessThanOrEqual(columnStep(side - 1, 0), bound(inside), "\(sheet) vertical seam")
+            XCTAssertLessThanOrEqual(rowStep(side - 1, 0), bound(insideRows), "\(sheet) horizontal seam")
         }
     }
 

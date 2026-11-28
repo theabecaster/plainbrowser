@@ -36,7 +36,8 @@ public nonisolated enum PaperTexture {
         /// Standard deviation of the formation and the tooth, in levels.
         var formation: Double
         var tooth: Double
-        /// Fibres per tile and their strength range in levels. Negative darkens.
+        /// Fibres per tile (a square number, so the jittered grid they start on is full) and their
+        /// strength range in levels. Negative darkens.
         var fibres: Int
         var fibreStrength: ClosedRange<Double>
         /// The share of fibres that go the other way (lighter on day paper, darker at night).
@@ -44,11 +45,11 @@ public nonisolated enum PaperTexture {
 
         static let day = Recipe(
             base: (255, 246, 230), channel: (0.45, 1.0, 1.2),
-            formation: 0.45, tooth: 2.2, fibres: 600, fibreStrength: -5.3 ... -2.1, fibreContrary: 0.4
+            formation: 0.45, tooth: 2.2, fibres: 625, fibreStrength: -5.2 ... -2.05, fibreContrary: 0.4
         )
         static let night = Recipe(
             base: (10, 33, 51), channel: (0.75, 0.9, 1.0),
-            formation: 0.28, tooth: 1.1, fibres: 520, fibreStrength: 2.0 ... 4.3, fibreContrary: 0.25
+            formation: 0.28, tooth: 1.1, fibres: 529, fibreStrength: 1.98 ... 4.25, fibreContrary: 0.25
         )
     }
 

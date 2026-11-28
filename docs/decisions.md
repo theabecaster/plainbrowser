@@ -972,7 +972,7 @@ Research: docs/research/browse-for-me.md.
   simple, in our own identity". Every FeatureUI sheet (Settings with Search Engine, App Icon and
   About; History; Favorites; Archived Tabs; Downloads) now sits on the textured Paper ground
   (`PaperBackground()`, day cream / night lagoon). Rows stay grouped, on flat paper cards a hair
-  lighter than the ground (`Palette.paperCard`: `#FFFBF4` by day, `#11293D` by night) with ink
+  lighter than the ground (`Palette.paperCard`: `#FFF9EE` by day since 2026-11-28, was `#FFFBF4`, `#11293D` by night) with ink
   hairlines (`Palette.paperHairline`). Text is ink (`Palette.ink`), supporting text the ink's
   secondary step (`Palette.inkSecondary`: ink at 72 % by day, paper at 76 % by night, well over
   4.5:1), actions and checkmarks Lagoon a step deeper on paper (`Palette.accentOnPaper`: `#2366F0` by day, 4.7:1 on
@@ -2689,3 +2689,13 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
 - **Side pane picker:** the selected segment carries its word beside its symbol (one template
   image, as a segment holds an image or a title), the others stay symbols, and every segment has
   its name for VoiceOver.
+
+## Sheet headers: Done in the corner, plain accent, warmer cards (2026-11-28)
+
+Owner feedback from TestFlight on the Duo: the Settings sheet's Done sat too far from the trailing edge and did not look like Plain; the white cards looked overexposed on the cream.
+
+- **Cause of the gap:** `SheetHeader` gives each side an equal share of the width with a `ZStack` holding a clear 1 pt line, so the side fills its share. The `ZStack` kept its default center alignment, so the control sat in the middle of its share; the outer frame's `.trailing` alignment had nothing to move. Measured (simulator, Done's trailing edge to the sheet's): 49 pt on the 13 mini, 55 pt on the 17, 124 pt on the Duo's outer screen, 118 pt on the inner screen. Back and History's Clear had the same fault on the leading side. Fix: the `ZStack`s align `.leading` and `.trailing`. Every sheet uses this header (Settings and its screens, History, Favorites, Archived Tabs, Downloads, Reading List, the summary), so all of them are fixed by it.
+- **Margins:** 16 pt in a compact width, 20 pt in a regular one (the system bar's own margins), and, as for the list's cards, the safe area counts toward it (`max(margin, inset)` per side, read with `onGeometryChange`). On the Duo's outer screen the system's vertical bar keeps an 84 pt column at the trailing edge beside the sheet and the sheet's safe area stops at it; with the margin on top of the safe area Done sat 16 pt short of the cards' edge (92 pt from the sheet's). Now Done, Back and Clear line up with the cards' edges on every screen: 16 pt on phones, 20 pt on the inner screen. No device or screen checks.
+- **Rejected: turning the vertical bar off for sheets.** A hosting controller returning `.disabled` from `preferredVerticalBarBehavior` changed nothing on the outer screen: the presenter's choice stands for a page sheet. Turning it off in the browser while a sheet shows would move the page's buttons behind the sheet for nothing.
+- **Style:** Done, Back, Clear and Favorites' Edit are plain accent text or symbols (`SheetHeaderButtonStyle`: `Palette.accentOnPaper`, a 44 pt target, dimmed while pressed, the Large Content Viewer on a long press), as the search sheet's Cancel, with Done in semibold (`.headline`), as the gallery's Done. They were glass capsules; Liquid Glass is for the floating controls over a page, and a capsule on the opaque paper header read as a pasted-on chip. The header's sides cap them at accessibility1 with the title (clarity pass).
+- **Cards:** `Palette.paperCard` by day is `#FFF9EE`, the cream's warmth a step lighter, in place of `#FFFBF4`. Still lighter than the ground (L* 98.1 against 97.2), so the cards read as raised. Ink 15.7:1, secondary ink 6.5:1 and the accent 4.7:1 on it (WCAG AA). Night and Increase Contrast are unchanged. One color, so the page sheet's cards and the summary's follow.

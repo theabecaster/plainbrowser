@@ -124,12 +124,15 @@ public enum Palette {
     }
 
     /// A card of rows on the Paper ground: a hair lighter by day, a hair lifted by night. Flat
-    /// and opaque, so a row costs no texture and no blending.
+    /// and opaque, so a row costs no texture and no blending. By day a warm off-white (`#FFF9EE`,
+    /// the cream's own warmth a step lighter), not the near-white `#FFFBF4`, which looked
+    /// overexposed on the cream (owner feedback, 2026-11-28). Ink 15.7:1, secondary ink 6.5:1,
+    /// the accent 4.7:1 on it. Increase Contrast keeps white cards.
     public static let paperCard = UIColor.anyThread { traits in
         let high = traits.accessibilityContrast == .high
         return traits.userInterfaceStyle == .dark
             ? UIColor(rgb: high ? 0x1A3850 : 0x11293D)
-            : UIColor(rgb: high ? 0xFFFFFF : 0xFFFBF4)
+            : UIColor(rgb: high ? 0xFFFFFF : 0xFFF9EE)
     }
 
     /// The hairline between rows on a card, in the ink's own tone.

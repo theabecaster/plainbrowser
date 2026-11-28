@@ -182,4 +182,79 @@ final class FeatureSheetTests: XCTestCase {
         let removed = NSPredicate { _, _ in !app.buttons["favorite.0"].exists }
         wait(for: [XCTNSPredicateExpectation(predicate: removed, object: nil)], timeout: 3)
     }
+
+    /// Done and Back sit in the sheet's top corners, lined up with the edges of the list's cards
+    /// under them, on every screen (owner feedback: on the Duo's inner screen Done sat far in from
+    /// the edge). History's Clear lines up the same way.
+    func testSheetDoneSitsInTheTrailingCorner() throws {
+        let app = try launch()
+        // Every sheet is measured and captured even when one is off.
+        continueAfterFailure = true
+        go(app, to: "/a", heading: "Page A")
+        var cards: (minX: CGFloat, maxX: CGFloat)?
+        var regular = false
+        for (item, identifier) in [("menu.settings", "settingsSheet"), ("History", "historySheet")] {
+            pageMenu(app, pick: item)
+            let sheet = app.otherElements[identifier]
+            // In a regular width History opens in the side pane, which has no Done.
+            if identifier == "historySheet", regular, !sheet.waitForExistence(timeout: 3) { continue }
+            XCTAssertTrue(sheet.waitForExistence(timeout: 3))
+            let done = sheet.buttons["Done"]
+            XCTAssertTrue(done.waitForExistence(timeout: 3))
+            Thread.sleep(forTimeInterval: 1)
+            shotEveryScreen("done-\(identifier)")
+            if identifier == "settingsSheet" {
+                regular = sheet.horizontalSizeClass == .regular
+                let card = sheet.cells.firstMatch.frame
+                cards = (card.minX, card.maxX)
+            }
+            let edges = try XCTUnwrap(cards)
+            print("SHEETFRAMES \(identifier) regular=\(regular) sheet=\(sheet.frame) cards=\(edges) done=\(done.frame)")
+            XCTAssertEqual(done.frame.maxX, edges.maxX, accuracy: 4, "\(identifier): Done ends at \(done.frame.maxX), the cards at \(edges.maxX)")
+            XCTAssertGreaterThanOrEqual(sheet.frame.maxX - done.frame.maxX, 15, "\(identifier): Done keeps a margin")
+            XCTAssertGreaterThanOrEqual(done.frame.width, 44, "Done's target")
+            XCTAssertGreaterThanOrEqual(done.frame.height, 44, "Done's target")
+            if identifier == "settingsSheet" {
+                // A pushed screen: Back in the leading corner.
+                app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Search Engine'")).firstMatch.tap()
+                let back = sheet.buttons["BackButton"]
+                XCTAssertTrue(back.waitForExistence(timeout: 3), "Back is in the sheet's header")
+                Thread.sleep(forTimeInterval: 1)
+                shotEveryScreen("done-searchEngine")
+                print("SHEETFRAMES back=\(back.frame)")
+                XCTAssertEqual(back.frame.minX, edges.minX, accuracy: 4, "Back starts at \(back.frame.minX), the cards at \(edges.minX)")
+                back.tap()
+                XCTAssertTrue(done.waitForExistence(timeout: 3))
+            }
+            if identifier == "historySheet" {
+                let clear = sheet.buttons["Clear…"]
+                XCTAssertTrue(clear.waitForExistence(timeout: 2), "History's Clear is in the header")
+                print("SHEETFRAMES clear=\(clear.frame)")
+                XCTAssertEqual(clear.frame.minX, edges.minX, accuracy: 4, "Clear starts at \(clear.frame.minX), the cards at \(edges.minX)")
+                clear.tap()
+                XCTAssertTrue(app.buttons["All History"].waitForExistence(timeout: 2), "Clear opens its menu")
+                // A tap outside the menu closes it without picking anything.
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)).tap()
+                if !app.buttons["All History"].waitForNonExistence(timeout: 2) {
+                    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)).tap()
+                }
+                Thread.sleep(forTimeInterval: 0.5)
+            }
+            done.tap()
+            XCTAssertTrue(sheet.waitForNonExistence(timeout: 3))
+        }
+    }
+
+    /// Every screen the app can show, named `<name>-<width>x<height>`: on the Duo the one that is
+    /// off is black, and the matrix keeps the one that shows something.
+    private func shotEveryScreen(_ name: String) {
+        for screen in XCUIScreen.screens {
+            let image = screen.screenshot()
+            let size = image.image.size
+            let attachment = XCTAttachment(screenshot: image)
+            attachment.name = "\(name)-\(Int(size.width))x\(Int(size.height))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
 }

@@ -201,5 +201,54 @@ simulator runs are in "Results" below.
 
 ### Results
 
-See the lane's hand-back (filled in from the captures): the frozen drag against the live one, on
-the iPhone Duo simulator's inner screen and an iPad simulator.
+iPhone Duo simulator, inner screen unfolded through Device Hub, the capture test's four drags
+(slow to Half, on to the whole width, back, a flick), `[plain-measure]` per drag. "Work" is the
+main thread's time in the divider's per-frame code (`apply`), p95 and max; the simulator ran at a
+60 Hz nominal on a shared, loaded test Mac, so frame counts matter more than absolute times.
+
+| Build | Work p95 (ms) | Work max (ms) | Long frames (> 1.5x) |
+|---|---|---|---|
+| Bar lane follows the divider, root layout per frame | 3.3 to 4.4 | 4.8 to 8.3 | 1 of 309 |
+| Root Duo pass skipped, pane constants per frame | 1.5 to 2.2 | 1.6 to 3.6 | 0 of 322 |
+| **Card slid by a transform (shipped)** | **0.14 to 0.27** | 0.3 to 1.6 (the one card layout as a move starts) | 1 of 320 |
+| Live: the page's web view resized every frame (`-PlainDividerLive`) | 0.19 to 0.38 | 2.4 to 3.3 | 2 of 322 |
+
+The live row's UI-thread numbers look small because the cost is elsewhere: each frame sends the
+web content process a new viewport and it lays the page out again. The frame strips show it: in
+the live recording the page's lines re-wrap on every frame of the drag (the text visibly jitters
+under the finger); in the shipped one the page holds still while the pane slides over it, then
+reflows once at the rest. So the drag stays frozen. Signposts per drag: one `sidePane.drag`, one
+`sidePane.settle`, and at most two `sidePane.commit` (the growing side at the start; the page and
+the pane together at the rest), never one per frame.
+
+Captures (the lane's scratch folder, not committed): rotation through Device Hub at Half
+(landscape Half, portrait Narrow, landscape Half again), the whole width, frame strips of each
+phase, and iPad Pro 13-inch shots at each width.
+
+## 5. Edge cases
+
+| Case | Handling | Checked by |
+|---|---|---|
+| Rotation mid-drag | `windowWillResize` cancels the move; the window's width rides the transition, mapped to the new span | Device Hub rotation shots; unit tests of `rest(for:)` |
+| Rotation at a width that doesn't fit | Half asked for in portrait shows Narrow; the request stays, so landscape brings Half back | `innerPortraitRestsAtNarrowOnly`, rotation shots |
+| Fold to the outer screen mid-drag | Same as rotation (a size transition); the pane hides on the outer screen as before | `windowWillResize` path |
+| Book pose (partly folded) | No divider: the fold divides; a fold's regions changing mid-drag (no size transition) cancels it in the layout pass | `bookPoseHasNoDivider`; review 1 fix |
+| Inner portrait | Narrow only (250 pt), take-over and close still work | unit tests |
+| iPad sizes | Rests from the span: 13-inch landscape Narrow, Half, Two Thirds; portrait Narrow, Half | `wideIPadWindowsRestAtAllThree`; iPad UI tests and shots |
+| Tiny windows (Split View, Stage Manager) | Under 640 pt the pane can't show (as before); at 640 with a rail, Narrow only | unit test at 52...640 |
+| Split tabs plus the pane | One rest on the split line; take-over and close work; the split's width is kept | `aSplitRestsOnTheSplitLine` |
+| Keyboard up (Find) while resizing | The field keeps the keyboard; the list keeps its matches | `testFindKeepsItsKeyboardWhileTheDividerMoves` |
+| Switching Reader, Find, History at a width | One width per window: the page never moves | `testTheWidthStaysWhenTheSectionChangesAndTheMenuSetsIt` |
+| Private windows | Same behavior; the width is layout, not history | by design |
+| Sidebar rail, Right sidebar, the strip | The span excludes the sidebar; the card is masked to it; the strip stays under the pane | `takingOverBesideARail`; review 3 fix |
+| Reduce Motion | Every settle is a 0.2 s crossfade; haptics still play | `Motion.crossfade` path |
+| VoiceOver | Adjustable handle, "Side Pane Width", value "Half, 50 percent"; steps Narrow, rests, Full Width; actions Full Width / Show Page, Hide Side Pane; the page under the whole-width pane is hidden from VoiceOver | `testTheHandleIsAdjustableAndSaysTheWidth`, step unit tests |
+| Pointer and trackpad (iPad) | A beam held to the seam, the handle grows; a click-drag drags; no haptics | code; recheck after the iPad lane (pointer input events) |
+| Hardware keyboard | Control-Command-S, -], -[ | code |
+| Fullscreen video, sheets, gallery, search sheet | The divider can't start (`sidePaneDividerMayAct`) | code |
+| The page's own sideways scroll | The divider's pan starts only sideways in its 44 pt strip; pans that start there wait for it to fail | code |
+| Double tap | Back to Narrow; at Narrow a bump with "nothing there" | `testTheWidthStaysWhen…` |
+| Relaunch | Width and take-over come back with the window | `testTheWidthComesBackAfterARelaunch` |
+| A release after holding still | No throw: the nearest rest | `testDragRestsAtHalf…` (failed before the fix) |
+| A divider close then a reopen | The close finishes; the pane reopens from the edge | review 1 and 3 fixes |
+| Gallery with the whole-width pane | The gallery fades in (no page to zoom from) | code |

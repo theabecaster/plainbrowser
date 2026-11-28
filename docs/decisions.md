@@ -2568,6 +2568,10 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
   foldable trait on `UITraitCollection` or `UIWindowScene` (checked in the iOS 27.2 SDK's
   headers). The audit's capture predates the traits rule (fde882b); the walk shows it hidden on
   the iPhone 17 and the 13 mini.
+- **Sheet headers at the accessibility sizes:** the buttons keep one line and stop growing at
+  the title's cap; the title truncates first. Done had wrapped "D / on / e" beside "Archived Tabs".
+- **A swipe's Delete is red** (`Style.destructive`) in every sheet: the sheets' accent tint had
+  turned the destructive role's red into Lagoon blue, so Delete looked like the main action.
 - **Side pane picker:** the selected segment carries its word beside its symbol (one template
   image, as a segment holds an image or a title), the others stay symbols, and every segment has
   its name for VoiceOver.

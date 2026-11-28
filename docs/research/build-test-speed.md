@@ -11,7 +11,7 @@ Ranked by slot-minutes saved per lane (a typical lane uses about 220 slot-minute
 
 | # | Change | Saves | Status |
 |---|---|---|---|
-| 1 | Run `swift test`, the build check and the full Smoke plan on GitHub's free hosted runners (`scripts/ci.sh`); rerun on a test Mac only the tests that did not pass there | up to about 55 slot-min per `test.sh` (65 min on a Mac becomes the rerun of a few tests), about 100 per lane | done, see 2 for the limits |
+| 1 | Run `swift test`, the build check and the full Smoke plan on GitHub's free hosted runners (`scripts/ci.sh`); rerun on a test Mac only the tests that did not pass there | about 50 slot-min per `test.sh` (65 min on a Mac becomes a rerun of about 10–20 tests, 5–10 min), about 100 per lane. Not faster for one lane: a hosted Smoke takes about 70 min | done; see 2.2 for its limits |
 | 2 | Keep two slots per test Mac, and stop work running outside them | two jobs at once: 1.8x the jobs per hour of one at a time (test Mac B, measured) | measured; runner kept at two |
 | 3 | Clone simulators from per-Mac templates (`scripts/lib/sim.zsh`) | `matrix.sh --quick` 610.8 s to 418.3 s (-32%, test Mac B); about 3 min per matrix, more under load | done (`test.sh`, `matrix.sh`) |
 | 4 | Build one simulator architecture (`scripts/build.sh`: `ARCHS=$(uname -m)`) | clean build 51.9 s to 35.6 s (-31%, test Mac B), 39.9 s to 28.6 s (-28%, this Mac); half the compile work on every edit | done |
@@ -169,7 +169,29 @@ hosted failure is not yet a verdict. The workflow lists every test that did not 
 timed out, or never ran after a crash), and `scripts/ci.sh` prints them per device for a rerun on
 a test Mac. That rerun is 10–20 tests (5–10 min), not the 65 min `test.sh`.
 
-HOSTED_RUN2
+Run 2 (same code plus the review fixes; every Smoke job first checked "30 enumerated classes, all
+in exactly one of 3 shards"): `swift test` passed in 2.3 min; the five Smoke jobs that had
+finished when this was written took 40–62 min each and failed 2–7 tests each (20 in all), again
+mostly 120 s limits and launches. Run 3 (`--tests PlainUITests/AppearanceTests --devices 17`):
+17 min, the same two AppearanceTests failures, and `scripts/ci.sh` printed the rerun list and
+deleted its branch and run.
+
+Then the tests that failed on every hosted run, on a test Mac (test Mac B, iPhone 17 clone, load
+13–39), with the same limits:
+
+| Test | Hosted (runs 1–3) | Test Mac B |
+|---|---|---|
+| `AddressFocusTests.testCopiedLinkIsOfferedOnAnotherPage` | failed 3 of 3 | passed, 28 s |
+| `AppearanceTests.testAppearanceIsSystemByDefaultAndSurvivesRelaunch` | failed 4 of 4 | passed, 63 s |
+| `AppearanceTests.testDarkPagesSwitchShowsOnlyWhileDarkAndIsRememberedForTheSite` | failed 4 of 4 | **failed**, 71 s (also on test Mac A on 2026-11-27) |
+| `EngineTests.testReaderOpensOnAnArticleAndBackReturnsToThePage` | failed 3 of 3 | passed, 46 s |
+| `FeatureSheetTests.testHistoryShowsVisitsSearchesAndOpens` | failed 2 of 2 (iPhone 17) | passed, 24 s |
+| `IntroTests.testBrowseForMeTurnOnThenReady` | failed 2 of 2 | passed, 28 s |
+| `LaunchTests.testLongAwayOpensSearchOverTheLastTab` | failed 3 of 3 | passed, 31 s |
+
+So the hosted failures are the runner, except one test that is failing on `dev` itself
+(`testDarkPagesSwitch...`, a real failure to fix in its own lane). Hosted Smoke is a filter, not
+a verdict: its passes count, and only what did not pass there goes to a test Mac.
 
 ### 2.3 What runs where
 
@@ -215,7 +237,10 @@ exactly the tests Xcode enumerates for the Smoke plan (`smoke-shards.zsh --verif
   waits while another lane's priority mark is on the host, survives `set -e` on a busy slot.
 - `~/.claude/scripts/plain-remote.zsh` (shared runner, installed atomically): a priority job's marks
   go as soon as it starts (they used to stay for the whole run, keeping other lanes off the host's
-  other slot); a waiting job whose parent has gone exits. Kept: two slots, priority, `try_local`.
+  other slot); a waiting job whose parent has gone exits, checked right before each start (so
+  `local` now polls its slot every 20 s instead of blocking on it). Kept: two slots, priority,
+  `try_local`. The old runner is not in the repository; the change is in
+  `~/.claude/scripts` only.
 - `.github/workflows/ci.yml`, `scripts/ci.sh`, `scripts/lib/smoke-shards.zsh` (new): section 2.
 
 Lane rules that would help most and need no code: pin a job to a host only when it needs that

@@ -113,6 +113,9 @@ public enum Palette {
     /// The sidebar's selected Private row: a veil of Horizon on the Night column, Horizon's glyph
     /// and name on it (8:1 or more).
     public static let privateRowVeil = horizon.withAlphaComponent(0.16)
+    /// A private tab's title in the strip while it is not on screen: white at 78% on Night
+    /// (10:1), a step over the secondary ink.
+    public static let privateInactiveTitle = UIColor(white: 1, alpha: 0.78)
     /// The text on `privateSelection`.
     public static let privateSelectionInk = UIColor(rgb: 0x0A2133)
 

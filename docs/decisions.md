@@ -3425,6 +3425,15 @@ Focus (its brand), Brave, and the gradient-violet look the owner calls AI slop. 
   Appearance glyph is Horizon while Plain changes the page (Lagoon on Paper), the ink for Off;
   pull to refresh runs through Horizon's warm steps and arms on Night (`privatePullCycle`,
   `privatePullFill`); the outer screen's floating side panel is Night like the bar.
+- **Design review (Codex, round 1: "the palette is ship-worthy", fix the family):** the
+  switcher's bar is Night over the private list (it was the regular blue-grey glass); the focused
+  field's rim is Horizon in private (`privateFocusRim`), not the mint-to-Lagoon gradient; the
+  sidebar's selected Private row is a 16% Horizon veil with Horizon's glyph and name (a whole row
+  filled in Horizon was too loud for a column), while the strip's and the switcher's small
+  capsules stay filled. Not taken: one symbol only (Browse for Me keeps its binoculars, Leave
+  Private keeps `hand.raised.slash`, the phone's design); a smaller start screen (the phone's
+  design, unchanged); the pale capsule on the outer screen's private page is the system's own
+  vertical bar, which Plain can't tint (its panel behind it is Night).
 - **Not colour alone:** Night, the hand mark and the word "Private" before the host, the titled
   start screen and the named, filled switch side say it together (NN/g: two cues at least). Why
   not black like Safari: a dark page or the dark app would look private; Night is warmer and

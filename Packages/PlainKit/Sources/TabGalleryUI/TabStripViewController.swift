@@ -474,11 +474,6 @@ final class TabStripCell: UICollectionViewCell {
     private let highlight = UIView()
     private let tile = SiteIconView(side: TabStripCell.tileSize, iconSide: TabStripCell.iconSize, radius: Radius.small)
     private let titleLabel = UILabel()
-    /// A private tab's hand, before its title: the strip has no section header to say so, and
-    /// the tab on screen is a white card like any other (design review, round 2).
-    private let privateMark = UIImageView(image: UIImage(
-        systemName: "hand.raised.fill", withConfiguration: UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small)
-    ))
     private let closeButton = UIButton(type: .system)
     private var isInOtherPane = false
     private var isOnScreen = false
@@ -499,10 +494,6 @@ final class TabStripCell: UICollectionViewCell {
         titleLabel.textColor = Palette.textPrimary
         titleLabel.lineBreakMode = .byTruncatingTail
         contentView.addSubview(titleLabel)
-        privateMark.tintColor = Palette.textSecondary
-        privateMark.contentMode = .center
-        privateMark.isHidden = true
-        contentView.addSubview(privateMark)
         closeButton.setImage(
             UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small)),
             for: .normal
@@ -547,10 +538,14 @@ final class TabStripCell: UICollectionViewCell {
         }
         isOnScreen = isFocused
         self.isInOtherPane = isInOtherPane
-        titleLabel.textColor = isFocused ? Palette.textPrimary : Palette.textSecondary
+        // On Night a tab not on screen is a step brighter than the secondary ink, so a crowded
+        // private strip still scans (design review, round 2).
+        titleLabel.textColor = isFocused
+            ? Palette.textPrimary : (item.isPrivate ? Palette.privateInactiveTitle : Palette.textSecondary)
         resolveBorder()
         closeButton.isHidden = !isFocused
-        privateMark.isHidden = !item.isPrivate
+        // No hand on each tab: the strip lists one mode, its glass and switch say which (design
+        // review, round 2: the marks cost the titles their room).
         accessibilityLabel = item.isPrivate ? "Private, \(item.displayTitle)" : item.displayTitle
         accessibilityValue = isFocused ? "Selected" : (isInOtherPane ? "In other pane" : nil)
         accessibilityTraits = isFocused ? [.button, .selected] : .button
@@ -578,12 +573,7 @@ final class TabStripCell: UICollectionViewCell {
         tile.frame = CGRect(x: Spacing.s, y: (bounds.height - size) / 2, width: size, height: size)
         let closeWidth: CGFloat = closeButton.isHidden ? 0 : Metrics.tapTarget
         closeButton.frame = CGRect(x: bounds.width - closeWidth, y: 0, width: closeWidth, height: bounds.height)
-        var titleX = tile.frame.maxX + Spacing.s
-        if !privateMark.isHidden {
-            let side: CGFloat = 12
-            privateMark.frame = CGRect(x: titleX, y: (bounds.height - side) / 2, width: side, height: side)
-            titleX = privateMark.frame.maxX + Spacing.xs
-        }
+        let titleX = tile.frame.maxX + Spacing.s
         titleLabel.frame = CGRect(
             x: titleX, y: 0, width: max(0, bounds.width - titleX - max(closeWidth, Spacing.s)), height: bounds.height
         )

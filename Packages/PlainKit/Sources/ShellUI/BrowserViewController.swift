@@ -885,7 +885,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// A hardware keyboard: Command-L opens the search sheet (every browser's Open Location).
     /// Escape closes it (the field's own key, `AddressPill.onEscape`, and a key command for
     /// when the text system passes it on), and so does Command-period, iOS's other Cancel.
-    override public var keyCommands: [UIKeyCommand]? {
+    /// `keyCommands` (`+KeyCommands`) adds these to the browser's other shortcuts.
+    var searchKeyCommands: [UIKeyCommand]? {
         if isEditingAddress {
             let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancelPressed))
             escape.wantsPriorityOverSystemBehavior = true

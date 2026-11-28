@@ -66,7 +66,7 @@ principle 3); with nothing to do a gesture bumps, a key does nothing.
 | Shake, three-finger swipe left, ⌘Z | Undo Close Tab: the last hand close | After a close, outside a field | The Reopen toast; Reopen Closed Tab |
 | ⌘T / ⌘⇧N | New Tab (of the list on screen) / New Private Tab | Always | Tabs menu |
 | ⌘W / ⌘⇧T | Close Tab / Reopen Closed Tab | Where the menu offers them | Tabs menu |
-| ⌘L | The search field (selects its text when open) | Always | A tap on the pill |
+| ⌘L | The search field | Where the pill can open it | A tap on the pill |
 | ⌘R / ⌘. | Reload / Stop | A page | More |
 | ⌘[ / ⌘] | Back / Forward | Where the button is enabled | Back, Forward |
 | ⌘F, ⌘G, ⌘⇧G | Find on Page, Find Next, Find Previous | A page; ⌘G while the find bar is open | More: Find |
@@ -77,7 +77,7 @@ principle 3); with nothing to do a gesture bumps, a key does nothing.
 | ⌘⇧R | Reader on or off | Where Reader is offered | The page sheet |
 | ⌘+ ⌘− ⌘0 | Zoom in, out, actual size | A page | More: Zoom |
 | ⌘Y | History | Always (beside the page on the inner screen) | More: History |
-| Escape | Closes the search field or the overview | Only there; elsewhere the page's own | Swipe down, Done |
+| Escape, ⌘. | Closes the search field; Escape also the overview | Only there; elsewhere the page's own | Swipe down, a tap on the page |
 | Space, ⇧Space, arrows, ⌘↑ ⌘↓ | Scroll the page (WebKit) | A page, with a hardware keyboard | — |
 
 Holding ⌘ lists the shortcuts where the system shows that overlay. VoiceOver and Switch Control

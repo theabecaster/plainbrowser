@@ -29,6 +29,10 @@ final class GestureUIState {
 enum ShortcutCommands {
     /// Built once: one listed command per shortcut, the other keys of each hidden from the ⌘
     /// overlay so it reads one line per action.
+    /// The search sheet's keys (`searchKeyCommands`) own ⌘L always, and Escape while it is open.
+    static let browsing = all.filter { $0.propertyList as? String != KeyShortcut.openLocation.identifier }
+    static let whileEditing = browsing.filter { $0.propertyList as? String != KeyShortcut.dismiss.identifier }
+
     static let all: [UIKeyCommand] = KeyShortcut.all.flatMap { shortcut in
         shortcut.keys.enumerated().map { index, key in
             let command = UIKeyCommand(
@@ -59,7 +63,12 @@ extension KeyModifiers {
 }
 
 extension BrowserViewController {
-    override public var keyCommands: [UIKeyCommand]? { ShortcutCommands.all }
+    /// Safari's shortcuts, with the search sheet's own (⌘L, and Escape and ⌘. while it is open:
+    /// `searchKeyCommands`), so each key has one command.
+    override public var keyCommands: [UIKeyCommand]? {
+        let own = isEditingAddress ? ShortcutCommands.whileEditing : ShortcutCommands.browsing
+        return own + (searchKeyCommands ?? [])
+    }
 
     /// The browser can hold the keys when nothing else does (`claimKeyFocusIfFree`), so a shortcut
     /// and the system's undo reach it after a tab closes or the field goes away.
@@ -200,11 +209,8 @@ extension BrowserViewController {
         case .history:
             showHistory()
         case .dismiss:
-            if isEditingAddress {
-                endAddressEditing()
-            } else if isShowingGallery {
-                tabsButtonTapped()
-            }
+            // The open search sheet's Escape is its own (`searchKeyCommands`); here the overview.
+            if isShowingGallery { tabsButtonTapped() }
         }
     }
 

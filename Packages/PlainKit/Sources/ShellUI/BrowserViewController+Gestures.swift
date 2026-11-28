@@ -186,7 +186,7 @@ extension BrowserViewController {
     /// The two-finger scrub (VoiceOver's Escape) closes the search field or the overview.
     override public func accessibilityPerformEscape() -> Bool {
         if isEditingAddress {
-            endAddressEditing()
+            dismissSearchSheet(.escape)
             return true
         }
         if isShowingGallery {

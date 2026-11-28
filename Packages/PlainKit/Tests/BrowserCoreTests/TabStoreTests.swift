@@ -277,6 +277,37 @@ final class RecordingPersistence: TabPersistence {
         #expect(store.windows[0].tabIDs == [c, a, b])
     }
 
+    /// The strip, sidebar and gallery leave empty tabs out: a place there is a place among the
+    /// tabs shown (TestFlight 2611280102: the strip then showed an order the store didn't keep).
+    @Test func moveAmongShownTabsSkipsTheHiddenOnes() {
+        let store = makeStore()
+        let a = store.open(url("a")), hidden = store.open(), b = store.open(url("b")), c = store.open(url("c"))
+        // What the strip shows: the store's order without the hidden tab.
+        func order() -> [TabID] { store.windows[0].tabIDs.filter { $0 != hidden } }
+        store.move(a, to: 2, among: order())
+        #expect(order() == [b, c, a], "last of the shown tabs")
+        store.move(a, to: 0, among: order())
+        #expect(order() == [a, b, c])
+        store.move(c, to: 1, among: order())
+        #expect(order() == [a, c, b])
+        store.move(a, to: 9, among: order())
+        #expect(order() == [c, b, a], "past the end is the end")
+        #expect(store.windows[0].tabIDs.count == 4, "the hidden tab stays")
+    }
+
+    @Test func moveAmongShownTabsKeepsPinnedFirstAndPrivateApart() {
+        let store = makeStore()
+        let a = store.open(url("a")), b = store.open(url("b"))
+        store.setPinned(true, for: a)
+        store.move(b, to: 0, among: [a, b])
+        #expect(store.windows[0].tabIDs == [a, b], "an unpinned tab can't pass a pinned one")
+        let p = store.open(url("p"), isPrivate: true), hidden = store.open(isPrivate: true)
+        let q = store.open(url("q"), isPrivate: true)
+        store.move(p, to: 1, among: [p, q])
+        #expect(store.windows[0].privateTabIDs.filter { $0 != hidden } == [q, p])
+        #expect(store.windows[0].tabIDs == [a, b], "the regular list is untouched")
+    }
+
     // MARK: Panes
 
     @Test func splitMovesAShownTabAndRefillsTheFirstPane() {

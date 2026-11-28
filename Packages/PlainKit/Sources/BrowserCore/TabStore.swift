@@ -301,6 +301,24 @@ public final class TabStore {
         reorder(&windows[index].privateTabIDs, id: id, entry: entry, destination: destination, pinnedBound: false)
     }
 
+    /// Moves a tab to `index` of `shown`: its list as a screen shows it, which may leave tabs out
+    /// (empty tabs are never a card or a row). The tab lands just before the shown tab that holds
+    /// that place after the move, or just after the last shown one. Pinned tabs stay first.
+    public func move(_ id: TabID, to index: Int, among shown: [TabID]) {
+        guard let windowID = windowOfTab[id], let entry = tabs[id] else { return }
+        let without = tabs(in: windowID, private: entry.isPrivate, profile: entry.profileID).map(\.id).filter { $0 != id }
+        let others = shown.filter { $0 != id && without.contains($0) }
+        let destination: Int
+        if others.indices.contains(index), let place = without.firstIndex(of: others[index]) {
+            destination = place
+        } else if index >= others.count, let last = others.last, let place = without.firstIndex(of: last) {
+            destination = place + 1
+        } else {
+            destination = index
+        }
+        move(id, to: destination)
+    }
+
     private func reorder(_ list: inout [TabID], id: TabID, entry: TabEntry, destination: Int, pinnedBound: Bool) {
         guard let from = list.firstIndex(of: id) else { return }
         list.remove(at: from)

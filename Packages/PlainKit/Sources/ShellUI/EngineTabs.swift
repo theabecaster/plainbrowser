@@ -375,9 +375,11 @@ final class EngineTabs {
         return store.reopenClosed(batchID, fallbackWindow: window)
     }
 
-    /// Moves `id` to `index` in its list.
+    /// Moves `id` to `index` in its list as the gallery, strip and sidebar show it: empty tabs
+    /// are left out there, so the store places it among the tabs shown.
     func move(_ id: TabID, to index: Int) {
-        store.move(id, to: index)
+        guard let entry = store.tabs[id] else { return }
+        store.move(id, to: index, among: pageEntries(private: entry.isPrivate, profile: entry.profileID).map(\.id))
     }
 
     /// Brings an archived tab back at the end of the list and shows it.

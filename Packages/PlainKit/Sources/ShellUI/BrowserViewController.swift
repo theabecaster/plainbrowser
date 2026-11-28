@@ -199,7 +199,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
-        pill.onCopy = { [weak self] in self?.copyPageAddress() }
+        pill.onCopy = { [weak self] in self?.copyFieldAddress() }
         pill.onBrowse = { [weak self] in self?.toggleBrowseArmed() }
         pill.onMic = { [weak self] in self?.toggleDictation() }
         pill.onEscape = { [weak self] in self?.dismissSearchSheet(.escape) }
@@ -700,23 +700,27 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
         OpenIntervals.begin(Signposts.urlBarReady, until: UIResponder.keyboardDidShowNotification)
         OpenIntervals.begin(Signposts.urlBarKeyboardStart, until: UIResponder.keyboardWillShowNotification)
-        // Go somewhere new (Arc): the field opens empty over the page, which stays behind the
-        // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
-        // Editing the page's address is its own door: the page's row, or the page sheet.
+        // On a page the field opens with its address, all selected, Copy inside it: typing over
+        // it goes somewhere new, in a new tab (Arc); editing part of it changes this page, in the
+        // same tab (docs/decisions.md, "The page's address in the field"). On the start screen
+        // it opens empty and loads in place.
         let overPage = currentTab.map { !session.tabs.isEmpty($0.id) } ?? false
-        updateFieldAccessory()
+        focusUI.selectsAllOnOpen = true
+        launchUI.isFreshSearch = false
         if overPage, let address = pageAddress, let query = data.searchEngine.query(inResults: address) {
             // On the engine's results page the search comes back, selected, to refine in place
             // (Safari): a new query replaces the results rather than stacking tabs of them.
-            focusUI.isEditingPage = true
-            launchUI.isFreshSearch = false
+            focusUI.intent = nil
             pill.textField.text = query
+        } else if overPage, let address = pageAddress {
+            focusUI.intent = .pageAddress
+            focusUI.openedAddress = address.absoluteString
+            pill.textField.text = address.absoluteString
         } else {
-            focusUI.isEditingPage = false
-            launchUI.isFreshSearch = overPage
-            if overPage { Signposts.signposter.emitEvent(Signposts.freshSearch, "pill") }
+            focusUI.intent = nil
             pill.textField.text = ""
         }
+        updateFieldAccessory()
         updateStartScreen()
         // The sheet is laid out open and starts to grow in this frame; the keyboard follows on
         // its own.
@@ -732,8 +736,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         data.prepareForTyping()
         sheet.session += 1
         applyEditingLayout(true, animated: didFocusAtLaunch)
-        if !(textField.text ?? "").isEmpty {
-            textField.selectAll(nil)
+        if let text = textField.text, !text.isEmpty, focusUI.selectsAllOnOpen {
+            // A keyboard that composes (Japanese, Chinese, Korean) needs UIKit's own replacement
+            // of a real selection, so its text is selected at once.
+            let language = textField.textInputMode?.primaryLanguage ?? ""
+            let composes = ["ja", "zh", "ko"].contains { language.hasPrefix($0) }
+            if sheetUI.driver.value < 1, !composes {
+                // Selected once the field is at rest (`searchSheetDidSettleOpen`); until then a
+                // keystroke replaces it all the same, and no caret rides along.
+                focusUI.pendingSelection = text
+                pill.holdSelectionHighlight(true)
+            } else {
+                textField.selectAll(nil)
+            }
+        } else if !focusUI.selectsAllOnOpen {
+            // The page sheet's Edit: the caret at the end, whatever the field kept from before.
+            let end = textField.endOfDocument
+            textField.selectedTextRange = textField.textRange(from: end, to: end)
         }
         // The content is already in memory (`refreshFocusContent`); only the pasteboard is asked
         // again, without reading it.
@@ -747,7 +766,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         suggestionTask?.cancel()
         data.cancelSuggestions()
         sheet.session += 1
-        focusUI.isEditingPage = false
+        focusUI.intent = nil
+        focusUI.pendingSelection = nil
+        pill.holdSelectionHighlight(false)
         focusUI.browseArmed = false
         focusUI.dictation.stop()
         updateFieldAccessory()
@@ -780,9 +801,58 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         return false
     }
 
+    /// The first change to the page's address decides whether the field is a new query or an
+    /// edit of this page (`AddressFieldIntent`), from the span the change replaces: the opening
+    /// selection, the user's own, or a caret.
+    public func textField(
+        _ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String
+    ) -> Bool {
+        if let opened = focusUI.pendingSelection {
+            focusUI.pendingSelection = nil
+            if textField.text == opened, textField.markedTextRange == nil {
+                // Typed before the selection was drawn: it replaces the whole text, as it would
+                // have over the selection.
+                let length = (opened as NSString).length
+                if let intent = focusUI.intent, let address = focusUI.openedAddress {
+                    setFieldIntent(intent.after(replacing: 0..<length, of: length, result: string, pageAddress: address))
+                }
+                pill.holdSelectionHighlight(false)
+                textField.text = string
+                queryChanged()
+                return false
+            }
+        }
+        guard let intent = focusUI.intent, let address = focusUI.openedAddress else { return true }
+        let text = (textField.text ?? "") as NSString
+        guard range.location != NSNotFound, NSMaxRange(range) <= text.length else { return true }
+        let result = text.replacingCharacters(in: range, with: string)
+        setFieldIntent(intent.after(
+            replacing: range.location..<NSMaxRange(range), of: text.length, result: result, pageAddress: address
+        ))
+        return true
+    }
+
+    public func textFieldDidChangeSelection(_ textField: UITextField) {
+        // The user put the caret somewhere during the open: their choice, not the selection
+        // Plain was about to make. (Opening leaves the caret at the end; only a move counts.)
+        guard focusUI.pendingSelection != nil, let range = textField.selectedTextRange else { return }
+        let end = textField.endOfDocument
+        guard textField.compare(range.start, to: end) != .orderedSame || !range.isEmpty else { return }
+        focusUI.pendingSelection = nil
+        pill.holdSelectionHighlight(false)
+    }
+
+    public func textFieldShouldClear(_ textField: UITextField) -> Bool {
+        // Cleared: a new query.
+        if focusUI.intent != nil { setFieldIntent(.newQuery) }
+        return true
+    }
+
     @objc func queryChanged() {
         let query = pill.textField.text ?? ""
         suggestionTask?.cancel()
+        // Emptied without a keystroke the delegate saw: a new query too.
+        if query.isEmpty, focusUI.intent != nil { setFieldIntent(.newQuery) }
         // The current page's address, untouched, is not a query: show favorites, as for an
         // empty field, until the user types.
         let isCurrentAddress = !query.isEmpty && query == pageAddress?.absoluteString
@@ -842,6 +912,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         guard let url else { return }
         let state = Signposts.signposter.beginInterval(Signposts.addressSubmit)
+        goingSomewhereNew()
         load(url, kind: .typed)
         Signposts.signposter.endInterval(Signposts.addressSubmit, state, "picked")
     }
@@ -900,7 +971,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     func beginAddressEditing() {
         // The drawer over the bar steps back: the field and its rows take the screen.
         collapseFloatingSidebar()
-        focusUI.isEditingPage = false
+        focusUI.intent = nil
+        focusUI.selectsAllOnOpen = true
         updateFieldAccessory()
         pill.textField.text = pageAddress?.absoluteString ?? ""
         applyEditingLayout(true, animated: true)
@@ -924,7 +996,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // A fresh search lasts as long as its field: closing it uncovers the page.
         if !editing {
             launchUI.isFreshSearch = false
-            focusUI.isEditingPage = false
+            focusUI.intent = nil
         }
         guard changed || !animated else { return }
         // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start

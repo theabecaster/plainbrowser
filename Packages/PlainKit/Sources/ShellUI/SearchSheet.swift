@@ -10,10 +10,6 @@ import WebEngine
 enum SearchPick: Equatable {
     case page(URL)
     case search(String)
-    /// The page's own row: edit its address in the field.
-    case editAddress
-    /// The page's own row's Copy button.
-    case copyAddress
     /// "Open Copied Link": the address, when Plain knows it without reading the pasteboard.
     case copiedLink(URL?)
     /// A recently closed batch, reopened where it was.
@@ -26,8 +22,6 @@ enum SearchPick: Equatable {
 /// typing starts.
 enum SheetItem: Hashable {
     case suggestion(AddressBarSuggestion)
-    /// The page on screen (search over a page): its title and host, Copy, and a tap to edit.
-    case currentPage(url: URL, title: String?)
     /// A web address on the pasteboard; the address itself only when Plain copied it.
     case copiedLink(URL?)
     /// A recently closed batch: its first tab's title and address, and how many tabs it holds.
@@ -705,18 +699,12 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
             guard let self, let pick = row?.pick else { return }
             self.onPick(pick)
         }, for: .touchUpInside)
-        row.onAccessory = { [weak self] in self?.onPick(.copyAddress) }
         row.onPaste = { [weak self] url, session in
             guard let self, session == self.session else { return }
             self.onPick(.copiedLink(url))
         }
         row.sessionProvider = { [weak self] in self?.session ?? 0 }
         return row
-    }
-
-    /// The page's row answers a copy with its check mark.
-    func confirmCopied() {
-        shownRows.first { $0.identity?.hasPrefix("current ") == true }?.showCopied()
     }
 
     /// Fades the favorites in or out. They sit under the rows, so rows arriving cover them.
@@ -794,20 +782,19 @@ final class PassThroughView: UIView {
 }
 
 /// One row: a page (from history or favorites) or a search from the engine while typing, or
-/// before typing the page on screen, a copied link, a closed tab or the first-run sentence.
+/// before typing a copied link, a closed tab or the first-run sentence.
 final class SuggestionRow: UIControl {
     private let icon = UIImageView()
     private let title = UILabel()
     private let detail = UILabel()
-    /// The trailing slot: Copy on the page's own row, the system Paste button on the copied
-    /// link's row (it hands Plain the link with no paste alert), empty elsewhere.
+    /// The trailing slot: the system Paste button on the copied link's row (it hands Plain the
+    /// link with no paste alert), empty elsewhere.
     private let slot = UIView()
-    private let accessory = UIButton(type: .system)
     private var pasteControl: UIPasteControl?
     private var slotWidth: NSLayoutConstraint!
     private var textTrailing: NSLayoutConstraint!
-    private enum Accessory { case none, copy, paste }
-    private var accessoryKind = Accessory.copy
+    private enum Accessory { case none, paste }
+    private var accessoryKind = Accessory.paste
     /// The row's identifier while a button sits beside it (the row itself then is a container).
     private(set) var mainIdentifier: String?
     /// A link the Paste button handed over.
@@ -815,11 +802,9 @@ final class SuggestionRow: UIControl {
     /// The open field's session (`SearchSheet.session`), read when Paste begins.
     var sessionProvider: () -> Int = { 0 }
     /// The row's main part for VoiceOver and UI tests while the accessory shows: the row itself
-    /// then can't be one element, or Copy would be out of reach.
+    /// then can't be one element, or Paste would be out of reach.
     private lazy var mainElement = RowElement(row: self)
     var pick: SearchPick?
-    /// The accessory's action (Copy on the page's row).
-    var onAccessory: () -> Void = {}
     /// The suggestion this row shows, as `identity(of:)` names it.
     private(set) var identity: String?
     private var shown: SheetItem?
@@ -831,8 +816,6 @@ final class SuggestionRow: UIControl {
     var place = -1
     /// Bumped whenever the row starts or stops fading out, so a stale fade's end is ignored.
     var leaveToken = 0
-    /// Bumped by each copy, so only the newest one's check mark turns back.
-    private var copyToken = 0
 
     /// What makes two rows the same across updates: a page's address (as `AddressBarSuggestions`
     /// dedupes it) or a search's text, ignoring case; the focused field's own rows by kind.
@@ -840,7 +823,6 @@ final class SuggestionRow: UIControl {
         switch item {
         case .suggestion(.page(let url, _, _, _)): "page " + AddressBarSuggestions.addressKey(url)
         case .suggestion(.search(let query)): "search " + query.lowercased()
-        case .currentPage(let url, _): "current " + AddressBarSuggestions.addressKey(url)
         case .copiedLink: "copied"
         case .closed(let batch, _, _, _): "closed " + batch.uuidString
         case .hint: "hint"
@@ -863,18 +845,6 @@ final class SuggestionRow: UIControl {
         detail.textColor = Palette.textSecondary
         detail.lineBreakMode = .byTruncatingMiddle
 
-        var copy = UIButton.Configuration.plain()
-        copy.image = UIImage(systemName: "link")
-        copy.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
-        copy.baseForegroundColor = Palette.accentOnPaper
-        accessory.configuration = copy
-        accessory.accessibilityLabel = String(localized: "Copy Link")
-        accessory.accessibilityIdentifier = "focus.copyAddress"
-        // The glyph stays inside its 44 pt slot at the accessibility sizes (it ran off the edge).
-        accessory.maximumContentSizeCategory = .extraExtraExtraLarge
-        accessory.isHidden = true
-        accessory.addAction(UIAction { [weak self] _ in self?.onAccessory() }, for: .touchUpInside)
-
         let text = UIStackView(arrangedSubviews: [title, detail])
         text.axis = .vertical
         text.spacing = Spacing.xxs
@@ -887,8 +857,6 @@ final class SuggestionRow: UIControl {
         slot.translatesAutoresizingMaskIntoConstraints = false
         slot.clipsToBounds = true
         addSubview(slot)
-        accessory.translatesAutoresizingMaskIntoConstraints = false
-        slot.addSubview(accessory)
         slotWidth = slot.widthAnchor.constraint(equalToConstant: 0)
         textTrailing = text.trailingAnchor.constraint(equalTo: slot.leadingAnchor)
         NSLayoutConstraint.activate([
@@ -913,10 +881,6 @@ final class SuggestionRow: UIControl {
             slot.topAnchor.constraint(equalTo: topAnchor),
             slot.bottomAnchor.constraint(equalTo: bottomAnchor),
             slotWidth,
-            accessory.trailingAnchor.constraint(equalTo: slot.trailingAnchor),
-            accessory.centerYAnchor.constraint(equalTo: slot.centerYAnchor),
-            accessory.widthAnchor.constraint(equalToConstant: Metrics.tapTarget),
-            accessory.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
         ])
         pasteConfiguration = UIPasteConfiguration(acceptableTypeIdentifiers: [UTType.url.identifier, UTType.plainText.identifier])
         setAccessory(.none)
@@ -961,14 +925,6 @@ final class SuggestionRow: UIControl {
             setSymbol("magnifyingglass")
             pick = .search(query)
             accessibilityIdentifier = "suggestion.search.\(index)"
-        case .currentPage(let url, let pageTitle):
-            setPage(url: url, title: pageTitle)
-            setSymbol("pencil")
-            tint = Palette.accentOnPaper
-            pick = .editAddress
-            kind = .copy
-            accessibilityIdentifier = "focus.currentPage"
-            accessibilityHint = String(localized: "Edits the address")
         case .copiedLink(let url):
             setLines(String(localized: "Open Copied Link"), url.map(Self.displayAddress))
             setSymbol("doc.on.clipboard")
@@ -1004,10 +960,7 @@ final class SuggestionRow: UIControl {
             title.textColor = Palette.textPrimary
             title.font = .preferredFont(forTextStyle: .body)
         }
-        switch item {
-        case .currentPage, .closed: break
-        default: accessibilityHint = nil
-        }
+        if case .closed = item {} else { accessibilityHint = nil }
         icon.tintColor = tint
         accessibilityLabel = title.text
         accessibilityValue = detail.text
@@ -1034,7 +987,6 @@ final class SuggestionRow: UIControl {
     private func setAccessory(_ kind: Accessory) {
         guard kind != accessoryKind else { return }
         accessoryKind = kind
-        accessory.isHidden = kind != .copy
         if kind == .paste, pasteControl == nil {
             let configuration = UIPasteControl.Configuration()
             configuration.displayMode = .labelOnly
@@ -1054,17 +1006,12 @@ final class SuggestionRow: UIControl {
         pasteControl?.isHidden = kind != .paste
         let width: CGFloat = switch kind {
         case .none: 0
-        case .copy: Metrics.tapTarget
         case .paste: (pasteControl?.intrinsicContentSize.width ?? 64) + Spacing.s
         }
         slotWidth.constant = width
         textTrailing.constant = kind == .none ? -Spacing.m + Spacing.xs : -Spacing.xs
         // With a button beside it, the row's main part and the button are two elements.
-        let button: UIView? = switch kind {
-        case .none: nil
-        case .copy: accessory
-        case .paste: pasteControl
-        }
+        let button: UIView? = kind == .paste ? pasteControl : nil
         isAccessibilityElement = button == nil
         accessibilityElements = button.map { [mainElement, $0] }
     }
@@ -1088,20 +1035,6 @@ final class SuggestionRow: UIControl {
         }
     }
 
-    /// Copy's answer: a check mark for a moment, said aloud for VoiceOver.
-    func showCopied() {
-        copyToken += 1
-        let token = copyToken
-        accessory.configuration?.image = UIImage(systemName: "checkmark")
-        accessory.accessibilityLabel = String(localized: "Copied")
-        UIAccessibility.post(notification: .announcement, argument: String(localized: "Copied"))
-        DispatchQueue.main.asyncAfter(deadline: .now() + FixedChoices.copiedConfirmation) { [weak self] in
-            guard let self, self.copyToken == token else { return }
-            self.accessory.configuration?.image = UIImage(systemName: "link")
-            self.accessory.accessibilityLabel = String(localized: "Copy Link")
-        }
-    }
-
     private func setText(_ label: UILabel, _ text: String?) {
         if label.text != text { label.text = text }
     }
@@ -1122,7 +1055,7 @@ final class SuggestionRow: UIControl {
         return path.isEmpty || path == "/" ? host : host + path
     }
 
-    /// The row's main part as one VoiceOver element while Copy sits beside it.
+    /// The row's main part as one VoiceOver element while Paste sits beside it.
     private final class RowElement: UIAccessibilityElement {
         weak var row: SuggestionRow?
 

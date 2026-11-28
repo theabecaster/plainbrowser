@@ -1579,6 +1579,9 @@ docs/research/address-focus.md.
 
 **Two intents, two doors (Arc's model).**
 
+*Superseded in part by "The page's address in the field" (below): on a page the field now
+opens with the address selected, and the page's row is gone.*
+
 1. **Go somewhere new: tap the pill.** The field opens empty ("Search or enter address"), the
    page stays behind a paper veil (the fresh search's `FrostView`), and what is submitted opens in
    a new tab whose opener is the page, so Back on its first page closes it and returns there (the
@@ -3014,3 +3017,75 @@ second tab) landed together, reconciled with New Tab in the bar and private mode
 - **Design review call not taken:** dropping "Not Secure" from the collapsed host capsule. The
   clarity lane's lead word is the page's one warning on screen; Safari keeps it while collapsed
   too, and the lead asked that the capsule keep the pill's words.
+
+## The page's address in the field (2026-11-27)
+
+Owner: "I don't like how the copy address is still a cell that looks like a suggestion, if we
+keep the bar with text and the copy icon within the text field." Supersedes the field opening
+empty on a page and the page's row under it ("Address focus and the page sheet", door 1 and
+"This page" row). Kept: what a new query opens (a new tab, the page as its opener).
+
+**What it does.** A tap on the pill over a page opens the field with the page's full address,
+all selected, and Copy (`link`) inside the field at its trailing end. The first change decides
+what the field is (`AddressFieldIntent`, BrowserCore, unit-tested):
+
+| The first change | Means | Return |
+|---|---|---|
+| Covers the whole text (typing over the selection, a paste over it, dictation into it), or the field is cleared (the × or deleting everything) | A new query | A new tab whose opener is the page, as before |
+| Covers part of it: the caret was put in the address (a tap into the text, a moved selection) and something changed there | An edit of this page | The same tab |
+| None (the address untouched) | The page's address | Loads it again in the same tab (Safari's Return on an unchanged address) |
+| None, and a row or a favorite is picked | Somewhere new | A new tab, as a typed query (what the empty field did before) |
+
+The rule reads only the span the change replaces (`textField(_:shouldChangeCharactersIn:)`):
+`range` from 0 to the text's length is a replace; anything else is an edit. The selection state
+at the first edit is exactly that span: Plain's opening selection is the whole text, a caret is
+an empty span, the user's own selection is its span. Later, a change over the whole text (select
+all, type) or an empty field counts as clearing: a new query again. Text back to the address
+exactly (an undo) is untouched again, and Copy comes back. Paste over the selection and the
+keyboard's dictation both arrive as a change over the selected span. The field's own microphone
+shows only in the empty field, so its text is always a new query.
+
+- **Copy** shows only while the field holds the untouched address; replaced or cleared, the
+  field's other options (microphone, Browse for Me, ×) follow their rules at once. Copy writes
+  the address the field shows (`copyFieldAddress`; the page may have moved on behind the sheet),
+  the glyph turns into a check for 1.2 s, the success haptic
+  plays and VoiceOver hears "Copied". Another page then offers it as Open Copied Link.
+- **VoiceOver** reads the field's value as the address, with the hint "Type to search in a new
+  tab; edit to change this page" while it is untouched (from the page sheet's Edit: "Edit to
+  change this page; clear it to search in a new tab").
+- **The page sheet's host** opens the same field with the caret at the address's end, not
+  selected (set explicitly, whatever the field kept): the door named Edit edits. Cleared, it is a new query, as anywhere.
+- **No page address, no change:** a new tab, the start screen, a new private tab and the fresh
+  search after four hours away open empty. On the engine's results page the query comes back
+  selected and refines in place, as before.
+- **The motion.** The text is set before the first frame of the spring and does not change or
+  scroll after it. The selection is made at rest (`searchSheetDidSettleOpen`): a selection made
+  in the first frame drew its handles riding up with the field, black mid-motion and blue at
+  rest (frame strip, iPhone 17); hiding it with a clear tint hid the highlight but not the
+  handles. Until then the field's tint is clear (no caret rides along), and the text counts as
+  selected: a keystroke during the open replaces all of it (`pendingSelection`), as it would
+  over the selection.
+  With a keyboard that composes (Japanese, Chinese, Korean) the text is selected at once, so the
+  input method replaces a real selection; a caret the user moves during the open cancels the
+  pending selection.
+
+**Validated against the references.** Safari (iOS 26/27): on a page the field shows the URL
+selected and typing replaces it; Return goes in the same tab, and there is no Copy in the field
+(Copy is in the edit menu). Arc Search: the search sheet opens empty and always opens a new tab;
+its page sheet's address capsule is editable in place with Copy inside it. Plain takes Safari's
+selected address and Arc's Copy-in-the-address and new-tab search, and tells the two apart by
+how the address was changed, so neither intent needs a second door.
+
+**Considered and not taken.**
+
+- *Keep the empty field and move Copy into it.* An empty field has no address to copy; the owner
+  asked for the address in the field.
+- *A pencil or "Edit" button to switch to editing.* A second control for what the caret already
+  says.
+- *Replace means "the text no longer starts like the address".* Guessing from content gets
+  wrong a user who fixes the scheme or the host.
+- *Same tab for everything (Safari).* A stray search would replace the page being read, the
+  reason Plain chose Arc's new tab (owner, 2026-11-27).
+
+**Removed.** `SheetItem.currentPage`, `SearchPick.editAddress` and `.copyAddress`, the row's
+Copy accessory (`focus.copyAddress`) and its check mark, `SearchSheet.confirmCopied`.

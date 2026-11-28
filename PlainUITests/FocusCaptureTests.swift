@@ -42,6 +42,17 @@ final class FocusCaptureTests: XCTestCase {
         shot("4-page-focus")
         if environment["PLAIN_CAPTURE_DEBUG"] == "1" { print("HIERARCHY\n" + app.debugDescription) }
 
+        // Editing the page's address: the caret put at its end, part of it changed (same tab).
+        let address = field.value as? String ?? ""
+        let copy = app.buttons["field.copy"]
+        let end = copy.exists ? copy.frame.minX - field.frame.minX - 10 : field.frame.width - 58
+        field.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: end, dy: field.frame.height / 2)).tap()
+        pause(0.4)
+        field.typeText(XCUIKeyboardKey.delete.rawValue + "s")
+        pause(1.2)
+        shot("4b-page-editing")
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: address.count + 2))
+
         field.typeText("pla")
         pause(1.5)
         shot("5-page-typing")

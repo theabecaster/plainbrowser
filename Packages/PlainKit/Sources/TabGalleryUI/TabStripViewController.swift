@@ -148,13 +148,10 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         diffable.reorderingHandlers.canReorderItem = { _ in true }
         diffable.reorderingHandlers.didReorder = { [weak self] transaction in
             guard let self else { return }
-            for change in transaction.difference {
-                guard case let .insert(_, id, _) = change,
-                      let section = transaction.finalSnapshot.sectionIdentifier(containingItem: id),
-                      let index = transaction.finalSnapshot.itemIdentifiers(inSection: section).firstIndex(of: id) else { continue }
+            for move in TabListReorder.moves(in: transaction) {
                 Signposts.signposter.emitEvent(Signposts.galleryReorder, "strip")
                 Haptic.drop.play()
-                dataSource.moveTab(id, to: index)
+                dataSource.moveTab(move.id, to: move.index)
             }
             // After the reorder has been committed: a snapshot applied inside this handler
             // raises in UIKit (a crash on TestFlight while dragging a tab in the strip).

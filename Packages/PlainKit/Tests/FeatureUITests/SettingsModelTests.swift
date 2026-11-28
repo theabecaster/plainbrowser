@@ -58,6 +58,20 @@ import Testing
         #expect(model.settings.darkPages, "the switch keeps its value")
     }
 
+    /// Two windows' Settings (or Settings and the Dark Pages suggestion): each change is saved over
+    /// what is stored, so neither writes the other's old value back.
+    @Test func twoModelsNeverUndoEachOther() async throws {
+        let first = makeModel(), second = makeModel()
+        await first.load()
+        await second.load()
+        first.setDarkPages(true)
+        second.setTabLayout(.right)
+        await first.waitForSaves()
+        await second.waitForSaves()
+        let stored = try await database.settings()
+        #expect(stored.darkPages && stored.tabLayout == .right)
+    }
+
     @Test func customEngineIsValidatedNamedAndSaved() async throws {
         let model = makeModel()
         await model.load()

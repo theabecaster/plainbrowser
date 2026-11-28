@@ -203,6 +203,12 @@ nonisolated struct LiveSettingsStore: SettingsStoring {
     func savedCustomSearchEngine() async throws -> SearchEngine? {
         try await database.savedCustomSearchEngine()
     }
+
+    func updateSettings(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) async throws -> BrowserSettings {
+        let settings = try await database.updateSettings(change)
+        await saved(settings)
+        return settings
+    }
 }
 
 /// History for the History screen: `AppDatabase`'s, after the visits the shell has queued are

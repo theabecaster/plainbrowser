@@ -24,7 +24,22 @@ extension AppDatabase {
     }
 
     public func settings() async throws -> BrowserSettings {
-        try await writer.read { db in
+        try await writer.read { db in try Self.readSettings(db) }
+    }
+
+    /// Changes stored settings in one write transaction: what another window saved a moment ago
+    /// is read and kept, and only `change` is applied over it. Returns what is stored now.
+    public func updateSettings(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) async throws -> BrowserSettings {
+        try await writer.write { db in
+            var settings = try Self.readSettings(db)
+            change(&settings)
+            try Self.writeSettings(settings, db)
+            return settings
+        }
+    }
+
+    private static func readSettings(_ db: Database) throws -> BrowserSettings {
+        do {
             let values = try Dictionary(
                 uniqueKeysWithValues: Row.fetchAll(db, sql: "SELECT key, value FROM \(Schema.setting)")
                     .map { (row: Row) -> (String, String) in (row["key"], row["value"]) }
@@ -70,6 +85,10 @@ extension AppDatabase {
     }
 
     public func saveSettings(_ settings: BrowserSettings) async throws {
+        try await writer.write { db in try Self.writeSettings(settings, db) }
+    }
+
+    private static func writeSettings(_ settings: BrowserSettings, _ db: Database) throws {
         var pairs: [(SettingKey, String)] = [
             (.searchEngine, settings.searchEngine.id),
             (.tabLayout, settings.tabLayout.rawValue),
@@ -83,13 +102,11 @@ extension AppDatabase {
             pairs.append((.customSearchEngine, json))
         }
         let values = pairs.map { ($0.0.rawValue, $0.1) }
-        try await writer.write { db in
-            let statement = try db.cachedStatement(
-                sql: "INSERT INTO \(Schema.setting) (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-            )
-            for (key, value) in values {
-                try statement.execute(arguments: [key, value])
-            }
+        let statement = try db.cachedStatement(
+            sql: "INSERT INTO \(Schema.setting) (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        for (key, value) in values {
+            try statement.execute(arguments: [key, value])
         }
     }
 

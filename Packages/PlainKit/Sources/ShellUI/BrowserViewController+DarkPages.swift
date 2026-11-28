@@ -131,8 +131,8 @@ extension BrowserViewController {
             }
         }
         Task {
-            _ = await change()
-            finish()
+            // A page that never answered for this document fades with the timeout instead.
+            if await change() { finish() }
         }
         Task {
             try? await Task.sleep(for: FixedChoices.darkPagesCrossfadeTimeout)
@@ -177,6 +177,7 @@ extension BrowserViewController {
     }
 
     private func scheduleDarkPagesSuggestion(for tab: Tab, document: String) {
+        observeSceneDeactivation()
         let store = darkPagesUI.suggestions
         guard !tab.isPrivate, let site = tab.siteKey,
               store.state.mayShow(onSite: site, session: store.session) else { return }
@@ -250,7 +251,14 @@ extension BrowserViewController {
         card.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(card)
         darkPagesUI.suggestion = card
-        // This window leaving the foreground (another window may stay): the card goes.
+        // Another toast takes the place by the bar: the card gives way.
+        tabsUI.toast.willShow = { [weak self] in self?.darkPagesUI.suggestion?.hide() }
+        return card
+    }
+
+    /// This window leaving the foreground (another window may stay): a pending or shown card goes.
+    private func observeSceneDeactivation() {
+        guard darkPagesUI.sceneObserver == nil else { return }
         darkPagesUI.sceneObserver = NotificationCenter.default.addObserver(
             forName: UIScene.willDeactivateNotification, object: nil, queue: .main
         ) { [weak self] note in
@@ -260,9 +268,6 @@ extension BrowserViewController {
                 self.hideDarkPagesSuggestion()
             }
         }
-        // Another toast takes the place by the bar: the card gives way.
-        tabsUI.toast.willShow = { [weak self] in self?.darkPagesUI.suggestion?.hide() }
-        return card
     }
 
     /// By the address bar, on the side away from the screen's edge: above the pill at the bottom,

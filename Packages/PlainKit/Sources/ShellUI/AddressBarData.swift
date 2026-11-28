@@ -193,9 +193,10 @@ public final class LiveAddressBarData: AddressBarData {
         self.database = database
         profileDatabase = profiles
         let edits = settingsEdits
-        if let stored = try? await database.settings(), edits == settingsEdits {
-            settings = stored
-        }
+        // A failed read leaves the settings unread (nil to the shell), so nothing launch kept, such
+        // as Dark Pages' switch, is replaced by a default.
+        guard let stored = try? await database.settings() else { return }
+        if edits == settingsEdits { settings = stored }
         hasSettings = true
         settingsDidChange()
     }

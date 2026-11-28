@@ -165,17 +165,14 @@ public final class SettingsModel {
 
     // MARK: Saving
 
-    /// Saves one change over what is stored now, not this model's whole copy: another window's
-    /// Settings, or the Dark Pages suggestion, may have saved a different setting meanwhile.
+    /// Saves one change over what is stored now, in one transaction, not this model's whole copy:
+    /// another window's Settings, or the Dark Pages suggestion, may have saved a different setting
+    /// meanwhile.
     private func save(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) {
         edits += 1
         Signposts.signposter.emitEvent(Signposts.settingsChange)
         let store = store
-        writes.enqueue({
-            var stored = try await store.settings()
-            change(&stored)
-            try await store.saveSettings(stored)
-        }) { [weak self] _ in
+        writes.enqueue({ _ = try await store.updateSettings(change) }) { [weak self] _ in
             guard let self else { return }
             errorMessage = Wording.saveFailed
             // Show what is really stored, so the failed choice can be made again.

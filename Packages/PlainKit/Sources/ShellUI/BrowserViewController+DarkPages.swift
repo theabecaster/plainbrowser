@@ -104,12 +104,16 @@ extension BrowserViewController {
             all.accessibilityIdentifier = "pageAppearance.useForAll"
             children.append(UIMenu(options: .displayInline, children: [all]))
         }
-        // Whose choice the check shows, in the title (a top-level menu shows no subtitle).
-        let whose = isOwn
-            ? String(localized: "Page Appearance · This Site")
-            : choices.defaultAppearance == nil ? String(localized: "Page Appearance") : String(localized: "Page Appearance · All Sites")
-        let menu = UIMenu(title: whose, image: UIImage(systemName: current.symbol), children: children)
-        return menu
+        // Whose choice the check shows. The pill's menu is top level and shows no subtitle, so it
+        // goes in the title; in Site Settings it is a row, where a long title wraps: the subtitle.
+        let scope: String? = isOwn
+            ? String(localized: "This Site")
+            : choices.defaultAppearance == nil ? nil : String(localized: "All Sites")
+        let title = String(localized: "Page Appearance")
+        if source == "indicator" {
+            return UIMenu(title: scope.map { "\(title) · \($0)" } ?? title, image: UIImage(systemName: current.symbol), children: children)
+        }
+        return UIMenu(title: title, subtitle: scope, image: UIImage(systemName: current.symbol), children: children)
     }
 
     /// A pick from the menu (docs/decisions.md, "Page appearance"): the first pick ever becomes

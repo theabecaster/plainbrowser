@@ -3671,7 +3671,9 @@ Research and sources: `docs/research/content-mode.md`.
   `panesDidChange()` at its completion or after a layout that changed a pane's size), and each
   page on screen whose wanted mode differs switches `FixedChoices.contentModeSettleDelay`
   (0.45 s) later. Another change in the meantime starts the wait again, so a fold then a quick
-  unfold does nothing. A per-site Desktop Site choice always wins, open or closed.
+  unfold does nothing. Dragging the side pane's divider holds the checks from the finger's first move
+  (`panesWillChange()`) and releases them when the divider comes to rest, so a page never reloads
+  under a drag; only the width it rests at counts. A per-site Desktop Site choice always wins, open or closed.
 - **Only when nothing is lost** (`ContentModeRules`): not on a form result, while media plays
   (or picture in picture, fullscreen, camera or microphone), while a download from the tab runs,
   with Find open or the page translated, and not when the page reports typed text, a changed

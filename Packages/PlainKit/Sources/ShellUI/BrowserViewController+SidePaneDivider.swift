@@ -204,6 +204,8 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         guard let geometry else { return false }
         prepareMove(layout: layout)
         drag = SidePaneDividerDrag(geometry: geometry, startWidth: geometry.paneWidth(dividerX: x))
+        // Desktop or mobile waits for the rest: a page never reloads under a finger still moving.
+        browser.session.pool.panesWillChange()
         return true
     }
 
@@ -478,6 +480,8 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         Motion.animate(Motion.sidePaneArm, changes: { browser.view.layoutIfNeeded() })
         browser.updatePageInsets()
         browser.updateButtons()
+        // At rest: the page follows its pane's new width once it settles (desktop or mobile).
+        browser.session.pool.panesDidChange()
     }
 
     /// Stops a drag or settle where it is and puts everything at the window's state at once: the

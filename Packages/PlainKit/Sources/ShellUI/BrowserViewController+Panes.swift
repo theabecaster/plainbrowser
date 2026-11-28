@@ -187,7 +187,9 @@ extension BrowserViewController {
         session.pool.defaultPaneSize = layout.focusedPaneFrame.size
         // A pane's size changed without a window resize (a split, the side pane): its page may
         // switch between desktop and mobile once it settles. A resize says so at its completion.
-        if let previous, !duo.isResizing, previous.paneFrames.map(\.size) != layout.paneFrames.map(\.size) {
+        // A divider drag or settle says so itself at rest (`SidePaneDividerController.endMove`).
+        if let previous, !duo.isResizing, sidePaneUI.divider?.activeSpan == nil,
+           previous.paneFrames.map(\.size) != layout.paneFrames.map(\.size) {
             session.pool.panesDidChange()
         }
         // A pane that just came on screen or left it (a fold, a split opening).

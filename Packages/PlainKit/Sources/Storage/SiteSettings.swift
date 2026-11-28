@@ -1,9 +1,10 @@
+import BrowserCore
 import Foundation
 import GRDB
 
 /// Choices remembered per site, never configured (AGENTS.md, "Opinionated and simple"): the
 /// answer to each permission prompt, the desktop or mobile choice from the page menu, and the
-/// sites where content blocking or dark pages are off.
+/// sites where content blocking is off, and each site's Dark Pages choice.
 ///
 /// Values are plain strings: the engine's types (`SitePermission`, `ContentMode`) live above
 /// Storage, and adapters in the shell map them. A site is whatever key the caller uses (an origin
@@ -131,26 +132,27 @@ extension AppDatabase {
         }
     }
 
-    // MARK: Dark pages off per site
+    // MARK: Dark pages per site
 
-    /// The sites where the user turned dark pages off. Read once at launch: the engine builds each
-    /// page's dark-pages script from this list, so the shell answers from memory.
-    public func darkPagesOffSites() async throws -> Set<String> {
+    /// The sites with a Dark Pages choice of their own: on, and off. Read once at launch: the
+    /// engine builds each page's dark-pages script from them, so the shell answers from memory.
+    public func darkPagesSiteChoices() async throws -> (on: Set<String>, off: Set<String>) {
         try await writer.read { db in
-            try Set(String.fetchAll(db, sql: "SELECT site FROM \(Schema.darkPagesOff)"))
+            let off = try Set(String.fetchAll(db, sql: "SELECT site FROM \(Schema.darkPagesOff)"))
+            let on = try Set(String.fetchAll(db, sql: "SELECT site FROM \(Schema.darkPagesOn)")).subtracting(off)
+            return (on, off)
         }
     }
 
-    /// Turns dark pages off for `site` (true) or back to automatic (false).
-    public func setDarkPagesOff(_ off: Bool, forSite site: String) async throws {
+    /// Sets `site`'s choice: on, off, or back to automatic (in neither table), in one transaction.
+    public func setDarkPagesChoice(_ choice: DarkPagesSiteChoice, forSite site: String) async throws {
         try await writer.write { db in
-            if off {
-                try db.execute(
-                    sql: "INSERT INTO \(Schema.darkPagesOff) (site) VALUES (?) ON CONFLICT(site) DO NOTHING",
-                    arguments: [site]
-                )
-            } else {
-                try db.execute(sql: "DELETE FROM \(Schema.darkPagesOff) WHERE site = ?", arguments: [site])
+            try db.execute(sql: "DELETE FROM \(Schema.darkPagesOff) WHERE site = ?", arguments: [site])
+            try db.execute(sql: "DELETE FROM \(Schema.darkPagesOn) WHERE site = ?", arguments: [site])
+            switch choice {
+            case .automatic: break
+            case .on: try db.execute(sql: "INSERT INTO \(Schema.darkPagesOn) (site) VALUES (?)", arguments: [site])
+            case .off: try db.execute(sql: "INSERT INTO \(Schema.darkPagesOff) (site) VALUES (?)", arguments: [site])
             }
         }
     }

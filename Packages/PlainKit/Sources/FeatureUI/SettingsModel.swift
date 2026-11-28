@@ -74,7 +74,7 @@ public final class SettingsModel {
     public func selectSearchEngine(_ engine: SearchEngine) {
         guard isLoaded, engine != settings.searchEngine else { return }
         settings.searchEngine = engine
-        save()
+        save { $0.searchEngine = engine }
         // The checkmark moved: a tick (docs/ui-reference.md, "Haptics").
         Haptic.selection.play()
     }
@@ -82,21 +82,32 @@ public final class SettingsModel {
     public func setTabLayout(_ layout: TabLayout) {
         guard isLoaded, layout != settings.tabLayout else { return }
         settings.tabLayout = layout
-        save()
+        save { $0.tabLayout = layout }
     }
 
     public func setArchiveAfter(_ archive: ArchiveAfter) {
         guard isLoaded, archive != settings.archiveAfter else { return }
         settings.archiveAfter = archive
-        save()
+        save { $0.archiveAfter = archive }
     }
 
     /// Saves the choice; the shell applies it to every window as the save is handed to it.
     public func setAppearance(_ appearance: Appearance) {
         guard isLoaded, appearance != settings.appearance else { return }
         settings.appearance = appearance
-        save()
+        save { $0.appearance = appearance }
     }
+
+    /// Settings > Appearance > Dark Pages. Saved like the rest; the shell applies it to every page
+    /// as the save is handed to it, and counts turning it on as the suggestion's answer.
+    public func setDarkPages(_ on: Bool) {
+        guard isLoaded, on != settings.darkPages else { return }
+        settings.darkPages = on
+        save { $0.darkPages = on }
+    }
+
+    /// Dark Pages does nothing while Plain is set to Light: the switch keeps its value, disabled.
+    public var isDarkPagesAvailable: Bool { settings.appearance != .light }
 
     /// Validates the typed address and, when it is good, makes it the search engine. Returns
     /// whether it was accepted; otherwise `customError` says why.
@@ -108,7 +119,7 @@ public final class SettingsModel {
             customEngine = engine
             customTemplate = engine.template
             settings.searchEngine = engine
-            save()
+            save { $0.searchEngine = engine }
             Haptic.selection.play()
             return true
         } catch {
@@ -154,12 +165,17 @@ public final class SettingsModel {
 
     // MARK: Saving
 
-    private func save() {
+    /// Saves one change over what is stored now, not this model's whole copy: another window's
+    /// Settings, or the Dark Pages suggestion, may have saved a different setting meanwhile.
+    private func save(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) {
         edits += 1
         Signposts.signposter.emitEvent(Signposts.settingsChange)
-        let snapshot = settings
         let store = store
-        writes.enqueue({ try await store.saveSettings(snapshot) }) { [weak self] _ in
+        writes.enqueue({
+            var stored = try await store.settings()
+            change(&stored)
+            try await store.saveSettings(stored)
+        }) { [weak self] _ in
             guard let self else { return }
             errorMessage = Wording.saveFailed
             // Show what is really stored, so the failed choice can be made again.
@@ -183,7 +199,7 @@ public final class SettingsModel {
     }
 
     /// Returns when every change so far is saved.
-    func waitForSaves() async {
+    public func waitForSaves() async {
         await writes.drain()
     }
 }
@@ -250,7 +266,7 @@ extension Appearance {
         switch self {
         case .system: "Plain and websites follow your iPhone's light or dark setting."
         case .light: "Plain and websites stay light."
-        case .dark: "Plain and websites stay dark, even sites made only in light."
+        case .dark: "Plain and websites stay dark."
         }
     }
 }
@@ -275,6 +291,8 @@ enum Wording {
     /// Shown only where a tab list fits, which has a top bar and no swipe up from the address bar:
     /// the Tabs button shows them all.
     static let tabLayoutFooter = "Where your tabs show on this wide screen. The Tabs button shows them all."
+    static let darkPagesFooter = "Darkens websites that have no dark mode of their own, while Plain is dark. Choices you make for a site stay."
+    static let darkPagesLightFooter = "Plain is set to Light. Dark Pages works while Plain is dark."
     static let tabLayoutUnavailableFooter = "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs."
     static let searchEngineFooter = "Searches from the address bar use this engine."
     static let customEngineFooter = "Paste a search results address with %s where the search words go."

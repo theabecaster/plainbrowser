@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 @testable import Storage
 import Testing
@@ -58,15 +59,22 @@ import Testing
         #expect(try await database.blockingAllowList() == ["b.example"])
     }
 
-    @Test func darkPagesOffSitesAreRemembered() async throws {
+    @Test func darkPagesSiteChoicesAreRememberedAndExclusive() async throws {
         let database = try AppDatabase.inMemory()
-        #expect(try await database.darkPagesOffSites().isEmpty)
-        try await database.setDarkPagesOff(true, forSite: "a.example")
-        try await database.setDarkPagesOff(true, forSite: "a.example")
-        try await database.setDarkPagesOff(true, forSite: "b.example")
-        #expect(try await database.darkPagesOffSites() == ["a.example", "b.example"])
-        try await database.setDarkPagesOff(false, forSite: "a.example")
-        #expect(try await database.darkPagesOffSites() == ["b.example"])
+        var choices = try await database.darkPagesSiteChoices()
+        #expect(choices.on.isEmpty && choices.off.isEmpty)
+        try await database.setDarkPagesChoice(.off, forSite: "a.example")
+        try await database.setDarkPagesChoice(.off, forSite: "a.example")
+        try await database.setDarkPagesChoice(.on, forSite: "b.example")
+        choices = try await database.darkPagesSiteChoices()
+        #expect(choices.off == ["a.example"] && choices.on == ["b.example"])
+        // A site is in one table at most: a new choice replaces the old one.
+        try await database.setDarkPagesChoice(.on, forSite: "a.example")
+        choices = try await database.darkPagesSiteChoices()
+        #expect(choices.off.isEmpty && choices.on == ["a.example", "b.example"])
+        try await database.setDarkPagesChoice(.automatic, forSite: "a.example")
+        choices = try await database.darkPagesSiteChoices()
+        #expect(choices.off.isEmpty && choices.on == ["b.example"])
     }
 
     @Test func cookieBannersOffSitesAreRemembered() async throws {

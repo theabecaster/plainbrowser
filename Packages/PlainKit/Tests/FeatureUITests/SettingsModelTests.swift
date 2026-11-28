@@ -44,6 +44,20 @@ import Testing
         #expect(saved == BrowserSettings(searchEngine: .duckDuckGo, tabLayout: .right, archiveAfter: .oneWeek, appearance: .light))
     }
 
+    @Test func darkPagesSwitchIsSavedAndOffByDefault() async throws {
+        let model = makeModel()
+        await model.load()
+        #expect(!model.settings.darkPages)
+        #expect(model.isDarkPagesAvailable)
+        model.setDarkPages(true)
+        await model.waitForSaves()
+        #expect(try await database.settings().darkPages)
+        #expect(try await database.settings().appearance == .system, "Dark Pages never touches Appearance")
+        model.setAppearance(.light)
+        #expect(!model.isDarkPagesAvailable, "nothing to darken while Plain is set to Light")
+        #expect(model.settings.darkPages, "the switch keeps its value")
+    }
+
     @Test func customEngineIsValidatedNamedAndSaved() async throws {
         let model = makeModel()
         await model.load()

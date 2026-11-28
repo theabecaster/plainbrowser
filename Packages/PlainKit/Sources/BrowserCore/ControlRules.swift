@@ -53,9 +53,28 @@ public enum SidePaneItem: Sendable, Equatable {
     case show, hide, hidden
 }
 
-/// The dark pages item in the page menu (§4).
+/// The Dark Pages checkmark item in Site Settings (§4): checked while it is applied here.
 public enum DarkPagesItem: Sendable, Equatable {
-    case turnOff, turnOn, hidden
+    case on, off, hidden
+}
+
+/// The Dark Pages indicator inside the resting pill (§3): on while Plain darkens the page, off
+/// (primary ink) on a page of a site the user turned off by hand, otherwise absent.
+public enum DarkPagesIndicator: Sendable, Equatable {
+    case on, off, hidden
+}
+
+/// What Dark Pages is doing on the page on screen, in the app's dark colors (in light colors it
+/// is always `.none`). docs/research/dark-pages-optin.md, the state table.
+public enum DarkPagesPage: Sendable, Equatable {
+    /// Light colors, a page with its own dark design, or not checked yet.
+    case none
+    /// The page could use it, the switch is off and the site has no choice of its own.
+    case available
+    /// Plain darkens the page.
+    case darkened
+    /// The page could use it, and the user turned it off for this site.
+    case off
 }
 
 /// The translate item in the page menu (§4).
@@ -112,10 +131,8 @@ public struct ChromeState: Sendable, Equatable {
     public var isWebPage = false
     public var isReaderAvailable = false
     public var isPDF = false
-    /// Plain darkens the page (only ever while the app is dark).
-    public var isDarkened = false
-    /// The user turned dark pages off for this site, and the app is dark.
-    public var isDarkPagesOff = false
+    /// What Dark Pages is doing on the page (only ever anything while the app is dark).
+    public var darkPages = DarkPagesPage.none
     /// The page's language is known, can be translated on the device, and is not one the user
     /// reads (their preferred languages).
     public var isForeignLanguage = false
@@ -314,14 +331,30 @@ public struct ControlRules: Sendable, Equatable {
     /// Like Desktop Site, regular tabs only (the allow-list is saved to disk).
     public var blockingToggle: Bool { desktopSite && !state.isPrivate }
 
-    /// Turn Off while Plain darkens the page, Turn On while the user has it off for the site; only
-    /// on the page itself (not under the reader, not on an error page). In a light app, or on a
-    /// page with its own dark design, there is nothing to switch.
+    /// Checked while Plain darkens the page; unchecked on a page that could use it (the switch is
+    /// off, or the user turned it off here). Only on the page itself (not under the reader, not on
+    /// an error page). In a light app, or on a page with its own dark design, there is nothing to
+    /// switch.
     public var darkPages: DarkPagesItem {
         guard isPageShowing, state.isWebPage, !state.isReaderOpen else { return .hidden }
-        if state.isDarkened { return .turnOff }
-        if state.isDarkPagesOff { return .turnOn }
-        return .hidden
+        switch state.darkPages {
+        case .darkened: return .on
+        case .off, .available: return .off
+        case .none: return .hidden
+        }
+    }
+
+    /// The indicator in the resting pill: only while Dark Pages is applied (on) or turned off here
+    /// by hand (off, so the way back is where the user left it). Never while editing (the field
+    /// takes the pill), under the reader, or on an error page; `.available` shows nothing, since
+    /// the feature is not being applied.
+    public var darkPagesIndicator: DarkPagesIndicator {
+        guard isPageShowing, state.isWebPage, !state.isReaderOpen, !state.isEditing else { return .hidden }
+        switch state.darkPages {
+        case .darkened: return .on
+        case .off: return .off
+        case .available, .none: return .hidden
+        }
     }
 
     /// Translate Page on a loaded page in a language the user doesn't read; Show Original while it

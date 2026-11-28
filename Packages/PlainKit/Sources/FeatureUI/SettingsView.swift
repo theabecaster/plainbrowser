@@ -77,6 +77,18 @@ public struct SettingsView: View {
                         SettingsFooter(model.settings.appearance.footer)
                     }
 
+                    // Under Appearance, but its own switch: it darkens pages, never the app.
+                    Section {
+                        Toggle("Dark Pages", isOn: Binding(
+                            get: { model.settings.darkPages }, set: { model.setDarkPages($0) }
+                        ))
+                        .tint(Style.accent)
+                        .disabled(!model.isLoaded || !model.isDarkPagesAvailable)
+                        .accessibilityIdentifier("settings.darkPages")
+                    } footer: {
+                        SettingsFooter(model.isDarkPagesAvailable ? Wording.darkPagesFooter : Wording.darkPagesLightFooter)
+                    }
+
                     if showsAppIcon {
                         Section {
                             NavigationLink {

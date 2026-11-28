@@ -79,9 +79,23 @@ import Testing
 
     @Test func settingsRoundTrip() async throws {
         let database = try AppDatabase.inMemory()
-        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never, appearance: .dark)
+        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never, appearance: .dark, darkPages: true)
         try await database.saveSettings(settings)
         #expect(try await database.settings() == settings)
+    }
+
+    /// Dark Pages starts off for everyone, upgraders too (no stored key reads as the default),
+    /// and a saved choice comes back either way.
+    @Test func darkPagesStartsOffAndIsRemembered() async throws {
+        let database = try AppDatabase.inMemory()
+        #expect(try await database.settings().darkPages == false)
+        var settings = BrowserSettings.defaults
+        settings.darkPages = true
+        try await database.saveSettings(settings)
+        #expect(try await database.settings().darkPages == true)
+        settings.darkPages = false
+        try await database.saveSettings(settings)
+        #expect(try await database.settings().darkPages == false)
     }
 
     @Test func customEngineIsKeptAfterSwitchingAway() async throws {

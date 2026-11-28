@@ -255,15 +255,16 @@ import Testing
     @Test func darkPagesItemOnlyWhereItSwitchesSomething() {
         var state = Self.page()
         #expect(ControlRules(state).darkPages == .hidden, "light app or a site's own dark design")
-        state.isDarkened = true
-        #expect(ControlRules(state).darkPages == .turnOff)
+        state.darkPages = .darkened
+        #expect(ControlRules(state).darkPages == .on)
         state.isPrivate = true
-        #expect(ControlRules(state).darkPages == .turnOff, "private tabs keep it for the session")
-        state.isDarkened = false
-        state.isDarkPagesOff = true
-        #expect(ControlRules(state).darkPages == .turnOn)
+        #expect(ControlRules(state).darkPages == .on, "private tabs keep it for the session")
+        state.darkPages = .off
+        #expect(ControlRules(state).darkPages == .off)
+        state.darkPages = .available
+        #expect(ControlRules(state).darkPages == .off, "the switch is off: Site Settings turns it on here")
         state.condition = .loading
-        #expect(ControlRules(state).darkPages == .turnOn)
+        #expect(ControlRules(state).darkPages == .off)
         for condition in [PageCondition.failed, .crashed, .awaitingResubmit] {
             state.condition = condition
             #expect(ControlRules(state).darkPages == .hidden, "\(condition)")
@@ -271,6 +272,28 @@ import Testing
         state.condition = .loaded
         state.isReaderOpen = true
         #expect(ControlRules(state).darkPages == .hidden, "under the reader it acts out of sight")
+    }
+
+    @Test func darkPagesIndicatorOnlyWhileAppliedOrTurnedOffHere() {
+        var state = Self.page()
+        #expect(ControlRules(state).darkPagesIndicator == .hidden, "light app or a site's own dark design")
+        state.darkPages = .available
+        #expect(ControlRules(state).darkPagesIndicator == .hidden, "not applied: nothing to show")
+        state.darkPages = .darkened
+        #expect(ControlRules(state).darkPagesIndicator == .on)
+        state.darkPages = .off
+        #expect(ControlRules(state).darkPagesIndicator == .off, "the way back stays where it was turned off")
+        state.isEditing = true
+        #expect(ControlRules(state).darkPagesIndicator == .hidden, "the field takes the pill")
+        state.isEditing = false
+        state.isReaderOpen = true
+        #expect(ControlRules(state).darkPagesIndicator == .hidden)
+        state.isReaderOpen = false
+        state.condition = .failed
+        #expect(ControlRules(state).darkPagesIndicator == .hidden)
+        state.condition = .loaded
+        state.isWebPage = false
+        #expect(ControlRules(state).darkPagesIndicator == .hidden)
     }
 
     @Test func crashedAndResendPagesAreReduced() {

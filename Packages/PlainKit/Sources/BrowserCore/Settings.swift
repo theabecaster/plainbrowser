@@ -49,8 +49,8 @@ public enum ArchiveAfter: String, Hashable, Sendable, Codable, CaseIterable {
 }
 
 /// The app's colors: follow iOS, or stay light or dark whatever iOS uses. Web pages follow it too:
-/// sites with a dark design switch with the app, and pages without one are darkened while it is
-/// dark (`FixedChoices.darkPagesOn`).
+/// sites with a dark design switch with the app. Darkening pages without one is Dark Pages'
+/// (`BrowserSettings.darkPages`), which never changes this.
 public enum Appearance: String, Hashable, Sendable, Codable, CaseIterable {
     case system
     case light
@@ -64,15 +64,19 @@ public struct BrowserSettings: Hashable, Sendable, Codable {
     public var tabLayout: TabLayout
     public var archiveAfter: ArchiveAfter
     public var appearance: Appearance
+    /// Settings > Appearance > Dark Pages: pages without a dark design of their own are darkened
+    /// while Plain is dark. A site's own choice (Site Settings, the indicator) beats it.
+    public var darkPages: Bool
 
     public init(
         searchEngine: SearchEngine, tabLayout: TabLayout, archiveAfter: ArchiveAfter,
-        appearance: Appearance = FixedChoices.defaultAppearance
+        appearance: Appearance = FixedChoices.defaultAppearance, darkPages: Bool = FixedChoices.darkPagesDefaultEnabled
     ) {
         self.searchEngine = searchEngine
         self.tabLayout = tabLayout
         self.archiveAfter = archiveAfter
         self.appearance = appearance
+        self.darkPages = darkPages
     }
 
     /// First-launch values.

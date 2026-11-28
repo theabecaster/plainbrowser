@@ -43,6 +43,9 @@ struct SlotContentMode {
     var placeBeforeChange: ContentModeProbe?
     /// A place is being read or was read for the change under way: one read per change.
     var readsPlace = false
+    /// Which read a reply belongs to: bumped by every read and every reset, so a late reply from
+    /// an earlier change (or an earlier page) is dropped.
+    var placeToken = 0
     /// Someone typed in this document or one of its frames (each reports its first `input`
     /// event): what the probe can't read, such as cross-origin frames.
     var subframeTyped = false
@@ -182,12 +185,14 @@ extension WebViewPool {
         let webView = slot.webView
         guard let url = webView.url, url.scheme == "http" || url.scheme == "https", !webView.isLoading else { return }
         slot.contentMode.readsPlace = true
+        slot.contentMode.placeToken += 1
+        let token = slot.contentMode.placeToken
         let zoom = max(webView.scrollView.zoomScale, 0.01)
         let top = Double(webView.obscuredContentInsets.top / zoom)
         webView.callAsyncJavaScript(
             ContentModeScripts.place, arguments: ["topInset": top], in: nil, in: UserScripts.world
         ) { [weak slot] result in
-            guard let slot, slot.contentMode.readsPlace, slot.webView.url == url,
+            guard let slot, slot.contentMode.placeToken == token, slot.webView.url == url,
                   let answer = (try? result.get()) as? [String: Any] else { return }
             slot.contentMode.placeBeforeChange = ContentModeProbe(answer)
         }
@@ -196,6 +201,7 @@ extension WebViewPool {
     /// The change is over for this page (checked, switched or kept): the next one reads afresh.
     private func forgetPlace(of slot: Slot) {
         slot.contentMode.readsPlace = false
+        slot.contentMode.placeToken += 1
         slot.contentMode.placeBeforeChange = nil
     }
 
@@ -382,8 +388,10 @@ extension WebViewPool {
         }
     }
 
-    /// Ends a switch at once: the tab left the screen or its web view is going away.
+    /// Ends a switch at once: the tab left the screen, moved to another pane or its web view is
+    /// going away. A place read for it is forgotten too: it belongs to where the page was.
     func cancelSwitch(_ slot: Slot) {
+        forgetPlace(of: slot)
         guard let change = slot.contentMode.running else { return }
         change.deadline?.cancel()
         slot.contentMode.running = nil

@@ -320,6 +320,9 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
     /// side gets its new frame as it starts, the shrinking side as it ends.
     func settle(to outcome: SidePaneDividerOutcome, velocity: CGFloat = 0, flicked: Bool = false) {
         guard let browser, let geometry, let pane else { return }
+        // A settle from the menu, a double tap or a key moves the panes too: the desktop or mobile
+        // check waits for its rest (`endMove`), as a drag's does.
+        browser.session.pool.panesWillChange()
         let signposter = Signposts.signposter
         if let settleInterval { signposter.endInterval(Signposts.sidePaneSettle, settleInterval, "replaced") }
         settleInterval = signposter.beginInterval(Signposts.sidePaneSettle, id: signposter.makeSignpostID(), "\(Self.name(outcome))")
@@ -474,14 +477,15 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         }
         browser.view.setNeedsLayout()
         browser.saveSidePaneState()
+        // At rest: the page follows its pane's new width once it settles (desktop or mobile). It
+        // only schedules, so it is safe inside a layout pass; a fold says so again at its end.
+        browser.session.pool.panesDidChange()
         // From inside a layout pass (a fold's regions changed) the pass in progress places it.
         guard relayout else { return }
         // The one real layout of the rest: the bar's lane and the header's place glide to it.
         Motion.animate(Motion.sidePaneArm, changes: { browser.view.layoutIfNeeded() })
         browser.updatePageInsets()
         browser.updateButtons()
-        // At rest: the page follows its pane's new width once it settles (desktop or mobile).
-        browser.session.pool.panesDidChange()
     }
 
     /// Stops a drag or settle where it is and puts everything at the window's state at once: the

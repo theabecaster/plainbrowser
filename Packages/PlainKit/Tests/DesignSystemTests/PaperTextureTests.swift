@@ -26,25 +26,57 @@ final class PaperTextureTests: XCTestCase {
             let p = PaperTexture.pixels(sheet)
             let count = Double(side * side)
             let mean = (0 ..< 3).map { c in (0 ..< side * side).reduce(0.0) { $0 + Double(p[$1 * 4 + c]) } / count }
-            // Red on day paper is already 255, so lighter specks clip there: allow a little more.
-            XCTAssertEqual(mean[0], base.0, accuracy: sheet == .day ? 1.0 : 0.5, "\(sheet) red")
+            // Red on day paper is already 255, so lighter specks clip there; red moves least on
+            // day paper (`channel`), which keeps it within the same half level.
+            XCTAssertEqual(mean[0], base.0, accuracy: 0.5, "\(sheet) red")
             XCTAssertEqual(mean[1], base.1, accuracy: 0.5, "\(sheet) green")
             XCTAssertEqual(mean[2], base.2, accuracy: 0.5, "\(sheet) blue")
         }
     }
 
-    /// Faint: almost every pixel within a few levels of the base, night fainter than day. Text
-    /// contrast moves by a fraction of a percent at most.
-    func testStaysFaint() {
+    /// Visible as paper, never as dirt: the spread sits inside the "material, not dirt" band
+    /// (docs/decisions.md, "Paper texture"), night weaker than day. The owner found the first
+    /// recipe (σ 1.2 / 0.8 levels, about 1.6 % / 1.0 % noise opacity) barely visible, so the
+    /// lower bounds keep it from sliding back there; the upper bounds keep the strongest strands
+    /// a shade, not a mark, and secondary text's contrast within a few percent of the flat paper.
+    func testVisibleButFaint() {
         for sheet in PaperTexture.Sheet.allCases {
             let l = luma(sheet)
             let mean = l.reduce(0, +) / Double(l.count)
             let spread = l.map { abs($0 - mean) }.sorted()
             let p999 = spread[Int(Double(spread.count) * 0.999)]
             let deviation = (l.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(l.count)).squareRoot()
-            XCTAssertLessThan(p999, sheet == .day ? 9 : 5, "\(sheet) 99.9th percentile")
-            XCTAssertLessThan(deviation, sheet == .day ? 2.6 : 1.4, "\(sheet) standard deviation")
-            XCTAssertGreaterThan(deviation, 0.4, "\(sheet) still has a texture")
+            XCTAssertLessThan(p999, sheet == .day ? 14 : 11, "\(sheet) 99.9th percentile")
+            XCTAssertLessThan(deviation, sheet == .day ? 2.8 : 1.9, "\(sheet) standard deviation")
+            XCTAssertGreaterThan(deviation, sheet == .day ? 1.8 : 1.2, "\(sheet) visible as paper")
+        }
+    }
+
+    /// No repeat: what is left after an arm's-length blur (about 4 pt) is the part of the sheet
+    /// that would show the 85 pt tile as a grid. The formation stays small and the strands are
+    /// high-passed, so that part stays a fraction of the texture.
+    func testNoTileScaleCloud() {
+        for sheet in PaperTexture.Sheet.allCases {
+            let l = luma(sheet)
+            func blur(_ v: [Double]) -> [Double] {
+                let r = 6
+                var rows = v, out = v
+                for y in 0 ..< side {
+                    for x in 0 ..< side {
+                        rows[y * side + x] = (-r ... r).reduce(0.0) { $0 + v[y * side + (x + $1 + side) % side] } / Double(2 * r + 1)
+                    }
+                }
+                for y in 0 ..< side {
+                    for x in 0 ..< side {
+                        out[y * side + x] = (-r ... r).reduce(0.0) { $0 + rows[((y + $1 + side) % side) * side + x] } / Double(2 * r + 1)
+                    }
+                }
+                return out
+            }
+            let low = blur(blur(l))
+            let mean = low.reduce(0, +) / Double(low.count)
+            let deviation = (low.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(low.count)).squareRoot()
+            XCTAssertLessThan(deviation, sheet == .day ? 0.5 : 0.3, "\(sheet) tile-scale cloud")
         }
     }
 

@@ -5,7 +5,8 @@ import Foundation
 /// (docs/decisions.md, "Paper texture"). No UIKit, so tests and tools can render it on macOS;
 /// `Paper` turns it into the background UIKit and SwiftUI surfaces use.
 ///
-/// The recipe is three layers of very low contrast, added to the Paper color in 8-bit levels:
+/// The recipe is three layers of low contrast (about 3 % of a full-range noise by day, 2 % by
+/// night), added to the Paper color in 8-bit levels:
 /// - **Formation:** soft cloudiness a few points across, like pulp settling unevenly.
 /// - **Tooth:** fine grain at device-pixel scale, slightly softened so it reads as surface, not
 ///   as digital noise.
@@ -42,12 +43,12 @@ public nonisolated enum PaperTexture {
         var fibreContrary: Double
 
         static let day = Recipe(
-            base: (255, 246, 230), channel: (0.85, 1.0, 1.2),
-            formation: 0.45, tooth: 1.0, fibres: 121, fibreStrength: -3.2 ... -1.2, fibreContrary: 0.4
+            base: (255, 246, 230), channel: (0.45, 1.0, 1.2),
+            formation: 0.45, tooth: 2.2, fibres: 220, fibreStrength: -8.5 ... -3.5, fibreContrary: 0.4
         )
         static let night = Recipe(
             base: (10, 33, 51), channel: (0.75, 0.9, 1.0),
-            formation: 0.25, tooth: 0.5, fibres: 100, fibreStrength: 1.2 ... 2.6, fibreContrary: 0.25
+            formation: 0.28, tooth: 1.1, fibres: 190, fibreStrength: 3.3 ... 7.0, fibreContrary: 0.25
         )
     }
 
@@ -145,9 +146,10 @@ public nonisolated enum PaperTexture {
             var x = (Double(index % grid) + random.unit()) * cell
             var y = (Double(index / grid) + random.unit()) * cell
             var angle = random.unit() * 2 * .pi
-            // Mostly short strands, a few long ones: 10 to 44 pixels (3 to 15 pt), weighted toward
-            // short: long ones read as scratches.
-            let length = 10 + 34 * pow(random.unit(), 2)
+            // Mostly short strands, a few long ones: 8 to 32 pixels (3 to 11 pt), weighted toward
+            // short: long ones read as scratches, and a long strand is the one the eye finds again
+            // one tile over.
+            let length = 8 + 24 * pow(random.unit(), 2)
             let range = recipe.fibreStrength
             var strength = range.lowerBound + random.unit() * (range.upperBound - range.lowerBound)
             if random.unit() < recipe.fibreContrary { strength *= -0.6 }
@@ -164,7 +166,13 @@ public nonisolated enum PaperTexture {
                 travelled += 0.5
             }
         }
-        return field
+        // Keep only the strands themselves. Where strands happen to gather, the field has a soft
+        // low-frequency cloud that repeats with the tile and, at arm's length, shows as a grid of
+        // faint blotches every 85 pt. Subtracting a wide blur of the field (a high pass) takes that
+        // cloud out and leaves the crisp strands; it also centers the field, so the sheet still
+        // averages to the base color.
+        let cloud = boxBlur(boxBlur(field, radius: 12), radius: 12)
+        return zip(field, cloud).map { $0 - $1 }
     }
 
     private static func splat(_ field: inout [Double], _ x: Double, _ y: Double, _ amount: Double) {
@@ -179,6 +187,30 @@ public nonisolated enum PaperTexture {
     }
 
     // MARK: Helpers
+
+    /// A box blur of `radius` pixels in both directions, wrapping at the tile's edges.
+    private static func boxBlur(_ values: [Double], radius: Int) -> [Double] {
+        let n = side, width = Double(2 * radius + 1)
+        var rows = [Double](repeating: 0, count: n * n)
+        for y in 0 ..< n {
+            var sum = 0.0
+            for dx in -radius ... radius { sum += values[y * n + wrap(dx)] }
+            for x in 0 ..< n {
+                rows[y * n + x] = sum / width
+                sum += values[y * n + wrap(x + radius + 1)] - values[y * n + wrap(x - radius)]
+            }
+        }
+        var out = rows
+        for x in 0 ..< n {
+            var sum = 0.0
+            for dy in -radius ... radius { sum += rows[wrap(dy) * n + x] }
+            for y in 0 ..< n {
+                out[y * n + x] = sum / width
+                sum += rows[wrap(y + radius + 1) * n + x] - rows[wrap(y - radius) * n + x]
+            }
+        }
+        return out
+    }
 
     /// A field scaled to unit standard deviation around zero, times `weight`.
     private struct Field {

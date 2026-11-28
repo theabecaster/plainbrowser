@@ -1,4 +1,4 @@
-# Sourced by the scripts that make simulators (test.sh, matrix.sh, perf-gate.sh).
+# Sourced by the scripts that make simulators (test.sh, matrix.sh, the CI workflow). Not perf-gate.sh.
 #
 # A brand-new simulator spends its first boot setting itself up (data migration, wallpapers,
 # widgets, the system apps' extensions), minutes of CPU on a loaded test Mac, and every script

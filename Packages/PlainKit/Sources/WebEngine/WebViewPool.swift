@@ -265,7 +265,10 @@ public final class WebViewPool {
         configuration.ignoresViewportScaleLimits = true
 
         let preferences = configuration.preferences
-        preferences.isElementFullscreenEnabled = true
+        // As in Safari: element fullscreen (the Fullscreen API) only off the iPhone. On an iPhone,
+        // the Duo included, sites' players fall back to the video's own fullscreen, the native
+        // player (EngineChoices.allowsElementFullscreen).
+        preferences.isElementFullscreenEnabled = EngineChoices.allowsElementFullscreen(on: UIDevice.current.userInterfaceIdiom)
         // WebKit then asks `createWebViewWith` only for popups a user gesture opened.
         preferences.javaScriptCanOpenWindowsAutomatically = false
         preferences.isFraudulentWebsiteWarningEnabled = true

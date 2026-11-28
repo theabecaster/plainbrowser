@@ -1,5 +1,8 @@
 import CoreGraphics
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Values the web engine decides for the user, each with its reason (AGENTS.md, "Opinionated and
 /// simple"). Shared tab values (`extraLiveTabs`, `thumbnailWidth`) are in BrowserCore's
@@ -49,6 +52,22 @@ nonisolated public enum EngineChoices {
     /// A pane whose shorter side is at least this wide gets desktop sites: the Duo's inner screen
     /// (951×669, 669×951) does, the outer screen, a split half and a phone in landscape do not.
     public static let desktopMinimumSide: CGFloat = 600
+
+    // MARK: Media (docs/research/media-playback.md)
+
+    /// Whether pages may take element fullscreen (the Fullscreen API, `requestFullscreen` on any
+    /// element): as Safari allows it, on iPad and Mac but never on iPhone. Without it a site's
+    /// player (YouTube, Vimeo, X) falls back to the video's own fullscreen, which on iOS is the
+    /// system's native player with its gestures, picture in picture, AirPlay and rotation. With
+    /// it, those sites fullscreen their own web player box instead: the odd fullscreen the owner
+    /// saw. Decided by the system's idiom, not the window's size: Safari on the Duo is iPhone
+    /// Safari on both screens (measured, docs/research/media-playback.md), and a web page must not
+    /// see the API appear or vanish with a fold.
+    #if canImport(UIKit)
+    public static func allowsElementFullscreen(on idiom: UIUserInterfaceIdiom) -> Bool {
+        idiom != .phone
+    }
+    #endif
 
     // MARK: Abuse limits (idea from firefox-ios `PopupThrottler`, MPL-2.0; no code taken)
 

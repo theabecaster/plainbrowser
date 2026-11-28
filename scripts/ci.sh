@@ -78,7 +78,7 @@ cleanup_remote() {
 trap 'cleanup_remote; rm -rf $tmp' EXIT
 trap 'exit 130' INT TERM
 
-git push -q -f origin $commit:refs/heads/$branch
+git push -q -f origin "${commit}:refs/heads/${branch}"
 print "ci: pushed $branch (${commit:0:10}); waiting for the run"
 run=""
 for i in {1..60}; do

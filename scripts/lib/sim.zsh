@@ -10,7 +10,8 @@
 #
 # Templates are named plain-template-v1-<device type>-<runtime>, stay on the Mac on purpose, and
 # are made or rebuilt under /tmp/plain-sim-template.lock, so two jobs never make the same one.
-# A template whose runtime is gone (an Xcode update) is deleted and made again. PLAIN_SIM_TEMPLATES=0
+# A template whose runtime is gone (an Xcode update) is deleted and made again. With under 25 GB
+# free on the disk no new template is made (about 2 GB each). PLAIN_SIM_TEMPLATES=0
 # skips templates and creates every simulator from scratch, as before.
 
 zmodload zsh/datetime 2>/dev/null
@@ -39,6 +40,10 @@ sim_template() {
     ok=$(jq -r --arg n $name "[.devices[][] | select(.name == \$n)][0] | (.isAvailable == true and .state == \"Shutdown\") // false" <<<$json)
     marker=~/Library/Developer/CoreSimulator/Devices/$udid/plain-template-ready
     if [[ -n $udid && $ok == true && -f $marker ]]; then print -r -- $udid; exit 0; fi
+    # A template takes about 2 GB. Below 25 GB free, make none (the caller creates the simulator
+    # from scratch): a full disk would break every job on the Mac.
+    free_kb=$(df -k ~/Library/Developer/CoreSimulator | awk "NR == 2 { print \$4 }")
+    (( ${free_kb:-0} > 25 * 1024 * 1024 )) || exit 1
     # Missing, unavailable, half made (no marker) or left booted: make it again.
     [[ -n $udid ]] && { xcrun simctl shutdown $udid 2>/dev/null; xcrun simctl delete $udid 2>/dev/null; }
     udid=$(xcrun simctl create $name $type $runtime) || exit 1

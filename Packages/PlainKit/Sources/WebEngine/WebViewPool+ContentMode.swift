@@ -85,7 +85,7 @@ struct ContentModeProbe: Sendable {
 }
 
 /// One reload in the other mode.
-final class ContentModeSwitch {
+final class ContentModeSwitch: NSObject {
     let target: ContentMode
     let restore: [String: Any]
     var cover: UIView?
@@ -95,9 +95,28 @@ final class ContentModeSwitch {
     var navigation: WKNavigation?
     /// The check generation it started in: a pane change since means another check is due.
     let generation: Int
-    /// Where the page was when the picture had to go before the reload finished (the limit): the
-    /// place is restored later only if the user hasn't scrolled since.
-    var offsetWhenUncovered: CGPoint?
+    /// The picture had to go before the reload finished (the limit): the place is restored later
+    /// only if the user hasn't touched the page since.
+    var isUncovered = false
+    private(set) var userScrolled = false
+    private weak var watchedPan: UIPanGestureRecognizer?
+
+    /// Watches the page's pan from the moment it is uncovered: a finger on it means the user moved
+    /// on, and the late restore must not yank the page.
+    func watchUserScrolling(_ scrollView: UIScrollView) {
+        isUncovered = true
+        scrollView.panGestureRecognizer.addTarget(self, action: #selector(userPanned))
+        watchedPan = scrollView.panGestureRecognizer
+    }
+
+    func stopWatching() {
+        watchedPan?.removeTarget(self, action: #selector(userPanned))
+        watchedPan = nil
+    }
+
+    @objc private func userPanned() {
+        userScrolled = true
+    }
 
     init(target: ContentMode, restore: [String: Any], cover: UIView?, interval: OSSignpostIntervalState, generation: Int) {
         self.target = target
@@ -105,6 +124,7 @@ final class ContentModeSwitch {
         self.cover = cover
         self.interval = interval
         self.generation = generation
+        super.init()
     }
 }
 
@@ -281,7 +301,7 @@ extension WebViewPool {
             try? await Task.sleep(for: FixedChoices.contentModeCoverLimit)
             guard !Task.isCancelled, let self, let slot, slot.contentMode.running === change else { return }
             // A slow network: the picture goes, the switch waits for its page to finish.
-            change.offsetWhenUncovered = slot.webView.scrollView.contentOffset
+            change.watchUserScrolling(slot.webView.scrollView)
             removeCover(of: change, animated: slot.container != nil)
         }
         // The navigation delegate gives the reload the mode the pane wants now.
@@ -301,8 +321,7 @@ extension WebViewPool {
         change.deadline?.cancel()
         let webView = slot.webView
         // Past the limit the page is already uncovered: put it back only if nobody has scrolled.
-        let untouched = change.offsetWhenUncovered.map { $0 == webView.scrollView.contentOffset } ?? true
-        if restoring, untouched, slot.container != nil {
+        if restoring, !change.userScrolled, slot.container != nil {
             let scrollView = webView.scrollView
             if scrollView.zoomScale != scrollView.minimumZoomScale {
                 scrollView.setZoomScale(scrollView.minimumZoomScale, animated: false)
@@ -317,6 +336,7 @@ extension WebViewPool {
         }
         guard slot.contentMode.running === change else { return }
         slot.contentMode.running = nil
+        change.stopWatching()
         removeCover(of: change, animated: slot.container != nil)
         Signposts.signposter.endInterval(Signposts.contentModeSwitch, change.interval, "\(outcome)")
         // A fold or another pane change came while it ran: the page may want the other mode again.
@@ -330,6 +350,7 @@ extension WebViewPool {
         guard let change = slot.contentMode.running else { return }
         change.deadline?.cancel()
         slot.contentMode.running = nil
+        change.stopWatching()
         removeCover(of: change, animated: false)
         Signposts.signposter.endInterval(Signposts.contentModeSwitch, change.interval, "cancelled")
     }
@@ -358,7 +379,9 @@ extension WebViewPool {
 
     /// The page committed: it is in the mode its navigation was given.
     func contentModeDidCommit(_ slot: Slot) {
-        slot.contentMode.subframeTyped = false
+        // A new document starts with nothing typed. Back or forward may show a cached one that
+        // was typed in: it says so again (`pageshow`), and until then the flag errs on keeping.
+        if !slot.contentMode.pendingIsBackForward { slot.contentMode.subframeTyped = false }
         guard let tab = slot.tab, let mode = slot.contentMode.pending else { return }
         slot.contentMode.pending = nil
         tab.set(\.contentMode, mode)

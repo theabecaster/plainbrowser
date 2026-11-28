@@ -61,9 +61,13 @@ enum UserScripts {
           // The first time someone types in this document or frame (a field, an editable area, a
           // shadow root, any origin), once: a fold never reloads typed text away
           // (`WebViewPool+ContentMode`). `input` comes only from the user and editing commands.
-          addEventListener('input', () => {
+          // A page back from the back-forward cache keeps what was typed: it says so again.
+          let typed = false;
+          const tell = () => {
             try { webkit.messageHandlers.\(subframePressHandlerName).postMessage('typed'); } catch (e) {}
-          }, { passive: true, capture: true, once: true });
+          };
+          addEventListener('input', () => { if (!typed) { typed = true; tell(); } }, { passive: true, capture: true });
+          addEventListener('pageshow', (e) => { if (e.persisted && typed) tell(); });
           if (window === window.top) return;
           let last = 0;
           addEventListener('pointerdown', () => {

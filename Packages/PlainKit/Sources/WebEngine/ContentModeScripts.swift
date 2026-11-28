@@ -54,6 +54,10 @@ nonisolated enum ContentModeScripts {
         const editingIn = (doc) => {
           const el = doc.activeElement;
           if (!el) return false;
+          // Focus inside a web component: follow it into an open shadow root; a closed one can't
+          // be read, so a focused custom element counts as editing.
+          if (el.shadowRoot && el.shadowRoot.activeElement) return editingIn(el.shadowRoot);
+          if (el.tagName.includes('-') && !el.shadowRoot) return true;
           if (el.isContentEditable) return true;
           if (el.tagName === 'TEXTAREA') return true;
           if (el.tagName === 'INPUT') {

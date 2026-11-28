@@ -556,6 +556,17 @@ public enum FixedChoices {
     /// narrowest about 14 characters of a title show, and past it the strip scrolls; the widest
     /// keeps two tabs from stretching across the whole screen.
     public static let tabStripItemWidth: (minimum: Double, maximum: Double) = (140, 280)
+    /// A tab's width while the strip is narrower than its lane: the strip is as wide as its tabs
+    /// (owner, on the Duo: "The whole bar should grow with the number of tabs it has"), so two
+    /// tabs make a compact bar and each new tab widens it, to the full lane at five on the inner
+    /// screen's landscape. About 18 characters of a title; past the lane the tabs narrow to the
+    /// minimum above, then scroll.
+    public static let tabStripRestingItemWidth: Double = 180
+    /// Between the status items' bottom and the strip under them (owner, on the Duo: "The tabs
+    /// bar should be below the status indicators; right now it's slightly under them"). The
+    /// items' backing reaches about 6 pt below the region the system reports for them, so the
+    /// 4 pt used between the row and the strip let the strip's edge slide under it.
+    public static let tabStripStatusGap: Double = 10
     /// The top bar on a wide screen (the Duo's inner screen, iPad-size windows): one row of 44 pt
     /// controls under the status bar, as Safari puts it there. The page gets the full width and
     /// height under it, and the bar shrinks to the address while reading.

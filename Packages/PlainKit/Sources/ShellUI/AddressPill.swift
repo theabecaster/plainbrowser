@@ -47,6 +47,9 @@ final class AddressPill: UIView {
     var isCompact = false
     private var url: URL?
     private var notSecure = false
+    /// What the resting pill says, and its short form for a pill too narrow for it.
+    private var restingText: NSAttributedString?
+    private var compactText: NSAttributedString?
     /// The glass has the private tint (`setPrivate`).
     var isPrivateTint = false
     /// The neighbour tab's host, sliding in during a bar swipe.
@@ -163,6 +166,17 @@ final class AddressPill: UIView {
         rimMask.frame = bounds
         rimMask.path = UIBezierPath(roundedRect: shape, cornerRadius: shape.height / 2).cgPath
         scrim.shapes = [bounds]
+        fitHostText()
+    }
+
+    /// A narrow pill (the inner screen's portrait with the side pane open) has no room for
+    /// "Not Secure — host": cut at the head it read "…ure — localhost". There the warning
+    /// becomes its symbol and the host stays whole.
+    private func fitHostText() {
+        guard notSecure, let full = restingText, let compact = compactText, hostLabel.bounds.width > 0 else { return }
+        let fits = ceil(full.size().width) <= hostLabel.bounds.width
+        let wanted = fits ? full : compact
+        if hostLabel.attributedText != wanted { hostLabel.attributedText = wanted }
     }
 
     private func resolveColors() {
@@ -175,10 +189,14 @@ final class AddressPill: UIView {
     func display(url: URL?, notSecure: Bool = false) {
         self.url = url
         self.notSecure = notSecure
-        hostLabel.attributedText = Self.hostText(
+        let text = Self.hostText(
             for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: textField.placeholder ?? ""
         )
-        accessibilityValue = url?.absoluteString ?? hostLabel.text
+        restingText = text
+        compactText = notSecure ? Self.compactNotSecureText(for: url, font: hostLabel.font) : nil
+        hostLabel.attributedText = text
+        fitHostText()
+        accessibilityValue = url?.absoluteString ?? text.string
     }
 
     /// The query a page searches for when it is the search engine's results page (the shell
@@ -204,6 +222,19 @@ final class AddressPill: UIView {
             return NSAttributedString(string: url.absoluteString, attributes: [.foregroundColor: Palette.textPrimary])
         }
         return NSAttributedString(string: placeholder, attributes: [.foregroundColor: Palette.textSecondary])
+    }
+
+    /// "Not Secure — host" for a pill too narrow for the words: the warning's symbol, then the host.
+    private static func compactNotSecureText(for url: URL?, font: UIFont) -> NSAttributedString? {
+        guard let host = url?.host(), !host.isEmpty else { return nil }
+        let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        let symbol = UIImage(
+            systemName: "exclamationmark.triangle", withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)
+        )?.withTintColor(Palette.textSecondary, renderingMode: .alwaysOriginal)
+        let text = NSMutableAttributedString()
+        if let symbol { text.append(NSAttributedString(attachment: NSTextAttachment(image: symbol))) }
+        text.append(NSAttributedString(string: " " + name, attributes: [.foregroundColor: Palette.textPrimary]))
+        return text
     }
 
     /// The glass tint: Paper, or the quiet private tint while a private tab is on screen.

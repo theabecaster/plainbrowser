@@ -453,7 +453,7 @@ extension BrowserViewController {
             self.updateDuoLayout()
             guard let layout = self.duo.layout else { return }
             if let strip = self.duo.strip?.view, strip !== stripBefore {
-                strip.frame = self.makeTopGeometry(stripHeight: layout.stripHeight).stripFrame(lane: layout.stripLane)
+                strip.frame = self.stripRestFrame(layout)
                 strip.layoutIfNeeded()
                 if moves {
                     strip.alpha = 0

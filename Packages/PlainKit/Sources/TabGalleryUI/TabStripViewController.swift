@@ -42,6 +42,22 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     private static let privateSection = 1
     /// The gap between two tabs' plates: clear glass, so each plate reads as one tab.
     static let tabGap: CGFloat = Spacing.xs + Spacing.xxs
+    private static let sectionInset = UIEdgeInsets(top: 0, left: Spacing.xxs, bottom: 0, right: Spacing.xs)
+
+    /// The strip's width with its tabs at their resting width
+    /// (`FixedChoices.tabStripRestingItemWidth`) and New Tab at the end: the host makes the strip
+    /// this wide, up to its lane, so the bar grows with its tabs.
+    public var preferredWidth: CGFloat {
+        let sections = CGFloat(hasPrivateTabs ? 2 : 1)
+        let inset = Self.sectionInset.left + Self.sectionInset.right
+        return sections * inset + CGFloat(max(1, items.count)) * (CGFloat(FixedChoices.tabStripRestingItemWidth) + Self.tabGap)
+            + Metrics.tapTarget
+    }
+
+    /// The number of tabs changed, so `preferredWidth` did: the host resizes the strip (inside
+    /// its spring) before the tabs' own change is shown.
+    public var onPreferredWidthChange: (() -> Void)?
+    private var hasPrivateTabs = false
 
     public init(dataSource: any SideTabsDataSource) {
         self.dataSource = dataSource
@@ -74,7 +90,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         layout.scrollDirection = .horizontal
         layout.minimumLineSpacing = Self.tabGap
         layout.minimumInteritemSpacing = Self.tabGap
-        layout.sectionInset = UIEdgeInsets(top: 0, left: Spacing.xxs, bottom: 0, right: Spacing.xs)
+        layout.sectionInset = Self.sectionInset
         layout.itemSize = CGSize(width: CGFloat(FixedChoices.tabStripItemWidth.minimum), height: Self.touchHeight)
         flow = layout
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
@@ -199,7 +215,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     /// The tabs share the strip's width, between the narrowest and the widest a tab may be.
     private func updateItemWidth() {
         let count = max(1, items.count)
-        let available = collectionView.bounds.width
+        let sections = CGFloat(hasPrivateTabs ? 2 : 1)
+        let available = collectionView.bounds.width - sections * (Self.sectionInset.left + Self.sectionInset.right)
         guard available > 0 else { return }
         let share = (available - CGFloat(count) * Self.tabGap) / CGFloat(count)
         let limits = FixedChoices.tabStripItemWidth
@@ -234,7 +251,13 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         items = next
         focusedID = focused
         otherID = other
-        if countChanged { updateItemWidth() }
+        let sectionsChanged = hasPrivateTabs == privateTabs.isEmpty
+        hasPrivateTabs = !privateTabs.isEmpty
+        if countChanged || sectionsChanged {
+            // The bar takes its new width first (the host lays it out), so the tabs keep theirs.
+            onPreferredWidthChange?()
+            updateItemWidth()
+        }
         let animated = old.numberOfItems > 0 && view.window != nil
         // Once the new tabs are laid out: before that the focused tab has no place to scroll to
         // (a restored session arrives after the strip's first layout).

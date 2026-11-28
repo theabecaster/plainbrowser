@@ -2486,3 +2486,26 @@ like separate things; they're just part of the whole bar."
 - **The strip brings the tab on screen into view** when a restored session arrives after its
   first layout (seen on the real inner screen: twenty tabs, the twentieth on screen, the strip
   resting on the first).
+- **The strip is as wide as its tabs** (owner: "The whole bar should grow with the number of tabs
+  it has when there are two or more"). Each tab rests at 180 pt
+  (`FixedChoices.tabStripRestingItemWidth`), so two tabs are a 422 pt bar, and New Tab rides its
+  end; it reaches the lane at five tabs in landscape and four in portrait, then the tabs share
+  the lane down to 140 pt, then scroll (as before). **From the leading edge, not centered under
+  the address:** centered, every tab would move each time one opens or closes; from the edge a
+  tab keeps its place and only the bar's end moves, as Safari's and Chrome's tab bars do. The
+  bar's width changes in one spring (the sidebar's, 0.35 s, no bounce): one layout pass, the
+  frame interpolated by the system. A stretch by transform was not used: it would bend the
+  capsule's ends and the tabs with it.
+- **The strip starts 10 pt under the status items** (`FixedChoices.tabStripStatusGap`; owner:
+  "The tabs bar should be below the status indicators; right now it's slightly under them").
+  The items end at 69 pt, and their backing reaches about 6 pt further, so at 74 the strip's
+  top edge slid under it. Now 80 pt in both orientations (`TopChromeGeometry.stripTop`: 10 pt
+  under the row the items sit on); the page's first line moves from 112 to 118. A corner that already runs down to the safe area's
+  top keeps the row's 4 pt. Leaving with the bar, the strip keeps 4 pt from the items.
+  `DuoInnerStatusRowTests.theStripStartsBelowTheStatusItemsWithAGap` holds the device's numbers.
+- **Clarity audit, inner screen:** the top bar's trailing capsule holds only the buttons that
+  show, packed toward More (the start screen showed 132 pt of glass around More alone); More
+  never moves, as Back never does in the leading capsule. A pill too narrow for "Not Secure —
+  host" (portrait with the side pane open read "…ure — localhost") shows the warning as its
+  symbol and the host whole. A tab in the rail shows its site's icon; a site without one (a
+  local test page) keeps its letter on the same tile.

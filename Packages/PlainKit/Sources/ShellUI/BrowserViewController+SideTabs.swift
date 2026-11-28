@@ -114,6 +114,7 @@ extension BrowserViewController {
         ])
         duo.top.stripEnds = ends
         strip.didMove(toParent: self)
+        strip.onPreferredWidthChange = { [weak self] in self?.stripWidthDidChange() }
         duo.strip = strip
         duo.top.stripTop = top
         placeStrip(layout)
@@ -121,12 +122,30 @@ extension BrowserViewController {
         if let geometry = duo.topGeometry { applyTopBarCollapse(collapseProgress, geometry: geometry) }
     }
 
-    /// The strip's ends: `TopChromeGeometry.edgeMargin` inside its lane, from the root view's edges.
+    /// The strip's ends, from the root view's edges: from its lane's leading margin, as wide as
+    /// its tabs, at most the lane (`TopChromeGeometry.stripFrame(lane:contentWidth:)`).
     func placeStrip(_ layout: DuoLayout) {
         guard duo.top.stripEnds.count == 2 else { return }
-        let margin = TopChromeGeometry.edgeMargin
-        duo.top.stripEnds[0].constant = layout.stripLane.lowerBound + margin
-        duo.top.stripEnds[1].constant = layout.stripLane.upperBound - view.bounds.width - margin
+        let frame = stripRestFrame(layout)
+        duo.top.stripEnds[0].constant = frame.minX
+        duo.top.stripEnds[1].constant = frame.maxX - view.bounds.width
+    }
+
+    /// Where the strip rests in `layout`.
+    func stripRestFrame(_ layout: DuoLayout) -> CGRect {
+        makeTopGeometry(stripHeight: layout.stripHeight)
+            .stripFrame(lane: layout.stripLane, contentWidth: duo.strip?.preferredWidth)
+    }
+
+    /// A tab opened or closed in the strip: the bar grows or shrinks to its tabs in one spring
+    /// (one layout pass, its frame animated by the system), its leading end in place.
+    private func stripWidthDidChange() {
+        guard let layout = duo.layout, let strip = duo.strip, strip.view.window != nil else { return }
+        let before = duo.top.stripEnds.last?.constant
+        placeStrip(layout)
+        guard duo.top.stripEnds.last?.constant != before else { return }
+        view.setNeedsLayout()
+        Motion.animate(Motion.sidebarSettle(flicked: false)) { self.view.layoutIfNeeded() }
     }
 
     /// The topmost of the page area's views (panes, strip, sidebar): the gallery goes above it.

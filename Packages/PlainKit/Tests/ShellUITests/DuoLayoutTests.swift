@@ -391,12 +391,12 @@ struct TopChromeGeometryTests {
         #expect(bar.expandedInset <= 84)
         // The strip starts under the status items (69), not beside them.
         let strip = Self.device(strip: Self.strip)
-        #expect(strip.stripTop == 73)
-        #expect(strip.expandedInset == 73 + Self.strip + 4)
+        #expect(strip.stripTop == 79, "10 pt under the items")
+        #expect(strip.expandedInset == 79 + Self.strip + 4)
         #expect(bar.obscuredInset < bar.expandedInset, "WebKit wants the largest viewport inset strictly larger")
-        // 10.8% of the screen at rest (Safari 12.6%), 16.5% with the strip.
+        // 10.8% of the screen at rest (Safari 12.6%), 17.5% with the strip.
         #expect(bar.chromeShare(of: Self.landscape, collapsed: false) < 0.11)
-        #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.17)
+        #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.18)
         #expect(bar.chromeShare(of: Self.landscape, collapsed: true) < 0.11)
     }
 
@@ -442,12 +442,12 @@ struct TopChromeGeometryTests {
             let progress = CGFloat(step) / 10
             #expect(bar.stripTop + bar.stripTranslation(progress: progress) >= Self.deviceCluster.maxY)
         }
-        // A guide corner down to the safe area (0–81): the strip starts under it (85) and rises
-        // only to its bottom too.
+        // A guide corner down to the safe area (0–81): the strip starts under it (85), keeps the
+        // row's gap from it and so does not rise.
         let corner = CGRect(x: 816, y: 0, width: 135, height: 81)
         let beside = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: Self.strip)
         #expect(beside.stripTop == 85)
-        #expect(beside.stripTranslation(progress: 1) == -TopChromeGeometry.gap)
+        #expect(beside.stripTranslation(progress: 1) == 0)
         // Under a full-width status bar nothing is in the way.
         #expect(Self.simulator(strip: Self.strip).stripTranslation(progress: 1) == -48)
     }
@@ -635,14 +635,14 @@ struct DuoInnerStatusRowTests {
         #expect(abs(row.trailingCapsule.midY - Self.landscape.items.midY) <= 0.5)
         // The address takes its full 560 pt (121–681), its end 6 pt before the capsule.
         #expect(row.pill.width == 560 && row.pill.minX == 121)
-        // The strip 12–939 at 74, under the items; the page's first line at 112.
-        #expect(bar.stripTop == 74)
-        #expect(bar.expandedInset == 112)
+        // The strip from 12 at 80, 10 pt under the items' row; the page's first line at 118.
+        #expect(bar.stripTop == 80)
+        #expect(bar.expandedInset == 118)
         // Margins that hug the items: the capsule at 823 (8 pt), the row on the items' row.
         let hugging = try Self.geometry(Self.landscape.with(hugging: true))
         let tight = hugging.rowFrames(lane: 0...951, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
         #expect(tight.trailingCapsule.maxX == 823)
-        #expect(hugging.rowTop == 26 && hugging.stripTop == 74 && hugging.expandedInset == 112)
+        #expect(hugging.rowTop == 26 && hugging.stripTop == 80 && hugging.expandedInset == 118)
     }
 
     @Test func portraitNumbers() throws {
@@ -652,6 +652,34 @@ struct DuoInnerStatusRowTests {
         #expect(row.trailingCapsule.maxX == 537)
         #expect(row.pill.minX == 106 && row.pill.maxX == 399)
         #expect(bar.stripFrame(lane: 0...669).maxX == 657)
+    }
+
+    /// Owner, on the device: "The tabs bar should be below the status indicators; right now
+    /// it's slightly under them."
+    @Test(arguments: screens) func theStripStartsBelowTheStatusItemsWithAGap(_ screen: Screen) throws {
+        let bar = try Self.geometry(screen)
+        let gap = CGFloat(FixedChoices.tabStripStatusGap)
+        #expect(bar.stripTop >= screen.items.maxY + gap, "the clock, the indicators and the battery ring end at 69")
+        #expect(bar.stripTop >= bar.rowBottom + TopChromeGeometry.gap, "and under the row")
+        #expect(bar.stripTop + Self.strip <= screen.safeTop + Self.strip, "no lower than a strip under the whole status zone")
+        // Leaving with the bar, it keeps the row's gap from them.
+        for step in 0...20 {
+            let top = bar.stripTop + bar.stripTranslation(progress: CGFloat(step) / 10)
+            #expect(top >= screen.items.maxY + TopChromeGeometry.gap)
+        }
+    }
+
+    @Test(arguments: screens) func theStripIsAsWideAsItsTabsUpToItsLane(_ screen: Screen) throws {
+        let bar = try Self.geometry(screen)
+        let lane = 0...screen.size.width
+        let margin = TopChromeGeometry.edgeMargin
+        let two = bar.stripFrame(lane: lane, contentWidth: 422)
+        #expect(two.minX == margin && two.width == 422, "two tabs: a compact bar from the leading margin")
+        let three = bar.stripFrame(lane: lane, contentWidth: 608)
+        #expect(three.minX == two.minX && three.width > two.width, "it grows at its end; the tabs keep their place")
+        let many = bar.stripFrame(lane: lane, contentWidth: 4000)
+        #expect(many == bar.stripFrame(lane: lane), "at most the lane")
+        #expect(many.maxX == screen.size.width - margin)
     }
 
     @Test func aCameraStillGivesTheCornerWhereNoStatusRegionIs() throws {
@@ -665,7 +693,7 @@ struct DuoInnerStatusRowTests {
         #expect(found.source == .camera)
         let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: found.rect, stripHeight: Self.strip)
         #expect(abs(951 - bar.rowClearance.trailing - 819.67) < 0.01, "12 pt before the time at 831.7")
-        #expect(abs(bar.stripTop - 73.83) < 0.01)
+        #expect(abs(bar.stripTop - 79.83) < 0.01)
         // With the status region too, the region wins.
         let both = try #require(StatusCorner.read(
             width: 951, safeTop: 82, safeLeft: 0, safeRight: 0, adaptedTop: 82, adaptedLeft: 0, adaptedRight: 0,

@@ -49,9 +49,13 @@ final class GestureCaptureTests: XCTestCase {
         go(app, "/a", heading: "Page A")
         app.webViews.links["Go to B"].tap()
         XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 10))
-        pause(0.5)
-        app.buttons["back"].firstMatch.press(forDuration: 1.0)
-        XCTAssertTrue(app.buttons["history.-1"].waitForExistence(timeout: 3))
+        // Back gets its list once the link's page has committed.
+        let back = app.buttons["back"].firstMatch
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in back.exists && back.isEnabled }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [enabled], timeout: 6), .completed)
+        pause(1)
+        back.press(forDuration: 1.2)
+        XCTAssertTrue(app.buttons["history.-1"].waitForExistence(timeout: 4))
         pause(0.6)
         shot("gestures-history")
         app.buttons["history.-1"].tap()

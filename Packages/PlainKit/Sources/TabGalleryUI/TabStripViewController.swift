@@ -223,11 +223,11 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         targetContentOffset.pointee.x = snapped(targetContentOffset.pointee.x, step: step)
     }
 
-    /// One tab and the gap after it, where the strip scrolls and holds one section; nil otherwise
-    /// (it fits, or the private section breaks the even steps). Left to right only: in right to
+    /// One tab and the gap after it, where the strip scrolls; nil otherwise (it fits). The strip
+    /// holds one mode's tabs, one section, so the steps are always even. Left to right only: in right to
     /// left the leading edge is the physical right, which these offsets don't measure from.
     private var snapStep: CGFloat? {
-        guard !hasPrivateTabs, view.effectiveUserInterfaceLayoutDirection == .leftToRight,
+        guard view.effectiveUserInterfaceLayoutDirection == .leftToRight,
               collectionView.contentSize.width > collectionView.bounds.width + 1 else { return nil }
         let step = flow.itemSize.width + Self.tabGap
         return step > 0 ? step : nil
@@ -332,8 +332,9 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         let animated = old.numberOfItems > 0 && view.window != nil && !modeChanged
         // Once the new tabs are laid out: before that the focused tab has no place to scroll to
         // (a restored session arrives after the strip's first layout).
-        let apply = { [weak self] in
-            self?.diffable.apply(snapshot, animatingDifferences: animated) {
+        let apply: () -> Void = { [weak self] in
+            guard let self else { return }
+            diffable.apply(snapshot, animatingDifferences: animated) { [weak self] in
                 guard let self, focusMoved || countChanged || modeChanged else { return }
                 scrollFocusedIntoViewIfNeeded(animated: animated)
             }

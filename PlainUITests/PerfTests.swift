@@ -499,6 +499,26 @@ final class PerfTests: XCTestCase {
         }
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
         Thread.sleep(forTimeInterval: 0.5)
+        // One summary first, unmeasured: the item can show while the model still can't write
+        // (a simulator borrows the Mac's model, which may be downloading, busy or refuse), and
+        // a run that never gets words is not a perf regression. It also loads the model, so
+        // every measured run starts from the same warm state.
+        more.tap()
+        let probe = app.buttons["menu.summarize"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        probe.tap()
+        let text = app.otherElements["summaryText"].firstMatch
+        let failure = app.descendants(matching: .any)["summaryFailure"].firstMatch
+        var gotWords = false
+        let deadline = Date().addingTimeInterval(60)
+        while Date() < deadline {
+            if text.exists { gotWords = true; break }
+            if failure.exists { break }
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "summary answers")], timeout: 0.5)
+        }
+        if app.buttons["Done"].exists { app.buttons["Done"].tap() }
+        Thread.sleep(forTimeInterval: 0.8)
+        guard gotWords else { throw XCTSkip("the on-device model wrote no summary here") }
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.summaryFirstWords)
         )

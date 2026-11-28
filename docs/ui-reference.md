@@ -54,7 +54,9 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
   Layout Above adds a 34 pt strip under the bar from the second tab; Left and Right show a 52 pt
   rail of site icons beside the page instead, in landscape and portrait, which widens to titles
-  (a drag, or Show Titles at its foot). Where the status items keep
+  (a drag, or Show Titles at its foot). With one tab neither shows: the page has the room, and
+  the list comes in from its edge with the second tab. Every tab in a list is its own plate (the
+  one on screen a solid card ringed in Lagoon, the others a veil with a hairline). Where the status items keep
   to a corner (the inner screen) the bar sits on their row, and nothing of Plain's is behind it:
   no band, backing, blur or header-colored fill at the top in any state, only the floating
   glass. At a page's top a site's fixed header rests under the bar and rides up with the page

@@ -88,6 +88,18 @@ public enum Palette {
     /// a layer over them: Deep Lagoon, lighter than the gallery's dim.
     public static let drawerScrim = UIColor(light: UIColor(rgb: 0x0A2133, alpha: 0.22), dark: UIColor(rgb: 0x000000, alpha: 0.4))
 
+    // MARK: Tab plates
+
+    /// The plate under a tab that is not on screen, in the strip and in the sidebar's titled rows:
+    /// a veil of the card's color, so each tab reads as its own thing on the glass over any page
+    /// (owner, on the Duo: "non-selected tabs [...] are just part of the whole bar"). Half the
+    /// card's weight: the tab on screen stays the one solid card.
+    public static let tabPlate = UIColor(light: UIColor(rgb: 0xFFFFFF, alpha: 0.5), dark: UIColor(rgb: 0x16344A, alpha: 0.55))
+    /// A private tab's plate: the dusk tint, as its page.
+    public static let privateTabPlate = UIColor(light: UIColor(rgb: 0xEEEBF6, alpha: 0.85), dark: UIColor(rgb: 0x15122A, alpha: 0.85))
+    /// The hairline around a tab's plate: it keeps the plate's edge over a white page or a dark one.
+    public static let tabPlateEdge = UIColor(light: UIColor(rgb: 0x0A2133, alpha: 0.12), dark: UIColor(rgb: 0xFFF6E6, alpha: 0.14))
+
     // MARK: Site icons
 
     /// The tile under a site icon that is one dark shape on a clear ground (a black logo): white

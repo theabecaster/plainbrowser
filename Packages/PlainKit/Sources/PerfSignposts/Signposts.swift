@@ -460,6 +460,9 @@ public enum Signposts {
     /// Interval: the sidebar moving between Hidden, Rail and Expanded, until it rests. The message
     /// is the state it rests in.
     public static let sidebarState: StaticString = "sidebar.state"
+    /// The tab list (the strip or the sidebar) came in with the second tab, or left with the
+    /// last but one ("shown" or "hidden").
+    public static let tabListPresence: StaticString = "tabList.presence"
 
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {

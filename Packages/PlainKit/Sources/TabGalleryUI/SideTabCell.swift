@@ -55,6 +55,7 @@ final class SideTabCell: UICollectionViewCell {
 
     private enum Mark { case none, focused, otherPane }
     private var markState = Mark.none
+    private var isPrivate = false
     private var visibleWidth = SideTabMetrics.rail
     /// The tab the cell shows: a change of its mark animates only for the same tab.
     private var shownID: UUID?
@@ -115,7 +116,9 @@ final class SideTabCell: UICollectionViewCell {
         tile.show(item, from: icons)
 
         let state: Mark = isFocused ? .focused : (isInOtherPane ? .otherPane : .none)
-        if state != markState {
+        let wasPrivate = isPrivate
+        isPrivate = item.isPrivate
+        if state != markState || wasPrivate != isPrivate || !sameTab {
             let changes = {
                 self.markState = state
                 self.applyMark()
@@ -143,7 +146,11 @@ final class SideTabCell: UICollectionViewCell {
     private func applyMark() {
         switch markState {
         case .none:
-            mark.alpha = 0
+            // A tab not on screen: in the rail its tile is its shape; with titles, the row gets
+            // a plate of its own (`setVisibleWidth` fades it in with the title).
+            mark.backgroundColor = isPrivate ? Palette.privateTabPlate : Palette.tabPlate
+            mark.layer.borderWidth = 0.5
+            mark.alpha = SideTabMetrics.titleAlpha(visibleWidth: visibleWidth)
         case .focused:
             // The tab on screen: Lagoon, tinted with the pane ring's color around it.
             mark.backgroundColor = Palette.pressed
@@ -158,7 +165,11 @@ final class SideTabCell: UICollectionViewCell {
     }
 
     private func resolveBorder() {
-        let color = markState == .otherPane ? UIColor.separator : Palette.accentOnGlass
+        let color: UIColor = switch markState {
+        case .focused: Palette.accentOnGlass
+        case .otherPane: .separator
+        case .none: Palette.tabPlateEdge
+        }
         mark.layer.borderColor = color.resolvedColor(with: traitCollection).cgColor
     }
 
@@ -168,6 +179,7 @@ final class SideTabCell: UICollectionViewCell {
         visibleWidth = width
         mark.frame = SideTabMetrics.markFrame(rowHeight: contentView.bounds.height, visibleWidth: width)
         let alpha = SideTabMetrics.titleAlpha(visibleWidth: width)
+        if markState == .none { mark.alpha = alpha }
         titleLabel.alpha = alpha
         closeButton.alpha = alpha
         // Behind the clip in the rail: no taps there.

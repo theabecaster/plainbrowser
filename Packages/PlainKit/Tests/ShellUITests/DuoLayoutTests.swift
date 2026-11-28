@@ -124,6 +124,23 @@ struct DuoLayoutTests {
         #expect(two.stripHeight == CGFloat(FixedChoices.tabStripHeight))
     }
 
+    @Test func theSidebarShowsFromTheSecondTab() {
+        for side in [TabLayout.left, .right] {
+            for area in [Self.innerLandscape, Self.innerPortrait] {
+                let one = inner(layout: side, sidebar: .expanded, tabs: 1, area: area)
+                #expect(one.tabLayout == side, "the layout in effect is still the setting")
+                #expect(!one.showsSidebar && !one.showsStrip, "one tab has nothing to switch to")
+                #expect(one.sidebar == .hidden && one.sidebarDockWidth == 0)
+                #expect(!one.sidebarFloats && !one.expandedSidebarCoversChrome)
+                #expect(one.paneFrames == [area], "the page has the whole width")
+                #expect(one.chromeLane == area.minX...area.maxX)
+                let two = inner(layout: side, sidebar: .rail, tabs: 2, area: area)
+                #expect(two.showsSidebar)
+                #expect(two.paneFrames[0].width == area.width - SidebarState.rail.width)
+            }
+        }
+    }
+
     @Test func compactHeightIsNeverWideEnough() {
         // A Pro Max in landscape: regular width, compact height.
         let phone = DuoLayout(DuoLayoutInput(

@@ -322,6 +322,21 @@ extension BrowserViewController {
             try? await Task.sleep(for: .seconds(delay))
             func pause() async { try? await Task.sleep(for: .seconds(1.6)) }
             guard let self else { return }
+            // With one tab: the list comes in with the second and leaves with it, twice.
+            if session.tabs.otherTabCount(besides: nil) == 1 {
+                for _ in 0..<2 {
+                    let added = session.tabs.newTab()
+                    show(added)
+                    added.load(URL(string: "https://example.org")!)
+                    tabsDidChange()
+                    await pause()
+                    await pause()
+                    galleryCloseTab(added.id)
+                    tabsDidChange()
+                    await pause()
+                }
+                return
+            }
             if duo.layout?.showsSidebar == true {
                 setSidebar(.expanded, flicked: false)
                 await pause()

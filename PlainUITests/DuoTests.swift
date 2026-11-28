@@ -200,10 +200,12 @@ final class DuoTests: XCTestCase {
         go(app, to: "/a", heading: "Page A")
         tabsMenu(app, pick: "New Tab")
         go(app, to: "/b", heading: "Page B")
+        tabsMenu(app, pick: "New Tab")
+        go(app, to: "/a", heading: "Page A")
         let sidebar = app.otherElements["sideTabs"]
         XCTAssertTrue(sidebar.waitForExistence(timeout: 5), "Left: the sidebar shows")
         let rows = sidebar.descendants(matching: .any).matching(identifier: "sideTab")
-        wait("two tabs in the rail") { rows.count == 2 }
+        wait("three tabs in the rail") { rows.count == 3 }
         XCTAssertLessThan(sidebar.frame.width, 60, "it rests as a rail")
         let page = app.webViews.firstMatch
 
@@ -215,9 +217,9 @@ final class DuoTests: XCTestCase {
         wait("the page docks beside the wide sidebar in landscape") { page.frame.minX >= sidebar.frame.maxX - 1 }
         // A row's close button closes its tab.
         let close = sidebar.buttons.matching(identifier: "sideTab.close")
-        XCTAssertEqual(close.count, 2)
+        XCTAssertEqual(close.count, 3)
         close.element(boundBy: 0).tap()
-        wait("one tab left") { rows.count == 1 }
+        wait("two tabs left") { rows.count == 2 }
         titles.tap()
         wait("back to the rail") { sidebar.frame.width < 60 }
 
@@ -237,6 +239,27 @@ final class DuoTests: XCTestCase {
         // A touch on the page closes the drawer.
         page.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.6)).tap()
         wait("the drawer closed") { sidebar.frame.width < 60 }
+    }
+
+    /// One tab has nothing to switch to: no sidebar and no strip until the second tab, and the
+    /// page has the whole width. The list leaves again with the last but one.
+    func testTabListShowsFromTheSecondTab() throws {
+        let app = try launch(["-PlainInMemoryStore", "-PlainTabLayout", "left"])
+        try requireInnerLandscape(app)
+        go(app, to: "/a", heading: "Page A")
+        let sidebar = app.otherElements["sideTabs"]
+        let window = app.windows.firstMatch
+        let page = app.webViews.firstMatch
+        XCTAssertFalse(sidebar.exists, "one tab: no sidebar")
+        XCTAssertFalse(app.otherElements["tabStrip"].exists, "one tab: no strip")
+        XCTAssertEqual(page.frame.width, window.frame.width, accuracy: 1, "the page has the whole width")
+        tabsMenu(app, pick: "New Tab")
+        go(app, to: "/b", heading: "Page B")
+        XCTAssertTrue(sidebar.waitForExistence(timeout: 5), "the second tab brings the sidebar in")
+        wait("the page sits beside the rail") { abs(app.webViews.firstMatch.frame.minX - sidebar.frame.maxX) < 2 }
+        tabsMenu(app, pick: "Close Tab")
+        wait("back to one tab: the sidebar left") { !sidebar.exists }
+        wait("the page has the whole width again") { abs(app.webViews.firstMatch.frame.width - window.frame.width) < 1 }
     }
 
     func testSidebarAndStripListTheTabsAndSwitchThem() throws {

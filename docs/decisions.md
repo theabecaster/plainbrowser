@@ -2448,3 +2448,41 @@ show theirs too, on their disc, once the site has been visited.
   user script on every page (work on every page for something needed once per site).
 - **Not built here:** icons in the widgets (they read a shared file the app writes; polish
   backlog). A favorite never visited since this build keeps its letter until it is.
+
+
+## Duo inner screen: one tab shows no tab list; every tab is its own plate (2026-11-27)
+
+Owner, on the public beta: "if I have one tab, the whole bar shows, and this looks weird [...]
+Arc doesn't do this at all, so we can't copy it." And: "Non-selected tabs on the Duo don't look
+like separate things; they're just part of the whole bar."
+
+- **Looked at:** Safari (iPadOS and macOS, and 27.3's vertical tabs) hides its tab bar with one
+  tab unless told to always show it; Chrome on iPad always shows its strip, one tab stretched
+  across a bar that says nothing; Orion follows Safari; Arc's desktop sidebar always shows, but
+  it is also where the address, the spaces and the pinned sites live, so it is never a list of
+  one thing.
+- **Chosen: the list earns its place from the second tab,** for the strip (already so) and now
+  the sidebar too (`DuoLayout.showsSidebar`). Plain's top bar holds the address and the
+  buttons, so with one tab the sidebar would be a column for one tile and a plus. The page gets
+  the whole width; the Tabs button opens the switcher, as it does for one tab everywhere; New Tab
+  is in the tabs menu, in More, and typing in the address opens one.
+- **Not chosen: keeping a compact New Tab affordance in the rail's place.** A 52 pt column for
+  one button costs the page as much as the rail and reads as a list that failed to load.
+- **The motion makes it read as meant.** The second tab brings the list in from its edge
+  (`animateTabListPresence`): the strip drops from under the bar, the sidebar slides from the
+  side, in the sidebar's own spring (0.35 s, no bounce), and the page takes its new frame once,
+  inside it. The list is built at its resting frame and only its transform and opacity move;
+  leaving, a picture of it goes back the same way while the layout is already the one-tab
+  layout. Reduce Motion: a 0.2 s crossfade. Signpost: `tabList.presence`.
+- **The sidebar's state is kept:** Rail or Expanded (and Hidden by the Tabs button) come back as
+  they were with the second tab.
+- **Plates:** each tab in the strip is a 30 pt plate, 6 pt of glass between two: not on screen,
+  a veil of the card's color with a hairline (`Palette.tabPlate`, `tabPlateEdge`; a private tab
+  on `privateTabPlate`) and a secondary title; on screen, the solid card with the Lagoon ring
+  and a semibold title. Safari's iPad tab bar and Chrome's tab shapes do the same job; the
+  veil keeps Plain's glass showing through, and the hairline keeps the edge over a white page
+  or a black one. The sidebar's titled rows get the same plate, faded in with the titles; in the
+  rail the tile is the shape, and a second box around it would be noise.
+- **The strip brings the tab on screen into view** when a restored session arrives after its
+  first layout (seen on the real inner screen: twenty tabs, the twentieth on screen, the strip
+  resting on the first).

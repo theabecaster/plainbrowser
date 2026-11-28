@@ -20,7 +20,8 @@ struct DuoLayoutInput: Equatable {
     var requestedSidebar: SidebarState
     /// Panes in the window (TabStore): one, or two for a split.
     var paneCount: Int
-    /// Page tabs in the window (regular and private): the strip shows only for two or more.
+    /// Page tabs in the window (regular and private): the strip and the sidebar show only for
+    /// two or more.
     var tabCount: Int
     var focusedPane: Int
     /// The fold's region (`reservedRegions(kind: .division, options: .includeInactive)`): its
@@ -80,7 +81,7 @@ struct DuoLayout: Equatable {
     /// page too narrow (`FixedChoices.sidebarRailMinimumPageWidth`); nil where Tab Layout does not
     /// apply. The Duo's inner screen keeps Left and Right in both orientations.
     var tabLayout: TabLayout?
-    /// The sidebar is on screen (Left or Right in effect).
+    /// The sidebar is on screen (Left or Right in effect, two or more tabs).
     var showsSidebar: Bool
     /// The sidebar is on the trailing side (Right).
     var sidebarOnRight: Bool
@@ -154,10 +155,13 @@ struct DuoLayout: Equatable {
             tabLayout = input.tabLayout
         }
         chromeOnTop = tabLayoutAvailable
-        showsSidebar = tabLayout?.isSidebar ?? false
+        // One tab has nothing to switch to: the tab list (the strip, the sidebar) earns its place
+        // from the second, and the page has the room until then. New Tab stays in the top bar
+        // (the Tabs button's menu, More, and typing in the address).
+        let listsTabs = input.tabCount > 1
+        showsSidebar = (tabLayout?.isSidebar ?? false) && listsTabs
         sidebarOnRight = tabLayout == .right
-        // One tab has nothing to switch to: the strip earns its place from the second.
-        showsStrip = tabLayout == .above && input.tabCount > 1
+        showsStrip = tabLayout == .above && listsTabs
         stripHeight = showsStrip ? CGFloat(FixedChoices.tabStripHeight) : 0
 
         let vertical = input.division.flatMap { Self.verticalFold($0) }

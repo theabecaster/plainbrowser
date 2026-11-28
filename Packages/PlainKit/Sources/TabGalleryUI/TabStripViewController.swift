@@ -40,6 +40,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     static var touchHeight: CGFloat { Metrics.tapTarget }
     static var touchOutset: CGFloat { max(0, (touchHeight - CGFloat(FixedChoices.tabStripHeight)) / 2) }
     private static let privateSection = 1
+    /// The gap between two tabs' plates: clear glass, so each plate reads as one tab.
+    static let tabGap: CGFloat = Spacing.xs + Spacing.xxs
 
     public init(dataSource: any SideTabsDataSource) {
         self.dataSource = dataSource
@@ -70,8 +72,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
 
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
-        layout.minimumLineSpacing = Spacing.xs
-        layout.minimumInteritemSpacing = Spacing.xs
+        layout.minimumLineSpacing = Self.tabGap
+        layout.minimumInteritemSpacing = Self.tabGap
         layout.sectionInset = UIEdgeInsets(top: 0, left: Spacing.xxs, bottom: 0, right: Spacing.xs)
         layout.itemSize = CGSize(width: CGFloat(FixedChoices.tabStripItemWidth.minimum), height: Self.touchHeight)
         flow = layout
@@ -199,7 +201,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         let count = max(1, items.count)
         let available = collectionView.bounds.width
         guard available > 0 else { return }
-        let share = (available - CGFloat(count) * Spacing.xs) / CGFloat(count)
+        let share = (available - CGFloat(count) * Self.tabGap) / CGFloat(count)
         let limits = FixedChoices.tabStripItemWidth
         let width = floor(min(max(share, CGFloat(limits.minimum)), CGFloat(limits.maximum)))
         let size = CGSize(width: width, height: Self.touchHeight)
@@ -233,10 +235,24 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         focusedID = focused
         otherID = other
         if countChanged { updateItemWidth() }
-        diffable.apply(snapshot, animatingDifferences: old.numberOfItems > 0 && view.window != nil)
-        if focusMoved, let focused, let indexPath = diffable.indexPath(for: focused) {
-            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: view.window != nil)
+        let animated = old.numberOfItems > 0 && view.window != nil
+        // Once the new tabs are laid out: before that the focused tab has no place to scroll to
+        // (a restored session arrives after the strip's first layout).
+        diffable.apply(snapshot, animatingDifferences: animated) { [weak self] in
+            guard let self, focusMoved || countChanged else { return }
+            scrollFocusedIntoViewIfNeeded(animated: animated)
         }
+    }
+
+    /// Brings the focused tab into view when any of it is outside the strip.
+    private func scrollFocusedIntoViewIfNeeded(animated: Bool) {
+        guard let focusedID, let indexPath = diffable.indexPath(for: focusedID), collectionView.bounds.width > 0 else {
+            needsFocusScroll = true
+            return
+        }
+        collectionView.layoutIfNeeded()
+        if let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame, collectionView.bounds.contains(frame) { return }
+        collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
     }
 
     private func close(_ id: UUID) {
@@ -324,6 +340,8 @@ final class TabStripCell: UICollectionViewCell {
     private var shownID: UUID?
     private static let tileSize: CGFloat = 22
     private static let iconSize: CGFloat = 16
+    /// The hairline around a tab that is not on screen.
+    private static let hairline: CGFloat = 0.5
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -363,10 +381,12 @@ final class TabStripCell: UICollectionViewCell {
         titleLabel.font = UIFont.preferredFont(forTextStyle: .footnote).withWeight(isFocused ? .semibold : .regular)
         tile.show(item, from: icons)
         let changes = {
-            // On the strip's glass only the focused tab is a lifted card, ringed in Lagoon; the
-            // others are their icon and title (a private tab on its dusk tint).
-            self.highlight.backgroundColor = isFocused ? Palette.surface : (item.isPrivate ? Palette.privateBackground : .clear)
-            self.highlight.layer.borderWidth = isFocused ? 1.5 : (isInOtherPane ? 1 : 0)
+            // Every tab is its own plate on the strip's glass, a gap of glass between two: the
+            // one on screen a solid card ringed in Lagoon, the others a veil with a hairline (a
+            // private tab on its dusk tint).
+            self.highlight.backgroundColor = isFocused
+                ? Palette.surface : (item.isPrivate ? Palette.privateTabPlate : Palette.tabPlate)
+            self.highlight.layer.borderWidth = isFocused ? 1.5 : (isInOtherPane ? 1 : Self.hairline)
             self.closeButton.alpha = isFocused ? 1 : 0
         }
         // The card fades from the tab left to the tab chosen; nothing moves.
@@ -377,6 +397,7 @@ final class TabStripCell: UICollectionViewCell {
         }
         isOnScreen = isFocused
         self.isInOtherPane = isInOtherPane
+        titleLabel.textColor = isFocused ? Palette.textPrimary : Palette.textSecondary
         resolveBorder()
         closeButton.isHidden = !isFocused
         accessibilityLabel = item.displayTitle
@@ -392,7 +413,7 @@ final class TabStripCell: UICollectionViewCell {
     }
 
     private func resolveBorder() {
-        let color = isInOtherPane ? UIColor.separator : Palette.accentOnGlass
+        let color = isOnScreen ? Palette.accentOnGlass : (isInOtherPane ? UIColor.separator : Palette.tabPlateEdge)
         highlight.layer.borderColor = color.resolvedColor(with: traitCollection).cgColor
     }
 

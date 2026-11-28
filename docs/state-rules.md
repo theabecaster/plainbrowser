@@ -234,7 +234,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | New Tab | Hidden when the tab on screen is an empty regular tab | It would reuse the tab already on screen. |
 | New Private Tab | Hidden when the tab on screen is an empty private tab | Same. |
 | Previous Tab / Next Tab | Shown when `list` has 2 or more tabs; each dims at its end | A pair, so it keeps its shape. Subtitles name the swipe. |
-| Show All Tabs | `others ≥ 1`, or a page on screen (with side tabs: `others ≥ 1`, as the sidebar already lists a lone tab) | Same predicate as the swipe up. |
+| Show All Tabs | `others ≥ 1`, or a page on screen (with the sidebar on screen: `others ≥ 1`, which it always is there) | Same predicate as the swipe up. |
 | Reopen Closed Tab | `closed` in the window's profile | The way back after a close, outside the gallery too. Another profile's close never comes back here. |
 | Archived Tabs | `archived` | Today the archive is reachable only from the gallery, so with no open tabs it cannot be reached. |
 | New Window | where a new window can open (both size classes regular and the app may have several scenes: the Duo's inner screen) | The system has no New Window button on iPhone; the outer screen takes no new windows. |
@@ -430,9 +430,9 @@ combines its base state with the rows that modify it (for example, private + loa
 | Downloads none / active / finished | | | | | Downloads hidden / shown "1 in progress" / shown | | | | | | toast on finish |
 | Duo outer (system vertical bar) | dim when none | dim when none | per table, dim instead of hide inside Page | ✓ | ✓ | same | same | same | same | same | same |
 | Duo inner (top bar), single pane | as Duo outer | | | | | off (no swipe up from a top bar; Tabs and the strip are at hand) | pill, sideways | | | | |
-| Tab Layout Above, two or more tabs | | | | | | | | | | | the strip shows under the top bar; one tab: no strip (nothing to switch to) |
+| Tab Layout Above, two or more tabs | | | | | | | | | | | the strip shows under the top bar; one tab: no strip (nothing to switch to). It comes in with the second tab and leaves with the last but one, in one spring |
 | Duo split | per focused pane | | | | | | | | | | Open in Other Pane shown; Close Tab acts on the focused pane |
-| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | the sidebar shows in landscape and portrait; see "The sidebar" below |
+| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | the sidebar shows in landscape and portrait from the second tab; with one tab the row is "Duo inner, single pane" (Tabs opens the switcher); see "The sidebar" below |
 | Book pose | as the pane's state; pills and toasts avoid the fold | | | | | | | | | | |
 | Phone landscape (compact height) | as Page; no side tabs | | | | | | | | | | |
 
@@ -453,7 +453,8 @@ strip and keeps the setting.
 
 | Control | Shows when | Why |
 |---|---|---|
-| The rail (site icons) | Left or Right in effect, unless the Tabs button hid it | The tab list. One tab still shows: its tile says where you are, and New Tab is above it. |
+| The rail (site icons) | Left or Right in effect and two or more tabs, unless the Tabs button hid it | The tab list. One tab has nothing to switch to, so the page has the whole width (owner, 2026-11-27: "if I have one tab, the whole bar shows, and this looks weird"); the same rule as the strip. It comes in from its edge with the second tab and leaves with the last but one. New Tab is then in the tabs menu, in More and in the address itself; the Tabs button opens the switcher, as on any page with one tab. |
+| A tab's plate | every tab, in the strip and in the titled rows | Each tab is its own shape: the one on screen a solid card ringed in Lagoon, the others a veil with a hairline, glass between them (owner: "non-selected tabs [...] are just part of the whole bar"). In the rail the tile is the shape. |
 | New Tab (first row) | per principle 8: hidden on an empty tab | The same rule as every New Tab. A long press offers New Private Tab. |
 | Show Titles / Hide Titles (last row) | the rail may widen: not during a split, a book pose or with the side pane open | Where Expanded can't rest, a control that does nothing would be noise. A drag on the sidebar does the same. |
 | Titles and close buttons | Expanded | The rail has room for the tile only; there Close Tab is in the tab's menu (and VoiceOver's actions). |

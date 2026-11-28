@@ -57,11 +57,11 @@ final class LaunchTests: XCTestCase {
         app.terminate()
     }
 
-    /// The screenshot's color at its center, where the page shows and no
-    /// chrome sits.
+    /// The screenshot's color a tenth of the way down at a third of the width, where the page
+    /// shows and no chrome sits (above the open search sheet, clear of the status items).
     private func pageColor(_ screenshot: XCUIScreenshot) -> (red: CGFloat, green: CGFloat, blue: CGFloat) {
         guard let image = screenshot.image.cgImage,
-              let pixel = image.cropping(to: CGRect(x: image.width / 2, y: image.height / 2, width: 1, height: 1)) else {
+              let pixel = image.cropping(to: CGRect(x: image.width / 3, y: image.height / 10, width: 1, height: 1)) else {
             return (0, 0, 0)
         }
         var rgba = [UInt8](repeating: 0, count: 4)
@@ -125,7 +125,7 @@ final class LaunchTests: XCTestCase {
         let app = try launch(["-PlainTestStore"] + Self.longAway)
         let first = XCUIScreen.main.screenshot()
         keep(first, "first screen")
-        // The page shows through the frost: tinted toward paper, but clearly blue, not paper.
+        // The page shows above the sheet: dimmed, but clearly blue.
         let color = pageColor(first)
         XCTAssertTrue(color.blue > color.red + 0.1, "the last tab shows behind the search: \(color)")
         let field = app.textFields["searchField"]
@@ -136,7 +136,7 @@ final class LaunchTests: XCTestCase {
 
         // A swipe down goes back to the tab, as it was.
         Thread.sleep(forTimeInterval: 1)
-        app.otherElements["searchSheet"].swipeDown()
+        app.otherElements["searchCard"].swipeDown()
         let gone = NSPredicate { _, _ in !app.keyboards.firstMatch.exists }
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: gone, object: nil)], timeout: 3), .completed)
         waitForPage(app, "Launch Page")

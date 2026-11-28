@@ -148,6 +148,7 @@ extension BrowserViewController {
             }
             // Only a close that was not turned around ends the open layout.
             if target == 0, !self.isEditingAddress { self.finishClosingSearchSheet() }
+            if target == 1, self.isEditingAddress { self.searchSheetDidSettleOpen() }
         }
         guard animated, view.window != nil else {
             ui.driver.jump(to: target)
@@ -174,6 +175,16 @@ extension BrowserViewController {
         ui.driver.animate(to: target, velocity: velocity, fromFirstFrame: true, in: view, onFrame: { [weak self] progress in
             self?.applyFocusProgress(progress)
         }, completion: finish)
+    }
+
+    /// The open is over: the field is at rest, so its text is selected now (during the motion a
+    /// keystroke replaced it all the same) and the caret shows.
+    private func searchSheetDidSettleOpen() {
+        pill.holdSelectionHighlight(false)
+        if let opened = focusUI.pendingSelection {
+            focusUI.pendingSelection = nil
+            if pill.textField.text == opened { pill.textField.selectAll(nil) }
+        }
     }
 
     /// The close is over: the pill goes back to the resting layout, exactly where the motion
@@ -377,11 +388,15 @@ extension BrowserViewController {
     /// What sits at the field's trailing end now: Copy on the page's own address, the empty
     /// field's options (dictation, Browse for Me), or nothing (the clear button while typing).
     func updateFieldAccessory() {
-        guard isEditingAddress else { return pill.setAccessory(.none) }
         let text = pill.textField.text ?? ""
-        if focusUI.isEditingPage, !text.isEmpty, text == pageAddress?.absoluteString {
-            return pill.setAccessory(.copy)
-        }
+        let untouched = isEditingAddress && focusUI.intent == .pageAddress && !text.isEmpty
+            && text == focusUI.openedAddress
+        // VoiceOver reads the address as the field's value, then what typing does.
+        pill.textField.accessibilityHint = !untouched ? nil : focusUI.selectsAllOnOpen
+            ? String(localized: "Type to search in a new tab; edit to change this page")
+            : String(localized: "Edit to change this page; clear it to search in a new tab")
+        guard isEditingAddress else { return pill.setAccessory(.none) }
+        if untouched { return pill.setAccessory(.copy) }
         let dictation = focusUI.dictation
         // Listening: the microphone stays, filled, whatever was heard so far.
         if dictation.isListening { return pill.setAccessory(.dictating) }

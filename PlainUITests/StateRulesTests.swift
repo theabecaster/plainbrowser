@@ -28,13 +28,20 @@ final class StateRulesTests: XCTestCase {
         field.typeText(server.address(path) + "\n")
     }
 
-    /// Edits the page's own address (the page's row above the field) and goes, in the same tab.
+    /// Edits the page's own address and goes, in the same tab: the page sheet's Edit puts the
+    /// caret at the address's end, and the address is rewritten from there.
     private func edit(_ app: XCUIApplication, to path: String) {
-        app.buttons["addressPill"].tap()
-        let row = app.buttons["focus.currentPage"]
-        XCTAssertTrue(row.waitForExistence(timeout: 2))
-        row.tap()
-        app.textFields["searchField"].typeText(server.address(path) + "\n")
+        app.buttons["more"].tap()
+        let address = app.buttons["pageSheet.address"]
+        XCTAssertTrue(address.waitForExistence(timeout: 3))
+        address.tap()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        Thread.sleep(forTimeInterval: 0.6)
+        // Back to "http://" at the caret, then the new address: changes at the caret, an edit.
+        let count = (field.value as? String ?? "").count
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: max(0, count - "http://".count)))
+        field.typeText(server.address(path) + "\n")
     }
 
     private func waitForPage(_ app: XCUIApplication, _ heading: String, file: StaticString = #filePath, line: UInt = #line) {

@@ -649,6 +649,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
         OpenIntervals.begin(Signposts.urlBarReady, until: UIResponder.keyboardDidShowNotification)
+        OpenIntervals.begin(Signposts.urlBarKeyboardStart, until: UIResponder.keyboardWillShowNotification)
         // Go somewhere new (Arc): the field opens empty over the page, which stays behind the
         // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
         // Editing the page's address is its own door: the page's row, or the page sheet.

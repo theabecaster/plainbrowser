@@ -220,8 +220,12 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.urlBarReady)
         )
+        // Its part before the keyboard starts rising, for the breakdown (not budgeted).
+        let start = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.urlBarKeyboardStart)
+        )
         var toB = true
-        measure(metrics: [metric], options: options) {
+        measure(metrics: [metric, start], options: options) {
             XCTAssertTrue(pill.waitForExistence(timeout: 3))
             pill.tap()
             // The keyboard rises; `urlBar.ready` ends inside this wait. No query meanwhile.
@@ -353,7 +357,11 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.newTabReady)
         )
-        measure(metrics: [metric], options: options) {
+        // Its part before the keyboard starts rising, for the breakdown (not budgeted).
+        let start = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.newTabKeyboardStart)
+        )
+        measure(metrics: [metric, start], options: options) {
             openNewTab(app)
             // The keyboard rises; `tab.newReady` ends inside this wait. No query meanwhile.
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard up")], timeout: Self.keyboardWait)

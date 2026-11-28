@@ -91,6 +91,10 @@ public enum Signposts {
     public static let searchSheetDrag: StaticString = "urlBar.sheetDrag"
     /// Event: an option in the empty field was used ("mic", "micStop", "browseArm", "browseDisarm").
     public static let fieldOption: StaticString = "urlBar.fieldOption"
+    /// The part of `urlBar.ready` before the keyboard starts rising: a tap on the URL pill to
+    /// `keyboardWillShow` (the shell's work, the commit of that frame and the keyboard's setup).
+    /// The rest of `urlBar.ready` is the system keyboard's own rise. Reported beside `focusMs`.
+    public static let urlBarKeyboardStart: StaticString = "urlBar.keyboardStart"
     /// Interval from a keystroke in the address bar to its local suggestions (history and
     /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
     public static let suggestionsShown: StaticString = "search.suggestions"
@@ -271,6 +275,9 @@ public enum Signposts {
     /// rest under the new tab's focused search field (`keyboardDidShow`; `OpenIntervals`). The perf
     /// gate's `newTabMs`.
     public static let newTabReady: StaticString = "tab.newReady"
+    /// The part of `tab.newReady` before the keyboard starts rising (`keyboardWillShow`), as
+    /// `urlBar.keyboardStart` for the pill. Reported beside `newTabMs`.
+    public static let newTabKeyboardStart: StaticString = "tab.newKeyboardStart"
     /// Interval: closing a tab (button, flick in the gallery, `window.close()`), until the next
     /// tab is on screen.
     public static let tabClose: StaticString = "tab.close"

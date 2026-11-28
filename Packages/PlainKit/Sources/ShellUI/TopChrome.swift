@@ -8,12 +8,13 @@ import Foundation
 //
 // Where the system keeps its status items to a corner (the Duo's inner screen: clock and battery in
 // the top-trailing corner of an 81 pt safe area), the row sits in that zone, on the status items'
-// row and clear of their corner, and the page runs to the top edge under it. Where the status bar
-// spans the width, the row sits under it. Either way the bar floats over the page like the bottom
-// pill does on a phone: it moves by transform and alpha only, and the page's top
-// `obscuredContentInsets` never follows it (`TopChromeGeometry.obscuredInset`). Decisions:
-// docs/decisions.md, "Duo inner screen: the bar in the status row" and "The page's top inset
-// never follows the bar".
+// row and clear of their corner. Where the status bar spans the width, the row sits under it.
+// Either way the capsules float on a band of glass across the top (`TopBand`), which shrinks to a
+// slim band with the host while reading; everything moves by transform and alpha only, and the
+// page's top `obscuredContentInsets` never follows the bar: it is the slim band's bottom in every
+// state (`TopChromeGeometry.obscuredInset`). Decisions: docs/decisions.md, "Duo inner screen: the
+// bar in the status row", "The page's top inset never follows the bar" and "Duo inner screen: a
+// glass band with the host while reading".
 
 /// The corner the system's status items keep to, read from the root view's safe area and its
 /// corner-adaptive variant (`UIView.edgeInsets(for: .safeArea(cornerAdaptation: .horizontal))`,

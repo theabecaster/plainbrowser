@@ -180,6 +180,8 @@ extension XCUIApplication {
         let after = haptics()
         let new = after.count - before
         let played = new > 0 ? Array(after.recent.suffix(min(new, after.recent.count))) : []
+        // In the test log, as evidence of what played (HapticsTests).
+        print("haptic log: +\(new) \(played) (expected \(kinds))")
         XCTAssertEqual(new, kinds.count, "expected haptics \(kinds), got \(new): \(played)", file: file, line: line)
         XCTAssertEqual(played, kinds, file: file, line: line)
     }

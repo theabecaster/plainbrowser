@@ -8,7 +8,9 @@ public enum LoadFailure: Equatable, Sendable {
     case offline
     /// The name doesn't resolve: a typo, or the site is gone.
     case notFound
-    /// The host refused the connection or dropped it: nothing is serving there.
+    /// The host refused the connection: it is there, but nothing is serving on that port.
+    case refused
+    /// The host couldn't be reached at all (no route, or no answer to the connection).
     case notAnswering
     /// The host took too long.
     case timedOut
@@ -32,8 +34,10 @@ public enum LoadFailure: Equatable, Sendable {
 
     /// Classifies an error by its domain and code. CFNetwork's codes are the same numbers as
     /// `NSURLError`'s; `underlying` is the error's `NSUnderlyingErrorKey`, checked when the outer
-    /// one is not a known network error (WebKit wraps some).
-    public init(domain: String, code: Int, underlying: (domain: String, code: Int)? = nil) {
+    /// one is not a known network error (WebKit wraps some). `streamCode` is CFNetwork's POSIX
+    /// error under it (`_kCFStreamErrorCodeKey`), which tells a refused connection
+    /// (`ECONNREFUSED`) from a host that never answered.
+    public init(domain: String, code: Int, underlying: (domain: String, code: Int)? = nil, streamCode: Int? = nil) {
         let networkDomains: Set<String> = [NSURLErrorDomain, "kCFErrorDomainCFNetwork"]
         if domain == Self.webKitDomain, code == Self.webKitRestrictedPort {
             self = .blockedPort
@@ -45,14 +49,17 @@ public enum LoadFailure: Equatable, Sendable {
         }
         guard networkDomains.contains(domain), let failure = Self.network(code) else {
             if let underlying, networkDomains.contains(underlying.domain), let failure = Self.network(underlying.code) {
-                self = failure
+                self = failure == .notAnswering && streamCode == Self.connectionRefused ? .refused : failure
             } else {
                 self = .other
             }
             return
         }
-        self = failure
+        self = failure == .notAnswering && streamCode == Self.connectionRefused ? .refused : failure
     }
+
+    /// Darwin's `ECONNREFUSED`: the host answered the connection with a reset.
+    static let connectionRefused = 61
 
     /// WebKit's error domain and its "cannot use restricted port" code
     /// (`WebKitErrorCannotUseRestrictedPort`).
@@ -94,6 +101,7 @@ public enum LoadFailure: Equatable, Sendable {
         switch self {
         case .offline: "You're offline."
         case .notFound: "Plain can't find this site."
+        case .refused: "The site refused the connection."
         case .notAnswering: "The site isn't answering."
         case .timedOut: "The site took too long to answer."
         case .notPrivate: "This site's connection isn't private."

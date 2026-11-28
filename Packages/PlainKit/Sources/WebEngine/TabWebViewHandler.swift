@@ -355,11 +355,15 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
 
 extension LoadError {
     init(_ error: NSError) {
-        let underlying = (error.userInfo[NSUnderlyingErrorKey] as? NSError).map { (domain: $0.domain, code: $0.code) }
+        let inner = error.userInfo[NSUnderlyingErrorKey] as? NSError
+        let underlying = inner.map { (domain: $0.domain, code: $0.code) }
+        // CFNetwork's POSIX error, on the error or the one under it: a refused connection is 61.
+        let streamKey = "_kCFStreamErrorCodeKey"
+        let streamCode = (error.userInfo[streamKey] as? Int) ?? (inner?.userInfo[streamKey] as? Int)
         self.init(
             url: error.userInfo[NSURLErrorFailingURLErrorKey] as? URL, code: error.code, domain: error.domain,
             message: error.localizedDescription,
-            failure: LoadFailure(domain: error.domain, code: error.code, underlying: underlying)
+            failure: LoadFailure(domain: error.domain, code: error.code, underlying: underlying, streamCode: streamCode)
         )
     }
 }

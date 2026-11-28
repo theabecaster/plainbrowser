@@ -151,7 +151,8 @@ final class ClarityCaptureTests: XCTestCase {
         }
 
         // Errors: a refused port, an unknown host, then the site going away under a page.
-        type(app, "127.0.0.1:9/nothing", local: false)
+        // Port 2: nothing listens there, so the connection is refused (port 9 is one WebKit never opens).
+        type(app, "127.0.0.1:2/nothing", local: false)
         _ = app.otherElements["pageState"].waitForExistence(timeout: 20)
         pause(1)
         shot("page-13-error-refused")

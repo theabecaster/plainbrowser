@@ -8,6 +8,14 @@ import Testing
         func failure(_ code: Int) -> LoadFailure { LoadFailure(domain: NSURLErrorDomain, code: code) }
         #expect(failure(NSURLErrorCannotConnectToHost) == .notAnswering)
         #expect(failure(NSURLErrorCannotConnectToHost).message == "The site isn't answering.")
+        // CFNetwork's POSIX code under it tells a refused connection from a host that never answered.
+        let refused = LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost, streamCode: 61)
+        #expect(refused == .refused)
+        #expect(refused.message == "The site refused the connection.")
+        #expect(LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost, streamCode: 65) == .notAnswering)
+        #expect(LoadFailure(
+            domain: "WebKitErrorDomain", code: 999, underlying: (domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost), streamCode: 61
+        ) == .refused)
         #expect(failure(NSURLErrorNotConnectedToInternet).message == "You're offline.")
         #expect(failure(NSURLErrorCannotFindHost).message == "Plain can't find this site.")
         #expect(failure(NSURLErrorDNSLookupFailed) == .notFound)

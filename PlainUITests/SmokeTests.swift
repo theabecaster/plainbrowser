@@ -149,6 +149,43 @@ extension XCUIApplication {
 }
 
 @MainActor
+extension XCUIApplication {
+    /// `-PlainHapticLog` (an isolated run only): the app records every haptic that passed its
+    /// gates on a hidden element, `plainHapticLog`, valued `"<count> <kind>,<kind>,…"` (the last 8).
+    static let hapticLogArgument = "-PlainHapticLog"
+
+    /// The haptics played so far: how many, and the last few kinds, oldest first.
+    func haptics() -> (count: Int, recent: [String]) {
+        let log = descendants(matching: .any).matching(identifier: "plainHapticLog").firstMatch
+        guard log.exists, let value = log.value as? String else { return (0, []) }
+        let parts = value.split(separator: " ", maxSplits: 1)
+        let count = parts.first.flatMap { Int($0) } ?? 0
+        let recent = parts.count > 1 ? parts[1].split(separator: ",").map(String.init) : []
+        return (count, recent)
+    }
+
+    /// Runs `action`, then checks that exactly `kinds` played, in order: it waits for them, then
+    /// `settle` seconds more so a double fire or a late one shows up too.
+    func expectHaptics(
+        _ kinds: [String], timeout: TimeInterval = 5, settle: TimeInterval = 0.8,
+        file: StaticString = #filePath, line: UInt = #line, after action: () -> Void
+    ) {
+        let before = haptics().count
+        action()
+        let deadline = Date().addingTimeInterval(timeout)
+        while haptics().count < before + kinds.count, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        RunLoop.current.run(until: Date().addingTimeInterval(settle))
+        let after = haptics()
+        let new = after.count - before
+        let played = new > 0 ? Array(after.recent.suffix(min(new, after.recent.count))) : []
+        XCTAssertEqual(new, kinds.count, "expected haptics \(kinds), got \(new): \(played)", file: file, line: line)
+        XCTAssertEqual(played, kinds, file: file, line: line)
+    }
+}
+
+@MainActor
 extension XCUIElement {
     var hasKeyboardFocus: Bool {
         (value(forKey: "hasKeyboardFocus") as? Bool) ?? false

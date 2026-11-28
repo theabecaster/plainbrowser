@@ -21,7 +21,8 @@ final class FeatureSheetTests: XCTestCase {
 
     private func go(_ app: XCUIApplication, to path: String, heading: String) {
         type(app, server.address(path) + "\n")
-        XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 10), "page \"\(heading)\" did not show")
+        // A fresh simulator's first page can take a while (the matrix makes a new one per row).
+        XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 30), "page \"\(heading)\" did not show")
     }
 
     /// Opens the address field when it is closed, then types `text`.

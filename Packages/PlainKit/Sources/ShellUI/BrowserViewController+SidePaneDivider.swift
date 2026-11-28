@@ -41,7 +41,6 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
     /// What the settle running now still commits when it ends.
     private var pending: Pending?
     /// Whether the bar spans the pane now (the take-over line armed, or the pane has the width).
-    private var barSpansPane = false
     private var dragInterval: OSSignpostIntervalState?
     private var settleInterval: OSSignpostIntervalState?
     #if DEBUG
@@ -54,11 +53,19 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         var commitsPane: Bool
     }
 
+    /// The finger's last travel and when it last moved, for a release after a pause.
+    private var lastTravel: CGFloat = 0
+    private var lastMoveTime: CFTimeInterval = 0
+
     /// The touches and the pointer the divider takes, in the root view.
     private(set) var strip: CGRect = .null
 
     /// A finger has the divider, or it is settling.
     var isActive: Bool { drag != nil || driver.isRunning }
+
+    /// A frame of the drag or the settle is being applied: the root view's layout pass places only
+    /// the pane (its two constants), nothing else (`BrowserViewController.viewWillLayoutSubviews`).
+    private(set) var isTracking = false
 
     init(browser: BrowserViewController, pane: SidePaneController) {
         self.browser = browser
@@ -134,6 +141,8 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         switch pan.state {
         case .began:
             guard begin() else { return }
+            lastTravel = pan.translation(in: browser.view).x
+            lastMoveTime = CACurrentMediaTime()
             dragInterval = Signposts.signposter.beginInterval(Signposts.sidePaneDrag, id: Signposts.signposter.makeSignpostID())
             Haptic.selection.prepare(in: browser.view)
             Haptic.threshold.prepare(in: browser.view)
@@ -143,12 +152,20 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
             #endif
             move(travel: pan.translation(in: browser.view).x)
         case .changed:
-            move(travel: pan.translation(in: browser.view).x)
+            let travel = pan.translation(in: browser.view).x
+            if travel != lastTravel {
+                lastTravel = travel
+                lastMoveTime = CACurrentMediaTime()
+            }
+            move(travel: travel)
         case .ended, .cancelled, .failed:
             guard self.drag != nil else { return }
             move(travel: pan.translation(in: browser.view).x)
             guard let drag else { return }
-            let velocityX = pan.state == .ended ? pan.velocity(in: browser.view).x : 0
+            // A finger that held still before lifting threw nothing: UIKit reports the last move's
+            // speed, so a pause would read as a flick (`FixedChoices.sidePaneReleaseStillness`).
+            let still = CACurrentMediaTime() - lastMoveTime > FixedChoices.sidePaneReleaseStillness
+            let velocityX = pan.state == .ended && !still ? pan.velocity(in: browser.view).x : 0
             let outcome = pan.state == .ended ? drag.outcome(velocity: -velocityX) : restingOutcome()
             if pan.state == .ended, let haptic = drag.releaseHaptic(for: outcome) { haptic.play(in: browser.view) }
             if let dragInterval {
@@ -182,7 +199,6 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         guard let geometry else { return false }
         prepareMove(layout: layout)
         drag = SidePaneDividerDrag(geometry: geometry, startWidth: geometry.paneWidth(dividerX: x))
-        barSpansPane = drag?.isTakeOverArmed ?? false
         return true
     }
 
@@ -237,20 +253,15 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
             browser.duo.panesTrailing.constant = -(span.upperBound - x)
         }
         #endif
-        // The bar keeps to the page while the page reads (at least its minimum), and spans the
-        // pane once the pane would take the whole width.
-        let minimumPage = geometry.minimumPage
-        let laneEnd = takeOverArmed ? span.upperBound : min(span.upperBound, max(x, span.lowerBound + minimumPage))
-        let spans = takeOverArmed
-        setLane(span.lowerBound...laneEnd)
-        browser.view.setNeedsLayout()
-        if spans != barSpansPane {
-            // The line crossed: the bar slides across (or back) and the header moves with it.
-            barSpansPane = spans
-            Motion.animate(Motion.sidePaneArm, changes: { browser.view.layoutIfNeeded() })
-        } else {
-            browser.view.layoutIfNeeded()
-        }
+        // Only what moves: the pane's two constants (one incremental solve; its header lays out,
+        // its content is frozen), the strip and the handle. The bar, the header's top and the
+        // page stay as they are until the divider rests, so the root's own pass does nothing else.
+        if let leading = browser.sidePaneUI.leading, leading.constant != x { leading.constant = x }
+        if let width = browser.sidePaneUI.width, width.constant != span.upperBound - x { width.constant = span.upperBound - x }
+        if let column = browser.sidePaneUI.dragColumn, let layout = browser.duo.layout { place(column: column, layout: layout) }
+        isTracking = true
+        browser.view.layoutIfNeeded()
+        isTracking = false
         setArmed(close: closeArmed, takeOver: takeOverArmed)
         #if DEBUG
         meter?.record(work: CACurrentMediaTime() - started)
@@ -387,8 +398,9 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         }
         browser.updateDuoLayout()
         if outcome == .takeOver { browser.expandChrome(animated: true) }
-        // The settle still moves the bar: it keeps following the divider until the end.
-        browser.view.layoutIfNeeded()
+        // One real layout: the bar takes its new lane (gliding), the page its new frame.
+        browser.view.setNeedsLayout()
+        Motion.animate(Motion.sidePaneArm, changes: { browser.view.layoutIfNeeded() })
         signposter.endInterval(Signposts.sidePaneCommit, interval)
     }
 
@@ -425,7 +437,6 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         handle.isArmed = false
         handle.state = .resting
         geometry = nil
-        barSpansPane = false
         if let layout = browser.duo.layout {
             setLane(layout.chromeLane)
             #if DEBUG
@@ -438,7 +449,8 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         browser.saveSidePaneState()
         // From inside a layout pass (a fold's regions changed) the pass in progress places it.
         guard relayout else { return }
-        browser.view.layoutIfNeeded()
+        // The one real layout of the rest: the bar's lane and the header's place glide to it.
+        Motion.animate(Motion.sidePaneArm, changes: { browser.view.layoutIfNeeded() })
         browser.updatePageInsets()
         browser.updateButtons()
     }

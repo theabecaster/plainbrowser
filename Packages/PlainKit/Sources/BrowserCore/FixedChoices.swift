@@ -672,6 +672,9 @@ public enum FixedChoices {
     /// nearest rest is picked (WWDC18, "Designing Fluid Interfaces": the projected stop, not the
     /// finger): the sidebar's drag beside it projects the same 0.18 s, so both edges agree.
     public static let sidePaneProjection = 0.18
+    /// A finger still for this long (seconds) before it lifts throws nothing: the divider settles on
+    /// the nearest rest, however fast it last moved (UIKit's pan reports the last move's speed).
+    public static let sidePaneReleaseStillness = 0.06
     /// The divider takes touches this wide, centered on the seam (Apple's 44 pt target; Android's
     /// split divider takes 48 dp). The seam itself stays a hairline.
     public static let sidePaneDividerTarget: Double = 44

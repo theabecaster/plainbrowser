@@ -553,6 +553,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     override public func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
+        // The side pane's divider moving: only the pane's two constants changed, which it set
+        // itself; nothing else is decided again until it rests (`SidePaneDividerController`).
+        if sidePaneUI.divider?.isTracking == true { return }
         // Every Duo state comes from the bounds, size classes and the fold's regions here.
         updateDuoLayout()
         // The open sheet's field, before the pass that places it.
@@ -562,6 +565,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        if sidePaneUI.divider?.isTracking == true { return }
         let next = ChromeGeometry(
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom,
             hasButtonBar: !usesVerticalBar && !usesSingleRow

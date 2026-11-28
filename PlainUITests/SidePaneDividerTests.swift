@@ -143,7 +143,7 @@ final class SidePaneDividerTests: XCTestCase {
         let app = try launch()
         let (pane, divider) = openPane(app)
         app.expectHaptics(["tap"]) {
-            drag(divider, by: 60, speed: 2500, hold: 0)
+            drag(divider, by: 110, speed: 3000, hold: 0)
         }
         wait({ !pane.exists || !pane.isHittable || pane.frame.width < 1 }, "a flick past Narrow closes it")
     }

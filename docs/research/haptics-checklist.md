@@ -7,9 +7,9 @@ the full inventory are in docs/research/haptics.md; the rules are in docs/ui-ref
 **Setup.** Turn System Haptics on (Settings > Sounds & Haptics). Do each item twice: once with
 Reduce Motion off and once with it on. With Reduce Motion on, each haptic plays with the crossfade.
 
-**Status.** `[run 1]` landed in the Phases 0–2 run: check it now. `[later]` lands with Phases 3–5,
-after the lanes that edit those files merge: it still plays the old way, or plays nothing, until
-then.
+**Status.** `[run 1]` landed in the Phases 0–2 run, `[run 2]` in the Phases 3–5 run: check both
+now. `[divider]` came with the resizable side pane. `[private]` is left for the private-mode lane:
+it plays the way it does today.
 
 **What each one feels like.** A *tick* is the lightest click (selection). A *light tap* is a short
 light impact. A *firm tap* is a medium impact. A *drop* is a short rigid knock. A *soft close* is
@@ -25,18 +25,18 @@ two-hit pattern. A *bump* is a faint soft impact, at most one a second.
 - [ ] `[run 1]` Sideways swipe on the only tab, with nothing beside it: one bump as it springs back. Repeating it fast does not buzz.
 - [ ] `[run 1]` Swipe up slowly into the switcher: a firm tap where the page passes the commit size, a tick if you go back down, silence when it opens. A quick flick up that opens it: one light tap.
 - [ ] `[run 1]` With Reduce Motion on, the swipe up's firm tap still plays (it is the only cue that nothing moves).
-- [ ] `[later]` Pull to refresh: a firm tap at the arm, a tick when backing off, no chatter while resting on the line, silence when the reload starts.
-- [ ] `[later]` Long-press the pill: one firm tap as the page sheet rises.
+- [ ] `[run 2]` Pull to refresh: a firm tap at the arm, a tick when backing off, no chatter while resting on the line, silence when the reload starts.
+- [ ] `[run 2]` Long-press the pill (bar not collapsed): one firm tap as the page sheet rises.
 
 ## Page sheet (More)
 
 - [ ] `[run 1]` Zoom + and −: a tick per step, a light tap on the step that lands on 100%, and a light tap on the percentage (back to 100%).
 - [ ] `[run 1]` Copy Link: success. Favorite on and off: success each time. Read Later: success. (Unchanged, but now on the window's generator.)
-- [ ] `[later]` Desktop Site, Blocking, Cookie Banner Blocking, Dark Pages: a tick, then the reload.
+- [ ] `[run 2]` Site Settings > Desktop Site, Content Blocking, Cookie Banner Blocking: a tick, then the reload. Page Appearance: a tick and the crossfade.
 - [ ] `[run 1]` Reload, Stop, Find, Reader, Share: no haptic.
-- [ ] `[later]` The pill's Reload and Stop: no haptic. Its long press: the system menu's own, once. Reload Without Cache: one light tap as the page reloads.
+- [ ] `[run 2]` The pill's Reload and Stop: no haptic. Its long press: the system menu's own, once. Reload Without Cache: one light tap as the page reloads.
 - [ ] `[run 1]` Save as PDF that fails: a warning with the "couldn't be saved" toast.
-- [ ] `[later]` Translation fails: a warning with its toast. Close Pane: a soft close.
+- [ ] `[run 2]` Translation fails: a warning with its toast (behind a sheet, when the toast shows after it closes). Close Pane (inner screen, split): a soft close.
 
 ## Gallery (switcher)
 
@@ -46,27 +46,30 @@ two-hit pattern. A *bump* is a faint soft impact, at most one a second.
 - [ ] `[run 1]` Fast flick close: one haptic, never two glued together (usually the soft close; a flick that crosses the line in its very last frame plays the firm tap alone).
 - [ ] `[run 1]` Long-press and reorder across three slots: the system's lift, three ticks, a drop on letting go. Drop it back where it started: no drop.
 - [ ] `[run 1]` Gallery scrolling and snapping: silent.
-- [ ] `[later]` Close All: one soft close after the confirmation. Reopen (menu or toast): a light tap. Private switch: a tick.
-- [ ] `[later]` New profile: success only (no tick glued to it). Delete profile: a soft close only.
+- [ ] `[run 2]` Close All: the confirmation is silent, then one soft close. Reopen (menu or toast): a light tap as the card comes back.
+- [ ] `[private]` Private switch: a tick.
+- [ ] `[run 2]` New profile: success only (no tick glued to it). Delete profile: a soft close only.
 
 ## Inner screen (unfolded)
 
 - [ ] `[run 1]` Side pane Find: Return past the last match ticks as it wraps to the first; Return with no matches bumps; Return while results are still coming stays silent.
 - [ ] `[divider]` Side pane divider: drag from Narrow toward the page: one tick passing Half, a firm tap where the pane would take the whole width, a tick if you pull back; letting go after the firm tap is silent. Drag the pane thin: a firm tap where it would close. A fast throw toward the edge closes it with one light tap. Leaving Narrow by itself is silent. Double tap the handle at Narrow: one soft bump.
-- [ ] `[later]` Strip and sidebar reorder: a tick per place and a drop. Sidebar resize: a firm tap into titles, a tick back to the rail.
+- [ ] `[run 2]` Strip and sidebar reorder: a tick per place and one drop. Sidebar resize: a firm tap as the titles come in, a tick as they go, and a flick that carries them in: one light tap.
 - [ ] `[run 1]` Fold and unfold, rotation: silent.
 
 ## Search
 
 - [ ] `[run 1]` Return in an empty field: a bump; pressing it again at once stays silent.
-- [ ] `[later]` Microphone: a light tap. Browse for Me arm: a tick. Swipe the search sheet down: silent.
+- [ ] `[run 2]` Microphone: a light tap. Browse for Me arm: a tick. Swipe the search sheet down: silent.
 
 ## Outcomes
 
 - [ ] `[run 1]` Download a large file: a light tap just after it starts (150 ms), success with the "downloaded" toast. A small file that is done at once: success only, with its toast. Download it while a sheet is open: the success waits and plays when the toast shows after the sheet closes.
 - [ ] `[run 1]` A download that fails: a warning with its toast.
-- [ ] `[later]` Turn on Airplane Mode, then Try Again on the error page: a warning.
-- [ ] `[later]` Summarize: success when done; a failure (offline): a warning.
+- [ ] `[run 2]` Turn on Airplane Mode, then Try Again on the error page: one warning as the page says so again. The first failure is silent (the page says it). Try Again that loads: silent.
+- [ ] `[run 2]` Summarize: success when done; a failure (offline): a warning. Close the sheet to a source before it ends: silent.
+- [ ] `[run 2]` Reopen on the bar's toast after Close Tab, Reopen Closed Tab from the tabs menu or the start screen: a light tap. ⌘⇧T: nothing.
+- [ ] `[run 2]` A sign-in that asks for a passkey: a bump with its toast. Save Image with Photos refused: a bump with the toast that says why. Open in Background: a light tap with its toast.
 
 ## Feature sheets (Settings, History, intro)
 
@@ -85,5 +88,5 @@ two-hit pattern. A *bump* is a faint soft impact, at most one a second.
 ## Silence
 
 - [ ] `[run 1]` Scroll a long page with the chrome collapsing and coming back: nothing.
-- [ ] `[later]` Hardware keyboard shortcuts (⌘T, ⌘W, ⌘L, ⌘R): nothing.
+- [ ] `[run 2]` Hardware keyboard shortcuts (⌘T, ⌘W, ⌘L, ⌘R, ⌘⇧T, Control-Command-S): nothing.
 - [ ] `[run 1]` Turn System Haptics off: nothing anywhere.

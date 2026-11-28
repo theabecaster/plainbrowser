@@ -3657,3 +3657,32 @@ a hamburger or a sliders-like settings glyph and says neither "more" nor "settin
   bar's own overflow is an ellipsis. More overflows first (`visibilityPriority`), so when it does,
   the system's "…" takes its place and holds it: there is still one ellipsis on screen. The
   circled form is the pre-glass style; inside a glass capsule it is a ring in a ring.
+
+## Haptics, phases 3 to 5 (2026-11-28)
+
+The rest of the haptics plan (docs/research/haptics.md §7, "Phases 3–5 as landed"), after the
+gallery, shell, strip and sidebar lanes merged. The rules in docs/ui-reference.md, "Haptics", are
+unchanged.
+
+- **A toast carries its cause's haptic** (`ShellToast.show(…haptic:)`), played on the toast's
+  window as it comes on screen. An outcome that waits behind a sheet or the gallery now plays when
+  it is seen, not when it happened (rule 10), and the call sites can no longer play one without
+  the other. Translation failed changes from the bump to the warning: the user waited for it.
+- **Try Again that fails again warns, through a count, not a flag.** `Tab.loadFailures` counts
+  failed main-frame loads; `RetryWatch` compares it with the count at the tap and the failing
+  address with the retried one. Tab observation folds the changes of one run loop turn, so an
+  instant refusal can reach the shell with its start and end in one snapshot; a loading flag
+  would miss it, the count does not. Another address typed meanwhile, a load that ends without
+  failing or another tab on screen ends the watch silently; the gallery or a sheet over the page
+  silences it.
+- **Reopen is a light tap everywhere a tab comes back** (the gallery's menu and toast, the bar's
+  toast, the menus, the start screen): the page appears, but often as a card to one side or
+  behind a toast button that has no other answer. ⌘⇧T stays silent (rule 8).
+- **The sidebar's resize arms like every other threshold:** `threshold` as the titles come in,
+  `selection` as they go, and a flick that carries them in without arming plays `tap` as the
+  spring starts (rule 3). The strip and the sidebar play one `drop` per reorder, not one per move.
+- **Summaries end with `success` or `failed`** the first time a run is done or fails, and only
+  while the summary sheet is up: a run kept behind a source says so when the sheet comes back.
+- **Not done:** the drop of a link or tab from outside onto the strip or sidebar (no such drop
+  exists yet) and a `BrowserCommands` file (none; key commands are already silent). Private-mode
+  entry and exit keep their haptics for the private-mode lane.

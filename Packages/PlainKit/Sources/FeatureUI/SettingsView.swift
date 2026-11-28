@@ -1,5 +1,6 @@
 #if os(iOS)
 import BrowserCore
+import DesignSystem
 import SwiftUI
 
 /// The Settings sheet: seven rows, each showing its value, and one Done button.
@@ -29,7 +30,7 @@ public struct SettingsView: View {
                         }
                         .disabled(!model.isLoaded)
                     } footer: {
-                        Text(Wording.searchEngineFooter).settingsFooter()
+                        SettingsFooter(Wording.searchEngineFooter)
                     }
 
                     Section {
@@ -42,8 +43,7 @@ public struct SettingsView: View {
                         .disabled(!model.isLoaded || !model.isTabLayoutAvailable)
                         .accessibilityIdentifier("settings.tabLayout")
                     } footer: {
-                        Text(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
-                            .settingsFooter()
+                        SettingsFooter(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
                     }
 
                     Section {
@@ -55,7 +55,7 @@ public struct SettingsView: View {
                         .pickerStyle(.menu)
                         .disabled(!model.isLoaded)
                     } footer: {
-                        Text(model.settings.archiveAfter.footer).settingsFooter()
+                        SettingsFooter(model.settings.archiveAfter.footer)
                     }
 
                     Section {
@@ -68,7 +68,7 @@ public struct SettingsView: View {
                         .disabled(!model.isLoaded)
                         .accessibilityIdentifier("settings.appearance")
                     } footer: {
-                        Text(model.settings.appearance.footer).settingsFooter()
+                        SettingsFooter(model.settings.appearance.footer)
                     }
 
                     Section {
@@ -100,7 +100,7 @@ public struct SettingsView: View {
                             Text(Wording.clearConfirmMessage)
                         }
                     } footer: {
-                        Text(Wording.clearFooter).settingsFooter()
+                        SettingsFooter(Wording.clearFooter)
                     }
 
                     Section {
@@ -195,14 +195,35 @@ struct SearchEngineView: View {
     }
 }
 
-private extension Text {
-    /// A section footer as wide as the list: next to a menu picker the system sized the footer to
-    /// an earlier width, and "Tabs you haven't opened in a week move to the archive." broke under
-    /// the picker's value (clarity audit 23).
-    func settingsFooter() -> some View {
-        foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
+/// A section footer that breaks its lines as plain text does. SwiftUI's `Text` keeps a last
+/// word from standing alone by pushing the one before it down too (`NSLineBreakStrategy
+/// .pushOut`), so "Tabs you haven't opened in a week move to / the archive." broke a word early,
+/// under the picker's value (clarity audit 23). A label with no line-break strategy fills each
+/// line. Low-frequency screen: one label per footer.
+struct SettingsFooter: UIViewRepresentable {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    func makeUIView(context: Context) -> UILabel {
+        let label = UILabel()
+        label.numberOfLines = 0
+        label.lineBreakStrategy = []
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = Palette.inkSecondary
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return label
+    }
+
+    func updateUIView(_ label: UILabel, context: Context) {
+        if label.text != text { label.text = text }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView label: UILabel, context: Context) -> CGSize? {
+        let width = proposal.width ?? label.intrinsicContentSize.width
+        let height = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        return CGSize(width: width, height: ceil(height))
     }
 }
 

@@ -2525,10 +2525,13 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
   can do now, with the soft refusal bump (`Haptic.nothingThere`: the sign-in the user tried did
   not happen; lead's call from the app-wide haptics plan). Too long for one line on the pill's width, so a toast now wraps to two lines,
   taller, rather than cutting the middle out of a sentence.
-- **A refused connection** says "The site refused the connection." (`LoadFailure.refused`): the
-  host's TCP reset, told apart from a host that never answered by CFNetwork's POSIX code under
-  the error (`_kCFStreamErrorCodeKey` 61, `ECONNREFUSED`). Without that code it stays "The site
-  isn't answering.". Port 9 and the like stay "Plain doesn't open pages on this port.".
+- **A refused connection** says "The site refused the connection." (`LoadFailure.refused`):
+  "can't connect to host" (-1004) is a refused connection, as Chrome names it. Only when
+  CFNetwork's POSIX code under the error (`_kCFStreamErrorCodeKey`) names another cause (no
+  route to the host) does it stay "The site isn't answering.". WebKit's network process does not
+  pass that key on (the first walk: a refused port on the simulator reached Plain without it),
+  so the code can't be the only test. Port 9 and the like stay "Plain doesn't open pages on this
+  port.".
 - **The pill and bar over text:** their paper ground (`ChromeScrim`) is 92% (95% dark), was 82%
   (92%): at 82% body text ghosted under "Not Secure — host", worst in the collapsed pill. Still
   only inside each glass shape, so the capsules float apart as before. The inner screen's top
@@ -2549,8 +2552,11 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
   row of three, and text the symbols already say).
 - **Downloads' Show in Files** is a labelled row under the files, in the accent, as a list's
   action; the bare folder in the header named nothing.
-- **Settings footers** take the list's width (`settingsFooter()`): beside a menu picker the
-  system kept an earlier, narrower width for Archive Tabs' and Appearance's.
+- **Settings footers** are a label with no line-break strategy (`SettingsFooter`). SwiftUI's
+  `Text` avoids a lone last word by pushing the word before it down too (UIKit's `.pushOut`), so
+  "Tabs you haven't opened in a week move to / the archive." broke early under the picker's
+  value, with room left on the first line (measured on the first walk; a full-width frame did not
+  change it). Rejected: shorter copy (any footer that wraps would break early again).
 - **An empty History** shows its empty state alone: no search field, no Clear. A search that
   finds nothing keeps both.
 - **History and Archive rows at accessibility sizes** put the time under the address, and the

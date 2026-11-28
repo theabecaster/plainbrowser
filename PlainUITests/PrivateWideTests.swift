@@ -269,21 +269,25 @@ final class PrivateWideTests: XCTestCase {
         let two = ["/light-site", "/long"].map(url).joined(separator: ",")
         let one = url("/long")
         // name, regular pages, private pages, layout, sidebar
-        let states: [(String, String, String?, String, String?)] = [
-            ("strip-1", one, one, "above", nil),
-            ("strip-2", two, two, "above", nil),
-            ("strip-5", five, five, "above", nil),
-            ("rail-2", two, two, "left", "rail"),
-            ("rail-5", five, five, "left", "rail"),
-            ("expanded-5", five, five, "left", "expanded"),
+        let states: [(String, String, String?, String, String?, Int)] = [
+            ("strip-1", one, one, "above", nil, 1),
+            ("strip-2", two, two, "above", nil, 2),
+            ("strip-5", five, five, "above", nil, 5),
+            ("rail-2", two, two, "left", "rail", 2),
+            ("rail-5", five, five, "left", "rail", 5),
+            ("expanded-5", five, five, "left", "expanded", 5),
         ]
-        for (name, regular, privatePages, layout, sidebar) in states {
+        for (name, regular, privatePages, layout, sidebar, count) in states {
             // Private: the regular tabs, then the private ones (the last on screen).
             var arguments = ["-PlainInMemoryStore", "-PlainTabLayout", layout, "-PlainOpen", regular]
             if let sidebar { arguments += ["-PlainSidebar", sidebar] }
             if let privatePages { arguments += ["-PlainOpenPrivate", privatePages] }
             let app = try launch(arguments)
-            settle(4)
+            // Every page opened (they open one at a time past four), the last private one on screen.
+            let side = app.descendants(matching: .any)[layout == "above" ? "tabStrip.private" : "sideTabs.private"]
+            let value = count == 1 ? "1 tab" : "\(count) tabs"
+            wait("all \(count) private pages open", timeout: 40) { side.exists && side.value as? String == value && self.isPrivate(app) }
+            settle(2)
             shot("\(tag)-\(name)-private")
             // Its regular twin: one tap on Tabs, the same tabs open.
             let tabsSide = app.buttons["tabStrip.regular"].exists ? app.buttons["tabStrip.regular"]
@@ -298,7 +302,8 @@ final class PrivateWideTests: XCTestCase {
                     app.scrollViews["tabGallery"].descendants(matching: .any).matching(identifier: "tabCard").firstMatch.tap()
                 }
             }
-            settle(2)
+            wait("out of private", timeout: 5) { !self.isPrivate(app) }
+            settle(1.5)
             shot("\(tag)-\(name)-regular")
             app.terminate()
         }
@@ -319,11 +324,14 @@ final class PrivateWideTests: XCTestCase {
         for index in 0..<4 { shot("\(tag)-entry-\(index)") }
         app.terminate()
 
-        // A private split: two private pages side by side.
+        // A private split: two private pages side by side (five pages: they open one at a time,
+        // each loaded before the next).
         app = try launch([
-            "-PlainInMemoryStore", "-PlainTabLayout", "above", "-PlainOpen", one,
-            "-PlainOpenPrivate", ["/long", "/light-site"].map(url).joined(separator: ","), "-PlainSplit",
+            "-PlainInMemoryStore", "-PlainTabLayout", "above", "-PlainOpen", two,
+            "-PlainOpenPrivate", ["/article", "/long", "/light-site"].map(url).joined(separator: ","), "-PlainSplit",
         ])
+        let privateSide = app.buttons["tabStrip.private"]
+        wait("three private pages", timeout: 40) { privateSide.exists && privateSide.value as? String == "3 tabs" }
         settle(4)
         shot("\(tag)-split-private")
         app.terminate()

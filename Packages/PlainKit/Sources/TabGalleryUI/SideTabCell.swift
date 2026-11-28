@@ -310,14 +310,16 @@ final class SideActionRow: UIControl {
     }
 
     /// Makes the row one side of the Private | Tabs switch at the sidebar's head: `selected` while
-    /// its mode is on (Private on a Horizon plate with ink on it, Tabs on a card with a hairline,
-    /// both spanning the row as the tab on screen's mark does), its count after its name.
+    /// its mode is on (Private: Horizon's glyph and name on a veil of it, on the Night column;
+    /// Tabs: a card with a hairline; both spanning the row as the tab on screen's mark does), its
+    /// count after its name. A whole row filled in Horizon was too loud for a column.
     func setMode(selected: Bool, isPrivateRow: Bool, count: Int) {
         selection.isHidden = !selected
-        selection.backgroundColor = isPrivateRow ? Palette.privateSelection : Palette.surface
-        selection.layer.borderWidth = selected && !isPrivateRow ? 0.5 : 0
-        selection.layer.borderColor = Palette.tabPlateEdge.resolvedColor(with: traitCollection).cgColor
-        let ink: UIColor = selected ? (isPrivateRow ? Palette.privateSelectionInk : Palette.ink) : Palette.inkSecondary
+        selection.backgroundColor = isPrivateRow ? Palette.privateRowVeil : Palette.surface
+        selection.layer.borderWidth = selected ? 0.5 : 0
+        selection.layer.borderColor = (isPrivateRow ? Palette.privateAccent.withAlphaComponent(0.35) : Palette.tabPlateEdge)
+            .resolvedColor(with: traitCollection).cgColor
+        let ink: UIColor = selected ? (isPrivateRow ? Palette.privateAccent : Palette.ink) : Palette.inkSecondary
         symbol.tintColor = ink
         label.textColor = ink
         label.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(selected ? .semibold : .regular)

@@ -110,6 +110,9 @@ public enum Palette {
     /// The selected Private side of the Private | Tabs switch: a Horizon capsule with ink on it
     /// (`privateSelectionInk`, 10:1).
     public static let privateSelection = horizon
+    /// The sidebar's selected Private row: a veil of Horizon on the Night column, Horizon's glyph
+    /// and name on it (8:1 or more).
+    public static let privateRowVeil = horizon.withAlphaComponent(0.16)
     /// The text on `privateSelection`.
     public static let privateSelectionInk = UIColor(rgb: 0x0A2133)
 
@@ -245,6 +248,8 @@ public enum Palette {
 
     /// The URL field's rim while it is focused, start to end.
     public static let focusRim: [UIColor] = [mint, accent]
+    /// The URL field's rim in a private tab: Horizon alone, a step deeper at its end.
+    public static let privateFocusRim: [UIColor] = [horizon, UIColor(rgb: 0xE8946A)]
     /// The load-progress bar, start to end. It ends in a coral tip.
     public static let progress: [UIColor] = [mint, accent, coral]
     /// Pull to refresh's color loop: dawn teal, Lagoon, the icon's violet bloom, Curl Coral, the

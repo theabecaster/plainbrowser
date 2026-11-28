@@ -146,6 +146,13 @@ final class GalleryBottomBar: UIView {
     /// The switch's side and counts. Returns whether its width may have changed.
     @discardableResult
     func setMode(isPrivate: Bool, regularCount: Int, privateCount: Int) -> Bool {
+        if isPrivate != modeSwitch.isPrivate {
+            // Over the private list the bar is the private chrome's Night, as the address bar is
+            // (design review: the blue-grey glass read as borrowed from the regular list).
+            let effect = UIGlassEffect(style: .regular)
+            effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTintOnPaper
+            glass.effect = effect
+        }
         let changed = modeSwitch.set(isPrivate: isPrivate, regularCount: regularCount, privateCount: privateCount)
         if changed { setNeedsLayout() }
         return changed

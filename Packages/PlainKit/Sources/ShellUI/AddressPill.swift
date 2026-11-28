@@ -387,7 +387,10 @@ final class AddressPill: UIView {
     }
 
     private func resolveColors() {
-        rim.gradient.colors = Palette.focusRim.map { $0.resolvedColor(with: traitCollection).cgColor }
+        // Private: one quiet Horizon rim, not the mint-to-Lagoon gradient (design review: the
+        // gradient was the one thing on the private chrome closest to a generic look).
+        let colors = isPrivateTint ? Palette.privateFocusRim : Palette.focusRim
+        rim.gradient.colors = colors.map { $0.resolvedColor(with: traitCollection).cgColor }
     }
 
     /// Shows `url`'s host while resting, or the placeholder when there is no page. A page that is
@@ -547,6 +550,7 @@ final class AddressPill: UIView {
         // over a white page it drew dark text on Night. Set there, it stays dark.
         glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
+        resolveColors()
         if case .shown(let appearance) = darkPagesIndicator { applyPageAppearanceTint(appearance) }
         // The field says it too, for VoiceOver while editing (the pill is no element then).
         textField.accessibilityLabel = isPrivate ? String(localized: "Private, Search or enter address") : nil

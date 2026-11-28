@@ -97,12 +97,22 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
     let title: String
     let leading: Leading
     let trailing: Trailing
+    /// The header's safe area insets at its sides (the system's vertical bar, a landscape notch).
+    @State private var safeInsets = EdgeInsets()
+
+    /// The list's card margin: 16 pt, in a compact sheet and in the Duo's regular-width inner
+    /// sheet alike (measured, 2026-11-28; the largest iPhones' lists take 20).
+    private let margin = Spacing.l
 
     var body: some View {
         // Each side takes the same share of the width, so the title stays centered whatever the
-        // two sides hold, and takes the room left before it truncates.
-        HStack(spacing: 8) {
-            ZStack { Color.clear.frame(height: 1); side(leading) }.frame(maxWidth: .infinity, alignment: .leading)
+        // two sides hold, and takes the room left before it truncates. The clear line makes each
+        // side fill its share, so the side's own alignment puts its control in the corner: with
+        // the ZStack's default (center) alignment Done sat in the middle of the trailing share,
+        // far in from the edge on a wide sheet (owner feedback, Duo inner screen, 2026-11-28).
+        HStack(spacing: Spacing.s) {
+            ZStack(alignment: .leading) { Color.clear.frame(height: 1); side(leading) }
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(title)
                 .font(.system(.headline, design: .serif))
                 .foregroundStyle(Style.ink)
@@ -110,10 +120,16 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .accessibilityAddTraits(.isHeader)
                 .layoutPriority(1)
-            ZStack { Color.clear.frame(height: 1); side(trailing) }.frame(maxWidth: .infinity, alignment: .trailing)
+            ZStack(alignment: .trailing) { Color.clear.frame(height: 1); side(trailing) }
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .frame(minHeight: 44)
-        .padding(.horizontal, 16)
+        .frame(minHeight: Metrics.tapTarget)
+        // Done, Back and Clear line up with the edges of the list's cards. As for the cards, the
+        // safe area counts toward the margin: where the system's vertical bar takes a side (the
+        // Duo's outer screen) Done meets the cards' edge beside it instead of 16 pt further in.
+        .padding(.leading, max(0, margin - safeInsets.leading))
+        .padding(.trailing, max(0, margin - safeInsets.trailing))
+        .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { safeInsets = $0 }
         .padding(.top, 12)
         .padding(.bottom, 6)
         .background { PaperBackground().ignoresSafeArea(edges: [.top, .horizontal]) }
@@ -178,7 +194,7 @@ struct TimedRowLabel: View {
     }
 }
 
-/// Done, in the header's trailing corner.
+/// Done, in the header's trailing corner: the sheet's one confirming action, in semibold.
 struct SheetDone: View {
     var onDone: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
@@ -187,8 +203,7 @@ struct SheetDone: View {
         Button("Done") {
             if let onDone { onDone() } else { dismiss() }
         }
-        .buttonStyle(.glass)
-        .foregroundStyle(Style.accent)
+        .buttonStyle(SheetHeaderButtonStyle(font: .headline, alignment: .trailing))
     }
 }
 
@@ -200,9 +215,33 @@ private struct SheetBack: View {
         Button { dismiss() } label: {
             Label("Back", systemImage: "chevron.backward").labelStyle(.iconOnly)
         }
-        .buttonStyle(.glass)
-        .foregroundStyle(Style.accent)
+        .buttonStyle(SheetHeaderButtonStyle(font: .body.weight(.semibold), alignment: .leading))
         .accessibilityIdentifier("BackButton")
+    }
+}
+
+/// A control in a sheet's header (Done, Back, History's Clear, Favorites' Edit): the
+/// accent on the header's paper, no glass, as the search sheet's Cancel. Liquid Glass is for the
+/// floating controls over a page (docs/ui-reference.md); a glass capsule on the opaque header read
+/// as a pasted-on chip. The target is at least 44 pt; a press dims the label, as UIKit's plain
+/// buttons do. The header's sides stop it growing where the title does (`SheetHeader.side`); a
+/// long press shows it in the Large Content Viewer, as the system bar's buttons do past that size.
+struct SheetHeaderButtonStyle: ButtonStyle {
+    var font: Font = .body
+    /// Where a label narrower than the target sits in it: toward the header's edge, so a symbol
+    /// lines up with the cards' edge as text does (Back's chevron sat 14 pt in).
+    var alignment: Alignment = .center
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(font)
+            .foregroundStyle(isEnabled ? Style.accent : Style.inkSecondary)
+            .accessibilityShowsLargeContentViewer()
+            .frame(minWidth: Metrics.tapTarget, minHeight: Metrics.tapTarget, alignment: alignment)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.35 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

@@ -39,6 +39,7 @@ layout.
 | `17-xxxl` | iPhone 17 | portrait | text `extra-extra-extra-large` | full | The largest standard Dynamic Type size (above XL), which many people use. |
 | `se-ax3` | iPhone SE (3rd generation) | portrait | text `accessibility-extra-large` | full | An accessibility size on the smallest screen: the worst case for text that wraps or clips. |
 | `17-dark` | iPhone 17 | portrait | Dark appearance | full | The dark theme on the standard phone. |
+| `duo-outer-dark` | iPhone Duo, closed | 466x678 outer | Dark appearance | full | The dark theme on Plain's primary phone layout. |
 | `duo-inner-dark` | iPhone Duo, open | inner, landscape | Dark appearance | full | The dark theme on the Duo's inner screen, where most chrome differs. |
 | `17-motion` | iPhone 17 | portrait | Reduce Motion | full | Plain's transitions crossfade instead (`Motion.prefersCrossfade`); the captures still reach every state. |
 

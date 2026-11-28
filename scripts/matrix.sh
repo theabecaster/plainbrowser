@@ -60,6 +60,7 @@ ROWS=(
   "17-xxxl|iPhone-17|portrait|extra-extra-extra-large|light|normal|"
   "se-ax3|iPhone-SE-3rd-generation|portrait|accessibility-extra-large|light|normal|"
   "17-dark|iPhone-17|portrait|large|dark|normal|"
+  "duo-outer-dark|iPhone-Duo|Closed|large|dark|normal|"
   "duo-inner-dark|iPhone-Duo|Open|large|dark|normal|"
   "17-motion|iPhone-17|portrait|large|light|reduce|"
 )

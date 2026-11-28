@@ -54,7 +54,7 @@ public struct HistoryView: View {
             list(searchRow: true)
                 .sheetTitle("History", onDone: onDone) {
                     // An empty history has nothing to search or clear: the empty state alone.
-                    if !isEmptyHistory { clearMenu }
+                    if !isEmptyHistory { clearMenu.menuStyle(.button).buttonStyle(SheetHeaderButtonStyle(alignment: .leading)) }
                 }
         }
     }

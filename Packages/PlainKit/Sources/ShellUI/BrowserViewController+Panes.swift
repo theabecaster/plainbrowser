@@ -40,6 +40,10 @@ final class DuoUIState {
     var lastShownSidebar: SidebarState = .rail
     /// A finger is resizing the sidebar; its width when the drag began.
     var isDraggingSidebar = false
+    /// Pictures of a strip or a sidebar on their way out (`animateTabListPresence`).
+    var leavingTabLists: [UIView] = []
+    /// `animateTabListPresence` is applying its layout: its own pictures stay.
+    var isChangingTabListPresence = false
     /// The sidebar sits above the chrome (Expanded over the top bar, `raiseSidebarOverChrome`).
     var isSidebarOverChrome = false
     /// What dims the page and the bar under the drawer while the sidebar is over the chrome.
@@ -163,6 +167,9 @@ extension BrowserViewController {
         duo.panesLeading.constant = layout.sidebarOnRight ? 0 : layout.sidebarDockWidth
         duo.panesTrailing.constant = (layout.sidebarOnRight ? -layout.sidebarDockWidth : 0) - layout.sidePaneDockWidth
         if previous?.chromeOnTop != layout.chromeOnTop { topBarModeDidChange() }
+        pill.shortensWarning = layout.chromeOnTop
+        // A layout from another moment ends a tab list still on its way out.
+        if !duo.isChangingTabListPresence { removeLeavingTabLists() }
         applyStripLayout(layout)
         duo.laneLeading.constant = layout.chromeLane.lowerBound
         duo.laneWidth.constant = layout.chromeLane.upperBound - layout.chromeLane.lowerBound
@@ -178,6 +185,9 @@ extension BrowserViewController {
         session.pool.defaultPaneSize = layout.focusedPaneFrame.size
         // A pane that just came on screen or left it (a fold, a split opening).
         if previous?.splitShown != layout.splitShown || previous == nil { syncPanes() }
+        // The Tabs button and the swipe up follow whether the sidebar is on screen (one tab: it
+        // is not), so the rules are read again once the layout says so.
+        if let previous, previous.showsSidebar != layout.showsSidebar { updateButtons() }
         // The side pane left the screen with the layout (a fold to the outer screen).
         if previous?.sidePaneColumn != nil, layout.sidePaneColumn == nil { sidePaneUI.controller?.paneWillHide() }
     }

@@ -63,7 +63,7 @@ final class ButtonBar: UIView {
     /// end, Tabs, Share and More in one at its trailing end, the pill between them, where Safari
     /// has them on the Duo's inner screen and on iPad. The leading capsule holds only what shows
     /// and grows away from Back (Forward comes in to its right), so Back never moves; the trailing
-    /// capsule too holds only what shows and grows away from More (Tabs and Share come in to its
+    /// capsule too (in the top bar) holds only what shows and grows away from More (Tabs and Share come in to its
     /// left), so More never moves and the start screen has no empty glass beside it (clarity
     /// audit: "the inner start screen shows an empty trailing capsule"). The pill keeps its place
     /// either way.
@@ -210,11 +210,12 @@ final class ButtonBar: UIView {
             // Tabs, Share and More: only what shows, packed toward More.
             var trailingShown = 0
             for view in trailingStack.arrangedSubviews {
-                let hidden = !view.isUserInteractionEnabled
+                // Only the top bar packs (`packsLeading`): a phone's one bottom row keeps its slots.
+                let hidden = packsLeading && !view.isUserInteractionEnabled
                 if !hidden { trailingShown += 1 }
                 if view.isHidden != hidden { view.isHidden = hidden }
             }
-            let trailing = Self.slot * CGFloat(max(1, trailingShown))
+            let trailing = packsLeading ? Self.slot * CGFloat(max(1, trailingShown)) : Self.splitTrailingWidth
             if trailingWidth?.constant != trailing { trailingWidth?.constant = trailing }
         }
         let showsLeading = !isSplit || !leadingShown.isEmpty
@@ -247,7 +248,7 @@ final class ButtonBar: UIView {
         // Beside the pill a hidden button gives up its slot: the bar is only what it shows. So
         // does Back or Forward in the top bar's leading capsule.
         let packs = isBesidePill || (isSplit && packsLeading && button.superview === stack)
-            || (isSplit && button.superview === trailingStack)
+            || (isSplit && packsLeading && button.superview === trailingStack)
         let removed = packs && !visibility.isVisible
         if button.isHidden != removed { button.isHidden = removed }
         if isBesidePill { updateBesideWidth() }

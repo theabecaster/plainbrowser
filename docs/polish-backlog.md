@@ -481,3 +481,11 @@ Newest feature last.
   and both sides in portrait; the drawer over the bar in portrait; 120 Hz while scrolling 50
   tabs (Instruments, `favicon.decode` off the main thread); a fold and an unfold with the rail
   showing; icons after a relaunch without network.
+- **Tab list tuning values beside their code** (code review, round 3): the strip's entrance
+  offset and scale (`BrowserViewController+TopBar.stripAway`) and the plates' 0.5 pt hairline
+  (`TabStripCell`, `SideTabCell`) are motion and drawing constants, like `ChromeScrim`'s; move
+  any that become product decisions to `FixedChoices`.
+- **The strip's width budget counts one gap per tab,** not per pair: 6 pt of extra glass before
+  New Tab. Tighten if it reads as loose on the device.
+- **Side pane open in portrait, the pill:** the short "Not Secure" form was not captured (no
+  launch argument opens the side pane); check on the device or add a capture.

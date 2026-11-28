@@ -429,36 +429,50 @@ extension BrowserViewController {
     /// opacity move; the one leaving goes as a picture of itself, so the layout is already the
     /// one-tab layout while it fades. A second change mid-flight starts from what is on screen.
     private func animateTabListPresence() {
-        let moves = !Motion.prefersCrossfade
+        let shows = { self.duo.layout.map { $0.showsStrip || $0.showsSidebar } ?? false }
+        guard !Motion.prefersCrossfade else {
+            // Reduce Motion: the list is there or gone inside one crossfade; nothing moves.
+            removeLeavingTabLists()
+            view.setNeedsLayout()
+            Motion.crossfade(view) {
+                self.updateDuoLayout()
+                self.view.layoutIfNeeded()
+            }
+            Signposts.signposter.emitEvent(Signposts.tabListPresence, "\(shows() ? "shown" : "hidden")")
+            return
+        }
+        // A change mid-flight: the pictures of the one before are done.
+        removeLeavingTabLists()
         let stripBefore = duo.strip?.view
         let sidebarBefore = duo.sidebar?.view
         let onRightBefore = duo.layout?.sidebarOnRight ?? false
-        // The list about to leave, as a picture where it stands.
+        // The list about to leave, as a picture where it is on screen now (mid-entrance too).
         var leaving: [(view: UIView, source: UIView, away: CGAffineTransform)] = []
-        if moves {
-            for (list, away) in [
-                (stripBefore, Self.stripAway),
-                (sidebarBefore, Self.sidebarAway(width: sidebarBefore?.bounds.width ?? 0, onRight: onRightBefore)),
-            ] {
-                guard let list, !list.isHidden, let picture = list.snapshotView(afterScreenUpdates: false) else { continue }
-                picture.frame = list.frame
-                picture.isUserInteractionEnabled = false
-                view.insertSubview(picture, aboveSubview: list)
-                leaving.append((picture, list, away))
-            }
+        for (list, away) in [
+            (stripBefore, Self.stripAway),
+            (sidebarBefore, Self.sidebarAway(width: sidebarBefore?.bounds.width ?? 0, onRight: onRightBefore)),
+        ] {
+            guard let list, !list.isHidden, let picture = list.snapshotView(afterScreenUpdates: false) else { continue }
+            let shown = list.layer.presentation() ?? list.layer
+            picture.bounds = list.bounds
+            picture.center = list.center
+            picture.transform = shown.affineTransform()
+            picture.alpha = CGFloat(shown.opacity)
+            picture.isUserInteractionEnabled = false
+            view.insertSubview(picture, aboveSubview: list)
+            leaving.append((picture, list, away))
         }
         view.setNeedsLayout()
         // The new layout's constants, and the list coming in, built where it will rest.
+        duo.isChangingTabListPresence = true
         UIView.performWithoutAnimation {
             self.updateDuoLayout()
             guard let layout = self.duo.layout else { return }
             if let strip = self.duo.strip?.view, strip !== stripBefore {
                 strip.frame = self.stripRestFrame(layout)
                 strip.layoutIfNeeded()
-                if moves {
-                    strip.alpha = 0
-                    strip.transform = Self.stripAway
-                }
+                strip.alpha = 0
+                strip.transform = Self.stripAway
             }
             if let sidebar = self.duo.sidebar?.view, sidebar !== sidebarBefore {
                 let width = layout.sidebar.width
@@ -469,21 +483,21 @@ extension BrowserViewController {
                     width: width, height: bounds.height
                 )
                 sidebar.layoutIfNeeded()
-                if moves {
-                    sidebar.alpha = 0
-                    sidebar.transform = Self.sidebarAway(width: width, onRight: layout.sidebarOnRight)
-                }
+                sidebar.alpha = 0
+                sidebar.transform = Self.sidebarAway(width: width, onRight: layout.sidebarOnRight)
             }
         }
+        duo.isChangingTabListPresence = false
         // A list that stayed (its layout is not the one that changed) needs no picture.
         leaving = leaving.filter { item in
             if item.source.superview == nil { return true }
             item.view.removeFromSuperview()
             return false
         }
-        let shows = duo.layout.map { $0.showsStrip || $0.showsSidebar } ?? false
-        Signposts.signposter.emitEvent(Signposts.tabListPresence, "\(shows ? "shown" : "hidden")")
-        Motion.animate(Motion.sidebarSettle(flicked: false), crossfading: view, changes: {
+        let pictures = leaving.map(\.view)
+        duo.leavingTabLists = pictures
+        Signposts.signposter.emitEvent(Signposts.tabListPresence, "\(shows() ? "shown" : "hidden")")
+        Motion.animate(Motion.sidebarSettle(flicked: false), changes: {
             // The strip rests at the bar's state (hidden with a collapsed bar).
             if let geometry = self.duo.topGeometry {
                 self.applyTopBarCollapse(self.collapseProgress, geometry: geometry)
@@ -498,9 +512,18 @@ extension BrowserViewController {
                 item.view.transform = item.away
             }
             self.view.layoutIfNeeded()
-        }, completion: {
-            for item in leaving { item.view.removeFromSuperview() }
+        }, completion: { [weak self] in
+            for picture in pictures { picture.removeFromSuperview() }
+            self?.duo.leavingTabLists.removeAll { picture in pictures.contains { $0 === picture } }
         })
+    }
+
+    /// Ends the pictures of a tab list on its way out: the next change, a rotation or a fold has
+    /// a layout of its own, and they belong to the one before.
+    func removeLeavingTabLists() {
+        guard !duo.leavingTabLists.isEmpty else { return }
+        for picture in duo.leavingTabLists { picture.removeFromSuperview() }
+        duo.leavingTabLists = []
     }
 
     /// Where the strip comes from and leaves to: tucked a little up under the bar, slightly small.

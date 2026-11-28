@@ -140,12 +140,14 @@ extension BrowserViewController {
     /// A tab opened or closed in the strip: the bar grows or shrinks to its tabs in one spring
     /// (one layout pass, its frame animated by the system), its leading end in place.
     private func stripWidthDidChange() {
-        guard let layout = duo.layout, let strip = duo.strip, strip.view.window != nil else { return }
+        guard let layout = duo.layout, let strip = duo.strip else { return }
         let before = duo.top.stripEnds.last?.constant
         placeStrip(layout)
         guard duo.top.stripEnds.last?.constant != before else { return }
         view.setNeedsLayout()
-        Motion.animate(Motion.sidebarSettle(flicked: false)) { self.view.layoutIfNeeded() }
+        // Off screen the constraints are enough: the next layout pass uses them.
+        guard strip.view.window != nil else { return }
+        Motion.animate(Motion.sidebarSettle(flicked: false), crossfading: strip.view) { self.view.layoutIfNeeded() }
     }
 
     /// The topmost of the page area's views (panes, strip, sidebar): the gallery goes above it.

@@ -173,10 +173,21 @@ final class AddressPill: UIView {
     /// "Not Secure — host": cut at the head it read "…ure — localhost". There the warning
     /// becomes its symbol and the host stays whole.
     private func fitHostText() {
-        guard notSecure, let full = restingText, let compact = compactText, hostLabel.bounds.width > 0 else { return }
-        let fits = ceil(full.size().width) <= hostLabel.bounds.width
-        let wanted = fits ? full : compact
+        guard notSecure, let full = restingText, let compact = compactText, bounds.width > 0 else { return }
+        var wanted = full
+        if shortensWarning {
+            // The label's own width follows its text, so measure against the capsule's room.
+            let measured = NSMutableAttributedString(attributedString: full)
+            measured.addAttribute(.font, value: hostLabel.font as Any, range: NSRange(location: 0, length: measured.length))
+            if ceil(measured.size().width) > bounds.width - Spacing.l * 2 { wanted = compact }
+        }
         if hostLabel.attributedText != wanted { hostLabel.attributedText = wanted }
+    }
+
+    /// The top bar's pill, which a side pane or a sidebar can make narrow: there a warning that
+    /// does not fit becomes its symbol (`fitHostText`). The bottom pill keeps the words.
+    var shortensWarning = false {
+        didSet { if shortensWarning != oldValue { fitHostText() } }
     }
 
     private func resolveColors() {

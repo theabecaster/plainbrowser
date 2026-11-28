@@ -2509,3 +2509,11 @@ like separate things; they're just part of the whole bar."
   host" (portrait with the side pane open read "…ure — localhost") shows the warning as its
   symbol and the host whole. A tab in the rail shows its site's icon; a site without one (a
   local test page) keeps its letter on the same tile.
+- **Code review, round 3** (Codex): a split is offered only where it fits beside the rail the
+  second tab brings (`DuoLayout.splitAvailable` counts the rail whenever Left or Right is in
+  effect); the Tabs button's rules are read again when the sidebar comes or goes; a tab list on
+  its way out is a picture owned by the shell, ended by the next change, a rotation or a fold,
+  and taken from what is on screen when the change interrupts an entrance; under Reduce Motion
+  the list is there or gone inside one crossfade; the strip's width follows its tabs off screen
+  too; only the top bar packs its trailing capsule (a phone's one bottom row keeps its slots),
+  and only the top bar's pill shortens "Not Secure".

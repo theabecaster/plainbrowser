@@ -167,7 +167,9 @@ struct DuoLayout: Equatable {
         let vertical = input.division.flatMap { Self.verticalFold($0) }
         let minimumPane = CGFloat(FixedChoices.splitMinimumPaneWidth)
         // A split needs two panes of the minimum width beside the narrowest docked sidebar.
-        let widthForPanes = area.width - (showsSidebar ? rail : 0)
+        // With one tab the rail is not on screen yet, but the split's second page brings it: it
+        // counts already, so Open in Other Pane is never offered for a split that cannot show.
+        let widthForPanes = area.width - ((tabLayout?.isSidebar ?? false) ? rail : 0)
         splitAvailable = regular && widthForPanes >= 2 * minimumPane
         splitShown = splitAvailable && input.paneCount > 1
 

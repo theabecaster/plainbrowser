@@ -141,6 +141,18 @@ struct DuoLayoutTests {
         }
     }
 
+    @Test func aSplitCountsTheRailTheSecondTabBrings() {
+        // Wide enough for two panes alone, not beside the rail: with one tab the rail is not on
+        // screen, but the split's second page would bring it, so the split is not offered.
+        let width = 2 * CGFloat(FixedChoices.splitMinimumPaneWidth) + Self.rail - 10
+        let area = CGRect(x: 0, y: 24, width: width, height: 900)
+        let one = inner(layout: .left, tabs: 1, area: area)
+        #expect(!one.showsSidebar)
+        #expect(!one.splitAvailable)
+        #expect(one.splitAvailable == inner(layout: .left, tabs: 2, area: area).splitAvailable)
+        #expect(inner(layout: .above, tabs: 1, area: area).splitAvailable)
+    }
+
     @Test func compactHeightIsNeverWideEnough() {
         // A Pro Max in landscape: regular width, compact height.
         let phone = DuoLayout(DuoLayoutInput(

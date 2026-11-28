@@ -104,10 +104,11 @@ extension BrowserViewController {
             all.accessibilityIdentifier = "pageAppearance.useForAll"
             children.append(UIMenu(options: .displayInline, children: [all]))
         }
+        // Whose choice the check shows, in the title (a top-level menu shows no subtitle).
         let whose = isOwn
-            ? String(localized: "This site only")
-            : choices.defaultAppearance == nil ? String(localized: "As each site was made") : String(localized: "Default for all sites")
-        let menu = UIMenu(title: String(localized: "Page Appearance"), subtitle: whose, image: UIImage(systemName: current.symbol), children: children)
+            ? String(localized: "Page Appearance · This Site")
+            : choices.defaultAppearance == nil ? String(localized: "Page Appearance") : String(localized: "Page Appearance · All Sites")
+        let menu = UIMenu(title: whose, image: UIImage(systemName: current.symbol), children: children)
         return menu
     }
 

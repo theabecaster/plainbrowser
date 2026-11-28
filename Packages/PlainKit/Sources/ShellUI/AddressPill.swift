@@ -105,6 +105,8 @@ final class AddressPill: UIView {
         button.accessibilityIdentifier = "pill.pageAppearance"
         button.accessibilityLabel = String(localized: "Page Appearance")
         button.showsMenuAsPrimaryAction = true
+        // Dark, Light, Off in that order wherever the menu opens (above the pill it would flip).
+        button.preferredMenuElementOrder = .fixed
         button.alpha = 0
         button.isHidden = true
         return button

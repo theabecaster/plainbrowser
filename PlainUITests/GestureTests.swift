@@ -209,8 +209,13 @@ final class GestureTests: XCTestCase {
         let app = try launch()
         try skipUnlessWide(app)
         // Two tabs: with a sidebar the overview needs another tab to show (Show All Tabs' rule).
+        // By touch, not keys: the simulator's folded Duo drops typed keys now and then.
         go(app, to: "/a", heading: "Page A")
-        newTabWithKeys(app, to: "/long", heading: "Long Read")
+        app.buttons["tabs"].firstMatch.press(forDuration: 1.0)
+        let newTab = app.buttons["menu.newTab"]
+        XCTAssertTrue(newTab.waitForExistence(timeout: 3))
+        newTab.tap()
+        go(app, to: "/long", heading: "Long Read")
         app.webViews.firstMatch.pinch(withScale: 0.4, velocity: -1)
         XCTAssertTrue(app.scrollViews["tabGallery"].waitForExistence(timeout: 3), "the pinch in shows all tabs")
     }

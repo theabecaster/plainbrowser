@@ -2379,6 +2379,10 @@ interactions are in docs/research/haptics.md; the rules are in docs/ui-reference
   out past 10 pt of hysteresis, fed with what is on screen after the transform. The bar swipe,
   the New Tab card, the swipe up into the gallery and a card's close line use it. A release
   plays at the spring's start, never at its completion.
+- **A download's start tap waits 150 ms** (`FixedChoices.hapticDownloadStartDelay`) and plays only
+  while the download still runs. On the simulator a small file finished 5 ms after it started, so
+  the 60 ms throttle kept the tap and dropped the success the user was waiting for. The start has
+  nothing on screen to sync with; the success plays with its toast.
 - **No `.sensoryFeedback` in SwiftUI.** It can't be throttled, recorded or tied to a window, and it
   would split the vocabulary; FeatureUI calls `Haptic` from its actions.
 - **No Core Haptics.** No surface is better with a custom pattern: a continuous charge-up on a

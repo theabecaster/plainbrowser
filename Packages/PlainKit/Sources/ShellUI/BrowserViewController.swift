@@ -1320,6 +1320,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// A status bar tap while the bar is hidden brings the bar back and keeps the reader's place;
     /// the next tap scrolls to the top (as in DuckDuckGo and Brave).
     public func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        // Under a top bar the bar comes back as the page scrolls up, so its top arrives under the
+        // whole bar (the strip comes in with it), never under the slim band with a gap above it.
+        if scrollView === pageScrollView, chromeOnTop, collapse.rest != .expanded {
+            revealChrome(.statusBar)
+            return true
+        }
         guard scrollView === pageScrollView, collapse.rest == .hidden else { return true }
         revealChrome(.statusBar)
         return false

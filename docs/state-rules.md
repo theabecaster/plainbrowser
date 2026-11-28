@@ -187,7 +187,8 @@ base URL, and that sets a boundary there"; docs/research/safari-duo-top.md).
   collapses or comes back. Whatever WebKit paints above such a header is behind the glass.
 - Gets to Pill and back as on every screen: 1:1 with the finger over 56 pt, a release snaps to the
   nearer state or follows a clear flick; any reveal brings Expanded back with one interruptible
-  spring. A tap anywhere on the collapsed band is a reveal; VoiceOver reads the collapsed band as
+  spring. A tap anywhere on the collapsed band is a reveal; a status bar tap brings the bar back
+  as the page scrolls to its top (no slim band over a page top); VoiceOver reads the collapsed band as
   the address (a double tap shows the toolbar).
 - Hidden is never reached under a top bar. A bar the outer screen left hidden rests at Pill when
   the Duo unfolds.

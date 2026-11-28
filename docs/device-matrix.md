@@ -86,6 +86,8 @@ scripts/matrix.sh --full                                        # every row, bef
   the largest screen that shows something. `scripts/matrix.sh --sheets-only --out <dir>` remakes
   the sheets of an earlier run.
 - Timing (2026-11-27, a loaded Mac, the quick capture test): about a minute and a half for each
-  iPhone row and the Duo's outer screen. The inner screen is slower: XCUITest waits 60 s for the
+  iPhone row and the Duo's outer screen. The inner screen was slower: XCUITest waited 60 s for the
   app to go idle before each step there ("App animations complete notification not received").
-  The full run, with every capture test, takes more than an hour.
+  On 2026-11-28 each step there took under 1.5 s, its wait for idle included
+  (`SearchSheetIdleTests`; see the polish backlog). The full run, with every capture test,
+  takes more than an hour.

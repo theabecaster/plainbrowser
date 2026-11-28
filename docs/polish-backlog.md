@@ -495,6 +495,16 @@ Newest feature last.
   bar (the inner-top lane's material). (Done since: the strip rests on whole tabs.)
 - **UI tests on the inner screen are slow** (a minute per step while XCUITest waits for the app
   to idle): `DuoTests` took an hour on a loaded Mac. Find what keeps the app from idling there.
+  Checked 2026-11-28 on dev (2f04c3cb) and on the iPad lane's tip (85a1c6b8): not reproduced.
+  With the search sheet open on the Duo's inner screen (951 pt, regular width), an iPad mini
+  (756 pt), the outer screen and an iPhone 17, each XCUITest action took 0.4 to 1.4 s, its wait
+  for idle included (`SearchSheetIdleTests`, which fails past 15 s). A probe in the app saw no
+  layout passes, about one run loop wakeup a second, no animation of Plain's own (only the
+  caret's blink and Liquid Glass's match animations, the same set on every screen, never
+  re-added) and 0.3 to 1.5% CPU with the sheet open. In the lanes' logs each 60 s wait follows
+  XCUITest's "Ignoring failure to get hierarchy for remote element ... kAXErrorServerNotFound";
+  a hypothesis, not shown: the wait is XCUITest losing its accessibility link to a process,
+  not motion in the app. If the waits come back, read the step before them in the log first.
 
 ## New Tab in the bar (2026-11-28)
 

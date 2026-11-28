@@ -411,7 +411,13 @@ extension BrowserViewController {
     private func applyTopBand(_ geometry: TopChromeGeometry, reading: CGFloat, reveal: CGFloat) {
         duo.top.stripReveal = reveal
         let stripProgress = TopChromeGeometry.stripProgress(collapse: reading, reveal: reveal)
-        duo.top.band.apply(progress: reading, translation: geometry.bandTranslation(progress: stripProgress))
+        // The host takes over from the pill where the pill is: its center (on the status row in
+        // the status zone, moving to the host's row under a full-width status bar) and its size.
+        let pillCenter = geometry.rowTop + TopChromeGeometry.rowHeight / 2 + geometry.pillTransform(progress: reading).translationY
+        duo.top.band.apply(
+            progress: reading, translation: geometry.bandTranslation(progress: stripProgress),
+            pillSize: pill.bounds.size, pillCenterOffset: pillCenter - geometry.hostCenterY
+        )
         guard let strip = duo.strip?.view else { return }
         let stripAlpha = ChromeGeometry.barAlpha(progress: stripProgress)
         strip.transform = CGAffineTransform(translationX: 0, y: geometry.stripTranslation(progress: stripProgress))

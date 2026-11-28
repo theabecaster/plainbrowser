@@ -2543,9 +2543,18 @@ docs/research/safari-duo-top.md.
   band is the status row's height); the timed morph (Plain's bar follows the finger 1:1 and
   springs, as on every screen); moving the page's inset with the band (WebKit relayouts fixed
   elements on every inset change, the jump the owner rejected).
-- **The host sits in a small glass capsule** (`TopBand.hostCapsule`, 12 x 5 pt around the
+- **The host sits in a small glass capsule** (`TopBand.hostCapsule`, 14 x 6 pt around the
   text, Safari's is 23 pt high): bare text on the band read as an empty status bar, not as the
-  address field made small (Codex design review, round 1). The pill's text shrinks into it.
+  address field made small (Codex design review, round 1). **One pill shrinking** (round 2: the
+  pill's text faded before the capsule appeared, at another width): through the collapse the
+  capsule sits where the pill's shell is and shrinks from its size to its own
+  (`hostShellSize`), the host's text sits where the pill's text is at its size (`hostScale`,
+  the same weight), and the two crossfade over the first 40% (`pillAlpha` + `hostAlpha` = 1).
+- **Known limit:** over a site's flat header color the band reads as a tinted slab rather than
+  glass (round 2). WebKit paints the header's color into the obscured inset above a fixed
+  header, under the band, and there is nothing behind the glass to refract; Safari's own band
+  suppresses that fill (`_shouldSuppressTopColorExtensionView`, SPI). Left for the owner to
+  judge on the device.
 - **The strip follows the page's top** (`TopChromeGeometry.stripReveal`): with two or more tabs
   the strip and the band under it show while the page's top is in view and go as the page
   scrolls the strip's height (38 pt), in step with it, so the band's bottom tracks the page's

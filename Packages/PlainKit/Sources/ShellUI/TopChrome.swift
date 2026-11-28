@@ -363,15 +363,27 @@ struct TopChromeGeometry: Equatable {
         return ((hostCenterY - restCenter) * p, scale)
     }
 
-    /// The pill's opacity: gone by 55% of the collapse, before the host is whole, so the two
-    /// texts cross only while both are faint.
+    /// The pill's opacity: gone by 40% of the collapse, handing over to the host's capsule and
+    /// text, which sit exactly where the pill's shell and text are at every step
+    /// (`hostShellSize`, `hostScale`), so the crossfade reads as one pill shrinking.
     static func pillAlpha(progress: CGFloat) -> CGFloat {
-        1 - smoothstep(0, 0.55, progress)
+        1 - hostAlpha(progress: progress)
     }
 
-    /// The host's opacity in the band: from 35% of the collapse to 90%.
+    /// The host's opacity in the band: the pill's, mirrored, over the first 40% of the collapse.
     static func hostAlpha(progress: CGFloat) -> CGFloat {
-        smoothstep(0.35, 0.9, progress)
+        smoothstep(0, 0.4, progress)
+    }
+
+    /// The host capsule's on-screen size at `progress`: the pill's (`pill`, as the pill itself
+    /// shrinks) at 0, its own (`host`) at 1, in between linearly.
+    static func hostShellSize(progress: CGFloat, pill: CGSize, host: CGSize) -> CGSize {
+        let p = min(max(progress, 0), 1)
+        let s = 1 - (1 - compactScale) * p
+        return CGSize(
+            width: pill.width * s * (1 - p) + host.width * p,
+            height: pill.height * s * (1 - p) + host.height * p
+        )
     }
 
     /// The host's scale at `progress`, relative to its own (collapsed) size: the pill's text

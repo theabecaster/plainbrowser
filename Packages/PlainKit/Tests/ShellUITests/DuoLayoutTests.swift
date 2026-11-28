@@ -386,11 +386,17 @@ struct TopChromeGeometryTests {
         #expect(bar.stripTranslation(progress: 1) < 0 && bar.buttonsTranslation(progress: 1) < 0)
         // The pill's text and the host cross only while both are faint, and the host's size is
         // the pill's text size at every step.
-        #expect(TopChromeGeometry.pillAlpha(progress: 0) == 1 && TopChromeGeometry.pillAlpha(progress: 0.55) == 0)
-        #expect(TopChromeGeometry.hostAlpha(progress: 0.35) == 0 && TopChromeGeometry.hostAlpha(progress: 0.9) == 1)
+        #expect(TopChromeGeometry.pillAlpha(progress: 0) == 1 && TopChromeGeometry.pillAlpha(progress: 0.4) == 0)
+        #expect(TopChromeGeometry.hostAlpha(progress: 0) == 0 && TopChromeGeometry.hostAlpha(progress: 0.4) == 1)
+        // One pill shrinking: the host's capsule starts at the pill's size and ends at its own,
+        // the text at the pill's text size, and the two crossfade at the same place.
+        let pill = CGSize(width: 560, height: 44)
+        let host = CGSize(width: 150, height: 29)
+        #expect(TopChromeGeometry.hostShellSize(progress: 0, pill: pill, host: host) == pill)
+        #expect(TopChromeGeometry.hostShellSize(progress: 1, pill: pill, host: host) == host)
         for step in 0...10 {
             let p = CGFloat(step) / 10
-            #expect(TopChromeGeometry.pillAlpha(progress: p) + TopChromeGeometry.hostAlpha(progress: p) <= 1.0001)
+            #expect(abs(TopChromeGeometry.pillAlpha(progress: p) + TopChromeGeometry.hostAlpha(progress: p) - 1) < 0.0001)
             let pillTextScale = bar.pillTransform(progress: p).scale
             #expect(abs(TopChromeGeometry.hostScale(progress: p) * TopChromeGeometry.compactScale - pillTextScale) < 0.0001)
         }

@@ -195,7 +195,7 @@ jobs:
             else
               classes=(${${only#-only-testing:}})
               sed 's/()$//' build/enumerated.txt | while IFS= read -r id; do
-                (( ${classes[(Ie)${id%/*}]} || ${classes[(Ie)${id%%/*}]} )) && print -r -- $id
+                if (( ${classes[(Ie)${id%/*}]} || ${classes[(Ie)${id%%/*}]} )); then print -r -- $id; fi
               done | sort -u > build/test/expected.txt
               comm -23 build/test/expected.txt build/test/ok.txt > build/test/rerun.txt
             fi

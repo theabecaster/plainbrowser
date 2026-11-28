@@ -607,6 +607,13 @@ public enum FixedChoices {
     /// items' backing reaches about 6 pt below the region the system reports for them, so the
     /// 4 pt used between the row and the strip let the strip's edge slide under it.
     public static let tabStripStatusGap: Double = 10
+    /// The glass panel behind the Duo outer screen's vertical bar: this far in from the page and
+    /// the screen's edges, so it floats as a panel (Apple's sidebars) rather than a slab cut
+    /// against the page (owner, 2026-11-28: "more like Apple glass, so the change from the page to
+    /// it is less abrupt"). Small enough that the bar's own capsule keeps its room.
+    public static let verticalBarPanelInset: Double = 6
+    /// Its corner radius: about concentric with the outer screen's display corners at that inset.
+    public static let verticalBarPanelRadius: Double = 28
     /// The top bar on a wide screen (the Duo's inner screen, iPad-size windows): one row of 44 pt
     /// controls under the status bar, as Safari puts it there. The page gets the full width and
     /// height under it, and the bar shrinks to the address while reading.

@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import BrowserCore
 import DesignSystem
 import UIKit
 
@@ -20,10 +21,10 @@ import UIKit
 final class VerticalBarBacking: UIView {
     private let glass = Glass.makeView(shape: .rounded(VerticalBarBacking.radius))
 
-    /// Between the panel and the page, and the screen's edges.
-    static let inset: CGFloat = 6
-    /// The panel's corners: concentric with the outer screen's display corners at `inset`.
-    static let radius: CGFloat = 28
+    /// Between the panel and the page, and the screen's edges (`FixedChoices.verticalBarPanelInset`).
+    static var inset: CGFloat { CGFloat(FixedChoices.verticalBarPanelInset) }
+    /// The panel's corners (`FixedChoices.verticalBarPanelRadius`).
+    static var radius: CGFloat { CGFloat(FixedChoices.verticalBarPanelRadius) }
 
     override init(frame: CGRect) {
         super.init(frame: frame)

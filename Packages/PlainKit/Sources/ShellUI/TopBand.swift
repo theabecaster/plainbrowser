@@ -131,6 +131,9 @@ final class TopBand: UIView {
         }
         text.append(NSAttributedString(string: domain, attributes: [.foregroundColor: Palette.textPrimary]))
         hostLabel.attributedText = text
+        // With a lead (Private, a mode, Not Secure) a long host loses its middle, never the words
+        // before it; alone it loses its head, as the pill's does.
+        hostLabel.lineBreakMode = isPrivate || lead != nil ? .byTruncatingMiddle : .byTruncatingHead
         accessibilityValue = text.string.replacingOccurrences(of: "\u{FFFC} ", with: "")
     }
 

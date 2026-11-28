@@ -8,9 +8,18 @@ nonisolated public enum EngineChoices {
     // MARK: Tab tiers (docs/plan.md, "Engine rules" 2)
 
     /// Tabs that keep a web view, visible ones included. Hidden ones are suspended by WebKit and
-    /// cost the app about 3-5 MB each; switching back to one is instant. Older tabs are discarded
+    /// cost about 3-5 MB each, nearly all of it in WebKit's processes (the app's own side of ten
+    /// is ~2 MB, docs/research/perf-pass-3.md); switching back to one is instant. Older tabs are discarded
     /// to `interactionState`. Busy tabs (media, capture, downloads) are kept beyond this.
     public static let maxWebViews = 8
+
+    /// After a tab takes the warm web view, the next one is made this long after the take, in the
+    /// run loop's default mode (not inside a scroll or a tracked gesture; an animation may still
+    /// run, as for the gallery's spare), so the next New Tab or link opened in a new tab finds one
+    /// ready instead of making a web view inside its tap (`WKWebView.init` and its attach were ~6 ms
+    /// of the tap before the keyboard on the simulator, docs/research/perf-pass-3.md). One second
+    /// clears a New Tab's keyboard rise (0.5 s).
+    public static let rewarmDelay: Duration = .seconds(1)
 
     // MARK: Saving tabs
 

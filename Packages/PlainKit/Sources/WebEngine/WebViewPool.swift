@@ -111,6 +111,10 @@ public final class WebViewPool {
     /// Private tabs' dark pages choices, for the private session only.
     private var privateDarkPagesStore: LayeredDarkPagesStore?
     private var warm: (webView: WKWebView, controller: WKUserContentController)?
+    /// A rewarm is waiting for the app to be idle.
+    private var rewarmScheduled = false
+    /// Memory warnings received: a rewarm scheduled before the latest one never runs.
+    private var memoryWarnings = 0
     /// Hidden web views lent out (`makeHiddenWebView`), with their controllers, so their content
     /// rules are released when they are.
     var hiddenWebViews: [ObjectIdentifier: WKUserContentController] = [:]
@@ -360,11 +364,35 @@ public final class WebViewPool {
         Signposts.signposter.endInterval(Signposts.webViewWarmUp, state)
     }
 
+    /// The warm web view was taken: another is made once the app is idle (`EngineChoices.rewarmDelay`,
+    /// default run loop mode only), so the next tab that needs one finds it ready. Not in the
+    /// background, and not again after a memory warning dropped it (only a later take rewarms).
+    private func scheduleRewarm() {
+        guard !rewarmScheduled else { return }
+        rewarmScheduled = true
+        let generation = memoryWarnings
+        Task { [weak self] in
+            try? await Task.sleep(for: EngineChoices.rewarmDelay)
+            RunLoop.main.perform(inModes: [.default]) { [weak self] in
+                MainActor.assumeIsolated { self?.rewarm(generation: generation) }
+            }
+        }
+    }
+
+    /// A memory warning since the take (`generation` behind) cancels it; so does the app not being
+    /// active (in the background, or covered by the app switcher or a system sheet).
+    private func rewarm(generation: Int) {
+        rewarmScheduled = false
+        guard warm == nil, generation == memoryWarnings, UIApplication.shared.applicationState == .active else { return }
+        warmUp()
+    }
+
     /// Takes the warmed web view, or makes a new one. Only Personal's tabs take the warm one: it
     /// uses Personal's data store.
     private func takeWebView(isPrivate: Bool, profile: ProfileID) -> (WKWebView, WKUserContentController) {
         if !isPrivate, profile == Profile.defaultID, let warm {
             self.warm = nil
+            scheduleRewarm()
             return warm
         }
         let (configuration, controller) = makeConfiguration(isPrivate: isPrivate, profile: profile)
@@ -587,6 +615,7 @@ public final class WebViewPool {
     /// `UIApplication.didReceiveMemoryWarningNotification`.
     public func handleMemoryWarning() {
         warm = nil
+        memoryWarnings += 1
         onMemoryWarning?()
         thumbnails.dropMemoryCache()
         // No sessionStorage fetch: it would wake every suspended process at the worst moment.

@@ -197,16 +197,20 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
     private func beginTabSwipe() {
         mode = .tabs
         if let swipe {
-            // A finger on a settling page takes it from where it is on screen.
-            startOffset = driver.stop()
+            // A finger on a settling page takes it from where it is on screen. With nothing beside
+            // it (the New Tab card, or nothing) the page is rubber-banded while a finger holds it,
+            // so the spot on screen is turned back into the finger travel that shows it there.
+            let shown = driver.stop()
+            if swipe.neighbour == nil, let browser {
+                startOffset = travel(showing: shown, width: browser.webContainer.bounds.width)
+            } else {
+                startOffset = shown
+            }
             swipe.target = nil
             swipe.offset = startOffset
             // The latch takes the state the page is in, silently: a grab past the line plays no
             // threshold of its own, and a release from here judges against where it was grabbed.
-            // The stopped value is already on screen: a settling New Tab card runs 1:1, unbanded.
-            if let browser, let value = latchValue(swipe, browser: browser) {
-                swipe.latch.sync(swipe.isNewTabCard ? -startOffset : value)
-            }
+            if let browser, let value = latchValue(swipe, browser: browser) { swipe.latch.sync(value) }
             return
         }
         guard let browser, let current = browser.currentTab else {
@@ -257,6 +261,14 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             return -shown
         }
         return nil
+    }
+
+    /// The finger travel that `displayed` shows at `shown` where nothing is beside the page: the
+    /// rubber band's inverse.
+    private func travel(showing shown: CGFloat, width: CGFloat) -> CGFloat {
+        let width = max(width, 1)
+        let band = min(abs(shown) / width, 0.99)
+        return (shown < 0 ? -1 : 1) * band / (1 - band) * width / 0.55
     }
 
     /// The page's on-screen offset: 1:1 toward a neighbour, rubber-banded where there is none.

@@ -131,7 +131,7 @@ extension BrowserViewController {
                 : min(pillFrame.minY, bounds.maxY - ChromeGeometry.pillHeight * 2)...bounds.maxY,
             stripBand: chromeOnTop ? row.stripTop...(row.stripTop + stripHeight) : nil,
             statusCorner: duo.statusCorner,
-            sidePaneOpen: sidePaneUI.isRequested
+            sidePaneOpen: sidePaneUI.isRequested, sidePaneWidth: sidePaneUI.restWidth, sidePaneTakesOver: sidePaneUI.takesOver
         )
     }
 
@@ -449,6 +449,9 @@ extension BrowserViewController {
         duo.resizeGeneration += 1
         let generation = duo.resizeGeneration
         tabsUI.swipe.cancel()
+        // A drag or settle of the side pane's divider stops: the window's width rides the
+        // transition, mapped to the new bounds (`SidePaneDividerGeometry.rest(for:)`).
+        sidePaneUI.divider?.cancel()
         coordinator.animate(alongsideTransition: { [weak self] _ in
             guard let self else { return }
             updateDuoLayout()

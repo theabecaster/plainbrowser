@@ -116,8 +116,9 @@ extension BrowserViewController: GalleryHost {
         applyToolbarItems()
         updateButtons()
 
-        // The page zooms into its card; an empty tab has no card, so the gallery fades in.
-        guard let tab = currentTab, tab.isPrivate == tabs.isShowingPrivateTabs,
+        // The page zooms into its card; an empty tab has no card, so the gallery fades in, and so
+        // it does over the side pane with the whole width (the page is out of sight).
+        guard let tab = currentTab, !panes.view.isHidden, tab.isPrivate == tabs.isShowingPrivateTabs,
               tab.isPrivate || tab.profileID == tabs.shownProfile, !session.tabs.isEmpty(tab.id),
               let snapshot = webContainer.snapshotView(afterScreenUpdates: false)
         else {

@@ -44,14 +44,21 @@ struct DuoLayoutInput: Equatable {
     var statusCorner: CGRect?
     /// The user opened the side pane (Reader, Find, History next to the page) in this window.
     var sidePaneOpen = false
+    /// The width the user left the pane's divider at in this window, and whether the pane has
+    /// the whole width (the page out of sight).
+    var sidePaneWidth: SidePaneWidth = .narrow
+    var sidePaneTakesOver = false
 
     init(
         pageArea: CGRect, isRegularWidth: Bool, isRegularHeight: Bool, tabLayout: TabLayout = FixedChoices.defaultTabLayout,
         requestedSidebar: SidebarState = .rail, paneCount: Int = 1, tabCount: Int = 2, focusedPane: Int = 0,
         division: CGRect? = nil, isDivisionActive: Bool = false, occlusions: [CGRect] = [],
         chromeBand: ClosedRange<CGFloat> = 0...0, stripBand: ClosedRange<CGFloat>? = nil,
-        statusCorner: CGRect? = nil, sidePaneOpen: Bool = false
+        statusCorner: CGRect? = nil, sidePaneOpen: Bool = false, sidePaneWidth: SidePaneWidth = .narrow,
+        sidePaneTakesOver: Bool = false
     ) {
+        self.sidePaneWidth = sidePaneWidth
+        self.sidePaneTakesOver = sidePaneTakesOver
         self.stripBand = stripBand
         self.statusCorner = statusCorner
         self.sidePaneOpen = sidePaneOpen
@@ -133,6 +140,12 @@ struct DuoLayout: Equatable {
     var sidePaneDockWidth: CGFloat
     /// The side pane is over the split's second pane, which keeps its page but is out of sight.
     var sidePaneCoversSecondPane: Bool
+    /// Where the divider between the page and the pane can rest, nil where it can't be dragged
+    /// (the pane closed or out of sight, or partly folded, where the fold is the divider).
+    var sidePaneDivider: SidePaneDividerGeometry?
+    /// The pane has the whole width: the pages keep their frames (`paneFrames`) out of sight, so
+    /// giving the width back relayouts nothing.
+    var sidePaneTakesOver: Bool
 
     init(_ input: DuoLayoutInput) {
         let area = input.pageArea
@@ -182,17 +195,26 @@ struct DuoLayout: Equatable {
         )
         sidePaneAvailable = chromeOnTop
         sidePaneCoversSecondPane = sidePaneAvailable && input.sidePaneOpen && splitShown
+        let span = allPanes.minX...allPanes.maxX
+        // Partly folded, the page and the pane each take one side of the fold: no divider.
+        let minimum = CGFloat(FixedChoices.sidePaneMinimumWidth)
+        let foldDivides = input.isDivisionActive && vertical.map {
+            $0.minX - allPanes.minX >= minimum && allPanes.maxX - $0.maxX >= minimum
+        } == true
         var panes = allPanes
+        var divider: SidePaneDividerGeometry?
         if sidePaneAvailable, input.sidePaneOpen, !splitShown {
-            let minimum = CGFloat(FixedChoices.sidePaneMinimumWidth)
-            let width = max(minimum, (allPanes.width * CGFloat(FixedChoices.sidePaneFraction)).rounded())
-            var pageEnd = allPanes.maxX - width
-            var column = CGRect(x: pageEnd, y: allPanes.minY, width: width, height: allPanes.height)
-            // Partly folded, the page and the pane each take one side of the fold.
-            if input.isDivisionActive, let fold = vertical, fold.minX - allPanes.minX >= minimum,
-               allPanes.maxX - fold.maxX >= minimum {
+            var pageEnd: CGFloat
+            var column: CGRect
+            if foldDivides, let fold = vertical {
                 pageEnd = fold.minX
                 column = CGRect(x: fold.maxX, y: allPanes.minY, width: allPanes.maxX - fold.maxX, height: allPanes.height)
+            } else {
+                let geometry = SidePaneDividerGeometry(span: span)
+                let width = geometry.rest(for: input.sidePaneWidth).paneWidth
+                pageEnd = allPanes.maxX - width
+                column = CGRect(x: pageEnd, y: allPanes.minY, width: width, height: allPanes.height)
+                divider = geometry
             }
             panes.size.width = max(0, pageEnd - allPanes.minX)
             sidePaneColumn = column
@@ -216,18 +238,29 @@ struct DuoLayout: Equatable {
             focusedPaneFrame = input.focusedPane == 1 ? second : first
             if sidePaneCoversSecondPane {
                 // The pane takes the second pane's place; the first one is the page it serves.
+                // Its divider rests on the split line only: the split's width is the user's.
                 sidePaneColumn = second
                 focusedPaneFrame = first
+                if !input.isDivisionActive {
+                    divider = SidePaneDividerGeometry(span: span, onlyRest: allPanes.maxX - second.minX)
+                }
             }
         } else {
             paneFrames = [panes]
             focusedPaneFrame = panes
         }
 
+        // The pane with the whole width (a drag past the page's minimum, or its expand button): it
+        // covers the pages, which keep their frames out of sight, and the top bar spans it.
+        sidePaneDivider = divider
+        sidePaneTakesOver = divider != nil && input.sidePaneTakesOver
+        if sidePaneTakesOver { sidePaneColumn = allPanes }
+
         // A top bar spans the pages: a pane of a split is too narrow for a bar of its own. Partly
         // folded, the panes sit either side of the fold and the bar keeps to the focused one.
         let spansPanes = chromeOnTop && !(splitShown && input.isDivisionActive) && !sidePaneCoversSecondPane
         var lane = spansPanes ? panes.minX...panes.maxX : focusedPaneFrame.minX...focusedPaneFrame.maxX
+        if sidePaneTakesOver { lane = allPanes.minX...allPanes.maxX }
         // Expanded floating over the page: the pill stays clear of it.
         if sidebarFloats {
             let width = SidebarState.expanded.width

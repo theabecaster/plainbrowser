@@ -76,6 +76,14 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   and slides under it. To type an address, the pill stays in the bar and the search sheet grows
   down from it, with Cancel beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab,
   17% with the strip; nothing while reading.
+- **The side pane's divider** (wide screens): the seam between the page and the side pane is a
+  hairline with a short ink capsule in its middle (4 × 36 pt, tertiary ink, a 1 pt paper edge; no
+  glass, it is part of the seam), inside a 44 pt target. Drag it and it rests at Narrow, Half or
+  Two Thirds, whichever leave the page 375 pt; drag the pane thin and it closes, drag the page thin
+  and the pane takes the whole width (the page keeps its place out of sight, the top bar spans the
+  pane). The capsule grows under the pointer and the finger and takes the accent where letting go
+  would close or take over. The header's Full Width / Show Page button, the capsule's menu, a
+  double tap (back to Narrow) and VoiceOver's adjust do the same without a drag.
 - Plus buttons act at once when there is one obvious action, and become a menu only when there is a real choice.
 - **The bar's buttons** (every layout): Back, Forward, Tabs, New Tab ("+") and More. New Tab opens a
   tab of the kind on screen with the keyboard up; its long press offers the other kind. Share is
@@ -127,9 +135,9 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
   | Kind | Feel | Meaning | Examples |
   |---|---|---|---|
-  | `selection` (the tick) | selection | a value or state changed in place, or a gesture crossed back over its threshold | zoom step, reorder slot, a toggle, Find wrapping to the first match, un-arming a swipe |
+  | `selection` (the tick) | selection | a value or state changed in place, or a gesture crossed back over its threshold | zoom step, reorder slot, a toggle, Find wrapping to the first match, un-arming a swipe, the side pane's divider passing a rest |
   | `tap` (the commit) | light impact | an action committed whose result is small, off-screen or delayed | background tab, download started, zoom back to 100%, a flick that commits without arming |
-  | `threshold` | medium impact, 0.7 | a gesture crossed into a new outcome while the finger is down | bar swipe past half, the New Tab card at 80 pt, swipe up past the commit line, a card past its close line |
+  | `threshold` | medium impact, 0.7 | a gesture crossed into a new outcome while the finger is down | bar swipe past half, the New Tab card at 80 pt, swipe up past the commit line, a card past its close line, the divider past its close or take-over line |
   | `drop` | rigid impact, 0.6 | a dragged item landed in a new place | gallery reorder drop |
   | `close` | soft impact | something went away | a tab, a pane, a profile |
   | `success` | notification success | it worked, and the result is invisible or ends a wait | Copy Link, favorite, download finished, Clear History done, the intro finished |

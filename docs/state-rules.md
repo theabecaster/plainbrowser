@@ -258,7 +258,14 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | Find | Field, count ("12 matches"), list; "Type to find on this page." before typing; "No matches" | Return goes to the next match. Marks come off when the pane closes or the section changes. |
 | History | The History screen without Done | The pane has its own close. |
 | Edge swipe from the trailing edge | Opens it where it can show and it is closed | Takes the edge from WebKit's swipe forward there; Forward stays in the top bar. |
-| Swipe toward the edge on the pane | Closes it | Same direction as it came in. |
+| Swipe toward the edge on the pane | Closes it | Same direction as it came in. Not from the divider's strip, which is the divider's. |
+| The divider's handle (a short capsule on the seam) | While the pane is open beside the page or over it, and not partly folded (the fold is the divider), not while it opens or closes | The seam is the place to resize; its 44 pt strip takes sideways drags only. |
+| Drag the divider | Same as the handle; not while the search sheet, a sheet, the gallery or a fold or rotation is running | Rests at Narrow, Half, Two Thirds (those that leave the page 375 pt); past the lines it closes the pane or hands it the whole width. |
+| Expand button (Full Width / Show Page) in the pane's header | Same as the handle | The visible way to the whole width and back: a gesture is never the only way. |
+| The handle's menu (long press): the rests, Full Width, Hide Side Pane | Same as the handle; the rests that fit this width only; in a split, "Beside the Page" | The drag's menu equivalent, on the thing it acts on. |
+| Double tap on the handle | Same as the handle | Back to Narrow; at Narrow it bumps with "nothing there". |
+| Control-Command-S / -] / -[ | The pane can show (S); it is open and the divider can move (] and [) | Show or hide it, one rest wider or narrower; the whole width after the widest; stepping never closes it. |
+| The page with the pane over the whole width | Hidden (kept at its frame), the top bar spanning the pane | Coming back relayouts nothing; the bar still acts on the page the pane serves. |
 
 
 ### Search field (Editing mode)

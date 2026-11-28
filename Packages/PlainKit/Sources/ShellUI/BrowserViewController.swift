@@ -815,12 +815,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             period.wantsPriorityOverSystemBehavior = true
             return [escape, period]
         }
-        guard canOpenLocation else { return nil }
+        // The side pane's keys (`sidePaneKeyCommands`) where it can show.
+        let pane = sidePaneKeyCommands()
+        guard canOpenLocation else { return pane.isEmpty ? nil : pane }
         let open = UIKeyCommand(
             title: String(localized: "Open Location"), action: #selector(openLocationPressed), input: "l",
             modifierFlags: .command
         )
-        return [open]
+        return [open] + pane
     }
 
     /// The bar is on screen to open from: not the gallery, a sheet, or Find on Page.

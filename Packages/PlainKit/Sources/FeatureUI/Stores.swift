@@ -14,6 +14,18 @@ public nonisolated protocol SettingsStoring: Sendable {
     func saveSettings(_ settings: BrowserSettings) async throws
     /// The custom engine the user defined, even when another engine is selected.
     func savedCustomSearchEngine() async throws -> SearchEngine?
+    /// Applies `change` over what is stored now, atomically where the store can, and returns the
+    /// result: another window may have saved a different setting meanwhile.
+    func updateSettings(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) async throws -> BrowserSettings
+}
+
+extension SettingsStoring {
+    public func updateSettings(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) async throws -> BrowserSettings {
+        var settings = try await settings()
+        change(&settings)
+        try await saveSettings(settings)
+        return settings
+    }
 }
 
 /// Clears history, cookies, caches and website data. The app wires it to the history recorder,

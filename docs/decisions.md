@@ -818,6 +818,8 @@ Research and sources: docs/research/dark-mode.md.
   a window ignores `overrideUserInterfaceStyle` (measured), so the pool sets
   `traitOverrides.userInterfaceStyle` on each web view to the style the browser's window shows,
   and background tabs load in the right colors.
+- **Superseded 2026-11-27 (below, "Dark Pages: off by default, one suggestion"):** dark pages
+  was automatic for everyone. The rest of this bullet is the engine's eligibility, which holds.
 - **Dark pages is automatic, with a per-site switch** (`FixedChoices.darkPagesOn`). It runs only
   while the app is dark, never on a page that declares a dark `color-scheme`, asks for
   `only light`, has a readable `prefers-color-scheme: dark` rule, or already has a dark
@@ -864,6 +866,107 @@ Research and sources: docs/research/dark-mode.md.
   off, and a user script cannot ask the app synchronously. The pool builds the script with the
   list and swaps it in every controller when the list changes (rare), keeping the other scripts.
 
+## Page appearance: Dark, Light or Off for websites, learned from the first pick (2026-11-28)
+
+Owner: "Plain's theme follows the setting Light, Dark or System. The new toggle should toggle
+Light, Dark or Off for the pages … doesn't mix the two features, and is clear", and "we save the
+choice for other pages that can support it". This replaces the on/off indicator of the section
+below; its engine, suggestion and per-site memory stay.
+
+- **Two features, two names.** *Appearance* (System, Light, Dark) colors Plain: its windows,
+  chrome, sheets. *Page Appearance* (Dark, Light, Off) is how websites look, nothing else. A page's
+  appearance is applied to its web view alone (a per-web-view `prefers-color-scheme`, plus Plain's
+  darkening for Dark), so the pill, the bar and the status bar never change with it, and Plain's
+  Appearance never changes a page's choice. In Settings they sit one under the other with their
+  own words.
+- **The three states.** **Dark:** the site's own dark design where it has one, Plain's darkening
+  where it doesn't. **Light:** the site's own light design. **Off:** the site as it was made (a
+  site with both designs follows Plain's colors, as every browser does by default).
+- **Light on a dark-only site: not offered.** Lightening a design made in dark is not the mirror of
+  darkening: dark designs carry light text on dark pictures and glows that only work on dark, and
+  no engine (Safari's, Chrome's, Dark Reader's) does it. Plain doesn't pretend: where a site has no
+  light design (a `color-scheme` of dark alone, or a dark page in light colors) Light shows
+  disabled in the menu, with "This site is made only in dark", and never in the pill.
+- **The default is learned, then deliberate** (`PageAppearanceChoices.choose`):
+  1. Nothing chosen: every site as made (`FixedChoices.defaultPageAppearance` is nil).
+  2. The **first pick** from the page's control (or Site Settings) becomes the default for every
+     site that can show it, and a toast says so: "Dark is now the default for websites", with
+     **This Site Only** to keep it for that site instead. The suggestion's Turn On sets Dark.
+  3. After that, a pick is **for that site only** (an exception), and the default stays. Picking
+     what the default already is clears the exception. **Use for All Sites** in the menu makes the
+     site's choice the default on purpose; Settings › Page Appearance changes it too.
+  4. Every other site's own choice survives a change of the default: it was the user's answer for
+     that site.
+  Why this rule: the owner wants one answer to carry ("save the choice for other pages") and a
+  broken site to be fixable without undoing that; the alternative (every pick sets the default)
+  turns a one-site fix into a global change, and the opposite (every pick per site) never learns.
+  The first pick is the only one that carries, it says so, and it can be undone in one tap.
+- **The control shows whose choice it is.** The menu's title reads "Page Appearance · This
+  Site" or "Page Appearance · All Sites" (plain "Page Appearance" while nothing is chosen);
+  VoiceOver reads "Dark, this site" / "Dark, all sites". The checked item is what the page shows.
+- **Where it lives.** A glyph at the pill's leading edge while Plain changes the page (Dark or
+  Light), or while this site is Off against a default (the way back). Its tap opens a menu, not a
+  cycle: with three states a cycle makes the user tap through a state they don't want (Light
+  flashing a dark site) and can't be predicted; a menu shows all three, checked, and picks in two
+  taps, as Safari's page menu does. The same menu is Site Settings' **Page Appearance** on every
+  web page, the way in while the pill shows nothing.
+- **Glyphs that read at a glance:** a moon (`moon.fill`) for Dark, a sun (`sun.max.fill`) for
+  Light, in the accent; a slashed circle (`circle.slash`) for Off, in the ink. Three shapes, so a
+  state never depends on a tint, and the same glyphs in the menu. (The half circle, which reads as
+  "dark mode on or off", is gone: it changed meaning by color.)
+- **The suggestion** stays one-time, in dark colors, on a light page, before any default exists:
+  "Dark Pages" / "Show every website dark, even ones made only in light?" / No Thanks, Turn On.
+  Turn On makes Dark the default.
+- **Settings:** the Dark Pages switch becomes **Page Appearance** (Off, Dark, Light), the default,
+  under Appearance, footer "How websites look by default; a site can have its own from the
+  address bar. Off shows each site as it was made." Appearance's footers now speak of Plain's own
+  colors only ("Plain's own colors stay dark"), so the two rows never claim each other's job. It
+  stays because the default needs a place that isn't a page, and it replaces the switch rather
+  than adding a row.
+- **The status bar belongs to the page.** On phones the page runs under the status bar (as in
+  Safari), so the strip there shows the page's top in the page's colors and iOS picks the status
+  bar's ink from what is under it. A page shown Dark in a light Plain has a dark strip with white
+  ink; that is the page, not Plain's theme changing. The bars, the pill and the sheets keep
+  Plain's colors (design review 2026-11-28 raised it; kept on purpose).
+- **Per site, private, motion, feel:** each site's choice is remembered (Storage
+  `sitePageAppearance`, the sites turned off before moved in as Off); a private tab's picks last
+  for its session and never set the default; every pick plays the selection tick and crossfades
+  the page from a snapshot (no reload, no white flash); the web view takes the site's scheme
+  before the page's first style, so a page never loads in the wrong one.
+
+## Dark Pages: off by default, one suggestion, an indicator in the field (2026-11-27)
+
+(Superseded in part by "Page appearance" above: the indicator, the toggle and the Settings switch.)
+
+Owner: "By default keep it off … show a little banner as a suggestion … an indicator in the
+address text field." Research, plan and the Codex plan review: docs/research/dark-pages-optin.md.
+
+- **Off by default** (`FixedChoices.darkPagesDefaultEnabled`), for upgraders too: it was on for
+  two TestFlight days without anyone choosing it, and the suggestion is how an upgrader learns
+  the default changed. Every engine gets some pages wrong (Safari 27.3's included); a user who
+  chose it forgives a broken page and knows where the switch is. Safari 27.3 ships the same
+  shape: off, a Try on bright pages in dark mode, a per-site switch.
+- **A switch and per-site choices.** Settings › Appearance › Dark Pages (`BrowserSettings.darkPages`)
+  darkens sites automatically; a site's own choice (on, off, automatic; Site Settings or the
+  indicator) beats it either way and is never cleared by it. Sites turned off before stay off.
+- **One owner, complete at launch.** `StorageSiteDarkPagesStore` holds the switch and the site
+  lists, with a launch copy of all of it in user defaults, so a restored page never darkens a site
+  the user turned off before the database opens. Every window's pool follows it.
+- **Pages it doesn't apply to are never touched.** No guard, no twins; one light check after
+  load (sliced, visible pages only, stricter than the darkening's judgement: the root and a
+  five-point sample) reports `available` or `off` for the indicator, Site Settings and the
+  suggestion. Light colors read nothing.
+- **The indicator** is `circle.lefthalf.filled` (Apple's Dark Mode symbol; the moon is Focus) at the
+  pill's leading edge, 44 pt: accent while applied, ink while the user turned it off here (a
+  working switch, not a disabled one), absent otherwise. A tap toggles the site with a tick and a
+  0.25 s crossfade from a snapshot, no reload. VoiceOver: "Dark Pages", On / Off.
+- **The suggestion** is a small glass card (title, one sentence, No Thanks / Turn On) by the bar,
+  above it at the bottom and under it in the top bar, 2 s after a light page in dark colors was
+  checked, for 8 s, never over a sheet, the keyboard, a toast, the reader or a collapsed bar, never
+  in a private tab. Turn On and No Thanks are final; untouched, it comes back on another site in a
+  later session. A card, not the one-line toast: it asks a question with two worded answers, like a
+  TipKit tip; ✕ would read as "not now".
+
 ## Paper texture (2026-11-26)
 
 - **Chosen:** the Paper surfaces carry a faint, fine paper texture, so "plain" reads as plain
@@ -873,13 +976,37 @@ Research and sources: docs/research/dark-mode.md.
   page tiles the same pixels as a CSS `background-image`.
 - **Recipe:** a 256 px tile (about 85 pt at 3x), three layers on a torus so tiles meet without a
   seam, added to the base in 8-bit levels: *formation* (value noise on 16 and 8 px lattices,
-  σ 0.45 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 1.0) and *fibres* (121 short,
-  tapered, nearly straight strands on a jittered grid so none cluster, peak 1–3 levels, 60 % darker,
-  40 % lighter). Night paper on Deep Lagoon is about half as strong (σ 0.25 / 0.5), with mostly
-  lighter strands. Day shadows move blue most (warm); night highlights move blue most (a cool
-  sheen). A ±1 level triangular dither hides 8-bit steps. The sheet averages to `Palette.background`, so it still matches the launch screen.
-  Tests hold it there: mean within 0.5 levels, 99.9 % of pixels within 9 (day) / 5 (night) levels,
-  no seam step larger than any step inside the tile.
+  σ 0.45 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 2.2) and *fibres* (625 short,
+  tapered, gently wandering strands, 8–32 px, on a full jittered grid so none cluster, 2.05–5.2 levels,
+  60 % darker, 40 % lighter). The fibre field is high-passed (minus a 25 px box blur, twice), so
+  where strands gather there is no soft cloud for the eye to find again one tile over. Night paper
+  on Deep Lagoon is weaker (σ 0.28 / 1.1, 529 strands at 2.0–4.25 levels, mostly lighter). Day
+  shadows move blue most and red least (warm; red is already 255, so it barely moves and its
+  average stays put); night highlights move blue most (a cool sheen). A ±1 level triangular
+  dither hides 8-bit steps. The sheet averages to `Palette.background`, so it still matches the
+  launch screen. Tests hold it there: every channel's mean within 0.5 levels; luma σ between 1.8
+  and 2.8 levels by day and 1.2 and 1.9 by night, 99.9 % of pixels within 12 (day) / 10 (night)
+  levels; an arm's-length blur (about 4 pt) leaves under 0.5 / 0.3 levels, so the tile never
+  shows as a grid; the step across the tile edge within 4.5 σ of the steps inside it (every layer
+  wraps, so the edge is one more step; a real seam measures 6–8 σ).
+- **Raised 2026-11-27 (owner: "The paper texture is barely visible, fix it.").** The first recipe
+  (formation 0.45, tooth 1.0, 121 strands at 1.2–3.2 levels; night 0.25 / 0.5, 100 at 1.2–2.6)
+  measured luma σ 1.16 levels by day and 0.77 by night: about 1.6 % and 1.0 % of a full-range
+  noise overlay, under the 2.5 % floor below. Most of that was the tooth and the dither, a pixel or
+  two across, which at 3x is under what the eye resolves at arm's length; the strands, which carry
+  the "paper" read, sat below the tooth. Now σ 2.31 / 1.52 (about 3.1 % / 2.1 %): the tooth 2.2×,
+  about five times the strands' total ink, the formation unchanged so the repeat stays hidden.
+  Chosen from a strip in the app (start screen and Settings, light and dark, full screen and 1:1):
+  the first recipe, then about 1.5×, 2× and 2.6× its σ. 1.5× was still close to barely visible;
+  2.6× turned Settings' ground mottled and the strands scratch-like. At 2× the design review
+  (Codex) found the material right but a faint lattice of recurring strand clusters when the tile
+  was repeated over a screen, clearest at night, so the same strength now comes from 625 faint,
+  gently wandering strands instead of 220 stronger, straighter ones (a square number, so the
+  grid they start on has no empty band): no single strand is a
+  landmark (the strongest arm's-length spot at night drops about 30 %). Secondary text barely
+  moves: at glyph scale (the paper averaged over 5 × 5 px) the worst `Palette.inkSecondary` goes
+  6.28 → 6.21:1 by day and 9.14 → 9.01:1 by night, the system's secondary label 3.31 → 3.28:1 and
+  5.72 → 5.66:1 (3.35 and 5.79 on flat paper). Tile size, memory and drawing are unchanged.
 - **Why these numbers:** grain guides put "material, not dirt" at roughly 2.5–12 % noise opacity
   and warn that more reads as dirt ([shadcn grain](https://www.shadcn.io/background/grain),
   [Magic UI noise](https://magicui.design/docs/components/noise-texture)). iOS 7 Notes' visible
@@ -900,6 +1027,17 @@ Research and sources: docs/research/dark-mode.md.
   appearance, instead of a ~70 KB PNG per sheet in the app and the reader, and one source for both.
   Until a tile is ready the surface is the flat color the tile averages to, so the swap can't be
   seen.
+- **Checked again with the raised recipe (2026-11-28).** Two perf gates showed "main to search
+  field focused" 20–100 % slower on a loaded test Mac, so it was measured directly. Generation:
+  1.37 → 2.38 ms per tile (optimized, on a Mac); in the app on the Duo simulator (the `paper.tile`
+  signpost, 7 launches a round) 1.5–2.1 → 2.4–6.1 ms, on a background thread, starting 200–700 ms
+  after `main` and done 100–500 ms before the field is focused; the main thread never waits for it
+  (it shows the flat color until then), and making the pattern color takes 0.6–1.1 ms on the main
+  thread (`paper.pattern`). End to end, interleaved on one simulator, 15 launches each: field
+  focused median 604 ms old, 579 ms new; at low load 398 ms old, 315 ms new; link paint 55 / 56 ms.
+  The earlier gaps were load. A baked PNG was tried as the alternative: reading and decoding it
+  from the bundle on a cold launch took 16–42 ms (still off the main thread) and would add about
+  148 KB to the app (82 KB day, 66 KB night), so the tile stays generated.
 - **CSS:** a tiled PNG, not SVG `feTurbulence`, which re-runs the filter on repaint and pinned the
   CPU while scrolling ([Mozilla 422371](https://bugzilla.mozilla.org/show_bug.cgi?id=422371),
   [WebKit 287982](https://bugs.webkit.org/show_bug.cgi?id=287982)). The background scrolls with
@@ -1231,6 +1369,8 @@ Safari on iPhone Duo is the model (`docs/research/safari-duo.md`).
   pill (1 to 2) the tucked address rises off the top edge (`TopChromeGeometry.pillTransform`) and
   the top inset goes to `hiddenInset` (0); the viewport range is hidden to expanded there too. The
   top bar is clear of the home-indicator zone, so it hides fully like the bottom pill.
+  **Superseded** by "Duo inner screen: a glass band with the host while reading": under a top bar
+  the chrome never hides; the slim glass band with the host stays.
 - **Performance** (iPhone 17 simulator, Release, 25 scripted swipes on the long test page; the
   simulator has no hitch data, so two proxies). The shell's work per scroll callback
   (`toolbar.scrollStep` signpost, ~3,500 callbacks): before mean 6.7–8.0 µs, p95 5.8–9.1 µs, max
@@ -1437,7 +1577,10 @@ simulator's 24 pt status bar had hidden this.
 - **Reading state:** in the zone the address shrinks in place (70%) on the row, the buttons and
   strip rise and fade; hidden lifts it off the top edge. Under a short status bar the pill tucks
   under it as before.
-- **No band at the top in any state (2026-11-27, follow-up).** Owner, on the device with this build: "when
+- **No band at the top in any state (2026-11-27, follow-up).** **Superseded** by "Duo inner
+  screen: a glass band with the host while reading": the owner asked for Safari's glass band
+  and slim host bar; what he rejected here was a band of a header's color with nothing in it.
+  Owner, on the device with this build: "when
   I scroll, the text field and buttons hide properly but the bar stays … I don't like that bar
   that stays there. Do we even need it at all? When the text field and buttons are showing I
   think it might look fine without that bar, so let's get rid of it all." The band while reading
@@ -1573,6 +1716,9 @@ Search, recorded on the same phone: "Arc keeps it all very intuitive." Research 
 docs/research/address-focus.md.
 
 **Two intents, two doors (Arc's model).**
+
+*Superseded in part by "The page's address in the field" (below): on a page the field now
+opens with the address selected, and the page's row is gone.*
 
 1. **Go somewhere new: tap the pill.** The field opens empty ("Search or enter address"), the
    page stays behind a paper veil (the fresh search's `FrostView`), and what is submitted opens in
@@ -1962,6 +2108,10 @@ bar above every page. Research: docs/research/inset-fill.md.
   the bar. When the bar came to rest collapsed the inset went to 0 in one step, so the header
   jumped 72.5 pt and the fill vanished after the controls had gone: the transition. On phones the
   panes started under the status bar and the root view's paper showed above them.
+- **Updated** by "Duo inner screen: a glass band with the host while reading": the obscured top
+  under the top bar is now the collapsed glass band's bottom (73 pt on the device), still the
+  same in every state, so still nothing jumps; the header's color fill sits behind the band's
+  glass.
 - **Chosen: the bar floats over the page and gives it no inset of its own.** Under the top bar
   the obscured top is the status items' strip in every state (`TopChromeGeometry.obscuredInset`):
   0 in the status zone, the status bar's height under a full-width status bar. No public API turns
@@ -2307,12 +2457,12 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
 - **The splash is the icon the user tapped.** The icon's field (its two-color fill from (0.2, 0)
   to (0.8, 1) and its two blooms, stretched over the screen as the icon's square is), with the
   Stem mark centred on it at 152 pt, in that icon's colors: cream paper, the coral fold and the
-  dawn for Dawn (and Dawn's dark art when iOS is dark); the night sky and moon for Night; the
+  dawn for Dawn (light and dark alike since 2026-11-28, "App icons: the Home Screen shows the
+  picker's art"); the night sky and moon for Night; the
   Lagoon fold on coral for Coral; the ink ring on cream for Paper. `SplashTheme` holds the
   generator's values (Brand/tools/gen_icon.py) and a test reads the generator's file to hold
   them to it; the shapes are `StemGeometry`, the generator's port the intro already used. It
-  follows `AppIcons.current` and the system's light or dark (as the icon and the launch screen
-  do), not the app's Appearance setting.
+  follows `AppIcons.current`, not the app's Appearance setting.
 - **No flash from the launch screen: it stays plain paper, and iOS's own fade carries the
   splash in.** iOS cannot vary the launch screen by alternate icon: `UILaunchScreen` and launch
   storyboards are static (colors and images may follow light and dark, nothing the app chose);
@@ -2415,6 +2565,191 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
   the splash is the flat art with its own soft shadows) and the tinted and clear icon
   appearances (the app cannot read which one the Home Screen uses; the splash shows the
   colorway's own art).
+## Duo inner screen: the sidebar, in both orientations (2026-11-27)
+
+Owner, on the Duo: "The Duo inner screen sidebars need some love and proper design, and I think we
+can use web favicons instead of URL initials [...] more elegant and premium, with proper
+transition animations. Right now in portrait the sidebar disappears."
+
+- **Looked at:** Safari 27.3's Vertical Tabs (a left strip, icons by default, dragged wider for
+  titles; reviewers: "icon-only tabs are hard to tell apart", `docs/research/safari-duo.md`),
+  iPadOS Safari's sidebar (a list of titled rows with close buttons, a button to show and hide
+  it, costs width) and Arc's (favicon tiles on top, titled rows, the tab on screen a lifted
+  card, New Tab as the first row, the page a card beside it).
+- **Chosen: one column, two widths.** A 52 pt rail of site icons on 32 pt tiles; the same rows
+  at 260 pt show the title and a close button. Top to bottom: New Tab on the top bar's row
+  (Lagoon plus on a tinted tile; a long press offers New Private Tab), the tabs, private tabs
+  under a hand, and Show Titles at the bottom edge, clear of the home indicator. Every tile
+  stands in one column and every label starts on one line, so the rail is the left 52 pt of
+  the wide list and nothing rearranges between them. Paper, a hairline to the page, no glass:
+  the column is docked beside the page, and glass is for what floats (ui-reference).
+- **Three ways to widen, one way each to close and add:** drag the sidebar sideways (it follows
+  the finger, as before), tap Show Titles (Hide Titles when wide), or ask for the tab's menu.
+  Safari's drag alone is not discoverable; the bottom row is the "clear control". Close is the
+  row's button when titles show, the tab's menu and VoiceOver's action in the rail. No pin
+  control: nothing in the app pins a tab yet (state-rules, gap 21), so the rail draws none.
+- **The tab on screen is Lagoon:** a tinted card (`Palette.pressed`) ringed in
+  `Palette.accentOnGlass`, around the tile in the rail and across the row when wide. A split's
+  other pane keeps its quiet outline. The mark's width follows the sidebar's edge, so the clip
+  never cuts it; choosing another tab fades the mark out there and in here (`Motion.quick`),
+  nothing slides.
+- **Portrait keeps the sidebar.** It used to fall back to the strip there: 669 − 52 = 617 pt of
+  page, under the 640 pt side-tabs minimum. The rail now docks down to a 600 pt page
+  (`FixedChoices.sidebarRailMinimumPageWidth`): 617 pt is still a desktop-width page, and Left
+  or Right means the same thing after a rotation, which is what the setting promises. Expanded
+  cannot dock there (409 pt of page), and the top bar cannot shrink beside it (409 pt less the
+  status corner leaves no address), so in portrait it opens as a drawer over the page and the
+  bar's leading end, with a shadow, above the chrome so its rows take the touches
+  (`DuoLayout.expandedSidebarCoversChrome`, `FixedChoices.topBarMinimumLane` 520 pt). A tab
+  picked, a touch on the page or the address field closes it. The page and the bar keep their
+  frames under it. Landscape docks Expanded (691 pt of page). Not chosen: the strip in portrait
+  (the complaint), a floating rail over the page (covers the page's own edge), no Expanded in
+  portrait (titles would need a rotation).
+- **Motion** (rows of the motion table added in docs/plan.md): the widths spring with
+  `Motion.sidebarSettle` (0.35 s, bounce only after a flick) and follow a finger 1:1; the
+  titles fade in over the first half of the way and the mark stretches with the edge, both
+  inside the same spring. Rows are laid out once at 260 pt and clipped, so a resize lays no row
+  out again; the page gets its new frame once, inside the spring. A tab opening or closing is
+  the list's own insert and delete; an icon that arrives after its row fades in over the letter
+  (0.2 s), and one already in memory is there with the row. A rotation or an unfold is the
+  system's bounds change: the rail is in the same place before and after. Reduce Motion: the
+  width change is a crossfade of the whole view, the mark and the icon appear without a fade.
+- **Perf:** rows scrolling in assign a ready bitmap (`SiteIconView`), never read or decode; the
+  drawer changes no frame but its own. Measured on the simulator, 50 tabs at 4000 pt/s in 120 Hz
+  steps: see `docs/perf-log.md` notes and `SideTabsViewTests`.
+
+## Site icons (2026-11-27)
+
+Tabs showed the first letter of their host. They show the site's own icon now, everywhere tabs
+are listed: the sidebar, the strip and the switcher's cards. The favorites above the keyboard
+show theirs too, on their disc, once the site has been visited.
+
+- **Fetched once per site** (`WebEngine/FaviconService`). When a main-frame load finishes, a
+  dictionary lookup decides: a site seen this launch costs nothing. Otherwise the profile's
+  database is asked; an icon stored within 14 days ends it. Else the page is asked once for its
+  `<link rel="icon">` and `apple-touch-icon` links (one `callAsyncJavaScript` in the engine's
+  content world; nothing is injected into pages), the best is downloaded, and `/favicon.ico` is
+  the last try. Best is the smallest that is at least 60 px (20 pt at 3x), then the touch icon,
+  then smaller ones; at most four tries, 768 KB and 8 s each. A site with no icon is asked
+  again after a day. SVG icons are skipped (ImageIO draws none), and an HTTPS page's icon must
+  be HTTPS.
+- **Off the main thread:** the download (an ephemeral `URLSession` with no cookies, no cache
+  and no credentials, so the request says nothing about the person), the scaling to at most
+  96 px and PNG encoding (ImageIO), the database, and every decode. The main thread asks the
+  page and assigns bitmaps. Signposts: `favicon.fetch`, `favicon.decode`.
+- **Decoded at the size shown.** A view asks for its own pixel size (`iconSide × displayScale`);
+  the service decodes with ImageIO's thumbnail path into a bitmap of exactly that size and
+  keeps it in an `NSCache` (4 MB, about 300 icons; dropped on a memory warning). Rows asking
+  for the same icon share one decode.
+- **Stored per profile.** Each profile's icons live in that profile's own database (the
+  `favicon` table every profile database has, keyed by host), so one profile's list of visited
+  sites never shows in another's file, Clear History and Data clears them all, and deleting a
+  profile deletes its icons with its history. Maintenance drops icons not refreshed in 90 days.
+- **Private tabs: memory only**, at most 64 sites, in a cache of their own, gone when the last
+  private tab closes. Nothing of a private tab reaches a database, and a regular tab's row
+  never shows an icon only a private tab fetched.
+- **The tile.** Every tab has the same lifted tile whatever its icon, so a rail of mixed icons
+  keeps one rhythm. The icon's pixels decide the tile once, off the main thread: an opaque icon
+  or a colorful shape sits on the surface color; one dark shape on a clear ground (a black
+  logo) keeps a light tile at night, one light shape a dark tile by day
+  (`SiteIconStyle`, `Palette.iconTileForDarkMark`). The switcher's cards have no tile, so there
+  the shape comes drawn on a light rounded one. Sites without an icon keep their letter, now in
+  New York on the same tile.
+- **Not chosen:** a favicon service on a server (a third party would learn every site), WebKit's
+  private icon database, `LPMetadataProvider` (a second full page load per site), an injected
+  user script on every page (work on every page for something needed once per site).
+- **Not built here:** icons in the widgets (they read a shared file the app writes; polish
+  backlog). A favorite never visited since this build keeps its letter until it is.
+
+
+## Duo inner screen: one tab shows no tab list; every tab is its own plate (2026-11-27)
+
+Owner, on the public beta: "if I have one tab, the whole bar shows, and this looks weird [...]
+Arc doesn't do this at all, so we can't copy it." And: "Non-selected tabs on the Duo don't look
+like separate things; they're just part of the whole bar."
+
+- **Looked at:** Safari (iPadOS and macOS, and 27.3's vertical tabs) hides its tab bar with one
+  tab unless told to always show it; Chrome on iPad always shows its strip, one tab stretched
+  across a bar that says nothing; Orion follows Safari; Arc's desktop sidebar always shows, but
+  it is also where the address, the spaces and the pinned sites live, so it is never a list of
+  one thing.
+- **Chosen: the list earns its place from the second tab,** for the strip (already so) and now
+  the sidebar too (`DuoLayout.showsSidebar`). Plain's top bar holds the address and the
+  buttons, so with one tab the sidebar would be a column for one tile and a plus. The page gets
+  the whole width; the Tabs button opens the switcher, as it does for one tab everywhere; New Tab
+  is in the tabs menu, in More, and typing in the address opens one.
+- **Not chosen: keeping a compact New Tab affordance in the rail's place.** A 52 pt column for
+  one button costs the page as much as the rail and reads as a list that failed to load.
+- **The motion makes it read as meant.** The second tab brings the list in from its edge
+  (`animateTabListPresence`): the strip drops from under the bar, the sidebar slides from the
+  side, in the sidebar's own spring (0.35 s, no bounce), and the page takes its new frame once,
+  inside it. The list is built at its resting frame and only its transform and opacity move;
+  leaving, a picture of it goes back the same way while the layout is already the one-tab
+  layout. Reduce Motion: a 0.2 s crossfade. Signpost: `tabList.presence`.
+- **The sidebar's state is kept:** Rail or Expanded (and Hidden by the Tabs button) come back as
+  they were with the second tab.
+- **Plates:** each tab in the strip is a 30 pt plate, 6 pt of glass between two: not on screen,
+  a veil of the card's color with a hairline (`Palette.tabPlate`, `tabPlateEdge`; a private tab
+  on `privateTabPlate`) and a secondary title; on screen, the solid card with the Lagoon ring
+  and a semibold title. Safari's iPad tab bar and Chrome's tab shapes do the same job; the
+  veil keeps Plain's glass showing through, and the hairline keeps the edge over a white page
+  or a black one. The sidebar's titled rows get the same plate, faded in with the titles; in the
+  rail the tile is the shape, and a second box around it would be noise.
+- **The strip brings the tab on screen into view** when a restored session arrives after its
+  first layout (seen on the real inner screen: twenty tabs, the twentieth on screen, the strip
+  resting on the first).
+- **The strip is as wide as its tabs** (owner: "The whole bar should grow with the number of tabs
+  it has when there are two or more"). Each tab rests at 180 pt
+  (`FixedChoices.tabStripRestingItemWidth`), so two tabs are a 422 pt bar, and New Tab rides its
+  end; it reaches the lane at five tabs in landscape and four in portrait, then the tabs share
+  the lane down to 140 pt, then scroll (as before). **From the leading edge, not centered under
+  the address:** centered, every tab would move each time one opens or closes; from the edge a
+  tab keeps its place and only the bar's end moves, as Safari's and Chrome's tab bars do. The
+  bar's width changes in one spring (the sidebar's, 0.35 s, no bounce): one layout pass, the
+  frame interpolated by the system. A stretch by transform was not used: it would bend the
+  capsule's ends and the tabs with it.
+- **The strip starts 10 pt under the status items** (`FixedChoices.tabStripStatusGap`; owner:
+  "The tabs bar should be below the status indicators; right now it's slightly under them").
+  The items end at 69 pt, and their backing reaches about 6 pt further, so at 74 the strip's
+  top edge slid under it. Now 80 pt in both orientations (`TopChromeGeometry.stripTop`: 10 pt
+  under the row the items sit on); the page's first line moves from 112 to 118. A corner that already runs down to the safe area's
+  top keeps the row's 4 pt. Leaving with the bar, the strip keeps 4 pt from the items.
+  `DuoInnerStatusRowTests.theStripStartsBelowTheStatusItemsWithAGap` holds the device's numbers.
+- **Clarity audit, inner screen:** the top bar's trailing capsule holds only the buttons that
+  show, packed toward More (the start screen showed 132 pt of glass around More alone); More
+  never moves, as Back never does in the leading capsule. A pill too narrow for "Not Secure —
+  host" (portrait with the side pane open read "…ure — localhost") shows the warning as its
+  symbol and the host whole. A tab in the rail shows its site's icon; a site without one (a
+  local test page) keeps its letter on the same tile.
+- **Code review, round 3** (Codex): a split is offered only where it fits beside the rail the
+  second tab brings (`DuoLayout.splitAvailable` counts the rail whenever Left or Right is in
+  effect); the Tabs button's rules are read again when the sidebar comes or goes; a tab list on
+  its way out is a picture owned by the shell, ended by the next change, a rotation or a fold,
+  and taken from what is on screen when the change interrupts an entrance; under Reduce Motion
+  the list is there or gone inside one crossfade; the strip's width follows its tabs off screen
+  too; only the top bar packs its trailing capsule (a phone's one bottom row keeps its slots),
+  and only the top bar's pill shortens "Not Secure".
+- **Haptics for the tab lists** (app-wide plan): Show Titles keeps its tick; a drag on the sidebar
+  ticks once as the titles come in and once as they go, with a band between
+  (`FixedChoices.sidebarTitlesTick`: in past 0.6 of the way, out under 0.4) so the edge never
+  chatters; a tab dragged to reorder in the strip or the sidebar ticks at each new place and
+  lands with `.drop`. Neither list applies a snapshot inside the reorder handler (a crash on
+  TestFlight in the strip): the reload runs once the reorder is committed.
+- **Design review, round 2** (Codex, on captures of the real inner screen): a private tab in the
+  strip carries a small hand before its title (the strip has no "Private" header, and the tab
+  on screen is a white card like any other); VoiceOver reads "Private" first. Left for the
+  backlog: a more solid card for the tab on screen, the private strip's glass tint over a
+  saturated page, and a clipped first plate where five tabs overflow in portrait.
+- **Rows are touched on their tile.** A sidebar row is as wide as the titled sidebar and clipped
+  by the rail, so its middle lies under the page: VoiceOver, Switch Control and UI tests
+  activated the page instead (found by `DuoTests` on the real inner screen). Each row's
+  `accessibilityActivationPoint` is its tile's middle.
+- **Measured** (simulator, 50 tabs, 4,000 pt/s in 120 Hz steps, `SideTabsViewTests`): the rail
+  costs 1.0 to 2.2 ms of main-thread work per frame at the 95th percentile and the strip 0.9 to
+  2.0 ms, against the 8.3 ms a 120 Hz frame has; no site icon is read on the main thread while
+  scrolling. The longest single step was 2 to 6 ms on a quiet host and 42 to 64 ms once in a run
+  on a loaded one (the host, not the list: it moved between the rail and the strip from run to
+  run). To confirm on the device with Instruments.
 
 
 ## Search sheet: the pill grows into it (2026-11-27)
@@ -2669,6 +3004,116 @@ and their limits: docs/research/perf-pass-2.md.
   run loop turn (AGENTS.md: no database work on the main thread). A read that finishes while
   UIKit still handles the keystroke is taken before the run loop sleeps, so its rows go out in
   the same commit anyway.
+
+## Duo inner screen: a glass band with the host while reading (2026-11-27)
+
+Owner, on the build where the page ran under the floating controls: "now the top of pages goes
+under the text field. Look at what Safari does … I like that Safari leaves the URL text field
+there in a smaller version, with just the shrunken base URL, and that sets a boundary there. And
+I like that they use glass for the background bar." And: "Keeping our color scheme, make that
+whole toolbar and the URL text field etc. more Apple-glass-like." Safari's frames, measured:
+docs/research/safari-duo-top.md.
+
+- **Chosen: one band of Liquid Glass behind the top bar** (`TopBand`), across the pages from the
+  top edge, under the strip and the capsules. At rest it reaches under the row (73 pt on the
+  device) or the strip (117 pt: the strip starts 10 pt under the status items, sidebar lane); the capsules keep floating on it, so Plain keeps its look and the
+  page under the controls reads as intentional, blurred under glass, as in Safari. Of the two
+  options in the brief (start the page below the controls, or glass behind them) the band is
+  the cleaner: a page always scrolls under the controls mid-page, so only glass makes that read
+  as a boundary; the first line at a page's top still starts below the band (the scroll range's
+  start, unchanged).
+- **While reading the band stays, slim** (supersedes "Scroll chrome: expanded, pill, hidden" and
+  "the bar in the status row" for the top bar): its bottom rises to the status row's (the row's
+  or the status items' bottom + 4 pt: 73 pt on the device, the same as at rest with one tab), the
+  pill's text shrinks into the site's host ("apple.com": `TopBandHost.baseDomain` drops "www." only;
+  cutting to a registrable domain without the public suffix list made "alice.github.io" read
+  "github.io", Codex review) on the
+  status row where the address was, clear of the status items, and the capsules and the strip
+  rise and fade. Hidden is gone under a top bar: the slim band is the boundary Safari keeps. A
+  tap anywhere on the collapsed band brings the bar back (one interruptible spring,
+  `Motion.toolbarSnap`, the same driver as every reveal); VoiceOver reads it as the address.
+- **The page's top inset never follows the bar, still** (keeps "The page's top inset never
+  follows the bar", with a new value): the obscured top is the collapsed band's bottom (73 pt) in
+  every state, no longer 0. So a fixed or sticky header rests under the band mid-page, never
+  under the controls alone, and never moves when the bar collapses or comes back; WebKit's color
+  fill above such a header is behind the band's glass, which it tints, as Safari's band takes the
+  page's color. The scroll range still starts under the expanded band (`expandedInset`), and
+  `keepPageTopUnderBar` still moves WebKit's own move to its top on to it, now only where the
+  strip makes the two differ (117 against 73).
+- **Not taken from Safari:** hiding the status items while collapsed (its slim band is 45 pt
+  because the status bar goes; the owner asked for the host clear of the status items, so the
+  band is the status row's height); the timed morph (Plain's bar follows the finger 1:1 and
+  springs, as on every screen); moving the page's inset with the band (WebKit relayouts fixed
+  elements on every inset change, the jump the owner rejected).
+- **The host sits in a small glass capsule** (`TopBand.hostCapsule`, 14 x 6 pt around the
+  text, Safari's is 23 pt high): bare text on the band read as an empty status bar, not as the
+  address field made small (Codex design review, round 1). **One pill shrinking** (round 2: the
+  pill's text faded before the capsule appeared, at another width): through the collapse the
+  capsule sits where the pill's shell is and shrinks from its size to its own
+  (`hostShellSize`), the host's text sits where the pill's text is at its size (`hostScale`,
+  the same weight), and the two crossfade over the first 40% (`pillAlpha` + `hostAlpha` = 1).
+- **Known limit:** over a site's flat header color the band reads as a tinted slab rather than
+  glass (round 2). WebKit paints the header's color into the obscured inset above a fixed
+  header, under the band, and there is nothing behind the glass to refract; Safari's own band
+  suppresses that fill (`_shouldSuppressTopColorExtensionView`, SPI). Left for the owner to
+  judge on the device.
+- **The strip follows the page's top** (`TopChromeGeometry.stripReveal`): with two or more tabs
+  the strip and the band under it show while the page's top is in view and go as the page
+  scrolls the band's extra height (44 pt), in step with it, so the band's bottom tracks the page's
+  top there, as Safari's does. Mid-page the bar comes back without the strip, as with one tab.
+  Round 1 of the design review found the strip covering a fixed header mid-page (the header
+  rests at the slim band's bottom, 73 pt; the strip runs from 79 to 113): keeping the strip there would
+  need the page's inset to follow it, which jumps the header. Tabs, the sidebar and the
+  switcher still switch tabs mid-page.
+- **Glass, more Apple-like, Plain's colors:** the floating controls' tint is lighter
+  (`Palette.glassTint` Paper at 0.55 in light, Deep Lagoon at 0.6 in dark, was 0.88 and 0.84;
+  private violet stays the private lane's deep violet, 0.9 and 0.86), and the soft ground under each control (`ChromeScrim`) is
+  0.92 / 0.95 (the clarity lane raised it from 0.82 / 0.92 for legibility, audit item 13; this lane had lowered it to 0.5 / 0.62: legibility wins where the ground is on), so the glass refracts and blurs the page and shows its rim
+  instead of reading as a paper fill. The band's tint is lighter again (`bandGlassTint`, 0.3 /
+  0.42) so the capsules on it read as their own layer, and on the band the capsules have no
+  paper ground at all (`setScrimShown(false)`): the band keeps them legible and their glass
+  shows its own refraction (design review, round 1: "creamy and opaque"). Private, the band is
+  the private lane's deep violet, a little lighter (`privateBandGlassTint`, 0.72 / 0.64), drawn
+  dark like the capsules, and so is the host capsule while reading; the strip's glass follows. Shared by the outer
+  screen and phones (one pill, one button bar), where the ground stays.
+- **Find and the gallery** fade the band with the capsules, so an empty band never stays at
+  the top (`updateTopBandAlpha`, one place for both). Editing keeps it: on the inner screen the
+  field widens in its row, on the band (the search sheet's dropdown).
+- **Performance:** motion is transform and alpha only (the band's glass, the host capsule, the
+  strip, the capsules); the page's insets change only with the layout. The strip's reveal is
+  re-applied from `scrollViewDidScroll` only when it changes (a page's first 44 pt). One more
+  glass surface: on the real inner screen in the simulator, three 4,000 pt scrolls over a
+  striped page drew 405 frames with the band and 406 without, one over 25 ms in each
+  (docs/research/safari-duo-top.md, "Glass cost"). The device's hitch gate is the check at 120 Hz.
+- **Scenarios** (fixed and sticky headers, dark pages, pages with their own bars, short pages,
+  Find, the reader, Back, private, split, side pane, rail, one and many tabs, both orientations):
+  docs/research/safari-duo-top.md. Not verified on the simulator: fold and rotation while
+  collapsed, a link from another app, pull to refresh.
+
+## Duo outer screen: the vertical bar's column is a glass panel (2026-11-28)
+
+Owner: "The sidebar on the Duo outer screen should keep the theme colors we are using but be more
+like Apple glass, so the change from the page to it is less abrupt", then: "the page should still
+not show [through it], because it'll stay where it is now, but it'll transition better to the eye
+like that, working towards our premium, elegant feel."
+
+- **Chosen: one floating panel of Liquid Glass behind the system's vertical bar**
+  (`VerticalBarBacking`), in Plain's tint (`Palette.glassTint`; the private violet drawn dark in a
+  private tab), 6 pt in from the page and the screen's edges, 28 pt corners. The system draws the
+  bar's items (the status items and the buttons' capsule) but nothing behind them, so the column
+  showed the root view's paper, a flat slab cut straight against the page. Apple's own sidebars
+  float as inset glass panels; the page now meets a rounded glass edge with its rim light.
+- **The layout does not change:** the page ends where it did and nothing of it is behind the
+  column (owner). The panel sits under the panes, over the root background, in the safe area's
+  side the bar takes (`verticalBarEdge`, mirrored in right-to-left).
+- **Cost:** one effect view and one shadow with a fixed path, placed on layout only; no
+  per-frame work, nothing on the inner screen or on phones (hidden wherever the vertical bar is
+  off).
+- **Design review (integration lane):** a soft shadow under the panel (10 pt, 14% in light, 45%
+  in dark and private) lifts it off the paper, so the page meets a raised glass edge rather than
+  a flat change of colour over a dark page; the panel fades while the search sheet is up, when
+  the bar's buttons are gone and an empty panel read as an unused control.
+
 ## Clarity audit, the rest (2026-11-27)
 
 The findings of docs/research/clarity-audit.md left to this lane, with the owner's calls.
@@ -2751,3 +3196,224 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
 - **Side pane picker:** the selected segment carries its word beside its symbol (one template
   image, as a segment holds an image or a title), the others stay symbols, and every segment has
   its name for VoiceOver.
+
+## Inner top and sidebar lanes together (2026-11-28)
+
+The inner top lane (the glass band) and the sidebar lane (site icons, the strip and rail from the
+second tab) landed together, reconciled with New Tab in the bar and private mode on `dev`:
+
+- **One New Tab on screen:** the bar's "+" (Tabs, +, More); the strip keeps no room for a "+";
+  the sidebar's New Tab shows only while the bar has none.
+- **The strip 10 pt under the status items, inside the band:** the band grows to hold it (117 pt
+  on the device with the strip, 73 pt without), and the strip's going mid-page takes away only
+  its own part of the band (`TopChromeGeometry.bandTranslation(reading:strip:)`).
+- **Private:** the band, the host capsule and the strip take the private violet glass drawn
+  dark; the collapsed host keeps the pill's words (the private mark, Private, then Reader,
+  Translated or Not Secure).
+- **The strip rests on whole tabs:** where it scrolls (one section), a drag comes to rest and the
+  focused tab is brought into view at whole-tab offsets, with at most one tab's clear glass after
+  the last, so its leading edge never shows a sliver of a plate (design review: a cut plate read
+  as an empty, broken tab).
+- **Design review call not taken:** dropping "Not Secure" from the collapsed host capsule. The
+  clarity lane's lead word is the page's one warning on screen; Safari keeps it while collapsed
+  too, and the lead asked that the capsule keep the pill's words.
+
+## The page's address in the field (2026-11-27)
+
+Owner: "I don't like how the copy address is still a cell that looks like a suggestion, if we
+keep the bar with text and the copy icon within the text field." Supersedes the field opening
+empty on a page and the page's row under it ("Address focus and the page sheet", door 1 and
+"This page" row). Kept: what a new query opens (a new tab, the page as its opener).
+
+**What it does.** A tap on the pill over a page opens the field with the page's full address,
+all selected, and Copy (`link`) inside the field at its trailing end. The first change decides
+what the field is (`AddressFieldIntent`, BrowserCore, unit-tested):
+
+| The first change | Means | Return |
+|---|---|---|
+| Covers the whole text (typing over the selection, a paste over it, dictation into it), or the field is cleared (the × or deleting everything) | A new query | A new tab whose opener is the page, as before |
+| Covers part of it: the caret was put in the address (a tap into the text, a moved selection) and something changed there | An edit of this page | The same tab |
+| None (the address untouched) | The page's address | Loads it again in the same tab (Safari's Return on an unchanged address) |
+| None, and a row or a favorite is picked | Somewhere new | A new tab, as a typed query (what the empty field did before) |
+
+The rule reads only the span the change replaces (`textField(_:shouldChangeCharactersIn:)`):
+`range` from 0 to the text's length is a replace; anything else is an edit. The selection state
+at the first edit is exactly that span: Plain's opening selection is the whole text, a caret is
+an empty span, the user's own selection is its span. Later, a change over the whole text (select
+all, type) or an empty field counts as clearing: a new query again. Text back to the address
+exactly (an undo) is untouched again, and Copy comes back. Paste over the selection and the
+keyboard's dictation both arrive as a change over the selected span. The field's own microphone
+shows only in the empty field, so its text is always a new query.
+
+- **Copy** shows only while the field holds the untouched address; replaced or cleared, the
+  field's other options (microphone, Browse for Me, ×) follow their rules at once. Copy writes
+  the address the field shows (`copyFieldAddress`; the page may have moved on behind the sheet),
+  the glyph turns into a check for 1.2 s, the success haptic
+  plays and VoiceOver hears "Copied". Another page then offers it as Open Copied Link.
+- **VoiceOver** reads the field's value as the address, with the hint "Type to search in a new
+  tab; edit to change this page" while it is untouched (from the page sheet's Edit: "Edit to
+  change this page; clear it to search in a new tab").
+- **The page sheet's host** opens the same field with the caret at the address's end, not
+  selected (set explicitly, whatever the field kept): the door named Edit edits. Cleared, it is a new query, as anywhere.
+- **No page address, no change:** a new tab, the start screen, a new private tab and the fresh
+  search after four hours away open empty. On the engine's results page the query comes back
+  selected and refines in place, as before.
+- **The motion.** The text is set before the first frame of the spring and does not change or
+  scroll after it. The selection is made at rest (`searchSheetDidSettleOpen`): a selection made
+  in the first frame drew its handles riding up with the field, black mid-motion and blue at
+  rest (frame strip, iPhone 17); hiding it with a clear tint hid the highlight but not the
+  handles. Until then the field's tint is clear (no caret rides along), and the text counts as
+  selected: a keystroke during the open replaces all of it (`pendingSelection`), as it would
+  over the selection.
+  With a keyboard that composes (Japanese, Chinese, Korean) the text is selected at once, so the
+  input method replaces a real selection; a caret the user moves during the open cancels the
+  pending selection.
+
+**Validated against the references.** Safari (iOS 26/27): on a page the field shows the URL
+selected and typing replaces it; Return goes in the same tab, and there is no Copy in the field
+(Copy is in the edit menu). Arc Search: the search sheet opens empty and always opens a new tab;
+its page sheet's address capsule is editable in place with Copy inside it. Plain takes Safari's
+selected address and Arc's Copy-in-the-address and new-tab search, and tells the two apart by
+how the address was changed, so neither intent needs a second door.
+
+**Considered and not taken.**
+
+- *Keep the empty field and move Copy into it.* An empty field has no address to copy; the owner
+  asked for the address in the field.
+- *A pencil or "Edit" button to switch to editing.* A second control for what the caret already
+  says.
+- *Replace means "the text no longer starts like the address".* Guessing from content gets
+  wrong a user who fixes the scheme or the host.
+- *Same tab for everything (Safari).* A stray search would replace the page being read, the
+  reason Plain chose Arc's new tab (owner, 2026-11-27).
+
+**Removed.** `SheetItem.currentPage`, `SearchPick.editAddress` and `.copyAddress`, the row's
+Copy accessory (`focus.copyAddress`) and its check mark, `SearchSheet.confirmCopied`.
+
+## Safari's gestures and keys (2026-11-27)
+
+Owner: "Like Safari, we should support all expected web browser gestures." Inventory, sources and
+before/after: docs/research/gestures.md; the table: docs/ui-reference.md, "Gestures and keys".
+
+- **Keyboard shortcuts are a table in BrowserCore** (`KeyShortcut`), each with its keys, its
+  title and `ControlRules.allows(_:)`, which asks the predicate of the control it stands for
+  (⌘[ is Back's `isEnabled`, ⌘W the tabs menu's Close Tab, ⌘⇧\ Show All Tabs). Tested on macOS.
+  The shell's `keyCommands` are built once; `canPerformAction` asks the rule when a key comes in,
+  so nothing is computed per frame. Over the gallery only the tab keys, ⌘⇧\ and Escape act; under
+  a sheet none.
+- **The keys need a home.** UIKit sends keys from the first responder up, and after a close or
+  with the field gone nothing holds them. `claimKeyFocusIfFree` gives them to the page's web view
+  while a hardware keyboard is attached (`GCKeyboard`), so Space and the arrows scroll as in
+  Safari, else to the browser (`canBecomeFirstResponder`), and never takes them from a field, a
+  page's form or a sheet. It runs on the next turn, after UIKit settles. GameController is
+  Apple's, already on the device; it is read only there.
+- **Undo Close Tab is the system's undo** (`undoManager` on the browser, one level): shake, the
+  three-finger swipe and ⌘Z reopen the last hand close, the same batch as the Reopen toast. The
+  field and a page's form keep their own undo, as they come first in the responder chain.
+- **History on a long press of Back and Forward** (`Tab.historySteps`, `go(to:)`, which refuses a list that changed under the menu):
+  the menu is a deferred element built when it opens, set on the button only while the page has
+  history that way, so the plain tap never changes and the menu is never empty.
+- **Close All N Tabs joins the tabs menu**, as in Safari, confirmed first with the count
+  (`ControlRules.menuCloseAllTabs`, two or more it would close; pinned tabs stay).
+- **The trailing edge is the page's swipe forward first** (`FixedChoices.forwardSwipeBeforeSidePane`).
+  The side pane's edge swipe begins only where forward has nothing to do. Rejected: the pane
+  always winning (a Safari user's forward swipe silently did something else on the inner screen);
+  a two-stage edge (invisible difference); the pane only from More (the swipe in is how the pane
+  feels attached to the edge). Back's edge already reads this way.
+- **Pinch in to the overview, inner screen only**, as Safari keeps it to the iPad. A watcher
+  recognizer (no touches cancelled, simultaneous with all) that starts only at the page's
+  smallest zoom and acts at release below 70% (`pinchToOverviewScale`). The page is put back to
+  its size before its card takes the picture.
+- **Pull to refresh's colors** (owner): a loop through `Palette.pullCycle` in OKLab, held in a
+  lightness band per appearance, its phase `turns × fraction²` so it speeds up near the threshold;
+  armed fills with Lagoon (violet in a private tab), released spins in that color until the load
+  ends (at most 1.5 s). Reduce Motion: one color, no spin. Tables built once; a callback is a
+  lookup.
+- **The refresh arrow is drawn, not a symbol** (owner: it "spins weird"): `arrow.clockwise`'s
+  image box isn't centered on its circle, so turning it wobbled, and the system's Rotate effect
+  can't follow a pull. A `CAShapeLayer` arc on a true circle plus an arrowhead layer, as the
+  mask of the colored view: the arc grows with the pull, the spin turns about the circle's own
+  center (docs/research/gestures.md, "The refresh arrow").
+- **Not done:** dragging links out of a page on iPhone-class screens (WebKit keeps its drag
+  interaction off there; turning it on needs SPI), drops onto the strip and rail (the strip
+  lane's), and Safari's sideways card swipe (Plain's cards swipe up, Arc's way, decided
+  earlier).
+## App icons: the Home Screen shows the picker's art (2026-11-28)
+
+Owner, on TestFlight (iPhone Duo): "The icon picker is broken: the only icon that is accurate to
+how the UI shows it is the [Night] one. I'd like the actual icons to match the design the app
+shows. Don't change the designs in the app. And also the splash and intro screens should follow
+the selected icon properly."
+
+- **Cause: dark Home Screen renditions iOS made up.** The wiring was right: project.yml compiles
+  all four `.icon` documents, `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` names the three
+  alternates, and on a light Home Screen every icon is its tile. On a dark Home Screen (the
+  system's dark mode with icons on Automatic, or Dark) iOS draws each icon's dark rendition, and
+  only Dawn's document had dark art. For an Icon Composer document with no dark fill iOS keeps
+  the layers and puts its own near-black field under them: Coral and Paper turned into a black
+  icon with a coral or cream smudge in the top-left corner, Night (already a dark field) looked
+  nearly right, and Dawn showed its designed dark art (Deep Lagoon field, dimmer paper), a
+  different picture from its tile. Hence "only Night is accurate". Seen in ictool's Dark
+  renditions and on the iPhone 17 simulator's Home Screen (`IconCaptureTests`).
+- **Fix: one picture per icon, light and dark.** The tiles are the design (owner: don't change
+  the app's designs), so the icons follow them. `gen_icon.py` now writes every document's dark
+  fill as its default fill and gives no layer a dark image, so the dark rendition is the default
+  one. Dawn's dark art is gone (its three `-dark.svg` files and the generator's dark sky, bloom
+  and field); the default and tinted art of all four are byte for byte what they were, so the
+  previews (`icon_previews.sh`, the Default rendition) did not change. Tinted and clear stay
+  shared and monochrome: iOS draws those in one tint from the shared tinted art whichever icon
+  was picked, so there is no color to match.
+- **The splash and the intro follow.** The splash dropped Dawn's dark world (`SplashTheme.dawnDark`
+  and the `dark:` parameter): every icon's splash is its tile, light and dark. The intro's mark
+  (`StemMarkView`), the default-browser step's mark and the empty-tab card's mark wore Dawn's
+  colors whatever the icon was; they now wear the current icon's (`SplashTheme`, the generator's
+  values, the same the splash uses), and the intro's marks follow a pick on the icon step. With
+  Dawn picked every mark is exactly what it was. Paper's ink ring lost its edge on the intro's
+  dark paper (design review), so an ink ring gets a soft glow of its own cream field around it
+  (`SplashTheme.hasInkRing`); paper rings get none. The intro's own backdrop (the dawn that grows
+  behind the mark, the paper) is the intro's design, not the icon's, and stays.
+- **Guarded against drift.** `AppIconDocumentTests` reads the repository: every choice is a
+  document project.yml compiles under the name the picker sets, with a preview; every
+  document's dark fill is its default fill and no layer has dark art; and each document's
+  field, paper, fold and dawn colors are its `SplashTheme`'s. `SplashTests` holds `SplashTheme`
+  to the generator's file. `IconCaptureTests` (on request, simulator only) photographs the real
+  Home Screen icon, the splash, Settings > App Icon after a relaunch and the intro for each
+  choice, light and dark; it changes the real icon through `-PlainRealAppIcon`, a Debug,
+  simulator-only hook in `AppIcons` that an isolated run otherwise never does.
+- **Rejected:** previews that change with the system's appearance (would change the app's
+  design, and the owner asked for the opposite), and designed dark art for each alternate (four
+  pictures per surface to keep in step for no gain the owner asked for).
+## Fullscreen video: the native player, as Safari on iPhone (2026-11-28)
+
+- **Chosen:** element fullscreen (`WKPreferences.isElementFullscreenEnabled`, the Fullscreen API
+  on any element) is off on iPhone, the Duo's two screens included, and on for any other idiom
+  (`EngineChoices.allowsElementFullscreen(on:)`). A video's own fullscreen, and a site player that falls
+  back to it when the API is absent, is then the system's native player: swipe down to close, picture in picture, AirPlay, rotation, the controls users
+  know. The app declares the `audio` background mode, so sound goes on in the background and
+  with the screen locked, a fullscreen video moves to picture in picture when the user leaves,
+  and lock-screen controls keep working. Research and sources: docs/research/media-playback.md.
+- **Why:** Safari never offers the Fullscreen API on iPhone (MDN compat data; WebKit leaves the
+  choice to the app). Plain had it on everywhere, so site players that use the API when it
+  exists fullscreened their own web player box: most likely the "weird" player the owner saw
+  (the pattern is reproduced in the UI tests; the live sites are on the owner's device list). Without the
+  background mode iOS suspends the app as it leaves the screen, which ends audio, blocks the
+  automatic picture in picture and leaves Now Playing dead (Apple, "Configuring your app for
+  media playback").
+- **Why by idiom, not by window size:** Safari's choice is per device class, and the Duo runs
+  iPhone Safari on both screens. A page must not see the API appear or vanish on a fold. The
+  preference is shared by every web view's configuration copy (and process-wide in WebKit), so a
+  per-pane switch would mean a separate `WKPreferences` per web view and possibly a different
+  web process per value: cost for no Safari-matching gain.
+- **Unchanged, already Safari's:** inline playback only with `playsinline` on iPhone (WebKit's
+  small-screen default), muted autoplay (`mediaTypesRequiringUserActionForPlayback = .audio`),
+  PiP and AirPlay allowed, all four orientations, busy tabs (playing, PiP, fullscreen) never
+  discarded. WebKit sets the audio session and pauses video that is not in PiP or on AirPlay
+  when the app leaves the screen, as in Safari.
+- **Shell:** nothing hides or changes. The native player is presented above Plain's window, so
+  bars, swipes and haptics can't act under it, and closing it returns to the page at the same
+  scroll position (`MediaTests`).
+- **Better than Safari:** none needed beyond parity; picture in picture keeps playing while
+  another tab is open (an audible page keeps its process, `WebPageProxy::updateThrottleState`),
+  now guarded by a test.
+- **Perf:** no new framework is loaded; a configuration flag and an Info.plist key. Launch and
+  memory budgets are untouched by construction.

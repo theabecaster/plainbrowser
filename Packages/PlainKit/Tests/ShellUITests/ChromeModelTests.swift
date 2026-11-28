@@ -415,6 +415,8 @@ struct PullToRefreshTests {
         #expect(tracker.pulled(79.9) == nil)
         #expect(tracker.pulled(80) == .armed)
         #expect(tracker.pulled(120) == nil)
+        // Hysteresis: just under the line stays armed, 10 pt under disarms.
+        #expect(tracker.pulled(75) == nil)
         #expect(tracker.pulled(60) == .disarmed)
         #expect(tracker.isArmed == false)
     }

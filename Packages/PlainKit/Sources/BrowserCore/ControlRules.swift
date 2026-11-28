@@ -53,9 +53,24 @@ public enum SidePaneItem: Sendable, Equatable {
     case show, hide, hidden
 }
 
-/// The dark pages item in the page menu (§4).
-public enum DarkPagesItem: Sendable, Equatable {
-    case turnOff, turnOn, hidden
+/// The page appearance control inside the resting pill (§3): the glyph of what the page shows
+/// (Dark, Light, or Off by the user's choice), or absent while Plain changes nothing.
+public enum PageAppearanceIndicator: Sendable, Equatable {
+    case shown(PageAppearance)
+    case hidden
+}
+
+/// What Dark Pages is doing on the page on screen, in the app's dark colors (in light colors it
+/// is always `.none`). docs/research/dark-pages-optin.md, the state table.
+public enum DarkPagesPage: Sendable, Equatable {
+    /// Light colors, a page with its own dark design, or not checked yet.
+    case none
+    /// The page could use it, the switch is off and the site has no choice of its own.
+    case available
+    /// Plain darkens the page.
+    case darkened
+    /// The page could use it, and the user turned it off for this site.
+    case off
 }
 
 /// The translate item in the page menu (§4).
@@ -97,6 +112,8 @@ public struct ChromeState: Sendable, Equatable {
     public var others = 0
     /// Tabs in the on-screen tab's own list (regular or private), itself included.
     public var listCount = 0
+    /// Tabs of that list Close All Tabs would close: pinned tabs stay (`closeAllKeepsPinnedTabs`).
+    public var closableInList = 0
     /// The bar swipe has a neighbour on that side in `list`.
     public var hasPrevious = false
     public var hasNext = false
@@ -110,10 +127,14 @@ public struct ChromeState: Sendable, Equatable {
     public var isWebPage = false
     public var isReaderAvailable = false
     public var isPDF = false
-    /// Plain darkens the page (only ever while the app is dark).
-    public var isDarkened = false
-    /// The user turned dark pages off for this site, and the app is dark.
-    public var isDarkPagesOff = false
+    /// What Dark Pages is doing on the page (only ever anything while the page is dark).
+    public var darkPages = DarkPagesPage.none
+    /// The page appearance the page's site gets (its own choice, else the default), and whether
+    /// it is the site's own (`PageAppearanceChoices`).
+    public var pageAppearance = PageAppearance.off
+    public var pageAppearanceIsOwn = false
+    /// The site has no light design (made only in dark): Light can't apply to it.
+    public var isLightless = false
     /// The page's language is known, can be translated on the device, and is not one the user
     /// reads (their preferred languages).
     public var isForeignLanguage = false
@@ -272,6 +293,10 @@ public struct ControlRules: Sendable, Equatable {
     /// On a private tab with another private page open: ends private browsing in one step, as
     /// Safari's and Chrome's Close All. With one, Close Tab already does it.
     public var menuCloseAllPrivateTabs: Bool { state.isPrivate && state.listCount >= 2 }
+    /// Close All Tabs under Close Tab, as Safari's tabs button offers it: on a regular tab, with two
+    /// or more tabs it would close (one is Close Tab's job). Confirmed first, as in the gallery's
+    /// More. A private list has its own Close All Private Tabs above.
+    public var menuCloseAllTabs: Bool { !state.isPrivate && state.closableInList >= 2 }
 
     // MARK: The page menu (§4)
 
@@ -308,14 +333,25 @@ public struct ControlRules: Sendable, Equatable {
     /// Like Desktop Site, regular tabs only (the allow-list is saved to disk).
     public var blockingToggle: Bool { desktopSite && !state.isPrivate }
 
-    /// Turn Off while Plain darkens the page, Turn On while the user has it off for the site; only
-    /// on the page itself (not under the reader, not on an error page). In a light app, or on a
-    /// page with its own dark design, there is nothing to switch.
-    public var darkPages: DarkPagesItem {
-        guard isPageShowing, state.isWebPage, !state.isReaderOpen else { return .hidden }
-        if state.isDarkened { return .turnOff }
-        if state.isDarkPagesOff { return .turnOn }
-        return .hidden
+    /// Site Settings' "Page Appearance" (Dark, Light, Off) on every web page itself (not under the
+    /// reader, not on an error page): how the site looks is the user's to choose in any colors of
+    /// Plain's, as it is separate from Plain's own Appearance.
+    public var pageAppearanceMenu: Bool {
+        isPageShowing && state.isWebPage && !state.isReaderOpen
+    }
+
+    /// The control in the resting pill, while Plain changes how the page looks: Dark (forced dark,
+    /// or darkened), Light (forced light, on a site that has a light design), or Off when the user
+    /// chose it for this site against a default (so the way back is where it was left). Absent
+    /// when nothing is applied (the page as the site made it, by default), while editing (the
+    /// field takes the pill), under the reader and on error pages.
+    public var pageAppearanceIndicator: PageAppearanceIndicator {
+        guard isPageShowing, state.isWebPage, !state.isReaderOpen, !state.isEditing else { return .hidden }
+        switch state.pageAppearance {
+        case .dark: return .shown(.dark)
+        case .light: return state.isLightless ? .hidden : .shown(.light)
+        case .off: return state.pageAppearanceIsOwn ? .shown(.off) : .hidden
+        }
     }
 
     /// Translate Page on a loaded page in a language the user doesn't read; Show Original while it

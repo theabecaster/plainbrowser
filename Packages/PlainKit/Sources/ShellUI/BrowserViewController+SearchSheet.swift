@@ -148,6 +148,7 @@ extension BrowserViewController {
             }
             // Only a close that was not turned around ends the open layout.
             if target == 0, !self.isEditingAddress { self.finishClosingSearchSheet() }
+            if target == 1, self.isEditingAddress { self.searchSheetDidSettleOpen() }
         }
         guard animated, view.window != nil else {
             ui.driver.jump(to: target)
@@ -176,6 +177,16 @@ extension BrowserViewController {
         }, completion: finish)
     }
 
+    /// The open is over: the field is at rest, so its text is selected now (during the motion a
+    /// keystroke replaced it all the same) and the caret shows.
+    private func searchSheetDidSettleOpen() {
+        pill.holdSelectionHighlight(false)
+        if let opened = focusUI.pendingSelection {
+            focusUI.pendingSelection = nil
+            if pill.textField.text == opened { pill.textField.selectAll(nil) }
+        }
+    }
+
     /// The close is over: the pill goes back to the resting layout, exactly where the motion
     /// left it, and the sheet leaves the screen.
     private func finishClosingSearchSheet() {
@@ -185,6 +196,7 @@ extension BrowserViewController {
         ui.driver.jump(to: 0)
         sheet.setProgress(0)
         sheet.isHidden = true
+        verticalBarBacking.alpha = 1
         // The next open starts from an empty list: its rows are there on its first frame, with
         // nothing of this search to crossfade from.
         sheet.clear()
@@ -288,6 +300,9 @@ extension BrowserViewController {
         pill.alpha = 1
         pill.isCompact = false
         let barAlpha = SearchSheetGeometry.barAlpha(progress: p)
+        // The outer screen's bar panel fades with the bar's buttons: an empty panel beside the
+        // sheet read as an unused control (design review).
+        verticalBarBacking.alpha = barAlpha
         switch ui.style {
         case .dropdown:
             // The field widens in its row, from the pill between the bar's buttons.
@@ -377,11 +392,15 @@ extension BrowserViewController {
     /// What sits at the field's trailing end now: Copy on the page's own address, the empty
     /// field's options (dictation, Browse for Me), or nothing (the clear button while typing).
     func updateFieldAccessory() {
-        guard isEditingAddress else { return pill.setAccessory(.none) }
         let text = pill.textField.text ?? ""
-        if focusUI.isEditingPage, !text.isEmpty, text == pageAddress?.absoluteString {
-            return pill.setAccessory(.copy)
-        }
+        let untouched = isEditingAddress && focusUI.intent == .pageAddress && !text.isEmpty
+            && text == focusUI.openedAddress
+        // VoiceOver reads the address as the field's value, then what typing does.
+        pill.textField.accessibilityHint = !untouched ? nil : focusUI.selectsAllOnOpen
+            ? String(localized: "Type to search in a new tab; edit to change this page")
+            : String(localized: "Edit to change this page; clear it to search in a new tab")
+        guard isEditingAddress else { return pill.setAccessory(.none) }
+        if untouched { return pill.setAccessory(.copy) }
         let dictation = focusUI.dictation
         // Listening: the microphone stays, filled, whatever was heard so far.
         if dictation.isListening { return pill.setAccessory(.dictating) }

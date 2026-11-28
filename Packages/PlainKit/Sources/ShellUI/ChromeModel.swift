@@ -370,6 +370,9 @@ struct PullToRefreshTracker: Equatable {
     }
 
     static let threshold: CGFloat = 80
+    /// An armed pull disarms only this far back under the threshold, so a finger resting on the
+    /// line never chatters between the two haptics (haptics plan, rule 4).
+    static let disarmHysteresis: CGFloat = 10
     private(set) var isArmed = false
 
     /// Feeds how far past the top the page is pulled. Returns the arm state's change, if any.
@@ -378,7 +381,7 @@ struct PullToRefreshTracker: Equatable {
             isArmed = true
             return .armed
         }
-        if isArmed, distance < Self.threshold {
+        if isArmed, distance < Self.threshold - Self.disarmHysteresis {
             isArmed = false
             return .disarmed
         }
@@ -398,6 +401,8 @@ enum ChromeRevealReason: String {
     case pageTop = "page top"
     case pageEnd = "page end"
     case edgeTap = "edge tap"
+    /// A tap on the collapsed top band (the Duo's inner screen).
+    case bandTap = "band tap"
     case statusBar = "status bar"
     case keyboard
     case find

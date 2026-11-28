@@ -116,6 +116,15 @@
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
 	</dict>
+	<!-- Audio, AirPlay and Picture in Picture, as Safari has them: a page's sound goes on with the
+	     screen locked or in another app, a fullscreen video moves to picture in picture when the
+	     user leaves, and lock-screen controls work. WebKit sets the audio session itself and
+	     pauses a video (not in PiP or AirPlay) when the app leaves the screen
+	     (docs/research/media-playback.md). -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

@@ -50,7 +50,11 @@ extension BrowserViewController {
         // Tabs of other profiles count: the switcher is the way to them.
         state.others = tabs.otherTabCount(besides: tab.id) + tabs.otherProfilesTabCount
         // The list the bar swipe moves through: the tab on screen and its list's page tabs.
-        state.listCount = tabs.entries(private: tab.isPrivate).count { $0.id == tab.id || !tabs.isEmpty($0.id) }
+        let list = tabs.entries(private: tab.isPrivate)
+        state.listCount = list.count { $0.id == tab.id || !tabs.isEmpty($0.id) }
+        // What the tabs menu's Close All Tabs would close (TabStore.closeAllTabs).
+        state.closableInList = tab.isPrivate
+            ? list.count : list.count { !(FixedChoices.closeAllKeepsPinnedTabs && $0.isPinned) }
         let neighbours = tabs.neighbours(of: tab.id)
         state.hasPrevious = neighbours.previous != nil
         state.hasNext = neighbours.next != nil
@@ -66,9 +70,14 @@ extension BrowserViewController {
             state.isUnreadLanguage = !PageLanguage.isRead(language.maximalIdentifier, preferred: Locale.preferredLanguages)
         }
         state.isTranslated = tab.translation != .original
-        // Both only while Plain is dark: the page reports `.inactive` otherwise.
-        state.isDarkened = tab.darkPages == .darkened
-        state.isDarkPagesOff = tab.darkPages == .offForSite
+        // Only while the page is dark: the page reports `.inactive` otherwise.
+        state.darkPages = tab.darkPages.page
+        if let site = tab.siteKey {
+            let choices = tab.pageAppearanceChoices
+            state.pageAppearance = choices.appearance(for: site)
+            state.pageAppearanceIsOwn = choices.hasOwnChoice(site)
+        }
+        state.isLightless = tab.isLightless
         if let page = session.pool.webView(for: tab) {
             state.isReaderAvailable = session.reader.isAvailable(in: page) == true
         }
@@ -120,11 +129,20 @@ extension BrowserViewController {
             if item.isEnabled != applied.isEnabled { item.isEnabled = applied.isEnabled }
         }
         applyTabsFace()
+        updateGestureMenus()
         // One New Tab button on screen (principle 8): the sidebar's only while the bar has none.
         duo.sidebar?.setNewTabShown(rules.menuNewTab && !rules.newTab.isVisible)
         if !tabsUI.start.isHidden { applyStartShortcuts() }
         applyToolbarItems()
         updateBarShapeIfNeeded()
+        let indicator = onPage ? rules.pageAppearanceIndicator : .hidden
+        let menu = indicator == .hidden ? nil : currentTab.flatMap { pageAppearanceMenu(for: $0, source: "indicator") }
+        pill.setPageAppearance(indicator, isOwn: rules.state.pageAppearanceIsOwn, menu: menu, animated: true)
+        // The suggestion gives way to the gallery, the reader, Find and the search field.
+        if darkPagesUI.suggestion?.isShowing == true || darkPagesUI.pending != nil,
+           isShowingGallery || isShowingReader || isFindOpen || isEditingAddress {
+            hideDarkPagesSuggestion()
+        }
     }
 
     /// The system's vertical bar (Duo) holds the page buttons only where the bar shows (state

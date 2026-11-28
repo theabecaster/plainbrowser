@@ -66,13 +66,21 @@ public final class BrowserSession {
             thumbnailDirectory: thumbnailDirectory,
             pageZooms: stores.pageZooms,
             darkPages: stores.darkPages,
-            translator: translator
+            translator: translator,
+            // Each profile's icons in its own database (Personal's is the main one).
+            iconDatabases: { [profileData = stores.profileData] profile in await profileData.database(for: profile) }
         )
         summaries = SummaryService(pool: pool)
         tabs = EngineTabs(
             pool: pool, app: stores.tabs, database: database, tabStates: tabStates, windowID: windowID,
             isNewWindow: isNewWindow
         )
+        // Dark Pages' policy is the app's: a change made in any window (or read at launch) reaches
+        // this window's pages too.
+        stores.darkPages.observe { [weak pool] in
+            guard let pool else { return }
+            Task { await pool.darkPagesChoicesDidChange() }
+        }
         tabs.privateSessionDidEnd = { [cookieBanners, weak self] in
             cookieBanners.endPrivateSession()
             self?.privateSessionDidEnd?()
@@ -103,7 +111,8 @@ public final class BrowserSession {
         let anyDarkSites = await darkSites
         _ = await (scripts, cookieEngine)
         cookieBanners.storedSitesDidLoad()
-        if anyDarkSites { pool.darkPagesSitesDidChange() }
+        // The stored policy differed from the launch copy: the observers already told every pool.
+        _ = anyDarkSites
         // Files of tabs gone for good, at background priority once launch has settled, and the data
         // of a profile whose deletion the app could not finish; once per app, since the tab list
         // and the profiles are the app's.

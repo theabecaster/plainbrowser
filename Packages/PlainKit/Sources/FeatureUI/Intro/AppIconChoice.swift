@@ -80,7 +80,7 @@ import UIKit
 @MainActor
 public enum AppIcons {
     public static var current: AppIconChoice {
-        if TestIsolation.isActive { return isolatedChoice }
+        if TestIsolation.isActive, !changesRealIcon { return isolatedChoice }
         return AppIconChoice(alternateIconName: UIApplication.shared.alternateIconName)
     }
 
@@ -104,7 +104,7 @@ public enum AppIcons {
         guard isSupported else { return false }
         if TestIsolation.isActive {
             isolatedChoice = choice
-            return true
+            guard changesRealIcon else { return true }
         }
         let interval = Signposts.signposter.beginInterval(Signposts.appIconChange)
         defer { Signposts.signposter.endInterval(Signposts.appIconChange, interval) }
@@ -115,6 +115,19 @@ public enum AppIcons {
             return false
         }
     }
+
+    /// Debug, simulator only: `-PlainRealAppIcon` lets an isolated run change the real Home Screen
+    /// icon, so a capture test can photograph what iOS draws for each choice
+    /// (PlainUITests/IconCaptureTests). Never on a device: the Home Screen there is the owner's.
+    public static let realIconArgument = "-PlainRealAppIcon"
+
+    private static let changesRealIcon: Bool = {
+        #if DEBUG && targetEnvironment(simulator)
+        ProcessInfo.processInfo.arguments.contains(realIconArgument)
+        #else
+        false
+        #endif
+    }()
 
     /// The preview image. The bundle lookup, the read and the decode all run off the main thread.
     public static func preview(_ choice: AppIconChoice) async -> UIImage? {

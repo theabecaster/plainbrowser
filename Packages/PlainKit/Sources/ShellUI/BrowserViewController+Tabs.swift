@@ -99,12 +99,13 @@ extension BrowserViewController {
         var sections = [opening, moves, windows, later].filter { !$0.isEmpty }.map {
             UIMenu(options: .displayInline, children: $0) as UIMenuElement
         }
+        var closes: [UIMenuElement] = []
         if rules.menuCloseTab, let tab = currentTab {
             let close = UIAction(title: "Close Tab", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
                 self?.closeTab(tab, offerReopen: true)
             }
             close.accessibilityIdentifier = "menu.closeTab"
-            var closes: [UIMenuElement] = [close]
+            closes.append(close)
             if rules.menuCloseAllPrivateTabs {
                 let all = UIAction(
                     title: "Close All Private Tabs", image: UIImage(systemName: "hand.raised.slash"), attributes: .destructive
@@ -112,8 +113,10 @@ extension BrowserViewController {
                 all.accessibilityIdentifier = "menu.closeAllPrivateTabs"
                 closes.append(all)
             }
-            sections.append(UIMenu(options: .displayInline, children: closes))
         }
+        // Safari's tabs button holds Close All too, under Close Tab (`+Gestures`).
+        if let closeAll = closeAllTabsAction(rules) { closes.append(closeAll) }
+        if !closes.isEmpty { sections.append(UIMenu(options: .displayInline, children: closes)) }
         return sections
     }
 
@@ -349,6 +352,8 @@ extension BrowserViewController {
     /// own toast). Reopen brings back exactly `batch`, the close it was made for, and follows the
     /// user: it shows over the page or the search field.
     func offerReopen(_ batch: UUID, message: String = String(localized: "Tab closed")) {
+        // Shake, the three-finger swipe and ⌘Z undo the same close (`+KeyCommands`).
+        registerUndoClose(batch)
         tabsUI.toast.show(message, button: "Reopen") { [weak self] in
             guard let self else { return }
             Signposts.signposter.emitEvent(Signposts.tabReopen, "toast")

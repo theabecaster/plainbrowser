@@ -16,6 +16,8 @@ final class TabsUIState {
     var spareGallery: TabGalleryViewController?
     /// A spare gallery build is waiting for an idle moment.
     var isPrewarmScheduled = false
+    /// Site icons arrived this turn: the lists read their tabs once, next turn.
+    var isIconReloadScheduled = false
     /// The saved tabs are in and the first frame is long gone: idle work may start.
     var isLaunchDone = false
     /// The page ↔ card transition running now, if any.
@@ -106,6 +108,7 @@ extension BrowserViewController: GalleryHost {
         tabsUI.spareGallery = nil
         // Over the page, under the chrome (which fades as the gallery's own bar arrives) and the
         // search sheet (a new tab from the gallery opens it).
+        lowerSidebarForGallery()
         view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
         gallery.pageTopInset = currentTab.map { session.pool.obscuredTop(for: $0) } ?? 0
         gallery.prepareToShow()
@@ -159,6 +162,7 @@ extension BrowserViewController: GalleryHost {
         gallery.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         gallery.view.accessibilityViewIsModal = true
         gallery.view.isHidden = true
+        lowerSidebarForGallery()
         view.insertSubview(gallery.view, aboveSubview: pageAreaTopView)
         gallery.didMove(toParent: self)
         return gallery
@@ -220,6 +224,9 @@ extension BrowserViewController: GalleryHost {
         chromeGlass.isHidden = false
         chromeGlass.alpha = max(0, 1 - t * 3)
         chromeGlass.transform = CGAffineTransform(translationX: 0, y: t * Spacing.xl)
+        // The top band goes with the bar it backs (the gallery has its own bar).
+        duo.top.galleryFade = chromeGlass.alpha
+        updateTopBandAlpha()
     }
 
     func setChromeHiddenForGallery(_ hidden: Bool, animated: Bool) {
@@ -265,6 +272,7 @@ extension BrowserViewController: GalleryHost {
         updatePageState()
         showPendingToast()
         tabsUI.tip.showIfPossible(in: self)
+        claimKeyFocusIfFree()
     }
 
     /// Ends a running transition where it was heading, without running its end (the caller
@@ -337,7 +345,10 @@ extension BrowserViewController: GalleryHost {
     func galleryCloseTab(_ id: TabID) {
         let wasShown = currentTab?.id == id
         if wasShown { clearPage() }
+        let before = session.tabs.lastClosedBatchID
         session.tabs.close(id)
+        // The gallery offers its own Reopen; the system's undo reopens the same card.
+        if let batch = session.tabs.lastClosedBatchID, batch != before { registerUndoClose(batch) }
         if wasShown, let next = session.tabs.selected { show(next) }
     }
 
@@ -552,6 +563,34 @@ extension BrowserViewController: GalleryHost {
                 }
             }
         })
+    }
+
+    /// The gallery goes over the page area: a drawer open over the bar (portrait) closes and goes
+    /// back under the chrome first, so it is never left over the cards.
+    func lowerSidebarForGallery() {
+        guard duo.isSidebarOverChrome else { return }
+        duo.sidebarRequest = .rail
+        duo.lastShownSidebar = .rail
+        UIView.performWithoutAnimation {
+            self.updateDuoLayout()
+            self.view.layoutIfNeeded()
+        }
+        raiseSidebarOverChrome(false)
+    }
+
+    /// Site icons arrived (often several at once, as restored pages finish): the sidebar, the
+    /// strip and the gallery read their tabs again once, on the next turn. Rows whose icon did
+    /// not change are left alone (their item is equal).
+    func siteIconsDidChange() {
+        guard !tabsUI.isIconReloadScheduled else { return }
+        tabsUI.isIconReloadScheduled = true
+        Task { [weak self] in
+            guard let self else { return }
+            tabsUI.isIconReloadScheduled = false
+            tabsUI.gallery?.reloadTabs(animated: false)
+            duo.sidebar?.reloadTabs()
+            duo.strip?.reloadTabs()
+        }
     }
 
     /// The tabs changed outside the gallery (a title, a thumbnail, the archive): it shows them.

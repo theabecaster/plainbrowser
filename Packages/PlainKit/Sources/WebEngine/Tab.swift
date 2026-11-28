@@ -4,6 +4,18 @@ import Foundation
 import Observation
 import PerfSignposts
 import UIKit
+import WebKit
+
+/// One page of a tab's back or forward list: a row of the long-press menu on Back or Forward.
+public struct HistoryStep: Sendable, Equatable {
+    public let title: String
+    public let url: URL
+    /// Steps from the page on screen: -1 is the page Back opens, 1 the one Forward opens.
+    public let offset: Int
+    /// The history entry itself (WebKit keeps one object per entry), so a pick never opens
+    /// another entry that came to sit at the same offset, even one with the same address.
+    let entry: ObjectIdentifier
+}
 
 /// How much a tab costs right now (docs/plan.md, "Engine rules" 2).
 public enum TabTier: Sendable, Equatable {
@@ -86,8 +98,14 @@ public final class Tab: Identifiable {
     /// The page is using the camera or microphone.
     public internal(set) var isCapturingMedia = false
     /// What dark pages does on the page now: nothing (light colors, or not a web page), the
-    /// site's own dark design, Plain's darkening, or off for this site by the user's choice.
+    /// site's own dark design, Plain's darkening, off for this site by the user's choice, or
+    /// available (the page could use it, the switch is off).
     public internal(set) var darkPages = DarkPagesState.inactive
+    /// The token of the document `darkPages` was reported by, so a delayed action (the
+    /// suggestion) can tell it is still the same page. Nil until the page reports.
+    public internal(set) var darkPagesDocument: String?
+    /// The site has no light design (made only in dark): Light can't apply to it.
+    public internal(set) var isLightless = false
     /// The page's language once recognized (`PageTranslation`); nil until then, or when it can't
     /// be told.
     public internal(set) var pageLanguage: Locale.Language?
@@ -163,6 +181,30 @@ public final class Tab: Identifiable {
         pool?.perform(in: self) { $0.goForward() }
     }
 
+    /// The pages Back (or Forward) can reach, nearest first, at most `limit`: what a long press on
+    /// the button lists, as in Safari. Empty for a tab without a web view (it has no list yet).
+    public func historySteps(forward: Bool, limit: Int = FixedChoices.historyMenuLimit) -> [HistoryStep] {
+        guard let list = pool?.existingWebView(for: self)?.backForwardList else { return [] }
+        let items = forward ? Array(list.forwardList.prefix(limit)) : Array(list.backList.reversed().prefix(limit))
+        return items.enumerated().map { index, item in
+            HistoryStep(
+                title: item.title ?? "", url: item.url, offset: forward ? index + 1 : -(index + 1),
+                entry: ObjectIdentifier(item)
+            )
+        }
+    }
+
+    /// Goes to `step`, a pick from the long-press list. Nothing when the list changed since it
+    /// was read (a navigation or `pushState` moved the pages): the row named one page, and a
+    /// different one must never open.
+    public func go(to step: HistoryStep) {
+        pool?.perform(in: self) { webView in
+            guard let item = webView.backForwardList.item(at: step.offset), ObjectIdentifier(item) == step.entry,
+                  item.url == step.url else { return }
+            webView.go(to: item)
+        }
+    }
+
     /// Reloads, restoring a discarded tab first.
     public func reload() {
         pool?.reload(self)
@@ -185,10 +227,21 @@ public final class Tab: Identifiable {
         await pool?.slot(for: self)?.refreshMediaPlayback()
     }
 
-    /// The page menu's "Turn Off / Turn On Dark Pages for This Site": remembered for the site,
-    /// applied to this page at once without a reload.
-    public func setDarkPagesOff(_ off: Bool) {
-        pool?.setDarkPagesOff(off, for: self)
+    /// The default page appearance and each site's own, as this tab's kind of tab sees them (a
+    /// private tab: the session's own choices over the regular ones).
+    public var pageAppearanceChoices: PageAppearanceChoices {
+        pool?.pageAppearanceChoices(isPrivate: isPrivate) ?? PageAppearanceChoices()
+    }
+
+    /// The site the per-site choices are remembered under (the host without `www.`), nil for a
+    /// page that is not on a site.
+    public var siteKey: String? { NavigationRules.siteKey(for: url) }
+
+    /// Sets this site's own page appearance (nil: follow the default). Applied to the pages on
+    /// screen at once without a reload; returns once they drew it, for the shell's crossfade.
+    @discardableResult
+    public func setPageAppearance(_ appearance: PageAppearance?, source: String = "menu") async -> Bool {
+        await pool?.setPageAppearance(appearance, for: self, source: source) ?? false
     }
 
     /// The page menu's "Translate Page": into `translationTarget`, on the device. The system may

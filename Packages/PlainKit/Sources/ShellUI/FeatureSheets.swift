@@ -82,6 +82,14 @@ public final class FeatureSheets {
         { [addressBar] in await addressBar.flush() }
     }
 
+    /// The default page appearance from outside Settings (the page's control, the suggestion;
+    /// nil undoes a first pick), through the same owner and write queue as Settings itself: saved,
+    /// applied here and handed to every other window, and an open (or later) Settings sheet shows it.
+    func setDefaultPageAppearance(_ appearance: PageAppearance?) async {
+        guard let model = makeSettingsModel() else { return }
+        await model.setDefaultPageAppearance(appearance)
+    }
+
     func makeSettingsModel() -> SettingsModel? {
         if let settingsModel { return settingsModel }
         guard let database else { return nil }
@@ -193,6 +201,12 @@ nonisolated struct LiveSettingsStore: SettingsStoring {
     func savedCustomSearchEngine() async throws -> SearchEngine? {
         try await database.savedCustomSearchEngine()
     }
+
+    func updateSettings(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) async throws -> BrowserSettings {
+        let settings = try await database.updateSettings(change)
+        await saved(settings)
+        return settings
+    }
 }
 
 /// History for the History screen: `AppDatabase`'s, after the visits the shell has queued are
@@ -230,6 +244,16 @@ nonisolated struct LiveBrowsingDataClearer: BrowsingDataClearing {
     var cleared: @Sendable () async -> Void = {}
 
     func clearHistoryAndData() async throws {
+        #if os(iOS)
+        // Whatever happens, the icon services fetch again afterwards.
+        defer {
+            Task { @MainActor in NotificationCenter.default.post(name: FaviconService.storedIconsCleared, object: nil) }
+        }
+        #endif
+        #if os(iOS)
+        // Before the rows go: an icon still being fetched is not written after the clear.
+        await MainActor.run { NotificationCenter.default.post(name: FaviconService.storedIconsWillClear, object: nil) }
+        #endif
         await settle()
         let others = await otherProfiles()
         for history in [database] + others.map(\.1) {

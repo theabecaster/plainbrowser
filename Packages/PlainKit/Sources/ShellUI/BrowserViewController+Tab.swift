@@ -238,6 +238,10 @@ extension BrowserViewController {
         refreshNeighbourPreviews()
         updateButtons()
         syncPanes()
+        // The last tab's web view may have held the keys; the new page takes them.
+        claimKeyFocusIfFree()
+        // A refresh spinning for the tab left behind ends with it.
+        pullIndicator.endRefreshing()
     }
 
     /// Removes an empty tab the user left, with no Reopen: it never shows as a card or neighbour.
@@ -307,10 +311,14 @@ extension BrowserViewController {
     /// The chrome's private tint, and private suggestions (no remote ones) in the search field.
     func setPrivateChrome(_ isPrivate: Bool) {
         data.isPrivate = isPrivate
+        pullIndicator.isPrivate = isPrivate
         guard pill.isPrivateTint != isPrivate else { return }
         pill.isPrivateTint = isPrivate
         Motion.animate(Motion.quick) {
             self.pill.setPrivate(isPrivate)
+            self.duo.top.band.setPrivate(isPrivate)
+            self.duo.strip?.setPrivate(isPrivate)
+            self.verticalBarBacking.setPrivate(isPrivate)
             self.buttonBar.setPrivate(isPrivate)
             self.tabsUI.toast.setPrivate(isPrivate)
             // The strip under the status bar too, so the whole screen says private, quietly.
@@ -340,11 +348,14 @@ extension BrowserViewController {
                 if let tab = currentTab { engineUI.crashedTabs.remove(tab.id) }
             } else if old != nil {
                 pill.progressBar.finish()
+                pullIndicator.endRefreshing()
+                pullIndicator.prepareColors()
                 // A typed load that ended without a new page (it failed): later visits are links.
                 if let tab = currentTab { engineUI.typedVisitTabs.remove(tab.id) }
             }
         }
         if old != nil, old?.canTranslate == false, new.canTranslate { offerTranslationOnce() }
+        darkPagesPageChanged(from: old, to: new)
         updateButtons()
         updatePageState()
         updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
@@ -501,7 +512,9 @@ extension BrowserViewController {
         // accessibility tree: the glass exposes its controls even inside a hidden content view.
         // The gallery hides the same container; it cannot open while the find bar is up.
         if !hidden { chromeGlass.isHidden = isShowingGallery }
-        Motion.animate(Motion.quick, changes: { content.alpha = alpha }) { [weak self] in
+        // The top band holds nothing while the find bar stands in for the bar.
+        duo.top.isHiddenForFind = hidden
+        Motion.animate(Motion.quick, changes: { content.alpha = alpha; self.updateTopBandAlpha() }) { [weak self] in
             guard let self, content.alpha == 0, engineUI.findWatch != nil else { return }
             chromeGlass.isHidden = true
         }
@@ -515,7 +528,7 @@ extension BrowserViewController {
     /// controls and checked while it is on (clarity audit 20): under a menu titled Site Settings,
     /// "Turn Off … on This Site" said the same thing three ways and Desktop Site's state not at all.
     func siteMenuItems(
-        for tab: Tab, url: URL, desktop showsDesktop: Bool, blocking showsBlocking: Bool, darkPages: DarkPagesItem
+        for tab: Tab, url: URL, desktop showsDesktop: Bool, blocking showsBlocking: Bool, darkPages: Bool
     ) -> [UIMenuElement] {
         guard showsDesktop, let host = url.host() else { return [] }
         let isDesktop = tab.contentMode == .desktop
@@ -530,7 +543,7 @@ extension BrowserViewController {
         // (the rules leave the toggle out there). Private tabs follow the regular choice instead
         // (polish backlog: a private-only toggle).
         let cookies = cookieBannerMenuItems(for: tab, url: url)
-        guard showsBlocking else { return [desktop] + cookies + darkPagesMenuItems(for: tab, item: darkPages) }
+        guard showsBlocking else { return [desktop] + cookies + darkPagesMenuItems(for: tab, shown: darkPages) }
 
         let blocking = session.isBlockingEnabled(for: url)
         let toggle = UIAction(
@@ -540,7 +553,7 @@ extension BrowserViewController {
             tab?.reload()
         }
         toggle.accessibilityIdentifier = "menu.blocking"
-        return [desktop, toggle] + cookies + darkPagesMenuItems(for: tab, item: darkPages)
+        return [desktop, toggle] + cookies + darkPagesMenuItems(for: tab, shown: darkPages)
     }
 
     /// Cookie Banner Blocking for the site, checked while on (state rules §4, `cookieBanners`).
@@ -687,6 +700,11 @@ struct TabSnapshot: Equatable {
     var canTranslate: Bool
     /// Translated text is on screen (the pill's "Translated —").
     var isTranslated: Bool
+    /// What Dark Pages does on the page, and the document that said so, and whether the site has
+    /// no light design.
+    var darkPages: DarkPagesState
+    var darkPagesDocument: String?
+    var isLightless: Bool
 
     init(_ tab: Tab) {
         url = tab.url
@@ -699,6 +717,9 @@ struct TabSnapshot: Equatable {
         isAwaitingResubmit = tab.isAwaitingResubmit
         canTranslate = tab.translationTarget != nil && tab.translation == .original
         isTranslated = tab.translation == .translated
+        darkPages = tab.darkPages
+        darkPagesDocument = tab.darkPagesDocument
+        isLightless = tab.isLightless
     }
 
     /// The load failed and nothing newer is loading.

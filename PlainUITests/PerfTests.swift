@@ -469,6 +469,13 @@ final class PerfTests: XCTestCase {
         let dark = app.buttons["Dark"]
         XCTAssertTrue(dark.waitForExistence(timeout: 2))
         dark.tap()
+        // No page appearance is chosen at first; the darkened page metric needs Dark.
+        let pages = app.buttons["settings.pageAppearance"]
+        XCTAssertTrue(pages.waitForExistence(timeout: 2))
+        pages.tap()
+        let darkPages = app.buttons["Dark"]
+        XCTAssertTrue(darkPages.waitForExistence(timeout: 2))
+        darkPages.tap()
         app.buttons["Done"].tap()
         XCTAssertTrue(more.waitForExistence(timeout: 3))
     }

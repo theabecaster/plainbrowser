@@ -1,7 +1,8 @@
 import XCTest
 
-/// Settings > Appearance (System, Light, Dark; saved) and dark pages' per-site switch in the
-/// page menu. The darkening itself is tested in WebEngineTests (DarkPagesTests).
+/// Settings > Appearance (System, Light, Dark; saved), and the dark pages perf and capture runs.
+/// The opt-in (suggestion, indicator, Site Settings) is in DarkPagesUITests; the darkening itself
+/// in WebEngineTests (DarkPagesTests).
 @MainActor
 final class AppearanceTests: XCTestCase {
     private var server: TestServer!
@@ -62,15 +63,28 @@ final class AppearanceTests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
-    /// The page menu's items, by label, while it is open.
-    /// Site Settings' Dark Pages item: nil when the menu leaves it out, else whether it is checked.
-    private func darkPages(_ app: XCUIApplication) -> Bool? {
-        let item = app.buttons["menu.darkPages"]
-        guard item.waitForExistence(timeout: 1) else { return nil }
-        XCTAssertEqual(item.label, "Dark Pages")
-        return item.isSelected
+    /// Settings > Page Appearance > Dark, then Done (no page appearance is chosen at first).
+    private func turnOnDarkPages(_ app: XCUIApplication) {
+        openSettings(app)
+        let row = app.buttons["settings.pageAppearance"]
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        row.tap()
+        XCTAssertTrue(app.buttons["Dark"].waitForExistence(timeout: 2))
+        app.buttons["Dark"].tap()
+        app.buttons["Done"].tap()
     }
 
+    /// Picks `appearance` ("dark", "light", "off") for this site from the control in the pill.
+    private func pickPageAppearance(_ app: XCUIApplication, _ appearance: String) {
+        let control = app.buttons["pill.pageAppearance"]
+        XCTAssertTrue(control.waitForExistence(timeout: 5))
+        control.tap()
+        let item = app.buttons["pageAppearance.\(appearance)"]
+        XCTAssertTrue(item.waitForExistence(timeout: 3))
+        item.tap()
+    }
+
+    /// The page menu's items, by label, while it is open.
     private func openPageMenu(_ app: XCUIApplication) {
         let more = app.buttons["more"]
         XCTAssertTrue(more.waitForExistence(timeout: 2))
@@ -109,35 +123,6 @@ final class AppearanceTests: XCTestCase {
         chooseAppearance(app, "System")
     }
 
-    func testDarkPagesSwitchShowsOnlyWhileDarkAndIsRememberedForTheSite() throws {
-        let app = try launch()
-        go(app, to: "/light-site", heading: "Light Only")
-        openPageMenu(app)
-        XCTAssertNil(darkPages(app), "a light app darkens nothing")
-        closeMenu(app)
-
-        chooseAppearance(app, "Dark")
-        openPageMenu(app)
-        XCTAssertEqual(darkPages(app), true, "the light-only page is darkened")
-        app.buttons["menu.darkPages"].tap()
-
-        // Remembered for the site: another page on it opens with dark pages off.
-        go(app, to: "/light-site-2", heading: "Light Only")
-        openPageMenu(app)
-        XCTAssertEqual(darkPages(app), false)
-        app.buttons["menu.darkPages"].tap()
-        openPageMenu(app)
-        XCTAssertEqual(darkPages(app), true, "back on, at once")
-        closeMenu(app)
-
-        // A site with its own dark design is left alone: nothing to turn off.
-        go(app, to: "/dark-site", heading: "Own Dark Design")
-        openPageMenu(app)
-        XCTAssertNil(darkPages(app))
-        closeMenu(app)
-        chooseAppearance(app, "System")
-    }
-
     /// Scroll proxy for dark pages (docs/research/dark-mode.md): frames the page drew while a
     /// fast scroll ran, and how many took over 25 ms, darkened and with dark pages off. The
     /// simulator has no hitch metric; the device perf gate's `hitchMsPerS` is the real number.
@@ -146,6 +131,7 @@ final class AppearanceTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_DARK_PERF"] == "1", "perf proxy runs on request only")
         let app = try launch()
         chooseAppearance(app, "Dark")
+        turnOnDarkPages(app)
         func run(_ label: String) {
             go(app, to: "/light-site?\(label)", heading: "Light Only")
             Thread.sleep(forTimeInterval: 1)
@@ -169,11 +155,9 @@ final class AppearanceTests: XCTestCase {
             Thread.sleep(forTimeInterval: 1)
         }
         run("darkened")
-        openPageMenu(app)
-        app.buttons["menu.darkPages"].tap()
+        pickPageAppearance(app, "off")
         run("off")
-        openPageMenu(app)
-        app.buttons["menu.darkPages"].tap()
+        pickPageAppearance(app, "dark")
         run("darkened-again")
         chooseAppearance(app, "System")
     }
@@ -188,11 +172,9 @@ final class AppearanceTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_DARK_PERF"] == "1", "perf runs on request only")
         let app = try launch()
         chooseAppearance(app, "Dark")
+        turnOnDarkPages(app)
         go(app, to: "/light-site", heading: "Light Only")
-        if darkPagesOff {
-            openPageMenu(app)
-            app.buttons["menu.darkPages"].tap()
-        }
+        if darkPagesOff { pickPageAppearance(app, "off") }
         Thread.sleep(forTimeInterval: 1)
         let web = app.webViews.firstMatch
         let options = XCTMeasureOptions()
@@ -225,17 +207,19 @@ final class AppearanceTests: XCTestCase {
         app.buttons["Dark"].tap()
         Thread.sleep(forTimeInterval: 1)
         shot("a4-settings-dark")
+        app.buttons["settings.pageAppearance"].tap()
+        app.buttons["Dark"].tap()
         app.buttons["Done"].tap()
         Thread.sleep(forTimeInterval: 1.2)
         shot("a5-light-site-darkened")
         openPageMenu(app)
         Thread.sleep(forTimeInterval: 0.8)
         shot("a6-page-menu-dark-pages")
-        app.buttons["menu.darkPages"].tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        pickPageAppearance(app, "off")
         Thread.sleep(forTimeInterval: 1)
         shot("a7-light-site-dark-pages-off")
-        openPageMenu(app)
-        app.buttons["menu.darkPages"].tap()
+        pickPageAppearance(app, "dark")
         go(app, to: "/dark-site", heading: "Own Dark Design")
         Thread.sleep(forTimeInterval: 1)
         shot("a8-own-dark-design")

@@ -31,6 +31,8 @@ final class ChromeScrim: UIView {
     /// dark mode: light text under the dark ground showed through more than dark text on paper.
     /// At 82% body text still ghosted under the host, worst in the collapsed pill's smaller
     /// text (clarity audit 13): 92% leaves the glass its light and the page a hint, no words.
+    /// The inner screen's top band turns this ground off (`setScrimShown`), so the lighter glass
+    /// shows its refraction there; on phones and the outer screen legibility wins.
     static let opacity: CGFloat = 0.92
     static let darkOpacity: CGFloat = 0.95
 

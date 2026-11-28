@@ -4,12 +4,15 @@ import os
 import PerfSignposts
 import UIKit
 
-/// Side tabs: the window's tabs in a leading sidebar (docs/plan.md, section 6, "Side tabs design").
+/// Side tabs: the window's tabs in a sidebar (docs/decisions.md, "Duo inner screen: the sidebar").
 ///
-/// The content is always laid out at the expanded width and the host sizes the view: at the rail's
-/// width the view clips it to the site tiles, so resizing between Hidden, Rail and Expanded moves
-/// one edge and never lays the rows out again. The host owns the width: a horizontal drag anywhere
-/// on the sidebar reports through `onResize`, and the host springs it to a state.
+/// A rail of site icons that widens to show titles: New Tab on top, the tabs, and Show Titles at
+/// the bottom. The content is always laid out at the expanded width and the host sizes the view:
+/// at the rail's width the view clips it to the tiles, so resizing between Hidden, Rail and
+/// Expanded moves one edge and never lays the rows out again; the selection mark and the titles'
+/// opacity follow the width (`visibleWidth`). The host owns the width: a horizontal drag anywhere
+/// on the sidebar reports through `onResize`, the bottom row through `onToggleTitles`, and the
+/// host springs it to a state.
 ///
 /// Rows come from `SideTabsDataSource` (the shell's `TabStore`): tap to show a tab in the focused
 /// pane, drag to reorder, close from the row (Expanded) or its menu, New Tab on top (a long press
@@ -25,11 +28,14 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     /// velocity (points per second, positive widens).
     public var onResize: ((ResizePhase, CGFloat, CGFloat) -> Void)?
 
-    private var collectionView: UICollectionView!
+    private(set) var collectionView: UICollectionView!
     private var diffable: UICollectionViewDiffableDataSource<Int, UUID>!
     private let header = UIView()
-    private let newTabButton = UIButton(type: .system)
+    private let newTabButton = SideActionRow(symbolName: "plus", title: String(localized: "New Tab"), prominent: true)
+    private let titlesButton = SideActionRow(symbolName: "sidebar.left", title: String(localized: "Show Titles"), prominent: false)
     private let separator = UIView()
+    /// Show Titles (or Hide Titles) was tapped: the host widens the rail or brings it back.
+    public var onToggleTitles: (() -> Void)?
     private var items: [UUID: TabGalleryItem] = [:]
     private var focusedID: UUID?
     private var otherID: UUID?
@@ -38,13 +44,45 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     private static let privateSection = 1
     private static let privateHeaderKind = "privateHeader"
 
-    /// Titles and close buttons show (Expanded); the rail shows tiles only.
+    /// How much of the rows the host shows now (the sidebar's width): the rail's shows tiles
+    /// only, more brings the titles and close buttons in. Set inside an animation, the selection
+    /// mark and the titles follow the sidebar's spring; under a finger they follow it 1:1. Sets
+    /// frames and opacities on the rows on screen; nothing is laid out again.
+    public var visibleWidth: CGFloat = SidebarState.rail.width {
+        didSet {
+            guard visibleWidth != oldValue, isViewLoaded else { return }
+            applyVisibleWidth()
+        }
+    }
+
+    /// The sidebar rests showing titles (Expanded): the bottom row offers to hide them.
     public var showsTitles = false {
         didSet {
-            guard showsTitles != oldValue else { return }
-            configureVisibleCells()
-            newTabButton.configuration?.title = showsTitles ? "New Tab" : nil
+            guard showsTitles != oldValue, isViewLoaded else { return }
+            updateTitlesButton()
         }
+    }
+
+    /// The rail may widen here (not during a split or a book pose): the bottom row shows.
+    public var canShowTitles = true {
+        didSet {
+            guard canShowTitles != oldValue, isViewLoaded else { return }
+            titlesButton.isHidden = !canShowTitles
+        }
+    }
+
+    private func applyVisibleWidth() {
+        let width = visibleWidth
+        for case let cell as SideTabCell in collectionView.visibleCells { cell.setVisibleWidth(width) }
+        newTabButton.setVisibleWidth(width)
+        titlesButton.setVisibleWidth(width)
+    }
+
+    private func updateTitlesButton() {
+        titlesButton.set(
+            symbolName: isOnRight ? "sidebar.right" : "sidebar.left",
+            title: showsTitles ? String(localized: "Hide Titles") : String(localized: "Show Titles")
+        )
     }
 
     /// Expanded floats over the page (the page would be too narrow beside it): it casts a shadow.
@@ -57,6 +95,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     public var isOnRight = false {
         didSet {
             guard isViewLoaded, isOnRight != oldValue else { return }
+            updateTitlesButton()
             // The outgoing edge lets go first.
             (isOnRight ? separatorOnTrailing : separatorOnLeading)?.isActive = false
             (isOnRight ? separatorOnLeading : separatorOnTrailing)?.isActive = true
@@ -75,7 +114,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     public func setFirstRowCenter(_ center: CGFloat?) {
         loadViewIfNeeded()
         if let center {
-            let top = center - SideTabCell.height / 2 - Spacing.xs
+            let top = center - SideTabMetrics.rowHeight / 2 - Spacing.xs
             if contentFromTop.constant != top { contentFromTop.constant = top }
         }
         let fromTop = center != nil
@@ -113,24 +152,19 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         content.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(content)
 
-        var button = UIButton.Configuration.plain()
-        button.image = UIImage(systemName: "plus", withConfiguration: UIImage.SymbolConfiguration(textStyle: .headline))
-        button.imagePadding = SidebarState.rail.width - SideTabCell.tileSize - Spacing.m
-        button.contentInsets = NSDirectionalEdgeInsets(
-            top: 0, leading: (SidebarState.rail.width - 20) / 2, bottom: 0, trailing: Spacing.m
-        )
-        button.baseForegroundColor = Palette.accent
-        newTabButton.configuration = button
-        newTabButton.contentHorizontalAlignment = .leading
         newTabButton.accessibilityIdentifier = "sideTabs.newTab"
-        newTabButton.accessibilityLabel = "New Tab"
         newTabButton.addAction(UIAction { [weak self] _ in self?.dataSource.newTab(private: false) }, for: .primaryActionTriggered)
         newTabButton.menu = UIMenu(children: [
             UIAction(title: "New Private Tab", image: UIImage(systemName: "hand.raised")) { [weak self] _ in
                 self?.dataSource.newTab(private: true)
             },
         ])
-        newTabButton.showsMenuAsPrimaryAction = false
+        titlesButton.accessibilityIdentifier = "sideTabs.titles"
+        titlesButton.addAction(UIAction { [weak self] _ in self?.onToggleTitles?() }, for: .primaryActionTriggered)
+        titlesButton.translatesAutoresizingMaskIntoConstraints = false
+        titlesButton.isHidden = !canShowTitles
+        content.addSubview(titlesButton)
+        updateTitlesButton()
         newTabButton.translatesAutoresizingMaskIntoConstraints = false
         header.translatesAutoresizingMaskIntoConstraints = false
         header.addSubview(newTabButton)
@@ -151,7 +185,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         )
         content.addSubview(collectionView)
 
-        separator.backgroundColor = UIColor.separator
+        separator.backgroundColor = Palette.paperHairline
         separator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(separator)
 
@@ -169,13 +203,18 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
             header.topAnchor.constraint(equalTo: content.topAnchor, constant: Spacing.xs),
             header.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             header.widthAnchor.constraint(equalToConstant: width),
-            header.heightAnchor.constraint(equalToConstant: SideTabCell.height),
+            header.heightAnchor.constraint(equalToConstant: SideTabMetrics.rowHeight),
             newTabButton.topAnchor.constraint(equalTo: header.topAnchor),
             newTabButton.bottomAnchor.constraint(equalTo: header.bottomAnchor),
             newTabButton.leadingAnchor.constraint(equalTo: header.leadingAnchor),
             newTabButton.trailingAnchor.constraint(equalTo: header.trailingAnchor),
-            collectionView.topAnchor.constraint(equalTo: header.bottomAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            collectionView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: Spacing.xs),
+            collectionView.bottomAnchor.constraint(equalTo: titlesButton.topAnchor),
+            // The bottom row stands clear of the home indicator.
+            titlesButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -Spacing.xs),
+            titlesButton.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            titlesButton.widthAnchor.constraint(equalToConstant: width),
+            titlesButton.heightAnchor.constraint(equalToConstant: SideTabMetrics.rowHeight),
             collectionView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             collectionView.widthAnchor.constraint(equalToConstant: width),
             separator.topAnchor.constraint(equalTo: view.topAnchor),
@@ -206,15 +245,16 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         view.addGestureRecognizer(pan)
 
         reloadTabs()
+        applyVisibleWidth()
     }
 
     private static func makeLayout() -> UICollectionViewLayout {
         UICollectionViewCompositionalLayout { section, _ in
             let item = NSCollectionLayoutItem(
-                layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(SideTabCell.height))
+                layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(SideTabMetrics.rowHeight))
             )
             let group = NSCollectionLayoutGroup.vertical(
-                layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(SideTabCell.height)),
+                layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(SideTabMetrics.rowHeight)),
                 subitems: [item]
             )
             let layoutSection = NSCollectionLayoutSection(group: group)
@@ -231,7 +271,6 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
 
     // MARK: Tabs
 
-    /// Reads the tabs again (a title, a selection, a close elsewhere) and shows what changed.
     /// The header's New Tab: hidden on an empty tab, which New Tab would only repeat
     /// (docs/state-rules.md, principle 8). The shell decides from its state rules.
     public func setNewTabShown(_ shown: Bool) {
@@ -239,6 +278,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         newTabButton.isHidden = !shown
     }
 
+    /// Reads the tabs again (a title, a selection, a close elsewhere) and shows what changed.
     public func reloadTabs() {
         guard isViewLoaded else { return }
         let regular = dataSource.regularTabs
@@ -261,25 +301,46 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
             old.indexOfItem(id) != nil && (items[id] != next[id] || marked.contains(id))
         }
         snapshot.reconfigureItems(changed)
+        let focusMoved = focused != focusedID
         items = next
         focusedID = focused
         otherID = other
         diffable.apply(snapshot, animatingDifferences: old.numberOfItems > 0 && view.window != nil)
+        if focusMoved { needsFocusScroll = true }
+        scrollFocusedIntoViewIfNeeded(animated: old.numberOfItems > 0 && view.window != nil)
+    }
+
+    /// The tab on screen has not been brought into view since the focus moved (or the list was
+    /// built: a rail made while the twentieth tab shows starts on it, not on the first).
+    private var needsFocusScroll = true
+
+    /// Brings the focused tab's row into view when it is not fully there; a row already in view
+    /// stays where it is, so picking a tab never moves the list under the finger.
+    private func scrollFocusedIntoViewIfNeeded(animated: Bool) {
+        guard needsFocusScroll, collectionView.bounds.height > 0, let focusedID,
+              let indexPath = diffable.indexPath(for: focusedID) else { return }
+        collectionView.layoutIfNeeded()
+        // No geometry yet (a row just inserted): the next layout pass tries again.
+        guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame, frame.height > 0 else {
+            view.setNeedsLayout()
+            return
+        }
+        needsFocusScroll = false
+        guard !collectionView.bounds.contains(frame) else { return }
+        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
+    }
+
+    override public func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        scrollFocusedIntoViewIfNeeded(animated: false)
     }
 
     private func configure(_ cell: SideTabCell, id: UUID) {
         guard let item = items[id] else { return }
-        cell.configure(item: item, isFocused: id == focusedID, isInOtherPane: id == otherID, showsTitle: showsTitles)
+        cell.configure(
+            item: item, isFocused: id == focusedID, isInOtherPane: id == otherID, visibleWidth: visibleWidth, icons: dataSource
+        )
         cell.onClose = { [weak self] in self?.close(id) }
-    }
-
-    private func configureVisibleCells() {
-        guard isViewLoaded else { return }
-        for indexPath in collectionView.indexPathsForVisibleItems {
-            guard let id = diffable.itemIdentifier(for: indexPath),
-                  let cell = collectionView.cellForItem(at: indexPath) as? SideTabCell else { continue }
-            configure(cell, id: id)
-        }
     }
 
     private func close(_ id: UUID) {
@@ -289,15 +350,15 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     }
 
     private func didReorder(_ transaction: NSDiffableDataSourceTransaction<Int, UUID>) {
-        for change in transaction.difference {
-            guard case let .insert(_, id, _) = change,
-                  let section = transaction.finalSnapshot.sectionIdentifier(containingItem: id),
-                  let index = transaction.finalSnapshot.itemIdentifiers(inSection: section).firstIndex(of: id) else { continue }
+        for move in TabListReorder.moves(in: transaction) {
             Signposts.signposter.emitEvent(Signposts.galleryReorder, "sidebar")
-            dataSource.moveTab(id, to: index)
+            Haptic.drop.play()
+            dataSource.moveTab(move.id, to: move.index)
         }
-        // The store may keep pinned tabs first: show its order.
-        reloadTabs()
+        // The store may keep pinned tabs first: show its order. After the reorder has been
+        // committed: a snapshot applied inside the handler raises in UIKit (the strip crashed so
+        // on TestFlight).
+        DispatchQueue.main.async { [weak self] in self?.reloadTabs() }
     }
 
     // MARK: UICollectionViewDelegate
@@ -340,6 +401,8 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         guard let id = diffable.itemIdentifier(for: indexPath) else { return [] }
         let item = UIDragItem(itemProvider: NSItemProvider())
         item.localObject = id
+        dragDestination = nil
+        Haptic.selection.prepare()
         return [item]
     }
 
@@ -352,8 +415,16 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
               let source = diffable.snapshot().sectionIdentifier(containingItem: id),
               let destination = destinationIndexPath, destination.section == source
         else { return UICollectionViewDropProposal(operation: .forbidden) }
+        // A tick as the dragged tab reaches each new place (not the one it started from).
+        if destination != dragDestination {
+            if dragDestination != nil { Haptic.selection.play() }
+            dragDestination = destination
+        }
         return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
     }
+
+    /// Where the tab being dragged would land now, to tick once per new place.
+    private var dragDestination: IndexPath?
 
     /// The diffable data source performs local moves itself (`reorderingHandlers`).
     public func collectionView(_ collectionView: UICollectionView, performDropWith coordinator: any UICollectionViewDropCoordinator) {}

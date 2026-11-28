@@ -224,7 +224,7 @@ extension BrowserViewController {
         addChild(controller)
         controller.view.translatesAutoresizingMaskIntoConstraints = false
         // Over the pages, the sidebar and the strip; under the chrome, the toast and the search sheet.
-        view.insertSubview(controller.view, aboveSubview: duo.strip?.view ?? duo.sidebar?.view ?? panes.view)
+        view.insertSubview(controller.view, aboveSubview: pageAreaTopView)
         let leading = controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor)
         let width = controller.view.widthAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
@@ -350,11 +350,18 @@ extension BrowserViewController {
 
     // MARK: The edge swipe
 
-    /// The swipe in from the trailing edge may begin: the pane can show and is closed, and nothing
-    /// else holds the screen.
+    /// The swipe in from the trailing edge may begin: the pane can show and is closed, nothing
+    /// else holds the screen, and the page has nowhere forward to go: there the edge is WebKit's
+    /// swipe forward, as in every browser (`FixedChoices.forwardSwipeBeforeSidePane`).
     var sidePaneSwipeMayBegin: Bool {
         duo.layout?.sidePaneAvailable == true && !sidePaneUI.isRequested && !isEditingAddress && !isShowingGallery
-            && presentedViewController == nil && !sidePaneUI.isAnimating
+            && presentedViewController == nil && !sidePaneUI.isAnimating && !edgeSwipeGoesForward
+    }
+
+    /// The trailing edge swipe is the page's swipe forward now: it has a page forward and shows it
+    /// (not the reader over it).
+    var edgeSwipeGoesForward: Bool {
+        FixedChoices.forwardSwipeBeforeSidePane && currentTab?.canGoForward == true && !isShowingReader
     }
 
     /// The divider may take a drag, a tap or a key: the pane is open beside the page (or over it)
@@ -425,9 +432,9 @@ extension BrowserViewController {
 }
 
 /// The side pane's gestures: the swipe in from the trailing edge opens it, a swipe toward the edge
-/// on the pane closes it. The edge swipe takes the trailing edge from WebKit's swipe forward where
-/// the pane can open (the top bar's Forward button stays); elsewhere it never begins and WebKit's
-/// swipe works as before.
+/// on the pane closes it. The edge swipe takes the trailing edge only where the pane can open and
+/// the page has nothing forward; with a page forward it never begins and WebKit's swipe forward
+/// runs, as Back's edge does (the opener swipe takes over only without history).
 final class SidePaneGestures: NSObject, UIGestureRecognizerDelegate {
     private weak var browser: BrowserViewController?
 

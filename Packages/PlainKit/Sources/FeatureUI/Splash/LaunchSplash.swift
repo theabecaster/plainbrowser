@@ -214,10 +214,8 @@ public final class LaunchSplash {
         defer { signposter.endInterval(Signposts.launchSplashBuild, build) }
         self.scene = scene
         debug = SplashDebug(arguments: arguments)
-        // The icon's world, as the Home Screen shows it: the system's light or dark, not the
-        // app's own Appearance setting. The launch screen under it follows the system too.
-        let dark = scene.traitCollection.userInterfaceStyle == .dark
-        let theme = SplashTheme.theme(for: debug.icon ?? AppIcons.current, dark: dark)
+        // The icon's world, as the Home Screen shows it (the same light and dark).
+        let theme = SplashTheme.theme(for: debug.icon ?? AppIcons.current)
         let scale = scene.traitCollection.displayScale
         let art = art, kit = kit
         DispatchQueue.global(qos: .userInitiated).async {

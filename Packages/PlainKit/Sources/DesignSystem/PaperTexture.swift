@@ -5,7 +5,8 @@ import Foundation
 /// (docs/decisions.md, "Paper texture"). No UIKit, so tests and tools can render it on macOS;
 /// `Paper` turns it into the background UIKit and SwiftUI surfaces use.
 ///
-/// The recipe is three layers of very low contrast, added to the Paper color in 8-bit levels:
+/// The recipe is three layers of low contrast (about 3 % of a full-range noise by day, 2 % by
+/// night), added to the Paper color in 8-bit levels:
 /// - **Formation:** soft cloudiness a few points across, like pulp settling unevenly.
 /// - **Tooth:** fine grain at device-pixel scale, slightly softened so it reads as surface, not
 ///   as digital noise.
@@ -35,19 +36,20 @@ public nonisolated enum PaperTexture {
         /// Standard deviation of the formation and the tooth, in levels.
         var formation: Double
         var tooth: Double
-        /// Fibres per tile and their strength range in levels. Negative darkens.
+        /// Fibres per tile (a square number, so the jittered grid they start on is full) and their
+        /// strength range in levels. Negative darkens.
         var fibres: Int
         var fibreStrength: ClosedRange<Double>
         /// The share of fibres that go the other way (lighter on day paper, darker at night).
         var fibreContrary: Double
 
         static let day = Recipe(
-            base: (255, 246, 230), channel: (0.85, 1.0, 1.2),
-            formation: 0.45, tooth: 1.0, fibres: 121, fibreStrength: -3.2 ... -1.2, fibreContrary: 0.4
+            base: (255, 246, 230), channel: (0.45, 1.0, 1.2),
+            formation: 0.45, tooth: 2.2, fibres: 625, fibreStrength: -5.2 ... -2.05, fibreContrary: 0.4
         )
         static let night = Recipe(
             base: (10, 33, 51), channel: (0.75, 0.9, 1.0),
-            formation: 0.25, tooth: 0.5, fibres: 100, fibreStrength: 1.2 ... 2.6, fibreContrary: 0.25
+            formation: 0.28, tooth: 1.1, fibres: 529, fibreStrength: 1.98 ... 4.25, fibreContrary: 0.25
         )
     }
 
@@ -138,33 +140,42 @@ public nonisolated enum PaperTexture {
         let n = side
         var field = [Double](repeating: 0, count: n * n)
         // Strands start on a jittered grid, not at random: even spacing leaves no cluster for the
-        // eye to find again one tile over.
+        // eye to find again one tile over. Many faint strands rather than a few strong ones, for
+        // the same reason: no single strand stands out enough to be a landmark.
         let grid = Int(Double(recipe.fibres).squareRoot().rounded(.up))
         let cell = Double(n) / Double(grid)
         for index in 0 ..< recipe.fibres {
             var x = (Double(index % grid) + random.unit()) * cell
             var y = (Double(index / grid) + random.unit()) * cell
             var angle = random.unit() * 2 * .pi
-            // Mostly short strands, a few long ones: 10 to 44 pixels (3 to 15 pt), weighted toward
-            // short: long ones read as scratches.
-            let length = 10 + 34 * pow(random.unit(), 2)
+            // Mostly short strands, a few long ones: 8 to 32 pixels (3 to 11 pt), weighted toward
+            // short: long ones read as scratches, and a long strand is the one the eye finds again
+            // one tile over.
+            let length = 8 + 24 * pow(random.unit(), 2)
             let range = recipe.fibreStrength
             var strength = range.lowerBound + random.unit() * (range.upperBound - range.lowerBound)
             if random.unit() < recipe.fibreContrary { strength *= -0.6 }
-            let bend = (random.unit() - 0.5) * 0.012
+            // A gentle, wandering curve: dead-straight strands read as scratches.
+            let bend = (random.unit() - 0.5) * 0.036
             var travelled = 0.0
             while travelled < length {
                 // Strands fade in and out at their ends instead of stopping bluntly.
                 let t = travelled / length
                 let taper = sin(t * .pi)
                 splat(&field, x, y, strength * taper)
-                angle += bend + (random.unit() - 0.5) * 0.05
+                angle += bend + (random.unit() - 0.5) * 0.15
                 x += cos(angle) * 0.5
                 y += sin(angle) * 0.5
                 travelled += 0.5
             }
         }
-        return field
+        // Keep only the strands themselves. Where strands happen to gather, the field has a soft
+        // low-frequency cloud that repeats with the tile and, at arm's length, shows as a grid of
+        // faint blotches every 85 pt. Subtracting a wide blur of the field (a high pass) takes that
+        // cloud out and leaves the crisp strands; it also centers the field, so the sheet still
+        // averages to the base color.
+        let cloud = boxBlur(boxBlur(field, radius: 12), radius: 12)
+        return zip(field, cloud).map { $0 - $1 }
     }
 
     private static func splat(_ field: inout [Double], _ x: Double, _ y: Double, _ amount: Double) {
@@ -179,6 +190,30 @@ public nonisolated enum PaperTexture {
     }
 
     // MARK: Helpers
+
+    /// A box blur of `radius` pixels in both directions, wrapping at the tile's edges.
+    private static func boxBlur(_ values: [Double], radius: Int) -> [Double] {
+        let n = side, width = Double(2 * radius + 1)
+        var rows = [Double](repeating: 0, count: n * n)
+        for y in 0 ..< n {
+            var sum = 0.0
+            for dx in -radius ... radius { sum += values[y * n + wrap(dx)] }
+            for x in 0 ..< n {
+                rows[y * n + x] = sum / width
+                sum += values[y * n + wrap(x + radius + 1)] - values[y * n + wrap(x - radius)]
+            }
+        }
+        var out = rows
+        for x in 0 ..< n {
+            var sum = 0.0
+            for dy in -radius ... radius { sum += rows[wrap(dy) * n + x] }
+            for y in 0 ..< n {
+                out[y * n + x] = sum / width
+                sum += rows[wrap(y + radius + 1) * n + x] - rows[wrap(y - radius) * n + x]
+            }
+        }
+        return out
+    }
 
     /// A field scaled to unit standard deviation around zero, times `weight`.
     private struct Field {

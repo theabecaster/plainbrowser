@@ -6,18 +6,19 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 
 - About five top-level rows, at most two levels deep, opened as a sheet with a single "Done" button.
 - Each row shows its current value, for example "Google", "Left" or "After 1 day".
-- Every row is a choice the user understands and would want to make. Plain's rows are: Search Engine, Tab Layout, Archive Tabs, Appearance (System, Light, Dark), App Icon (only where the icon can change: not for an iPhone app on a Mac), Clear History and Data, and About.
+- Every row is a choice the user understands and would want to make. Plain's rows are: Search Engine, Tab Layout, Archive Tabs, Appearance (System, Light, Dark; Plain's own colors), Page Appearance (Off, Dark, Light; how websites look), App Icon (only where the icon can change: not for an iPhone app on a Mac), Clear History and Data, and About.
 - Footers are one plain sentence that teaches, for example "Tabs you haven't opened in a day move to the archive."
 - Labels are Title Case nouns ("Search Engine", "Clear History and Data").
 - A row that doesn't apply on this screen stays, disabled, keeping its value, and its footer says why and what to use instead (Tab Layout on a narrow screen: "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs.").
 
-**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, cookie banners are rejected, translation is on the device, PDFs are Letter or A4 by region, haptics follow iOS (System Haptics, no switch of Plain's), text follows Dynamic Type, the archive default is a week and archived tabs leave after 30 days, Appearance starts on System, and dark pages is on.
+**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, cookie banners are rejected, translation is on the device, PDFs are Letter or A4 by region, haptics follow iOS (System Haptics, no switch of Plain's), text follows Dynamic Type, the archive default is a week and archived tabs leave after 30 days, Appearance starts on System, and no page appearance is chosen (every site as made).
 
 ## Options live on the object
 
 - **Page sheet** (More, or a long press on the pill; Arc's page sheet in Plain's paper): a bottom sheet sized to its content, a popover under More on wide screens. Top to bottom: the **address row**, a capsule card with Back and Forward (dimmed at a limit), the host (a tap edits the address in the field, with Copy inside it; Return loads in the same tab; with two or more profiles the profile's name under it, quiet: "Work"), Copy Link (a check mark answers in place) and Reload (Stop while loading, `stop.circle` in the same slot: an X at a sheet's corner reads as "close the sheet"; Safari's in-field X belongs where nothing else can close); **tiles**, at most four captioned cards for the page actions people reach for most: Find, Reader, Summarize (on an article in a language the user reads, where Apple Intelligence runs) or Translate (Translated while it is; the two never apply together), Share always last; a tile whose mode is on (Reader while the reader is open, Translated) shows in the accent and turns it off; then keeping the page, one captioned row: Favorite and Read Later (in the accent once kept: the filled star, "Saved"; a tap removes it) and "Site Settings" (Desktop Site, Content Blocking, Cookie Banner Blocking and Dark Pages, each named for what it controls and checked while on, set once per site and remembered; then the permissions the site asked for); then **rows**: Zoom (magnifier minus, the percent in ink, magnifier plus, acting in place; VoiceOver hears "Zoom"), Save PDF to Files, Open in Other Pane / Swap Panes / Close Pane (Duo), Downloads while there are any, the tabs' places (New Private Tab, Reopen Closed Tab, Archived Tabs) and the app's places (History, Reading List, Favorites, Settings) as captioned chips. Items appear only when they apply; it fits the Duo's outer screen without scrolling. Print and Save as PDF are in the share sheet, where Safari and Chrome keep them. No blocked-trackers count: WebKit gives no public count of what a rule list blocked (docs/research/address-focus.md).
-- **Address bar, two doors (Arc):** a tap on the pill opens an empty field to go somewhere new; what is submitted from a page opens a new tab (Back on its first page returns to the page). On the search engine's results page the pill shows the query, and a tap brings it back selected, to refine in the same tab. Editing the page's own address is the page sheet's host, or the page's row under the field.
+- **Address bar, the page's address in the field:** a tap on the pill over a page opens the field with the page's full address, all selected, and Copy (`link`) inside the field at its trailing end. Typing over it (or pasting, dictating, clearing) is a new query and opens a new tab (Back on its first page returns to the page); putting the caret in the address and changing part of it edits this page, in the same tab. Copy shows only while the address is untouched. No row under the field stands for the page. On the search engine's results page the pill shows the query, and a tap brings it back selected, to refine in the same tab. The page sheet's host opens the same field with the caret at the address's end. New tabs and the start screen open the field empty.
 - **The search sheet (Arc Search's, in paper):** the pill grows into a paper card over the dimmed page; the field ends at the card's top (18.7% down the screen), rows run top down under it, and the card runs to the bottom edge behind the keyboard. In the empty field: a microphone (dictation on the phone) and Browse for Me; once typed in, the clear button. The way out is always visible: the handle at the sheet's top (swipe down, or tap it) and the dimmed page above (tap it); under a top bar, Cancel beside the field. Spec and frames: docs/research/arc-address-expand.md.
+- **Page Appearance, apart from Plain's own** (docs/decisions.md, "Page appearance"): how websites look, Dark, Light or Off (as the site made it), never Plain's colors. Nothing is chosen at first. In Plain's dark colors the first light page offers Dark once, in a small card by the address bar ("Dark Pages" / "Show every website dark, even ones made only in light?" / No Thanks, Turn On). The first pick from the page's control becomes the default for every site that can show it, said by a toast with This Site Only; later picks are for that site, and Use for All Sites changes the default on purpose. The control is a glyph at the pill's leading edge while Plain changes the page (a moon, a sun, or a slashed circle for a site Off against a default); its tap opens the menu, whose title says whether it shows this site's choice or the default. Site Settings has the same menu; Settings has the default under Appearance. Light is never offered for a site made only in dark.
 - **Automatic, with a way out:** cookie banners are answered (rejected where the banner allows it) on every site, and a foreign page offers Translate Page in its menu. Each has its switch or item on the page, never in Settings. The one hint Plain gives about a feature is a single toast the first time ever it applies ("This page is in French", Translate); after that the menu is the way.
 - **On-device AI:** Browse for Me is a row under the search field while the text would search, and a button in the empty field that arms it for Return; Summarize Page is a tile in the page sheet on articles. Both write on the phone with Apple Intelligence and are left out where it can't run (no hint, no dimmed item). The summary is a paper sheet with its title and Done pinned at the top: the query or page title in New York, an honest progress line, then short headings and bullet points, each ending with small numbered citations in Lagoon that open their source, and the numbered sources at the end.
 - **Switched-off features** (camera, microphone, location, Photos, cellular data; research in
@@ -41,6 +42,49 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - **Confirmations:** only for destructive actions that affect a lot, for example Clear History and Data or Close All Tabs.
 - **Gestures are shortcuts, never the only way.** Every gesture has a menu equivalent, and menus name the gesture where it helps ("Next Tab — or swipe the address bar").
 
+## Gestures and keys
+
+Safari's, so a Safari user's hands already know them (inventory and sources:
+docs/research/gestures.md). Each acts only where its control would (docs/state-rules.md,
+principle 3); with nothing to do a gesture bumps, a key does nothing.
+
+| Gesture or key | Does | Where | Same as |
+|---|---|---|---|
+| Swipe the address bar left / right | Next / previous tab; past the last, New Tab | Every bottom bar; the pill in the top bar | Tabs menu: Previous Tab, Next Tab |
+| Swipe up from the address bar | All tabs | Bottom bars (not the top bar, not with side tabs) | Tabs button, Show All Tabs |
+| Edge swipe from the leading edge | Back; on a link's first page, back to its opener | Every page | Back |
+| Edge swipe from the trailing edge | Forward while the page has somewhere forward; else, on the Duo's inner screen, opens the side pane | Every page | Forward; More: Show Side Pane |
+| Pull the page down | Reload: the arrow runs through the brand's colors, fills with Lagoon when armed (haptic) and spins until the load ends | Loaded pages, not the reader or an error | More: Reload |
+| Pinch in on a page at its smallest zoom | All tabs | The Duo's inner screen (Safari on iPad) | Show All Tabs |
+| Pinch, double tap | Zoom the page (WebKit) | Every page | More: Zoom |
+| Tap the status bar | Top of the page; with the bar hidden, the bar first | Every page | — |
+| Tap the bottom edge | The hidden bar back | While the bar is hidden | — |
+| Long press Back / Forward | The pages it can reach, nearest first | Where the page has history that way | — |
+| Long press Tabs | New Tab, New Private Tab, Previous / Next, Show All, Reopen Closed Tab, Archived Tabs, windows, Close Tab, Close All N Tabs (asks first) | Always | More, the gallery's More |
+| Long press the pill | The page sheet | A page | More |
+| Long press a link or image | Preview and its menu | Every page | — |
+| Swipe a card up | Close the tab (Reopen toast) | The gallery | The card's menu |
+| Shake, three-finger swipe left, ⌘Z | Undo Close Tab: the last hand close | After a close, outside a field | The Reopen toast; Reopen Closed Tab |
+| ⌘T / ⌘⇧N | New Tab (of the list on screen) / New Private Tab | Always | Tabs menu |
+| ⌘W / ⌘⇧T | Close Tab / Reopen Closed Tab | Where the menu offers them | Tabs menu |
+| ⌘L | The search field | Where the pill can open it | A tap on the pill |
+| ⌘R / ⌘. | Reload / Stop | A page | More |
+| ⌘[ / ⌘] | Back / Forward | Where the button is enabled | Back, Forward |
+| ⌘F, ⌘G, ⌘⇧G | Find on Page, Find Next, Find Previous | A page; ⌘G while the find bar is open | More: Find |
+| ⌘D / ⌘⇧D | Add to Favorites / Read Later | A page that can be kept | The page sheet |
+| ⌃Tab, ⌘⇧] / ⌃⇧Tab, ⌘⇧[ | Next / previous tab | With a tab that way | Bar swipe |
+| ⌘1 to ⌘8, ⌘9 | That tab of the list; ⌘9 the last | The list on screen | Tap a card |
+| ⌘⇧\ | All tabs; again, back to the page | Where Show All Tabs is | Show All Tabs |
+| ⌘⇧R | Reader on or off | Where Reader is offered | The page sheet |
+| ⌘+ ⌘− ⌘0 | Zoom in, out, actual size | A page | More: Zoom |
+| ⌘Y | History | Always (beside the page on the inner screen) | More: History |
+| Escape, ⌘. | Closes the search field; Escape also the overview | Only there; elsewhere the page's own | Swipe down, a tap on the page |
+| Space, ⇧Space, arrows, ⌘↑ ⌘↓ | Scroll the page (WebKit) | A page, with a hardware keyboard | — |
+
+Holding ⌘ lists the shortcuts where the system shows that overlay. VoiceOver and Switch Control
+get the bar's gestures as actions on the pill (Previous Tab, Next Tab, New Tab, Show All Tabs),
+and the two-finger scrub closes the search field or the overview.
+
 ## Chrome
 
 - The page gets the screen. Controls show only while they apply, for example the progress bar while loading or a "Reopen tab" toast after a close.
@@ -50,6 +94,10 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   (`ChromeScrim`): the glass's own shape, its edge softened over 2 pt, nothing past it, inside
   the control so it moves and fades with it. Never a band, never a halo: the page shows in the
   gaps between capsules, so they float apart.
+- **The Duo's outer screen keeps the system's vertical bar** beside the page (status items, then
+  Back, Forward, Tabs, New Tab and More in one capsule). Behind it Plain puts one floating panel of
+  its glass (paper, navy in dark mode, violet in a private tab), 6 pt in from the page and the
+  screen's edges with round corners; the page never runs under it.
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
   pill in a fixed place, Tabs, New Tab and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
@@ -65,17 +113,23 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, New Tab
   and More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
-  Layout Above adds a 34 pt strip under the bar from the second tab. Where the status items keep
-  to a corner (the inner screen) the bar sits on their row, and nothing of Plain's is behind it:
-  no band, backing, blur or header-colored fill at the top in any state, only the floating
-  glass. At a page's top a site's fixed header rests under the bar and rides up with the page
-  to the top edge; mid-page it stays at the top edge under the bar, and nothing in the page moves
-  when the bar collapses or comes back. While
-  reading, the address shrinks in place and then lifts away, the buttons and strip fade, and the
-  page runs to the top edge under the status items. The page's first line starts under the bar
-  and slides under it. To type an address, the pill stays in the bar and the search sheet grows
-  down from it, with Cancel beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab,
-  17% with the strip; nothing while reading.
+  Layout Above adds a 34 pt strip under the bar from the second tab; Left and Right show a 52 pt
+  rail of site icons beside the page instead, in landscape and portrait, which widens to titles
+  (a drag, or Show Titles at its foot). With one tab neither shows: the page has the room, and
+  the list comes in from its edge with the second tab. The strip is as wide as its tabs, from
+  the leading edge, up to the screen's width, and starts 10 pt under the status items. Every tab in a list is its own plate (the
+  one on screen a solid card ringed in Lagoon, the others a veil with a hairline). Where the status items keep
+  to a corner (the inner screen) the bar sits on their row. Behind the row and the strip is one
+  band of Liquid Glass across the pages, from the top edge, as Safari has there; the capsules
+  float on it, and it reaches under the strip when there is one. While reading the band rises to the status row's height and shows only the site's
+  host in a small glass capsule where the address was ("apple.com"), clear of the status items; a
+  tap on it brings the bar back. The page's top boundary is the band's bottom in every state: a
+  site's fixed header rests under it and nothing in the page moves when the bar collapses or
+  comes back; the strip shows while the page's top is in view, so it never covers a header
+  mid-page. Private, the band, the host capsule and the strip are the private violet glass, drawn dark. The page's first line starts under the expanded band and slides under the glass. To
+  type an address, the pill stays in the bar and the search sheet grows down from it, with Cancel
+  beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab, 17.5% with
+  the strip at a page's top; 11% while reading.
 - **The side pane's divider** (wide screens): the seam between the page and the side pane is a
   hairline with a short ink capsule in its middle (5 × 40 pt, secondary ink, a 1 pt paper edge; no
   glass, it is part of the seam), inside a 44 pt target. Drag it and it rests at Narrow, Half or
@@ -124,6 +178,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 ## Visual and motion
 
 - One accent color (Lagoon Blue, from `Brand/identity.md`) and semantic colors from `DesignSystem`. No hard-coded colors in features.
+- A tab is shown by its site's icon on a small lifted tile (the sidebar, the strip, the switcher's cards), the same tile for every site; a site without an icon shows its first letter in New York on that tile. The tab on screen is marked in Lagoon.
 - System text styles with Dynamic Type. Tap targets are at least 44 pt (the tappable area, not only the frame around it).
 - Lists of pages with a time (History, Archived Tabs) put the time under the title from the
   first accessibility size, where beside it the title was cut to a word.

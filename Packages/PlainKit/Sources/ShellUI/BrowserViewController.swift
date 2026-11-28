@@ -45,6 +45,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let duo = DuoUIState()
     /// The side pane beside the page on a wide screen (`+SidePane`).
     let sidePaneUI = SidePaneUIState()
+    /// The keyboard shortcuts' focus, the system's undo for a close, the pinch to the overview
+    /// and the history menus (`+KeyCommands`, `+Gestures`).
+    let gestureUI = GestureUIState()
     /// Where the focused pane's tab is attached. The chrome, the bar swipe, the gallery's zoom and
     /// the reader all act on the focused pane.
     var webContainer: UIView { panes.slots[session.tabs.focusedPane].container }
@@ -58,6 +61,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let buttonBar = ButtonBar()
     let sheet = SearchSheet()
     let pullIndicator = PullIndicator()
+    /// The glass panel behind the system's vertical bar (the Duo's outer screen), under the panes.
+    let verticalBarBacking = VerticalBarBacking()
     /// The bottom-edge strip a hidden bar leaves behind (the home-indicator zone over the focused
     /// pane): a tap there brings the bar back. It takes touches only while the bar is hidden.
     private let revealEdge = UIView()
@@ -70,6 +75,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let summaryUI = SummaryUIState()
     /// The gallery, the bar swipe, neighbour previews and the toast.
     let tabsUI = TabsUIState()
+    /// Dark Pages' suggestion and crossfades (`+DarkPages`).
+    let darkPagesUI = DarkPagesUIState()
     /// What launch opened to: the last tab's picture and the fresh search's frost (`+Launch`).
     let launchUI = LaunchUIState()
     /// What the focused address bar offers before typing, and whether it edits the page's
@@ -140,6 +147,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Where a running Reduce Motion crossfade takes the bar.
     private var crossfadeTarget: CGFloat?
     private var pullTracker = PullToRefreshTracker()
+    /// The pull's haptics are readied for this pull (once, past half the threshold).
+    private var pullHapticPrepared = false
     private var suggestionTask: Task<Void, Never>?
     /// Runs when the presented feature sheet closes, by Done or by a swipe.
     private var sheetClosed: (() -> Void)?
@@ -181,6 +190,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             subview.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(subview)
         }
+        verticalBarBacking.isHidden = true
+        verticalBarBacking.setPrivate(false)
+        view.insertSubview(verticalBarBacking, belowSubview: panes.view)
         for subview in [buttonBar, pill] as [UIView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             chromeGlass.contentView.addSubview(subview)
@@ -194,10 +206,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
-        pill.onCopy = { [weak self] in self?.copyPageAddress() }
+        pill.onCopy = { [weak self] in self?.copyFieldAddress() }
         pill.onBrowse = { [weak self] in self?.toggleBrowseArmed() }
         pill.onMic = { [weak self] in self?.toggleDictation() }
         pill.onEscape = { [weak self] in self?.dismissSearchSheet(.escape) }
+        pill.onDisplay = { [weak self] url, lead, isPrivate in self?.duo.top.band.display(url: url, lead: lead, isPrivate: isPrivate) }
         pill.searchQuery = { [weak self] url in self?.data.searchEngine.query(inResults: url) }
         pill.onLongPress = { [weak self] in
             guard let self else { return }
@@ -213,8 +226,20 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.onPan = { [weak self] pan in self?.searchSheetPanned(pan) }
         installSearchSheetGestures()
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor(editing: true) }
+        // A favorite shows its site's icon, from the window's profile's stored ones.
+        sheet.favoriteIcons = FavoriteIcons(
+            cached: { [weak self] url, pixelSize in
+                guard let self, let site = FaviconService.site(of: url) else { return nil }
+                return session.pool.favicons.cachedIcon(site: site, scope: .profile(session.tabs.activeProfile), pixelSize: pixelSize)
+            },
+            load: { [weak self] url, pixelSize in
+                guard let self, let site = FaviconService.site(of: url) else { return nil }
+                return await session.pool.favicons.icon(site: site, scope: .profile(session.tabs.activeProfile), pixelSize: pixelSize)
+            }
+        )
 
         buildButtons()
+        installGestures()
         updateButtons()
         layOut()
         updateBarMode()
@@ -236,6 +261,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        // A site's icon arrived: the lists that show it read their tabs again (once per turn).
+        session.pool.favicons.onChange = { [weak self] _ in self?.siteIconsDidChange() }
+        // The switcher's cards have no tile of their own: there a site's shape comes on one, light
+        // in both appearances (the cards' titles sit on the dimmed page either way).
+        let light = UITraitCollection(userInterfaceStyle: .light)
+        session.pool.favicons.plateColors = (
+            Palette.iconTileForDarkMark.resolvedColor(with: light).cgColor,
+            Palette.iconTileForLightMark.resolvedColor(with: light).cgColor
+        )
         wireProfiles()
         // Which private sites were told a feature is off ends with the private session.
         session.privateSessionDidEnd = { [weak self] in self?.engineUI.privateAccessNotices = SystemAccessNoticeMemory() }
@@ -562,6 +596,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        placeVerticalBarBacking()
         let next = ChromeGeometry(
             viewHeight: view.bounds.height, safeBottom: view.safeAreaInsets.bottom,
             hasButtonBar: !usesVerticalBar && !usesSingleRow
@@ -579,6 +614,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if !duo.isResizing { updatePageInsets() }
     }
 
+    /// The vertical bar's column (the safe area's side the system's bar takes) gets its glass panel;
+    /// hidden wherever the bar is not in use.
+    private func placeVerticalBarBacking() {
+        let edge = traitCollection.verticalBarEdge
+        let safe = view.safeAreaInsets
+        let bounds = view.bounds
+        let onTrailing = (edge == .trailing) != (view.effectiveUserInterfaceLayoutDirection == .rightToLeft)
+        let width = onTrailing ? safe.right : safe.left
+        let shown = usesVerticalBar && width > 0
+        if verticalBarBacking.isHidden == shown { verticalBarBacking.isHidden = !shown }
+        guard shown else { return }
+
+        verticalBarBacking.place(column: CGRect(
+            x: onTrailing ? bounds.width - width : 0, y: 0, width: width, height: bounds.height
+        ))
+    }
+
     /// Off where the top bar holds the buttons (`+TopBar`): the Duo's inner screen, as Safari.
     override public var preferredVerticalBarBehavior: UIVerticalBarBehavior {
         wantsHorizontalBars ? .disabled : .automatic
@@ -589,8 +641,18 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.prefersLightStatusBar ? .lightContent : .default
     }
 
+    /// Every sheet, menu and alert the browser presents: the suggestion gives way to it.
+    override public func present(_ viewController: UIViewController, animated: Bool, completion: (() -> Void)? = nil) {
+        hideDarkPagesSuggestion()
+        super.present(viewController, animated: animated, completion: completion)
+    }
+
     override public func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
+        // A fold, unfold or rotation: the suggestion would point at the wrong place, and a
+        // crossfade's picture would no longer fit the page.
+        hideDarkPagesSuggestion()
+        removeDarkPagesFades()
         windowWillResize(to: size, with: coordinator)
     }
 
@@ -632,6 +694,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         startSession()
         // After the first frame: whether the field's microphone can run here.
         prepareDictation()
+        // The keys (and the system's undo) have a home from launch on, unless the field has them.
+        claimKeyFocusIfFree()
     }
 
     /// Call when the address bar's data changed outside the shell (the database opened), so an
@@ -645,7 +709,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     // MARK: Address bar
 
-    private func pillTapped() {
+    func pillTapped() {
         // A collapsed bar first comes back, as Safari's does; the next tap edits. A bar already
         // springing back out takes the tap as an edit.
         let restingProgress = snap.isRunning ? snap.target : collapse.progress
@@ -656,23 +720,27 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
         OpenIntervals.begin(Signposts.urlBarReady, until: UIResponder.keyboardDidShowNotification)
         OpenIntervals.begin(Signposts.urlBarKeyboardStart, until: UIResponder.keyboardWillShowNotification)
-        // Go somewhere new (Arc): the field opens empty over the page, which stays behind the
-        // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
-        // Editing the page's address is its own door: the page's row, or the page sheet.
+        // On a page the field opens with its address, all selected, Copy inside it: typing over
+        // it goes somewhere new, in a new tab (Arc); editing part of it changes this page, in the
+        // same tab (docs/decisions.md, "The page's address in the field"). On the start screen
+        // it opens empty and loads in place.
         let overPage = currentTab.map { !session.tabs.isEmpty($0.id) } ?? false
-        updateFieldAccessory()
+        focusUI.selectsAllOnOpen = true
+        launchUI.isFreshSearch = false
         if overPage, let address = pageAddress, let query = data.searchEngine.query(inResults: address) {
             // On the engine's results page the search comes back, selected, to refine in place
             // (Safari): a new query replaces the results rather than stacking tabs of them.
-            focusUI.isEditingPage = true
-            launchUI.isFreshSearch = false
+            focusUI.intent = nil
             pill.textField.text = query
+        } else if overPage, let address = pageAddress {
+            focusUI.intent = .pageAddress
+            focusUI.openedAddress = address.absoluteString
+            pill.textField.text = address.absoluteString
         } else {
-            focusUI.isEditingPage = false
-            launchUI.isFreshSearch = overPage
-            if overPage { Signposts.signposter.emitEvent(Signposts.freshSearch, "pill") }
+            focusUI.intent = nil
             pill.textField.text = ""
         }
+        updateFieldAccessory()
         updateStartScreen()
         // The sheet is laid out open and starts to grow in this frame; the keyboard follows on
         // its own.
@@ -688,8 +756,23 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         data.prepareForTyping()
         sheet.session += 1
         applyEditingLayout(true, animated: didFocusAtLaunch)
-        if !(textField.text ?? "").isEmpty {
-            textField.selectAll(nil)
+        if let text = textField.text, !text.isEmpty, focusUI.selectsAllOnOpen {
+            // A keyboard that composes (Japanese, Chinese, Korean) needs UIKit's own replacement
+            // of a real selection, so its text is selected at once.
+            let language = textField.textInputMode?.primaryLanguage ?? ""
+            let composes = ["ja", "zh", "ko"].contains { language.hasPrefix($0) }
+            if sheetUI.driver.value < 1, !composes {
+                // Selected once the field is at rest (`searchSheetDidSettleOpen`); until then a
+                // keystroke replaces it all the same, and no caret rides along.
+                focusUI.pendingSelection = text
+                pill.holdSelectionHighlight(true)
+            } else {
+                textField.selectAll(nil)
+            }
+        } else if !focusUI.selectsAllOnOpen {
+            // The page sheet's Edit: the caret at the end, whatever the field kept from before.
+            let end = textField.endOfDocument
+            textField.selectedTextRange = textField.textRange(from: end, to: end)
         }
         // The content is already in memory (`refreshFocusContent`); only the pasteboard is asked
         // again, without reading it.
@@ -703,7 +786,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         suggestionTask?.cancel()
         data.cancelSuggestions()
         sheet.session += 1
-        focusUI.isEditingPage = false
+        focusUI.intent = nil
+        focusUI.pendingSelection = nil
+        pill.holdSelectionHighlight(false)
         focusUI.browseArmed = false
         focusUI.dictation.stop()
         updateFieldAccessory()
@@ -712,6 +797,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Any end of editing settles the new tab; only the user's own close goes back first
         // (`dismissSearchSheet`, which reads it before ending).
         tabsUI.newTabReturn = nil
+        claimKeyFocusIfFree()
     }
 
     public func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -736,9 +822,58 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         return false
     }
 
+    /// The first change to the page's address decides whether the field is a new query or an
+    /// edit of this page (`AddressFieldIntent`), from the span the change replaces: the opening
+    /// selection, the user's own, or a caret.
+    public func textField(
+        _ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String
+    ) -> Bool {
+        if let opened = focusUI.pendingSelection {
+            focusUI.pendingSelection = nil
+            if textField.text == opened, textField.markedTextRange == nil {
+                // Typed before the selection was drawn: it replaces the whole text, as it would
+                // have over the selection.
+                let length = (opened as NSString).length
+                if let intent = focusUI.intent, let address = focusUI.openedAddress {
+                    setFieldIntent(intent.after(replacing: 0..<length, of: length, result: string, pageAddress: address))
+                }
+                pill.holdSelectionHighlight(false)
+                textField.text = string
+                queryChanged()
+                return false
+            }
+        }
+        guard let intent = focusUI.intent, let address = focusUI.openedAddress else { return true }
+        let text = (textField.text ?? "") as NSString
+        guard range.location != NSNotFound, NSMaxRange(range) <= text.length else { return true }
+        let result = text.replacingCharacters(in: range, with: string)
+        setFieldIntent(intent.after(
+            replacing: range.location..<NSMaxRange(range), of: text.length, result: result, pageAddress: address
+        ))
+        return true
+    }
+
+    public func textFieldDidChangeSelection(_ textField: UITextField) {
+        // The user put the caret somewhere during the open: their choice, not the selection
+        // Plain was about to make. (Opening leaves the caret at the end; only a move counts.)
+        guard focusUI.pendingSelection != nil, let range = textField.selectedTextRange else { return }
+        let end = textField.endOfDocument
+        guard textField.compare(range.start, to: end) != .orderedSame || !range.isEmpty else { return }
+        focusUI.pendingSelection = nil
+        pill.holdSelectionHighlight(false)
+    }
+
+    public func textFieldShouldClear(_ textField: UITextField) -> Bool {
+        // Cleared: a new query.
+        if focusUI.intent != nil { setFieldIntent(.newQuery) }
+        return true
+    }
+
     @objc func queryChanged() {
         let query = pill.textField.text ?? ""
         suggestionTask?.cancel()
+        // Emptied without a keystroke the delegate saw: a new query too.
+        if query.isEmpty, focusUI.intent != nil { setFieldIntent(.newQuery) }
         // The current page's address, untouched, is not a query: show favorites, as for an
         // empty field, until the user types.
         let isCurrentAddress = !query.isEmpty && query == pageAddress?.absoluteString
@@ -798,6 +933,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         guard let url else { return }
         let state = Signposts.signposter.beginInterval(Signposts.addressSubmit)
+        goingSomewhereNew()
         load(url, kind: .typed)
         Signposts.signposter.endInterval(Signposts.addressSubmit, state, "picked")
     }
@@ -805,7 +941,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// A hardware keyboard: Command-L opens the search sheet (every browser's Open Location).
     /// Escape closes it (the field's own key, `AddressPill.onEscape`, and a key command for
     /// when the text system passes it on), and so does Command-period, iOS's other Cancel.
-    override public var keyCommands: [UIKeyCommand]? {
+    /// `keyCommands` (`+KeyCommands`) adds these to the browser's other shortcuts.
+    var searchKeyCommands: [UIKeyCommand]? {
         if isEditingAddress {
             let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancelPressed))
             escape.wantsPriorityOverSystemBehavior = true
@@ -856,7 +993,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
-        focusUI.isEditingPage = false
+        // The drawer over the bar steps back: the field and its rows take the screen.
+        collapseFloatingSidebar()
+        focusUI.intent = nil
+        focusUI.selectsAllOnOpen = true
         updateFieldAccessory()
         pill.textField.text = pageAddress?.absoluteString ?? ""
         applyEditingLayout(true, animated: true)
@@ -880,7 +1020,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // A fresh search lasts as long as its field: closing it uncovers the page.
         if !editing {
             launchUI.isFreshSearch = false
-            focusUI.isEditingPage = false
+            focusUI.intent = nil
         }
         guard changed || !animated else { return }
         // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
@@ -1011,6 +1151,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Places the pill and button bar for collapse `progress` with transform and alpha only.
     func applyCollapse(_ progress: CGFloat) {
+        // The suggestion sits by the whole bar; a bar on its way down takes it away.
+        if progress > 0 { hideDarkPagesSuggestion() }
         // While the search sheet holds the pill and the bar, their place is its progress.
         guard !sheetUI.isLaidOutOpen else { return applyFocusProgress(sheetUI.driver.value) }
         if let top = duo.topGeometry {
@@ -1055,6 +1197,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     @objc private func keyboardWillShow() {
+        hideDarkPagesSuggestion()
         guard !isEditingAddress else { return }
         revealChrome(.keyboard)
     }
@@ -1067,8 +1210,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// The page is long enough for the bar to hide: at least two screens, so the hidden bar has
     /// a page to give back, and the page's end (where the bar returns) is not already in sight.
     /// Measured on the content, not the scroll range, which the resting bar's inset changes.
+    /// Under a top bar the chrome never hides: the slim glass band with the host is the page's top
+    /// boundary while reading (docs/state-rules.md, "Duo inner screen (top bar)").
     private func pageAllowsHiding(_ scrollView: UIScrollView) -> Bool {
-        rules.chromeMayHide && scrollView.contentSize.height >= 2 * scrollView.bounds.height
+        rules.chromeMayHide && !chromeOnTop && scrollView.contentSize.height >= 2 * scrollView.bounds.height
+    }
+
+    #if DEBUG
+    /// The top bar walk's collapse (`debugTopWalk`): the snap a release mid-page starts.
+    func debugSettleCollapse(at target: CGFloat) {
+        settleCollapse(at: target, animated: true)
+    }
+    #endif
+
+    /// A hidden bar the top bar now holds (a fold to the inner screen while reading) rests at the
+    /// slim band instead: under a top bar nothing hides.
+    func settleHiddenChromeForTopBar() {
+        guard chromeOnTop, collapse.rest == .hidden || (snap.isRunning && snap.target > ChromeRest.pill.progress) else { return }
+        settleCollapse(at: ChromeRest.pill.progress, animated: false)
     }
 
     /// The offset at which the page's end reaches the screen's bottom edge: from there on the bar
@@ -1117,6 +1276,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             snap.jump(to: target)
             let crossfade = crossfades
             crossfadeTarget = target
+            // The top band is the chrome's sibling: it crossfades with it.
+            if chromeOnTop { Motion.crossfade(duo.top.band, changes: {}) }
             Motion.crossfade(chromeGlass, changes: {
                 self.collapse.place(at: target)
                 self.applyCollapse(target)
@@ -1203,6 +1364,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             let previousY = lastPageOffsetY.object(forKey: scrollView)?.doubleValue
             lastPageOffsetY.setObject(NSNumber(value: Double(scrollView.contentOffset.y)), forKey: scrollView)
             if scrollView.keepPageTopUnderBar(webKitTop: top.obscuredInset, previousY: previousY.map { CGFloat($0) }) { return }
+            topBarPageDidScroll(top)
         }
         guard scrollView === pageScrollView, !isEditingAddress else { return }
         let signposter = Signposts.signposter
@@ -1251,6 +1413,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         _ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>
     ) {
         guard scrollView === pageScrollView else { return }
+        pullHapticPrepared = false
         if pullTracker.released() {
             refresh()
         } else {
@@ -1317,6 +1480,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// A status bar tap while the bar is hidden brings the bar back and keeps the reader's place;
     /// the next tap scrolls to the top (as in DuckDuckGo and Brave).
     public func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        // Under a top bar the bar comes back as the page scrolls up, so its top arrives under the
+        // whole bar (the strip comes in with it), never under the slim band with a gap above it.
+        if scrollView === pageScrollView, chromeOnTop, collapse.rest != .expanded {
+            revealChrome(.statusBar)
+            return true
+        }
         guard scrollView === pageScrollView, collapse.rest == .hidden else { return true }
         revealChrome(.statusBar)
         return false
@@ -1328,13 +1497,22 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Off on Start, in the reader and on error pages, whose own button reloads (state rules §3).
         guard rules.pullToRefresh else { return }
         if distance > 0 { pullIndicator.follow(pull: distance, threshold: PullToRefreshTracker.threshold) }
-        if distance > PullToRefreshTracker.threshold / 2 { Haptic.selection.prepare() }
+        // Readied once per pull, when it passes half the threshold (haptics plan, §4).
+        if distance > PullToRefreshTracker.threshold / 2, !pullHapticPrepared {
+            pullHapticPrepared = true
+            Haptic.threshold.prepare(in: view)
+            Haptic.selection.prepare(in: view)
+        } else if distance <= 0 {
+            pullHapticPrepared = false
+        }
         switch pullTracker.pulled(distance) {
         case .armed:
-            Haptic.selection.play()
+            // Into the outcome: the threshold; back out of it: a tick (haptics plan, rule 4).
+            Haptic.threshold.play(in: view)
             Signposts.signposter.emitEvent(Signposts.pullToRefreshArm)
             pullIndicator.setArmed(true)
         case .disarmed:
+            Haptic.selection.play(in: view)
             pullIndicator.setArmed(false)
         case nil:
             break
@@ -1343,19 +1521,20 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     private func refresh() {
         Signposts.signposter.emitEvent(Signposts.pullToRefresh)
-        pullIndicator.hide()
+        // It spins in its one color until the load ends (`+Tab`, `tabChanged`).
+        pullIndicator.beginRefreshing()
         reloadPage()
     }
 
     // MARK: Buttons and page menu
 
-    private func goBack() {
+    func goBack() {
         guard canGoBack else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navBack)
         performBack()
     }
 
-    private func goForward() {
+    func goForward() {
         guard let tab = currentTab, !isShowingReader, tab.canGoForward else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.navForward)
         dropLaunchCover(animated: true)
@@ -1551,7 +1730,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             keep.append(readLaterMenuItem(for: tab, url: url, isSaved: isSaved))
         }
         var siteItems = siteMenuItems(
-            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
+            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.pageAppearanceMenu
         )
         // The permissions the site asked for, with what iOS allows (Off in Settings).
         if !siteItems.isEmpty { siteItems += sitePermissionMenuItems(for: tab) }
@@ -1590,7 +1769,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    private func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
+    func setFavorite(_ isFavorite: Bool, url: URL, title: String?) {
         Signposts.signposter.emitEvent(Signposts.favoriteToggle)
         Task { [weak self, data] in
             if await data.setFavorite(isFavorite, url: url, title: title) {
@@ -1613,7 +1792,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         )
     }
 
-    private func showHistory() {
+    func showHistory() {
         // Beside the page where the side pane can show; a sheet elsewhere.
         if currentRules().historyInSidePane { return openSidePane(.history) }
         let history = sheets.history(

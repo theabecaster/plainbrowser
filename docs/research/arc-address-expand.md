@@ -82,8 +82,8 @@ the field does not change size at all: the morph is a pure move.
 | Field | 348×48, 16 pt under the sheet top, 16 pt side margins | the pill itself: 48 pt, 16 pt under the sheet top, the chrome row's width (12 pt side margins, as at rest, so it never changes size on a page) |
 | Surface | frosted dark material | paper over a blur of the page (`Palette.sheetTint`), by day and by night; top corners 32 pt continuous; to the bottom edge behind the keyboard |
 | Page above | sharp, dimmed ~20% | sharp, dimmed (`Palette.sheetScrim`) |
-| Rows | 52 pt, top down under the field | the same rows as before, now top down: favorites (while the field is empty), then the page's own row with Copy, a copied link, reading list, recent pages, recently closed tabs; suggestions while typing, best first |
-| In the field | microphone and eyes; × once typed | microphone (dictation on the phone) and Browse for Me (sparkles) while empty; the system's × once typed; Copy while the page's own address is untouched |
+| Rows | 52 pt, top down under the field | the same rows as before, now top down: favorites (while the field is empty or holds the page's address untouched), then a copied link, reading list, recent pages, recently closed tabs; suggestions while typing, best first |
+| In the field | microphone and eyes; × once typed | microphone (dictation on the phone) and Browse for Me (sparkles) while empty; the system's × once typed; Copy while the page's own address, which the field opens with on a page, is untouched |
 | Placeholder | "Search…" | "Search or enter address" (Plain's words); "Ask Browse for Me" while that is armed |
 | Way out | none visible | a handle at the sheet's top, a swipe down, a tap on the dimmed page; Cancel beside the field under a top bar (§4) |
 

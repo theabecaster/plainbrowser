@@ -5,7 +5,8 @@ import UIKit
 import WebEngine
 
 // Settings > Appearance and dark pages: the windows take the setting, the web views follow the
-// colors the window shows, and the page menu offers the per-site dark pages switch.
+// colors the window shows, and Site Settings offers the per-site Dark Pages item (the rest of
+// Dark Pages is in `+DarkPages`).
 extension BrowserViewController {
     /// Puts the saved Appearance on every window once Settings are read, and after each change.
     func applyAppearance() {
@@ -22,20 +23,12 @@ extension BrowserViewController {
         }
     }
 
-    /// "Dark Pages", checked while Plain darkens the page, unchecked while the user has it off
-    /// here; `item` is the state rules' answer (`ControlRules.darkPages`, §4).
-    func darkPagesMenuItems(for tab: Tab, item: DarkPagesItem) -> [UIMenuElement] {
-        let off: Bool
-        switch item {
-        case .turnOff: off = false
-        case .turnOn: off = true
-        case .hidden: return []
-        }
-        let item = UIAction(title: "Dark Pages", image: UIImage(systemName: "moon"), state: off ? .off : .on) { [weak tab] _ in
-            tab?.setDarkPagesOff(!off)
-        }
-        item.accessibilityIdentifier = "menu.darkPages"
-        return [item]
+    /// Site Settings' "Page Appearance": the same menu as the control in the pill (Dark, Light,
+    /// Off), on every web page (`ControlRules.pageAppearanceMenu`, §4).
+    func darkPagesMenuItems(for tab: Tab, shown: Bool) -> [UIMenuElement] {
+        guard shown, let menu = pageAppearanceMenu(for: tab, source: "menu") else { return [] }
+        menu.accessibilityIdentifier = "menu.pageAppearance"
+        return [menu]
     }
 }
 #endif

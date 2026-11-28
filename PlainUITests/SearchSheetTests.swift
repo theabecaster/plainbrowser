@@ -54,8 +54,9 @@ final class SearchSheetTests: XCTestCase {
         XCTAssertTrue(card.exists)
         XCTAssertLessThan(field.frame.midY, window.height * 0.4, "the field is at the top")
         XCTAssertLessThan(field.frame.minY - card.frame.minY, 40, "the field is the sheet's first thing")
-        let page = app.buttons["focus.currentPage"]
-        XCTAssertTrue(page.waitForExistence(timeout: 1), "the page's own row")
+        XCTAssertTrue(app.buttons["field.copy"].waitForExistence(timeout: 1), "Copy inside the field, on the page's address")
+        let page = app.buttons["suggestion.page.0"]
+        XCTAssertTrue(page.waitForExistence(timeout: 1), "a recent page's row")
         let favorite = app.buttons["favorite.0"]
         XCTAssertTrue(favorite.exists)
         XCTAssertGreaterThan(favorite.frame.minY, field.frame.maxY - 1, "favorites under the field")
@@ -165,12 +166,16 @@ final class SearchSheetTests: XCTestCase {
     }
 
     /// Browse for Me from the field: armed while empty, Return browses; and the row under the
-    /// field while typing.
+    /// field while typing. Over a page the field opens on its address with Copy; the options come
+    /// back once it is cleared.
     func testBrowseForMeIsReachableFromTheField() throws {
         let app = try launch(["-PlainTestSummaries"])
         let field = focus(app)
         let option = app.buttons["field.browse"]
-        XCTAssertTrue(option.waitForExistence(timeout: 2), "Browse for Me in the empty field")
+        XCTAssertTrue(app.buttons["field.copy"].exists, "the page's address, untouched: Copy")
+        XCTAssertFalse(option.exists)
+        field.typeText(XCUIKeyboardKey.delete.rawValue)
+        XCTAssertTrue(option.waitForExistence(timeout: 2), "Browse for Me in the emptied field")
         field.typeText("trail shoes")
         let row = app.buttons["browseForMe"]
         XCTAssertTrue(row.waitForExistence(timeout: 2), "the row under the field while typing")
@@ -188,6 +193,8 @@ final class SearchSheetTests: XCTestCase {
     func testMicrophoneDictatesIntoTheField() throws {
         let app = try launch(["-PlainTestDictation"])
         let field = focus(app)
+        // The page's address is selected: clearing it brings the microphone back.
+        field.typeText(XCUIKeyboardKey.delete.rawValue)
         let mic = app.buttons["field.mic"]
         XCTAssertTrue(mic.waitForExistence(timeout: 2))
         mic.tap()

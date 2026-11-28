@@ -37,7 +37,9 @@ nonisolated struct SplashColor: Equatable, Sendable {
 /// (Brand/tools/gen_icon.py: `FILL`, `BLOOM`, `PAPER`, `CURL`, `SCENE`, `COLORWAYS`), so the
 /// splash is the icon the user tapped. A test holds them to the generator's file.
 ///
-/// Dawn has dark art, as the icon does; Night, Coral and Paper look the same light and dark.
+/// One world per icon, light and dark alike, as the Home Screen shows it: the icons' dark fill is
+/// their default one (Brand/tools/gen_icon.py), so the icon, the picker's preview and the splash
+/// are one picture (docs/decisions.md, "App icons: the Home Screen shows the picker's art").
 nonisolated struct SplashTheme: Equatable, Sendable {
     /// The field's gradient, from (0.2, 0) to (0.8, 1) of the screen, as in the icon.
     var field: [SplashColor]
@@ -62,12 +64,15 @@ nonisolated struct SplashTheme: Equatable, Sendable {
 
     static let curlStops: [CGFloat] = [0, 0.18, 0.6, 1]
 
+    /// A dark (ink) ring, as Paper's, rather than cream paper: it needs a light edge on dark ground.
+    var hasInkRing: Bool { paper[1].luminance < 0.2 }
+
     /// The status bar's text over the field's top edge: light on a dark field.
     var statusBarIsLight: Bool { field[0].luminance < 0.35 }
 
-    static func theme(for choice: AppIconChoice, dark: Bool) -> SplashTheme {
+    static func theme(for choice: AppIconChoice) -> SplashTheme {
         switch choice {
-        case .dawn: dark ? dawnDark : dawn
+        case .dawn: dawn
         case .night: night
         case .coral: coral
         case .paper: paper
@@ -75,6 +80,7 @@ nonisolated struct SplashTheme: Equatable, Sendable {
     }
 
     private static let paperLight = [SplashColor(0xFFFDF8), SplashColor(0xFFF6E6), SplashColor(0xFFE6D2)]
+    /// Night's warmer, dimmer paper.
     private static let paperDark = [SplashColor(0xFFF8EE), SplashColor(0xF7EAD8), SplashColor(0xEED8C2)]
     private static let coralCurl = [SplashColor(0xFFB096), SplashColor(0xFF9174), SplashColor(0xFF6E5E), SplashColor(0xEC4A57)]
 
@@ -88,22 +94,6 @@ nonisolated struct SplashTheme: Equatable, Sendable {
         planet: [SplashColor(0x1B2A8F), SplashColor(0x121552)], rim: SplashColor(0x9CFFE8),
         sun: [SplashColor(0xFFF8E8), SplashColor(0xFF9A78), SplashColor(0xFF5A4C)], glow: 1.0
     )
-
-    /// The app icon's dark art: Deep Lagoon, a warmer, dimmer paper.
-    static let dawnDark: SplashTheme = {
-        var t = dawn
-        t.field = [SplashColor(r: 0.04, g: 0.13, b: 0.20), SplashColor(r: 0.06, g: 0.06, b: 0.20)]
-        t.bloomNear = SplashColor(0x1FB5A0, alpha: 0.5)
-        t.bloomFar = SplashColor(0x5B3BFF, alpha: 0.6)
-        t.paper = paperDark
-        t.paperWarm = SplashColor(0xE8B9A4)
-        t.flapShade = SplashColor(0x2A0E10)
-        t.sky = [SplashColor(0x1E1A80), SplashColor(0x2F6FE8), SplashColor(0xFFBA8E)]
-        t.planet = [SplashColor(0x141F70), SplashColor(0x0B0D3A)]
-        t.rim = SplashColor(0x7CFFE0)
-        t.sun = [SplashColor(0xFFF6E4), SplashColor(0xFF9474), SplashColor(0xFF5A4C)]
-        return t
-    }()
 
     /// Deep Lagoon at night: the paper ring around a violet night sky and a pale moon.
     static let night: SplashTheme = {

@@ -135,6 +135,25 @@
           }
         }
       }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:1.0,0.97,0.92,1.0",
+          "srgb:0.95,0.88,0.78,1.0"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.2,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.8,
+            "y": 1
+          }
+        }
+      }
     }
   ]
 }

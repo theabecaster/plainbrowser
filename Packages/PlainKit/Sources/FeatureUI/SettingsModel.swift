@@ -74,7 +74,7 @@ public final class SettingsModel {
     public func selectSearchEngine(_ engine: SearchEngine) {
         guard isLoaded, engine != settings.searchEngine else { return }
         settings.searchEngine = engine
-        save()
+        save { $0.searchEngine = engine }
         // The checkmark moved: a tick (docs/ui-reference.md, "Haptics").
         Haptic.selection.play()
     }
@@ -82,20 +82,38 @@ public final class SettingsModel {
     public func setTabLayout(_ layout: TabLayout) {
         guard isLoaded, layout != settings.tabLayout else { return }
         settings.tabLayout = layout
-        save()
+        save { $0.tabLayout = layout }
     }
 
     public func setArchiveAfter(_ archive: ArchiveAfter) {
         guard isLoaded, archive != settings.archiveAfter else { return }
         settings.archiveAfter = archive
-        save()
+        save { $0.archiveAfter = archive }
     }
 
     /// Saves the choice; the shell applies it to every window as the save is handed to it.
     public func setAppearance(_ appearance: Appearance) {
         guard isLoaded, appearance != settings.appearance else { return }
         settings.appearance = appearance
-        save()
+        save { $0.appearance = appearance }
+    }
+
+    /// Settings > Page Appearance: the default for every website (each site's own choice stays).
+    /// Saved like the rest; the shell applies it to every page as the save is handed to it.
+    public func setPageAppearance(_ appearance: PageAppearance) {
+        guard isLoaded, appearance != settings.pageAppearance else { return }
+        settings.pageAppearance = appearance
+        save { $0.pageAppearance = appearance }
+    }
+
+    /// The same from outside Settings (the page's control, the suggestion): nil undoes a first
+    /// pick. Loads first when Settings never opened.
+    public func setDefaultPageAppearance(_ appearance: PageAppearance?) async {
+        if !isLoaded { await load() }
+        guard isLoaded, appearance != settings.pageAppearance else { return }
+        settings.pageAppearance = appearance
+        save { $0.pageAppearance = appearance }
+        await waitForSaves()
     }
 
     /// Validates the typed address and, when it is good, makes it the search engine. Returns
@@ -108,7 +126,7 @@ public final class SettingsModel {
             customEngine = engine
             customTemplate = engine.template
             settings.searchEngine = engine
-            save()
+            save { $0.searchEngine = engine }
             Haptic.selection.play()
             return true
         } catch {
@@ -154,12 +172,14 @@ public final class SettingsModel {
 
     // MARK: Saving
 
-    private func save() {
+    /// Saves one change over what is stored now, in one transaction, not this model's whole copy:
+    /// another window's Settings, or the Dark Pages suggestion, may have saved a different setting
+    /// meanwhile.
+    private func save(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) {
         edits += 1
         Signposts.signposter.emitEvent(Signposts.settingsChange)
-        let snapshot = settings
         let store = store
-        writes.enqueue({ try await store.saveSettings(snapshot) }) { [weak self] _ in
+        writes.enqueue({ _ = try await store.updateSettings(change) }) { [weak self] _ in
             guard let self else { return }
             errorMessage = Wording.saveFailed
             // Show what is really stored, so the failed choice can be made again.
@@ -183,8 +203,19 @@ public final class SettingsModel {
     }
 
     /// Returns when every change so far is saved.
-    func waitForSaves() async {
+    public func waitForSaves() async {
         await writes.drain()
+    }
+}
+
+extension PageAppearance {
+    /// The picker's and the menus' word for it.
+    public var title: String {
+        switch self {
+        case .off: "Off"
+        case .dark: "Dark"
+        case .light: "Light"
+        }
     }
 }
 
@@ -248,9 +279,9 @@ extension Appearance {
     /// The section footer: one sentence on what the current choice does.
     public var footer: String {
         switch self {
-        case .system: "Plain and websites follow your iPhone's light or dark setting."
-        case .light: "Plain and websites stay light."
-        case .dark: "Plain and websites stay dark, even sites made only in light."
+        case .system: "Plain's own colors follow your iPhone's light or dark setting."
+        case .light: "Plain's own colors stay light."
+        case .dark: "Plain's own colors stay dark."
         }
     }
 }
@@ -275,6 +306,7 @@ enum Wording {
     /// Shown only where a tab list fits, which has a top bar and no swipe up from the address bar:
     /// the Tabs button shows them all.
     static let tabLayoutFooter = "Where your tabs show on this wide screen. The Tabs button shows them all."
+    static let pageAppearanceFooter = "How websites look by default; a site can have its own from the address bar. Off shows each site as it was made."
     static let tabLayoutUnavailableFooter = "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs."
     static let searchEngineFooter = "Searches from the address bar use this engine."
     static let customEngineFooter = "Paste a search results address with %s where the search words go."

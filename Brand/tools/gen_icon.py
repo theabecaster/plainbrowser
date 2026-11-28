@@ -11,13 +11,20 @@ band, and the flap is the exact mirror of the removed paper about the crease,
 so the flap and the notch it leaves share their end points.
 
 Every part is its own SVG layer: the curl, the ring (with the stem), the view
-and the background bloom. Each has light, dark and tinted versions.
+and the background bloom. Each has a default and a tinted version.
 
 Colorways: Dawn is the app icon. Night, Coral and Paper are alternate icons the
 user can pick (the first-run intro, Settings > App Icon). Each is its own
 document, Brand/AppIcon-<Name>.icon: the same mark with only the colors changed.
-They have no dark art of their own (each already suits both), and they share
-Dawn's tinted art, so a tinted Home Screen looks the same whichever was picked.
+
+Light and dark Home Screens show the same art: each document's dark fill is its
+default fill, and the layers have no dark images, so the dark rendition is the
+default one. The app shows one picture per icon (the picker's previews, the
+launch splash, the intro's mark), and the Home Screen must match it. Without a
+dark fill iOS draws its own near-black field under the art, so Coral and Paper
+turned black in dark mode (docs/decisions.md, "App icons: the Home Screen shows
+the picker's art"). All four share Dawn's tinted art, so a tinted or clear Home
+Screen looks the same whichever was picked.
 
 Usage: gen_icon.py [output.icon]                    Dawn (default: Brand/AppIcon.icon)
        gen_icon.py --colorway Night [output.icon]   (default: Brand/AppIcon-Night.icon)
@@ -147,6 +154,7 @@ def stops(st):
     return "".join(f'<stop offset="{o}" stop-color="{c}"/>' for o, c in st)
 
 PAPER = {"light": ("#FFFDF8", "#FFF6E6", "#FFE6D2", "#FFC9B0", "#7A2E22"),
+         # a warmer, dimmer paper, for the Night colorway
          "dark": ("#FFF8EE", "#F7EAD8", "#EED8C2", "#E8B9A4", "#2A0E10"),
          # tinted: the system tints by brightness, so the paper is plain bright
          "tinted": ("#FFFFFF", "#FFFFFF", "#F2F2F2", "#E0E0E0", "#000000")}
@@ -187,8 +195,6 @@ def curl_svg(mode):
 SCENE = {
     "light": dict(sky=("#3A2FCF", "#3F86FF", "#FFC08E"), planet=("#1B2A8F", "#121552"),
                   rim="#9CFFE8", sun=("#FFF8E8", "#FF9A78", "#FF5A4C"), glow=1.0),
-    "dark": dict(sky=("#1E1A80", "#2F6FE8", "#FFBA8E"), planet=("#141F70", "#0B0D3A"),
-                 rim="#7CFFE0", sun=("#FFF6E4", "#FF9474", "#FF5A4C"), glow=1.0),
     # tinted: the system tints the ring at full strength, so the view stays
     # dark to keep the ring crisp; a thin bright band, rim and sun mark the horizon
     "tinted": dict(sky=("#0E0E0E", "#161616", "#7A7A7A"), planet=("#000000", "#000000"),
@@ -221,10 +227,10 @@ def view_svg(mode):
                f'<circle cx="{sx}" cy="{hy+pr}" r="{pr}" fill="url(#pl)"/>'
                f'<rect x="{x0b}" y="{y0b}" width="{2*r}" height="60" fill="url(#ins)"/></g>', defs)
 
-BLOOM = {"light": ("#B8FFE0", 0.9, "#6B4BFF", 0.85), "dark": ("#1FB5A0", 0.5, "#5B3BFF", 0.6)}
+BLOOM = {"light": ("#B8FFE0", 0.9, "#6B4BFF", 0.85)}
 
-def bloom_svg(dark):
-    c1, o1, c2, o2 = BLOOM["dark" if dark else "light"]
+def bloom_svg():
+    c1, o1, c2, o2 = BLOOM["light"]
     defs = (f'<radialGradient id="a" gradientUnits="userSpaceOnUse" cx="150" cy="120" r="640">'
             f'<stop offset="0" stop-color="{c1}" stop-opacity="{o1}"/><stop offset="1" stop-color="{c1}" stop-opacity="0"/></radialGradient>'
             f'<radialGradient id="b" gradientUnits="userSpaceOnUse" cx="960" cy="980" r="660">'
@@ -247,9 +253,8 @@ def group(name, layers, shadow=0.0, trans=None, specular=False):
 
 # ---------------------------------------------------------------- colorways
 
-# The icon's field, light and dark.
-FILL = {"light": ("srgb:0.20,0.86,0.78,1.0", "srgb:0.16,0.45,1.0,1.0"),
-        "dark": ("srgb:0.04,0.13,0.20,1.0", "srgb:0.06,0.06,0.20,1.0")}
+# The icon's field (its dark fill is the same: see the module docstring).
+FILL = {"light": ("srgb:0.20,0.86,0.78,1.0", "srgb:0.16,0.45,1.0,1.0")}
 
 # Each colorway overrides only the default (light) art. The app's icon picker
 # (FeatureUI AppIconChoice) lists the same names in the same order.
@@ -297,9 +302,9 @@ def group(name, layers, shadow=0.0, trans=None, specular=False):
             "specular": specular}
 
 def write_icon(out, name):
-    """Writes one colorway's document. Dawn has dark art; the alternates do not."""
+    """Writes one colorway's document: default and tinted art, and a dark fill equal to the
+    default one, so the dark Home Screen shows the default art."""
     apply_colorway(name)
-    dark = name == "Dawn"
     assets = os.path.join(out, "Assets")
     os.makedirs(assets, exist_ok=True)
     for f in os.listdir(assets):
@@ -308,25 +313,22 @@ def write_icon(out, name):
         "curl.svg": curl_svg("light"), "curl-tinted.svg": curl_svg("tinted"),
         "ring.svg": ring_svg("light"), "ring-tinted.svg": ring_svg("tinted"),
         "view.svg": view_svg("light"), "view-tinted.svg": view_svg("tinted"),
-        "bloom.svg": bloom_svg(False),
+        "bloom.svg": bloom_svg(),
     }
-    if dark:
-        files.update({"ring-dark.svg": ring_svg("dark"), "view-dark.svg": view_svg("dark"),
-                      "bloom-dark.svg": bloom_svg(True)})
     for fname, s in files.items():
         with open(os.path.join(assets, fname), "w") as fh:
             fh.write(s)
 
     def spec(base, tinted=True):
         out = {"": f"{base}.svg"}
-        if dark and f"{base}-dark.svg" in files: out["dark"] = f"{base}-dark.svg"
         if tinted: out["tinted"] = f"{base}-tinted.svg"
         return out
 
     grad = lambda a, b: {"linear-gradient": [a, b], "orientation": {"start": {"x": 0.2, "y": 0}, "stop": {"x": 0.8, "y": 1}}}
-    fills = [{"value": grad(*FILL["light"])}]
-    if dark:
-        fills.append({"appearance": "dark", "value": grad(*FILL["dark"])})
+    # The dark fill is the default one: with no dark fill iOS puts a near-black field under the
+    # art on a dark Home Screen, and the icon no longer looks like the app's picture of it.
+    fills = [{"value": grad(*FILL["light"])},
+             {"appearance": "dark", "value": grad(*FILL["light"])}]
     doc = {
         "groups": [
             group("Curl", [layer("Curl", spec("curl"), True)],

@@ -28,12 +28,18 @@ import Network
 /// - `/paint-start`, `/paint-target`: the perf gate's link tap to first paint. The start page notes
 ///   when its link is tapped; the target shows "Paint <ms> fcp", from that tap to its own first
 ///   contentful paint (Paint Timing), both on the page's clock.
+/// - `/video`, `/video-bare`, `/custom-player`, `/autoplay`: media pages (`mediaPage`) with
+///   `/media-clip.mp4`: a video with controls and `playsinline`; one with neither (iPhone plays
+///   it in the native player); a site's own player box that asks for fullscreen the way YouTube's
+///   does; a muted video that autoplays inline. Their heading says what happened.
 /// - `/big`: a large light-only page (3,000 paragraphs, 4,000 style rules, 300 background
 ///   pictures; the same as WebEngineTests' `DarkPagesTests.bigPage`), for the heavy scroll test.
 final class TestServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "TestServer")
     private var loads = 0
+    /// Requests for `/long?reload=slow` so far: the first answers at once, later ones slowly.
+    private var slowReloads = 0
     private(set) var port: UInt16 = 0
 
     init() throws {
@@ -73,6 +79,10 @@ final class TestServer: @unchecked Sendable {
                 return
             }
             let path = request.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
+            if path.hasPrefix("/media-clip.mp4") {
+                self.serveClip(connection, request: request)
+                return
+            }
             let agent = request.split(separator: "\r\n")
                 .first { $0.lowercased().hasPrefix("user-agent:") }.map(String.init) ?? ""
             let (status, body) = self.page(for: path, userAgent: agent)
@@ -92,13 +102,129 @@ final class TestServer: @unchecked Sendable {
 
             """
             // `/slow` answers after a few seconds: a page that stays loading (Stop, the progress bar).
-            let delay: Double = path.hasPrefix("/slow") ? 8 : 0
+            // `/long?reload=slow` loads at once and reloads slowly: a pull to refresh keeps spinning.
+            var delay: Double = path.hasPrefix("/slow") ? 8 : 0
+            if path.contains("reload=slow") {
+                self.slowReloads += 1
+                if self.slowReloads > 1 { delay = 3 }
+            }
             self.queue.asyncAfter(deadline: .now() + delay) {
                 connection.send(content: Data((header + body).utf8), completion: .contentProcessed { _ in
                     connection.cancel()
                 })
             }
         }
+    }
+
+    /// The test clip (`media-clip.mp4`: 60 s, 256x144 H.264 with a quiet AAC tone, so a playing
+    /// page is audible as a real video is). WebKit's media loader asks for byte ranges and plays
+    /// nothing from a server that ignores them, so this answers `Range` with 206.
+    private static let clip: Data = {
+        let url = Bundle(for: TestServer.self).url(forResource: "media-clip", withExtension: "mp4")
+        return url.flatMap { try? Data(contentsOf: $0) } ?? Data()
+    }()
+
+    private func serveClip(_ connection: NWConnection, request: String) {
+        let clip = Self.clip
+        var range = 0..<clip.count
+        var status = "200 OK"
+        // One range: `a-b`, `a-` or the last N bytes (`-N`). Several ranges get the whole file (200).
+        if let line = request.split(separator: "\r\n").first(where: { $0.lowercased().hasPrefix("range: bytes=") }),
+           !line.contains(",") {
+            let spec = line.dropFirst("range: bytes=".count).split(separator: "-", omittingEmptySubsequences: false)
+            if spec.count == 2 {
+                let last = clip.count - 1
+                let (start, end): (Int?, Int?) = spec[0].isEmpty
+                    ? (Int(spec[1]).map { max(0, clip.count - $0) }, last)
+                    : (Int(spec[0]), spec[1].isEmpty ? last : Int(spec[1]).map { min($0, last) })
+                if let start, let end, start <= end {
+                    range = start..<(end + 1)
+                    status = "206 Partial Content"
+                }
+            }
+        }
+        let contentRange = status.hasPrefix("206")
+            ? "Content-Range: bytes \(range.lowerBound)-\(range.upperBound - 1)/\(clip.count)\r\n" : ""
+        let header = "HTTP/1.1 \(status)\r\nContent-Type: video/mp4\r\nAccept-Ranges: bytes\r\n\(contentRange)"
+            + "Content-Length: \(range.count)\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+        connection.send(content: Data(header.utf8) + clip.subdata(in: range), completion: .contentProcessed { _ in
+            connection.cancel()
+        })
+    }
+
+    /// The media pages' shared script. `log(text)` sets the `state` heading. It reports which
+    /// fullscreen the page got ("Element fullscreen" from the Fullscreen API, "Native player"
+    /// from the video's own presentation), picture in picture, and on leaving fullscreen whether
+    /// the page's scroll position came back. `?exit=<s>` leaves native fullscreen after that many
+    /// seconds, so a test needs no player buttons, whose labels are the system's.
+    private static let mediaScript = """
+        <script>
+        const v = document.getElementById('v');
+        const state = document.getElementById('state');
+        const log = (t) => { state.textContent = t; };
+        const exitAfter = Number(new URLSearchParams(location.search).get('exit') || 0);
+        // `?slack=<pt>`: how far the page may move and still count as kept (a turn reflows it).
+        const slack = Number(new URLSearchParams(location.search).get('slack') || 1);
+        let scrollAtEntry = 0, hiddenAt = 0, timeAtHide = 0;
+        document.getElementById('fe').textContent = 'Element fullscreen ' + (document.fullscreenEnabled ? 'on' : 'off');
+        // The simulator has no picture in picture (Safari's own `document.pictureInPictureEnabled` is false there).
+        document.getElementById('pp').textContent = 'Picture in picture ' + (document.pictureInPictureEnabled ? 'on' : 'off');
+        const scrollNote = () => Math.abs(scrollY - scrollAtEntry) <= slack ? 'scroll kept' : 'scroll moved ' + Math.round(scrollAtEntry) + ' to ' + Math.round(scrollY);
+        v.addEventListener('webkitbeginfullscreen', () => {
+          log('Native player');
+          if (exitAfter) setTimeout(() => v.webkitExitFullscreen(), exitAfter * 1000);
+        });
+        v.addEventListener('webkitendfullscreen', () => setTimeout(() => log('Left native player, ' + scrollNote()), 600));
+        // The app turned while the player was up (the page under it turns with it).
+        addEventListener('resize', () => {
+          if (v.webkitDisplayingFullscreen && innerWidth > innerHeight) document.getElementById('fe').textContent += ', turned';
+        });
+        document.addEventListener('fullscreenchange', () => {
+          if (document.fullscreenElement) {
+            log('Element fullscreen');
+            if (exitAfter) setTimeout(() => document.exitFullscreen(), exitAfter * 1000);
+          } else setTimeout(() => log('Left element fullscreen, ' + scrollNote()), 600);
+        });
+        v.addEventListener('enterpictureinpicture', () => log('In picture in picture'));
+        v.addEventListener('leavepictureinpicture', () => log('Left picture in picture'));
+        v.addEventListener('playing', () => { if (!v.webkitDisplayingFullscreen && state.textContent === 'Video') log('Playing inline'); });
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) { hiddenAt = Date.now(); timeAtHide = v.currentTime; return; }
+          if (!hiddenAt || v.webkitPresentationMode !== 'picture-in-picture') return;
+          const away = (Date.now() - hiddenAt) / 1000, played = v.currentTime - timeAtHide;
+          log(played > away * 0.6 ? 'Kept playing in picture in picture' : 'Stalled in picture in picture ' + played.toFixed(1) + ' of ' + away.toFixed(1));
+        });
+        const fullscreen = () => {
+          scrollAtEntry = scrollY;
+          const player = document.getElementById('player');
+          // What YouTube's and Vimeo's players do: the player's box when the page may go
+          // fullscreen, the video's own fullscreen otherwise.
+          if (player && document.fullscreenEnabled) player.requestFullscreen();
+          else v.webkitEnterFullscreen();
+          v.play();
+        };
+        const play = () => { scrollAtEntry = scrollY; v.play(); };
+        const pip = () => { v.play(); v.webkitSetPresentationMode('picture-in-picture'); };
+        </script>
+        """
+
+    private static let mediaButton = "font-size:20px;padding:10px 16px;margin:6px 6px 0 0"
+
+    /// The media pages: a heading that reports what happened (`mediaScript`), a tall block above
+    /// the player so fullscreen starts from a scrolled page, and the player.
+    private func mediaPage(_ title: String, video: String, wrapped: Bool = false, autoplay: Bool = false) -> String {
+        let player = wrapped
+            ? "<div id=\"player\" style=\"position:relative;background:#000\">\(video)</div>" : video
+        let script = autoplay ? "<script>document.getElementById('v').play().catch(() => {});</script>" : ""
+        return html("Plain \(title)", """
+            <h1 id="state">Video</h1><p id="fe"></p><p id="pp"></p>
+            <div style="height:520px;background:linear-gradient(#8ab,#fda);border-radius:8px"></div>
+            \(player)
+            <p><button id="fs" style="\(Self.mediaButton)" onclick="fullscreen()">Go Fullscreen</button>\
+            <button id="play" style="\(Self.mediaButton)" onclick="play()">Play Video</button>\
+            <button id="pip" style="\(Self.mediaButton)" onclick="pip()">Start Picture in Picture</button></p>
+            <div style="height:900px"></div>
+            """ + Self.mediaScript + script)
     }
 
     private func page(for path: String, userAgent: String) -> (String, String) {
@@ -286,6 +412,22 @@ final class TestServer: @unchecked Sendable {
             let body = "<h1>Paint Target</h1><p id=\"paint\">Paint pending</p>"
                 + "<p><a id=\"back\" href=\"/paint-start\" style=\"display:block;font-size:32px;padding:48px 0\">Back to Paint Start</a></p>"
             return ("200 OK", html("Plain Paint Target", body + script))
+        case "/video":
+            return ("200 OK", mediaPage("Video", video: """
+                <video id="v" src="/media-clip.mp4" controls playsinline preload="auto" style="width:100%;display:block"></video>
+                """))
+        case "/video-bare":
+            return ("200 OK", mediaPage("Bare Video", video: """
+                <video id="v" src="/media-clip.mp4" preload="auto" style="width:100%;display:block"></video>
+                """))
+        case "/custom-player":
+            return ("200 OK", mediaPage("Custom Player", video: """
+                <video id="v" src="/media-clip.mp4" playsinline preload="auto" style="width:100%;display:block"></video>
+                """, wrapped: true))
+        case "/autoplay":
+            return ("200 OK", mediaPage("Autoplay", video: """
+                <video id="v" src="/media-clip.mp4" muted autoplay loop playsinline style="width:100%;display:block"></video>
+                """, autoplay: true))
         case "/big":
             return ("200 OK", Self.bigPage)
         case "/slow":

@@ -85,7 +85,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | `others ≥ 1` | Tabs (`square.on.square`) | Gallery | There is somewhere to switch to. |
 | `others = 0`, `page` | Tabs (`square.on.square`) | Gallery: this tab's card alone, centered, with the same page-to-card motion as the swipe up | Owner, 2026-11-27: "Not having a tabs button when there's only one tab is weird too — match the behavior to what dragging the URL bar up does now." Was "+" (New Tab) until then. New Tab is the bar's "+" beside it (2026-11-27, new-tab lane), with the tabs menu's New Tab and More's New Private Tab as before. |
 | `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) stay in More (section 4) and show as shortcuts on the start screen, so none of them is ever out of reach. |
-| Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. The sidebar's New Tab follows principle 8 (hidden on an empty tab). |
+| Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. The sidebar's New Tab shows only while the bar has no "+". |
 
 - **The tabs items are never only behind a long press** (owner, 2026-11-26). New Private Tab,
   Reopen Closed Tab and Archived Tabs are in More's top section in every state where they apply,
@@ -126,6 +126,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Tabs slot | see above | see above | | VoiceOver value: the tab count, and the window's profile with two or more ("3 tabs, Work"). No badge. |
 | Bar shape | beside the pill: the bar shrinks to a round glass button (More), or a capsule (Tabs and More), at the pill's trailing end, and the pill takes the rest of the row at the bottom (`ControlRules.barBesidePill`) | under the pill, full width | Changes between modes only | A full-width bar holding one button read as unfinished. Start is its own mode, so the bar may change shape (principle 5); the Duo's vertical bar packs its items itself. On a wide screen (the Duo's inner screen) the bar is the top bar in every mode: Back and Forward at the row's leading end, Tabs, New Tab and More at its trailing end, the pill between; a capsule with nothing to show (Back and Forward on Start) leaves no empty glass. |
 | Pill | placeholder "Search or enter address" | host, after one quiet lead word (`PillLead`): "Reader —" while the reader is open, "Translated —" on a translated page, else "Not Secure —" on http, mixed content or a passed certificate (a private page shows the private mark and "Private" before it); on a failed page the address that was tried | Never hidden by a mode; while reading it may sink away (below) | The one way to search. |
+| Page appearance control (in the pill, leading edge) | — | a moon (Dark) or a sun (Light) in the accent while Plain shows the page that way, by the default or this site's choice; a slashed circle (Off) in the ink while this site is Off against a default; otherwise absent | Absent while editing, during a bar swipe, in the collapsed pill, under the reader, on error pages; Light never on a site made only in dark | A tap opens its menu: Dark, Light, Off (the one shown checked; Light disabled on a dark-only site, "This site is made only in dark"), and Use for All Sites while the site has its own choice; its title says whose choice it shows ("Page Appearance · This Site" or "· All Sites"). A pick ticks and crossfades, no reload. The first pick ever becomes the default (toast with This Site Only); later picks are this site's. Never changes Plain's own colors. `ControlRules.pageAppearanceIndicator`; docs/decisions.md, "Page appearance". |
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
 | Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. With two or more profiles the sentence names the window's profile ("Start with a search or an address in Work."), so a search never starts in the wrong one unnoticed. |
@@ -173,19 +174,35 @@ fixed place, so Forward coming and going hides in place and moves nothing. Pill 
 into the home-indicator zone, then sinks away. The start screen keeps its own row (More beside the
 pill); editing lifts the pill above the keyboard, full width, as everywhere.
 
-**Duo inner screen (top bar).** The same three states drive the top bar. Where the status items
-keep to a corner (the Duo's inner screen) the row sits on their row, clear of the corner, and the
-page runs to the top edge: Expanded is the row (Back/Forward, the pill, Tabs/New Tab/More) and the
-strip, and a fresh page's first line starts under them; Pill shrinks the address in place on the
-row, buttons and strip faded; Hidden lifts it off the top edge. The page's top inset is the same in
-every state (`obscuredContentInsets.top` 0): the bar floats over the page, so the page and any
-fixed header run to the top edge under the status items, a collapse or reveal moves nothing in
-the page, and WebKit fills no band of a header's color behind the controls. In no state does a
-band, backing or scroll edge effect sit at the top, only the floating glass (owner, 2026-11-27:
-"I don't like that bar that stays there", "that bar needs to be removed"). Under a full-width
-status bar the row sits under it, the page's top inset is the status bar in every state, Pill
-tucks the address under the status bar, and Hidden leaves only the status bar. Same triggers and
-the same never-hidden list.
+**Duo inner screen (top bar).** Two of the three states drive the top bar: under it the chrome
+never hides, because the slim band is the page's top boundary while reading (owner, 2026-11-27:
+"I like that Safari leaves the URL text field there in a smaller version, with just the shrunken
+base URL, and that sets a boundary there"; docs/research/safari-duo-top.md).
+
+| State | On screen | Page's top |
+|---|---|---|
+| Expanded | a glass band across the pages from the top edge to under the row (and the strip, from the second tab), with the floating capsules on it: Back/Forward, the pill, Tabs/New Tab/More | a fresh page's first line starts under the band (`contentInset.top`, the expanded band's bottom); it scrolls under the glass |
+| Pill (reading) | the band's bottom rises to the status row's (73 pt on the device); the pill's text shrinks into the site's host ("apple.com", no "www.") on the status row, clear of the status items; the capsules and the strip rise and fade | the band's bottom |
+
+- The page's obscured top (`obscuredContentInsets.top`) is the collapsed band's bottom in both
+  states: a fixed or sticky header rests under the band mid-page and never moves when the bar
+  collapses or comes back. Whatever WebKit paints above such a header is behind the glass.
+- Gets to Pill and back as on every screen: 1:1 with the finger over 56 pt, a release snaps to the
+  nearer state or follows a clear flick; any reveal brings Expanded back with one interruptible
+  spring. A tap anywhere on the collapsed band is a reveal; a status bar tap brings the bar back
+  as the page scrolls to its top (no slim band over a page top); VoiceOver reads the collapsed band as
+  the address (a double tap shows the toolbar).
+- Hidden is never reached under a top bar. A bar the outer screen left hidden rests at Pill when
+  the Duo unfolds.
+- With two or more tabs (Tab Layout Above) the strip starts 10 pt under the status items and the
+  band reaches under it (117 pt on the device); with one tab there is no strip and the band is
+  the row's (73 pt). The strip (and the band under it) shows while the page's top is in view
+  and goes as the page scrolls the strip's height; mid-page the bar comes back without it, so it
+  never covers a fixed header resting at the band's bottom.
+- Find and the gallery fade the band with the capsules: an empty band never stays at the top.
+  Editing keeps it (the field widens in its row on the band).
+- Under a full-width status bar (iPad-size windows) the band runs from the top edge to under the
+  row; while reading it is the status bar plus a 30 pt host row.
 
 ## 4. The page sheet (More, and a long press on the pill)
 
@@ -217,7 +234,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | Desktop Site (checked while on) | — | http(s) | http(s) | http(s) | — | — | A remembered Desktop Site choice can be why a page fails, so the switch back stays (it retries the load). Under the reader it would act out of sight. Site Settings' items are named for the thing they control and checked while it is on; a tap switches it (clarity audit 20). |
 | Content Blocking (checked while on) | — | http(s), regular tabs | http(s), regular tabs | http(s), regular tabs (blocking can cause the failure) | — | — | Private tabs: hidden (the allow-list is saved to disk). |
 | Cookie Banner Blocking (checked while on) | — | http(s) | http(s) | — | — | — | In Site Settings. Applies by reloading. Private tabs: shown, kept for the private session only. Off for a site stops answering its banner; the cookie list's hiding follows the blocking switch. |
-| Dark Pages (checked while on) | — | as Loaded | Only while Plain is dark: checked while Plain darkens the page, unchecked while the user has it off for this site | — | — | — | Hidden in a light app (it would change nothing), on pages with their own dark design (nothing to turn off), on error pages and under the reader. Applies at once, no reload. Private tabs: shown, kept for the private session only. |
+| Page Appearance (Site Settings, a submenu) | — | as Loaded | On every web page, in any colors of Plain's: the control's menu (Dark, Light, Off; Use for All Sites) | — | — | — | The way in while the pill shows no control (the page as made). Hidden on error pages and under the reader. Private tabs: shown, kept for the private session only, never the default. |
 | Site permissions (Camera, Microphone, Location, Motion) | — | as Loaded | In Site Settings, only the permissions this site asked for, each with its value: Allowed (checked), Not Allowed, Off in Settings (iOS has it off for Plain: a tap opens Settings), Restricted (Screen Time: dimmed) | — | — | — | Read when the page commits, so the menu lists them at once. Allowed and Not Allowed switch with a tap; taking one back reloads the page. A site that asked while the feature was off for Plain (WebKit refused it, nobody was asked) still gets its row, Off in Settings, for the session. A site that never asked has no row. Private tabs: their own answers, for the private session only. |
 | Add to / Remove from Favorites | — | — | recordable page | — | — | shown (the page's address) | A page that never loaded is not a favorite. |
 | Read Later / Remove from Reading List | — | — | recordable page | — (≠ its saved copy opens instead, below) | — | shown (the page's address; on a saved copy: Remove) | Same predicate as Add to Favorites (`ControlRules.readLater`). Saves the article as a reader copy when the readerable check said yes, else the link. Follows Add to Favorites. |
@@ -237,13 +254,14 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | New Tab | Hidden when the tab on screen is an empty regular tab | It would reuse the tab already on screen. |
 | New Private Tab | Hidden when the tab on screen is an empty private tab | Same. |
 | Previous Tab / Next Tab | Shown when `list` has 2 or more tabs; each dims at its end | A pair, so it keeps its shape. Subtitles name the swipe. |
-| Show All Tabs | `others ≥ 1`, or a page on screen (with side tabs: `others ≥ 1`, as the sidebar already lists a lone tab) | Same predicate as the swipe up. |
+| Show All Tabs | `others ≥ 1`, or a page on screen (with the sidebar on screen: `others ≥ 1`, which it always is there) | Same predicate as the swipe up. |
 | Reopen Closed Tab | `closed` in the window's profile | The way back after a close, outside the gallery too. Another profile's close never comes back here. |
 | Archived Tabs | `archived` | Today the archive is reachable only from the gallery, so with no open tabs it cannot be reached. |
 | New Window | where a new window can open (both size classes regular and the app may have several scenes: the Duo's inner screen) | The system has no New Window button on iPhone; the outer screen takes no new windows. |
 | The other windows (one item each: the page it shows, its tab count) | another window exists (connected or in the app switcher) | iPhone has no window list (iPad's Show All Windows); a tap brings that window forward. |
 | Close Tab | `page` | Closing an empty tab does nothing useful; it goes away by itself. |
 | Close All Private Tabs | A private tab on screen and 2 or more private pages in `list` | Ends private browsing in one step, where Safari and Chrome keep Close All. With one, Close Tab does it. The screen goes to the regular tab seen last, else the search field. |
+| Close All N Tabs | A regular tab on screen and 2 or more tabs of `list` it would close (pinned tabs stay) | Safari's tabs button has it. It asks first (a confirmation names the count), then the Reopen toast and the system's undo bring the batch back. With one, Close Tab does it. |
 
 ## 6. Other surfaces
 
@@ -257,7 +275,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | Reader | The focused page's article; "This page has no article to read." when the page's check says no; "Open a page to read it here." on Start | One sentence, no dead end. |
 | Find | Field, count ("12 matches"), list; "Type to find on this page." before typing; "No matches" | Return goes to the next match. Marks come off when the pane closes or the section changes. |
 | History | The History screen without Done | The pane has its own close. |
-| Edge swipe from the trailing edge | Opens it where it can show and it is closed | Takes the edge from WebKit's swipe forward there; Forward stays in the top bar. |
+| Edge swipe from the trailing edge | Opens it where it can show, it is closed, and the page has nothing forward (`canGoForward` false); with a page forward the edge is WebKit's swipe forward | Each edge is the page's history first, Plain's extra only where history has nothing, as Back's edge and the opener swipe (§8). A Safari user's swipe forward works on the inner screen too (docs/research/gestures.md). More's Show Side Pane is always there. |
 | Swipe toward the edge on the pane | Closes it | Same direction as it came in. Not from the divider's strip, which is the divider's. |
 | The divider's handle (a short capsule on the seam) | While the pane is open beside the page or over it, and not partly folded (the fold is the divider), not while it opens or closes | The seam is the place to resize; its 44 pt strip takes sideways drags only. |
 | Drag the divider | Same as the handle; not while the search sheet, a sheet, the gallery or a fold or rotation is running | Rests at Narrow, Half, Two Thirds (those that leave the page 375 pt); past the lines it closes the pane or hands it the whole width. |
@@ -265,7 +283,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | The handle's menu (long press): the rests, Full Width, Hide Side Pane | Same as the handle; the rests that fit this width only; in a split, "Beside the Page" | The drag's menu equivalent, on the thing it acts on. |
 | Double tap on the handle | Same as the handle | Back to Narrow; at Narrow it bumps with "nothing there". |
 | Control-Command-S / -] / -[ | The pane can show (S); it is open and the divider can move (] and [) | Show or hide it, one rest wider or narrower; the whole width after the widest; stepping never closes it. |
-| The page with the pane over the whole width | Hidden (kept at its frame), the top bar spanning the pane | Coming back relayouts nothing; the bar still acts on the page the pane serves. |
+| The page with the pane over the whole width | Kept at its frame, drawn under the opaque pane and hidden from VoiceOver; the top bar spans the pane | Coming back relayouts nothing; the bar still acts on the page the pane serves. |
 
 
 ### Search field (Editing mode)
@@ -274,17 +292,20 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 |---|---|---|
 | Button bar | Hidden (faded out) | The keyboard and the field take the bottom. |
 | Bar gestures | Off | The field owns the touches. |
-| Favorites under the field | Field empty, or still showing the page's own address, and at least one favorite | With none, the strip takes no space and says nothing; Favorites is in the page sheet. |
-| Rows before typing (top down under the field, nearest first) | Open Copied Link (a web address on the pasteboard, offered once, within 10 minutes, never the page on screen); the page's own row (search over a page: title and host, Copy, a tap edits the address); up to 4 recently visited pages (regular tabs; never the page on screen, a favorite or a closed tab's page); up to 2 recently closed tabs (regular tabs); unread Reading List pages (up to 2); one sentence, "Pages you visit and your favorites show up here.", while nothing is kept yet (no recent, closed or unread pages, no favorites, no copied link; not on the start screen, which has its own) | Never an empty field (owner, 2026-11-27: "it just looks empty"). Everything is already in memory, so it shows in the frame the keyboard starts. Private tabs show no history: only the page, a copied link, favorites and a sentence that says Plain keeps none. |
+| Favorites under the field | Field empty, or still showing the page's own address untouched, and at least one favorite | With none, the strip takes no space and says nothing; Favorites is in the page sheet. |
+| Rows before typing (top down under the field, nearest first) | Open Copied Link (a web address on the pasteboard, offered once, within 10 minutes, never the page on screen); up to 4 recently visited pages (regular tabs; never the page on screen, a favorite or a closed tab's page); up to 2 recently closed tabs (regular tabs); unread Reading List pages (up to 2); one sentence, "Pages you visit and your favorites show up here.", while nothing is kept yet (no recent, closed or unread pages, no favorites, no copied link; not on the start screen, which has its own) | Never an empty field (owner, 2026-11-27: "it just looks empty"). Everything is already in memory, so it shows in the frame the keyboard starts. Private tabs show no history: only a copied link, favorites and a sentence that says Plain keeps none. No row stands for the page on screen: its address is in the field (owner, 2026-11-27: the page's row "looks like a suggestion"). |
 | The sheet | The pill grows into a paper card over the dimmed page: its top at 18.7% of the height (right under the safe area on a screen under 560 pt tall), the field 16 pt under its top, the rows top down under the field, the card to the bottom edge behind the keyboard. Under a top bar the field stays in the bar and the card grows down from it. | Arc Search's sheet, measured (docs/research/arc-address-expand.md); the page stays sharp above it as the place to go back to (owner, 2026-11-27: the field at the top when expanded). |
-| The field's options (trailing end of the field) | Empty field: the microphone (dictation on the phone; only where on-device speech recognition runs) and Browse for Me (binoculars; only where the model runs). Typed in: the system's clear button. The page's own address, untouched: Copy. Dictating: the microphone, filled, until it stops. | Arc Search's field: options while empty, × once typed. Each shows only where it can act. |
+| The field's options (trailing end of the field) | Empty field: the microphone (dictation on the phone; only where on-device speech recognition runs) and Browse for Me (binoculars; only where the model runs). Typed in: the system's clear button. The page's own address, untouched: Copy (`link`; a check mark and the success haptic answer it). Dictating: the microphone, filled, until it stops. Replaced or cleared, the address gives way to these rules at once. | Arc Search's field: options while empty, × once typed; Arc's page sheet keeps Copy inside the address. Each shows only where it can act. |
 | Browse for Me armed | A tap on the field's binoculars arms it: the button turns Lagoon and stays while typing, the placeholder reads "Ask Browse for Me", and Return browses for a text that would search (an address still opens). A second tap, or closing the field, takes it back. | In an empty field there is nothing to browse for yet; armed, Return does it. What Return will do is always in sight. |
 | The way out | The handle at the sheet's top (a tap closes; it marks the swipe), a swipe down on the sheet or the field (follows the finger; collapses past 28% or on a flick, else springs back), a tap on the dimmed page. Under a top bar: Cancel beside the field, and a tap on the dimmed page. | Arc shows none and the owner could not find Plain's (2026-11-27). One visible, quiet affordance per layout, plus the gestures it names. |
 | Suggestions | While typing; a recent row that is also a suggestion keeps its row | |
 | Start screen behind | Shown on Start, dimmed, above the sheet | The same sheet everywhere; the start screen is the place a tap outside goes back to. |
 | Start screen while typing | With a query, or rows of the field's own, the mark, sentence and shortcuts recede (fade, shrink to 94 %, drift up, with the snappy 0.3 spring; Reduce Motion: a crossfade); cleared, or the field closed, they come back | Suggestion rows never draw over the mark (owner, 2026-11-26). The rows sit on the paper token themselves, so they read even mid-transition, in light and dark. |
-| Search over a page (a tap on the pill) | The field opens empty over the veiled page; a submitted search or address opens a new tab whose opener is the page (Back on its first page closes it and shows the page); dismissing creates nothing. On the start screen it loads in place. | Arc's "go somewhere new": the page being read is never replaced by a stray search (owner, 2026-11-27). |
-| Edit the page's address (the page sheet's host, or the page's row) | The field shows the address, selected, with Copy inside it while untouched; Return loads in the same tab | The second door, for changing this page. |
+| A tap on the pill over a page | The field opens with the page's full address, all selected, Copy inside it; the selection's highlight shows once the sheet is at rest. VoiceOver reads the address as the field's value, hint "Type to search in a new tab; edit to change this page". Return on it untouched loads it again in the same tab. | One field: the address is where the user looks for it (owner, 2026-11-27; Safari, Arc's page sheet). |
+| Replace the address (the first change covers the whole text: typing over the selection, a paste over it, dictation into it; or the field cleared) | A new query: a submitted search or address opens a new tab whose opener is the page (Back on its first page closes it and shows the page); dismissing creates nothing | Arc's "go somewhere new": the page being read is never replaced by a stray search (owner, 2026-11-27). |
+| Edit the address (the caret put in the address first, then part of it changed) | Return loads in the same tab. A row or a favorite picked from the untouched address opens a new tab, as a typed query does. | Changing this page. Decided from the change's span at the first edit (`AddressFieldIntent`), so nothing else to learn. |
+| The page sheet's host | The field shows the address with the caret at its end, Copy inside it while untouched; what is typed edits this page (same tab); cleared, it is a new query | The door named Edit edits. |
+| New tab, start screen, fresh search after time away | The field opens empty, as before; what is submitted loads in place (a fresh search over a page: a new tab) | There is no page address to show. |
 | On the search engine's results page | The pill shows the query; a tap brings it back selected and a new query replaces the results in the same tab | Safari: refining a search is not going somewhere new. |
 | Remote suggestions | Off in private tabs | FixedChoices. |
 | Browse for Me (the row right under the field) | Its place opens with the first keystroke where the on-device model can run, and stays while there is text; the row shows in it while the text would search (`AddressBarInput.search`) and fades out in place while it is an address. Before typing there is no place: the focused field's own rows (the page, a copied link, reading list, recents) sit right on the field | Arc Search's button beside Go. The place opens when the focused rows give way to suggestions anyway, then holds, so the suggestions never move while typing (principle 5). Without the model the place is not there and nothing says why (§4, Summarize Page). Private tabs: shown; it leaves nothing behind. |
@@ -332,9 +353,10 @@ above still says what it shows, and the splash only covers it.
 | Reduce Motion | The icon's world, then a 0.2 s crossfade to the app; no dive | The motion table's rule. |
 | An isolated test run | None, unless `-PlainSplash` is given | Hundreds of UI tests launch the app; the perf launch tests and the splash's own tests pass it. |
 
-The splash follows the Home Screen icon as it is (`AppIcons.current`) and the system's light or
-dark, like the icon and the launch screen under it, not the app's own Appearance setting. Dawn
-has dark art; Night, Coral and Paper look the same in both.
+The splash follows the Home Screen icon as it is (`AppIcons.current`), not the app's own
+Appearance setting. Every icon looks the same on a light and a dark Home Screen, so the splash
+does too: it is the picture in the icon picker. The intro's mark wears the same icon's colors,
+and the icon picked on the intro's icon step from then on.
 
 ### Tab gallery (Gallery mode, reachable with a card to show: `others ≥ 1`, or a page on screen)
 
@@ -373,6 +395,7 @@ has dark art; Night, Coral and Paper look the same in both.
 | While the gallery is up | The shell's toast hides; the gallery has its own Reopen toast. |
 | Camera / Microphone / Location is off for Plain — Settings | The page on screen asked for a feature iOS has off for Plain (WebKit denied it without asking). Once per site until the switch changes, in memory only; never right after the user said no in iOS's own prompt (that page was already loaded without the watch). "Location Services are off" when they are off for the phone. Screen Time: "… is restricted", no button. Never for background tabs. |
 | Saving to Photos is off for Plain — Settings | Save Image while Photos is off for Plain: every time (the user's own action), with the "nothing there" haptic. Screen Time: no button. |
+| Dark Pages suggestion (a card: "Dark Pages", "Show every website dark, even ones made only in light?", No Thanks / Turn On) | The page on screen is light and could be darkened (`available`), in Plain's dark colors, no page appearance chosen yet, 2 s after it was checked, if still the same page, the bar whole, the settings read, a regular tab, nothing else up (keyboard, sheet, gallery, reader, Find, another toast). Above the pill at the bottom, under it in the top bar. Gone after 8 s (not while VoiceOver runs), or at once on a navigation, a tab or pane-focus change, a sheet, the keyboard, the bar collapsing, a layout change or another toast. Turn On makes Dark the default page appearance; No Thanks is final; untouched, it shows again on another site in a later session. Any page appearance chosen anywhere also ends it. `DarkPagesSuggestion`. |
 | Passkeys aren't available in Plain yet. Use your password. | A page on screen asked for a passkey and Plain refused it (no web-browser entitlement yet, so WebKit would too). Once per site per launch; never for silent (conditional) requests or background tabs. Gone once `FixedChoices.passkeysEnabled` is on. |
 
 ### Sheets (Sheet mode)
@@ -447,9 +470,9 @@ combines its base state with the rows that modify it (for example, private + loa
 | Downloads none / active / finished | | | | | Downloads hidden / shown "1 in progress" / shown | | | | | | toast on finish |
 | Duo outer (system vertical bar) | dim when none | dim when none | per table, dim instead of hide inside Page | ✓ | ✓ | same | same | same | same | same | same |
 | Duo inner (top bar), single pane | as Duo outer | | | | | off (no swipe up from a top bar; Tabs and the strip are at hand) | pill, sideways | | | | |
-| Tab Layout Above, two or more tabs | | | | | | | | | | | the strip shows under the top bar; one tab: no strip (nothing to switch to) |
+| Tab Layout Above, two or more tabs | | | | | | | | | | | the strip shows under the top bar; one tab: no strip (nothing to switch to). It comes in with the second tab and leaves with the last but one, in one spring |
 | Duo split | per focused pane | | | | | | | | | | Open in Other Pane shown; Close Tab acts on the focused pane |
-| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | |
+| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | the sidebar shows in landscape and portrait from the second tab; with one tab the row is "Duo inner, single pane" (Tabs opens the switcher); see "The sidebar" below |
 | Book pose | as the pane's state; pills and toasts avoid the fold | | | | | | | | | | |
 | Phone landscape (compact height) | as Page; no side tabs | | | | | | | | | | |
 
@@ -461,6 +484,26 @@ Notes:
 - "bump": the page lifts slightly, rubber-bands back and plays the "nothing there" haptic.
 - A popup or link-opened tab on its first page: Back is enabled and closes the tab, returning to
   its opener. The edge swipe back does the same, so button and gesture agree.
+
+### The sidebar (Tab Layout Left or Right)
+
+Where it shows: wherever Tab Layout applies and the rail leaves a page of at least 600 pt
+(`DuoLayout`): the Duo's inner screen in landscape and in portrait. A narrower window shows the
+strip and keeps the setting.
+
+| Control | Shows when | Why |
+|---|---|---|
+| The rail (site icons) | Left or Right in effect and two or more tabs, unless the Tabs button hid it | The tab list. One tab has nothing to switch to, so the page has the whole width (owner, 2026-11-27: "if I have one tab, the whole bar shows, and this looks weird"); the same rule as the strip. It comes in from its edge with the second tab and leaves with the last but one. New Tab is then the bar's "+", as on every page; the Tabs button opens the switcher, as on any page with one tab. |
+| A tab's plate | every tab, in the strip and in the titled rows | Each tab is its own shape: the one on screen a solid card ringed in Lagoon, the others a veil with a hairline, glass between them (owner: "non-selected tabs [...] are just part of the whole bar"). In the rail the tile is the shape. |
+| New Tab (first row) | only while the bar has no "+" (principle 8); on an empty tab neither shows | One New Tab on screen: the bar's "+" is it on a page. A long press offers New Private Tab. |
+| Show Titles / Hide Titles (last row) | the rail may widen: not during a split, a book pose or with the side pane open | Where Expanded can't rest, a control that does nothing would be noise. A drag on the sidebar does the same. |
+| Titles and close buttons | Expanded | The rail has room for the tile only; there Close Tab is in the tab's menu (and VoiceOver's actions). |
+| Private section (hand, then "Private") | at least one private tab | Private tabs are listed after the regular ones on the dusk tint, never mixed in. |
+| The mark on a tab | the focused pane shows it (Lagoon tint and ring); a split's other pane shows it (outline) | One strong mark: the tab the bar acts on. |
+| Expanded as a drawer | portrait: over the page and the bar's leading end; a tab picked, a touch on the page or the address field closes it | No page or bar fits beside 260 pt there. Landscape docks it beside the page. |
+
+A site icon replaces the tab's letter once the site has one; a site without an icon keeps the
+letter (docs/decisions.md, "Site icons"). Private tabs' icons are never stored.
 
 ## 9. What Safari and Arc Search do
 

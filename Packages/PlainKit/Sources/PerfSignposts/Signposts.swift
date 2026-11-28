@@ -26,6 +26,9 @@ public enum Signposts {
     /// Interval: generating one paper texture tile (DesignSystem `PaperTexture`), off the main
     /// thread, once per appearance.
     public static let paperTile: StaticString = "paper.tile"
+    /// Interval: making the paper's pattern color from a generated tile, on the main thread, once
+    /// per appearance and display scale.
+    public static let paperPattern: StaticString = "paper.pattern"
     /// Interval: the user submitting the address bar, until the load is handed to the web view
     /// (parsing the input, getting a web view, starting the load).
     public static let addressSubmit: StaticString = "address.submit"
@@ -134,8 +137,17 @@ public enum Signposts {
     public static let findOnPage: StaticString = "page.find"
     public static let copyLink: StaticString = "page.copyLink"
     public static let desktopSite: StaticString = "page.desktopSite"
-    /// Event: Turn Off / Turn On Dark Pages for This Site in the page menu.
+    /// Event: a site's Dark Pages choice changed ("on", "off", "automatic"), from the indicator in
+    /// the pill or Site Settings.
     public static let darkPagesToggle: StaticString = "page.darkPages"
+    /// Event: the Dark Pages switch changed ("on", "off") from outside Settings (the suggestion).
+    public static let darkPagesSwitch: StaticString = "page.darkPagesSwitch"
+    /// Interval: a page's crossfade between its light and dark rendering, from the snapshot to
+    /// the end of the fade.
+    public static let darkPagesCrossfade: StaticString = "page.darkPagesCrossfade"
+    /// Event: the Dark Pages suggestion "shown", then how it went ("turnOn", "noThanks",
+    /// "timedOut", "hidden").
+    public static let darkPagesSuggestion: StaticString = "page.darkPagesSuggestion"
     /// Event: the user turned cookie banner handling off ("off") or back on ("on") for a site.
     public static let cookieBannersToggle: StaticString = "page.cookieBanners"
     /// Event: the cookie banner engine answered a banner ("rejected") or gave up ("failed").
@@ -387,6 +399,11 @@ public enum Signposts {
     public static let tabDiscard: StaticString = "tab.discard"
     /// Interval of a tab thumbnail snapshot, until WebKit returns the image.
     public static let tabSnapshot: StaticString = "tab.snapshot"
+    /// Interval: fetching a site's icon, from the page's answer to the icon stored (or none
+    /// found). Off the main thread but for the page's answer. The message is "stored" or "none".
+    public static let faviconFetch: StaticString = "favicon.fetch"
+    /// Interval: decoding a stored icon at a view's size, off the main thread.
+    public static let faviconDecode: StaticString = "favicon.decode"
     /// Interval from the engine asking the shell (dialog, sign-in, certificate warning, permission,
     /// external app, universal link) to the answer. The kind is the interval's message.
     public static let enginePrompt: StaticString = "engine.prompt"
@@ -492,6 +509,22 @@ public enum Signposts {
     /// Interval: the sidebar moving between Hidden, Rail and Expanded, until it rests. The message
     /// is the state it rests in.
     public static let sidebarState: StaticString = "sidebar.state"
+    /// The tab list (the strip or the sidebar) came in with the second tab, or left with the
+    /// last but one ("shown" or "hidden").
+    public static let tabListPresence: StaticString = "tabList.presence"
+
+    /// Event: a hardware keyboard shortcut acted (message: which one, `KeyShortcut.identifier`).
+    public static let keyShortcut: StaticString = "key.shortcut"
+    /// Event: a long press on Back or Forward listed the tab's history (message: back or forward).
+    public static let historyMenu: StaticString = "nav.historyMenu"
+    /// Event: a page picked from that list (message: the offset, negative is back).
+    public static let historyJump: StaticString = "nav.historyJump"
+    /// Event: a pinch in on a page at its smallest zoom opened the tab overview (wide screens).
+    public static let pinchToOverview: StaticString = "gallery.pinch"
+    /// Event: the system's undo (shake, three-finger swipe, ⌘Z) reopened the last closed tab.
+    public static let undoCloseTab: StaticString = "tab.undoClose"
+    /// Interval: the refresh arrow spinning after a pull, until the page's load ends.
+    public static let pullRefreshing: StaticString = "ptr.refreshing"
 
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {

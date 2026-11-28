@@ -34,11 +34,15 @@ import WebKit
 
     let server: TestServer
     let pool: WebViewPool
-    let tabsStore = WKWebsiteDataStore.nonPersistent()
+    let tabsStore: WKWebsiteDataStore
 
     init() async throws {
         server = try await TestServer(route: Self.route)
-        pool = WebViewPool(dataStore: tabsStore)
+        // A local, not the property: the pool takes its store as an escaping autoclosure (made on
+        // first use), which can't capture this struct's `self` from its initializer.
+        let store = WKWebsiteDataStore.nonPersistent()
+        tabsStore = store
+        pool = WebViewPool(dataStore: store)
     }
 
     func litePage() -> BrowseForMe.ResultsPage {

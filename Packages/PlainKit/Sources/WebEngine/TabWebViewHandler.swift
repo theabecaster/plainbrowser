@@ -82,6 +82,9 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let slot = pool.slot(for: tab) {
             pool.applyContentRules(slot, mainFrameURL: url)
         }
+        // The page appearance of the site it goes to, before its first style is resolved (a page
+        // of the same site keeps it, so nothing changes under the page leaving).
+        pool.applyInterfaceStyle(to: webView, site: NavigationRules.siteKey(for: url), isPrivate: tab.isPrivate)
 
         // `.allow` also lets WebKit hand a tapped cross-site link to an app that claims it.
         decisionHandler(.allow, preferences)
@@ -101,9 +104,20 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         switch decision {
         case .allow: decisionHandler(.allow)
-        case .download: decisionHandler(.download)
-        case .cancel: decisionHandler(.cancel)
+        case .download:
+            restorePageStyle(webView)
+            decisionHandler(.download)
+        case .cancel:
+            restorePageStyle(webView)
+            decisionHandler(.cancel)
         }
+    }
+
+    /// A main-frame navigation that won't commit (stopped, failed, a download): the page still on
+    /// screen gets its own site's scheme back (the decision gave the web view the destination's).
+    private func restorePageStyle(_ webView: WKWebView) {
+        guard let tab, let pool else { return }
+        pool.applyInterfaceStyle(to: webView, site: NavigationRules.siteKey(for: webView.url ?? tab.url), isPrivate: tab.isPrivate)
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
@@ -145,6 +159,8 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         updateSecurity(of: webView)
         endRestore()
         if let tab, let pool, let slot = pool.slot(for: tab) { pool.scheduleSave(slot) }
+        // The site's icon, once per site (`FaviconService`): a dictionary lookup otherwise.
+        if let tab, let pool { pool.favicons.pageDidFinish(webView, tab: tab) }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
@@ -158,6 +174,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
     ) {
         signposter.webView(webView, didFailProvisionalNavigation: navigation, withError: error)
         endRestore()
+        restorePageStyle(webView)
         let error = error as NSError
         if NavigationRules.isCertificateError(error), let tab, let pool {
             tab.set(\.loadError, LoadError(error))

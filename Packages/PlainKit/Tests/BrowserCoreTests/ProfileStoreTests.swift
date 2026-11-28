@@ -115,6 +115,27 @@ import Testing
         #expect(store.windows[0].tabIDs == [a, w2, b, w1])
     }
 
+    /// A place among the shown tabs (an empty one left out) with another profile's tabs between
+    /// them, and a pinned tab dragged to the end: it stays in its profile and its pinned group.
+    @Test func moveAmongShownTabsKeepsProfilesAndPins() throws {
+        let store = makeStore()
+        let work = try #require(store.addProfile(named: "Work"))
+        let a = store.open(url("a"))
+        let w1 = store.open(url("w1"), profile: work)
+        let b = store.open(url("b"), profile: Profile.defaultID)
+        let hidden = store.open(profile: Profile.defaultID)
+        let w2 = store.open(url("w2"), profile: work)
+        let c = store.open(url("c"), profile: Profile.defaultID)
+        func personal() -> [TabID] { store.windows[0].tabIDs.filter { store.tabs[$0]?.profileID == Profile.defaultID && $0 != hidden } }
+        store.move(a, to: 2, among: personal())
+        #expect(personal() == [b, c, a])
+        #expect(store.windows[0].tabIDs.filter { store.tabs[$0]?.profileID == work } == [w1, w2], "Work's tabs keep their order")
+        store.setPinned(true, for: c)
+        #expect(personal() == [c, b, a])
+        store.move(c, to: 2, among: personal())
+        #expect(personal() == [c, b, a], "a pinned tab can't leave the pinned group")
+    }
+
     @Test func closeAllClosesOneProfile() throws {
         let store = makeStore()
         let window = store.windows[0].id

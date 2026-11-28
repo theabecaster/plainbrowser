@@ -322,6 +322,9 @@ final class AddressPill: UIView {
         // Private, a long host loses its middle, never the mark at its start.
         hostLabel.lineBreakMode = isPrivate ? .byTruncatingMiddle : .byTruncatingHead
         display(url: url, notSecure: notSecure)
+        // The field itself too: on the search sheet it sits over the paper card, so its own
+        // controls (Dictate, Browse for Me) would take the card's light style on the violet.
+        textField.overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
         // The field's text too, fixed light on the always-dark private glass.
         textField.textColor = isPrivate ? .white : Palette.textPrimary
         textField.attributedPlaceholder = NSAttributedString(

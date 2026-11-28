@@ -102,9 +102,10 @@ final class PullIndicator: UIView {
         guard !isRefreshing, armed != isArmed else { return }
         isArmed = armed
         let fill = isPrivate ? PullTint.privateFill : Palette.accent
+        // The arrow turns white at once, so it never sits half-cycled on the filling disc.
+        if armed { arrow.backgroundColor = .white }
         Motion.animate(Motion.quick, changes: {
             self.backgroundColor = armed ? fill : Palette.surface
-            if armed { self.arrow.backgroundColor = .white }
         })
         if !armed { lastIndex = -1 }
         accessibilityValue = armed ? "armed" : nil
@@ -183,7 +184,9 @@ enum PullTint {
     static func cycle(isPrivate: Bool, dark: Bool) -> ColorCycle {
         let slot = key(isPrivate, dark)
         if let cycle = cycles[slot] { return cycle }
-        let stops = (isPrivate ? privateStops : PullTint.stops).map(srgb)
+        // There and back (mint, Lagoon, violet, coral, violet, Lagoon): coral never blends
+        // straight into mint, its opposite, which passes through grey.
+        let stops = pingPong(isPrivate ? privateStops : PullTint.stops).map(srgb)
         let cycle = ColorCycle(stops: stops, lightness: dark ? nightBand : dayBand)
         cycles[slot] = cycle
         return cycle
@@ -197,6 +200,10 @@ enum PullTint {
         }
         tables[slot] = table
         return table
+    }
+
+    private static func pingPong(_ stops: [UIColor]) -> [UIColor] {
+        stops.count > 2 ? stops + stops.reversed().dropFirst().dropLast() : stops
     }
 
     private static func key(_ isPrivate: Bool, _ dark: Bool) -> Int { (isPrivate ? 1 : 0) + (dark ? 2 : 0) }

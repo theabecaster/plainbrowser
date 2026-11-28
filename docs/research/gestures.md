@@ -92,8 +92,9 @@ trigger point, and the closer it gets the quicker it changes? Use our gradient a
 colors."
 
 - The loop is dawn teal (Shallows Mint), Lagoon, the icon's violet bloom and Curl Coral
-  (`Palette.pullCycle`); a private tab runs the dusk violets and the sky's blue
-  (`Palette.privatePullCycle`).
+  (`Palette.pullCycle`), there and back: coral blended straight into mint, its opposite,
+  passed through a muddy grey on the first capture. A private tab runs the dusk violets and the
+  sky's blue (`Palette.privatePullCycle`).
 - Colors blend in OKLab (Björn Ottosson, 2020), so Lagoon to coral passes through an even violet
   instead of the grey an sRGB blend gives. Each color is held in a lightness band so it reads on
   the indicator's ground: OKLab L ≤ 0.62 on white by day, ≥ 0.74 on the dark surface by night.

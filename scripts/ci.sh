@@ -98,6 +98,15 @@ gh run view $run -R $repo --json jobs -q '.jobs[] | "\(.conclusion // .status)\t
 gh run view $run -R $repo --log 2>/dev/null \
   | grep -E $'^smoke [^\t]*\tSmoke\t.*(Succeeded|Failed|passed, [0-9]+ failed|[0-9]+s (Failed|Expected))' \
   | sed -E $'s/\t[^\t]*\t[0-9TZ:.-]+ /: /' | head -80 || true
+# What did not pass there (failed, timed out, or never ran): the hosted runners are slow (3 cores)
+# and nothing is retried, so confirm these on a test Mac before treating them as failures.
+reruns=$(gh run view $run -R $repo --log 2>/dev/null \
+  | awk -F'\t' '$2 == "Smoke" && match($3, /rerun: -only-testing:[A-Za-z0-9_\/]+/) { print $1 "\t" substr($3, RSTART + 7, RLENGTH - 7) }' \
+  | sort -u) || reruns=""
+if [[ -n $reruns ]]; then
+  print "ci: did not pass on the hosted runners; rerun these on a test Mac (per device):"
+  print -r -- $reruns | awk -F'\t' '{ d = $1; sub(/^smoke /, "", d); sub(/ .*/, "", d); a[d] = a[d] " " $2 } END { for (d in a) print "  " d ":" a[d] }'
+fi
 
 if [[ $(jq -r .matrix <<<$request) != none ]]; then
   rm -rf $out $tmp/dl

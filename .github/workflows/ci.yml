@@ -180,7 +180,27 @@ jobs:
             | jq -r '"\(.result): \(.passedTests) passed, \(.failedTests) failed, \(.skippedTests) skipped, \((.finishTime - .startTime) | floor) s"' || true
           xcrun xcresulttool get test-results tests --path build/test/smoke.xcresult \
             | jq -r '[.. | objects | select(.nodeType == "Test Case")] | sort_by(-.durationInSeconds) | .[] | "\(.durationInSeconds | floor)s \(.result) \(.nodeIdentifier // .name)"' || true
-          if (( rc )); then grep -E 'error:|failed' build/test/smoke.log | head -40 || true; fi
+          if (( rc )); then grep -E 'error:|failed|encountered an error' build/test/smoke.log | head -40 || true; fi
+          # Every test of this shard that did not pass or skip (failed, timed out, or never ran
+          # because the runner crashed), as `rerun:` lines: scripts/ci.sh collects them for a
+          # rerun on a test Mac. Nothing is retried here, so a pass is a real pass.
+          if (( rc )); then
+            xcrun xcresulttool get test-results tests --path build/test/smoke.xcresult 2>/dev/null \
+              | jq -r '.. | objects | select(.nodeType == "UI test bundle" or .nodeType == "Unit test bundle") | .name as $t
+                  | .. | objects | select(.nodeType == "Test Case" and (.result == "Passed" or .result == "Skipped"))
+                  | "\($t)/\(.nodeIdentifier // .name)"' | sed 's/()$//' | sort -u > build/test/ok.txt || : > build/test/ok.txt
+            if [[ -n $TESTS ]]; then
+              # Named tests: rerun all of them (they may be whole classes).
+              print -l -- ${only#-only-testing:} > build/test/rerun.txt
+            else
+              classes=(${${only#-only-testing:}})
+              sed 's/()$//' build/enumerated.txt | while IFS= read -r id; do
+                (( ${classes[(Ie)${id%/*}]} || ${classes[(Ie)${id%%/*}]} )) && print -r -- $id
+              done | sort -u > build/test/expected.txt
+              comm -23 build/test/expected.txt build/test/ok.txt > build/test/rerun.txt
+            fi
+            sed 's/^/rerun: -only-testing:/' build/test/rerun.txt
+          fi
           exit $rc
       - name: Keep the failure's results
         if: failure()

@@ -69,6 +69,8 @@ extension BrowserViewController {
     /// Opens the pane on `section` (or what it showed last), animated.
     func openSidePane(_ section: SidePaneSection? = nil, focus: Bool = false) {
         guard duo.layout?.sidePaneAvailable == true else { return Haptic.nothingThere.play() }
+        // A close by the divider still settling: it ends now, and the pane opens from there.
+        sidePaneUI.divider?.cancel()
         let controller = makeSidePaneIfNeeded()
         if sidePaneUI.isRequested {
             showSidePaneSection(section ?? sidePaneUI.section)
@@ -151,6 +153,12 @@ extension BrowserViewController {
     /// layouts, since the row and the corner move on their own.
     func applySidePaneLayout(_ layout: DuoLayout) {
         guard let controller = sidePaneUI.controller else { return }
+        // A fold's regions or the pages' span changed under a drag or settle (book pose arriving
+        // through `updateViewConstraints`, with no size transition): it stops at the window's
+        // width, and this pass places everything.
+        if sidePaneUI.isRequested, let span = sidePaneUI.divider?.activeSpan, layout.sidePaneDivider?.span != span {
+            sidePaneUI.divider?.cancel(relayout: false)
+        }
         // A divider drag or settle places the pane itself (`dragColumn`), as the edge swipe does.
         let column = sidePaneUI.dragColumn ?? (sidePaneUI.isRequested ? layout.sidePaneColumn : nil)
         guard let column else {
@@ -354,6 +362,7 @@ extension BrowserViewController {
         let travel = max(0, -pan.translation(in: view).x)
         switch pan.state {
         case .began:
+            sidePaneUI.divider?.cancel()
             sidePaneUI.takesOver = false
             guard let column = sidePaneColumnIfOpened() else { return }
             let controller = makeSidePaneIfNeeded()

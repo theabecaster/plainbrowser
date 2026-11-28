@@ -322,7 +322,7 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         } else if pageGrows {
             commitPage(outcome)
         }
-        if paneGrows, outcome != .close { commitPane() }
+        if paneGrows, outcome != .close { commitPane(width: span.upperBound - targetX - pixelInset) }
         handle.state = .resting
         setArmed(close: false, takeOver: outcome == .takeOver && armedTakeOver)
         let spring = Motion.sidePaneSettle(flicked: flicked)
@@ -393,18 +393,26 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
     }
 
     /// The pane's content takes the column's width (one layout pass for the section).
-    private func commitPane() {
+    /// `width` given: the content takes its width after the settle now and stays frozen at it
+    /// while the column grows (one layout pass at the start); none: it rejoins the column at rest.
+    private func commitPane(width: CGFloat? = nil) {
         guard let pane, pending?.commitsPane == true else { return }
         pending?.commitsPane = false
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.sidePaneCommit, id: signposter.makeSignpostID(), "pane")
-        pane.unfreezeContent()
+        if let width { pane.setFrozenContentWidth(width) } else { pane.unfreezeContent() }
         browser?.view.layoutIfNeeded()
         signposter.endInterval(Signposts.sidePaneCommit, interval)
     }
 
+    /// The content sits a hairline in from the column's leading edge (`SidePaneController`).
+    private var pixelInset: CGFloat { 1 / max(browser?.traitCollection.displayScale ?? 2, 1) }
+
+    /// The span the running drag or settle works in, nil at rest.
+    var activeSpan: ClosedRange<CGFloat>? { isActive ? geometry?.span : nil }
+
     /// Back to rest: the layout places everything again.
-    private func endMove() {
+    private func endMove(relayout: Bool = true) {
         guard let browser else { return }
         browser.sidePaneUI.dragColumn = nil
         browser.sidePaneUI.revealsPage = false
@@ -427,6 +435,8 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
             #endif
         }
         browser.view.setNeedsLayout()
+        // From inside a layout pass (a fold's regions changed) the pass in progress places it.
+        guard relayout else { return }
         browser.view.layoutIfNeeded()
         browser.updatePageInsets()
         browser.updateButtons()
@@ -435,8 +445,10 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
 
     /// Stops a drag or settle where it is and puts everything at the window's state at once: the
     /// pane closing, a fold or a rotation.
-    func cancel() {
+    func cancel(relayout: Bool = true) {
         guard isActive || pending != nil else { return }
+        // A close still under way finishes its bookkeeping (the pane hides, its signpost ends).
+        let closing = pending?.outcome == .close
         if drag != nil {
             drag = nil
             pan.isEnabled = false
@@ -451,7 +463,8 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         #if DEBUG
         meter = nil
         #endif
-        endMove()
+        if closing { browser?.sidePaneDidCloseFromDivider() }
+        endMove(relayout: relayout)
     }
 
     // MARK: Taps, menu, keys, VoiceOver

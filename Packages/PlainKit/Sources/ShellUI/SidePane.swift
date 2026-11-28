@@ -51,6 +51,10 @@ final class SidePaneController: UIViewController {
     /// (`freezeContent`), so Reader, Find and History lay out once per settle, not per frame.
     private var contentTrailing: NSLayoutConstraint!
     private var contentWidth: NSLayoutConstraint!
+    /// The content's top: under the header at rest; held where it is while the divider moves (the
+    /// header may step under the top bar mid-drag), so the content's height never changes then.
+    private var contentUnderHeader: NSLayoutConstraint!
+    private var contentTop: NSLayoutConstraint!
     private var expandShown: NSLayoutConstraint!
     private var expandHidden: NSLayoutConstraint!
 
@@ -121,12 +125,14 @@ final class SidePaneController: UIViewController {
             closeButton.widthAnchor.constraint(equalToConstant: Metrics.tapTarget),
             closeButton.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
 
-            content.topAnchor.constraint(equalTo: header.bottomAnchor, constant: Spacing.s),
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: pixel),
             content.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
         contentTrailing = content.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         contentTrailing.isActive = true
+        contentUnderHeader = content.topAnchor.constraint(equalTo: header.bottomAnchor, constant: Spacing.s)
+        contentUnderHeader.isActive = true
+        contentTop = content.topAnchor.constraint(equalTo: view.topAnchor)
         contentWidth = content.widthAnchor.constraint(equalToConstant: 0)
         expandShown = picker.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor, constant: -Spacing.xs)
         expandHidden = picker.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -Spacing.s)
@@ -139,15 +145,27 @@ final class SidePaneController: UIViewController {
         loadViewIfNeeded()
         guard !contentWidth.isActive else { return }
         contentWidth.constant = content.bounds.width
+        contentTop.constant = content.frame.minY
         contentTrailing.isActive = false
+        contentUnderHeader.isActive = false
         contentWidth.isActive = true
+        contentTop.isActive = true
     }
 
-    /// The content takes the column's width again: one layout pass for the section.
+    /// While frozen, the content takes `width` now (a settle that widens the pane: one layout pass,
+    /// at the start, and the column uncovers it as it moves).
+    func setFrozenContentWidth(_ width: CGFloat) {
+        guard isViewLoaded, contentWidth.isActive, contentWidth.constant != width else { return }
+        contentWidth.constant = width
+    }
+
+    /// The content takes the column again: under the header, to its trailing edge.
     func unfreezeContent() {
         guard isViewLoaded, contentWidth.isActive else { return }
         contentWidth.isActive = false
+        contentTop.isActive = false
         contentTrailing.isActive = true
+        contentUnderHeader.isActive = true
     }
 
     /// The content's width now (frozen or not).

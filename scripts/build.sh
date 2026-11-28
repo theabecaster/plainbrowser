@@ -2,6 +2,9 @@
 # Generate the Xcode project and build the app for the simulator (Debug). No simulator needed.
 # Usage: scripts/build.sh
 # Output: build/sim (derived data), log in build/build.log.
+# Only this Mac's own architecture (arm64 on Apple silicon): its simulators run nothing else, and
+# the generic simulator destination would otherwise compile every file twice (arm64 and x86_64).
+# Release, device and archive builds don't use this script and keep their architectures.
 set -euo pipefail
 source "${0:A:h}/lib/common.zsh"
 
@@ -9,7 +12,7 @@ xcodegen generate --quiet
 mkdir -p build
 if ! xcodebuild -project Plain.xcodeproj -scheme Plain -configuration Debug \
     -destination 'generic/platform=iOS Simulator' -derivedDataPath build/sim \
-    build-for-testing > build/build.log 2>&1; then
+    ARCHS=$(uname -m) build-for-testing > build/build.log 2>&1; then
   grep -E 'error:' build/build.log | sort -u | head -20 || true
   print -u2 "build failed; full log: build/build.log"
   exit 1

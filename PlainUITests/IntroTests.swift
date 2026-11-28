@@ -276,7 +276,7 @@ final class IntroCaptureTests: XCTestCase {
     func testCaptureIntro() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
         let app = XCUIApplication.isolated()
-        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainForceDefaultBrowserPrompts"]
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainForceDefaultBrowserPrompts", "-PlainAlternateIcons", "on"]
         app.launch()
         pause(0.5)
         shot("0-splash", app)
@@ -327,7 +327,7 @@ final class IntroCaptureTests: XCTestCase {
         let state = environment["PLAIN_CAPTURE_AI"] ?? "available"
         let tag = environment["PLAIN_CAPTURE_TAG"] ?? "shot"
         let app = XCUIApplication.isolated()
-        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainAIAvailability", state]
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro", "-PlainAIAvailability", state, "-PlainAlternateIcons", "on"]
         app.launch()
         let next = app.buttons["introNext"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))

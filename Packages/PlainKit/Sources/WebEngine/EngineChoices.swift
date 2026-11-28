@@ -20,6 +20,12 @@ nonisolated public enum EngineChoices {
     /// of the tap before the keyboard on the simulator, docs/research/perf-pass-3.md). One second
     /// clears a New Tab's keyboard rise (0.5 s).
     public static let rewarmDelay: Duration = .seconds(1)
+    /// A rewarm that comes while the keyboard is rising or falling tries again this much later:
+    /// longer than a frame, well under the keyboard's 0.5 s motion, so it lands soon after it ends.
+    public static let rewarmRetry: Duration = .milliseconds(150)
+    /// At most this many retries (3 s): a keyboard whose `did` notification never comes doesn't
+    /// keep the rewarm waiting for ever.
+    public static let rewarmRetries = 20
 
     // MARK: Saving tabs
 

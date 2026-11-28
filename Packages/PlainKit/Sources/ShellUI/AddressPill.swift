@@ -94,6 +94,9 @@ final class AddressPill: UIView {
     var isCompact = false
     private var url: URL?
     private var notSecure = false
+    /// The reader is open over the page, or the page is translated (`setMode`).
+    private var isReader = false
+    private var isTranslated = false
     /// The glass has the private tint (`setPrivate`).
     var isPrivateTint = false
     /// The neighbour tab's host, sliding in during a bar swipe.
@@ -219,14 +222,31 @@ final class AddressPill: UIView {
 
     /// Shows `url`'s host while resting, or the placeholder when there is no page. A page that is
     /// not secure (http, mixed content, a certificate the user chose to pass) says so before the
-    /// host, as Safari does.
+    /// host, as Safari does; so does a page in a mode (`setMode`), in the same quiet word.
     func display(url: URL?, notSecure: Bool = false) {
         self.url = url
         self.notSecure = notSecure
         hostLabel.attributedText = Self.hostText(
-            for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: "Search or enter address"
+            for: url, query: url.flatMap(searchQuery), lead: lead, placeholder: "Search or enter address"
         )
         accessibilityValue = url?.absoluteString ?? hostLabel.text
+    }
+
+    /// The reader is open, or the page is translated: the pill names the mode in place of the
+    /// security word ("Reader — host"), so the page's mode shows where its address does. Called
+    /// with each chrome update; only a change draws again.
+    func setMode(reader: Bool, translated: Bool) {
+        guard reader != isReader || translated != isTranslated else { return }
+        isReader = reader
+        isTranslated = translated
+        display(url: url, notSecure: notSecure)
+    }
+
+    /// The one lead word for the page on screen (`PillLead`: Private, then Reader or Translated,
+    /// then Not Secure). Private is the private lane's to draw (its own mark and word); until it
+    /// lands a private page keeps the tint and the other words.
+    private var lead: PillLead? {
+        PillLead.resolve(isPrivate: false, isReader: isReader, isTranslated: isTranslated, notSecure: notSecure)
     }
 
     /// The query a page searches for when it is the search engine's results page (the shell
@@ -234,18 +254,20 @@ final class AddressPill: UIView {
     var searchQuery: (URL) -> String? = { _ in nil }
 
     /// What the resting pill says for `url`: the search on the engine's results page, otherwise
-    /// its host without `www.`, after "Not Secure —" when the page is not secure; the placeholder
-    /// without a page.
-    private static func hostText(for url: URL?, query: String? = nil, notSecure: Bool, placeholder: String) -> NSAttributedString {
-        if let query, !notSecure {
+    /// its host without `www.`, after the lead word ("Not Secure —", "Reader —") when there is
+    /// one; the placeholder without a page.
+    private static func hostText(for url: URL?, query: String? = nil, lead: PillLead?, placeholder: String) -> NSAttributedString {
+        if let query, lead == nil {
             return NSAttributedString(string: query, attributes: [.foregroundColor: Palette.textPrimary])
         }
         if let url, let host = url.host(), !host.isEmpty {
             let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-            guard notSecure else {
+            guard let lead else {
                 return NSAttributedString(string: name, attributes: [.foregroundColor: Palette.textPrimary])
             }
-            let text = NSMutableAttributedString(string: "Not Secure — ", attributes: [.foregroundColor: Palette.textSecondary])
+            let text = NSMutableAttributedString(
+                string: String(localized: "\(lead.word) — "), attributes: [.foregroundColor: Palette.textSecondary]
+            )
             text.append(NSAttributedString(string: name, attributes: [.foregroundColor: Palette.textPrimary]))
             return text
         } else if let url {
@@ -280,7 +302,7 @@ final class AddressPill: UIView {
         label.maximumContentSizeCategory = hostLabel.maximumContentSizeCategory
         label.textAlignment = .center
         label.lineBreakMode = .byTruncatingHead
-        label.attributedText = Self.hostText(for: url, query: url.flatMap(searchQuery), notSecure: false, placeholder: "New Tab")
+        label.attributedText = Self.hostText(for: url, query: url.flatMap(searchQuery), lead: nil, placeholder: "New Tab")
         label.alpha = 0
         label.isAccessibilityElement = false
         let height = max(hostLabel.bounds.height, label.font.lineHeight)

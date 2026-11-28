@@ -1,0 +1,208 @@
+# Plain's checks on GitHub-hosted runners (docs/research/build-test-speed.md, "GitHub Actions").
+#
+# Free: the repository is public, and standard hosted runners (xcode-27: 3-core M1, 7 GB) cost
+# nothing there. Never add a larger runner label (`-xlarge`, `-large`): those are billed.
+#
+# Triggered only by a push to a ci/** branch (scripts/ci.sh pushes one for a lane, then deletes
+# it and the run), never by pull requests, so a fork can't start it. No secrets: nothing here
+# signs, uploads to TestFlight or reaches the device. Logs and artifacts are public: print and
+# upload only what the repository itself already shows (test names, results, screenshots of the
+# test pages).
+#
+# A ci/** branch may carry .github/ci-request.json (scripts/ci.sh writes it on a commit of its
+# own, never on the lane's branch):
+#   {"tests": ["PlainUITests/TabsTests", ...],   only these, on each device (default: all of Smoke)
+#    "shards": 3,                                 Smoke shards per device (1-4)
+#    "devices": ["duo", "17"],                    Smoke devices (default both, as scripts/test.sh; [] skips Smoke)
+#    "matrix": "none" | "quick" | "full",         scripts/matrix.sh rows, one runner each
+#    "rows": "17,duo-outer",                      only these matrix rows
+#    "matrixTests": ["PlainUITests/CaptureTests/testCaptureX", ...],
+#    "unit": true}                                swift test for PlainKit
+name: CI
+on:
+  push:
+    branches: ["ci/**"]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+  XCODEGEN_URL: https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+  XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      unit: ${{ steps.plan.outputs.unit }}
+      smoke: ${{ steps.plan.outputs.smoke }}
+      tests: ${{ steps.plan.outputs.tests }}
+      shards: ${{ steps.plan.outputs.shards }}
+      rows: ${{ steps.plan.outputs.rows }}
+      matrix_tests: ${{ steps.plan.outputs.matrix_tests }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: plan
+        name: Read and check the request
+        run: |
+          set -euo pipefail
+          req=.github/ci-request.json
+          [ -f "$req" ] || echo '{}' > "$req"
+          jq -e 'type == "object"' "$req" >/dev/null
+          test_re='^Plain(UI)?Tests(/[A-Za-z0-9_]+){0,2}$'
+          for key in tests matrixTests; do
+            jq -r --arg k "$key" '.[$k] // [] | .[]' "$req" | while read -r t; do
+              [[ $t =~ $test_re ]] || { echo "bad test name in $key: $t"; exit 1; }
+            done
+          done
+          shards=$(jq -r '.shards // 3' "$req"); [[ $shards =~ ^[1-4]$ ]] || { echo "shards must be 1-4"; exit 1; }
+          devices=$(jq -c '.devices // ["duo", "17"]' "$req")
+          jq -e 'all(.[]; . == "duo" or . == "17")' <<<"$devices" >/dev/null || { echo "devices: duo, 17 (or none)"; exit 1; }
+          tests=$(jq -c '.tests // []' "$req")
+          if [ "$(jq length <<<"$tests")" -gt 0 ]; then shards=1; fi
+          smoke=$(jq -c --argjson n "$shards" '[.[] as $d | range(1; $n + 1) | {device: $d, shard: ., of: $n}]' <<<"$devices")
+          matrix=$(jq -r '.matrix // "none"' "$req")
+          case $matrix in
+            none) all="" ;;
+            quick) all="se 17 max duo-outer duo-inner" ;;
+            full) all="se mini 17 air max 17-land max-land duo-outer duo-inner duo-inner-portrait 17-xxxl se-ax3 17-dark duo-inner-dark 17-motion" ;;
+            *) echo "matrix: none, quick or full"; exit 1 ;;
+          esac
+          picked=$(jq -r '.rows // ""' "$req")
+          [[ $picked =~ ^[a-z0-9,-]*$ ]] || { echo "bad rows"; exit 1; }
+          rows=()
+          for r in $all; do
+            if [ -z "$picked" ] || [[ ",$picked," == *",$r,"* ]]; then rows+=("$r"); fi
+          done
+          {
+            echo "unit=$(jq -r 'if .unit == false then "false" else "true" end' "$req")"
+            echo "smoke=$smoke"
+            echo "tests=$(jq -r '.tests // [] | map("-only-testing:" + .) | join(" ")' "$req")"
+            echo "shards=$shards"
+            echo "rows=$(printf '%s\n' "${rows[@]}" | jq -R . | jq -sc 'map(select(length > 0))')"
+            echo "matrix_tests=$(jq -r '.matrixTests // [] | map("-only-testing:" + .) | join(" ")' "$req")"
+          } >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  unit:
+    needs: plan
+    if: needs.plan.outputs.unit == 'true'
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: swift test (PlainKit)
+        working-directory: Packages/PlainKit
+        run: swift test 2>&1 | tail -40; exit ${PIPESTATUS[0]}
+
+  smoke:
+    needs: plan
+    if: needs.plan.outputs.smoke != '[]'
+    runs-on: xcode-27
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.smoke) }}
+    name: smoke ${{ matrix.device }} ${{ matrix.shard }}/${{ matrix.of }}
+    env:
+      TESTS: ${{ needs.plan.outputs.tests }}
+      DEVICE: ${{ matrix.device }}
+      SHARD: ${{ matrix.shard }}
+      OF: ${{ matrix.of }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" "$XCODEGEN_URL"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Test isolation
+        run: scripts/lib/check-isolation.zsh
+      - name: Build for testing
+        run: scripts/build.sh || { tail -60 build/build.log; exit 1; }
+      - name: Smoke
+        shell: zsh {0}
+        run: |
+          set -euo pipefail
+          source scripts/lib/sim.zsh
+          if [[ $DEVICE == duo ]]; then
+            type=com.apple.CoreSimulator.SimDeviceType.iPhone-Duo runtime=com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4
+          else
+            type=com.apple.CoreSimulator.SimDeviceType.iPhone-17 runtime=com.apple.CoreSimulator.SimRuntime.iOS-27-2
+          fi
+          # A throwaway runner: no template to keep.
+          udid=$(PLAIN_SIM_TEMPLATES=0 sim_new plain-ci-$DEVICE $type $runtime)
+          if [[ -n $TESTS ]]; then only=(${=TESTS}); else only=(${(f)"$(scripts/lib/smoke-shards.zsh $OF $SHARD)"}); fi
+          print -l -- $only
+          mkdir -p build/test
+          rc=0
+          xcodebuild -project Plain.xcodeproj -scheme Plain -testPlan Smoke -destination "id=$udid" \
+            -derivedDataPath build/sim -resultBundlePath build/test/smoke.xcresult \
+            -test-timeouts-enabled YES -default-test-execution-time-allowance 120 \
+            -maximum-test-execution-time-allowance 300 $only \
+            test-without-building > build/test/smoke.log 2>&1 || rc=$?
+          xcrun xcresulttool get test-results summary --path build/test/smoke.xcresult \
+            | jq -r '"\(.result): \(.passedTests) passed, \(.failedTests) failed, \(.skippedTests) skipped, \((.finishTime - .startTime) | floor) s"' || true
+          xcrun xcresulttool get test-results tests --path build/test/smoke.xcresult \
+            | jq -r '[.. | objects | select(.nodeType == "Test Case")] | sort_by(-.durationInSeconds) | .[] | "\(.durationInSeconds | floor)s \(.result) \(.nodeIdentifier // .name)"' || true
+          if (( rc )); then grep -E 'error:|failed' build/test/smoke.log | head -40 || true; fi
+          exit $rc
+      - name: Keep the failure's results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.device }}-${{ matrix.shard }}
+          path: |
+            build/test/smoke.log
+            build/test/smoke.xcresult
+          retention-days: 3
+
+  matrix:
+    needs: plan
+    if: needs.plan.outputs.rows != '[]'
+    runs-on: xcode-27
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.plan.outputs.rows) }}
+    name: matrix ${{ matrix.row }}
+    env:
+      ROW: ${{ matrix.row }}
+      MATRIX_TESTS: ${{ needs.plan.outputs.matrix_tests }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" "$XCODEGEN_URL"
+          echo "$XCODEGEN_SHA256  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Matrix row
+        shell: zsh {0}
+        # No Device Hub on a hosted runner: the Duo's inner rows use the resizable window, and
+        # summary.txt says so. The sheets are made where the rows are brought together (scripts/ci.sh).
+        run: |
+          PLAIN_SIM_TEMPLATES=0 PLAIN_MATRIX_ON_HOST=1 scripts/matrix.sh --rows $ROW --resizable ${=MATRIX_TESTS} --out build/matrix-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: matrix-${{ matrix.row }}
+          path: |
+            build/matrix-out
+            !build/matrix-out/**/*.xcresult
+          include-hidden-files: true
+          retention-days: 3

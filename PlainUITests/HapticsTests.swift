@@ -143,7 +143,93 @@ final class HapticsTests: XCTestCase {
         }
     }
 
+    /// Reopen from the gallery's toast plays a light tap as the card comes back.
+    func testGalleryReopenTaps() throws {
+        let app = try launch()
+        twoTabs(app)
+        app.buttons["tabs"].tap()
+        let gallery = app.scrollViews["tabGallery"]
+        XCTAssertTrue(gallery.waitForExistence(timeout: 3))
+        let card = gallery.descendants(matching: .any).matching(identifier: "tabCard")
+            .matching(NSPredicate(format: "label BEGINSWITH 'Plain Test B'")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 2))
+        Thread.sleep(forTimeInterval: 0.6)
+        // The flick's own haptic is testCardPastTheLineArmsThenClosesSoftly's.
+        card.swipeUp(velocity: .fast)
+        let reopen = app.buttons["reopenTab"]
+        XCTAssertTrue(reopen.waitForExistence(timeout: 2))
+        Thread.sleep(forTimeInterval: 0.6)
+        app.expectHaptics(["tap"]) { reopen.tap() }
+        let two = NSPredicate(format: "value == '2 tabs'")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: two, object: gallery)], timeout: 4), .completed)
+    }
+
+    /// Close All: the dialog is silent, the destructive choice plays one soft close for the batch.
+    func testGalleryCloseAllClosesOnceAfterItsDialog() throws {
+        let app = try launch()
+        twoTabs(app)
+        app.buttons["tabs"].tap()
+        XCTAssertTrue(app.scrollViews["tabGallery"].waitForExistence(timeout: 3))
+        Thread.sleep(forTimeInterval: 0.6)
+        app.buttons["galleryMenu"].tap()
+        let closeAll = app.buttons["gallery.closeAll"]
+        XCTAssertTrue(closeAll.waitForExistence(timeout: 3))
+        let confirm = app.buttons["Close All 2 Tabs"]
+        app.expectHaptics([]) {
+            closeAll.tap()
+            XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        }
+        app.expectHaptics(["close"]) { confirm.tap() }
+    }
+
+    /// Reopen on the bar's toast, after Close Tab from the tabs menu: a light tap.
+    func testBarToastReopenTaps() throws {
+        let app = try launch()
+        twoTabs(app)
+        app.buttons["tabs"].press(forDuration: 1.0)
+        let close = app.buttons["menu.closeTab"]
+        XCTAssertTrue(close.waitForExistence(timeout: 3))
+        close.tap()
+        let reopen = app.buttons["toastButton"]
+        XCTAssertTrue(reopen.waitForExistence(timeout: 3), "the Reopen toast")
+        app.expectHaptics(["tap"]) { reopen.tap() }
+        XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 5), "Page B came back")
+    }
+
     // MARK: Page sheet
+
+    /// Site Settings > Desktop Site: a tick, then the reload.
+    func testSiteToggleTicks() throws {
+        let app = try launch()
+        go(app, to: "/a", heading: "Page A")
+        app.buttons["more"].tap()
+        let site = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Site Settings'")).firstMatch
+        XCTAssertTrue(site.waitForExistence(timeout: 3))
+        site.tap()
+        let desktop = app.buttons["menu.desktopSite"]
+        XCTAssertTrue(desktop.waitForExistence(timeout: 2))
+        app.expectHaptics(["selection"]) { desktop.tap() }
+    }
+
+    /// A refused page plays nothing when it fails (the page says so); Try Again that fails again
+    /// plays the warning once.
+    func testTryAgainThatFailsAgainWarns() throws {
+        let app = try launch()
+        let closed = try TestServer()
+        try closed.start()
+        let port = closed.port
+        closed.stop()
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        app.expectHaptics([], settle: 1.5) {
+            field.typeText("http://127.0.0.1:\(port)/nothing\n")
+            XCTAssertTrue(app.staticTexts["The site refused the connection."].waitForExistence(timeout: 5))
+        }
+        let tryAgain = app.buttons["Try Again"]
+        XCTAssertTrue(tryAgain.exists)
+        app.expectHaptics(["failed"]) { tryAgain.tap() }
+        XCTAssertTrue(app.staticTexts["The site refused the connection."].waitForExistence(timeout: 5))
+    }
 
     /// A tick per zoom step, a light tap at 100% (the detent).
     func testZoomTicksPerStepAndTapsAtActualSize() throws {

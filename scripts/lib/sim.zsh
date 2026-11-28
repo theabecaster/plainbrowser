@@ -35,17 +35,22 @@ sim_template() {
   /usr/bin/lockf -k -t 900 /tmp/plain-sim-template.lock zsh -c '
     set -u
     name=$1 type=$2 runtime=$3
-    json=$(xcrun simctl list devices -j)
-    udid=$(jq -r --arg n $name "[.devices[][] | select(.name == \$n)][0].udid // empty" <<<$json)
-    ok=$(jq -r --arg n $name "[.devices[][] | select(.name == \$n)][0] | (.isAvailable == true and .state == \"Shutdown\") // false" <<<$json)
-    marker=~/Library/Developer/CoreSimulator/Devices/$udid/plain-template-ready
-    if [[ -n $udid && $ok == true && -f $marker ]]; then print -r -- $udid; exit 0; fi
+    devices=~/Library/Developer/CoreSimulator/Devices
+    # Every simulator with this name: "<udid> <usable>", usable = available, shut down, marked ready.
+    good="" bad=()
+    while read -r u usable; do
+      [[ -z $u ]] && continue
+      if [[ -z $good && $usable == true && -f $devices/$u/plain-template-ready ]]; then good=$u; else bad+=$u; fi
+    done < <(xcrun simctl list devices -j | jq -r --arg n $name "
+      .devices[][] | select(.name == \$n) | \"\(.udid) \(.isAvailable == true and .state == \"Shutdown\")\"")
+    # Unavailable, half made (no marker), left booted by a killed job, or a second copy: remove
+    # it first, whatever happens next.
+    for u in $bad; do xcrun simctl shutdown $u 2>/dev/null; xcrun simctl delete $u 2>/dev/null; done
+    [[ -n $good ]] && { print -r -- $good; exit 0; }
     # A template takes about 2 GB. Below 25 GB free, make none (the caller creates the simulator
     # from scratch): a full disk would break every job on the Mac.
-    free_kb=$(df -k ~/Library/Developer/CoreSimulator | awk "NR == 2 { print \$4 }")
+    free_kb=$(df -k $devices | awk "NR == 2 { print \$4 }")
     (( ${free_kb:-0} > 25 * 1024 * 1024 )) || exit 1
-    # Missing, unavailable, half made (no marker) or left booted: make it again.
-    [[ -n $udid ]] && { xcrun simctl shutdown $udid 2>/dev/null; xcrun simctl delete $udid 2>/dev/null; }
     udid=$(xcrun simctl create $name $type $runtime) || exit 1
     if ! xcrun simctl boot $udid || ! perl -e "alarm 900; exec @ARGV" xcrun simctl bootstatus $udid -b >/dev/null; then
       xcrun simctl shutdown $udid 2>/dev/null; xcrun simctl delete $udid 2>/dev/null; exit 1

@@ -79,14 +79,17 @@ done
 if [[ $which == --verify ]]; then
   ids=${3:?usage: smoke-shards.zsh <count> --verify <file>}
   # The enumerated classes, as the shards name them: PlainUITests/<Class>, and PlainTests whole.
-  enumerated=(${(f)"$(grep -E '^Plain(UI)?Tests/' $ids | awk -F/ '$1 == "PlainTests" { print "PlainTests"; next } { print $1 "/" $2 }' | sort -u)"})
-  sharded=(${(f)"$(for u in $units; do print -r -- ${u#* }; done | sort -u)"})
+  # Only the two targets the shards know: a test from any other target fails the check.
+  other=(${(f)"$(grep -vE '^Plain(UI)?Tests/[A-Za-z0-9_]+/' $ids | grep -v '^[[:space:]]*$' || true)"})
+  (( ${#other} )) && { print -u2 "smoke-shards: tests the shards don't know: ${other[1,5]}"; exit 1; }
+  enumerated=(${(f)"$(awk -F/ '$1 == "PlainTests" { print "PlainTests"; next } { print $1 "/" $2 }' $ids | sort -u)"})
+  sharded=(${(f)"$(for u in $units; do print -r -- ${u#* }; done | sort)"})
   (( ${#enumerated} )) || { print -u2 "smoke-shards: no tests in $ids"; exit 1; }
+  unique=(${(u)sharded})
+  (( ${#sharded} == ${#unique} )) || { print -u2 "smoke-shards: a class is in two shards"; exit 1; }
   missing=(${enumerated:|sharded}) extra=(${sharded:|enumerated})
-  # A class can be in the shards without tests Xcode lists (all gated by a condition it can't
-  # see at enumeration time); that is harmless. A class Xcode lists that no shard runs is not.
   (( ${#missing} )) && { print -u2 "smoke-shards: in the Smoke plan but in no shard: ${missing[*]}"; exit 1; }
-  (( ${#extra} )) && print "smoke-shards: sharded but not enumerated (no tests listed): ${extra[*]}"
+  (( ${#extra} )) && { print -u2 "smoke-shards: sharded but not in the Smoke plan: ${extra[*]}"; exit 1; }
   print "smoke-shards: ${#enumerated} enumerated classes, all in exactly one of $count shards"
   exit 0
 fi

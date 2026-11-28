@@ -164,13 +164,13 @@ Show. Nothing changed.
 Verified with UI tests (`PlainUITests/SystemAccessTests`, iPhone 17 and the Duo's outer screen)
 and captures: the location toast once per site (location revoked with `simctl privacy`), the
 camera and Screen Time toasts, the cellular error page, Site Settings' "Off in Settings" and "Not
-Allowed", a summary ending in one line when the model goes away and Browse for Me leaving.
+Allowed", Save Image's line with Photos off, a summary ending in one line when the model goes
+away and Browse for Me leaving.
 Simulator limits: `simctl privacy` has no camera service, and WebKit's stand-in cameras on a
 simulator skip its own authorization check and reach Plain's delegate, which is why the pool's
 `decide` also refuses a feature that is off (`-PlainSystemAccess` stands in for the camera,
-cellular data and Photos). The simulator's synthesized long press doesn't open the link menu, so
-Save Image's line is covered by unit tests; the Duo simulator's Home doesn't background the app,
-so the summary test runs on the iPhone 17 only.
+cellular data and Photos). On the Duo simulator the synthesized long press opens no link menu and
+Home doesn't background the app, so Save Image and the summary test run on the iPhone 17 only.
 
 To check on the device: the real camera prompt order (iOS's, then Plain's); that turning camera
 access off in Settings ends Plain and it reopens on its tab; a site asking for the camera with it

@@ -199,9 +199,11 @@ extension BrowserViewController {
         }
         // From a page: closing the field untouched goes back to it (`returnFromUntouchedNewTab`).
         let back = fromGallery ? nil : currentTab.flatMap { session.tabs.isEmpty($0.id) ? nil : $0.id }
-        let pane = session.tabs.focusedPane
         let tab = session.tabs.newTab(isPrivate: isPrivate)
         show(tab)
+        // The pane after `show`: a tab of the other kind may have ended a split and moved the
+        // focus to the remaining pane.
+        let pane = session.tabs.focusedPane
         tabsUI.newTabReturn = back.map { NewTabReturn(made: tab.id, back: $0, pane: pane) }
         beginAddressEditing()
     }

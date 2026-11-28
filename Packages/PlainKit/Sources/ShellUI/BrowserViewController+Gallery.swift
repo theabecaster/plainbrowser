@@ -482,7 +482,7 @@ extension BrowserViewController: GalleryHost {
             applyStartShortcuts()
             // An empty private tab says what it is, on Night; with profiles, the
             // window's is named.
-            start.setPrivate(currentTab?.isPrivate == true)
+            start.setPrivate(showsPrivateMode)
             updateStartScreenMessage()
         }
         updateStatusBarForStart()

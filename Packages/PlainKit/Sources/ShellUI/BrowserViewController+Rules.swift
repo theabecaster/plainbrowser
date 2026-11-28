@@ -27,6 +27,8 @@ extension BrowserViewController {
         state.queryIsSearch = isEditingAddress && Self.isSearch(pill.textField.text ?? "")
         guard let tab = currentTab else {
             state.others = tabs.otherTabCount(besides: nil) + tabs.otherProfilesTabCount
+            // An empty pane beside a private page is in the window's private mode.
+            state.isPrivate = showsPrivateMode
             // The last tab's picture stands in until the restored session is in.
             if let hint = launchUI.placeholder { placeholderState(hint, into: &state) }
             return state

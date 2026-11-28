@@ -81,11 +81,15 @@ final class PrivateWideTests: XCTestCase {
         app.buttons["addressPill"].label == "Private Address"
     }
 
-    /// Closes the search field by tapping the page area above it.
+    /// Closes the search field with its Cancel (on wide screens the card reaches the bottom, so
+    /// no page shows outside it to tap).
     private func closeSearch(_ app: XCUIApplication) {
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        let cancel = app.buttons["search.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 3))
+        cancel.tap()
+        let field = app.textFields["searchField"]
+        wait("the field closed") { !(field.exists && field.hasKeyboardFocus) }
         XCTAssertTrue(app.buttons["addressPill"].waitForExistence(timeout: 2))
-        Thread.sleep(forTimeInterval: 0.6)
     }
 
     private func stripTabs(_ app: XCUIApplication) -> XCUIElementQuery {

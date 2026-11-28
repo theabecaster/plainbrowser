@@ -89,6 +89,16 @@ import Testing
         #expect(bare.startShortcuts == [.privateTab])
     }
 
+    /// An empty split pane beside a private page is in the window's private mode: its start
+    /// screen and More offer Leave Private, as an empty private tab's do.
+    @Test func anEmptyPaneInAPrivateWindowOffersLeavePrivate() {
+        var state = Self.firstRun
+        state.isPrivate = true
+        let rules = ControlRules(state)
+        #expect(!rules.moreNewTabOpensPrivate)
+        #expect(rules.startShortcuts == [.regularTab])
+    }
+
     @Test func moreCarriesTheTabItemsInEveryStateWhereTheyApply() {
         var state = Self.page(others: 3)
         state.hasClosed = true

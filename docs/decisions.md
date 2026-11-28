@@ -3676,7 +3676,11 @@ Research and sources: `docs/research/content-mode.md`.
   (or picture in picture, fullscreen, camera or microphone), while a download from the tab runs,
   with Find open or the page translated, and not when the page reports typed text, a changed
   choice or checkbox, or focus in a field (one page script, `ContentModeScripts.probe`, run only
-  for a page that needs the other mode; a page that does not answer in 400 ms keeps its mode).
+  for a page that needs the other mode; a page that does not answer in
+  `contentModeProbeTimeout`, 1 s, keeps its mode), and not when anyone typed in the document or
+  any of its frames: each frame reports its first `input` event once (added to the iframe-press
+  script, so no new script), which covers what the probe can't read (cross-origin frames, closed
+  shadow roots, an editable area left after typing).
   A loading page is checked again when its load ends. A kept page switches on its next
   navigation. No prompt: the owner asked for no surprises, and a question at every fold is one.
 - **The switch is a reload in place under the page's picture.** The pool (which owns the web
@@ -3685,8 +3689,11 @@ Research and sources: `docs/research/content-mode.md`.
   restored from the old layout, scrolls the element that was under the top edge back there (by
   id, else child-index path with the same text, else the scroll fraction), waits two frames and
   crossfades for `contentModeCrossfade` (0.2 s). `contentModeCoverLimit` (2.5 s) caps the
-  picture on a slow network; a failed reload just fades it. A reload adds no history entry.
-  Leaving the screen, moving to another pane or closing ends a switch at once.
+  picture on a slow network; the place is still put back when that page finishes unless the user
+  scrolled meanwhile. Only the reload's own navigation ends a switch: a failed or replaced reload
+  fades the picture without restoring. A reload adds no history entry. Leaving the screen, moving
+  to another pane or closing ends a switch at once; a fold during a switch checks again once it
+  settles. A tab attached right after a fold never shortens the fold's settle time.
 - **`Tab.contentMode` is the mode of the page that shows**, set when a navigation commits (it was
   set when it started, so a failed or download navigation could flip Desktop Site's checkmark).
   A page from the back-forward cache keeps the mode it was loaded in: after a back or forward,

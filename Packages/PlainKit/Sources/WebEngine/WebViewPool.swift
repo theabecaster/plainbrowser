@@ -1817,6 +1817,7 @@ extension WebViewPool {
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == UserScripts.subframePressHandlerName {
                 if let time = message.body as? Double { slot?.lastSubframePress = time }
+                if message.body as? String == "typed" { slot?.contentMode.subframeTyped = true }
                 return
             }
             if message.name == SignInScripts.passkeyHandlerName {

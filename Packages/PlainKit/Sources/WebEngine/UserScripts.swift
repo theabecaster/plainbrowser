@@ -54,9 +54,16 @@ enum UserScripts {
 
     /// A press inside an iframe never reaches the main document, so the main document's last press
     /// could be an older one. Each iframe reports the time of its presses (one small message per
-    /// finger down in an iframe), and the menu ignores a main-frame press older than that.
+    /// finger down in an iframe), and the menu ignores a main-frame press older than that. Every
+    /// frame, the main one included, also says once that someone typed in it.
     static let subframePressSource = """
         (() => {
+          // The first time someone types in this document or frame (a field, an editable area, a
+          // shadow root, any origin), once: a fold never reloads typed text away
+          // (`WebViewPool+ContentMode`). `input` comes only from the user and editing commands.
+          addEventListener('input', () => {
+            try { webkit.messageHandlers.\(subframePressHandlerName).postMessage('typed'); } catch (e) {}
+          }, { passive: true, capture: true, once: true });
           if (window === window.top) return;
           let last = 0;
           addEventListener('pointerdown', () => {

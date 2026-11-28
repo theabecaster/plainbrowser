@@ -21,6 +21,9 @@ final class ContentModeCoordinator {
     var debounce = ContentModeDebounce()
     var panesChanging = false
     var pending: Task<Void, Never>?
+    /// When the pending check runs. A later, shorter request (a tab attached right after a fold)
+    /// never brings it forward, so a pane change always gets its full settle time.
+    var pendingDeadline: ContinuousClock.Instant?
 }
 
 /// A tab's mode bookkeeping, kept on its slot.
@@ -35,6 +38,9 @@ struct SlotContentMode {
     /// A back or forward ended: the page may be from the back-forward cache, in the mode it was
     /// loaded in, so the next check asks the page which mode it shows.
     var needsVerify = false
+    /// Someone typed in this document or one of its frames (each reports its first `input`
+    /// event): what the probe can't read, such as cross-origin frames.
+    var subframeTyped = false
     /// The switch in progress: its picture over the page and where to scroll back to.
     var running: ContentModeSwitch?
     /// Why the last check kept the page's mode (for tests and the log).
@@ -85,12 +91,20 @@ final class ContentModeSwitch {
     var cover: UIView?
     var deadline: Task<Void, Never>?
     let interval: OSSignpostIntervalState
+    /// The reload's navigation: only its finish or failure ends the switch.
+    var navigation: WKNavigation?
+    /// The check generation it started in: a pane change since means another check is due.
+    let generation: Int
+    /// Where the page was when the picture had to go before the reload finished (the limit): the
+    /// place is restored later only if the user hasn't scrolled since.
+    var offsetWhenUncovered: CGPoint?
 
-    init(target: ContentMode, restore: [String: Any], cover: UIView?, interval: OSSignpostIntervalState) {
+    init(target: ContentMode, restore: [String: Any], cover: UIView?, interval: OSSignpostIntervalState, generation: Int) {
         self.target = target
         self.restore = restore
         self.cover = cover
         self.interval = interval
+        self.generation = generation
     }
 }
 
@@ -105,6 +119,7 @@ extension WebViewPool {
         _ = modeChecks.debounce.paneDidChange()
         modeChecks.pending?.cancel()
         modeChecks.pending = nil
+        modeChecks.pendingDeadline = nil
     }
 
     /// The panes have their new sizes (a transition ended, a split or the side pane opened or
@@ -117,11 +132,16 @@ extension WebViewPool {
 
     func scheduleContentModeCheck(after delay: Duration) {
         guard FixedChoices.contentModeFollowsFold, !modeChecks.panesChanging else { return }
+        let now = ContinuousClock.now
+        var deadline = now + delay
+        if let pending = modeChecks.pendingDeadline, pending > deadline { deadline = pending }
         let generation = modeChecks.debounce.paneDidChange()
         modeChecks.pending?.cancel()
+        modeChecks.pendingDeadline = deadline
         modeChecks.pending = Task { [weak self] in
-            try? await Task.sleep(for: delay)
+            try? await Task.sleep(until: deadline, clock: .continuous)
             guard !Task.isCancelled, let self, modeChecks.debounce.isCurrent(generation) else { return }
+            modeChecks.pendingDeadline = nil
             for slot in attachedSlots() {
                 await checkContentMode(of: slot, generation: generation)
             }
@@ -176,7 +196,7 @@ extension WebViewPool {
         let zoom = max(webView.scrollView.zoomScale, 0.01)
         let top = Double(webView.obscuredContentInsets.top / zoom)
         let answer = await withWebKitTimeout(
-            fallback: nil as ContentModeProbe?, timeout: EngineChoices.contentModeProbeTimeout
+            fallback: nil as ContentModeProbe?, timeout: FixedChoices.contentModeProbeTimeout
         ) { done in
             webView.callAsyncJavaScript(
                 ContentModeScripts.probe, arguments: ["topInset": top], in: nil, in: UserScripts.world
@@ -197,7 +217,11 @@ extension WebViewPool {
             current = desktop ? .desktop : .mobile
             if current != tab.contentMode { tab.set(\.contentMode, current) }
         }
-        let report = answer.map { ContentModeRules.PageReport(hasTypedInput: $0.hasTypedInput, isEditing: $0.isEditing) }
+        let report = answer.map {
+            ContentModeRules.PageReport(
+                hasTypedInput: $0.hasTypedInput || slot.contentMode.subframeTyped, isEditing: $0.isEditing
+            )
+        }
         let decision = ContentModeRules.decide(
             current: current, wanted: wanted, state: pageState(of: slot, tab: tab), report: report
         )
@@ -209,7 +233,7 @@ extension WebViewPool {
         case .reload(let target):
             // A page at its top needs no restore: the reload starts there.
             let restore = answer.flatMap { $0.isScrolled ? $0.restoreArguments(top: top) : nil } ?? [:]
-            beginSwitch(slot, to: target, restore: restore)
+            beginSwitch(slot, to: target, restore: restore, generation: generation)
         }
     }
 
@@ -217,7 +241,7 @@ extension WebViewPool {
     /// per document) and corrects `Tab.contentMode`. One IPC, after a back or forward only.
     private func verifyContentMode(of slot: Slot, tab: Tab) async {
         let webView = slot.webView
-        let platform = await withWebKitTimeout(fallback: nil as String?, timeout: EngineChoices.contentModeProbeTimeout) { done in
+        let platform = await withWebKitTimeout(fallback: nil as String?, timeout: FixedChoices.contentModeProbeTimeout) { done in
             webView.callAsyncJavaScript("return navigator.platform", in: nil, in: UserScripts.world) { result in
                 done((try? result.get()) as? String)
             }
@@ -235,7 +259,7 @@ extension WebViewPool {
 
     // MARK: The switch
 
-    private func beginSwitch(_ slot: Slot, to target: ContentMode, restore: [String: Any]) {
+    private func beginSwitch(_ slot: Slot, to target: ContentMode, restore: [String: Any], generation: Int) {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(
             Signposts.contentModeSwitch, id: signposter.makeSignpostID(), "\(target.rawValue)"
@@ -250,16 +274,24 @@ extension WebViewPool {
             cover = picture
         }
         let change = ContentModeSwitch(
-            target: target, restore: restore, cover: cover, interval: interval
+            target: target, restore: restore, cover: cover, interval: interval, generation: generation
         )
         slot.contentMode.running = change
         change.deadline = Task { [weak self, weak slot] in
             try? await Task.sleep(for: FixedChoices.contentModeCoverLimit)
             guard !Task.isCancelled, let self, let slot, slot.contentMode.running === change else { return }
-            await finishSwitch(slot, restoring: true, outcome: "limit")
+            // A slow network: the picture goes, the switch waits for its page to finish.
+            change.offsetWhenUncovered = slot.webView.scrollView.contentOffset
+            removeCover(of: change, animated: slot.container != nil)
         }
         // The navigation delegate gives the reload the mode the pane wants now.
-        webView.reload()
+        change.navigation = webView.reload()
+        if change.navigation == nil {
+            Task { [weak self, weak slot] in
+                guard let self, let slot else { return }
+                await finishSwitch(slot, restoring: false, outcome: "noReload")
+            }
+        }
     }
 
     /// The reloaded page finished (or the limit passed): reset the zoom WebKit restored from the
@@ -268,7 +300,9 @@ extension WebViewPool {
         guard let change = slot.contentMode.running else { return }
         change.deadline?.cancel()
         let webView = slot.webView
-        if restoring, slot.container != nil {
+        // Past the limit the page is already uncovered: put it back only if nobody has scrolled.
+        let untouched = change.offsetWhenUncovered.map { $0 == webView.scrollView.contentOffset } ?? true
+        if restoring, untouched, slot.container != nil {
             let scrollView = webView.scrollView
             if scrollView.zoomScale != scrollView.minimumZoomScale {
                 scrollView.setZoomScale(scrollView.minimumZoomScale, animated: false)
@@ -285,6 +319,10 @@ extension WebViewPool {
         slot.contentMode.running = nil
         removeCover(of: change, animated: slot.container != nil)
         Signposts.signposter.endInterval(Signposts.contentModeSwitch, change.interval, "\(outcome)")
+        // A fold or another pane change came while it ran: the page may want the other mode again.
+        if !modeChecks.debounce.isCurrent(change.generation) || modeChecks.panesChanging {
+            scheduleContentModeCheck(after: FixedChoices.contentModeSettleDelay)
+        }
     }
 
     /// Ends a switch at once: the tab left the screen or its web view is going away.
@@ -320,34 +358,38 @@ extension WebViewPool {
 
     /// The page committed: it is in the mode its navigation was given.
     func contentModeDidCommit(_ slot: Slot) {
+        slot.contentMode.subframeTyped = false
         guard let tab = slot.tab, let mode = slot.contentMode.pending else { return }
         slot.contentMode.pending = nil
         tab.set(\.contentMode, mode)
     }
 
-    func contentModeDidFinish(_ slot: Slot) {
+    func contentModeDidFinish(_ slot: Slot, navigation: WKNavigation?) {
         let backForward = slot.contentMode.pendingIsBackForward
         slot.contentMode.pendingIsBackForward = false
-        if slot.contentMode.running != nil {
+        // Back or forward may have shown a cached page in its old mode: the next check, now or when
+        // the tab is shown again, asks the page.
+        if backForward { slot.contentMode.needsVerify = true }
+        if let change = slot.contentMode.running {
+            // Only the reload's own finish ends the switch; another navigation's is not its page.
+            guard change.navigation === navigation else { return }
             Task { [weak self, weak slot] in
                 guard let self, let slot else { return }
                 await finishSwitch(slot, restoring: true, outcome: "painted")
             }
             return
         }
-        // Back or forward may have shown a cached page in its old mode, and a page that kept its
-        // mode while loading can switch now.
+        // A page that kept its mode while loading can switch now.
         if slot.container != nil, backForward || slot.contentMode.checkWhenLoaded {
             slot.contentMode.checkWhenLoaded = false
-            if backForward { slot.contentMode.needsVerify = true }
             scheduleContentModeCheck(after: FixedChoices.contentModeAttachDelay)
         }
     }
 
-    /// A load failed. `silently`: it was cancelled or replaced (a redirect, a new navigation),
-    /// which ends nothing: the navigation after it finishes the switch, or the limit does.
-    func contentModeDidFail(_ slot: Slot, silently: Bool) {
-        guard !silently, slot.contentMode.running != nil else { return }
+    /// A load failed or was replaced by another navigation (a script, a new page): the switch ends
+    /// without restoring a place that belonged to the page it reloaded.
+    func contentModeDidFail(_ slot: Slot, navigation: WKNavigation?) {
+        guard let change = slot.contentMode.running, change.navigation === navigation else { return }
         Task { [weak self, weak slot] in
             guard let self, let slot else { return }
             await finishSwitch(slot, restoring: false, outcome: "failed")

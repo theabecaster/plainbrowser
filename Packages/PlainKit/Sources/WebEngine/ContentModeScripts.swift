@@ -8,14 +8,25 @@ nonisolated enum ContentModeScripts {
     /// Takes `topInset`: the height in CSS pixels the browser's bar covers at the top of the page.
     ///
     /// - Typed input: a text field, text area, select, checkbox or radio whose value differs from
-    ///   what the page served, in the document or a same-origin frame. Cross-origin frames can't
-    ///   be read: one that has the focus counts as editing.
+    ///   what the page served, in the document, its open shadow roots or a same-origin frame, or a
+    ///   page in `designMode`. Edits this can't compare (an editable area left after typing, a
+    ///   closed shadow root, a cross-origin frame) are caught by every frame reporting its first
+    ///   `input` event (`UserScripts.subframePressSource`); a cross-origin frame with the focus
+    ///   counts as editing.
     /// - The anchor: the element under the top edge of the visible page, by id when it or an
     ///   ancestor has one, else by its child-index path from `body`, with how far into it the
     ///   edge was; plus the scroll fraction as a fallback.
     static let probe = """
-        const changed = (doc) => {
-          for (const el of doc.querySelectorAll('input, textarea, select')) {
+        const textTypes = ['', 'text', 'search', 'email', 'url', 'tel', 'password', 'number', 'date',
+          'datetime-local', 'month', 'week', 'time'];
+        const roots = (doc) => {
+          const found = [doc];
+          for (const el of doc.querySelectorAll('*')) if (el.shadowRoot) found.push(...roots(el.shadowRoot));
+          return found;
+        };
+        const changedIn = (root) => {
+          if (root.designMode === 'on') return true;
+          for (const el of root.querySelectorAll('input, textarea, select')) {
             const type = (el.type || '').toLowerCase();
             if (el.tagName === 'SELECT') {
               // With no option marked selected, a single select shows its first one.
@@ -28,17 +39,18 @@ nonisolated enum ContentModeScripts {
               }
             } else if (type === 'checkbox' || type === 'radio') {
               if (el.checked !== el.defaultChecked) return true;
-            } else if (!['button', 'submit', 'reset', 'image', 'hidden', 'file'].includes(type)) {
+            } else if (el.tagName === 'TEXTAREA' || textTypes.includes(type)) {
               if (el.value !== el.defaultValue) return true;
             } else if (type === 'file' && el.files && el.files.length) {
               return true;
             }
           }
-          for (const frame of doc.querySelectorAll('iframe')) {
+          for (const frame of root.querySelectorAll('iframe')) {
             try { if (frame.contentDocument && changed(frame.contentDocument)) return true; } catch (e) {}
           }
           return false;
         };
+        const changed = (doc) => roots(doc).some(changedIn);
         const editingIn = (doc) => {
           const el = doc.activeElement;
           if (!el) return false;

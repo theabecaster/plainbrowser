@@ -172,8 +172,13 @@ public enum FixedChoices {
     /// long after it is attached: after the layout pass that sizes its pane.
     public static let contentModeAttachDelay: Duration = .milliseconds(150)
     /// The page's picture stays over it for at most this long while it reloads in the new mode,
-    /// then fades whatever has painted: a slow network must not leave a frozen page.
+    /// then fades: a slow network must not leave a frozen page. Its place is still put back when
+    /// the page finishes, unless the user has scrolled since.
     public static let contentModeCoverLimit: Duration = .milliseconds(2500)
+    /// The page's answer before a switch (does it hold typed text, a focused field?) may take
+    /// this long. Nothing waits on it (the fold has settled), and a page that misses it keeps its
+    /// mode, so it is longer than the engine's usual 400 ms reply limit.
+    public static let contentModeProbeTimeout: Duration = .seconds(1)
     /// The picture's crossfade to the reloaded page: short enough to read as the same page, long
     /// enough that the change of layout is not a jump cut.
     public static let contentModeCrossfade: Double = 0.2

@@ -162,7 +162,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         endRestore()
         if let tab, let pool, let slot = pool.slot(for: tab) {
             pool.scheduleSave(slot)
-            pool.contentModeDidFinish(slot)
+            pool.contentModeDidFinish(slot, navigation: navigation)
         }
         // The site's icon, once per site (`FaviconService`): a dictionary lookup otherwise.
         if let tab, let pool { pool.favicons.pageDidFinish(webView, tab: tab) }
@@ -172,7 +172,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         signposter.webView(webView, didFail: navigation, withError: error)
         endRestore()
         if let tab, let pool, let slot = pool.slot(for: tab) {
-            pool.contentModeDidFail(slot, silently: NavigationRules.isSilentError(error as NSError))
+            pool.contentModeDidFail(slot, navigation: navigation)
         }
         report(error as NSError)
     }
@@ -185,7 +185,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         restorePageStyle(webView)
         let error = error as NSError
         if let tab, let pool, let slot = pool.slot(for: tab) {
-            pool.contentModeDidFail(slot, silently: NavigationRules.isSilentError(error))
+            pool.contentModeDidFail(slot, navigation: navigation)
         }
         if NavigationRules.isCertificateError(error), let tab, let pool {
             tab.set(\.loadError, LoadError(error))

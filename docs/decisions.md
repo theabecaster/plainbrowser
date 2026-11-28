@@ -2813,3 +2813,33 @@ before/after: docs/research/gestures.md; the table: docs/ui-reference.md, "Gestu
   interaction off there; turning it on needs SPI), drops onto the strip and rail (the strip
   lane's), and Safari's sideways card swipe (Plain's cards swipe up, Arc's way, decided
   earlier).
+
+## Perf pass 3: the floor, complexity, and what is left (2026-11-28)
+
+Owner: "get creative and investigate and research ... keep premium look, feel and motion";
+"obsess over the algorithmic complexity"; "keep it legal by Apple's eyes". Measurements and their
+limits: docs/research/perf-pass-3.md.
+
+- **A perf reference instead of guessing at floors.** `-PlainPerfReference` (isolated test runs
+  only) launches a bare UIKit screen, one text field with the address field's traits and two
+  buttons, measured by the same signposts and metrics as Plain (`testReference*`, run with
+  `TEST_RUNNER_PLAIN_PERF_REFERENCE=1`; the gate prints them as report-only). A budget below the
+  reference on the same device can't be met by any app; above it, the gap is Plain's.
+- **Cookie banner rules are indexed by host and compiled on first use.** Every frame used to run
+  all 882 regular expressions, all compiled at the first page. Now an address looks up its host
+  suffixes and runs only those rules plus the 35 the index can't read: per frame O(U + labels +
+  k) instead of O(R), and flat as the rules grow (31 vs 373 µs at 882 rules, 35 vs 6,609 µs at
+  13,587). Equal to the full check on every rule's host and its look-alikes (a test, ~187k
+  checks). Memory at ten tabs: 68.6 vs 71.3 MB on the simulator.
+- **The warm web view is made again after a tab takes it**, `EngineChoices.rewarmDelay` after
+  the take, in the default run loop mode (not during a scroll or a tracked gesture; an animation
+  may still run, as for the gallery's spare), only while active and not after a memory warning.
+  So a New Tab that comes a second or more after the last one makes no `WKWebView` in its tap.
+- **The address field keeps its prediction traits** (inline predictions, Writing Tools, grammar
+  outside private tabs). Turning them off saved no time on a quiet simulator, and 11 MB at ten
+  tabs on one test Mac but nothing on the other; `testMemoryWithTenTabsLeanField` measures it on
+  the device, and the owner decides with that number.
+- **Not changed:** the start screen's shortcuts stay in the first frame (built after it: no gain);
+  the keystroke's rows are not moved ahead of the main queue's accessibility work (they would
+  reach the screen in the same commit: a metric game); fewer kept web views and smaller pictures
+  (little memory for a visible or felt loss).

@@ -81,7 +81,8 @@ struct ContentModeTests {
         let covered = harness.container.subviews.count > 1
         try await settle(tab, harness)
         #expect(covered)
-        #expect(harness.container.subviews.count == 1, "the picture is gone")
+        // The picture fades (`contentModeCrossfade`), then leaves the container.
+        try await waitUntil("the picture is gone", timeout: .seconds(2)) { harness.container.subviews.count == 1 }
         #expect(try await platform(harness, tab) != "MacIntel")
         #expect(!(try await isMarked(harness, tab)))
         let afterFold = try await topParagraph(harness, tab)

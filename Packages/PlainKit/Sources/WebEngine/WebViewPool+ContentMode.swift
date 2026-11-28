@@ -38,6 +38,11 @@ struct SlotContentMode {
     /// A back or forward ended: the page may be from the back-forward cache, in the mode it was
     /// loaded in, so the next check asks the page which mode it shows.
     var needsVerify = false
+    /// Where the reader was when the pane began to change size (`ContentModeScripts.place`): a
+    /// switch after it puts that place back, not the one the fold's reflow left.
+    var placeBeforeChange: ContentModeProbe?
+    /// A place is being read or was read for the change under way: one read per change.
+    var readsPlace = false
     /// Someone typed in this document or one of its frames (each reports its first `input`
     /// event): what the probe can't read, such as cross-origin frames.
     var subframeTyped = false
@@ -135,6 +140,11 @@ extension WebViewPool {
 
     /// A pane is about to change size (a fold, an unfold, a rotation): checks wait for it.
     public func panesWillChange() {
+        // Where each reader is, before the change reflows the pages (once per change: a fold's
+        // several passes, a drag, read the place it started from). One message per page on screen.
+        if FixedChoices.contentModeFollowsFold {
+            for slot in attachedSlots() where !slot.contentMode.readsPlace { readPlace(of: slot) }
+        }
         modeChecks.panesChanging = true
         _ = modeChecks.debounce.paneDidChange()
         modeChecks.pending?.cancel()
@@ -166,6 +176,27 @@ extension WebViewPool {
                 await checkContentMode(of: slot, generation: generation)
             }
         }
+    }
+
+    private func readPlace(of slot: Slot) {
+        let webView = slot.webView
+        guard let url = webView.url, url.scheme == "http" || url.scheme == "https", !webView.isLoading else { return }
+        slot.contentMode.readsPlace = true
+        let zoom = max(webView.scrollView.zoomScale, 0.01)
+        let top = Double(webView.obscuredContentInsets.top / zoom)
+        webView.callAsyncJavaScript(
+            ContentModeScripts.place, arguments: ["topInset": top], in: nil, in: UserScripts.world
+        ) { [weak slot] result in
+            guard let slot, slot.contentMode.readsPlace, slot.webView.url == url,
+                  let answer = (try? result.get()) as? [String: Any] else { return }
+            slot.contentMode.placeBeforeChange = ContentModeProbe(answer)
+        }
+    }
+
+    /// The change is over for this page (checked, switched or kept): the next one reads afresh.
+    private func forgetPlace(of slot: Slot) {
+        slot.contentMode.readsPlace = false
+        slot.contentMode.placeBeforeChange = nil
     }
 
     // MARK: The check
@@ -204,8 +235,10 @@ extension WebViewPool {
         let first = ContentModeRules.decide(current: tab.contentMode, wanted: wanted, state: state)
         switch first {
         case .none, .reload:
+            forgetPlace(of: slot)
             return
         case .keep(let reason):
+            forgetPlace(of: slot)
             kept(reason, slot: slot)
             return
         case .askPage:
@@ -247,12 +280,16 @@ extension WebViewPool {
         )
         switch decision {
         case .none, .askPage:
-            return
+            forgetPlace(of: slot)
         case .keep(let reason):
+            forgetPlace(of: slot)
             kept(reason, slot: slot)
         case .reload(let target):
-            // A page at its top needs no restore: the reload starts there.
-            let restore = answer.flatMap { $0.isScrolled ? $0.restoreArguments(top: top) : nil } ?? [:]
+            // The place the reader saw before the change, else the one now. A page at its top
+            // needs no restore: the reload starts there.
+            let place = slot.contentMode.placeBeforeChange ?? answer
+            forgetPlace(of: slot)
+            let restore = place.flatMap { $0.isScrolled ? $0.restoreArguments(top: top) : nil } ?? [:]
             beginSwitch(slot, to: target, restore: restore, generation: generation)
         }
     }
@@ -379,6 +416,8 @@ extension WebViewPool {
 
     /// The page committed: it is in the mode its navigation was given.
     func contentModeDidCommit(_ slot: Slot) {
+        // A new page (or the switch's own reload) has nothing to do with a place read before.
+        if slot.contentMode.running == nil { forgetPlace(of: slot) }
         // A new document starts with nothing typed. Back or forward may show a cached one that
         // was typed in: it says so again (`pageshow`), and until then the flag errs on keeping.
         if !slot.contentMode.pendingIsBackForward { slot.contentMode.subframeTyped = false }

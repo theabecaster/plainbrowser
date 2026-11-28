@@ -69,6 +69,22 @@ nonisolated enum ContentModeScripts {
           }
           return false;
         };
+        \(placeSource)
+        return {
+          typed: changed(document),
+          editing: editingIn(document),
+          desktop: navigator.platform === 'MacIntel',
+          anchor,
+          fraction: range > 0 ? scrollY / range : 0,
+          scrolled: scrollY > 0
+        };
+        """
+
+    /// Where the reader is: the element under the top edge of the visible page (not a sticky or
+    /// fixed header), by id when it or an ancestor has one, else by its child-index path from
+    /// `body`, with how far into it the edge was; plus the scroll fraction as a fallback. Defines
+    /// `anchor`, `scroller` and `range`; takes `topInset`.
+    static let placeSource = """
         const edge = Math.max(0, topInset) + 1;
         // The first element under the edge that scrolls with the page: a sticky or fixed header
         // (or anything inside one) stays put, so it can't tell where the reader was.
@@ -79,12 +95,20 @@ nonisolated enum ContentModeScripts {
           }
           return false;
         };
-        let el = document.elementsFromPoint(innerWidth / 2, Math.min(edge, innerHeight - 1))
-          .find((node) => !pinned(node)) || null;
+        // The edge can fall in the gap between two blocks (a margin is the body's): look a little
+        // lower for content, and remember how far above it the edge was.
+        const content = (node) => node !== document.body && node !== document.documentElement && !pinned(node);
+        let el = null;
+        for (const dy of [0, 8, 16, 32, 48, 64, 96]) {
+          const y = Math.min(edge + dy, innerHeight - 1);
+          el = document.elementsFromPoint(innerWidth / 2, y).find(content) || null;
+          if (el) break;
+        }
         let anchor = null;
         if (el && el !== document.body && el !== document.documentElement) {
           const rect = el.getBoundingClientRect();
-          const into = rect.height > 0 ? Math.min(1, Math.max(0, (edge - rect.top) / rect.height)) : 0;
+          // Negative when the edge is in the gap above the element.
+          const into = rect.height > 0 ? Math.min(1, (edge - rect.top) / rect.height) : 0;
           let id = null, path = [], node = el;
           while (node && node !== document.body) {
             if (node.id) { id = node.id; break; }
@@ -97,14 +121,13 @@ nonisolated enum ContentModeScripts {
         }
         const scroller = document.scrollingElement || document.documentElement;
         const range = scroller.scrollHeight - innerHeight;
-        return {
-          typed: changed(document),
-          editing: editingIn(document),
-          desktop: navigator.platform === 'MacIntel',
-          anchor,
-          fraction: range > 0 ? scrollY / range : 0,
-          scrolled: scrollY > 0
-        };
+        """
+
+    /// Where the reader is, read when a pane starts to change size (before the fold reflows the
+    /// page), so a switch afterwards puts back the place the reader saw, not the reflowed one.
+    static let place = """
+        \(placeSource)
+        return { anchor, fraction: range > 0 ? scrollY / range : 0, scrolled: scrollY > 0 };
         """
 
     /// Puts the page back where `probe` found it: the anchor's element under the top edge when

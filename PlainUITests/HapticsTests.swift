@@ -182,15 +182,13 @@ final class HapticsTests: XCTestCase {
         app.expectHaptics(["nothingThere"]) { field.typeText("\n") }
     }
 
-    /// A download plays a tap as it starts and a success with its toast.
-    func testDownloadTapsThenSucceedsWithItsToast() throws {
+    /// A small download is done before its start's tap is due: one success, with its toast.
+    func testSmallDownloadSucceedsOnceWithItsToast() throws {
         let app = try launch()
         go(app, to: "/files", heading: "Files")
-        // The slow file: it starts at once and lands half a second later, so the two outcomes
-        // are two moments (inside 60 ms the throttle would rightly keep only the first).
-        let link = app.webViews.links["Download notes slowly"]
+        let link = app.webViews.links["Download notes"]
         XCTAssertTrue(link.waitForExistence(timeout: 5))
-        app.expectHaptics(["tap", "success"]) { link.tap() }
+        app.expectHaptics(["success"]) { link.tap() }
         XCTAssertTrue(app.buttons["toastButton"].waitForExistence(timeout: 3), "the downloaded toast")
     }
 

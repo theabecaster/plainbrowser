@@ -61,7 +61,7 @@ two-hit pattern. A *bump* is a faint soft impact, at most one a second.
 
 ## Outcomes
 
-- [ ] `[run 1]` Download a file: a light tap as it starts, success with the "downloaded" toast. Download it while a sheet is open: the success waits and plays when the toast shows after the sheet closes.
+- [ ] `[run 1]` Download a large file: a light tap just after it starts (150 ms), success with the "downloaded" toast. A small file that is done at once: success only, with its toast. Download it while a sheet is open: the success waits and plays when the toast shows after the sheet closes.
 - [ ] `[run 1]` A download that fails: a warning with its toast.
 - [ ] `[later]` Turn on Airplane Mode, then Try Again on the error page: a warning.
 - [ ] `[later]` Summarize: success when done; a failure (offline): a warning.

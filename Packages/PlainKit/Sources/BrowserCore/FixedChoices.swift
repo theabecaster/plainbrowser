@@ -60,6 +60,10 @@ public enum FixedChoices {
     /// The same hysteresis for a threshold measured in progress (0 to 1), such as the swipe up
     /// into the switcher: about 10 pt of a bar's travel.
     public static let hapticProgressHysteresis: CGFloat = 0.03
+    /// A download's start plays its tap this long after it starts, and only while it still runs:
+    /// most small files are done sooner, and then their success is the one haptic. The start has
+    /// nothing on screen to keep in sync with, so the wait costs nothing.
+    public static let hapticDownloadStartDelay: Duration = .milliseconds(150)
 
     // MARK: Launch and return (docs/research/launch.md)
 

@@ -251,8 +251,13 @@ extension BrowserViewController {
 
     // MARK: DownloadPresenter
 
+    /// The start's tap waits a moment: a small file finishes first, and its success with the
+    /// toast is then the one haptic (a tap glued to a success would read as one muddled event).
     public func downloadDidStart(_ download: Download) {
-        Haptic.tap.play()
+        Task { [weak download] in
+            try? await Task.sleep(for: FixedChoices.hapticDownloadStartDelay)
+            if download?.state == .inProgress { Haptic.tap.play() }
+        }
     }
 
     /// A short toast instead of an alert: the file is in Downloads, one tap away. While the

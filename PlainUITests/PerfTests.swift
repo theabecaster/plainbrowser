@@ -220,8 +220,12 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.urlBarReady)
         )
+        // Its part before the keyboard starts rising, for the breakdown (not budgeted).
+        let start = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.urlBarKeyboardStart)
+        )
         var toB = true
-        measure(metrics: [metric], options: options) {
+        measure(metrics: [metric, start], options: options) {
             XCTAssertTrue(pill.waitForExistence(timeout: 3))
             pill.tap()
             // The keyboard rises; `urlBar.ready` ends inside this wait. No query meanwhile.
@@ -353,7 +357,11 @@ final class PerfTests: XCTestCase {
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.newTabReady)
         )
-        measure(metrics: [metric], options: options) {
+        // Its part before the keyboard starts rising, for the breakdown (not budgeted).
+        let start = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.newTabKeyboardStart)
+        )
+        measure(metrics: [metric, start], options: options) {
             openNewTab(app)
             // The keyboard rises; `tab.newReady` ends inside this wait. No query meanwhile.
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard up")], timeout: Self.keyboardWait)
@@ -489,6 +497,26 @@ final class PerfTests: XCTestCase {
         }
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
         Thread.sleep(forTimeInterval: 0.5)
+        // One summary first, unmeasured: the item can show while the model still can't write
+        // (a simulator borrows the Mac's model, which may be downloading, busy or refuse), and
+        // a run that never gets words is not a perf regression. It also loads the model, so
+        // every measured run starts from the same warm state.
+        more.tap()
+        let probe = app.buttons["menu.summarize"]
+        XCTAssertTrue(probe.waitForExistence(timeout: 3))
+        probe.tap()
+        let text = app.otherElements["summaryText"].firstMatch
+        let failure = app.descendants(matching: .any)["summaryFailure"].firstMatch
+        var gotWords = false
+        let deadline = Date().addingTimeInterval(60)
+        while Date() < deadline {
+            if text.exists { gotWords = true; break }
+            if failure.exists { break }
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "summary answers")], timeout: 0.5)
+        }
+        if app.buttons["Done"].exists { app.buttons["Done"].tap() }
+        Thread.sleep(forTimeInterval: 0.8)
+        guard gotWords else { throw XCTSkip("the on-device model wrote no summary here") }
         let metric = XCTOSSignpostMetric(
             subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.summaryFirstWords)
         )
@@ -541,7 +569,7 @@ final class PageReportedMetric: NSObject, XCTMetric, @unchecked Sendable {
     /// Shared by every copy XCTest makes.
     private final class Box: @unchecked Sendable {
         let lock = NSLock()
-        var values: [(at: Date, value: Double)] = []
+        var values: [(at: Date, ticks: UInt64, value: Double)] = []
     }
 
     private struct NoValue: Error {}
@@ -566,7 +594,7 @@ final class PageReportedMetric: NSObject, XCTMetric, @unchecked Sendable {
     /// has no measurement, which fails it).
     func record(_ value: Double?) {
         guard let value else { return }
-        box.lock.withLock { box.values.append((Date(), value)) }
+        box.lock.withLock { box.values.append((Date(), mach_absolute_time(), value)) }
     }
 
     func copy(with zone: NSZone? = nil) -> Any {
@@ -576,8 +604,15 @@ final class PageReportedMetric: NSObject, XCTMetric, @unchecked Sendable {
     func reportMeasurements(
         from startTime: XCTPerformanceMeasurementTimestamp, to endTime: XCTPerformanceMeasurementTimestamp
     ) throws -> [XCTPerformanceMeasurement] {
-        let span = startTime.date...endTime.date
-        guard let value = box.lock.withLock({ box.values.last { span.contains($0.at) }?.value }) else { throw NoValue() }
+        // The span in the runner's own clock (mach ticks) first; the dates as a second way, for
+        // a timestamp whose ticks read 0.
+        let ticks = startTime.absoluteTime...max(startTime.absoluteTime, endTime.absoluteTime)
+        let dates = startTime.date...max(startTime.date, endTime.date)
+        let value = box.lock.withLock {
+            (startTime.absoluteTime > 0 ? box.values.last { ticks.contains($0.ticks) } : nil)
+                ?? box.values.last { dates.contains($0.at) }
+        }?.value
+        guard let value else { throw NoValue() }
         return [XCTPerformanceMeasurement(identifier: identifier, displayName: displayName, doubleValue: value, unitSymbol: "ms")]
     }
 }

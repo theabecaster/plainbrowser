@@ -655,6 +655,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         let interval = Signposts.signposter.beginInterval(Signposts.urlBarFocus)
         OpenIntervals.begin(Signposts.urlBarReady, until: UIResponder.keyboardDidShowNotification)
+        OpenIntervals.begin(Signposts.urlBarKeyboardStart, until: UIResponder.keyboardWillShowNotification)
         // Go somewhere new (Arc): the field opens empty over the page, which stays behind the
         // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
         // Editing the page's address is its own door: the page's row, or the page sheet.
@@ -760,7 +761,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // The address bar's data is the app's: each query carries this window's private state, so
         // another window's tab never decides whether a private query leaves the device.
         let isPrivate = pill.isPrivateTint
-        suggestionTask = Task { [weak self, data] in
+        // Immediate: the body runs now, inside this keystroke's handling, up to the database
+        // read, so the read overlaps the rest of UIKit's work on the keystroke instead of waiting
+        // for it in the main queue first. Only the rows' arrival waits for the main thread.
+        suggestionTask = Task.immediate { [weak self, data] in
             var shown = false
             await data.suggestions(for: query, isPrivate: isPrivate) { suggestions in
                 guard let self, !Task.isCancelled else { return }

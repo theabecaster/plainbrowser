@@ -63,7 +63,9 @@ public final class WebViewPool {
     public let downloads: DownloadCoordinator
     public let thumbnails: ThumbnailService
 
-    private let baseConfiguration: WKWebViewConfiguration
+    /// Made when the first web view is (the warm-up after the first frame): WebKit's
+    /// preferences and the data store cost the launch's first frame several ms otherwise.
+    private lazy var baseConfiguration = Self.makeBaseConfiguration(dataStore: dataStore)
     private let tabStates: TabStateStore?
     private let permissionStore: any SitePermissionStore
     private let contentModes: any SiteContentModeStore
@@ -84,7 +86,10 @@ public final class WebViewPool {
     /// per attempt. Private tabs keep theirs apart and drop them with the private session.
     private var passkeyNoticeSites: Set<String> = []
     private var privatePasskeyNoticeSites: Set<String> = []
-    let dataStore: WKWebsiteDataStore
+    /// Personal's website data store, made on first use (the warm-up), not in the launch's first
+    /// frame.
+    lazy var dataStore: WKWebsiteDataStore = makeDataStore()
+    private let makeDataStore: () -> WKWebsiteDataStore
     /// Where Copy Link and Copy Image write. Tests use a private one: reading the general
     /// pasteboard needs the user's permission. An isolated run gets a private one too
     /// (`UIPasteboard.plain`).
@@ -156,7 +161,7 @@ public final class WebViewPool {
     ///   - profileStore: the website data store of each profile but Personal (whose store is
     ///     `dataStore`): its own, so profiles never share cookies or logins.
     public init(
-        dataStore: WKWebsiteDataStore = AppWebsiteData.store,
+        dataStore: @autoclosure @escaping () -> WKWebsiteDataStore = AppWebsiteData.store,
         profileStore: @escaping (ProfileID) -> WKWebsiteDataStore = { AppWebsiteData.store(forProfile: $0) },
         tabStates: TabStateStore? = nil,
         permissionStore: any SitePermissionStore = InMemorySitePermissionStore(),
@@ -173,8 +178,7 @@ public final class WebViewPool {
         self.translator = translator
         self.passkeysEnabled = passkeysEnabled
         signInScripts = passkeysEnabled ? nil : SignInScripts()
-        baseConfiguration = Self.makeBaseConfiguration(dataStore: dataStore)
-        self.dataStore = dataStore
+        makeDataStore = dataStore
         self.profileStore = profileStore
         self.tabStates = tabStates
         self.permissionStore = permissionStore

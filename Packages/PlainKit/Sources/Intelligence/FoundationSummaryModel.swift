@@ -15,7 +15,9 @@ import os
 public final class FoundationSummaryModel: SummaryModel {
     /// Summaries transform content the user chose (pages they asked to read), which is what
     /// Apple's permissive guardrails are for: news about a war or an illness is not refused.
-    private let model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
+    /// Made on first use, after launch: making it reads the device's eligibility (about 5 ms on
+    /// the main thread), which the browser's first frame must not wait for.
+    private lazy var model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
     private var prewarmed: (kind: SummaryKind, session: LanguageModelSession)?
     private let logger = Logger(subsystem: "dev.abrahamgonzalez.plainbrowser", category: "summary")
 

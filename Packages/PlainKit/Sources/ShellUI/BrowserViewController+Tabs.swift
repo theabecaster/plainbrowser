@@ -182,6 +182,7 @@ extension BrowserViewController {
     /// same kind already on screen is reused, so empty tabs never pile up (state rules, principle 7).
     func openNewTab(private isPrivate: Bool) {
         OpenIntervals.begin(Signposts.newTabReady, until: UIResponder.keyboardDidShowNotification)
+        OpenIntervals.begin(Signposts.newTabKeyboardStart, until: UIResponder.keyboardWillShowNotification)
         // From the gallery the page under it is not where the user was: no way back to it.
         let fromGallery = isShowingGallery
         if fromGallery { dismissGalleryFading() }

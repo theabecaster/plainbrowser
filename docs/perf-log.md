@@ -65,3 +65,5 @@ since, and it passes alone). Gallery tab reads ~1.5 s against ~0.6 s for the gal
 | 2026-11-27 14:11 | 5094071 | sim | 968.3 | 507.2 | n/a | 583.7 | 329.3 | 889.3 | 468.3 | 9.3 | 56 | 1489.9 | 531.3 | 72 | n/a | FAIL |
 | 2026-11-27 20:30 | eb5ddec | device | 235.5 | 212.3 | 0 | 574.3 | 313.3 | 218 | 533.4 | 11.7 | — | 555.3 | 536.3 | 72.7 | 0 | FAIL |
 | 2026-11-27 23:21 | 75d1fa6 | sim | 833.2 | 456.2 | n/a | 482.9 | 292.7 | 643.1 | 507.3 | 9.1 | 65 | 498.9 | 484.4 | 67.2 | n/a | pass (new-tab lane, before the search-sheet rebase; dev before it on the same host: new tab 549.8, its run FAIL on tests) |
+| 2026-11-27 21:44 | eea68b6 | sim | 732.7 | 398.8 | n/a | 482.9 | 292.3 | 479.9 | 517.2 | 7.9 | 73 | 487.9 | 500 | 71.3 | n/a | FAIL (perf pass 2 baseline on the test Mac, load 11–69; link paint +20% is noise) |
+| 2026-11-27 23:27 | bed7c69 | sim | 639.4 | 316 | n/a | 483 | 294.6 | 386.6 | 484.2 | 3.8 | 55 | 518.1 | 465.7 | 58.5 | n/a | pass (perf pass 2, same test Mac, load 4–63) |

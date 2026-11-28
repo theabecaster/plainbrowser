@@ -15,7 +15,16 @@ final class EngineUIState {
     var observation: TabObservation?
     let reader = ReaderPresenter()
     var readerTask: Task<Void, Never>?
-    let pageState = PageStateView()
+    /// What covers a page that can't show. Made on first use (`updatePageState`), never for the
+    /// launch's first frame: most launches show no page state at all.
+    var pageState: PageStateView {
+        if let madePageState { return madePageState }
+        let made = PageStateView()
+        madePageState = made
+        return made
+    }
+    /// The page state if it was made, for keeping it in front without making it.
+    private(set) var madePageState: PageStateView?
     /// Tabs whose next visit the address bar asked for (`VisitKind.typed`).
     var typedVisitTabs: Set<UUID> = []
     /// Tabs whose page kept crashing after the engine's automatic reloads.
@@ -191,7 +200,7 @@ extension BrowserViewController {
         session.pool.attach(tab, to: webContainer)
         record(tab.id, inSlot: session.tabs.focusedPane)
         keepLaunchCoverOnTop()
-        webContainer.bringSubviewToFront(engineUI.pageState)
+        if let state = engineUI.madePageState { webContainer.bringSubviewToFront(state) }
         if let scrollView = session.pool.scrollView(for: tab) {
             scrollView.delegate = self
             scrollView.alwaysBounceVertical = true
@@ -352,6 +361,11 @@ extension BrowserViewController {
 
     /// One sentence and one button over the page when it can't show (docs/ui-reference.md).
     func updatePageState() {
+        // Nothing to say and nothing shown yet: the view is not made for a page that loads fine.
+        let needed = currentTab.map {
+            engineUI.crashedTabs.contains($0.id) || $0.isAwaitingResubmit || ($0.loadError != nil && !$0.isLoading)
+        } ?? false
+        guard needed || engineUI.madePageState != nil else { return updateStartScreen() }
         let state = engineUI.pageState
         if state.superview !== webContainer {
             state.frame = webContainer.bounds

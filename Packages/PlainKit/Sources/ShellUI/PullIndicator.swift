@@ -102,7 +102,9 @@ final class PullIndicator: UIView {
     func follow(pull distance: CGFloat, threshold: CGFloat) {
         guard !isRefreshing else { return }
         let fraction = min(max(distance / threshold, 0), 1)
-        alpha = fraction
+        // Fully there by 40% of the pull, so the growing arrow reads from early on (on paper and
+        // on the dark disc alike) instead of fading in all the way to the threshold.
+        alpha = min(1, fraction / 0.4)
         // Halfway down the pulled gap, never above its resting spot. The disc itself never turns.
         let drop = max(0, distance / 2 - Self.size / 2)
         transform = CGAffineTransform(translationX: 0, y: drop)
@@ -185,11 +187,12 @@ final class PullIndicator: UIView {
         guard !isRefreshing, armed != isArmed else { return }
         isArmed = armed
         let fill = isPrivate ? PullTint.privateFill : Palette.accent
-        // The arrow turns white at once, so it never sits half-cycled on the filling disc.
-        if armed { arrow.backgroundColor = .white }
-        Motion.animate(Motion.quick, changes: {
-            self.backgroundColor = armed ? fill : Palette.surface
-        })
+        // The disc fills and the arrow turns white in the same frame, with the threshold haptic:
+        // a crossfade left a frame of white on white, or a half-cycled arrow on the fill.
+        UIView.performWithoutAnimation {
+            if armed { arrow.backgroundColor = .white }
+            backgroundColor = armed ? fill : Palette.surface
+        }
         if !armed { lastIndex = -1 }
         accessibilityValue = armed ? "armed" : nil
     }

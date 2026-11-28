@@ -447,7 +447,7 @@ final class PageSheetController: UIViewController {
             "Hide Reader": String(localized: "Reader"),
             "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
             "Archived Tabs": String(localized: "Archive"), "Add to Favorites": String(localized: "Favorite"),
-            "Remove from Favorites": String(localized: "Favorite"), "Edit Favorites": String(localized: "Favorites"),
+            "Remove from Favorites": String(localized: "Favorite"),
             "Remove from Reading List": String(localized: "Saved"), "Summarize Page": String(localized: "Summarize"),
         ]
         return captions[title] ?? title

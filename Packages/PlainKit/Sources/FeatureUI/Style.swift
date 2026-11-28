@@ -55,6 +55,12 @@ extension View {
         modifier(SheetHeaderModifier(title: title, leading: leading(), trailing: SheetDone(onDone: onDone)))
     }
 
+    /// The pinned header with both sides given: a sheet whose trailing button changes with its
+    /// state (Favorites while editing: Done ends the editing, not the sheet).
+    func sheetTitle(_ title: String, @ViewBuilder leading: () -> some View, @ViewBuilder trailing: () -> some View) -> some View {
+        modifier(SheetHeaderModifier(title: title, leading: leading(), trailing: trailing()))
+    }
+
     /// The same, with nothing on the leading side.
     func sheetTitle(_ title: String, onDone: (() -> Void)?) -> some View {
         sheetTitle(title, onDone: onDone) { EmptyView() }

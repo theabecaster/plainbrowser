@@ -66,7 +66,7 @@ final class GestureCaptureTests: XCTestCase {
         pause(0.6)
         shot("gestures-tabsmenu")
         app.buttons["menu.closeAllTabs"].tap()
-        XCTAssertTrue(app.buttons["confirm.closeAllTabs"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["confirm.closeAllTabs"].firstMatch.waitForExistence(timeout: 3))
         pause(0.6)
         shot("gestures-closeall")
     }

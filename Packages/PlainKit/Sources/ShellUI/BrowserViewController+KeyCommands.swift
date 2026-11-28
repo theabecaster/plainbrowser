@@ -38,8 +38,10 @@ enum ShortcutCommands {
             command.discoverabilityTitle = shortcut.title
             if index > 0 || !shortcut.isListed { command.attributes = .hidden }
             // A page's own keys (a web app's ⌘L or ⌘F) never shadow the browser's, as in Safari;
-            // Escape stays the page's (fullscreen video, a web app's dialog) unless the field is open.
-            command.wantsPriorityOverSystemBehavior = shortcut != .dismiss
+            // Escape included: the field would swallow it otherwise. Validation still hands every
+            // key the browser has no use for right now back to the page (fullscreen video, a web
+            // app's dialog), as `canPerformAction` says no.
+            command.wantsPriorityOverSystemBehavior = true
             return command
         }
     }

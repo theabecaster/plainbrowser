@@ -155,7 +155,7 @@ final class GestureTests: XCTestCase {
         XCTAssertTrue(closeAll.waitForExistence(timeout: 3), "Close All is in the tabs menu")
         XCTAssertEqual(closeAll.label, "Close All 2 Tabs")
         closeAll.tap()
-        let confirm = app.buttons["confirm.closeAllTabs"]
+        let confirm = app.buttons["confirm.closeAllTabs"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 3), "it asks first")
         confirm.tap()
         // Nothing left: the search field, and Reopen brings both back.

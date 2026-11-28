@@ -79,8 +79,9 @@ Status before (dev at eea68b6) and after this lane.
   the home indicator, Control Center and the notification shade are untouched; the bottom-edge tap
   takes touches only while the bar is hidden, as before.
 - **Keys and the page.** Browser keys win over a page's own ⌘L or ⌘F, as in Safari
-  (`wantsPriorityOverSystemBehavior`), except Escape, which stays the page's unless the field is
-  open. Space and the arrows are never claimed: WebKit scrolls with them.
+  (`wantsPriorityOverSystemBehavior`). Escape acts only while the field or the overview is open;
+  anywhere else its validation says no and the key goes on to the page. Space and the arrows are
+  never claimed: WebKit scrolls with them.
 - **Undo and typing.** The browser's undo is the responder chain's last resort: in the field or a
   page's form, ⌘Z and a shake undo typing, as everywhere in iOS.
 

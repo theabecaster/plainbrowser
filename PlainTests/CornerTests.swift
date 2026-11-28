@@ -46,5 +46,33 @@ final class CornerTests: XCTestCase {
         XCTAssertEqual(panel.frame.minY, expected.inset, accuracy: 0.5)
         // The page side stays at the minimum.
         XCTAssertEqual(panel.effectiveRadius(corner: .topLeft), min(VerticalBarBacking.radius, panel.bounds.width / 2), accuracy: 0.5)
+        // A screen with round corners (every supported iPhone but the SE, 375x667) reports them.
+        if root.bounds.size != CGSize(width: 375, height: 667) {
+            XCTAssertGreaterThan(display, 30, "the display's corners were not resolved")
+        }
+
+        // A column on the leading side (the bar on the other edge): the outer corners are on the left.
+        backing.place(column: CGRect(x: 0, y: 0, width: 84, height: root.bounds.height), in: root.bounds)
+        backing.layoutIfNeeded()
+        let left = VerticalBarBacking.end(
+            display: backing.effectiveRadius(corner: .bottomLeft), side: VerticalBarBacking.inset, cap: panel.bounds.width / 2
+        )
+        XCTAssertEqual(panel.frame.minX, VerticalBarBacking.inset, accuracy: 0.5)
+        XCTAssertEqual(root.bounds.height - panel.frame.maxY, left.inset, accuracy: 0.5)
+        XCTAssertEqual(panel.effectiveRadius(corner: .bottomLeft), left.radius, accuracy: 0.5)
+    }
+
+    /// Concentric against a container with known corners, as the split panes and the panel use
+    /// it: each corner is the container's less the distance, with the minimum away from it.
+    func testConcentricInsideAConfiguredContainer() {
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+        container.cornerConfiguration = .corners(radius: .fixed(40))
+        let child = UIView(frame: CGRect(x: 0, y: 100, width: 200, height: 500))
+        child.cornerConfiguration = .corners(radius: .containerConcentric(minimum: 10))
+        container.addSubview(child)
+        container.layoutIfNeeded()
+        XCTAssertEqual(child.effectiveRadius(corner: .bottomLeft), 40, accuracy: 0.5, "flush with the container's corner")
+        XCTAssertEqual(child.effectiveRadius(corner: .topLeft), 10, accuracy: 0.5, "away from it: the minimum")
+        XCTAssertEqual(child.effectiveRadius(corner: .bottomRight), 10, accuracy: 0.5)
     }
 }

@@ -36,10 +36,14 @@ final class CornerCaptureTests: XCTestCase {
         pause(1.2)
         step += 1
         let base = String(format: "%02d-%@", step, name)
-        FileManager.default.createFile(atPath: directory.appendingPathComponent("\(base).ready").path, contents: nil)
+        XCTAssertTrue(
+            FileManager.default.createFile(atPath: directory.appendingPathComponent("\(base).ready").path, contents: nil),
+            "can't write the handshake for \(base)"
+        )
         let done = directory.appendingPathComponent("\(base).done").path
         let deadline = Date().addingTimeInterval(30)
         while !FileManager.default.fileExists(atPath: done), Date() < deadline { pause(0.2) }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: done), "nothing took \(base)")
     }
 
     private func launch(_ arguments: [String] = []) -> XCUIApplication {

@@ -29,14 +29,16 @@
 # <out>/summary.txt.
 #
 # Simulators: <prefix>-<row>, prefix PLAIN_SIM_PREFIX (default plain-matrix; must start with
-# plain-matrix). Each is created for its row, booted alone, shut down after it and deleted; the
-# exit trap deletes any this run made. No other simulator is touched.
+# plain-matrix). Each is cloned from the Mac's template (scripts/lib/sim.zsh) for its row,
+# booted alone, shut down after it and deleted; the exit trap deletes any this run made. No other
+# simulator is touched (the templates stay; nothing boots them).
 # The Duo's fold comes from scripts/duo-fold.sh (Device Hub). When Device Hub can't be driven
 # (Mac locked, no Accessibility access), the inner rows fall back to the resizable window
 # (devicectl appResize at the inner screen's size) and summary.txt says so.
 set -euo pipefail
 setopt extended_glob
 source "${0:A:h}/lib/common.zsh"
+source "${0:A:h}/lib/sim.zsh"
 
 PREFIX=${PLAIN_SIM_PREFIX:-plain-matrix}
 [[ $PREFIX == plain-matrix* ]] || { print -u2 "PLAIN_SIM_PREFIX must start with plain-matrix"; exit 1; }
@@ -247,10 +249,6 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-sim_udid() {
-  xcrun simctl list devices -j | jq -r --arg n "$1" '[.devices[][] | select(.name == $n)][0].udid // empty'
-}
-
 # Keeps the app in the simulator's resizable window at the given size while the tests run,
 # starting a new appResize session each time the tests relaunch the app.
 keep_resized() {
@@ -287,10 +285,11 @@ for row in $rows; do
   done
   runtime=$RUNTIME
   [[ $type == iPhone-Duo ]] && runtime=$DUO_RUNTIME
-  udid=$(xcrun simctl create $name com.apple.CoreSimulator.SimDeviceType.$type $runtime)
+  # A clone of the Mac's template for this device (scripts/lib/sim.zsh): its first-boot setup is
+  # already done.
+  udid=$(sim_new $name com.apple.CoreSimulator.SimDeviceType.$type $runtime)
   created+=$udid
-  xcrun simctl boot $udid
-  timeout 600 xcrun simctl bootstatus $udid >/dev/null
+  sim_boot $udid
   xcrun simctl ui $udid appearance $appearance
   xcrun simctl ui $udid content_size $size
   # A new simulator's keyboard first shows its slide-to-type introduction over the keys.

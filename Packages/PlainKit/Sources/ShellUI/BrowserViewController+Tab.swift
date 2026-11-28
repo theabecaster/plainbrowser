@@ -516,7 +516,9 @@ extension BrowserViewController {
 
     /// Desktop Site, blocking and dark pages for this site, all remembered per site. Desktop Site
     /// and blocking apply by reloading; dark pages applies at once. `desktop`, `blocking` and
-    /// `darkPages` are the state rules' answer for the page (§4).
+    /// `darkPages` are the state rules' answer for the page (§4). Each item is named for what it
+    /// controls and checked while it is on (clarity audit 20): under a menu titled Site Settings,
+    /// "Turn Off … on This Site" said the same thing three ways and Desktop Site's state not at all.
     func siteMenuItems(
         for tab: Tab, url: URL, desktop showsDesktop: Bool, blocking showsBlocking: Bool, darkPages: DarkPagesItem
     ) -> [UIMenuElement] {
@@ -537,8 +539,7 @@ extension BrowserViewController {
 
         let blocking = session.isBlockingEnabled(for: url)
         let toggle = UIAction(
-            title: blocking ? "Turn Off Blocking on This Site" : "Turn On Blocking on This Site",
-            image: UIImage(systemName: blocking ? "shield.slash" : "checkmark.shield")
+            title: "Content Blocking", image: UIImage(systemName: "shield.lefthalf.filled"), state: blocking ? .on : .off
         ) { [weak self, weak tab] _ in
             self?.session.blocker.setBlockingEnabled(!blocking, forHost: host)
             tab?.reload()
@@ -547,15 +548,15 @@ extension BrowserViewController {
         return [desktop, toggle] + cookies + darkPagesMenuItems(for: tab, item: darkPages)
     }
 
-    /// Turn Off / Turn On Cookie Banner Blocking for the site (state rules §4, `cookieBanners`).
+    /// Cookie Banner Blocking for the site, checked while on (state rules §4, `cookieBanners`).
     /// Applies by reloading, like the blocking switch; a private tab keeps it for its session.
     private func cookieBannerMenuItems(for tab: Tab, url: URL) -> [UIMenuElement] {
         let item = currentRules().cookieBanners
         guard item != .hidden else { return [] }
         let isOff = item == .turnOn
         let action = UIAction(
-            title: isOff ? "Turn On Cookie Banner Blocking" : "Turn Off Cookie Banner Blocking",
-            image: UIImage(systemName: isOff ? "checkmark.bubble" : "bubble.left.and.exclamationmark.bubble.right")
+            title: "Cookie Banner Blocking", image: UIImage(systemName: "bubble.left.and.exclamationmark.bubble.right"),
+            state: isOff ? .off : .on
         ) { [weak self, weak tab] _ in
             guard let self, let tab else { return }
             self.session.cookieBanners.setOff(!isOff, for: url, isPrivate: tab.isPrivate)
@@ -689,6 +690,8 @@ struct TabSnapshot: Equatable {
     var isAwaitingResubmit: Bool
     /// The page is in a language the user doesn't read (Translate Page applies).
     var canTranslate: Bool
+    /// Translated text is on screen (the pill's "Translated —").
+    var isTranslated: Bool
 
     init(_ tab: Tab) {
         url = tab.url
@@ -700,6 +703,7 @@ struct TabSnapshot: Equatable {
         loadError = tab.loadError
         isAwaitingResubmit = tab.isAwaitingResubmit
         canTranslate = tab.translationTarget != nil && tab.translation == .original
+        isTranslated = tab.translation == .translated
     }
 
     /// The load failed and nothing newer is loading.

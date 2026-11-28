@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 
 /// The app icon colorways (Brand/tools/gen_icon.py, `COLORWAYS`). Dawn is the app icon; the others
@@ -40,8 +41,34 @@ public nonisolated enum AppIconChoice: String, CaseIterable, Sendable, Identifia
     }
 }
 
+/// Whether this app can change its icon, so the intro's icon step and Settings > App Icon show.
+///
+/// Decided from the system's capability, never the device model: `supportsAlternateIcons`, and
+/// `ProcessInfo.isiOSAppOnMac` too, since an iPhone app on a Mac has a Dock icon the app cannot
+/// change (macOS has no alternate icons; docs/research/notes.md, "Alternate app icons"). Where it
+/// is false the picker would be a control that can do nothing (docs/state-rules.md), so neither
+/// surface shows it.
+public nonisolated enum AppIconSupport {
+    /// The Debug override, `-PlainAlternateIcons off` (or `on`): honored only in Debug builds and
+    /// isolated runs (`TestIsolation`), so a UI test can see the unsupported case on a simulator.
+    public static let overrideArgument = "-PlainAlternateIcons"
+
+    public static func isSupported(systemSupports: Bool, isiOSAppOnMac: Bool, arguments: [String]) -> Bool {
+        #if DEBUG
+        if TestIsolation.mode(for: arguments) != .off, let index = arguments.firstIndex(of: overrideArgument),
+           index + 1 < arguments.count {
+            switch arguments[index + 1] {
+            case "off": return false
+            case "on": return true
+            default: break
+            }
+        }
+        #endif
+        return systemSupports && !isiOSAppOnMac
+    }
+}
+
 #if os(iOS)
-import BrowserCore
 import PerfSignposts
 import UIKit
 
@@ -57,6 +84,16 @@ public enum AppIcons {
         return AppIconChoice(alternateIconName: UIApplication.shared.alternateIconName)
     }
 
+    /// Whether the icon can change here (`AppIconSupport`): the intro's icon step and Settings >
+    /// App Icon show only then.
+    public static var isSupported: Bool {
+        AppIconSupport.isSupported(
+            systemSupports: UIApplication.shared.supportsAlternateIcons,
+            isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac,
+            arguments: ProcessInfo.processInfo.arguments
+        )
+    }
+
     /// The icon an isolated run has "set", starting from the default.
     private static var isolatedChoice = AppIconChoice.dawn
 
@@ -64,11 +101,11 @@ public enum AppIcons {
     @discardableResult
     public static func set(_ choice: AppIconChoice) async -> Bool {
         guard choice != current else { return true }
+        guard isSupported else { return false }
         if TestIsolation.isActive {
             isolatedChoice = choice
             return true
         }
-        guard UIApplication.shared.supportsAlternateIcons else { return false }
         let interval = Signposts.signposter.beginInterval(Signposts.appIconChange)
         defer { Signposts.signposter.endInterval(Signposts.appIconChange, interval) }
         do {

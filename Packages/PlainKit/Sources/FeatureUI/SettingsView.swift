@@ -1,8 +1,10 @@
 #if os(iOS)
 import BrowserCore
+import DesignSystem
 import SwiftUI
 
-/// The Settings sheet: seven rows, each showing its value, and one Done button.
+/// The Settings sheet: seven rows (six where the icon can't change), each showing its value, and
+/// one Done button.
 ///
 /// Present it in a sheet. `onDone` runs when Done is tapped; without it the view dismisses itself.
 public struct SettingsView: View {
@@ -11,9 +13,14 @@ public struct SettingsView: View {
     @State private var confirmingClear = false
     /// The Home Screen icon. Read from the system, not stored: the system owns it.
     @State private var appIcon = AppIcons.current
+    /// The App Icon row shows only where the icon can change (`AppIconSupport`).
+    private let showsAppIcon: Bool
 
-    public init(model: SettingsModel, onDone: (() -> Void)? = nil) {
+    /// - Parameter showsAppIcon: whether the icon can change here; the system's answer unless a
+    ///   caller (a preview, a test) says otherwise.
+    public init(model: SettingsModel, showsAppIcon: Bool = AppIcons.isSupported, onDone: (() -> Void)? = nil) {
         self.model = model
+        self.showsAppIcon = showsAppIcon
         self.onDone = onDone
     }
 
@@ -29,7 +36,7 @@ public struct SettingsView: View {
                         }
                         .disabled(!model.isLoaded)
                     } footer: {
-                        Text(Wording.searchEngineFooter).foregroundStyle(.secondary)
+                        SettingsFooter(Wording.searchEngineFooter)
                     }
 
                     Section {
@@ -42,8 +49,7 @@ public struct SettingsView: View {
                         .disabled(!model.isLoaded || !model.isTabLayoutAvailable)
                         .accessibilityIdentifier("settings.tabLayout")
                     } footer: {
-                        Text(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
-                            .foregroundStyle(.secondary)
+                        SettingsFooter(model.isTabLayoutAvailable ? Wording.tabLayoutFooter : Wording.tabLayoutUnavailableFooter)
                     }
 
                     Section {
@@ -55,7 +61,7 @@ public struct SettingsView: View {
                         .pickerStyle(.menu)
                         .disabled(!model.isLoaded)
                     } footer: {
-                        Text(model.settings.archiveAfter.footer).foregroundStyle(.secondary)
+                        SettingsFooter(model.settings.archiveAfter.footer)
                     }
 
                     Section {
@@ -68,16 +74,18 @@ public struct SettingsView: View {
                         .disabled(!model.isLoaded)
                         .accessibilityIdentifier("settings.appearance")
                     } footer: {
-                        Text(model.settings.appearance.footer).foregroundStyle(.secondary)
+                        SettingsFooter(model.settings.appearance.footer)
                     }
 
-                    Section {
-                        NavigationLink {
-                            AppIconView(current: $appIcon)
-                        } label: {
-                            ValueLabel("App Icon", value: appIcon.title)
+                    if showsAppIcon {
+                        Section {
+                            NavigationLink {
+                                AppIconView(current: $appIcon)
+                            } label: {
+                                ValueLabel("App Icon", value: appIcon.title)
+                            }
+                            .accessibilityIdentifier("settingsAppIcon")
                         }
-                        .accessibilityIdentifier("settingsAppIcon")
                     }
 
                     Section {
@@ -100,7 +108,7 @@ public struct SettingsView: View {
                             Text(Wording.clearConfirmMessage)
                         }
                     } footer: {
-                        Text(Wording.clearFooter).foregroundStyle(.secondary)
+                        SettingsFooter(Wording.clearFooter)
                     }
 
                     Section {
@@ -192,6 +200,38 @@ struct SearchEngineView: View {
         }
         .paperSheet()
         .sheetTitle("Search Engine")
+    }
+}
+
+/// A section footer that breaks its lines as plain text does. SwiftUI's `Text` keeps a last
+/// word from standing alone by pushing the one before it down too (`NSLineBreakStrategy
+/// .pushOut`), so "Tabs you haven't opened in a week move to / the archive." broke a word early,
+/// under the picker's value (clarity audit 23). A label with no line-break strategy fills each
+/// line. Low-frequency screen: one label per footer.
+struct SettingsFooter: UIViewRepresentable {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    func makeUIView(context: Context) -> UILabel {
+        let label = UILabel()
+        label.numberOfLines = 0
+        label.lineBreakStrategy = []
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = Palette.inkSecondary
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return label
+    }
+
+    func updateUIView(_ label: UILabel, context: Context) {
+        if label.text != text { label.text = text }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView label: UILabel, context: Context) -> CGSize? {
+        let width = proposal.width ?? label.intrinsicContentSize.width
+        let height = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        return CGSize(width: width, height: ceil(height))
     }
 }
 

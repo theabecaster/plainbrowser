@@ -27,6 +27,7 @@ public struct ArchiveView: View {
                             ArchiveRowView(row: row, period: section.period) { model.restore(row) }
                                 .swipeActions {
                                     Button("Delete", role: .destructive) { model.delete(row) }
+                                        .tint(Style.destructive)
                                 }
                                 .contextMenu {
                                     Button("Open", systemImage: "arrow.up.forward.app") { model.restore(row) }
@@ -91,24 +92,8 @@ struct ArchiveRowView: View {
 
     var body: some View {
         Button(action: open) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.title)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    if !row.address.isEmpty {
-                        Text(row.address)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-                Text(archived)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .contentShape(.rect)
+            TimedRowLabel(title: row.title, detail: row.address, time: archived)
+                .contentShape(.rect)
         }
         .tint(.primary)
         .accessibilityIdentifier("archiveRow")

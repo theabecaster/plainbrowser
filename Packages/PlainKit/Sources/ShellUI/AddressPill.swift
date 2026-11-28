@@ -97,6 +97,9 @@ final class AddressPill: UIView {
     /// What the resting pill says, and its short form for a pill too narrow for it.
     private var restingText: NSAttributedString?
     private var compactText: NSAttributedString?
+    /// The reader is open over the page, or the page is translated (`setMode`).
+    private var isReader = false
+    private var isTranslated = false
     /// The glass has the private tint (`setPrivate`).
     var isPrivateTint = false
     /// The neighbour tab's host, sliding in during a bar swipe.
@@ -244,39 +247,60 @@ final class AddressPill: UIView {
 
     /// Shows `url`'s host while resting, or the placeholder when there is no page. A page that is
     /// not secure (http, mixed content, a certificate the user chose to pass) says so before the
-    /// host, as Safari does.
+    /// host, as Safari does; so does a page in a mode (`setMode`), in the same quiet word.
     func display(url: URL?, notSecure: Bool = false) {
         self.url = url
         self.notSecure = notSecure
         let text = Self.hostText(
-            for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: "Search or enter address",
+            for: url, query: url.flatMap(searchQuery), lead: lead, placeholder: "Search or enter address",
             isPrivate: isPrivateTint
         )
         restingText = text
-        compactText = notSecure
+        compactText = lead == .notSecure
             ? Self.compactNotSecureText(for: url, font: hostLabel.font).map { isPrivateTint ? Self.privateMarked($0, onPage: true) : $0 }
             : nil
         hostLabel.attributedText = text
         fitHostText()
-        // Without the private mark's attachment character: the label already says Private.
-        accessibilityValue = url?.absoluteString ?? text.string.replacingOccurrences(of: "\u{FFFC} ", with: "")
-        onDisplay(url, notSecure)
+        // VoiceOver hears a mode as the pill shows it ("Reader, https://…"), without the private
+        // mark's attachment character: the label already says Private.
+        let mode = lead == .reader || lead == .translated ? lead?.word : nil
+        let shown = text.string.replacingOccurrences(of: "\u{FFFC} ", with: "")
+        accessibilityValue = [mode, url?.absoluteString ?? shown].compactMap { $0 }.joined(separator: ", ")
+        onDisplay(url, lead, isPrivateTint)
     }
 
-    /// The page's address changed (the top band's host follows it).
-    var onDisplay: (URL?, Bool) -> Void = { _, _ in }
+    /// The reader is open, or the page is translated: the pill names the mode in place of the
+    /// security word ("Reader — host"), so the page's mode shows where its address does. Called
+    /// with each chrome update; only a change draws again.
+    func setMode(reader: Bool, translated: Bool) {
+        guard reader != isReader || translated != isTranslated else { return }
+        isReader = reader
+        isTranslated = translated
+        display(url: url, notSecure: notSecure)
+    }
+
+    /// The one lead word for the page on screen (`PillLead`: Private, then Reader or Translated,
+    /// then Not Secure). Private draws as its own mark and word ahead of it (`hostText`'s
+    /// `isPrivate`), so a private page still says Reader or Not Secure after "Private".
+    private var lead: PillLead? {
+        PillLead.resolve(isPrivate: false, isReader: isReader, isTranslated: isTranslated, notSecure: notSecure)
+    }
+
+    /// The page's address or its lead changed (the top band's host follows it): the address, the
+    /// lead word (`PillLead`, never `.private`) and whether the private mark and word lead.
+    var onDisplay: (URL?, PillLead?, Bool) -> Void = { _, _, _ in }
 
     /// The query a page searches for when it is the search engine's results page (the shell
     /// answers from Settings' engine), so the pill reads what was searched, as Safari's does.
     var searchQuery: (URL) -> String? = { _ in nil }
 
     /// What the resting pill says for `url`: the search on the engine's results page, otherwise
-    /// its host without `www.`, after "Not Secure —" when the page is not secure; the placeholder
-    /// without a page. Private, the private mark leads, whatever follows.
+    /// its host without `www.`, after the lead word ("Not Secure —", "Reader —") when there is
+    /// one; the placeholder without a page. Private, the private mark and word lead, whatever follows.
     private static func hostText(
-        for url: URL?, query: String? = nil, notSecure: Bool, placeholder: String, isPrivate: Bool
+        for url: URL?, query: String? = nil, lead: PillLead?, placeholder: String, isPrivate: Bool
     ) -> NSAttributedString {
-        let text = hostText(for: url, query: query, notSecure: notSecure, placeholder: placeholder)
+        let text = hostText(for: url, query: query, lead: lead, placeholder: placeholder)
         guard isPrivate else { return text }
         return privateMarked(text, onPage: url != nil)
     }
@@ -325,16 +349,18 @@ final class AddressPill: UIView {
         return attachment
     }
 
-    private static func hostText(for url: URL?, query: String? = nil, notSecure: Bool, placeholder: String) -> NSAttributedString {
-        if let query, !notSecure {
+    private static func hostText(for url: URL?, query: String? = nil, lead: PillLead?, placeholder: String) -> NSAttributedString {
+        if let query, lead == nil {
             return NSAttributedString(string: query, attributes: [.foregroundColor: Palette.textPrimary])
         }
         if let url, let host = url.host(), !host.isEmpty {
             let name = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-            guard notSecure else {
+            guard let lead else {
                 return NSAttributedString(string: name, attributes: [.foregroundColor: Palette.textPrimary])
             }
-            let text = NSMutableAttributedString(string: "Not Secure — ", attributes: [.foregroundColor: Palette.textSecondary])
+            let text = NSMutableAttributedString(
+                string: String(localized: "\(lead.word) — "), attributes: [.foregroundColor: Palette.textSecondary]
+            )
             text.append(NSAttributedString(string: name, attributes: [.foregroundColor: Palette.textPrimary]))
             return text
         } else if let url {
@@ -436,7 +462,7 @@ final class AddressPill: UIView {
         label.textAlignment = .center
         label.lineBreakMode = hostLabel.lineBreakMode
         label.attributedText = Self.hostText(
-            for: url, query: url.flatMap(searchQuery), notSecure: false, placeholder: "New Tab", isPrivate: isPrivateTint
+            for: url, query: url.flatMap(searchQuery), lead: nil, placeholder: "New Tab", isPrivate: isPrivateTint
         )
         label.alpha = 0
         label.isAccessibilityElement = false

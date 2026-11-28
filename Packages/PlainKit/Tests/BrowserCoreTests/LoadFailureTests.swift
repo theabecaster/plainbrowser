@@ -6,8 +6,17 @@ import Testing
 @Suite struct LoadFailureTests {
     @Test func networkErrorsMapToPlainSentences() {
         func failure(_ code: Int) -> LoadFailure { LoadFailure(domain: NSURLErrorDomain, code: code) }
-        #expect(failure(NSURLErrorCannotConnectToHost) == .notAnswering)
-        #expect(failure(NSURLErrorCannotConnectToHost).message == "The site isn't answering.")
+        #expect(failure(NSURLErrorCannotConnectToHost) == .refused)
+        #expect(failure(NSURLErrorCannotConnectToHost).message == "The site refused the connection.")
+        // CFNetwork's POSIX code under it tells a refused connection from a host that never answered.
+        let refused = LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost, streamCode: 61)
+        #expect(refused == .refused)
+        #expect(refused.message == "The site refused the connection.")
+        #expect(LoadFailure(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost, streamCode: 65) == .notAnswering)
+        #expect(LoadFailure.notAnswering.message == "The site isn't answering.")
+        #expect(LoadFailure(
+            domain: "WebKitErrorDomain", code: 999, underlying: (domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost), streamCode: 61
+        ) == .refused)
         #expect(failure(NSURLErrorNotConnectedToInternet).message == "You're offline.")
         #expect(failure(NSURLErrorCannotFindHost).message == "Plain can't find this site.")
         #expect(failure(NSURLErrorDNSLookupFailed) == .notFound)
@@ -20,12 +29,12 @@ import Testing
     }
 
     @Test func cfNetworkAndWrappedErrorsToo() {
-        #expect(LoadFailure(domain: "kCFErrorDomainCFNetwork", code: NSURLErrorCannotConnectToHost) == .notAnswering)
+        #expect(LoadFailure(domain: "kCFErrorDomainCFNetwork", code: NSURLErrorCannotConnectToHost) == .refused)
         // WebKit's own domain wrapping a refused connection.
         let wrapped = LoadFailure(
             domain: "WebKitErrorDomain", code: 999, underlying: (domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost)
         )
-        #expect(wrapped == .notAnswering)
+        #expect(wrapped == .refused)
         #expect(LoadFailure(domain: "WebKitErrorDomain", code: 101) == .other)
         // WebKit refuses restricted ports (9, 25, ...) itself.
         #expect(LoadFailure(domain: "WebKitErrorDomain", code: 103) == .blockedPort)

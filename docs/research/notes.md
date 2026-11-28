@@ -112,6 +112,14 @@ These are the key facts from seven research reports, kept for builders. The plan
 - **Simulator screenshots:** `xcrun simctl io booted enumerate`, then `screenshot --display=<id>`.
 - **Device screenshots:** `xcrun devicectl device info displays --device <udid>`, then `xcrun devicectl device capture screenshot --device <udid> --destination out.png [--display-unique-id <id>]`.
 
+## Alternate app icons (checked 2026-11-28)
+
+- **`supportsAlternateIcons`:** "true only when the system allows you to change the icon of your app"; "always false for apps built using the visionOS SDK". Listed for iOS 10.3, iPadOS 10.3, Mac Catalyst 13.1, tvOS 10.2 and visionOS 1.0 ([Apple](https://developer.apple.com/documentation/uikit/uiapplication/supportsalternateicons)).
+- **`setAlternateIconName(_:completionHandler:)`:** "You can change the icon only if the value of the `supportsAlternateIcons` property is `true`." It still works for iPhone and iPad apps running in visionOS ([Apple](https://developer.apple.com/documentation/uikit/uiapplication/setalternateiconname(_:completionhandler:))). The docs say nothing about iPhone and iPad apps on a Mac.
+- **On a Mac it fails:** a Catalyst build gets "The requested operation couldn't be completed because the feature is not supported" while the same call works in the iOS simulator (developer report, Dec 2022, unanswered: [forum 721930](https://developer.apple.com/forums/thread/721930)). macOS has no alternate icon API: an Apple Frameworks Engineer, June 2026, "there is currently no way to accomplish this", pointing to `NSDockTile` instead ([forum 833052](https://developer.apple.com/forums/thread/833052)). An iPhone app on a Mac runs as a Mac app with a Dock icon, so it cannot change it either (unverified on a Mac: whether `supportsAlternateIcons` reads false there, or reads true and the call fails).
+- **`ProcessInfo.isiOSAppOnMac`** (iOS 14): "true only when the process is an iOS app running on a Mac"; false for Catalyst apps and on every other platform ([Apple](https://developer.apple.com/documentation/foundation/processinfo/isiosapponmac)).
+- **Plain's rule:** the icon picker shows only when `supportsAlternateIcons && !isiOSAppOnMac` (`AppIconSupport`), so the Mac is covered whichever of the two ways it fails. A TestFlight user on a MacBook could not pick any icon in the intro (2026-11-28): each tap moved the check, then the refusal put it back with a bump the Mac can't play.
+
 ## Build and performance tooling (verified on Xcode 27.2)
 
 - **Device build:** `xcodebuild -destination id=<UDID> -allowProvisioningUpdates -allowProvisioningDeviceRegistration`.

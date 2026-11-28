@@ -71,9 +71,28 @@ public struct DownloadsView<Source: DownloadListSource>: View {
     public var body: some View {
         let items = Array(source.downloads.reversed())
         NavigationStack {
-            List(items, id: \.id) { item in
-                DownloadRow(item: item, open: open, showInFiles: showInFiles)
+            List {
+                Section {
+                    ForEach(items, id: \.id) { item in
+                        DownloadRow(item: item, open: open, showInFiles: showInFiles)
+                    }
                     .paperRows()
+                }
+                // The folder as a row that says what it does, in the accent like a list's action
+                // (clarity audit 22: a bare folder in the header named nothing).
+                if !items.isEmpty {
+                    Section {
+                        Button { showInFiles(source.directory) } label: {
+                            Label("Show in Files", systemImage: "folder")
+                                .foregroundStyle(Style.accent)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(.rect)
+                        }
+                        .accessibilityIdentifier("downloads.showInFiles")
+                        .accessibilityHint("Opens the Downloads folder in the Files app")
+                    }
+                    .paperRows()
+                }
             }
             .paperSheet()
             .overlay {
@@ -81,12 +100,7 @@ public struct DownloadsView<Source: DownloadListSource>: View {
                     PaperEmptyState(message: "Files you download show up here.", systemImage: "arrow.down.circle")
                 }
             }
-            .sheetTitle("Downloads", onDone: onDone) {
-                Button { showInFiles(source.directory) } label: {
-                    Label("Show in Files", systemImage: "folder").labelStyle(.iconOnly)
-                }
-                .buttonStyle(.glass)
-            }
+            .sheetTitle("Downloads", onDone: onDone)
             .quickLookPreview($preview, in: items.compactMap(\.fileURL))
         }
         .tint(Style.accent)

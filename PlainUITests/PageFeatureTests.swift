@@ -186,14 +186,16 @@ final class PageFeatureTests: XCTestCase {
         site.tap()
         let toggle = app.buttons["menu.cookieBanners"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 2))
-        XCTAssertEqual(toggle.label, "Turn Off Cookie Banner Blocking")
+        XCTAssertEqual(toggle.label, "Cookie Banner Blocking")
+        XCTAssertTrue(toggle.isSelected, "checked: on for the site")
         shot("c2-site-settings")
         toggle.tap()
         Thread.sleep(forTimeInterval: 1.5)
         openPageMenu(app)
         site.tap()
         XCTAssertTrue(app.buttons["menu.cookieBanners"].waitForExistence(timeout: 2))
-        XCTAssertEqual(app.buttons["menu.cookieBanners"].label, "Turn On Cookie Banner Blocking", "remembered for the site")
+        XCTAssertEqual(app.buttons["menu.cookieBanners"].label, "Cookie Banner Blocking")
+        XCTAssertFalse(app.buttons["menu.cookieBanners"].isSelected, "off, remembered for the site")
         closeMenu(app)
     }
 

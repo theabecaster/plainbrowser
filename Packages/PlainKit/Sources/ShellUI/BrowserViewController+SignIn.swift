@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import DesignSystem
 import Foundation
 import PerfSignposts
 import UIKit
@@ -17,12 +18,14 @@ extension BrowserViewController {
         guard !isShowingGallery, root.presentedViewController == nil,
               tab === currentTab || isShownInOtherPane(tab.id) else { return false }
         tabsUI.toast.show(Self.passkeysUnavailableMessage)
+        // The soft refusal bump: the sign-in the user just tried did not happen.
+        Haptic.nothingThere.play()
         return true
     }
 
     /// True as long as `FixedChoices.passkeysEnabled` is off: with the entitlement, WebKit handles
     /// passkeys for every site and this toast never shows.
-    static let passkeysUnavailableMessage = "Passkeys will work once Apple approves Plain"
+    static let passkeysUnavailableMessage = "Passkeys aren't available in Plain yet. Use your password."
 }
 
 // MARK: - Links from other apps

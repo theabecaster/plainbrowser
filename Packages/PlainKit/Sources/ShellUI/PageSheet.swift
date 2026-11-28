@@ -12,6 +12,9 @@ struct PageSheetModel {
     struct Address {
         var host: String
         var notSecure: Bool
+        /// The window's profile, named once there are two or more ("Work"), so a sign-in never
+        /// happens in the wrong one unnoticed.
+        var profile: String? = nil
         var back: UIAction?
         var forward: UIAction?
         var copy: UIAction
@@ -148,8 +151,12 @@ final class PageSheetController: UIViewController {
         host.attributedTitle = AttributedString(address.host, attributes: AttributeContainer([
             .font: Self.gridFont(.headline), .foregroundColor: Palette.ink,
         ]))
-        if address.notSecure {
-            host.subtitle = String(localized: "Not Secure")
+        // Under the host: the profile, then "Not Secure", in one quiet line.
+        let notes = [address.profile, address.notSecure ? String(localized: "Not Secure") : nil].compactMap { $0 }
+        if !notes.isEmpty {
+            host.attributedSubtitle = AttributedString(notes.joined(separator: " · "), attributes: AttributeContainer([
+                .font: Self.gridFont(.caption1), .foregroundColor: Palette.inkSecondary,
+            ]))
             host.titleAlignment = .center
         }
         host.titleLineBreakMode = .byTruncatingHead
@@ -157,7 +164,7 @@ final class PageSheetController: UIViewController {
             self?.onEditAddress()
         })
         hostButton.accessibilityIdentifier = "pageSheet.address"
-        hostButton.accessibilityLabel = address.host
+        hostButton.accessibilityLabel = ([address.host] + notes).joined(separator: ", ")
         hostButton.accessibilityHint = String(localized: "Edits the address")
         hostButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         hostButton.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -264,7 +271,14 @@ final class PageSheetController: UIViewController {
                     button.accessibilityLabel = action.title
                 }
                 button.configuration?.baseForegroundColor = Palette.ink
-                button.isEnabled = !action.attributes.contains(.disabled)
+                if action.image == nil {
+                    // The percent always reads in ink: at 100% it has nothing to reset, so it takes
+                    // no tap and reads as text, never dimmed to near nothing.
+                    button.isUserInteractionEnabled = !action.attributes.contains(.disabled)
+                    if action.attributes.contains(.disabled) { button.accessibilityTraits = .staticText }
+                } else {
+                    button.isEnabled = !action.attributes.contains(.disabled)
+                }
                 Self.identify(button, as: action)
                 return button
             })
@@ -274,6 +288,9 @@ final class PageSheetController: UIViewController {
             Self.pin(row, in: card, inset: 0)
             card.heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget + Spacing.xs).isActive = true
             card.maximumContentSizeCategory = Self.gridLimit
+            // VoiceOver hears "Zoom" entering the row, then Zoom Out, the percent and Zoom In.
+            card.accessibilityContainerType = .semanticGroup
+            card.accessibilityLabel = String(localized: "Zoom")
             return card
         }
     }
@@ -440,7 +457,7 @@ final class PageSheetController: UIViewController {
             "Hide Reader": String(localized: "Reader"),
             "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
             "Archived Tabs": String(localized: "Archive"), "Add to Favorites": String(localized: "Favorite"),
-            "Remove from Favorites": String(localized: "Favorite"), "Edit Favorites": String(localized: "Favorites"),
+            "Remove from Favorites": String(localized: "Favorite"),
             "Remove from Reading List": String(localized: "Saved"), "Summarize Page": String(localized: "Summarize"),
         ]
         return captions[title] ?? title

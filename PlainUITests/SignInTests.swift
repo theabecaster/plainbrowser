@@ -66,7 +66,7 @@ final class SignInTests: XCTestCase {
         button.tap()
         // The toast first: it lives a few seconds, and reading a page's text through
         // accessibility can take about as long.
-        let toastText = app.staticTexts["Passkeys will work once Apple approves Plain"]
+        let toastText = app.staticTexts["Passkeys aren't available in Plain yet. Use your password."]
         XCTAssertTrue(toastText.waitForExistence(timeout: 3))
         attachScreenshot("passkey-toast")
         // The page still gets WebKit's refusal, so its own password sign-in can take over.

@@ -21,7 +21,8 @@ final class FeatureSheetTests: XCTestCase {
 
     private func go(_ app: XCUIApplication, to path: String, heading: String) {
         type(app, server.address(path) + "\n")
-        XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 10), "page \"\(heading)\" did not show")
+        // A fresh simulator's first page can take a while (the matrix makes a new one per row).
+        XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 30), "page \"\(heading)\" did not show")
     }
 
     /// Opens the address field when it is closed, then types `text`.
@@ -130,6 +131,26 @@ final class FeatureSheetTests: XCTestCase {
         XCTAssertEqual(app.buttons["addressPill"].value as? String, "http://" + server.address("/a"))
     }
 
+    /// The Favorites sheet opens a favorite on a tap (clarity audit 7); rename is in its row's
+    /// swipe and menu, not on the tap.
+    func testFavoritesSheetOpensAFavoriteOnATap() throws {
+        let app = try launch()
+        go(app, to: "/a", heading: "Page A")
+        pageMenu(app, pick: "Add to Favorites")
+        go(app, to: "/b", heading: "Page B")
+        pageMenu(app, pick: "menu.editFavorites")
+        let row = app.buttons["favoriteRow"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        XCTAssertEqual(app.buttons["menu.editFavorites"].exists, false, "the page sheet went down for the Favorites sheet")
+        row.swipeRight()
+        XCTAssertTrue(app.buttons["Rename"].waitForExistence(timeout: 2), "a swipe offers Rename")
+        row.swipeLeft()
+        Thread.sleep(forTimeInterval: 0.5)
+        row.tap()
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 10), "a tap opens the favorite")
+        XCTAssertFalse(app.otherElements["favoritesSheet"].exists)
+    }
+
     func testAddedFavoriteShowsAboveTheKeyboardAndOpensTheEditor() throws {
         let app = try launch()
         go(app, to: "/a", heading: "Page A")
@@ -146,6 +167,10 @@ final class FeatureSheetTests: XCTestCase {
         edit.tap()
         XCTAssertTrue(app.staticTexts["Favorites"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Plain Test A"].exists)
+        // Edit Favorites opens editing: its Done ends the editing, then the sheet's Done closes it.
+        XCTAssertFalse(app.buttons["Edit"].exists, "already editing")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 2))
         app.buttons["Done"].tap()
         // The field comes back, favorites and all.
         XCTAssertTrue(app.buttons["favorite.0"].waitForExistence(timeout: 3))

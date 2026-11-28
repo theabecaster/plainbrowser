@@ -53,4 +53,40 @@ import Testing
         }
         #expect(AppIconChoice(alternateIconName: "Unknown") == .dawn)
     }
+
+    /// The icon picker shows only where the system lets the icon change, and never for an iPhone
+    /// app on a Mac (its Dock icon can't change), whatever `supportsAlternateIcons` says there.
+    @Test func iconPickerOnlyWhereTheIconCanChange() {
+        #expect(AppIconSupport.isSupported(systemSupports: true, isiOSAppOnMac: false, arguments: []))
+        #expect(!AppIconSupport.isSupported(systemSupports: false, isiOSAppOnMac: false, arguments: []))
+        #expect(!AppIconSupport.isSupported(systemSupports: true, isiOSAppOnMac: true, arguments: []))
+        #expect(!AppIconSupport.isSupported(systemSupports: false, isiOSAppOnMac: true, arguments: []))
+        // The override needs an isolated run: a real launch can't be talked out of the system's answer.
+        #expect(AppIconSupport.isSupported(systemSupports: true, isiOSAppOnMac: false, arguments: ["-PlainAlternateIcons", "off"]))
+        #expect(!AppIconSupport.isSupported(systemSupports: false, isiOSAppOnMac: true, arguments: ["-PlainAlternateIcons", "on"]))
+    }
+
+    #if DEBUG
+    @Test func iconPickerOverrideInIsolatedRuns() {
+        let off = ["-PlainInMemoryStore", "-PlainAlternateIcons", "off"]
+        #expect(!AppIconSupport.isSupported(systemSupports: true, isiOSAppOnMac: false, arguments: off))
+        let on = ["-PlainTestStore", "-PlainAlternateIcons", "on"]
+        #expect(AppIconSupport.isSupported(systemSupports: false, isiOSAppOnMac: true, arguments: on))
+        // A missing or unknown value leaves the system's answer.
+        #expect(AppIconSupport.isSupported(systemSupports: true, isiOSAppOnMac: false, arguments: ["-PlainInMemoryStore", "-PlainAlternateIcons"]))
+        #expect(!AppIconSupport.isSupported(systemSupports: true, isiOSAppOnMac: true, arguments: ["-PlainInMemoryStore", "-PlainAlternateIcons", "maybe"]))
+    }
+    #endif
+
+    #if os(iOS)
+    /// Without the icon step the intro goes from "What's inside" straight to the blocking demo.
+    @Test @MainActor func introLeavesOutTheIconStepWhereTheIconCannotChange() {
+        #expect(IntroModel.initialSteps(defaultBrowserStep: false, iconStep: true) == [.promise, .inside, .icon, .blocking])
+        #expect(IntroModel.initialSteps(defaultBrowserStep: false, iconStep: false) == [.promise, .inside, .blocking])
+        #expect(IntroModel.initialSteps(defaultBrowserStep: true, iconStep: false) == [.promise, .inside, .blocking, .defaultBrowser])
+        let model = IntroModel(defaultBrowserStep: false, iconStep: false, icon: .dawn)
+        model.setAIAvailability(.available)
+        #expect(model.steps == [.promise, .inside, .blocking, .browseForMe])
+    }
+    #endif
 }

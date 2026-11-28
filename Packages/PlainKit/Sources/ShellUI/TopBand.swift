@@ -93,9 +93,10 @@ final class TopBand: UIView {
         hostLabel.font = .systemFont(ofSize: size, weight: .regular)
     }
 
-    /// Shows `url`'s host while reading (`TopBandHost.baseDomain`), "Not Secure — " before it
-    /// when the page is not secure.
-    func display(url: URL?, notSecure: Bool) {
+    /// Shows `url`'s host while reading (`TopBandHost.baseDomain`), after the pill's lead as the
+    /// pill says it (`PillLead`: "Reader — ", "Translated — ", "Not Secure — "), and in a private
+    /// tab after the private mark and "Private", so the address keeps its words as it shrinks.
+    func display(url: URL?, lead: PillLead?, isPrivate: Bool) {
         let domain = url?.host().map(TopBandHost.baseDomain) ?? url?.absoluteString
         host = domain
         guard let domain, !domain.isEmpty else {
@@ -103,13 +104,34 @@ final class TopBand: UIView {
             accessibilityValue = nil
             return
         }
+        let font = hostLabel.font ?? .systemFont(ofSize: 13)
         let text = NSMutableAttributedString()
-        if notSecure {
-            text.append(NSAttributedString(string: "Not Secure — ", attributes: [.foregroundColor: Palette.textSecondary]))
+        if isPrivate {
+            let configuration = UIImage.SymbolConfiguration(font: font, scale: .small)
+            if let symbol = UIImage(systemName: "hand.raised.fill", withConfiguration: configuration)?
+                .withTintColor(Palette.privateAccent, renderingMode: .alwaysOriginal) {
+                let mark = NSTextAttachment(image: symbol)
+                mark.bounds = CGRect(
+                    x: 0, y: ((font.capHeight - symbol.size.height) / 2).rounded(),
+                    width: symbol.size.width, height: symbol.size.height
+                )
+                text.append(NSAttributedString(attachment: mark))
+                text.append(NSAttributedString(string: " "))
+            }
+            text.append(NSAttributedString(string: String(localized: "Private"), attributes: [
+                .foregroundColor: Palette.privateAccent,
+                .font: UIFont.systemFont(ofSize: font.pointSize, weight: .semibold),
+            ]))
+            text.append(NSAttributedString(string: "  "))
+        }
+        if let lead, lead != .private {
+            text.append(NSAttributedString(
+                string: String(localized: "\(lead.word) — "), attributes: [.foregroundColor: Palette.textSecondary]
+            ))
         }
         text.append(NSAttributedString(string: domain, attributes: [.foregroundColor: Palette.textPrimary]))
         hostLabel.attributedText = text
-        accessibilityValue = hostLabel.text
+        accessibilityValue = text.string.replacingOccurrences(of: "\u{FFFC} ", with: "")
     }
 
     /// The glass tint: Paper, or the private violet while a private tab is on screen, drawn dark

@@ -29,10 +29,12 @@ final class ChromeScrim: UIView {
     static let inset: CGFloat = 1
     /// Under the glass the page shows only faintly; at the edge the glow fades out. Denser in
     /// dark mode: light text under the dark ground showed through more than dark text on paper.
-    /// Lighter since the glass went lighter (owner: "more Apple-glass-like"): at 0.82 / 0.92 the
-    /// glass showed mostly this ground, a paper fill with no refraction.
-    static let opacity: CGFloat = 0.5
-    static let darkOpacity: CGFloat = 0.62
+    /// At 82% body text still ghosted under the host, worst in the collapsed pill's smaller
+    /// text (clarity audit 13): 92% leaves the glass its light and the page a hint, no words.
+    /// The inner screen's top band turns this ground off (`setScrimShown`), so the lighter glass
+    /// shows its refraction there; on phones and the outer screen legibility wins.
+    static let opacity: CGFloat = 0.92
+    static let darkOpacity: CGFloat = 0.95
 
     override init(frame: CGRect) {
         super.init(frame: frame)

@@ -94,7 +94,7 @@ final class EngineTests: XCTestCase {
         app.buttons["addressPill"].tap()
         XCTAssertTrue(field.waitForExistence(timeout: 2))
         field.typeText("http://127.0.0.1:\(port)/nothing\n")
-        XCTAssertTrue(app.staticTexts["The site isn't answering."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["The site refused the connection."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Try Again"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "refused"
@@ -177,12 +177,12 @@ final class EngineTests: XCTestCase {
         }
         XCTAssertTrue(blocked.exists, "the rule lists never blocked the test ad")
 
-        pageMenu(app, pick: "Turn Off Blocking on This Site")
+        pageMenu(app, pick: "Content Blocking")
         waitForPage(app, "Ad loaded")
         pageMenu(app, pick: "Reload")
         waitForPage(app, "Ad loaded")
 
-        pageMenu(app, pick: "Turn On Blocking on This Site")
+        pageMenu(app, pick: "Content Blocking")
         waitForPage(app, "Ad blocked")
     }
 

@@ -2690,7 +2690,6 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
   image, as a segment holds an image or a title), the others stay symbols, and every segment has
   its name for VoiceOver.
 
-
 ## App icons: the Home Screen shows the picker's art (2026-11-28)
 
 Owner, on TestFlight (iPhone Duo): "The icon picker is broken: the only icon that is accurate to

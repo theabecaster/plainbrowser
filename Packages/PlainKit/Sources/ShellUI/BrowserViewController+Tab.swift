@@ -37,6 +37,8 @@ final class EngineUIState {
     /// The current tab's network error page was shown because of a switch of Plain's (cellular
     /// data off for Plain): turning it back on retries the page.
     var networkBlockedTab: UUID?
+    /// Try Again on the error page, until its load ends (the warning if it fails again).
+    var retry = RetryWatch()
     /// Checks a few times a second, while the find bar is open, whether it has closed: UIKit
     /// tells no one when the system find bar goes away (it can close without the keyboard).
     var findWatch: Task<Void, Never>?
@@ -336,6 +338,13 @@ extension BrowserViewController {
 
     /// Follows the tab's observed state: the pill, the buttons, progress and the page's state.
     private func tabChanged(from old: TabSnapshot?, to new: TabSnapshot) {
+        // Try Again that failed again: the warning, as the error page shows again.
+        if engineUI.retry.update(
+            tab: old == nil ? nil : currentTab?.id, isLoading: new.isLoading, isFailed: new.isFailed,
+            errorChanged: old?.loadError != new.loadError
+        ) {
+            Haptic.failed.play(in: view)
+        }
         if old?.shownAddress != new.shownAddress || old?.security != new.security || old?.isFailed != new.isFailed {
             // A failed load shows the address that was tried, as Share and Copy Link use it
             // (state rules §4), not the page before it. Nothing loaded, so nothing is "Not Secure".
@@ -405,9 +414,11 @@ extension BrowserViewController {
             })
         } else if let error = tab.loadError, !tab.isLoading {
             let retry = error.url ?? tab.url
-            let tryAgain = { [weak tab] in
+            let tryAgain = { [weak self, weak tab] in
                 Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again")
-                if let retry { tab?.load(retry) } else { tab?.reload() }
+                guard let tab else { return }
+                self?.engineUI.retry.begin(tab.id)
+                if let retry { tab.load(retry) } else { tab.reload() }
             }
             let access = session.pool.systemAccess
             if PageStateView.isNetworkFailure(error, simulated: access.simulatesNetworkBlock),
@@ -552,8 +563,11 @@ extension BrowserViewController {
         let isDesktop = tab.contentMode == .desktop
         let desktop = UIAction(
             title: "Desktop Site", image: UIImage(systemName: "desktopcomputer"), state: isDesktop ? .on : .off
-        ) { [weak tab] _ in
+        ) { [weak self, weak tab] _ in
             Signposts.signposter.emitEvent(Signposts.desktopSite)
+            // A tick: the state flipped, and the menu is gone before the reload shows (haptics
+            // plan, §4.2). Content Blocking and Cookie Banner Blocking tick the same way.
+            Haptic.selection.play(in: self?.view)
             tab?.setContentModeOverride(isDesktop ? .mobile : .desktop)
         }
         desktop.accessibilityIdentifier = "menu.desktopSite"
@@ -567,6 +581,7 @@ extension BrowserViewController {
         let toggle = UIAction(
             title: "Content Blocking", image: UIImage(systemName: "shield.lefthalf.filled"), state: blocking ? .on : .off
         ) { [weak self, weak tab] _ in
+            Haptic.selection.play(in: self?.view)
             self?.session.blocker.setBlockingEnabled(!blocking, forHost: host)
             tab?.reload()
         }
@@ -585,6 +600,7 @@ extension BrowserViewController {
             state: isOff ? .off : .on
         ) { [weak self, weak tab] _ in
             guard let self, let tab else { return }
+            Haptic.selection.play(in: self.view)
             self.session.cookieBanners.setOff(!isOff, for: url, isPrivate: tab.isPrivate)
             tab.reload()
         }

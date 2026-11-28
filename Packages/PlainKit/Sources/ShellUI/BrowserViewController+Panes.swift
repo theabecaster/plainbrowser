@@ -403,6 +403,8 @@ extension BrowserViewController {
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.splitClose, id: signposter.makeSignpostID())
         defer { signposter.endInterval(Signposts.splitClose, interval) }
+        // A pane goes away: the soft close, as the pane starts leaving (haptics plan, §4.2).
+        Haptic.close.play(in: view)
         let focusBefore = session.tabs.focusedPane
         session.tabs.closePane(focusBefore)
         reconcilePanes(focusBefore: focusBefore)

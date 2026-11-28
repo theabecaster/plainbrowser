@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 @testable import ShellUI
 import Testing
 
@@ -429,5 +430,43 @@ struct PullToRefreshTests {
         #expect(tracker.released() == true)
         #expect(tracker.isArmed == false)
         #expect(tracker.released() == false)
+    }
+}
+
+/// Try Again that fails again: the warning once, when the retried load ends (haptics plan, §4.7).
+struct RetryWatchTests {
+    let tab = UUID()
+
+    @Test func warnsOnceWhenTheRetriedLoadFailsAgain() {
+        var watch = RetryWatch()
+        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == false, "no Try Again yet")
+        watch.begin(tab)
+        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == false, "the old failure, before the load starts")
+        #expect(watch.update(tab: tab, isLoading: true, isFailed: false) == false)
+        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == true)
+        #expect(watch.tab == nil)
+        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == false, "once")
+    }
+
+    @Test func aRetryThatLoadsIsSilent() {
+        var watch = RetryWatch()
+        watch.begin(tab)
+        _ = watch.update(tab: tab, isLoading: true, isFailed: false)
+        #expect(watch.update(tab: tab, isLoading: false, isFailed: false) == false)
+        #expect(watch.tab == nil, "the load ended: the watch with it")
+    }
+
+    @Test func anotherTabOnScreenEndsTheWatch() {
+        var watch = RetryWatch()
+        watch.begin(tab)
+        _ = watch.update(tab: tab, isLoading: true, isFailed: false)
+        #expect(watch.update(tab: UUID(), isLoading: false, isFailed: true) == false)
+        #expect(watch.update(tab: tab, isLoading: false, isFailed: true) == false, "back on the tab: the watch is gone")
+    }
+
+    @Test func aNewFailureCountsEvenIfTheLoadWasNeverSeen() {
+        var watch = RetryWatch()
+        watch.begin(tab)
+        #expect(watch.update(tab: tab, isLoading: false, isFailed: true, errorChanged: true) == true)
     }
 }

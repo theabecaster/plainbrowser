@@ -395,6 +395,38 @@ struct PullToRefreshTracker: Equatable {
     }
 }
 
+/// Try Again on an error page, watched until its load ends: one that fails again gets the warning
+/// haptic (haptics plan, §4.7), since the same sentence coming back is no answer by itself. The
+/// watch is for one tab and one load: another tab on screen, or the load ending either way, ends it.
+struct RetryWatch: Equatable {
+    private(set) var tab: UUID?
+    private var started = false
+
+    /// Try Again was tapped on `tab`'s error page.
+    mutating func begin(_ tab: UUID) {
+        self.tab = tab
+        started = false
+    }
+
+    /// The on-screen tab's state changed (`tab` nil: none on screen). true once, when the
+    /// retried load ended in a failure. `errorChanged`: the failure is not the one before, so a
+    /// load ran even if its loading state was never seen.
+    mutating func update(tab id: UUID?, isLoading: Bool, isFailed: Bool, errorChanged: Bool = false) -> Bool {
+        guard let tab else { return false }
+        guard id == tab else {
+            self.tab = nil
+            return false
+        }
+        if isLoading {
+            started = true
+            return false
+        }
+        guard started || errorChanged else { return false }
+        self.tab = nil
+        return isFailed
+    }
+}
+
 /// What brought a collapsed or hidden bar back, for the `toolbar.reveal` signpost.
 enum ChromeRevealReason: String {
     case scrollUp = "scroll up"

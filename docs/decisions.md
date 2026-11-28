@@ -3381,8 +3381,8 @@ Shift-Command-R. … Do the same on the inner screen and iPad layouts."
   third of the collapse (alpha only) and stops taking touches as soon as the collapse starts, so a
   tap there still only brings the bar back. While the launch picture stands in, it shows as the
   bar will (no pop after the restore); a tap before the tab is back does nothing.
-- **Hold: a menu with one item, "Reload Without Cache"** (subtitle "Gets everything again from
-  the site"), not a hold that acts on its own. A press that reloads differently from a tap is
+- **Hold: a menu with one item, "Reload Without Cache"** (subtitle "Fresh from the site": one line under
+  the title, and no promise a page's own service worker could break), not a hold that acts on its own. A press that reloads differently from a tap is
   invisible and easy to trigger by accident; a menu names what the hold does, which is how people
   learn it (Chrome desktop's reload menu with DevTools open: Normal Reload, Hard Reload, Empty
   Cache and Hard Reload; Safari for iOS's long press on Reload offered Reload Without Content

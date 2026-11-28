@@ -135,8 +135,8 @@ and the two-finger scrub closes the search field or the overview.
   `arrow.clockwise` in ink; while the page loads it is Stop (`xmark`, Safari's in-field X: inside
   the address nothing else can close), with the progress along the bottom. A tap reloads or stops
   (no haptic: the progress answers). A long press is a menu with one item, Reload Without Cache
-  ("Gets everything again from the site"; `tap` when chosen, since on screen it looks like any
-  reload); VoiceOver reads "Reload" or "Stop" after the address and offers Reload Without Cache as
+  ("Fresh from the site"; `tap` when chosen, since on screen it looks like any
+  reload); VoiceOver reads Page Appearance (when it shows), the address, then "Reload" or "Stop" and offers Reload Without Cache as
   an action. Not on the start screen, error pages (Try Again), the reader, the open field, or the
   collapsed pill and slim band, which are the host alone. The host stays centred in the capsule.
 - **More is `ellipsis`** (every layout: the phone bar, the Duo's vertical bar, the inner screen's

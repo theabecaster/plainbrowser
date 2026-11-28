@@ -426,8 +426,8 @@ final class AddressPill: UIView {
             : nil
         hostLabel.attributedText = text
         // The full text's truncation (`fitHostText` changes it for the short form).
-        let mode: NSLineBreakMode = isPrivateTint ? .byTruncatingMiddle : .byTruncatingHead
-        if hostLabel.lineBreakMode != mode { hostLabel.lineBreakMode = mode }
+        let truncation: NSLineBreakMode = isPrivateTint ? .byTruncatingMiddle : .byTruncatingHead
+        if hostLabel.lineBreakMode != truncation { hostLabel.lineBreakMode = truncation }
         fitHostText()
         // VoiceOver hears a mode as the pill shows it ("Reader, https://…"), without the private
         // mark's attachment character: the label already says Private.
@@ -792,7 +792,7 @@ final class AddressPill: UIView {
     /// Origin", Chrome "Hard Reload"). The system's menu plays its own haptic as it opens.
     private lazy var reloadMenu: UIMenu = {
         let action = UIAction(
-            title: String(localized: "Reload Without Cache"), subtitle: String(localized: "Gets everything again from the site"),
+            title: String(localized: "Reload Without Cache"), subtitle: String(localized: "Fresh from the site"),
             image: UIImage(systemName: "arrow.clockwise")
         ) { [weak self] _ in self?.reloadFromOriginChosen() }
         action.accessibilityIdentifier = "pill.reloadFromOrigin"

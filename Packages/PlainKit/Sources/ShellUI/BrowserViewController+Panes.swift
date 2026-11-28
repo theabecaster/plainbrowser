@@ -155,6 +155,8 @@ extension BrowserViewController {
         let input = layoutInput()
         let layout = DuoLayout(input)
         let previous = duo.layout
+        // Before anything is applied: the pages still have the layout the reader sees.
+        notePaneSizes(layout)
         // The row's place follows the status zone even when nothing else in the layout changed.
         applyTopBarPlacement(layout.chromeOnTop ? makeTopGeometry(stripHeight: layout.stripHeight) : nil, layout: layout)
         applySidePaneLayout(layout)
@@ -185,6 +187,13 @@ extension BrowserViewController {
         panes.show(shown, primaryWidth: primaryWidth)
         updatePaneLooks()
         session.pool.defaultPaneSize = layout.focusedPaneFrame.size
+        // A pane's size changed without a window resize (a split, the side pane): its page may
+        // switch between desktop and mobile once it settles. A resize says so at its completion.
+        // A divider drag or settle says so itself at rest (`SidePaneDividerController.endMove`).
+        if let previous, !duo.isResizing, sidePaneUI.divider?.activeSpan == nil,
+           previous.paneFrames.map(\.size) != layout.paneFrames.map(\.size) {
+            session.pool.panesDidChange()
+        }
         // A pane that just came on screen or left it (a fold, a split opening).
         if previous?.splitShown != layout.splitShown || previous == nil { syncPanes() }
         // The Tabs button and the swipe up follow whether the sidebar is on screen (one tab: it
@@ -192,6 +201,26 @@ extension BrowserViewController {
         if let previous, previous.showsSidebar != layout.showsSidebar { updateButtons() }
         // The side pane left the screen with the layout (a fold to the outer screen).
         if previous?.sidePaneColumn != nil, layout.sidePaneColumn == nil { sidePaneUI.controller?.paneWillHide() }
+    }
+
+    /// Tells the pool that the panes are about to get other sizes, before any web view has one:
+    /// the pool reads where each reader is from the layout they still see (desktop or mobile
+    /// across the fold). Called with the layout about to be applied, and with none when the safe
+    /// area changed (`viewSafeAreaInsetsDidChange`): a fold changes the safe area first, which
+    /// alone makes the page wider, and announces the resize a few frames later.
+    func notePaneSizes(_ next: DuoLayout? = nil) {
+        // A window resize and a divider drag say so themselves, once, when they start.
+        guard let previous = duo.layout, view.bounds.width > 0, !duo.isResizing, sidePaneUI.divider?.activeSpan == nil
+        else { return }
+        let layout = next ?? DuoLayout(layoutInput())
+        guard previous.paneFrames.map(\.size) != layout.paneFrames.map(\.size) else { return }
+        let sizes = { (frames: [CGRect]) in frames.map { "\(Int($0.width))x\(Int($0.height))" }.joined(separator: ",") }
+        let cause = next == nil ? "safe area" : "layout"
+        DuoUIState.logger.notice("""
+            panes \(sizes(previous.paneFrames), privacy: .public) to \(sizes(layout.paneFrames), privacy: .public) \
+            (\(cause, privacy: .public))
+            """)
+        session.pool.panesMayChange()
     }
 
     /// The gutter and the focus ring: only while a split shows.
@@ -456,14 +485,17 @@ extension BrowserViewController {
     /// frame once: inside the transition the root view already has `size`, the layout is decided
     /// for it and laid out in one pass (the web views follow their pane by autoresizing). The page
     /// insets wait for the completion. No snapshot cover: WebKit scales its tiles, then reflows.
-    /// Desktop or mobile stays what it was at navigation start.
+    /// Desktop or mobile: the pool holds its checks until the completion, then each page on
+    /// screen follows its pane's new size once it settles (`WebViewPool.panesDidChange()`).
     func windowWillResize(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
         let signposter = Signposts.signposter
         if let interval = duo.resizeInterval { signposter.endInterval(Signposts.foldTransition, interval, "replaced") }
         duo.resizeInterval = signposter.beginInterval(
             Signposts.foldTransition, id: signposter.makeSignpostID(), "\(Int(size.width))x\(Int(size.height))"
         )
-        DuoUIState.logger.info("viewWillTransition to \(Int(size.width))x\(Int(size.height))")
+        DuoUIState.logger.notice(
+            "viewWillTransition to \(Int(size.width))x\(Int(size.height)) from \(Int(self.view.bounds.width))x\(Int(self.view.bounds.height))"
+        )
         duo.isResizing = true
         duo.resizeGeneration += 1
         let generation = duo.resizeGeneration
@@ -471,8 +503,10 @@ extension BrowserViewController {
         // A drag or settle of the side pane's divider stops: the window's width rides the
         // transition, mapped to the new bounds (`SidePaneDividerGeometry.rest(for:)`).
         sidePaneUI.divider?.cancel()
+        session.pool.panesWillChange()
         coordinator.animate(alongsideTransition: { [weak self] _ in
             guard let self else { return }
+            DuoUIState.logger.notice("fold layout pass \(Int(self.view.bounds.width))x\(Int(self.view.bounds.height))")
             updateDuoLayout()
             view.layoutIfNeeded()
         }, completion: { [weak self] _ in
@@ -488,6 +522,7 @@ extension BrowserViewController {
                 signposter.endInterval(Signposts.foldTransition, interval)
                 duo.resizeInterval = nil
             }
+            session.pool.panesDidChange()
         })
     }
 }

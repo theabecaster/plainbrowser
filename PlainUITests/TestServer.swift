@@ -343,6 +343,15 @@ final class TestServer: @unchecked Sendable {
                 + "@media (prefers-color-scheme: dark){body{background:#1b1430;color:#e9e3ff}h1{color:#c8b6ff}}"
             return ("200 OK", styled("Plain Dark Site", css, "<h1>Own Dark Design</h1>" + paragraphs.joined(),
                                      head: "<meta name=\"color-scheme\" content=\"light dark\">"))
+        case "/fold":
+            // Desktop or mobile across the fold: the heading says which page the server sent, the
+            // first load scrolls paragraph 40 to the top, and a field to type in.
+            let desktop = !userAgent.contains("Mobile")
+            let paragraphs = (1...80).map { "<p id=\"p\($0)\">Fold paragraph \($0). The quick brown fox jumps over the lazy dog, again and again, so the line wraps.</p>" }
+            let scroll = "<script>if(!sessionStorage.getItem('fold')){sessionStorage.setItem('fold','1');"
+                + "addEventListener('load',()=>document.getElementById('p40').scrollIntoView())}</script>"
+            return ("200 OK", html("Plain Fold", "<h1>\(desktop ? "Desktop" : "Mobile") UA</h1>"
+                + "<input id=\"field\" placeholder=\"Type here\">" + paragraphs.joined() + scroll))
         case "/ua":
             let desktop = !userAgent.contains("Mobile")
             return ("200 OK", html("Plain UA", "<h1>\(desktop ? "Desktop" : "Mobile") UA</h1>"))

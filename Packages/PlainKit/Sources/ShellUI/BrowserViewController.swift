@@ -598,6 +598,12 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         Motion.animate(Motion.reflow) { self.view.layoutIfNeeded() }
     }
 
+    override public func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        // A pane's width follows the safe area: say so before the web views hear of it.
+        notePaneSizes()
+    }
+
     override public func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         // Every Duo state comes from the bounds, size classes and the fold's regions here.

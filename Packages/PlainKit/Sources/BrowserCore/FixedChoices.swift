@@ -155,6 +155,39 @@ public enum FixedChoices {
     /// remembered zoom always matches a step.
     public static let pageZoomSteps: [Double] = [0.5, 0.75, 0.85, 1.0, 1.15, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
 
+    // MARK: Desktop or mobile across the fold (docs/research/content-mode.md)
+
+    /// The page on screen follows the fold: open, it switches to the desktop site; closed, to the
+    /// mobile site, by reloading in place when nothing would be lost (no typed text, form result,
+    /// media, download, Find or translation). Otherwise it keeps its mode until the next
+    /// navigation, without asking. A per-site choice from Desktop Site always wins. No setting:
+    /// a phone page stretched over the inner screen and a desktop page squeezed onto the outer
+    /// one both look broken, and nobody wants to pick per fold.
+    public static let contentModeFollowsFold = true
+    /// The check waits this long after a fold, unfold or pane change settles, so a fold then a
+    /// quick unfold (or a rotation's several passes) reloads nothing, and the reload never
+    /// competes with the fold's own animation. Longer feels like the page ignored the fold.
+    public static let contentModeSettleDelay: Duration = .milliseconds(450)
+    /// A tab coming on screen in the other mode (a background tab after a fold) is checked this
+    /// long after it is attached: after the layout pass that sizes its pane.
+    public static let contentModeAttachDelay: Duration = .milliseconds(150)
+    /// The page's picture stays over it for at most this long while it reloads in the new mode,
+    /// then fades: a slow network must not leave a frozen page. Its place is still put back when
+    /// the page finishes, unless the user has scrolled since.
+    public static let contentModeCoverLimit: Duration = .milliseconds(2500)
+    /// The page's answer before a switch (does it hold typed text, a focused field?) may take
+    /// this long. Nothing waits on it (the fold has settled), and a page that misses it keeps its
+    /// mode, so it is longer than the engine's usual 400 ms reply limit.
+    public static let contentModeProbeTimeout: Duration = .seconds(1)
+    /// The picture's crossfade to the reloaded page: short enough to read as the same page, long
+    /// enough that the change of layout is not a jump cut.
+    public static let contentModeCrossfade: Double = 0.2
+    /// No skipping the reload for pages that look responsive: many big sites (shops, search,
+    /// social) serve another page to a desktop user agent at the same address, and a page with a
+    /// device-width viewport can still sniff it. A needless reload costs a second behind the
+    /// picture; a missed one leaves the phone site on the big screen, which is the complaint.
+    public static let contentModeSkipsResponsivePages = false
+
     // MARK: Dark pages (docs/research/dark-mode.md)
 
     /// Page appearance starts unchosen, which shows every site as it was made (owner, 2026-11-27;

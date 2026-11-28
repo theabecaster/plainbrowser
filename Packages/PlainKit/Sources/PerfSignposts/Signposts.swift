@@ -515,6 +515,21 @@ public enum Signposts {
     /// `viewWillTransition(to:with:)` to its completion, when the page insets apply. The message is
     /// the target size.
     public static let foldTransition: StaticString = "fold.transition"
+    /// Interval: the page on screen changing to desktop or mobile after its pane changed size,
+    /// from the reload to the crossfade onto the new page. The message is the new mode.
+    public static let contentModeSwitch: StaticString = "contentMode.switch"
+    /// Event: a page kept its mode after its pane changed size, and why (`typedInput`, `media`,
+    /// ...); its next navigation gets the new mode.
+    public static let contentModeKept: StaticString = "contentMode.kept"
+    /// Event: a pane starts to change size (a fold, a split, the side pane), at its first notice:
+    /// "may" (the safe area or the layout changed) or "will" (a window resize, a divider drag).
+    public static let contentModePaneChange: StaticString = "contentMode.paneChange"
+    /// Event: the reader's place being read when a pane starts to change size, before the page
+    /// reflows ("request", then "reply" when the page answered).
+    public static let contentModePlace: StaticString = "contentMode.place"
+    /// Event: the reloaded page was scrolled back to the reader's place. The message is the
+    /// scroll position it ended at.
+    public static let contentModeRestore: StaticString = "contentMode.restore"
     /// Interval: the sidebar moving between Hidden, Rail and Expanded, until it rests. The message
     /// is the state it rests in.
     public static let sidebarState: StaticString = "sidebar.state"

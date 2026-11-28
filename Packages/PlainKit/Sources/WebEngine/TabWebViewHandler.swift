@@ -71,15 +71,16 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         if NavigationRules.keepsHTTPAsRequested(url) {
             preferences.preferredHTTPSNavigationPolicy = .keepAsRequested
         }
-        // Desktop or mobile, decided now and kept for this page (never switched on resize).
+        // Desktop or mobile, decided now for this page. It becomes the tab's when the page commits;
+        // a later fold switches it only through `WebViewPool+ContentMode`.
         pool.slot(for: tab)?.pendingNavigationIsFormSubmission =
             action.request.httpMethod == "POST" || action.navigationType == .formResubmitted
         let mode = pool.contentMode(for: url, in: tab)
         preferences.preferredContentMode = mode == .desktop ? .desktop : .mobile
         let agent = mode == .desktop ? EngineChoices.desktopUserAgent : nil
         if webView.customUserAgent != agent { webView.customUserAgent = agent }
-        tab.set(\.contentMode, mode)
         if let slot = pool.slot(for: tab) {
+            pool.contentModeWillNavigate(slot, mode: mode, isBackForward: action.navigationType == .backForward)
             pool.applyContentRules(slot, mainFrameURL: url)
         }
         // The page appearance of the site it goes to, before its first style is resolved (a page
@@ -141,6 +142,7 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
             tab.isFormResult = slot.pendingNavigationIsFormSubmission
             tab.set(\.isAwaitingResubmit, false)
             tab.set(\.isPDF, slot.pendingNavigationIsPDF)
+            pool.contentModeDidCommit(slot)
             slot.pendingNavigationIsPDF = false
             // The old document's frames, and their media, are gone; the new one reports its own
             // dark pages state.
@@ -158,7 +160,10 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         signposter.webView(webView, didFinish: navigation)
         updateSecurity(of: webView)
         endRestore()
-        if let tab, let pool, let slot = pool.slot(for: tab) { pool.scheduleSave(slot) }
+        if let tab, let pool, let slot = pool.slot(for: tab) {
+            pool.scheduleSave(slot)
+            pool.contentModeDidFinish(slot, navigation: navigation)
+        }
         // The site's icon, once per site (`FaviconService`): a dictionary lookup otherwise.
         if let tab, let pool { pool.favicons.pageDidFinish(webView, tab: tab) }
     }
@@ -166,6 +171,9 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
         signposter.webView(webView, didFail: navigation, withError: error)
         endRestore()
+        if let tab, let pool, let slot = pool.slot(for: tab) {
+            pool.contentModeDidFail(slot, navigation: navigation)
+        }
         report(error as NSError)
     }
 
@@ -176,6 +184,9 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         endRestore()
         restorePageStyle(webView)
         let error = error as NSError
+        if let tab, let pool, let slot = pool.slot(for: tab) {
+            pool.contentModeDidFail(slot, navigation: navigation)
+        }
         if NavigationRules.isCertificateError(error), let tab, let pool {
             tab.set(\.loadError, LoadError(error))
             pool.handleCertificateError(error, in: tab)

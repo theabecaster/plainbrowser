@@ -95,12 +95,16 @@ never use a larger runner label (`-large`, `-xlarge`), which is billed. Why and 
 - `scripts/ci.sh` is the way in. It pushes one commit with no parents (HEAD's tree, plus
   `.github/ci-request.json` with the options) by "Plain CI" to `ci/<lane>`, so no history and no
   author email goes up; uncommitted changes are not included. It waits for the run, prints each
-  job's result and the Smoke tests' times, brings matrix rows back into `build/ci-matrix` (sheets
+  job's result and the Smoke tests' times, lists per device the tests that did not pass (failed,
+  timed out, or never ran), brings matrix rows back into `build/ci-matrix` (sheets
   made here), and deletes the branch and the run (`--keep` keeps them).
 - The default run: `swift test`, then the Smoke plan on the Duo and the iPhone 17, three runners
   each (`scripts/lib/smoke-shards.zsh` splits it by test class and checks that every class is in
   exactly one shard). Same tests and time limits as `scripts/test.sh`. `--tests` runs only the
   tests you name; `--matrix quick|full` (with `--rows`, `--matrix-tests`) adds matrix rows.
+- A hosted pass counts (nothing is retried; the limits are `test.sh`'s). A hosted failure does
+  not yet: the 3-core runners fail about 20 Smoke tests a run on timeouts and launches that pass
+  on a test Mac. Rerun the listed ones there (`-only-testing:`) before calling them failures.
 - Logs and artifacts are public while the run exists. Print and upload only what the repository
   already shows. Failure results are kept 3 days at most.
 - What stays on the test Macs and this Mac: anything that needs Device Hub (the Duo's real inner

@@ -67,6 +67,10 @@ nonisolated public enum EngineChoices {
     /// A pane whose shorter side is at least this wide gets desktop sites: the Duo's inner screen
     /// (951×669, 669×951) does, the outer screen, a split half and a phone in landscape do not.
     public static let desktopMinimumSide: CGFloat = 600
+    /// The page's answer before a desktop/mobile switch (`ContentModeScripts.probe`) may take this
+    /// long. Nothing waits on it (the fold has settled), and a busy page that misses it keeps its
+    /// mode, so it is longer than `webKitReplyTimeout`.
+    public static let contentModeProbeTimeout: Duration = .seconds(1)
 
     // MARK: Media (docs/research/media-playback.md)
 

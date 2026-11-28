@@ -48,6 +48,16 @@ struct ContentModeTests {
         }
     }
 
+    /// Waits for `mode`, saying why the page kept its mode if it never comes.
+    private func waitForMode(_ mode: ContentMode, _ tab: Tab, _ harness: Harness) async throws {
+        do {
+            try await waitUntil("\(mode)", timeout: .seconds(10)) { tab.contentMode == mode }
+        } catch {
+            report("kept: \(String(describing: harness.pool.slot(for: tab)?.contentMode.lastKept))")
+            throw error
+        }
+    }
+
     @Test func foldSwitchesToMobileAndBackKeepingTheParagraph() async throws {
         let harness = try await Harness(paneSize: Self.inner)
         defer { harness.cleanUp() }
@@ -66,7 +76,7 @@ struct ContentModeTests {
         // Nothing happens before the fold has settled.
         try await Task.sleep(for: .milliseconds(200))
         #expect(try await isMarked(harness, tab))
-        try await waitUntil("mobile", timeout: .seconds(10)) { tab.contentMode == .mobile }
+        try await waitForMode(.mobile, tab, harness)
         // The page's picture covers the reload.
         let covered = harness.container.subviews.count > 1
         try await settle(tab, harness)
@@ -80,12 +90,34 @@ struct ContentModeTests {
         #expect(tab.canGoBack == false, "a switch adds no history")
 
         fold(harness, to: Self.inner)
-        try await waitUntil("desktop", timeout: .seconds(10)) { tab.contentMode == .desktop }
+        try await waitForMode(.desktop, tab, harness)
         try await settle(tab, harness)
         #expect(try await platform(harness, tab) == "MacIntel")
         let afterUnfold = try await topParagraph(harness, tab)
         report("top paragraph after unfold \(afterUnfold)")
         #expect(afterUnfold.hasPrefix("Para 60") || afterUnfold.hasPrefix("Para 59") || afterUnfold.hasPrefix("Para 61"))
+    }
+
+    @Test func theProbeAnswers() async throws {
+        let harness = try await Harness(paneSize: Self.inner)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/long", in: tab)
+        let webView = try #require(harness.pool.existingWebView(for: tab))
+        do {
+            let answer = try await webView.callAsyncJavaScript(
+                ContentModeScripts.probe, arguments: ["topInset": 0.0], in: nil, contentWorld: UserScripts.world
+            )
+            report("probe: \(String(describing: answer))")
+            let probe = try #require((answer as? [String: Any]).map(ContentModeProbe.init))
+            #expect(probe.isDesktop == true)
+            #expect(!probe.hasTypedInput)
+            #expect(!probe.isEditing)
+        } catch {
+            report("probe error: \(error)")
+            throw error
+        }
     }
 
     @Test func typedTextKeepsTheModeUntilTheNextNavigation() async throws {
@@ -172,7 +204,7 @@ struct ContentModeTests {
         try await Task.sleep(for: FixedChoices.contentModeSettleDelay + .milliseconds(300))
         #expect(tab.contentMode == .desktop, "a hidden tab waits")
         harness.pool.attach(tab, to: harness.container)
-        try await waitUntil("mobile when shown", timeout: .seconds(10)) { tab.contentMode == .mobile }
+        try await waitForMode(.mobile, tab, harness)
         try await settle(tab, harness)
         #expect(try await platform(harness, tab) != "MacIntel")
     }
@@ -193,7 +225,7 @@ struct ContentModeTests {
         try await waitUntil("back") { tab.title == "Long" && !tab.isLoading }
         try await Task.sleep(for: FixedChoices.contentModeAttachDelay + .milliseconds(500))
         let platformNow = try await platform(harness, tab)
-        report("back to the long page: platform \(platformNow), tab mode \(tab.contentMode)")
+        report("back to the long page: platform \(platformNow), tab mode \(tab.contentMode), kept \(String(describing: harness.pool.slot(for: tab)?.contentMode.lastKept))")
         // Whatever WebKit served (its cache or a fresh load), the tab says which mode shows.
         #expect((platformNow == "MacIntel") == (tab.contentMode == .desktop))
     }

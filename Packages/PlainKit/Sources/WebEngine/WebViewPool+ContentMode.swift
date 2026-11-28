@@ -32,8 +32,13 @@ struct SlotContentMode {
     var pendingIsBackForward = false
     /// The page kept its mode because it was loading: check it again when the load ends.
     var checkWhenLoaded = false
+    /// A back or forward ended: the page may be from the back-forward cache, in the mode it was
+    /// loaded in, so the next check asks the page which mode it shows.
+    var needsVerify = false
     /// The switch in progress: its picture over the page and where to scroll back to.
     var running: ContentModeSwitch?
+    /// Why the last check kept the page's mode (for tests and the log).
+    var lastKept: ContentModeRules.KeepReason?
 }
 
 /// What `ContentModeScripts.probe` answered, in Swift values.
@@ -69,7 +74,7 @@ struct ContentModeProbe: Sendable {
         if let anchorPath {
             anchor = ["id": anchorID ?? NSNull(), "path": anchorPath, "into": anchorInto, "text": anchorText] as [String: Any]
         }
-        return ["top": top, "fraction": fraction, "anchor": anchor]
+        return ["topInset": top, "fraction": fraction, "anchor": anchor]
     }
 }
 
@@ -90,6 +95,8 @@ final class ContentModeSwitch {
 }
 
 extension WebViewPool {
+    nonisolated static let contentModeLogger = Logger(subsystem: "dev.abrahamgonzalez.plainbrowser", category: "contentMode")
+
     // MARK: Events from the shell
 
     /// A pane is about to change size (a fold, an unfold, a rotation): checks wait for it.
@@ -145,6 +152,13 @@ extension WebViewPool {
         guard let tab = slot.tab, slot.container != nil, slot.contentMode.running == nil, !slot.isRestoring,
               let url = slot.webView.url
         else { return }
+        if slot.contentMode.needsVerify {
+            slot.contentMode.needsVerify = false
+            await verifyContentMode(of: slot, tab: tab)
+            guard modeChecks.debounce.isCurrent(generation), slot.tab === tab, slot.container != nil,
+                  slot.contentMode.running == nil, slot.webView.url == url
+            else { return }
+        }
         let wanted = contentMode(for: url, in: tab)
         let state = pageState(of: slot, tab: tab)
         let first = ContentModeRules.decide(current: tab.contentMode, wanted: wanted, state: state)
@@ -161,10 +175,15 @@ extension WebViewPool {
         let webView = slot.webView
         let zoom = max(webView.scrollView.zoomScale, 0.01)
         let top = Double(webView.obscuredContentInsets.top / zoom)
-        let answer = await withWebKitTimeout(fallback: nil as ContentModeProbe?) { done in
+        let answer = await withWebKitTimeout(
+            fallback: nil as ContentModeProbe?, timeout: EngineChoices.contentModeProbeTimeout
+        ) { done in
             webView.callAsyncJavaScript(
-                ContentModeScripts.probe, arguments: ["top": top], in: nil, in: UserScripts.world
+                ContentModeScripts.probe, arguments: ["topInset": top], in: nil, in: UserScripts.world
             ) { result in
+                if case .failure(let error) = result {
+                    WebViewPool.contentModeLogger.error("probe failed: \(error.localizedDescription, privacy: .public)")
+                }
                 done(((try? result.get()) as? [String: Any]).map(ContentModeProbe.init))
             }
         }
@@ -194,8 +213,23 @@ extension WebViewPool {
         }
     }
 
+    /// Reads the document's own mode (`navigator.platform` is `MacIntel` only in desktop mode,
+    /// per document) and corrects `Tab.contentMode`. One IPC, after a back or forward only.
+    private func verifyContentMode(of slot: Slot, tab: Tab) async {
+        let webView = slot.webView
+        let platform = await withWebKitTimeout(fallback: nil as String?, timeout: EngineChoices.contentModeProbeTimeout) { done in
+            webView.callAsyncJavaScript("return navigator.platform", in: nil, in: UserScripts.world) { result in
+                done((try? result.get()) as? String)
+            }
+        }
+        guard let platform, slot.tab === tab else { return }
+        let shown: ContentMode = platform == "MacIntel" ? .desktop : .mobile
+        if shown != tab.contentMode { tab.set(\.contentMode, shown) }
+    }
+
     private func kept(_ reason: ContentModeRules.KeepReason, slot: Slot) {
         Signposts.signposter.emitEvent(Signposts.contentModeKept, "\(reason.rawValue)")
+        slot.contentMode.lastKept = reason
         if reason == .loading { slot.contentMode.checkWhenLoaded = true }
     }
 
@@ -305,6 +339,7 @@ extension WebViewPool {
         // mode while loading can switch now.
         if slot.container != nil, backForward || slot.contentMode.checkWhenLoaded {
             slot.contentMode.checkWhenLoaded = false
+            if backForward { slot.contentMode.needsVerify = true }
             scheduleContentModeCheck(after: FixedChoices.contentModeAttachDelay)
         }
     }

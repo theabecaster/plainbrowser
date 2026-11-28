@@ -5,7 +5,7 @@ import Foundation
 nonisolated enum ContentModeScripts {
     /// Asks the page whether a reload would lose anything, which mode its document was really
     /// loaded in (a page from the back-forward cache keeps its own), and where it is scrolled to.
-    /// Takes `top`: the height in CSS pixels the browser's bar covers at the top of the page.
+    /// Takes `topInset`: the height in CSS pixels the browser's bar covers at the top of the page.
     ///
     /// - Typed input: a text field, text area, select, checkbox or radio whose value differs from
     ///   what the page served, in the document or a same-origin frame. Cross-origin frames can't
@@ -18,7 +18,14 @@ nonisolated enum ContentModeScripts {
           for (const el of doc.querySelectorAll('input, textarea, select')) {
             const type = (el.type || '').toLowerCase();
             if (el.tagName === 'SELECT') {
-              for (const option of el.options) if (option.selected !== option.defaultSelected) return true;
+              // With no option marked selected, a single select shows its first one.
+              const options = Array.from(el.options);
+              const marked = options.some((option) => option.defaultSelected);
+              if (el.multiple || marked) {
+                if (options.some((option) => option.selected !== option.defaultSelected)) return true;
+              } else if (el.selectedIndex > 0) {
+                return true;
+              }
             } else if (type === 'checkbox' || type === 'radio') {
               if (el.checked !== el.defaultChecked) return true;
             } else if (!['button', 'submit', 'reset', 'image', 'hidden', 'file'].includes(type)) {
@@ -46,7 +53,7 @@ nonisolated enum ContentModeScripts {
           }
           return false;
         };
-        const edge = Math.max(0, top) + 1;
+        const edge = Math.max(0, topInset) + 1;
         let el = document.elementFromPoint(innerWidth / 2, Math.min(edge, innerHeight - 1));
         let anchor = null;
         if (el && el !== document.body && el !== document.documentElement) {
@@ -75,13 +82,13 @@ nonisolated enum ContentModeScripts {
         """
 
     /// Puts the page back where `probe` found it: the anchor's element under the top edge when
-    /// it is still there with the same text, else the same scroll fraction. Takes `top`,
+    /// it is still there with the same text, else the same scroll fraction. Takes `topInset`,
     /// `anchor` and `fraction` as `probe` returned them. Waits two frames, so WebKit's own
     /// restore of the reloaded page has run and the result is painted before the picture over
     /// the page fades.
     static let restore = """
         const scroller = document.scrollingElement || document.documentElement;
-        const edge = Math.max(0, top) + 1;
+        const edge = Math.max(0, topInset) + 1;
         let target = null;
         if (anchor) {
           let node = anchor.id ? document.getElementById(anchor.id) : document.body;

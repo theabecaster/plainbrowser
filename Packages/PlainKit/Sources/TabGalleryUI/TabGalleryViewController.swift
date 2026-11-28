@@ -711,9 +711,10 @@ public final class TabGalleryViewController: UIViewController {
     }
 
     /// The shell changed which list the data source shows (another profile's, from the
-    /// switcher): the cards cross-fade to it, as for the private toggle.
-    public func showList() {
-        Haptic.selection.play()
+    /// switcher): the cards cross-fade to it, as for the private toggle. `tick: false` where the
+    /// caller already played a haptic (deleting a profile), so it never fires twice.
+    public func showList(tick: Bool = true) {
+        if tick { Haptic.selection.play() }
         toast.hide(animated: true)
         crossfadeToList()
     }

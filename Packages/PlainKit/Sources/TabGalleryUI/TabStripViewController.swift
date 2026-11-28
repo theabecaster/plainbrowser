@@ -201,9 +201,11 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     }
 
     /// One tab and the gap after it, where the strip scrolls and holds one section; nil otherwise
-    /// (it fits, or the private section breaks the even steps).
+    /// (it fits, or the private section breaks the even steps). Left to right only: in right to
+    /// left the leading edge is the physical right, which these offsets don't measure from.
     private var snapStep: CGFloat? {
-        guard !hasPrivateTabs, collectionView.contentSize.width > collectionView.bounds.width + 1 else { return nil }
+        guard !hasPrivateTabs, view.effectiveUserInterfaceLayoutDirection == .leftToRight,
+              collectionView.contentSize.width > collectionView.bounds.width + 1 else { return nil }
         let step = flow.itemSize.width + Self.tabGap
         return step > 0 ? step : nil
     }

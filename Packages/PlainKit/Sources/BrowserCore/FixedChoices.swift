@@ -614,6 +614,10 @@ public enum FixedChoices {
     public static let verticalBarPanelInset: Double = 6
     /// Its corner radius: about concentric with the outer screen's display corners at that inset.
     public static let verticalBarPanelRadius: Double = 28
+    /// The panel's shadow: lifts it off the paper so the page meets a raised glass edge rather
+    /// than a flat change of colour, strongest over a dark page (design review). Blur radius, then
+    /// opacity in light mode and in dark mode or a private tab, where a faint one vanishes.
+    public static let verticalBarPanelShadow: (radius: Double, light: Double, dark: Double) = (10, 0.14, 0.45)
     /// The top bar on a wide screen (the Duo's inner screen, iPad-size windows): one row of 44 pt
     /// controls under the status bar, as Safari puts it there. The page gets the full width and
     /// height under it, and the bar shrinks to the address while reading.

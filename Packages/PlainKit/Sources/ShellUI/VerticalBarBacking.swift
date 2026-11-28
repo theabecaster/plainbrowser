@@ -37,7 +37,7 @@ final class VerticalBarBacking: UIView {
         shadow.isUserInteractionEnabled = false
         shadow.layer.shadowColor = UIColor.black.cgColor
         shadow.layer.shadowOffset = .zero
-        shadow.layer.shadowRadius = 10
+        shadow.layer.shadowRadius = CGFloat(FixedChoices.verticalBarPanelShadow.radius)
         addSubview(shadow)
         addSubview(glass)
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: VerticalBarBacking, _) in view.updateShadow() }
@@ -48,7 +48,8 @@ final class VerticalBarBacking: UIView {
 
     private func updateShadow() {
         // Stronger in dark mode and on the always-dark private glass, where a faint one vanishes.
-        shadow.layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark || isPrivate ? 0.45 : 0.14
+        shadow.layer.shadowOpacity = Float(traitCollection.userInterfaceStyle == .dark || isPrivate
+            ? FixedChoices.verticalBarPanelShadow.dark : FixedChoices.verticalBarPanelShadow.light)
     }
 
     @available(*, unavailable)

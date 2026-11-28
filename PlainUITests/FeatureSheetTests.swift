@@ -48,7 +48,9 @@ final class FeatureSheetTests: XCTestCase {
     /// first, with the footer once under the last; one tap on a row brings its tab back.
     func testArchiveGroupsTabsByWhenTheyWereArchived() throws {
         let app = try launch(["-PlainSeedArchive"])
-        go(app, to: "/a", heading: "Page A")
+        // A page, so More is the page sheet; a cold simulator's first page can take a while.
+        type(app, server.address("/a") + "\n")
+        XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 30), "page \"Page A\" did not show")
         pageMenu(app, pick: "more.archivedTabs")
         let sheet = app.otherElements["archiveSheet"]
         XCTAssertTrue(sheet.waitForExistence(timeout: 3))

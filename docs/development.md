@@ -164,11 +164,11 @@ does not match.
 | `galleryMs` | `testGalleryOpen`: the `gallery.show` interval, from the tabs button's action (the gallery made ready and the page snapshotted inside it, since 2026-11-27), ending when the page is within 0.5 pt of its card and moving less than 0.5 pt a frame (not at Core Animation's settle of the spring's tail) |
 | `swipeMs` | `testBarSwipe`: the `tab.swipeSettle` interval, the finger lifting until the page is visibly at rest on the neighbour (within 0.5 pt, moving less than 0.5 pt a frame) and the new tab has taken the page (`tab.swipeHandoff`, also reported). The test's scripted drag is left out. Each iteration waits out the settle before it ends: the metric drops an interval that ends after the measure block. |
 | `lastTabMs` | `testLaunchToLastTab`: `launch.firstFrame` with a last tab, its picture and resting bar on the first frame |
-| `focusMs` | `testAddressBarFocus`: `urlBar.ready`, a tap on `addressPill` until `keyboardDidShow` (the system keyboard's rise is inside) |
+| `focusMs` | `testAddressBarFocus`: `urlBar.ready`, a tap on `addressPill` until `keyboardDidShow` (the system keyboard's rise is inside). The test also reports `urlBar.keyboardStart`, the tap until `keyboardWillShow`: the part before the rise starts (not budgeted) |
 | `suggestionsMs` | `testKeystrokeToSuggestions`: `search.suggestions`, one keystroke (the "t" of "Plain Test") until its local rows are applied; measuring stops before the letter is deleted |
-| `linkPaintMs` | `testLinkTapToFirstPaint`: the pages measure it (TestServer `/paint-start`, `/paint-target`): the link's touchend until the next page's first contentful paint (Paint Timing), both on the page's clock, handed to XCTest by `PageReportedMetric` |
+| `linkPaintMs` | `testLinkTapToFirstPaint`: the pages measure it (TestServer `/paint-start`, `/paint-target`): the link's touchend until the next page's first contentful paint (Paint Timing), both on the page's clock (the tap's time rides in the link's address), handed to XCTest by `PageReportedMetric`, which matches each value to its iteration by the runner's mach clock |
 | `galleryTabMs` | `testGalleryTabOpen`: `gallery.openTab`, a card tapped until its page rests (the tap lands on the part of the card that shows) |
-| `newTabMs` | `testNewTabToSearchField`: `tab.newReady`, the tabs menu's New Tab until `keyboardDidShow` |
+| `newTabMs` | `testNewTabToSearchField`: `tab.newReady`, the tabs menu's New Tab until `keyboardDidShow`; also reports `tab.newKeyboardStart`, New Tab until `keyboardWillShow` (not budgeted) |
 | `memoryMB` | `testMemoryWithTenTabs`: `XCTMemoryMetric`'s absolute physical footprint of the app process with ten local pages in tabs, after the gallery shows them. WebKit's processes are not counted. |
 | `heavyHitchMsPerS` | `testHeavyPageScrollHitches`: `XCTHitchMetric` while scrolling TestServer `/big` (6,300 elements, 4,000 rules) with Appearance set to Dark, so dark pages darken it. Device only. |
 
@@ -191,6 +191,9 @@ shared with the owner's app: a read-only cache built from the bundled lists, the
 run, holding no user data (which sites have blocking off lives in the isolated database). The
 interaction tests (focus, suggestions, link paint, new tab, memory, heavy page) use the in-memory
 store and local TestServer pages; the heavy page test sets Appearance to Dark in that store only.
+
+A metric with no measurement fails the gate with its test's first failure lines from the run's
+log, so a device run says why (the result bundle stays in `build/perf/`).
 
 Exit codes: 0 pass, 1 budget breach, regression or test failure, 2 device not ready.
 

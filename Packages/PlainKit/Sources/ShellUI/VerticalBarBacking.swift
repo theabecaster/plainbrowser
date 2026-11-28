@@ -12,7 +12,7 @@ import UIKit
 /// the change from the page to it is less abrupt", and the page "should still not show [through
 /// it] ... but it'll transition better to the eye like that". So the layout stays: the page ends
 /// where it did and nothing of it is behind the column. The column becomes one floating panel of
-/// Liquid Glass in Plain's tint (`Palette.glassTint`; the private violet drawn dark in a private
+/// Liquid Glass in Plain's tint (`Palette.glassTint`; Night drawn dark in a private
 /// tab), inset a few points from the page and the screen's edges with round corners, as the
 /// sidebars of Apple's own apps float in glass: the page meets a soft rounded glass edge with its
 /// rim light, not a hard seam.
@@ -68,7 +68,7 @@ final class VerticalBarBacking: UIView {
         }
     }
 
-    /// Paper glass, or the private violet drawn dark (as the pill and the buttons).
+    /// Paper glass, or Night drawn dark (as the pill and the buttons).
     func setPrivate(_ isPrivate: Bool) {
         let effect = UIGlassEffect(style: .regular)
         effect.tintColor = isPrivate ? Palette.privateGlassTint : Palette.glassTint

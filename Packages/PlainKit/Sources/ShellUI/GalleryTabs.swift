@@ -18,6 +18,8 @@ protocol GalleryHost: AnyObject {
     func galleryShowArchive()
     var galleryCanShowArchive: Bool { get }
     var galleryCanOpenInOtherPane: Bool { get }
+    /// The window is in private mode (`BrowserViewController.showsPrivateMode`).
+    var showsPrivateMode: Bool { get }
     func galleryOpenInOtherPane(_ id: TabID)
     func galleryReturnToPage()
     func galleryProfileMenu() -> [UIMenuElement]
@@ -49,7 +51,12 @@ final class GalleryTabs: TabGalleryDataSource {
     var selectedTabID: UUID? { engineTabs.selectedID }
     var canReopenClosedTab: Bool { !isShowingPrivateTabs && engineTabs.store.lastClosedBatch(in: shownProfile) != nil }
     var supportsPrivateTabs: Bool { true }
-    var canOpenInOtherPane: Bool { host?.galleryCanOpenInOtherPane ?? false }
+    /// Only for the window's own mode: a split shows one mode (docs/decisions.md, "Private as a
+    /// clear mode on wide screens"), so the other list's cards open in the focused pane instead.
+    var canOpenInOtherPane: Bool {
+        guard let host else { return false }
+        return host.galleryCanOpenInOtherPane && isShowingPrivateTabs == host.showsPrivateMode
+    }
 
     func openInOtherPane(_ id: UUID) {
         host?.galleryOpenInOtherPane(id)

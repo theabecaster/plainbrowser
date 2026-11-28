@@ -340,7 +340,7 @@ public enum Signposts {
     public static let archiveShow: StaticString = "archive.show"
     /// Interval: the Archive screen reads its tabs and puts them in their sections (open, search).
     public static let archiveLoad: StaticString = "archive.load"
-    /// Event: private browsing turned on or off in the gallery.
+    /// Event: private browsing turned on or off (the gallery, the wide tab list's switch, a split ended by it).
     public static let privateMode: StaticString = "tab.privateMode"
     /// Event: the gallery switched to another profile's tabs from its profile switcher.
     public static let profileShow: StaticString = "profile.show"

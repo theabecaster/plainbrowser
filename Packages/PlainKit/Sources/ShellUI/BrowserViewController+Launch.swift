@@ -284,6 +284,12 @@ extension BrowserViewController {
             show(fresh)
             return fresh
         }
+        // An empty pane beside a private page types into a private tab: one window, one mode.
+        if currentTab == nil, showsPrivateMode {
+            let tab = session.tabs.newTab(isPrivate: true)
+            show(tab)
+            return tab
+        }
         return currentTab ?? openNewTab()
     }
 }

@@ -307,8 +307,8 @@ final class EngineTabs {
     }
 
     /// Closes `pane`; its tab stays open. The other pane is focused.
-    func closePane(_ pane: Int) {
-        store.closePane(pane, in: window)
+    func closePane(_ pane: Int, touching: Bool = true) {
+        store.closePane(pane, in: window, touching: touching)
         checkProfile()
     }
 

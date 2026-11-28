@@ -548,7 +548,7 @@ public final class TabGalleryViewController: UIViewController {
 
     private func updateChrome() {
         let isPrivate = dataSource.isShowingPrivateTabs
-        // Private tabs: the same blur, tinted with the private dusk.
+        // Private tabs: the same blur, tinted with Night.
         let dim = isPrivate ? Palette.privateBackground.withAlphaComponent(0.7) : Palette.galleryDim
         if backdrop.contentView.backgroundColor != dim || isShowingPrivate != isPrivate {
             isShowingPrivate = isPrivate

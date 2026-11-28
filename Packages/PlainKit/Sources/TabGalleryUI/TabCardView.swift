@@ -284,7 +284,7 @@ final class TabCardView: UIView {
         // edge, so stacked dark pages stay apart.
         shadowView.layer.shadowColor = Palette.floatingShadow.resolvedColor(with: traitCollection).cgColor
         shadowView.layer.shadowOpacity = dark ? 0.5 : 0.16
-        // A quiet plate: a veil of ink on paper; private cards take the private chrome's violet.
+        // A quiet plate: a veil of ink on paper; private cards take the private chrome's Night.
         closePlate.backgroundColor = isPrivateTab
             ? Palette.privateGlassTint
             : UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.16) : UIColor(white: 0, alpha: 0.07) }

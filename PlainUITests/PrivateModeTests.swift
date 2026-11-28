@@ -219,10 +219,7 @@ final class PrivateModeTests: XCTestCase {
         tabsMenu(app, pick: "New Private Tab")
         pause(1)
         shot("p2-private-focus")
-        closeSearch(app)
-        pause(0.8)
-        shot("p3-private-start")
-
+        // Typed straight away: closing the field untouched would go back to the regular page.
         go(app, to: "/long")
         waitForPage(app, "Long Read")
         pause(1.5)
@@ -239,6 +236,16 @@ final class PrivateModeTests: XCTestCase {
         app.buttons["galleryRegular"].tap()
         pause(1.2)
         shot("p7-regular-switcher")
+        app.terminate()
+
+        // The empty private tab's start screen (`-PlainPrivate`: an empty private tab at launch).
+        let start = try launch(["-PlainInMemoryStore", "-PlainPrivate"])
+        if start.textFields["searchField"].waitForExistence(timeout: 3), start.textFields["searchField"].hasKeyboardFocus {
+            closeSearch(start)
+        }
+        XCTAssertTrue(start.staticTexts["start.privateTitle"].waitForExistence(timeout: 5))
+        pause(1)
+        shot("p3-private-start")
     }
 
     private func pause(_ seconds: TimeInterval) {

@@ -175,6 +175,8 @@ extension BrowserViewController {
         // principle 7), once the new tab has the pane.
         let leftEmpty = currentTab.flatMap { session.tabs.isEmpty($0.id) ? $0 : nil }
         defer { if let leftEmpty { dropEmptyTab(leftEmpty) } }
+        // One window, one mode: a tab of the other kind ends a split first.
+        endSplitOfOtherMode(before: tab)
         let focusBefore = session.tabs.focusedPane
         // The store decides the pane first: the outgoing tab stays attached if it is still shown.
         session.tabs.select(tab)
@@ -274,7 +276,8 @@ extension BrowserViewController {
         updateHandoff(page: nil, title: "", isPrivate: false)
         pill.display(url: nil)
         pill.progressBar.finish()
-        setPrivateChrome(false)
+        // An empty pane beside a private page is in the window's private mode.
+        setPrivateChrome(showsPrivateMode)
         refreshNeighbourPreviews()
         updateButtons()
         updatePageState()
@@ -318,12 +321,17 @@ extension BrowserViewController {
             self.pill.setPrivate(isPrivate)
             self.duo.top.band.setPrivate(isPrivate)
             self.duo.strip?.setPrivate(isPrivate)
+            self.duo.sidebar?.setPrivate(isPrivate)
+            self.sheet.setPrivate(isPrivate)
             self.verticalBarBacking.setPrivate(isPrivate)
             self.buttonBar.setPrivate(isPrivate)
             self.tabsUI.toast.setPrivate(isPrivate)
             // The strip under the status bar too, so the whole screen says private, quietly.
             self.view.backgroundColor = isPrivate ? Palette.privateBackground : Paper.background
         }
+        // The tab lists swap to the mode's own tabs (one crossfade each, `reloadTabs`).
+        duo.sidebar?.reloadTabs()
+        duo.strip?.reloadTabs()
     }
 
     /// Follows the tab's observed state: the pill, the buttons, progress and the page's state.

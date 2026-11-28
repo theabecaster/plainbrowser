@@ -445,7 +445,9 @@ public struct ControlRules: Sendable, Equatable {
 
     /// Whether More's new-tab item opens a private tab. Always shown; on an empty private tab it
     /// reads "New Tab" and turns this tab regular (nothing is added).
-    public var moreNewTabOpensPrivate: Bool { !(state.hasTab && !state.hasPage && state.isPrivate) }
+    /// Not on an empty private tab, nor on an empty pane in a private window: there it reads
+    /// Leave Private.
+    public var moreNewTabOpensPrivate: Bool { !(!state.hasPage && state.isPrivate) }
 
     public var moreReopenClosedTab: Bool { state.hasClosed }
     public var moreArchivedTabs: Bool { state.hasArchived }

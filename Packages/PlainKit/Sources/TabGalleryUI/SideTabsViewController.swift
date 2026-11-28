@@ -16,7 +16,11 @@ import UIKit
 ///
 /// Rows come from `SideTabsDataSource` (the shell's `TabStore`): tap to show a tab in the focused
 /// pane, drag to reorder, close from the row (Expanded) or its menu, New Tab on top (a long press
-/// offers New Private Tab), private tabs in their own section.
+/// offers the other kind).
+///
+/// Private is a mode (docs/decisions.md, "Private as a clear mode on wide screens"): the head's two
+/// rows, Private and Tabs, are the Private | Tabs switch, one tap each way, and the list shows the
+/// shown mode's tabs only. While private the whole column is Night, drawn dark.
 public final class SideTabsViewController: UIViewController, UICollectionViewDelegate,
     UICollectionViewDragDelegate, UICollectionViewDropDelegate, UIGestureRecognizerDelegate {
     public enum ResizePhase {
@@ -30,7 +34,11 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
 
     private(set) var collectionView: UICollectionView!
     private var diffable: UICollectionViewDiffableDataSource<Int, UUID>!
-    private let header = UIView()
+    private let header = UIStackView()
+    private let privateRow = SideActionRow(symbolName: "hand.raised", title: String(localized: "Private"), prominent: false)
+    private let tabsRow = SideActionRow(symbolName: "square.on.square", title: String(localized: "Tabs"), prominent: false)
+    /// The hairline between the switch and the list.
+    private let headRule = UIView()
     private let newTabButton = SideActionRow(symbolName: "plus", title: String(localized: "New Tab"), prominent: true)
     private let titlesButton = SideActionRow(symbolName: "sidebar.left", title: String(localized: "Show Titles"), prominent: false)
     private let separator = UIView()
@@ -39,10 +47,10 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     private var items: [UUID: TabGalleryItem] = [:]
     private var focusedID: UUID?
     private var otherID: UUID?
+    /// The mode the rows shown belong to.
+    private(set) var showsPrivate = false
 
     private static let regularSection = 0
-    private static let privateSection = 1
-    private static let privateHeaderKind = "privateHeader"
 
     /// How much of the rows the host shows now (the sidebar's width): the rail's shows tiles
     /// only, more brings the titles and close buttons in. Set inside an animation, the selection
@@ -76,6 +84,8 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         for case let cell as SideTabCell in collectionView.visibleCells { cell.setVisibleWidth(width) }
         newTabButton.setVisibleWidth(width)
         titlesButton.setVisibleWidth(width)
+        privateRow.setVisibleWidth(width)
+        tabsRow.setVisibleWidth(width)
     }
 
     private func updateTitlesButton() {
@@ -153,21 +163,42 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         view.addSubview(content)
 
         newTabButton.accessibilityIdentifier = "sideTabs.newTab"
-        newTabButton.addAction(UIAction { [weak self] _ in self?.dataSource.newTab(private: false) }, for: .primaryActionTriggered)
+        newTabButton.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            dataSource.newTab(private: showsPrivate)
+        }, for: .primaryActionTriggered)
+        // The other kind, which a tap does not open.
         newTabButton.menu = UIMenu(children: [
-            UIAction(title: "New Private Tab", image: UIImage(systemName: "hand.raised")) { [weak self] _ in
-                self?.dataSource.newTab(private: true)
+            UIDeferredMenuElement.uncached { [weak self] completion in
+                guard let self else { return completion([]) }
+                let toPrivate = !showsPrivate
+                completion([UIAction(
+                    title: toPrivate ? String(localized: "New Private Tab") : String(localized: "New Tab"),
+                    image: UIImage(systemName: toPrivate ? "hand.raised" : "plus")
+                ) { [weak self] _ in self?.dataSource.newTab(private: toPrivate) }])
             },
         ])
+        privateRow.accessibilityIdentifier = "sideTabs.private"
+        tabsRow.accessibilityIdentifier = "sideTabs.regular"
+        for (row, isPrivate) in [(privateRow, true), (tabsRow, false)] {
+            row.addAction(UIAction { [weak self] _ in self?.modeTapped(isPrivate) }, for: .primaryActionTriggered)
+        }
+        privateRow.menu = UIMenu(children: [
+            UIDeferredMenuElement.uncached { [weak self] completion in completion(self?.privateMenu() ?? []) },
+        ])
+        headRule.backgroundColor = Palette.paperHairline
+        headRule.translatesAutoresizingMaskIntoConstraints = false
+        let ruleRow = UIView()
+        ruleRow.addSubview(headRule)
         titlesButton.accessibilityIdentifier = "sideTabs.titles"
         titlesButton.addAction(UIAction { [weak self] _ in self?.onToggleTitles?() }, for: .primaryActionTriggered)
         titlesButton.translatesAutoresizingMaskIntoConstraints = false
         titlesButton.isHidden = !canShowTitles
         content.addSubview(titlesButton)
         updateTitlesButton()
-        newTabButton.translatesAutoresizingMaskIntoConstraints = false
+        header.axis = .vertical
         header.translatesAutoresizingMaskIntoConstraints = false
-        header.addSubview(newTabButton)
+        for row in [privateRow, tabsRow, ruleRow, newTabButton] { header.addArrangedSubview(row) }
         content.addSubview(header)
 
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: Self.makeLayout())
@@ -180,9 +211,6 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         collectionView.showsVerticalScrollIndicator = false
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.register(SideTabCell.self, forCellWithReuseIdentifier: SideTabCell.reuseID)
-        collectionView.register(
-            PrivateHeaderView.self, forSupplementaryViewOfKind: Self.privateHeaderKind, withReuseIdentifier: PrivateHeaderView.reuseID
-        )
         content.addSubview(collectionView)
 
         separator.backgroundColor = Palette.paperHairline
@@ -203,11 +231,17 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
             header.topAnchor.constraint(equalTo: content.topAnchor, constant: Spacing.xs),
             header.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             header.widthAnchor.constraint(equalToConstant: width),
-            header.heightAnchor.constraint(equalToConstant: SideTabMetrics.rowHeight),
-            newTabButton.topAnchor.constraint(equalTo: header.topAnchor),
-            newTabButton.bottomAnchor.constraint(equalTo: header.bottomAnchor),
-            newTabButton.leadingAnchor.constraint(equalTo: header.leadingAnchor),
-            newTabButton.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+            privateRow.heightAnchor.constraint(equalToConstant: SideTabMetrics.rowHeight),
+            tabsRow.heightAnchor.constraint(equalToConstant: SideTabMetrics.rowHeight),
+            // Below required: the stack collapses the row to zero while it is hidden.
+            newTabButton.heightAnchor.constraint(equalToConstant: SideTabMetrics.rowHeight).withPriority(.required - 1),
+            // A hairline under the switch, as wide as the rail's tiles in the rail and the
+            // titled rows' plates past it (it is clipped with them).
+            ruleRow.heightAnchor.constraint(equalToConstant: Spacing.s + 1),
+            headRule.heightAnchor.constraint(equalToConstant: 1 / max(1, traitCollection.displayScale)),
+            headRule.centerYAnchor.constraint(equalTo: ruleRow.centerYAnchor),
+            headRule.leadingAnchor.constraint(equalTo: ruleRow.leadingAnchor, constant: Spacing.s),
+            headRule.trailingAnchor.constraint(equalTo: ruleRow.trailingAnchor, constant: -Spacing.s),
             collectionView.topAnchor.constraint(equalTo: header.bottomAnchor, constant: Spacing.xs),
             collectionView.bottomAnchor.constraint(equalTo: titlesButton.topAnchor),
             // The bottom row stands clear of the home indicator.
@@ -231,9 +265,6 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
             if let self, let cell = cell as? SideTabCell { self.configure(cell, id: id) }
             return cell
         }
-        diffable.supplementaryViewProvider = { collectionView, kind, indexPath in
-            collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: PrivateHeaderView.reuseID, for: indexPath)
-        }
         diffable.reorderingHandlers.canReorderItem = { _ in true }
         diffable.reorderingHandlers.didReorder = { [weak self] transaction in
             self?.didReorder(transaction)
@@ -249,7 +280,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     }
 
     private static func makeLayout() -> UICollectionViewLayout {
-        UICollectionViewCompositionalLayout { section, _ in
+        UICollectionViewCompositionalLayout { _, _ in
             let item = NSCollectionLayoutItem(
                 layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(SideTabMetrics.rowHeight))
             )
@@ -257,15 +288,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
                 layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(SideTabMetrics.rowHeight)),
                 subitems: [item]
             )
-            let layoutSection = NSCollectionLayoutSection(group: group)
-            if section == privateSection {
-                let header = NSCollectionLayoutBoundarySupplementaryItem(
-                    layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(32)),
-                    elementKind: privateHeaderKind, alignment: .top
-                )
-                layoutSection.boundarySupplementaryItems = [header]
-            }
-            return layoutSection
+            return NSCollectionLayoutSection(group: group)
         }
     }
 
@@ -278,36 +301,90 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         newTabButton.isHidden = !shown
     }
 
-    /// Reads the tabs again (a title, a selection, a close elsewhere) and shows what changed.
+    /// The column's look: Paper, or Night drawn dark while private, as the top bar's glass, so the
+    /// whole screen says which mode it is in. Set inside the chrome's mode change (`Motion.quick`).
+    public func setPrivate(_ isPrivate: Bool) {
+        loadViewIfNeeded()
+        let style: UIUserInterfaceStyle = isPrivate ? .dark : .unspecified
+        guard view.overrideUserInterfaceStyle != style else { return }
+        view.overrideUserInterfaceStyle = style
+        if isPrivate {
+            view.backgroundColor = Palette.privateBackground
+        } else {
+            Paper.apply(to: view)
+        }
+    }
+
+    /// A row of the switch was tapped: the other mode comes on screen; the shown one does nothing.
+    private func modeTapped(_ isPrivate: Bool) {
+        guard isPrivate != showsPrivate else { return }
+        Haptic.selection.play()
+        dataSource.showMode(private: isPrivate)
+        reloadTabs()
+    }
+
+    /// The Private row's long press: a new private tab, and Close All Private Tabs while there
+    /// are any.
+    private func privateMenu() -> [UIMenuElement] {
+        let new = UIAction(title: String(localized: "New Private Tab"), image: UIImage(systemName: "hand.raised")) { [weak self] _ in
+            self?.dataSource.newTab(private: true)
+            self?.reloadTabs()
+        }
+        new.accessibilityIdentifier = "sideTabs.newPrivateTab"
+        guard dataSource.privateCount > 0 else { return [new] }
+        let closeAll = UIAction(
+            title: String(localized: "Close All Private Tabs"), image: UIImage(systemName: "hand.raised.slash"), attributes: .destructive
+        ) { [weak self] _ in
+            self?.dataSource.closeAllPrivateTabs()
+            self?.reloadTabs()
+        }
+        closeAll.accessibilityIdentifier = "sideTabs.closeAllPrivate"
+        return [new, UIMenu(options: .displayInline, children: [closeAll])]
+    }
+
+    /// Reads the tabs again (a title, a selection, a close elsewhere) and shows what changed. A
+    /// change of mode swaps the whole list in one crossfade.
     public func reloadTabs() {
         guard isViewLoaded else { return }
-        let regular = dataSource.regularTabs
-        let privateTabs = dataSource.privateTabs
+        let modeChanged = dataSource.showsPrivate != showsPrivate
+        showsPrivate = dataSource.showsPrivate
+        let shown = dataSource.tabs
         var next: [UUID: TabGalleryItem] = [:]
-        for item in regular + privateTabs { next[item.id] = item }
+        for item in shown { next[item.id] = item }
         let focused = dataSource.focusedTabID
         let other = dataSource.otherPaneTabID
 
+        privateRow.set(symbolName: showsPrivate ? "hand.raised.fill" : "hand.raised", title: String(localized: "Private"))
+        privateRow.setMode(selected: showsPrivate, isPrivateRow: true, count: dataSource.privateCount)
+        tabsRow.setMode(selected: !showsPrivate, isPrivateRow: false, count: dataSource.regularCount)
+        newTabButton.set(
+            symbolName: "plus", title: showsPrivate ? String(localized: "New Private Tab") : String(localized: "New Tab")
+        )
+
         var snapshot = NSDiffableDataSourceSnapshot<Int, UUID>()
         snapshot.appendSections([Self.regularSection])
-        snapshot.appendItems(regular.map(\.id), toSection: Self.regularSection)
-        if !privateTabs.isEmpty {
-            snapshot.appendSections([Self.privateSection])
-            snapshot.appendItems(privateTabs.map(\.id), toSection: Self.privateSection)
-        }
+        snapshot.appendItems(shown.map(\.id), toSection: Self.regularSection)
         let old = diffable.snapshot()
         let marked = Set([focusedID, otherID, focused, other].compactMap { $0 })
         let changed = next.keys.filter { id in
             old.indexOfItem(id) != nil && (items[id] != next[id] || marked.contains(id))
         }
         snapshot.reconfigureItems(changed)
-        let focusMoved = focused != focusedID
+        let focusMoved = focused != focusedID || modeChanged
         items = next
         focusedID = focused
         otherID = other
-        diffable.apply(snapshot, animatingDifferences: old.numberOfItems > 0 && view.window != nil)
+        let animated = old.numberOfItems > 0 && view.window != nil
         if focusMoved { needsFocusScroll = true }
-        scrollFocusedIntoViewIfNeeded(animated: old.numberOfItems > 0 && view.window != nil)
+        if modeChanged, view.window != nil {
+            // The rows of the mode left go in one quick fade, the new ones come in with it.
+            Motion.crossfadeMode(collectionView) {
+                self.diffable.apply(snapshot, animatingDifferences: false)
+            }
+        } else {
+            diffable.apply(snapshot, animatingDifferences: animated)
+        }
+        scrollFocusedIntoViewIfNeeded(animated: animated && !modeChanged)
     }
 
     /// The tab on screen has not been brought into view since the focus moved (or the list was
@@ -410,7 +487,8 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         _ collectionView: UICollectionView, dropSessionDidUpdate session: any UIDropSession,
         withDestinationIndexPath destinationIndexPath: IndexPath?
     ) -> UICollectionViewDropProposal {
-        // Local moves within a list only: a regular tab never becomes private.
+        // Local moves within the shown list only: the other mode's tabs are never in it, so a
+        // regular tab never becomes private.
         guard let id = session.localDragSession?.items.first?.localObject as? UUID,
               let source = diffable.snapshot().sectionIdentifier(containingItem: id),
               let destination = destinationIndexPath, destination.section == source
@@ -449,37 +527,10 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     }
 }
 
-/// The private section's header: an icon on the rail, "Private" beside it.
-private final class PrivateHeaderView: UICollectionReusableView {
-    static let reuseID = "PrivateHeader"
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        let icon = UIImageView(image: UIImage(systemName: "hand.raised.fill"))
-        icon.tintColor = Palette.textSecondary
-        icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption1)
-        icon.contentMode = .center
-        let label = UILabel()
-        label.text = "Private"
-        label.font = UIFont.preferredFont(forTextStyle: .caption1)
-        label.textColor = Palette.textSecondary
-        for subview in [icon, label] {
-            subview.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(subview)
-        }
-        let rail = SidebarState.rail.width
-        NSLayoutConstraint.activate([
-            icon.centerXAnchor.constraint(equalTo: leadingAnchor, constant: rail / 2),
-            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: rail),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
-        isAccessibilityElement = true
-        accessibilityLabel = "Private Tabs"
-        accessibilityTraits = .header
+private extension NSLayoutConstraint {
+    func withPriority(_ priority: UILayoutPriority) -> NSLayoutConstraint {
+        self.priority = priority
+        return self
     }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 }
 #endif

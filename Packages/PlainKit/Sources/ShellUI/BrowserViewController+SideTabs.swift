@@ -190,6 +190,7 @@ extension BrowserViewController {
             width,
         ])
         sidebar.didMove(toParent: self)
+        sidebar.setPrivate(pill.isPrivateTint)
         duo.sidebar = sidebar
         duo.sideTabs = source
         duo.sidebarWidth = width
@@ -216,6 +217,64 @@ extension BrowserViewController {
         let panes = session.tabs.panes
         let focused = session.tabs.focusedPane
         return shownPanes.first { $0 != focused }.flatMap { panes[$0] }
+    }
+
+    // MARK: Private mode
+
+    /// The window is in private mode (docs/decisions.md, "Private as a clear mode on wide
+    /// screens"): the tab on screen is private, or, on a split's empty pane, the other pane's is.
+    /// One window, one mode: the strip, the sidebar, New Tab and the chrome all follow it, and
+    /// each window has its own (it is read from the window's own panes).
+    var showsPrivateMode: Bool {
+        if let currentTab { return currentTab.isPrivate }
+        let panes = session.tabs.panes
+        let focused = session.tabs.focusedPane
+        return panes.indices.contains { index in
+            index != focused && panes[index].map { session.tabs.store.tabs[$0]?.isPrivate == true } == true
+        }
+    }
+
+    /// The Private | Tabs switch (the strip's end, the sidebar's head): the list's tab seen last
+    /// comes on screen, else a new empty tab of that kind with the search field (the private one
+    /// over its own start screen). The tabs of the mode left stay open, as on the phone, until
+    /// closed.
+    func showTabMode(private isPrivate: Bool) {
+        guard isPrivate != showsPrivateMode else { return }
+        Signposts.signposter.emitEvent(Signposts.privateMode, "\(isPrivate ? "enter" : "leave")")
+        if isEditingAddress { endAddressEditing() }
+        if let id = session.tabs.mostRecent(private: isPrivate) {
+            show(session.tabs.tab(id))
+        } else {
+            openNewTab(private: isPrivate)
+            // The mode was asked for: closing the field untouched stays in it, on its start
+            // screen, rather than going back to the page of the other mode.
+            tabsUI.newTabReturn = nil
+        }
+        collapseFloatingSidebar()
+    }
+
+    /// A split shows one mode (docs/decisions.md, "Private as a clear mode on wide screens"): a
+    /// tab of the other kind coming into the focused pane first closes the other pane. Its tab
+    /// stays open in its own list; the window shows the one pane. Nothing happens outside a
+    /// split, or when the other pane is empty or of `tab`'s kind.
+    func endSplitOfOtherMode(before tab: Tab) {
+        let panes = session.tabs.panes
+        guard panes.count > 1 else { return }
+        let focused = session.tabs.focusedPane
+        guard let other = panes.indices.first(where: { $0 != focused }), let otherID = panes[other], otherID != tab.id,
+              let entry = session.tabs.store.tabs[otherID], entry.isPrivate != tab.isPrivate else { return }
+        Signposts.signposter.emitEvent(Signposts.privateMode, "split ended")
+        // Its page leaves the screen: the pool may reclaim it.
+        if otherID != currentTab?.id, let otherTab = session.tabs.existingTab(otherID) {
+            session.pool.detach(otherTab)
+            forgetAttachment(of: otherID)
+        }
+        session.tabs.closePane(other, touching: false)
+        // Only the panes' layout here: the `show` this runs in puts `tab` on screen once. The
+        // outgoing tab leaves the screen there too, so it is not moved to the remaining slot.
+        updateDuoLayout()
+        syncPanes()
+        if session.tabs.focusedPane != focused { focusDidChange() }
     }
 
     /// A row tapped: the tab shows in the focused pane (or its pane gets the focus). A floating

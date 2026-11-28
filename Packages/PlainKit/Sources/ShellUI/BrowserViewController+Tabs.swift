@@ -128,7 +128,11 @@ extension BrowserViewController {
         if wasShown { clearPage() }
         session.tabs.closeAll(private: true)
         tabsUI.toast.hide(animated: true)
-        guard wasShown else { return updateButtons() }
+        guard wasShown else {
+            // An empty pane beside a private page was private: it is not any more.
+            setPrivateChrome(showsPrivateMode)
+            return tabsDidChange()
+        }
         if let regular = session.tabs.mostRecent(private: false) {
             show(session.tabs.tab(regular))
         } else if let next = session.tabs.selected, !next.isPrivate {
@@ -195,9 +199,11 @@ extension BrowserViewController {
         }
         // From a page: closing the field untouched goes back to it (`returnFromUntouchedNewTab`).
         let back = fromGallery ? nil : currentTab.flatMap { session.tabs.isEmpty($0.id) ? nil : $0.id }
-        let pane = session.tabs.focusedPane
         let tab = session.tabs.newTab(isPrivate: isPrivate)
         show(tab)
+        // The pane after `show`: a tab of the other kind may have ended a split and moved the
+        // focus to the remaining pane.
+        let pane = session.tabs.focusedPane
         tabsUI.newTabReturn = back.map { NewTabReturn(made: tab.id, back: $0, pane: pane) }
         beginAddressEditing()
     }
@@ -221,14 +227,14 @@ extension BrowserViewController {
     /// a private page's "+" stays private. No haptic: the result is on screen (haptics plan, rule 1).
     func newTabButtonTapped() {
         Signposts.signposter.emitEvent(Signposts.barNewTab, "tap")
-        openNewTab(private: currentTab?.isPrivate ?? false)
+        openNewTab(private: showsPrivateMode)
     }
 
     /// The New Tab button's long press: the other kind, the one a tap does not open.
     func newTabButtonMenu() -> UIMenu {
         UIMenu(children: [
             UIDeferredMenuElement.uncached { [weak self] completion in
-                let isPrivate = self?.currentTab?.isPrivate ?? false
+                let isPrivate = self?.showsPrivateMode ?? false
                 let other = UIAction(
                     title: isPrivate ? "New Tab" : "New Private Tab", image: UIImage(systemName: isPrivate ? "plus" : "hand.raised")
                 ) { [weak self] _ in
@@ -243,7 +249,7 @@ extension BrowserViewController {
 
     /// A bar swipe past the last tab let go on the New Tab card.
     func openNewTabFromSwipe() {
-        openNewTab(private: currentTab?.isPrivate ?? false)
+        openNewTab(private: showsPrivateMode)
     }
 
     /// A bar swipe landed on `tab`: it takes the page. `cover`, the picture that stood in for a tab

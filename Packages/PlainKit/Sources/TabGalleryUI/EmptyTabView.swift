@@ -14,7 +14,7 @@ public final class EmptyTabView: UIView {
         set { label.text = newValue }
     }
 
-    /// An empty private tab: the screen is drawn dark on the private dusk, and "Private" with the
+    /// An empty private tab: the screen is drawn dark on Night, and "Private" with the
     /// private mark heads the sentence (docs/decisions.md, "Private mode you can't miss"). One
     /// background and one label's visibility change; nothing is laid out anew besides the title.
     public private(set) var isPrivate = false
@@ -275,9 +275,10 @@ public final class EmptyTabView: UIView {
     }
 
     private func applyGlow() {
-        // Private: the screen is drawn dark, so the glow is the night's violet.
-        let traits = isPrivate ? traitCollection.modifyingTraits { $0.userInterfaceStyle = .dark } : traitCollection
-        glow.colors = [UIColor.clear.cgColor, Palette.startGlow.resolvedColor(with: traits).cgColor]
+        // Private: the screen is drawn dark on Night, and the glow is a low Horizon, the dawn
+        // before it breaks.
+        let color = isPrivate ? Palette.privateGlow : Palette.startGlow.resolvedColor(with: traitCollection)
+        glow.colors = [UIColor.clear.cgColor, color.cgColor]
     }
 
     @objc private func keyboardWillShow() {

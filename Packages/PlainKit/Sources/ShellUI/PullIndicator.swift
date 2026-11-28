@@ -6,8 +6,8 @@ import PerfSignposts
 import UIKit
 
 /// The pull-to-refresh indicator: an arrow that turns as the page is pulled and runs through the
-/// brand's colors on the way (Shallows Mint, Lagoon, the icon's violet, Curl Coral; the dusk
-/// violets in a private tab), faster the nearer the pull is to reloading. Once the pull is far
+/// brand's colors on the way (Shallows Mint, Lagoon, the icon's violet, Curl Coral; Horizon's
+/// warm steps in a private tab), faster the nearer the pull is to reloading. Once the pull is far
 /// enough it fills with Lagoon (the threshold haptic, from the shell; a tick if pulled back);
 /// after release it spins in that one color until the page's load ends. Reduce Motion: one color, no spin.
 ///
@@ -171,7 +171,7 @@ final class PullIndicator: UIView {
         arrow.backgroundColor = color
     }
 
-    /// The color a pull rests on: Lagoon (on paper, a deeper step by day) or the private violet.
+    /// The color a pull rests on: Lagoon (on paper, a deeper step by day) or the private one (`privatePullRest`).
     private static func restColor(isPrivate: Bool) -> UIColor {
         isPrivate ? PullTint.privateRest : Palette.accentOnGlass
     }

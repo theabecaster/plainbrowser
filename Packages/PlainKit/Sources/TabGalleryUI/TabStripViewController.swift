@@ -9,8 +9,10 @@ import UIKit
 /// the narrowest it scrolls sideways; the focused pane's tab is marked. New Tab is the top bar's
 /// "+" right above the strip's end, the one New Tab button on screen (docs/research/new-tab.md).
 /// Tap a tab to show it, long press for Open in Other Pane
-/// and Close Tab, drag to reorder; the focused tab also has a close button. Private tabs follow the
-/// regular ones, tinted. It floats over the page with the bar; the host hides it with the bar.
+/// and Close Tab, drag to reorder; the focused tab also has a close button. It shows one mode's tabs,
+/// the regular ones or the private ones, never both: the Private | Tabs switch at its end moves
+/// between them (docs/decisions.md, "Private as a clear mode on wide screens"), and while private
+/// its glass is Night. It floats over the page with the bar; the host hides it with the bar.
 ///
 /// It reads the same `SideTabsDataSource` as the sidebar (the shell's `TabStore`), and never owns
 /// tab state.
@@ -40,26 +42,32 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     /// strip's 34 pt glass above and below (`StripView`).
     static var touchHeight: CGFloat { Metrics.tapTarget }
     static var touchOutset: CGFloat { max(0, (touchHeight - CGFloat(FixedChoices.tabStripHeight)) / 2) }
-    private static let privateSection = 1
     /// The gap between two tabs' plates: clear glass, so each plate reads as one tab.
     static let tabGap: CGFloat = Spacing.xs + Spacing.xxs
     private static let sectionInset = UIEdgeInsets(top: 0, left: Spacing.xxs, bottom: 0, right: Spacing.xs)
+    /// The Private | Tabs switch at the strip's trailing end: it stays put while the tabs scroll.
+    let modeSwitch = GalleryModeSwitch(style: .strip)
+    private var modeSwitchWidth: NSLayoutConstraint!
+    /// The mode the tabs shown belong to.
+    private var showsPrivate = false
 
     /// The strip's width with its tabs at their resting width
     /// (`FixedChoices.tabStripRestingItemWidth`): the host makes the strip this wide, up to its
     /// lane, so the strip grows with its tabs. New Tab is the top bar's "+", not the strip's.
     public var preferredWidth: CGFloat {
-        let sections = CGFloat(hasPrivateTabs ? 2 : 1)
         let inset = Self.sectionInset.left + Self.sectionInset.right
-        return sections * inset + CGFloat(max(1, items.count)) * (CGFloat(FixedChoices.tabStripRestingItemWidth) + Self.tabGap)
+        return inset + CGFloat(items.count) * (CGFloat(FixedChoices.tabStripRestingItemWidth) + Self.tabGap)
+            + switchWidth + Spacing.xxs
     }
+
+    /// The switch's width as it shows now.
+    private var switchWidth: CGFloat { modeSwitch.sizeThatFits(.zero).width }
 
     /// The number of tabs changed, so `preferredWidth` did: the host resizes the strip (inside
     /// its spring) before the tabs' own change is shown.
     public var onPreferredWidthChange: (() -> Void)?
-    private var hasPrivateTabs = false
 
-    /// The strip's glass: Paper, or the private violet drawn dark while a private tab is on
+    /// The strip's glass: Paper, or Night drawn dark while a private tab is on
     /// screen, as the top bar's capsules and band are, so the top reads as one private context
     /// (the private mode lane's look; the plates resolve their dark colors on it).
     public func setPrivate(_ isPrivate: Bool) {
@@ -124,9 +132,27 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         view.addSubview(fade)
         fade.addSubview(collectionView)
 
+        modeSwitch.translatesAutoresizingMaskIntoConstraints = false
+        modeSwitch.onSelect = { [weak self] isPrivate in self?.modeTapped(isPrivate) }
+        modeSwitch.privateSide.menu = UIMenu(children: [
+            UIDeferredMenuElement.uncached { [weak self] completion in completion(self?.privateMenu() ?? []) },
+        ])
+        view.addSubview(modeSwitch)
+        modeSwitchWidth = modeSwitch.widthAnchor.constraint(equalToConstant: switchWidth)
+        // A text size change resizes the switch's words: the strip and its tabs follow.
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (strip: TabStripViewController, _) in
+            strip.modeSwitchWidth.constant = strip.switchWidth
+            strip.onPreferredWidthChange?()
+            strip.updateItemWidth()
+        }
+
         NSLayoutConstraint.activate([
             fade.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            fade.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            fade.trailingAnchor.constraint(equalTo: modeSwitch.leadingAnchor),
+            modeSwitch.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Spacing.xxs),
+            modeSwitch.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            modeSwitch.heightAnchor.constraint(equalToConstant: Self.touchHeight),
+            modeSwitchWidth,
             fade.topAnchor.constraint(equalTo: view.topAnchor, constant: -Self.touchOutset),
             fade.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: Self.touchOutset),
             collectionView.leadingAnchor.constraint(equalTo: fade.leadingAnchor),
@@ -197,11 +223,11 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         targetContentOffset.pointee.x = snapped(targetContentOffset.pointee.x, step: step)
     }
 
-    /// One tab and the gap after it, where the strip scrolls and holds one section; nil otherwise
-    /// (it fits, or the private section breaks the even steps). Left to right only: in right to
+    /// One tab and the gap after it, where the strip scrolls; nil otherwise (it fits). The strip
+    /// holds one mode's tabs, one section, so the steps are always even. Left to right only: in right to
     /// left the leading edge is the physical right, which these offsets don't measure from.
     private var snapStep: CGFloat? {
-        guard !hasPrivateTabs, view.effectiveUserInterfaceLayoutDirection == .leftToRight,
+        guard view.effectiveUserInterfaceLayoutDirection == .leftToRight,
               collectionView.contentSize.width > collectionView.bounds.width + 1 else { return nil }
         let step = flow.itemSize.width + Self.tabGap
         return step > 0 ? step : nil
@@ -261,10 +287,9 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     /// The tabs share the strip's width, between the narrowest and the widest a tab may be.
     private func updateItemWidth() {
         let count = max(1, items.count)
-        let sections = CGFloat(hasPrivateTabs ? 2 : 1)
         // From the strip's own width: the tabs' view is laid out a pass later than the strip, so
         // its bounds are still the old ones when the strip has just grown.
-        let available = view.bounds.width - sections * (Self.sectionInset.left + Self.sectionInset.right)
+        let available = view.bounds.width - (Self.sectionInset.left + Self.sectionInset.right) - switchWidth - Spacing.xxs
         guard available > 0 else { return }
         let share = (available - CGFloat(count) * Self.tabGap) / CGFloat(count)
         let limits = FixedChoices.tabStripItemWidth
@@ -275,22 +300,20 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     }
 
     /// Reads the tabs again and shows what changed; the focused tab scrolls into view when the
-    /// focus moved.
+    /// focus moved. A change of mode swaps the whole list in one crossfade: the other mode's tabs
+    /// never slide in among these.
     public func reloadTabs() {
         guard isViewLoaded else { return }
-        let regular = dataSource.regularTabs
-        let privateTabs = dataSource.privateTabs
+        let modeChanged = dataSource.showsPrivate != showsPrivate
+        showsPrivate = dataSource.showsPrivate
+        let shown = dataSource.tabs
         var next: [UUID: TabGalleryItem] = [:]
-        for item in regular + privateTabs { next[item.id] = item }
+        for item in shown { next[item.id] = item }
         let focused = dataSource.focusedTabID
         let other = dataSource.otherPaneTabID
         var snapshot = NSDiffableDataSourceSnapshot<Int, UUID>()
         snapshot.appendSections([Self.regularSection])
-        snapshot.appendItems(regular.map(\.id), toSection: Self.regularSection)
-        if !privateTabs.isEmpty {
-            snapshot.appendSections([Self.privateSection])
-            snapshot.appendItems(privateTabs.map(\.id), toSection: Self.privateSection)
-        }
+        snapshot.appendItems(shown.map(\.id), toSection: Self.regularSection)
         let old = diffable.snapshot()
         let marked = Set([focusedID, otherID, focused, other].compactMap { $0 })
         snapshot.reconfigureItems(next.keys.filter { old.indexOfItem($0) != nil && (items[$0] != next[$0] || marked.contains($0)) })
@@ -299,20 +322,56 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         items = next
         focusedID = focused
         otherID = other
-        let sectionsChanged = hasPrivateTabs == privateTabs.isEmpty
-        hasPrivateTabs = !privateTabs.isEmpty
-        if countChanged || sectionsChanged {
+        let switchChanged = modeSwitch.set(isPrivate: showsPrivate, regularCount: dataSource.regularCount, privateCount: dataSource.privateCount)
+        if switchChanged || modeChanged { modeSwitchWidth.constant = switchWidth }
+        if countChanged || switchChanged {
             // The bar takes its new width first (the host lays it out), so the tabs keep theirs.
             onPreferredWidthChange?()
             updateItemWidth()
         }
-        let animated = old.numberOfItems > 0 && view.window != nil
+        let animated = old.numberOfItems > 0 && view.window != nil && !modeChanged
         // Once the new tabs are laid out: before that the focused tab has no place to scroll to
         // (a restored session arrives after the strip's first layout).
-        diffable.apply(snapshot, animatingDifferences: animated) { [weak self] in
-            guard let self, focusMoved || countChanged else { return }
-            scrollFocusedIntoViewIfNeeded(animated: animated)
+        let apply: () -> Void = { [weak self] in
+            guard let self else { return }
+            diffable.apply(snapshot, animatingDifferences: animated) { [weak self] in
+                guard let self, focusMoved || countChanged || modeChanged else { return }
+                scrollFocusedIntoViewIfNeeded(animated: animated)
+            }
         }
+        if modeChanged, view.window != nil {
+            // The tabs of the mode left go in one quick fade, the new ones come in with it.
+            Motion.crossfadeMode(fade, changes: apply)
+        } else {
+            apply()
+        }
+    }
+
+    /// A side of the switch was tapped: the other mode comes on screen; the shown one does nothing.
+    private func modeTapped(_ isPrivate: Bool) {
+        guard isPrivate != showsPrivate else { return }
+        Haptic.selection.play()
+        dataSource.showMode(private: isPrivate)
+        reloadTabs()
+    }
+
+    /// The Private side's long press: a new private tab, and Close All Private Tabs while there
+    /// are any.
+    private func privateMenu() -> [UIMenuElement] {
+        let new = UIAction(title: String(localized: "New Private Tab"), image: UIImage(systemName: "hand.raised")) { [weak self] _ in
+            self?.dataSource.newTab(private: true)
+            self?.reloadTabs()
+        }
+        new.accessibilityIdentifier = "tabStrip.newPrivateTab"
+        guard dataSource.privateCount > 0 else { return [new] }
+        let closeAll = UIAction(
+            title: String(localized: "Close All Private Tabs"), image: UIImage(systemName: "hand.raised.slash"), attributes: .destructive
+        ) { [weak self] _ in
+            self?.dataSource.closeAllPrivateTabs()
+            self?.reloadTabs()
+        }
+        closeAll.accessibilityIdentifier = "tabStrip.closeAllPrivate"
+        return [new, UIMenu(options: .displayInline, children: [closeAll])]
     }
 
     /// Brings the focused tab into view when any of it is outside the strip.
@@ -415,11 +474,6 @@ final class TabStripCell: UICollectionViewCell {
     private let highlight = UIView()
     private let tile = SiteIconView(side: TabStripCell.tileSize, iconSide: TabStripCell.iconSize, radius: Radius.small)
     private let titleLabel = UILabel()
-    /// A private tab's hand, before its title: the strip has no section header to say so, and
-    /// the tab on screen is a white card like any other (design review, round 2).
-    private let privateMark = UIImageView(image: UIImage(
-        systemName: "hand.raised.fill", withConfiguration: UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small)
-    ))
     private let closeButton = UIButton(type: .system)
     private var isInOtherPane = false
     private var isOnScreen = false
@@ -440,10 +494,6 @@ final class TabStripCell: UICollectionViewCell {
         titleLabel.textColor = Palette.textPrimary
         titleLabel.lineBreakMode = .byTruncatingTail
         contentView.addSubview(titleLabel)
-        privateMark.tintColor = Palette.textSecondary
-        privateMark.contentMode = .center
-        privateMark.isHidden = true
-        contentView.addSubview(privateMark)
         closeButton.setImage(
             UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small)),
             for: .normal
@@ -474,7 +524,7 @@ final class TabStripCell: UICollectionViewCell {
         let changes = {
             // Every tab is its own plate on the strip's glass, a gap of glass between two: the
             // one on screen a solid card ringed in Lagoon, the others a veil with a hairline (a
-            // private tab on its dusk tint).
+            // private tab on Night).
             self.highlight.backgroundColor = isFocused
                 ? Palette.surface : (item.isPrivate ? Palette.privateTabPlate : Palette.tabPlate)
             self.highlight.layer.borderWidth = isFocused ? 1.5 : (isInOtherPane ? 1 : Self.hairline)
@@ -488,10 +538,14 @@ final class TabStripCell: UICollectionViewCell {
         }
         isOnScreen = isFocused
         self.isInOtherPane = isInOtherPane
-        titleLabel.textColor = isFocused ? Palette.textPrimary : Palette.textSecondary
+        // On Night a tab not on screen is a step brighter than the secondary ink, so a crowded
+        // private strip still scans (design review, round 2).
+        titleLabel.textColor = isFocused
+            ? Palette.textPrimary : (item.isPrivate ? Palette.privateInactiveTitle : Palette.textSecondary)
         resolveBorder()
         closeButton.isHidden = !isFocused
-        privateMark.isHidden = !item.isPrivate
+        // No hand on each tab: the strip lists one mode, its glass and switch say which (design
+        // review, round 2: the marks cost the titles their room).
         accessibilityLabel = item.isPrivate ? "Private, \(item.displayTitle)" : item.displayTitle
         accessibilityValue = isFocused ? "Selected" : (isInOtherPane ? "In other pane" : nil)
         accessibilityTraits = isFocused ? [.button, .selected] : .button
@@ -519,12 +573,7 @@ final class TabStripCell: UICollectionViewCell {
         tile.frame = CGRect(x: Spacing.s, y: (bounds.height - size) / 2, width: size, height: size)
         let closeWidth: CGFloat = closeButton.isHidden ? 0 : Metrics.tapTarget
         closeButton.frame = CGRect(x: bounds.width - closeWidth, y: 0, width: closeWidth, height: bounds.height)
-        var titleX = tile.frame.maxX + Spacing.s
-        if !privateMark.isHidden {
-            let side: CGFloat = 12
-            privateMark.frame = CGRect(x: titleX, y: (bounds.height - side) / 2, width: side, height: side)
-            titleX = privateMark.frame.maxX + Spacing.xs
-        }
+        let titleX = tile.frame.maxX + Spacing.s
         titleLabel.frame = CGRect(
             x: titleX, y: 0, width: max(0, bounds.width - titleX - max(closeWidth, Spacing.s)), height: bounds.height
         )

@@ -308,7 +308,7 @@ final class AddressPill: UIView {
             case .off: "circle.slash"
             }
             darkPagesButton.configuration?.image = UIImage(systemName: symbol)
-            darkPagesButton.configuration?.baseForegroundColor = appearance == .off ? Palette.textPrimary : Palette.accentOnGlass
+            applyPageAppearanceTint(appearance)
             let scope = isOwn ? String(localized: "this site") : String(localized: "all sites")
             darkPagesButton.accessibilityValue = "\(Self.title(appearance)), \(scope)"
             darkPagesButton.accessibilityHint = String(localized: "Shows Dark, Light and Off for this site.")
@@ -316,6 +316,14 @@ final class AddressPill: UIView {
         guard indicator != darkPagesIndicator else { return }
         darkPagesIndicator = indicator
         updateDarkPagesVisibility(animated: animated)
+    }
+
+    /// The glyph's colour: the ink for Off; while Plain changes the page, Lagoon on Paper glass
+    /// and Horizon on Night (a private tab), the private chrome's one warm light, never Lagoon's
+    /// blue on it.
+    private func applyPageAppearanceTint(_ appearance: PageAppearance) {
+        darkPagesButton.configuration?.baseForegroundColor = appearance == .off
+            ? Palette.textPrimary : (isPrivateTint ? Palette.privateAccent : Palette.accentOnGlass)
     }
 
     static func title(_ appearance: PageAppearance) -> String {
@@ -380,7 +388,10 @@ final class AddressPill: UIView {
     }
 
     private func resolveColors() {
-        rim.gradient.colors = Palette.focusRim.map { $0.resolvedColor(with: traitCollection).cgColor }
+        // Private: one quiet Horizon rim, not the mint-to-Lagoon gradient (design review: the
+        // gradient was the one thing on the private chrome closest to a generic look).
+        let colors = isPrivateTint ? Palette.privateFocusRim : Palette.focusRim
+        rim.gradient.colors = colors.map { $0.resolvedColor(with: traitCollection).cgColor }
     }
 
     /// Shows `url`'s host while resting, or the placeholder when there is no page. A page that is
@@ -526,7 +537,7 @@ final class AddressPill: UIView {
         if scrim.isHidden == shown { scrim.isHidden = !shown }
     }
 
-    /// Paper glass, or the private look while a private tab is on screen: deep violet glass drawn
+    /// Paper glass, or the private look while a private tab is on screen: Night glass drawn
     /// dark (light text), the private mark before the host and in the field, and a dark keyboard
     /// that predicts and rewrites nothing (docs/decisions.md, "Private mode you can't miss").
     func setPrivate(_ isPrivate: Bool) {
@@ -537,16 +548,18 @@ final class AddressPill: UIView {
         scrim.isPrivate = isPrivate
         overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
         // On the effect view too: glass picks light or dark content from what is behind it, and
-        // over a white page it drew dark text on the violet. Set there, it stays dark.
+        // over a white page it drew dark text on Night. Set there, it stays dark.
         glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
+        resolveColors()
+        if case .shown(let appearance) = darkPagesIndicator { applyPageAppearanceTint(appearance) }
         // The field says it too, for VoiceOver while editing (the pill is no element then).
         textField.accessibilityLabel = isPrivate ? String(localized: "Private, Search or enter address") : nil
         // Private, a long host loses its middle, never the mark at its start.
         hostLabel.lineBreakMode = isPrivate ? .byTruncatingMiddle : .byTruncatingHead
         display(url: url, notSecure: notSecure)
         // The field itself too: on the search sheet it sits over the paper card, so its own
-        // controls (Dictate, Browse for Me) would take the card's light style on the violet.
+        // controls (Dictate, Browse for Me) would take the card's light style on Night.
         textField.overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
         // The field's text too, fixed light on the always-dark private glass.
         textField.textColor = isPrivate ? .white : Palette.textPrimary

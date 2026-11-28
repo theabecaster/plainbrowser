@@ -465,11 +465,13 @@ public final class TabStore {
         saveSession()
     }
 
-    /// Closes a pane; its tab stays open. The remaining pane is focused.
-    public func closePane(_ pane: Int, in window: WindowID) {
+    /// Closes a pane; its tab stays open. The remaining pane is focused. `touching`: the closed
+    /// pane's tab counts as seen now (Close Pane); not when the window leaves its mode, so the tab
+    /// seen last in that mode stays the one the user was on.
+    public func closePane(_ pane: Int, in window: WindowID, touching: Bool = true) {
         guard let index = windowIndex(window), windows[index].panes.count > 1,
               windows[index].panes.indices.contains(pane) else { return }
-        if let id = windows[index].panes[pane] { touch(id) }
+        if touching, let id = windows[index].panes[pane] { touch(id) }
         windows[index].panes.remove(at: pane)
         windows[index].focusedPane = 0
         // The remaining pane's tab decides the window's profile.

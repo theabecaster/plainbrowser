@@ -90,7 +90,7 @@ final class PageStateView: UIView {
     static func isNetworkFailure(_ error: LoadError, simulated: Bool = false) -> Bool {
         switch error.failure {
         case .offline: true
-        case .notAnswering, .notFound, .timedOut: simulated
+        case .notAnswering, .refused, .notFound, .timedOut: simulated
         default: false
         }
     }

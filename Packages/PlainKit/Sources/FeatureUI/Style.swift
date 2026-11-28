@@ -11,6 +11,9 @@ enum Style {
     /// Text on paper, and its supporting step.
     static let ink = Color(uiColor: Palette.ink)
     static let inkSecondary = Color(uiColor: Palette.inkSecondary)
+    /// A swipe's Delete: the system's red, which the sheets' accent tint would otherwise turn
+    /// Lagoon blue, making a destructive action look like the main one.
+    static let destructive = Color(uiColor: .systemRed)
     /// A card of rows, and the hairline between them.
     static let card = Color(uiColor: Palette.paperCard)
     static let hairline = Color(uiColor: Palette.paperHairline)
@@ -55,6 +58,12 @@ extension View {
         modifier(SheetHeaderModifier(title: title, leading: leading(), trailing: SheetDone(onDone: onDone)))
     }
 
+    /// The pinned header with both sides given: a sheet whose trailing button changes with its
+    /// state (Favorites while editing: Done ends the editing, not the sheet).
+    func sheetTitle(_ title: String, @ViewBuilder leading: () -> some View, @ViewBuilder trailing: () -> some View) -> some View {
+        modifier(SheetHeaderModifier(title: title, leading: leading(), trailing: trailing()))
+    }
+
     /// The same, with nothing on the leading side.
     func sheetTitle(_ title: String, onDone: (() -> Void)?) -> some View {
         sheetTitle(title, onDone: onDone) { EmptyView() }
@@ -93,7 +102,7 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
         // Each side takes the same share of the width, so the title stays centered whatever the
         // two sides hold, and takes the room left before it truncates.
         HStack(spacing: 8) {
-            ZStack { Color.clear.frame(height: 1); leading }.frame(maxWidth: .infinity, alignment: .leading)
+            ZStack { Color.clear.frame(height: 1); side(leading) }.frame(maxWidth: .infinity, alignment: .leading)
             Text(title)
                 .font(.system(.headline, design: .serif))
                 .foregroundStyle(Style.ink)
@@ -101,7 +110,7 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .accessibilityAddTraits(.isHeader)
                 .layoutPriority(1)
-            ZStack { Color.clear.frame(height: 1); trailing }.frame(maxWidth: .infinity, alignment: .trailing)
+            ZStack { Color.clear.frame(height: 1); side(trailing) }.frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(minHeight: 44)
         .padding(.horizontal, 16)
@@ -111,6 +120,61 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Style.hairline).frame(height: 0.5)
         }
+    }
+
+    /// A side's buttons keep one line at their full width and stop growing where the title does;
+    /// the title truncates first. At the accessibility sizes Done wrapped a letter or two per
+    /// line ("D / on / e") beside "Archived Tabs".
+    private func side(_ content: some View) -> some View {
+        content
+            .lineLimit(1)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .fixedSize()
+    }
+}
+
+/// A list row's text: the title, the address under it and when, at the trailing end. From the
+/// first accessibility text size the time goes under the address and the title may take two
+/// lines: beside a large time the title was cut to a word ("The Verg…", clarity audit 14).
+struct TimedRowLabel: View {
+    let title: String
+    let detail: String
+    let time: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).foregroundStyle(.primary).lineLimit(2)
+                if !detail.isEmpty { detailText }
+                timeText
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundStyle(.primary).lineLimit(1)
+                    if !detail.isEmpty { detailText }
+                }
+                Spacer(minLength: 0)
+                timeText
+            }
+        }
+    }
+
+    private var detailText: some View {
+        Text(detail)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+    }
+
+    private var timeText: some View {
+        Text(time)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
     }
 }
 

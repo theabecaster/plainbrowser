@@ -110,9 +110,18 @@ public nonisolated enum SystemAccessRules {
     }
 
     /// A site permission's row in Site Settings: the site's remembered answer under what iOS
-    /// allows. Nil when the site never asked (no row).
-    public static func siteValue(remembered: Bool?, system: SystemAccess) -> SitePermissionValue? {
-        guard let remembered else { return nil }
+    /// allows. A site that asked while the feature was off for Plain has no answer (WebKit refused
+    /// it before anyone was asked) but still gets its row, Off in Settings, so the way to change
+    /// it is where the user looks (clarity audit 12). Nil when the site never asked (no row).
+    public static func siteValue(remembered: Bool?, askedWhileOff: Bool = false, system: SystemAccess) -> SitePermissionValue? {
+        guard let remembered else {
+            guard askedWhileOff else { return nil }
+            switch system {
+            case .restricted: return .notAllowedOnPhone
+            case .denied, .servicesOff: return .offInSettings
+            case .notDetermined, .allowed: return nil
+            }
+        }
         switch system {
         case .restricted: return .notAllowedOnPhone
         case .denied, .servicesOff: return .offInSettings

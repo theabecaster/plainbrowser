@@ -212,7 +212,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.onDismiss = { [weak self] how in self?.dismissSearchSheet(how) }
         sheet.onPan = { [weak self] pan in self?.searchSheetPanned(pan) }
         installSearchSheetGestures()
-        sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
+        sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor(editing: true) }
 
         buildButtons()
         updateButtons()
@@ -373,7 +373,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             // page, `+TopBar`).
             duo.top.toastOverPill as NSLayoutConstraint,
             tabsUI.toast.centerXAnchor.constraint(equalTo: pill.centerXAnchor),
-            tabsUI.toast.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
+            tabsUI.toast.heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget),
             tabsUI.toast.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
         ] + capWidth(centerX: row.centerXAnchor, width: row.widthAnchor))
 
@@ -1437,7 +1437,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self?.showSettings()
         }
         settings.accessibilityIdentifier = "menu.settings"
-        let favorites = UIAction(title: "Edit Favorites", image: UIImage(systemName: "star.square.on.square")) { [weak self] _ in
+        // "Favorites": the sheet opens them (clarity audit 7); editing is inside it.
+        let favorites = UIAction(title: "Favorites", image: UIImage(systemName: "star.square.on.square")) { [weak self] _ in
             self?.showFavoritesEditor()
         }
         favorites.accessibilityIdentifier = "menu.editFavorites"
@@ -1493,7 +1494,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             action.accessibilityIdentifier = "menu.reload"
             reload = action
         case .stop:
-            let action = UIAction(title: "Stop", image: UIImage(systemName: "xmark")) { [weak tab] _ in
+            // Not an X: in a sheet's top corner an X reads as "close the sheet" (clarity audit 8).
+            let action = UIAction(title: "Stop", image: UIImage(systemName: "stop.circle")) { [weak tab] _ in
                 Signposts.signposter.emitEvent(Signposts.reload, "stop")
                 tab?.stopLoading()
             }
@@ -1504,7 +1506,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         let host = url.host().map(Self.siteName) ?? url.absoluteString
         let notSecure = tab.security == .notSecure || tab.security == .certificateBypassed
-        model.address = .init(host: host, notSecure: notSecure, back: back, forward: forward, copy: copy, reload: reload)
+        model.address = .init(
+            host: host, notSecure: notSecure, profile: shownProfileName, back: back, forward: forward, copy: copy, reload: reload
+        )
 
         // Tiles: the page actions people reach for most, at most four, Share always last.
         var tiles: [UIAction] = []
@@ -1619,14 +1623,24 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         present(history, signpost: Signposts.historyShow)
     }
 
-    /// From the favorites strip (the search field is open: it closes for the editor and opens
-    /// again after, showing the edited favorites) or from the page menu.
-    private func showFavoritesEditor() {
-        guard let editor = sheets.favoritesEditor(onDone: { [weak self] in self?.closeSheet() }) else { return }
+    /// From the favorites strip's Edit Favorites (the search field is open: it closes for the
+    /// sheet, which opens editing, and opens again after, showing the edited favorites) or from
+    /// the page sheet's Favorites chip. A favorite tapped there opens in the tab, as History's do.
+    private func showFavoritesEditor(editing: Bool = false) {
+        var opened = false
+        let editor = sheets.favoritesEditor(
+            startsEditing: editing,
+            onOpen: { [weak self] url in
+                opened = true
+                self?.closeSheet { self?.load(url) }
+            },
+            onDone: { [weak self] in self?.closeSheet() }
+        )
+        guard let editor else { return }
         let wasEditing = isEditingAddress
         if wasEditing { endEditing() }
         present(editor, signpost: Signposts.favoritesEditorOpen) { [weak self] in
-            guard let self else { return }
+            guard let self, !opened else { return }
             // Focusing reloads the favorites (textFieldDidBeginEditing).
             if !(wasEditing && self.pill.beginEditing()) { self.loadFavorites() }
         }

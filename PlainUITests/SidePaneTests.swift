@@ -62,6 +62,10 @@ final class SidePaneTests: XCTestCase {
         let heading = app.webViews.staticTexts["Long Read"]
         XCTAssertLessThan(heading.frame.maxX, pane.frame.minX + 1, "the page is beside the pane, not under it")
 
+        // Every segment has its name for VoiceOver, the selected one in words too.
+        let picker = app.segmentedControls["sidePane.picker"]
+        XCTAssertEqual((0..<3).map { picker.buttons.element(boundBy: $0).label }, ["Reader", "Find", "History"])
+
         // Find: a list of matches.
         app.segmentedControls["sidePane.picker"].buttons.element(boundBy: 1).tap()
         let field = app.descendants(matching: .any)["sidePane.findField"]

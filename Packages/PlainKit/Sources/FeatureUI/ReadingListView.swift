@@ -68,6 +68,7 @@ public struct ReadingListView: View {
                 }
                 .swipeActions(edge: .trailing) {
                     Button("Delete", role: .destructive) { model.delete(row) }
+                        .tint(Style.destructive)
                 }
                 .contextMenu {
                     Button("Open", systemImage: "arrow.up.forward.app") { open(row) }

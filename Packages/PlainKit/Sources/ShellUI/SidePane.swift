@@ -55,11 +55,17 @@ final class SidePaneController: UIViewController {
             image?.accessibilityLabel = item.title
             picker.insertSegment(with: image, at: picker.numberOfSegments, animated: false)
         }
+        // The selected segment is wider: it carries its word.
+        picker.apportionsSegmentWidthsByContent = true
         picker.accessibilityIdentifier = "sidePane.picker"
         picker.addAction(UIAction { [weak self] _ in
             guard let self, SidePaneSection.allCases.indices.contains(picker.selectedSegmentIndex) else { return }
+            applySegmentFaces()
             browser?.showSidePaneSection(SidePaneSection.allCases[picker.selectedSegmentIndex])
         }, for: .valueChanged)
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self, UITraitDisplayScale.self]) {
+            (pane: SidePaneController, _) in pane.applySegmentFaces()
+        }
         closeButton.setImage(UIImage(systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(weight: .semibold)), for: .normal)
         closeButton.tintColor = .secondaryLabel
         closeButton.accessibilityLabel = String(localized: "Hide Side Pane")
@@ -116,10 +122,45 @@ final class SidePaneController: UIViewController {
         if separator.isHidden != hidden { separator.isHidden = hidden }
     }
 
+    /// The selected segment says its name beside its symbol ("Reader"); the others keep the
+    /// symbol alone, so the picker stays one short row (clarity audit 26: three bare symbols left
+    /// people guessing which was which). VoiceOver hears every segment's name.
+    private func applySegmentFaces() {
+        for (index, item) in SidePaneSection.allCases.enumerated() {
+            let image = index == picker.selectedSegmentIndex
+                ? Self.labelledSymbol(item, traits: traitCollection) : UIImage(systemName: item.symbol)
+            image?.accessibilityLabel = item.title
+            picker.setImage(image, forSegmentAt: index)
+        }
+    }
+
+    /// The symbol and the word in one template image, as a segment holds one or the other.
+    private static func labelledSymbol(_ section: SidePaneSection, traits: UITraitCollection) -> UIImage? {
+        // The segmented control's own title size, growing with Dynamic Type to the pill's cap.
+        let size = min(traits.preferredContentSizeCategory, .extraExtraExtraLarge)
+        let font = UIFontMetrics(forTextStyle: .footnote).scaledFont(
+            for: .systemFont(ofSize: 13, weight: .semibold), compatibleWith: UITraitCollection(preferredContentSizeCategory: size)
+        )
+        guard let symbol = UIImage(systemName: section.symbol, withConfiguration: UIImage.SymbolConfiguration(font: font))?
+            .withTintColor(.black, renderingMode: .alwaysOriginal) else { return nil }
+        let attachment = NSTextAttachment(image: symbol)
+        attachment.bounds = CGRect(
+            x: 0, y: ((font.capHeight - symbol.size.height) / 2).rounded(), width: symbol.size.width, height: symbol.size.height
+        )
+        let text = NSMutableAttributedString(attachment: attachment)
+        text.append(NSAttributedString(string: " " + section.title, attributes: [.font: font, .foregroundColor: UIColor.black]))
+        let bounds = text.boundingRect(with: CGSize(width: 400, height: 100), options: [.usesLineFragmentOrigin], context: nil)
+        let format = UIGraphicsImageRendererFormat(for: traits)
+        let image = UIGraphicsImageRenderer(size: CGSize(width: ceil(bounds.width), height: ceil(bounds.height)), format: format)
+            .image { _ in text.draw(with: CGRect(origin: .zero, size: bounds.size), options: [.usesLineFragmentOrigin], context: nil) }
+        return image.withRenderingMode(.alwaysTemplate)
+    }
+
     /// Shows `section`, building it the first time.
     func show(_ section: SidePaneSection) {
         loadViewIfNeeded()
         picker.selectedSegmentIndex = SidePaneSection.allCases.firstIndex(of: section) ?? 0
+        applySegmentFaces()
         let previous = sections[self.section]
         self.section = section
         let controller = sections[section] ?? makeSection(section)

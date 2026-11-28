@@ -183,7 +183,7 @@ struct EdgeCaseTests {
     }
 
     /// A refused connection says so in Plain's words, at once (ux-audit item 22).
-    @Test func refusedConnectionSaysTheSiteIsNotAnswering() async throws {
+    @Test func refusedConnectionSaysTheSiteRefusedIt() async throws {
         let harness = try await Harness()
         defer { harness.cleanUp() }
         // A port that was just listening and is now closed: the connection is refused.
@@ -198,7 +198,8 @@ struct EdgeCaseTests {
         try await waitUntil("load error", timeout: .seconds(4)) { tab.loadError != nil && !tab.isLoading }
         let error = try #require(tab.loadError)
         report("[plain-measure] refused port error after \(ms(ContinuousClock.now - start)) ms: \(error.domain) \(error.code)")
-        #expect(error.failure == .notAnswering)
+        #expect(error.failure == .refused)
+        #expect(error.failure.message == "The site refused the connection.")
     }
 
     /// A port WebKit never opens (9, discard) says so, rather than the catch-all sentence.

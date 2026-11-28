@@ -151,7 +151,8 @@ final class ClarityCaptureTests: XCTestCase {
         }
 
         // Errors: a refused port, an unknown host, then the site going away under a page.
-        type(app, "127.0.0.1:9/nothing", local: false)
+        // Port 2: nothing listens there, so the connection is refused (port 9 is one WebKit never opens).
+        type(app, "127.0.0.1:2/nothing", local: false)
         _ = app.otherElements["pageState"].waitForExistence(timeout: 20)
         pause(1)
         shot("page-13-error-refused")
@@ -428,6 +429,11 @@ final class ClarityCaptureTests: XCTestCase {
             go(app, "/b", "Page B")
             pause(1)
             shot("profiles-08-work-page")
+            // The tabs button's VoiceOver value names the profile ("2 tabs, Work"), and so does the sheet.
+            print("[clarity] tabs button value: \(app.buttons["tabs"].value as? String ?? "none")")
+            openSheet(app)
+            shot("profiles-08b-work-sheet")
+            dismissSheet(app)
             tap(app.buttons["tabs"], or: nil)
             pause(1.5)
             shot("profiles-09-work-gallery")
@@ -691,6 +697,14 @@ final class ClarityCaptureTests: XCTestCase {
         for label in ["Don’t Allow", "Don't Allow", "Deny"] where tapLabel(app, label) { break }
         pause(1)
         shot("misc-07-location-denied")
+        // Where the answer can be changed: Site Settings' Location row, Not Allowed.
+        openSheet(app)
+        if tap(app.buttons["menu.siteSettings"], or: nil) {
+            pause(1)
+            shot("misc-07b-location-site-settings")
+            dismissMenu(app)
+        }
+        dismissSheet(app)
 
         // Dark: the app dark, a light site darkened, the switch for the site, then off.
         openSheet(app)
@@ -717,7 +731,7 @@ final class ClarityCaptureTests: XCTestCase {
             if tap(app.buttons["menu.siteSettings"], or: nil) {
                 pause(1)
                 shot("misc-11-dark-site-settings")
-                if tapLabel(app, "Turn Off Dark Pages") || tap(app.buttons["menu.darkPages"], or: nil) {
+                if tap(app.buttons["menu.darkPages"], or: nil) {
                     pause(1.5)
                     shot("misc-12-dark-pages-off")
                 } else {
@@ -729,6 +743,19 @@ final class ClarityCaptureTests: XCTestCase {
             } else {
                 dismissSheet(app)
             }
+        }
+        app.terminate()
+
+        // Location off for Plain in iOS: the site asks, WebKit refuses, and Site Settings has the
+        // row that says where to turn it on (Off in Settings).
+        app = launch(["-PlainSystemAccess", "location=denied"])
+        go(app, "/location", nil)
+        pause(2.5)
+        openSheet(app)
+        if tap(app.buttons["menu.siteSettings"], or: nil) {
+            pause(1)
+            shot("misc-07c-location-off-site-settings")
+            dismissMenu(app)
         }
         app.terminate()
 
@@ -821,6 +848,31 @@ final class ClarityCaptureTests: XCTestCase {
             shot("inner-09-tabs-\(layout)")
             app.terminate()
         }
+    }
+
+    /// The link menu with its preview, upright and on its side: the whole menu on screen.
+    func test16LinkMenu() {
+        let app = launch()
+        go(app, "/a", "Page A")
+        let link = app.webViews.links["Go to B"]
+        guard link.waitForExistence(timeout: 5) else { return }
+        link.press(forDuration: 1.2)
+        pause(1.5)
+        shot("misc-01-link-menu")
+        dismissMenu(app)
+        pause(0.8)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        pause(2.5)
+        // A rotation can leave the web view's links out of the tree for a moment: load again.
+        if !link.waitForExistence(timeout: 3) { go(app, "/a", "Page A") }
+        if link.waitForExistence(timeout: 5) {
+            link.press(forDuration: 1.2)
+            pause(1.5)
+            shot("misc-01b-link-menu-landscape")
+            dismissMenu(app)
+        }
+        XCUIDevice.shared.orientation = .portrait
+        pause(1)
     }
 
     // MARK: Driving

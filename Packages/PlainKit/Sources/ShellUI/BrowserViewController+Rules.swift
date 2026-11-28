@@ -97,6 +97,9 @@ extension BrowserViewController {
     /// slot's face. Called whenever the tab on screen or the tab list changes.
     func updateButtons() {
         rules = currentRules()
+        // The pill names the page's mode (Reader, Translated) where it says Not Secure: Translated
+        // once translated text is on screen (the sheet's tile says "Translating…" before).
+        pill.setMode(reader: rules.state.isReaderOpen, translated: currentTab?.translation == .translated)
         // A state that no longer lets the bar hide (a load, an error, VoiceOver) brings it back.
         chromeRulesChanged()
         // Under the gallery the page's own buttons rest; Tabs goes back to the page.
@@ -137,10 +140,12 @@ extension BrowserViewController {
     }
 
     /// The tabs slot's face: always Tabs where it shows; the long press is the tabs menu.
-    /// VoiceOver hears how many tabs are open (no badge).
+    /// VoiceOver hears how many tabs are open and, with two or more profiles, the window's
+    /// profile ("3 tabs, Work"; no badge).
     private func applyTabsFace() {
         let open = rules.state.others + (rules.state.hasPage ? 1 : 0)
-        let value = open == 1 ? String(localized: "1 tab") : String(localized: "\(open) tabs")
+        let count = open == 1 ? String(localized: "1 tab") : String(localized: "\(open) tabs")
+        let value = shownProfileName.map { "\(count), \($0)" } ?? count
         buttonBar.setAccessibilityValue(value, for: .tabs)
         barItems[.tabs]?.accessibilityValue = value
     }

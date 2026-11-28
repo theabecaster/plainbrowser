@@ -2607,3 +2607,85 @@ and their limits: docs/research/perf-pass-2.md.
   run loop turn (AGENTS.md: no database work on the main thread). A read that finishes while
   UIKit still handles the keystroke is taken before the run loop sleeps, so its rows go out in
   the same commit anyway.
+## Clarity audit, the rest (2026-11-27)
+
+The findings of docs/research/clarity-audit.md left to this lane, with the owner's calls.
+
+- **The pill's lead word (`PillLead`).** The resting pill says at most one quiet word before the
+  host, in the place and style of "Not Secure —": "Reader —" while the reader is open,
+  "Translated —" on a translated page (from the first translated text on). One word, so the host
+  keeps its room on the narrowest pill. Precedence, one rule shared with the private lane's
+  "Private": **Private > Reader / Translated > Not Secure.** Private changes what Plain keeps (no
+  history, its data gone at the close), so it is the costliest to miss; Reader and Translated say
+  that what is on screen is not the page as the site sent it, and the user must know how to leave
+  it; Not Secure is about the connection, and the page sheet's host still says it under any word.
+  Reader over Translated: the reader shows the article's text, not the translated page under it.
+  The pill reads the mode from the chrome update it already runs (`updateButtons`); it draws again
+  only when the word changes. Private is the private lane's to draw (its mark and word); until it
+  lands, the pill asks the rule with `isPrivate: false`.
+- **Profiles: named, no badge.** With two or more profiles the page sheet's host has the window's
+  profile under it ("Work"; "Work · Not Secure" on http), and the tabs button's VoiceOver value
+  is "3 tabs, Work". Not in a private tab. Rejected: a badge on the bar (no badges, ui-reference).
+- **Favorites open on a tap.** The sheet listed pages but a tap renamed one; every other list of
+  pages (History, Reading List, Archive) opens on a tap. Rename is a leading swipe and in the
+  row's menu with Open, Copy Link and Delete; Edit, in the header while there are favorites,
+  shows the reorder handles, and its Done (in the sheet's Done place) ends the editing first.
+  Edit Favorites on the strip above the keyboard opens the sheet editing. The chip is
+  "Favorites" for VoiceOver too.
+- **Stop is `stop.circle`.** At the top corner of a sheet an X reads as "close the sheet".
+  `stop.circle` keeps Reload's slot and weight; `xmark.circle` is still an X, and a progress
+  line under the host would move the row. Safari's in-field X stays where nothing else can close.
+- **Passkeys:** "Passkeys aren't available in Plain yet. Use your password." says what the user
+  can do now, with the soft refusal bump (`Haptic.nothingThere`: the sign-in the user tried did
+  not happen; lead's call from the app-wide haptics plan). Too long for one line on the pill's width, so a toast now wraps to two lines,
+  taller, rather than cutting the middle out of a sentence.
+- **A refused connection** says "The site refused the connection." (`LoadFailure.refused`):
+  "can't connect to host" (-1004) is a refused connection, as Chrome names it. Only when
+  CFNetwork's POSIX code under the error (`_kCFStreamErrorCodeKey`) names another cause (no
+  route to the host) does it stay "The site isn't answering.". WebKit's network process does not
+  pass that key on (the first walk: a refused port on the simulator reached Plain without it),
+  so the code can't be the only test. Port 9 and the like stay "Plain doesn't open pages on this
+  port.".
+- **The pill and bar over text:** their paper ground (`ChromeScrim`) is 92% (95% dark), was 82%
+  (92%): at 82% body text ghosted under "Not Secure — host", worst in the collapsed pill. Still
+  only inside each glass shape, so the capsules float apart as before. The inner screen's top
+  bar is the inner-top lane's (Liquid Glass); this is the phone's and the outer screen's chrome.
+- **The link preview** keeps `LinkMenuRules.previewSize` (landed after the audit's base); the
+  walk now captures it upright and on its side on the 13 mini, iPhone 17 and the Duo's outer
+  screen.
+- **Site Settings' items** are named for what they control, checked while on (a `UIMenu` `.on`
+  state): Desktop Site, Content Blocking, Cookie Banner Blocking, Dark Pages. Under a menu titled
+  Site Settings, "on This Site" was noise, and "Turn Off …" hid the state behind a verb.
+- **A permission asked while off for Plain** gets its Site Settings row, Off in Settings, for the
+  session (`WebViewPool.permissionsAskedWhileOff`, in memory: nothing was answered, so nothing is
+  stored). WebKit refuses such a request before anyone is asked, so before this a site that wanted
+  location while Location was off for Plain had no row, and the only way to it was the toast.
+- **Zoom row:** `minus.magnifyingglass` and `plus.magnifyingglass` say zoom without a word, the
+  percent is always in ink (at 100% it takes no tap rather than dimming to near nothing), and
+  VoiceOver hears the row as "Zoom". Rejected: a "Zoom" caption in the row (a fourth item in a
+  row of three, and text the symbols already say).
+- **Downloads' Show in Files** is a labelled row under the files, in the accent, as a list's
+  action; the bare folder in the header named nothing.
+- **Settings footers** are a label with no line-break strategy (`SettingsFooter`). SwiftUI's
+  `Text` avoids a lone last word by pushing the word before it down too (UIKit's `.pushOut`), so
+  "Tabs you haven't opened in a week move to / the archive." broke early under the picker's
+  value, with room left on the first line (measured on the first walk; a full-width frame did not
+  change it). Rejected: shorter copy (any footer that wraps would break early again).
+- **An empty History** shows its empty state alone: no search field, no Clear. A search that
+  finds nothing keeps both.
+- **History and Archive rows at accessibility sizes** put the time under the address, and the
+  title may take two lines (`TimedRowLabel`).
+- **"Made for iPhone Duo" asks UIKit.** iOS 27.1's `UIHingeInteraction` hands its handler a
+  hinge only in a hierarchy that has one (nil elsewhere): a real "this phone folds" answer, read
+  once on the intro, never for layout. The traits rule (a vertical bar edge, or both size classes
+  regular) stays as the answer until the hinge's first update. UIKit has no posture trait or
+  foldable trait on `UITraitCollection` or `UIWindowScene` (checked in the iOS 27.2 SDK's
+  headers). The audit's capture predates the traits rule (fde882b); the walk shows it hidden on
+  the iPhone 17 and the 13 mini.
+- **Sheet headers at the accessibility sizes:** the buttons keep one line and stop growing at
+  the title's cap; the title truncates first. Done had wrapped "D / on / e" beside "Archived Tabs".
+- **A swipe's Delete is red** (`Style.destructive`) in every sheet: the sheets' accent tint had
+  turned the destructive role's red into Lagoon blue, so Delete looked like the main action.
+- **Side pane picker:** the selected segment carries its word beside its symbol (one template
+  image, as a segment holds an image or a title), the others stay symbols, and every segment has
+  its name for VoiceOver.

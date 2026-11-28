@@ -139,12 +139,16 @@ public final class FeatureSheets {
         return Self.sheet(ReadingListView(model: model, onOpen: onOpen, onDone: onDone), identifier: "readingListSheet")
     }
 
-    /// The favorites editor.
-    func favoritesEditor(onDone: @escaping () -> Void) -> UIViewController? {
+    /// The Favorites sheet: a tap opens a favorite; `startsEditing` opens it with the reorder
+    /// handles showing.
+    func favoritesEditor(
+        startsEditing: Bool, onOpen: @escaping (URL) -> Void, onDone: @escaping () -> Void
+    ) -> UIViewController? {
         guard let database = activeDatabase else { return nil }
         let model = favoritesModel ?? FavoritesModel(store: database)
         favoritesModel = model
-        return Self.sheet(FavoritesEditor(model: model, onDone: onDone), identifier: "favoritesSheet")
+        let view = FavoritesEditor(model: model, startsEditing: startsEditing, onOpen: onOpen, onDone: onDone)
+        return Self.sheet(view, identifier: "favoritesSheet")
     }
 
     /// Archived tabs. Restores and deletes go to the shell, which hands them to `TabStore`.

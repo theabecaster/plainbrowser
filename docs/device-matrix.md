@@ -81,7 +81,7 @@ scripts/matrix.sh --full                                        # every row, bef
 - With `PLAIN_TEST_HOST` set (or `--host <name>`) the matrix runs on that test Mac and the results
   come back to `--out`; see "Test Macs" in `docs/development.md`.
 - `XCUIScreen.screens` can list both of the Duo's screens, and the one that is off is
-  black. `CaptureTests` attaches the largest, `FocusCaptureTests` every one; the sheets step keeps
+  black. `CaptureTests` and `FocusCaptureTests` attach every one; the sheets step keeps
   the largest screen that shows something. `scripts/matrix.sh --sheets-only --out <dir>` remakes
   the sheets of an earlier run.
 - Timing (2026-11-27, a loaded Mac, the quick capture test): about a minute and a half for each

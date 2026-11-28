@@ -26,6 +26,9 @@ public enum Signposts {
     /// Interval: generating one paper texture tile (DesignSystem `PaperTexture`), off the main
     /// thread, once per appearance.
     public static let paperTile: StaticString = "paper.tile"
+    /// Interval: making the paper's pattern color from a generated tile, on the main thread, once
+    /// per appearance and display scale.
+    public static let paperPattern: StaticString = "paper.pattern"
     /// Interval: the user submitting the address bar, until the load is handed to the web view
     /// (parsing the input, getting a web view, starting the load).
     public static let addressSubmit: StaticString = "address.submit"

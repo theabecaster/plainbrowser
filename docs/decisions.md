@@ -976,13 +976,37 @@ address text field." Research, plan and the Codex plan review: docs/research/dar
   page tiles the same pixels as a CSS `background-image`.
 - **Recipe:** a 256 px tile (about 85 pt at 3x), three layers on a torus so tiles meet without a
   seam, added to the base in 8-bit levels: *formation* (value noise on 16 and 8 px lattices,
-  σ 0.45 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 1.0) and *fibres* (121 short,
-  tapered, nearly straight strands on a jittered grid so none cluster, peak 1–3 levels, 60 % darker,
-  40 % lighter). Night paper on Deep Lagoon is about half as strong (σ 0.25 / 0.5), with mostly
-  lighter strands. Day shadows move blue most (warm); night highlights move blue most (a cool
-  sheen). A ±1 level triangular dither hides 8-bit steps. The sheet averages to `Palette.background`, so it still matches the launch screen.
-  Tests hold it there: mean within 0.5 levels, 99.9 % of pixels within 9 (day) / 5 (night) levels,
-  no seam step larger than any step inside the tile.
+  σ 0.45 levels), *tooth* (white noise softened by a [1 2 1] blur, σ 2.2) and *fibres* (625 short,
+  tapered, gently wandering strands, 8–32 px, on a full jittered grid so none cluster, 2.05–5.2 levels,
+  60 % darker, 40 % lighter). The fibre field is high-passed (minus a 25 px box blur, twice), so
+  where strands gather there is no soft cloud for the eye to find again one tile over. Night paper
+  on Deep Lagoon is weaker (σ 0.28 / 1.1, 529 strands at 2.0–4.25 levels, mostly lighter). Day
+  shadows move blue most and red least (warm; red is already 255, so it barely moves and its
+  average stays put); night highlights move blue most (a cool sheen). A ±1 level triangular
+  dither hides 8-bit steps. The sheet averages to `Palette.background`, so it still matches the
+  launch screen. Tests hold it there: every channel's mean within 0.5 levels; luma σ between 1.8
+  and 2.8 levels by day and 1.2 and 1.9 by night, 99.9 % of pixels within 12 (day) / 10 (night)
+  levels; an arm's-length blur (about 4 pt) leaves under 0.5 / 0.3 levels, so the tile never
+  shows as a grid; the step across the tile edge within 4.5 σ of the steps inside it (every layer
+  wraps, so the edge is one more step; a real seam measures 6–8 σ).
+- **Raised 2026-11-27 (owner: "The paper texture is barely visible, fix it.").** The first recipe
+  (formation 0.45, tooth 1.0, 121 strands at 1.2–3.2 levels; night 0.25 / 0.5, 100 at 1.2–2.6)
+  measured luma σ 1.16 levels by day and 0.77 by night: about 1.6 % and 1.0 % of a full-range
+  noise overlay, under the 2.5 % floor below. Most of that was the tooth and the dither, a pixel or
+  two across, which at 3x is under what the eye resolves at arm's length; the strands, which carry
+  the "paper" read, sat below the tooth. Now σ 2.31 / 1.52 (about 3.1 % / 2.1 %): the tooth 2.2×,
+  about five times the strands' total ink, the formation unchanged so the repeat stays hidden.
+  Chosen from a strip in the app (start screen and Settings, light and dark, full screen and 1:1):
+  the first recipe, then about 1.5×, 2× and 2.6× its σ. 1.5× was still close to barely visible;
+  2.6× turned Settings' ground mottled and the strands scratch-like. At 2× the design review
+  (Codex) found the material right but a faint lattice of recurring strand clusters when the tile
+  was repeated over a screen, clearest at night, so the same strength now comes from 625 faint,
+  gently wandering strands instead of 220 stronger, straighter ones (a square number, so the
+  grid they start on has no empty band): no single strand is a
+  landmark (the strongest arm's-length spot at night drops about 30 %). Secondary text barely
+  moves: at glyph scale (the paper averaged over 5 × 5 px) the worst `Palette.inkSecondary` goes
+  6.28 → 6.21:1 by day and 9.14 → 9.01:1 by night, the system's secondary label 3.31 → 3.28:1 and
+  5.72 → 5.66:1 (3.35 and 5.79 on flat paper). Tile size, memory and drawing are unchanged.
 - **Why these numbers:** grain guides put "material, not dirt" at roughly 2.5–12 % noise opacity
   and warn that more reads as dirt ([shadcn grain](https://www.shadcn.io/background/grain),
   [Magic UI noise](https://magicui.design/docs/components/noise-texture)). iOS 7 Notes' visible
@@ -1003,6 +1027,17 @@ address text field." Research, plan and the Codex plan review: docs/research/dar
   appearance, instead of a ~70 KB PNG per sheet in the app and the reader, and one source for both.
   Until a tile is ready the surface is the flat color the tile averages to, so the swap can't be
   seen.
+- **Checked again with the raised recipe (2026-11-28).** Two perf gates showed "main to search
+  field focused" 20–100 % slower on a loaded test Mac, so it was measured directly. Generation:
+  1.37 → 2.38 ms per tile (optimized, on a Mac); in the app on the Duo simulator (the `paper.tile`
+  signpost, 7 launches a round) 1.5–2.1 → 2.4–6.1 ms, on a background thread, starting 200–700 ms
+  after `main` and done 100–500 ms before the field is focused; the main thread never waits for it
+  (it shows the flat color until then), and making the pattern color takes 0.6–1.1 ms on the main
+  thread (`paper.pattern`). End to end, interleaved on one simulator, 15 launches each: field
+  focused median 604 ms old, 579 ms new; at low load 398 ms old, 315 ms new; link paint 55 / 56 ms.
+  The earlier gaps were load. A baked PNG was tried as the alternative: reading and decoding it
+  from the bundle on a cold launch took 16–42 ms (still off the main thread) and would add about
+  148 KB to the app (82 KB day, 66 KB night), so the tile stays generated.
 - **CSS:** a tiled PNG, not SVG `feTurbulence`, which re-runs the filter on repaint and pinned the
   CPU while scrolling ([Mozilla 422371](https://bugzilla.mozilla.org/show_bug.cgi?id=422371),
   [WebKit 287982](https://bugs.webkit.org/show_bug.cgi?id=287982)). The background scrolls with

@@ -183,7 +183,7 @@ final class PillReloadTests: XCTestCase {
     func testVoiceOverReadsPageAppearanceThenAddressThenReload() throws {
         let app = try launch()
         closeSearch(app)
-        // Plain dark, then a light-only page offers dark pages; taking it shows the glyph.
+        // Plain dark, then Dark for a light-only page shows the glyph.
         app.buttons["more"].tap()
         let settings = app.buttons["menu.settings"]
         if !settings.waitForExistence(timeout: 2) { app.buttons["more"].tap() }
@@ -198,9 +198,17 @@ final class PillReloadTests: XCTestCase {
         app.buttons["Dark"].tap()
         app.buttons["Done"].tap()
         go(app, to: server.address("/light-site"))
-        let suggestion = app.buttons["darkPagesSuggestion.turnOn"]
-        XCTAssertTrue(suggestion.waitForExistence(timeout: 12), "a light page in dark colors suggests dark pages")
-        suggestion.tap()
+        waitForPage(app, "Light Only")
+        // Site Settings > Page Appearance > Dark: the way in on every layout.
+        app.buttons["more"].tap()
+        let site = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Site Settings'")).firstMatch
+        if site.waitForExistence(timeout: 2) { site.tap() }
+        let menu = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Page Appearance'")).firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 3), "Site Settings offers Page Appearance")
+        menu.tap()
+        let dark = app.buttons["pageAppearance.dark"]
+        XCTAssertTrue(dark.waitForExistence(timeout: 3))
+        dark.tap()
         let appearance = app.buttons["pill.pageAppearance"]
         XCTAssertTrue(appearance.waitForExistence(timeout: 5))
         let reload = app.buttons["pill.reload"]

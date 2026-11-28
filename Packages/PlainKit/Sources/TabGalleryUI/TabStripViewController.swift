@@ -174,11 +174,13 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         diffable.reorderingHandlers.canReorderItem = { _ in true }
         diffable.reorderingHandlers.didReorder = { [weak self] transaction in
             guard let self else { return }
-            for move in TabListReorder.moves(in: transaction) {
+            let moves = TabListReorder.moves(in: transaction)
+            for move in moves {
                 Signposts.signposter.emitEvent(Signposts.galleryReorder, "strip")
-                Haptic.drop.play()
                 dataSource.moveTab(move.id, to: move.index)
             }
+            // One drop for the landing, however many moves the transaction holds.
+            if !moves.isEmpty { Haptic.drop.play(in: view) }
             // After the reorder has been committed: a snapshot applied inside this handler
             // raises in UIKit (a crash on TestFlight while dragging a tab in the strip).
             DispatchQueue.main.async { [weak self] in self?.reloadTabs() }
@@ -431,7 +433,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         let item = UIDragItem(itemProvider: NSItemProvider())
         item.localObject = id
         dragDestination = nil
-        Haptic.selection.prepare()
+        Haptic.selection.prepare(in: collectionView)
+        Haptic.drop.prepare(in: collectionView)
         return [item]
     }
 
@@ -445,7 +448,7 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         else { return UICollectionViewDropProposal(operation: .forbidden) }
         // A tick as the dragged tab reaches each new place (not the one it started from).
         if destination != dragDestination {
-            if dragDestination != nil { Haptic.selection.play() }
+            if dragDestination != nil { Haptic.selection.play(in: collectionView, at: session.location(in: collectionView)) }
             dragDestination = destination
         }
         return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)

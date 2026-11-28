@@ -139,6 +139,12 @@ extension BrowserViewController {
         return screen
     }
 
+    /// The summary sheet is up (not closing to show a source, not behind another sheet).
+    private var isShowingSummarySheet: Bool {
+        !summaryUI.keepsRun && presentedViewController?.view.accessibilityIdentifier == "summarySheet"
+            && presentedViewController?.presentedViewController == nil
+    }
+
     private func showSummarySheet(_ screen: SummaryScreenModel, signpost: StaticString) {
         let host = UIHostingController(rootView: SummaryView(model: screen))
         host.modalPresentationStyle = .pageSheet
@@ -149,8 +155,14 @@ extension BrowserViewController {
     private func startRun(_ input: SummaryRun.Input, on screen: SummaryScreenModel) {
         let browsing: (any ResultsReading & PageReading)?
         if case .search = input { browsing = session.summaries.makeBrowsing() } else { browsing = nil }
-        let run = SummaryRun(input, model: session.summaries.model, results: browsing, pages: browsing) { [weak screen] progress in
-            screen?.apply(progress)
+        let run = SummaryRun(input, model: session.summaries.model, results: browsing, pages: browsing) { [weak self, weak screen] progress in
+            guard let screen else { return }
+            let before = screen.progress.stage
+            screen.apply(progress)
+            // Done or failed, once, while the sheet shows it: the user waited (haptics plan, §4.8).
+            // Behind a source, the sheet says so when it comes back.
+            guard let self, let haptic = progress.stage.outcomeHaptic(after: before), self.isShowingSummarySheet else { return }
+            haptic.play(in: self.view)
         }
         summaryUI.run = run
         run.start()

@@ -67,6 +67,18 @@ final class HapticProbe {
         #expect(model.days.isEmpty)
     }
 
+    @Test func aSummaryEndsWithSuccessOrTheWarningOnce() {
+        let writing = SummaryStage.writing
+        #expect(SummaryStage.reading.outcomeHaptic(after: .searching(engine: "DuckDuckGo")) == nil)
+        #expect(writing.outcomeHaptic(after: .reading) == nil, "a step on the way is silent")
+        #expect(SummaryStage.done.outcomeHaptic(after: writing) == .success)
+        #expect(SummaryStage.failed(.offline).outcomeHaptic(after: .reading) == .failed)
+        #expect(SummaryStage.done.outcomeHaptic(after: .done) == nil, "once: the next progress is not a new ending")
+        #expect(SummaryStage.failed(.declined).outcomeHaptic(after: .failed(.offline)) == nil)
+        // Try Again starts over: its ending plays again.
+        #expect(SummaryStage.done.outcomeHaptic(after: writing) == .success)
+    }
+
     @Test func historyClearFailureIsSilent() async {
         let now = HistoryModelTests.now
         let model = HistoryModel(store: UnclearableHistory(), now: { now },

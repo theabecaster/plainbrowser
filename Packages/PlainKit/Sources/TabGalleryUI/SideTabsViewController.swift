@@ -427,11 +427,13 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
     }
 
     private func didReorder(_ transaction: NSDiffableDataSourceTransaction<Int, UUID>) {
-        for move in TabListReorder.moves(in: transaction) {
+        let moves = TabListReorder.moves(in: transaction)
+        for move in moves {
             Signposts.signposter.emitEvent(Signposts.galleryReorder, "sidebar")
-            Haptic.drop.play()
             dataSource.moveTab(move.id, to: move.index)
         }
+        // One drop for the landing, however many moves the transaction holds.
+        if !moves.isEmpty { Haptic.drop.play(in: view) }
         // The store may keep pinned tabs first: show its order. After the reorder has been
         // committed: a snapshot applied inside the handler raises in UIKit (the strip crashed so
         // on TestFlight).
@@ -479,7 +481,8 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         let item = UIDragItem(itemProvider: NSItemProvider())
         item.localObject = id
         dragDestination = nil
-        Haptic.selection.prepare()
+        Haptic.selection.prepare(in: collectionView)
+        Haptic.drop.prepare(in: collectionView)
         return [item]
     }
 
@@ -495,7 +498,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
         else { return UICollectionViewDropProposal(operation: .forbidden) }
         // A tick as the dragged tab reaches each new place (not the one it started from).
         if destination != dragDestination {
-            if dragDestination != nil { Haptic.selection.play() }
+            if dragDestination != nil { Haptic.selection.play(in: collectionView, at: session.location(in: collectionView)) }
             dragDestination = destination
         }
         return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)

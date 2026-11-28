@@ -452,3 +452,19 @@ Newest feature last.
   iPhone 17e, 17 and 17 Pro Max. Check them unfolded on the Duo.
 - **HTTPS-first wait.** Not reproduced for IP addresses on the simulator; check a `.local` or
   intranet name on the device to confirm WebKit no longer tries HTTPS there.
+
+## Switched-off features (2026-11-27)
+
+- **Screen Time per-website limits.** `STWebpageController` per tab would apply parents' website
+  limits in Plain and cover a blocked page as Safari does. It sits over every web view, so it
+  needs its own lane and the perf gate (docs/research/permissions-states.md, "Open").
+- **Local network.** Whether a load of a LAN address asks iOS's local network permission, and
+  what it fails with when denied, is unverified; no `NSLocalNetworkUsageDescription` yet.
+- **"Not Allowed" in Site Settings** reads without its scope; the design review suggested "Not
+  Allowed on This Site" if it fits the menu without wrapping.
+- **Frames already loaded** when a feature goes off are watched from their next load only (the
+  main document is watched at once).
+- **Duo simulator tests:** its synthesized long press opens no link menu and Home doesn't
+  background the app, so Save Image and the summary-ends test skip there.
+- **Clear History and Data keeps site permissions** (docs/privacy.md says site settings are
+  deleted with it); pre-existing, found while reading the code.

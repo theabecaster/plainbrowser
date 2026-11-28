@@ -20,7 +20,7 @@ final class DarkPagesSuggestionView: UIView {
     /// Called once per showing, after it starts leaving.
     var onFinish: (Outcome) -> Void = { _ in }
 
-    private let glass = Glass.makeView(shape: .rounded(22), interactive: true)
+    private let glass = Glass.makeView(shape: .rounded(22), interactive: true, tint: Palette.cardGlassTint)
     private let icon = UIImageView()
     private let title = UILabel()
     private let message = UILabel()

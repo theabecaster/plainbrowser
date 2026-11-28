@@ -86,7 +86,7 @@ final class InkContrastTests: XCTestCase {
     }
 
     /// The words on a glass card (the Dark Pages suggestion: its title, sentence and No Thanks in
-    /// the label color, Turn On in `accentTextOnGlass`) keep 4.5:1 in both themes over a white
+    /// the label color, Turn On in `accentTextOnGlass`, on `cardGlassTint`) keep 4.5:1 in both themes over a white
     /// and a black page. The glass is modeled as its tint over the page, which is lighter than the
     /// rendered glass by night (measured on the Duo over a white page: rgb(39, 66, 85), the model
     /// gives rgb(59, 84, 103)) and darker than it by day, so the check errs on the safe side.
@@ -94,7 +94,7 @@ final class InkContrastTests: XCTestCase {
         let pages: [RGB] = [(255, 255, 255), (0, 0, 0)]
         for style in [UIUserInterfaceStyle.light, .dark] {
             let t = traits(style)
-            let tint = components(Palette.glassTint, t)
+            let tint = components(Palette.cardGlassTint, t)
             for page in pages {
                 let glass = over(tint.rgb, alpha: tint.alpha, page)
                 for (name, color) in [("label", UIColor.label), ("accentTextOnGlass", Palette.accentTextOnGlass)] {

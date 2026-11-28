@@ -59,6 +59,14 @@ public enum Palette {
         light: UIColor(rgb: 0xFFF6E6, alpha: 0.55), dark: UIColor(rgb: 0x16344A, alpha: 0.6)
     )
 
+    /// The tint of a glass card of sentences by the bar (the Dark Pages suggestion): firmer than
+    /// `glassTint`, whose light glass suits a capsule's one word on its scrim but leaves a
+    /// sentence near 4:1 over a white page by night. Words on it keep 4.5:1 over any page
+    /// (`InkContrastTests`); it looks as the card did before the capsules' glass lightened.
+    public static let cardGlassTint = UIColor(
+        light: UIColor(rgb: 0xFFF6E6, alpha: 0.88), dark: UIColor(rgb: 0x16344A, alpha: 0.84)
+    )
+
     /// The tint of the glass band across the top of a wide screen (the Duo's inner screen) behind
     /// the floating controls and, while reading, under the host: the same colors as `glassTint`,
     /// a little lighter, so the capsules on it read as their own layer, as Safari's do on its band.

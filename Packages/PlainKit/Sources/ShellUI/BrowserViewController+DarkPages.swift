@@ -402,10 +402,12 @@ extension BrowserViewController {
             card.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
         ]
         if onTop {
-            // Under the whole top chrome: the row (pill and button capsules) and the tab strip
-            // when it shows, as close under the lowest of them as it can be.
+            // Under the whole top chrome: the row (pill and button capsules), the glass band
+            // behind them and the tab strip when they show, as close under the lowest as it can be.
             var above: [NSLayoutYAxisAnchor] = [pill.bottomAnchor]
             if duo.top.isBarOnTop { above.append(buttonBar.bottomAnchor) }
+            let band = duo.top.band
+            if band.superview === view, !band.isHidden, band.alpha > 0.01 { above.append(band.bottomAnchor) }
             if let strip = duo.strip?.view, !strip.isHidden, strip.alpha > 0.01 { above.append(strip.bottomAnchor) }
             let close = card.topAnchor.constraint(equalTo: pill.bottomAnchor, constant: Spacing.s)
             close.priority = .defaultLow

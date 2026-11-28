@@ -11,6 +11,8 @@ final class IntroTests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication.isolated()
         app.launchArguments += ["-PlainInMemoryStore", "-PlainShowIntro"] + extra
+        // The icon step's walk-throughs assume the icon can change, whatever the simulator says.
+        if !extra.contains("-PlainAlternateIcons") { app.launchArguments += ["-PlainAlternateIcons", "on"] }
         app.launch()
         return app
     }
@@ -132,7 +134,7 @@ final class IntroTests: XCTestCase {
     /// Where it can change, Settings has the App Icon row (the counterpart of the test above).
     func testSettingsOffersAppIconWhereTheIconCanChange() {
         let app = XCUIApplication.isolated()
-        app.launchArguments += ["-PlainInMemoryStore"]
+        app.launchArguments += ["-PlainInMemoryStore", "-PlainAlternateIcons", "on"]
         app.launch()
         let field = app.textFields["searchField"]
         if field.waitForExistence(timeout: 5), field.hasKeyboardFocus {

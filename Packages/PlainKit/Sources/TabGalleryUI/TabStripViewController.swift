@@ -166,6 +166,8 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
     override public func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         updateItemWidth()
+        collectionView.layoutIfNeeded()
+        updateSnapInset()
         if fadeMask.frame != fade.bounds {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
@@ -181,12 +183,61 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
         if needsFocusScroll, collectionView.bounds.width > 0, let focusedID, let indexPath = diffable.indexPath(for: focusedID) {
             needsFocusScroll = false
             collectionView.layoutIfNeeded()
-            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: false)
+            scrollToFocused(indexPath, animated: false)
         }
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         updateFade(force: false)
+    }
+
+    /// A strip that scrolls comes to rest with a whole tab at its leading edge, never a sliver of
+    /// one (a cut plate read as a broken, empty tab; design review).
+    public func scrollViewWillEndDragging(
+        _ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>
+    ) {
+        guard let step = snapStep else { return }
+        targetContentOffset.pointee.x = snapped(targetContentOffset.pointee.x, step: step)
+    }
+
+    /// One tab and the gap after it, where the strip scrolls and holds one section; nil otherwise
+    /// (it fits, or the private section breaks the even steps).
+    private var snapStep: CGFloat? {
+        guard !hasPrivateTabs, collectionView.contentSize.width > collectionView.bounds.width + 1 else { return nil }
+        let step = flow.itemSize.width + Self.tabGap
+        return step > 0 ? step : nil
+    }
+
+    /// `x` on the nearest whole-tab offset, within the scroll range.
+    private func snapped(_ x: CGFloat, step: CGFloat) -> CGFloat {
+        let maxX = max(0, collectionView.contentSize.width + collectionView.contentInset.right - collectionView.bounds.width)
+        return min(max((x / step).rounded() * step, 0), maxX)
+    }
+
+    /// The end of the scroll range on a whole-tab offset too: a little clear glass after the last
+    /// tab, at most one tab's width, so the strip can rest with its first tab whole at either end.
+    private func updateSnapInset() {
+        var extra: CGFloat = 0
+        if let step = snapStep {
+            let maxX = collectionView.contentSize.width - collectionView.bounds.width
+            extra = (maxX / step).rounded(.up) * step - maxX
+        }
+        if abs(collectionView.contentInset.right - extra) > 0.5 { collectionView.contentInset.right = extra }
+    }
+
+    /// Scrolls the focused tab into view, centered as near as whole-tab offsets allow.
+    private func scrollToFocused(_ indexPath: IndexPath, animated: Bool) {
+        guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return }
+        updateSnapInset()
+        guard let step = snapStep else {
+            collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
+            return
+        }
+        let width = collectionView.bounds.width
+        var x = snapped(frame.midX - width / 2, step: step)
+        if frame.maxX > x + width { x = snapped(x + step, step: step) }
+        if frame.minX < x { x = snapped(x - step, step: step) }
+        collectionView.setContentOffset(CGPoint(x: x, y: collectionView.contentOffset.y), animated: animated)
     }
 
     /// Fades an edge only while tabs continue past it. Changes the mask's colors only when an
@@ -272,8 +323,9 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
             return
         }
         collectionView.layoutIfNeeded()
+        updateSnapInset()
         if let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame, collectionView.bounds.contains(frame) { return }
-        collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
+        scrollToFocused(indexPath, animated: animated)
     }
 
     private func close(_ id: UUID) {

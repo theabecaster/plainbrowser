@@ -492,9 +492,7 @@ Newest feature last.
 - **Tab strip, from design review round 2:** the tab on screen reads as outlined more than
   raised: try a more solid card or a soft shadow. The strip's glass over a saturated page (a
   purple one under private tabs) picks up a brassy tint: the chrome's glass, shared with the top
-  bar (the inner-top lane's material). In portrait with five or more tabs the first plate can
-  rest partly cut at the leading edge; the edge fades, but a rest position on a whole tab would
-  read better.
+  bar (the inner-top lane's material). (Done since: the strip rests on whole tabs.)
 - **UI tests on the inner screen are slow** (a minute per step while XCUITest waits for the app
   to idle): `DuoTests` took an hour on a loaded Mac. Find what keeps the app from idling there.
 

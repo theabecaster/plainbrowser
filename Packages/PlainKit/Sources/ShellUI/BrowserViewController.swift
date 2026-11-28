@@ -617,6 +617,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         let shown = usesVerticalBar && width > 0
         if verticalBarBacking.isHidden == shown { verticalBarBacking.isHidden = !shown }
         guard shown else { return }
+        // While the search sheet is up the bar's buttons are gone: an empty panel beside it read
+        // as an unused control (design review). It fades with the layout pass that opens it.
+        let alpha: CGFloat = isEditingAddress ? 0 : 1
+        if verticalBarBacking.alpha != alpha { verticalBarBacking.alpha = alpha }
         verticalBarBacking.place(column: CGRect(
             x: onTrailing ? bounds.width - width : 0, y: 0, width: width, height: bounds.height
         ))

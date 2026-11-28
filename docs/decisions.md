@@ -2903,8 +2903,13 @@ like that, working towards our premium, elegant feel."
 - **The layout does not change:** the page ends where it did and nothing of it is behind the
   column (owner). The panel sits under the panes, over the root background, in the safe area's
   side the bar takes (`verticalBarEdge`, mirrored in right-to-left).
-- **Cost:** one effect view, placed on layout only; no per-frame work, nothing on the inner screen
-  or on phones (hidden wherever the vertical bar is off).
+- **Cost:** one effect view and one shadow with a fixed path, placed on layout only; no
+  per-frame work, nothing on the inner screen or on phones (hidden wherever the vertical bar is
+  off).
+- **Design review (integration lane):** a soft shadow under the panel (10 pt, 14% in light, 45%
+  in dark and private) lifts it off the paper, so the page meets a raised glass edge rather than
+  a flat change of colour over a dark page; the panel fades while the search sheet is up, when
+  the bar's buttons are gone and an empty panel read as an unused control.
 
 ## Clarity audit, the rest (2026-11-27)
 
@@ -2988,3 +2993,24 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
 - **Side pane picker:** the selected segment carries its word beside its symbol (one template
   image, as a segment holds an image or a title), the others stay symbols, and every segment has
   its name for VoiceOver.
+
+## Inner top and sidebar lanes together (2026-11-28)
+
+The inner top lane (the glass band) and the sidebar lane (site icons, the strip and rail from the
+second tab) landed together, reconciled with New Tab in the bar and private mode on `dev`:
+
+- **One New Tab on screen:** the bar's "+" (Tabs, +, More); the strip keeps no room for a "+";
+  the sidebar's New Tab shows only while the bar has none.
+- **The strip 10 pt under the status items, inside the band:** the band grows to hold it (117 pt
+  on the device with the strip, 73 pt without), and the strip's going mid-page takes away only
+  its own part of the band (`TopChromeGeometry.bandTranslation(reading:strip:)`).
+- **Private:** the band, the host capsule and the strip take the private violet glass drawn
+  dark; the collapsed host keeps the pill's words (the private mark, Private, then Reader,
+  Translated or Not Secure).
+- **The strip rests on whole tabs:** where it scrolls (one section), a drag comes to rest and the
+  focused tab is brought into view at whole-tab offsets, with at most one tab's clear glass after
+  the last, so its leading edge never shows a sliver of a plate (design review: a cut plate read
+  as an empty, broken tab).
+- **Design review call not taken:** dropping "Not Secure" from the collapsed host capsule. The
+  clarity lane's lead word is the page's one warning on screen; Safari keeps it while collapsed
+  too, and the lead asked that the capsule keep the pill's words.

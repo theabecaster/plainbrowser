@@ -92,11 +92,16 @@ struct ContentModeProbe: Sendable {
         anchorText = anchor?["text"] as? String ?? ""
     }
 
-    /// The anchor, for the log: its id, or that it is found by its path. Never its text: a page's
-    /// words are the user's.
+    /// The anchor, for the log: how it is found, never its text or its id (both are the page's
+    /// words, in private tabs too). A debug build names the id, for the fold tests' timeline.
     var anchorLabel: String {
         guard anchorPath != nil else { return isScrolled ? "none (fraction)" : "none (top)" }
-        return anchorID.map { "#\($0)" } ?? "by path"
+        guard let anchorID else { return "by path" }
+        #if DEBUG
+        return "#\(anchorID)"
+        #else
+        return "by id"
+        #endif
     }
 
     /// The arguments of `ContentModeScripts.restore`.

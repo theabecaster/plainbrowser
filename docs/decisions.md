@@ -3724,5 +3724,5 @@ Research and sources: `docs/research/content-mode.md`.
   Only a page in the wrong mode runs the probe (one IPC) and the reload. Signposts:
   `contentMode.switch` (interval, reload to crossfade), `contentMode.kept` (event, with the
   reason), `contentMode.paneChange`, `contentMode.place` and `contentMode.restore` (events). The
-  same steps are in the log (categories `contentMode` and `duo`), with sizes and the anchor's id,
-  never a page's text or address.
+  same steps are in the log (categories `contentMode` and `duo`), with sizes and how the anchor is
+  found, never a page's text, ids or address (a debug build names the anchor's id).

@@ -307,7 +307,7 @@ final class AddressPill: UIView {
             case .off: "circle.slash"
             }
             darkPagesButton.configuration?.image = UIImage(systemName: symbol)
-            darkPagesButton.configuration?.baseForegroundColor = appearance == .off ? Palette.textPrimary : Palette.accentOnGlass
+            applyPageAppearanceTint(appearance)
             let scope = isOwn ? String(localized: "this site") : String(localized: "all sites")
             darkPagesButton.accessibilityValue = "\(Self.title(appearance)), \(scope)"
             darkPagesButton.accessibilityHint = String(localized: "Shows Dark, Light and Off for this site.")
@@ -315,6 +315,14 @@ final class AddressPill: UIView {
         guard indicator != darkPagesIndicator else { return }
         darkPagesIndicator = indicator
         updateDarkPagesVisibility(animated: animated)
+    }
+
+    /// The glyph's colour: the ink for Off; while Plain changes the page, Lagoon on Paper glass
+    /// and Horizon on Night (a private tab), the private chrome's one warm light, never Lagoon's
+    /// blue on it.
+    private func applyPageAppearanceTint(_ appearance: PageAppearance) {
+        darkPagesButton.configuration?.baseForegroundColor = appearance == .off
+            ? Palette.textPrimary : (isPrivateTint ? Palette.privateAccent : Palette.accentOnGlass)
     }
 
     static func title(_ appearance: PageAppearance) -> String {
@@ -539,6 +547,7 @@ final class AddressPill: UIView {
         // over a white page it drew dark text on Night. Set there, it stays dark.
         glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
+        if case .shown(let appearance) = darkPagesIndicator { applyPageAppearanceTint(appearance) }
         // The field says it too, for VoiceOver while editing (the pill is no element then).
         textField.accessibilityLabel = isPrivate ? String(localized: "Private, Search or enter address") : nil
         // Private, a long host loses its middle, never the mark at its start.

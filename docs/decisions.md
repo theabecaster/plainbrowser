@@ -3421,7 +3421,10 @@ Focus (its brand), Brave, and the gradient-violet look the owner calls AI slop. 
 - `privateBackground` `#121110` (dark) for what is drawn dark (start screen, gallery, sidebar),
   `#E9E7E3` (light: Paper in shadow, no hue) behind the status bar in a light app;
   `privateSheetTint` Night 0.84 (opaque under Increase Contrast); `privateGlow` Horizon at 0.12,
-  a low dawn at the start screen's foot; `privateTabPlate` Night lifted.
+  a low dawn at the start screen's foot; `privateTabPlate` Night lifted. The pill's Page
+  Appearance glyph is Horizon while Plain changes the page (Lagoon on Paper), the ink for Off;
+  pull to refresh runs through Horizon's warm steps and arms on Night (`privatePullCycle`,
+  `privatePullFill`); the outer screen's floating side panel is Night like the bar.
 - **Not colour alone:** Night, the hand mark and the word "Private" before the host, the titled
   start screen and the named, filled switch side say it together (NN/g: two cues at least). Why
   not black like Safari: a dark page or the dark app would look private; Night is warmer and

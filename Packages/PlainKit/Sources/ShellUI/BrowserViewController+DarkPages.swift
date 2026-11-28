@@ -70,7 +70,7 @@ extension BrowserViewController {
     /// A tap on the indicator, or on Site Settings' "Dark Pages": off for the site where it
     /// applies, on where it doesn't, with a tick and a crossfade. Remembered for the site.
     func toggleDarkPages(for tab: Tab, source: StaticString) {
-        Haptic.selection.play()
+        Haptic.selection.play(in: view)
         hideDarkPagesSuggestion()
         // The user found the feature: no suggestion after this (a private tab teaches nothing).
         if !tab.isPrivate { darkPagesUI.suggestions.answer(true) }
@@ -213,7 +213,7 @@ extension BrowserViewController {
             case .turnOn:
                 store.answer(true)
                 Signposts.signposter.emitEvent(Signposts.darkPagesSwitch, "on")
-                Haptic.selection.play()
+                Haptic.selection.play(in: view)
                 guard let tab else {
                     Task { await self.sheets.setDarkPages(true) }
                     return

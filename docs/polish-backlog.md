@@ -510,3 +510,8 @@ Newest feature last.
 - **Private search sheet.** In light mode the focused field of a private tab sits on the warm
   paper sheet; a private tint for the sheet would carry the mode into that state (design review,
   private mode lane). The sheet is the search-bar lane's; do it with them.
+- **A long host on a bar swipe beside Reload.** The incoming host is laid out centred with
+  Reload's room at both ends; a long resting host gives up its centre toward the free side
+  instead, so a long host can land a few points to the side when the swipe commits. Short hosts
+  (the common case) land exactly (code review 3, pill reload lane). Lay the incoming label out
+  with the resting label's constraints.

@@ -70,11 +70,27 @@ commit=$(GIT_AUTHOR_NAME="Plain CI" GIT_AUTHOR_EMAIL=ci@plain.invalid GIT_COMMIT
   GIT_COMMITTER_EMAIL=ci@plain.invalid git commit-tree $tree -m "ci: $lane")
 
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+# This run's id: the run for this commit (it can appear a few seconds after the push).
+find_run() {
+  local i id
+  for i in {1..${1:-60}}; do
+    id=$(gh run list -R $repo --branch $branch --json databaseId,headSha \
+      -q "[.[] | select(.headSha == \"$commit\")][0].databaseId // empty" 2>/dev/null)
+    [[ -n $id ]] && { print -r -- $id; return 0; }
+    sleep 5
+  done
+  return 1
+}
+pushed=0
 cleanup_remote() {
-  (( keep )) && return
+  (( keep || ! pushed )) && return 0
   # Only while the branch is still this run's commit: a newer scripts/ci.sh for the lane keeps its own.
   git push -q --force-with-lease="refs/heads/${branch}:${commit}" origin ":refs/heads/${branch}" 2>/dev/null || true
-  [[ -n ${run:-} ]] || return 0
+  if [[ $(git ls-remote origin "refs/heads/${branch}" 2>/dev/null | cut -f1) == $commit ]]; then
+    print -u2 "ci: could not delete $branch; delete it with: git push origin --delete $branch"
+  fi
+  # Interrupted before the run was found: look for it once more.
+  [[ -n ${run:-} ]] || run=$(find_run 6) || { print -u2 "ci: no run found for ${commit:0:10} to clean up; check: gh run list -R $repo --branch $branch"; return 0; }
   # A run still going (ci.sh interrupted) can't be deleted: cancel it and wait for it to stop.
   if [[ $(gh run view $run -R $repo --json status -q .status 2>/dev/null) != completed ]]; then
     gh run cancel $run -R $repo >/dev/null 2>&1 || true
@@ -89,16 +105,11 @@ cleanup_remote() {
 trap 'cleanup_remote; rm -rf $tmp' EXIT
 trap 'exit 130' INT TERM
 
+run=""
+pushed=1
 git push -q -f origin "${commit}:refs/heads/${branch}"
 print "ci: pushed $branch (${commit:0:10}); waiting for the run"
-run=""
-for i in {1..60}; do
-  run=$(gh run list -R $repo --branch $branch --json databaseId,headSha \
-    -q "[.[] | select(.headSha == \"$commit\")][0].databaseId // empty")
-  [[ -n $run ]] && break
-  sleep 5
-done
-[[ -n $run ]] || { print -u2 "ci: no run started for $branch"; exit 1; }
+run=$(find_run 60) || { print -u2 "ci: no run started for $branch"; exit 1; }
 print "ci: run https://github.com/$repo/actions/runs/$run"
 rc=0
 gh run watch $run -R $repo --interval 30 --exit-status >/dev/null 2>&1 || rc=$?

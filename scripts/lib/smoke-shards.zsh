@@ -3,7 +3,11 @@
 # one per line. Used by .github/workflows/ci.yml to run Smoke on several runners at once.
 #
 #   scripts/lib/smoke-shards.zsh <count> <index>     index 1..count
-#   scripts/lib/smoke-shards.zsh <count> --check     every Smoke class is in exactly one shard
+#   scripts/lib/smoke-shards.zsh <count> --check     print the shards
+#   scripts/lib/smoke-shards.zsh <count> --verify <file>
+#        <file>: the test identifiers Xcode enumerates for the Smoke plan (Target/Class/test, one
+#        per line; `xcodebuild -enumerate-tests`). Fails unless the shards' classes are exactly
+#        the enumerated ones: none missing, none extra.
 #
 # The units are the Smoke plan's test classes: every XCTestCase subclass in PlainUITests except
 # the ones Smoke.xctestplan skips (PerfTests), plus the hosted unit tests (PlainTests). A class is
@@ -32,8 +36,22 @@ if jq -e '.testTargets[] | select(.selectedTests != null)' PlainUITests/Smoke.xc
 fi
 
 # "<tests> <target>/<class>" for every unit, sorted largest first, then by name.
+setopt extended_glob
+ui_files=(PlainUITests/**/*.swift(N))
+unit_files=(PlainTests/**/*.swift(N))
+# A test class must say XCTestCase itself: a class on a base of its own would be missed here
+# (--verify, run by the CI, would also catch it).
+while IFS= read -r line; do
+  [[ -n $line ]] && { print -u2 "smoke-shards: a class with tests that is not a direct XCTestCase subclass: $line"; exit 1; }
+done < <(for f in $ui_files $unit_files; do
+  awk -v f=$f '
+    /^[[:space:]]*((final|public|open|internal) )*class [A-Za-z0-9_]+ *:/ {
+      cls = $0; direct = ($0 ~ /: *XCTestCase/) }
+    /^[[:space:]]*func test/ && cls != "" && !direct { print f ": " cls; cls = "" }' $f
+done)
+
 units=()
-for f in PlainUITests/*.swift; do
+for f in $ui_files; do
   for cls in ${(f)"$(grep -oE '^(final )?class [A-Za-z0-9_]+ *: *XCTestCase' $f | sed -E 's/.*class ([A-Za-z0-9_]+).*/\1/')"}; do
     [[ -z $cls ]] && continue
     (( ${skipped[(Ie)$cls]} )) && continue
@@ -46,7 +64,7 @@ for f in PlainUITests/*.swift; do
     units+="$n PlainUITests/$cls"
   done
 done
-units+="$(grep -hcE '^[[:space:]]*func test' PlainTests/*.swift | awk '{s += $1} END {print s + 0}') PlainTests"
+units+="$(cat $unit_files | grep -cE '^[[:space:]]*func test' || true) PlainTests"
 units=(${(f)"$(print -l -- $units | sort -k1,1nr -k2,2)"})
 
 typeset -A load shard_of
@@ -58,6 +76,20 @@ for u in $units; do
   load[$best]=$(( load[$best] + (n > 0 ? n : 1) ))
 done
 
+if [[ $which == --verify ]]; then
+  ids=${3:?usage: smoke-shards.zsh <count> --verify <file>}
+  # The enumerated classes, as the shards name them: PlainUITests/<Class>, and PlainTests whole.
+  enumerated=(${(f)"$(grep -E '^Plain(UI)?Tests/' $ids | awk -F/ '$1 == "PlainTests" { print "PlainTests"; next } { print $1 "/" $2 }' | sort -u)"})
+  sharded=(${(f)"$(for u in $units; do print -r -- ${u#* }; done | sort -u)"})
+  (( ${#enumerated} )) || { print -u2 "smoke-shards: no tests in $ids"; exit 1; }
+  missing=(${enumerated:|sharded}) extra=(${sharded:|enumerated})
+  # A class can be in the shards without tests Xcode lists (all gated by a condition it can't
+  # see at enumeration time); that is harmless. A class Xcode lists that no shard runs is not.
+  (( ${#missing} )) && { print -u2 "smoke-shards: in the Smoke plan but in no shard: ${missing[*]}"; exit 1; }
+  (( ${#extra} )) && print "smoke-shards: sharded but not enumerated (no tests listed): ${extra[*]}"
+  print "smoke-shards: ${#enumerated} enumerated classes, all in exactly one of $count shards"
+  exit 0
+fi
 if [[ $which == --check ]]; then
   for i in {1..$count}; do
     print -r -- "shard $i: ${load[$i]} tests: $(for u in $units; do [[ ${shard_of[${u#* }]} == $i ]] && print -n "${u#* } "; done)"

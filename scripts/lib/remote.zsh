@@ -48,9 +48,9 @@ remote_run() {
   # zsh stops on a glob that matches nothing.
   held='for f in /tmp/plain-priority.*; do [ -e "$f" ] || continue; [ "$f" = /tmp/plain-priority.'$lane' ] && continue; [ -n "$(find "$f" -mmin -180 2>/dev/null)" ] && exit 1; done; exit 0'
   while true; do
+    r=0
     ssh $host "cd ~/plain-lanes/$lane || exit 1; /bin/sh -c ${(q)held} || exit 75
-      for s in 1 2; do /usr/bin/lockf -s -t 0 -k /tmp/plain-sim-\$s.lock zsh -lc $q; r=\$?; [ \$r -ne 75 ] && exit \$r; done; exit 75"
-    r=$?
+      for s in 1 2; do /usr/bin/lockf -s -t 0 -k /tmp/plain-sim-\$s.lock zsh -lc $q; r=\$?; [ \$r -ne 75 ] && exit \$r; done; exit 75" || r=$?
     (( r != 75 )) && return $r
     sleep 20
   done

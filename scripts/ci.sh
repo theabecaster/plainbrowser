@@ -72,7 +72,8 @@ commit=$(GIT_AUTHOR_NAME="Plain CI" GIT_AUTHOR_EMAIL=ci@plain.invalid GIT_COMMIT
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 cleanup_remote() {
   (( keep )) && return
-  git push -q origin --delete $branch 2>/dev/null || true
+  # Only while the branch is still this run's commit: a newer scripts/ci.sh for the lane keeps its own.
+  git push -q --force-with-lease="refs/heads/${branch}:${commit}" origin ":refs/heads/${branch}" 2>/dev/null || true
   [[ -n ${run:-} ]] && gh run delete $run -R $repo >/dev/null 2>&1 || true
 }
 trap 'cleanup_remote; rm -rf $tmp' EXIT

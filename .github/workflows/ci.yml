@@ -43,6 +43,7 @@ jobs:
       shards: ${{ steps.plan.outputs.shards }}
       rows: ${{ steps.plan.outputs.rows }}
       matrix_tests: ${{ steps.plan.outputs.matrix_tests }}
+      matrix_mode: ${{ steps.plan.outputs.matrix_mode }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -67,18 +68,29 @@ jobs:
           if [ "$(jq length <<<"$tests")" -gt 0 ]; then shards=1; fi
           smoke=$(jq -c --argjson n "$shards" '[.[] as $d | range(1; $n + 1) | {device: $d, shard: ., of: $n}]' <<<"$devices")
           matrix=$(jq -r '.matrix // "none"' "$req")
-          case $matrix in
-            none) all="" ;;
-            quick) all="se 17 max duo-outer duo-inner" ;;
-            full) all="se mini 17 air max 17-land max-land duo-outer duo-inner duo-inner-portrait 17-xxxl se-ax3 17-dark duo-inner-dark 17-motion" ;;
-            *) echo "matrix: none, quick or full"; exit 1 ;;
-          esac
+          # The row ids of scripts/matrix.sh, in its order; quick is its default set.
+          full="$(sed -nE 's/^  "([a-z0-9-]+)\|.*/\1/p' scripts/matrix.sh | tr '\n' ' ')"
+          quick="$(sed -nE 's/^  "([a-z0-9-]+)\|.*\|quick"$/\1/p' scripts/matrix.sh | tr '\n' ' ')"
+          [ -n "$full" ] && [ -n "$quick" ] || { echo "could not read the rows from scripts/matrix.sh"; exit 1; }
           picked=$(jq -r '.rows // ""' "$req")
           [[ $picked =~ ^[a-z0-9,-]*$ ]] || { echo "bad rows"; exit 1; }
+          case $matrix in
+            none) all=""; [ -z "$picked" ] || { echo "rows given without a matrix mode"; exit 1; } ;;
+            quick) all=$quick ;;
+            full) all=$full ;;
+            *) echo "matrix: none, quick or full"; exit 1 ;;
+          esac
           rows=()
-          for r in $all; do
-            if [ -z "$picked" ] || [[ ",$picked," == *",$r,"* ]]; then rows+=("$r"); fi
-          done
+          if [ -n "$picked" ]; then
+            # As matrix.sh --rows: any row by id, whatever the mode; an unknown id stops the run.
+            IFS=, read -ra want <<<"$picked"
+            for r in "${want[@]}"; do
+              [[ " $full " == *" $r "* ]] || { echo "unknown matrix row: $r"; exit 1; }
+              rows+=("$r")
+            done
+          else
+            for r in $all; do rows+=("$r"); done
+          fi
           {
             echo "unit=$(jq -r 'if .unit == false then "false" else "true" end' "$req")"
             echo "smoke=$smoke"
@@ -86,6 +98,7 @@ jobs:
             echo "shards=$shards"
             echo "rows=$(printf '%s\n' "${rows[@]}" | jq -R . | jq -sc 'map(select(length > 0))')"
             echo "matrix_tests=$(jq -r '.matrixTests // [] | map("-only-testing:" + .) | join(" ")' "$req")"
+            echo "matrix_mode=$matrix"
           } >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
@@ -143,7 +156,18 @@ jobs:
           fi
           # A throwaway runner: no template to keep.
           udid=$(PLAIN_SIM_TEMPLATES=0 sim_new plain-ci-$DEVICE $type $runtime)
-          if [[ -n $TESTS ]]; then only=(${=TESTS}); else only=(${(f)"$(scripts/lib/smoke-shards.zsh $OF $SHARD)"}); fi
+          if [[ -n $TESTS ]]; then
+            only=(${=TESTS})
+          else
+            # The shards together must be exactly what Xcode runs for the Smoke plan.
+            xcodebuild -project Plain.xcodeproj -scheme Plain -testPlan Smoke -destination "id=$udid" \
+              -derivedDataPath build/sim test-without-building -enumerate-tests -test-enumeration-style flat \
+              -test-enumeration-format json -test-enumeration-output-path build/enumerated.json > build/enumerate.log 2>&1 \
+              || { tail -30 build/enumerate.log; exit 1; }
+            jq -r '[.. | objects | select(has("enabledTests")) | .enabledTests[] | .identifier] | .[]' build/enumerated.json > build/enumerated.txt
+            scripts/lib/smoke-shards.zsh $OF --verify build/enumerated.txt
+            only=(${(f)"$(scripts/lib/smoke-shards.zsh $OF $SHARD)"})
+          fi
           print -l -- $only
           mkdir -p build/test
           rc=0
@@ -181,6 +205,7 @@ jobs:
     env:
       ROW: ${{ matrix.row }}
       MATRIX_TESTS: ${{ needs.plan.outputs.matrix_tests }}
+      MATRIX_MODE: ${{ needs.plan.outputs.matrix_mode }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -196,7 +221,7 @@ jobs:
         # No Device Hub on a hosted runner: the Duo's inner rows use the resizable window, and
         # summary.txt says so. The sheets are made where the rows are brought together (scripts/ci.sh).
         run: |
-          PLAIN_SIM_TEMPLATES=0 PLAIN_MATRIX_ON_HOST=1 scripts/matrix.sh --rows $ROW --resizable ${=MATRIX_TESTS} --out build/matrix-out
+          PLAIN_SIM_TEMPLATES=0 PLAIN_MATRIX_ON_HOST=1 scripts/matrix.sh --$MATRIX_MODE --rows $ROW --resizable ${=MATRIX_TESTS} --out build/matrix-out
       - uses: actions/upload-artifact@v7
         if: always()
         with:

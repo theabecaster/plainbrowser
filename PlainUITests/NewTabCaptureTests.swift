@@ -39,8 +39,8 @@ final class NewTabCaptureTests: XCTestCase {
         plus.press(forDuration: 1)
         pause(0.8)
         shot("nt-2-plus-menu")
-        // Close the menu without choosing.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        // Close the menu without choosing: a tap on the page, far from the menu on every screen.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.55)).tap()
         pause(0.8)
 
         // The tap, and the frames right after it, as fast as the runner takes them.

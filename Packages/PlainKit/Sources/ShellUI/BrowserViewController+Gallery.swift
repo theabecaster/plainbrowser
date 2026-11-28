@@ -44,6 +44,17 @@ final class TabsUIState {
     let tip = TabsTipPresenter()
     /// The edge swipe back that closes a link-opened tab on its first page.
     let openerSwipe = OpenerEdgeSwipe()
+    /// A New Tab opened over a page (`made`) and the page it came from (`back`): if its field
+    /// closes before anything is opened, the page comes back and the empty tab goes, so a stray
+    /// "+" or swipe costs nothing (docs/research/new-tab.md). Cleared by any load.
+    var newTabReturn: NewTabReturn?
+}
+
+/// A New Tab opened from a page: the tab made, the page to go back to, and the pane it was in.
+struct NewTabReturn {
+    let made: TabID
+    let back: TabID
+    let pane: Int
 }
 
 // MARK: - The tab gallery

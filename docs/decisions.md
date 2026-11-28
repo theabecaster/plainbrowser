@@ -2492,3 +2492,33 @@ interactions are in docs/research/haptics.md; the rules are in docs/ui-reference
 - **Tests:** `-PlainHapticLog` (isolated runs only) records every play on a hidden element the UI
   tests read (HapticsTests), and unit tests use `Haptic.recorder`. The perf gate never passes it,
   so the recorder stays nil there.
+
+## New Tab in the bar, in Share's slot (2026-11-27)
+
+Owner: "a quick way to open a new tab instead of having to open the tab switcher. But I don't want
+to overload the interface." Research, options and the Codex review: docs/research/new-tab.md.
+
+- **Chosen: the bar's Share slot is New Tab ("+")** on every layout: Back, Forward, Tabs, New Tab,
+  More (phone bar, landscape row, the Duo's vertical bar, the inner screen's trailing capsule).
+  Share was the bar's one duplicate (the page sheet's last tile). Safari 26's default layout and
+  Chrome keep Share out of the bar; Chrome, Firefox and Brave put "+" in it. The bar stays at five
+  (Hoober: more than four or five items on a phone bar is trouble), with Tabs still in the
+  middle. Cost: Share is two taps (More, Share) instead of one.
+- **Same predicate as Share had** (`ControlRules.newTab`: shown on every page, hidden on Start),
+  so the bar's shape, the start screen's beside-the-pill bar and the vertical bar's packing are
+  unchanged.
+- **Tap: the kind on screen; long press: the other kind.** As the swipe past the last tab, a
+  private page's "+" stays private. No haptic on the tap (the haptics plan's rule 1).
+- **A stray "+" costs nothing.** Closing an untouched New Tab's search sheet by hand (a swipe down, a tap on the
+  page, the grabber, Cancel, Escape) goes back to the page it came from; the empty tab drops
+  (principle 7). Only that close, only with an empty field, only in the same pane, never from the gallery. Any load
+  or other end of editing settles the new tab (`NewTabReturn`, `dismissSearchSheet`, `returnFromUntouchedNewTab`).
+- **One New Tab button:** the strip's "+" on the inner screen is gone (the bar's sits right above
+  it, and with one tab there was no strip, so no "+"); the sidebar's New Tab shows only while the
+  bar has none.
+- **Settings stays in the page sheet.** It never had a bar slot, so moving it frees nothing.
+- **The New Tab card's haptics follow the haptics plan:** `threshold` at 80 pt, a tick back under
+  70 pt, a silent commit; it commits only armed and only on a finger let go (a cancelled touch
+  used to be able to commit an armed card).
+- **Perf:** no launch work (the button is built with the other four), nothing per frame. The tap
+  runs the existing `openNewTab`, so `newTabMs` measures it; the perf test now taps "+".

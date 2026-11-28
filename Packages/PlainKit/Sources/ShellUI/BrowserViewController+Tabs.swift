@@ -154,14 +154,59 @@ extension BrowserViewController {
     /// same kind already on screen is reused, so empty tabs never pile up (state rules, principle 7).
     func openNewTab(private isPrivate: Bool) {
         OpenIntervals.begin(Signposts.newTabReady, until: UIResponder.keyboardDidShowNotification)
-        if isShowingGallery { dismissGalleryFading() }
+        // From the gallery the page under it is not where the user was: no way back to it.
+        let fromGallery = isShowingGallery
+        if fromGallery { dismissGalleryFading() }
         if let current = currentTab, current.isPrivate == isPrivate, session.tabs.isEmpty(current.id) {
             beginAddressEditing()
             return
         }
+        // From a page: closing the field untouched goes back to it (`returnFromUntouchedNewTab`).
+        let back = fromGallery ? nil : currentTab.flatMap { session.tabs.isEmpty($0.id) ? nil : $0.id }
+        let pane = session.tabs.focusedPane
         let tab = session.tabs.newTab(isPrivate: isPrivate)
         show(tab)
+        tabsUI.newTabReturn = back.map { NewTabReturn(made: tab.id, back: $0, pane: pane) }
         beginAddressEditing()
+    }
+
+    /// The user closed the search sheet (`dismissSearchSheet`: a swipe down, a tap on the page,
+    /// the grabber, Cancel, Escape). Over a New Tab opened from a page, with nothing typed and
+    /// nothing opened, the page comes back and the empty tab, left, drops by itself (state rules,
+    /// principle 7), so a stray "+" or swipe costs nothing. Arc's search over a page works the same
+    /// way. Typed text keeps the new tab; so does the field closing for any other reason
+    /// (backgrounding, a sheet, the gallery, a pane). Called before the field ends (which clears
+    /// the way back), so the closing sheet lands on the page.
+    func returnFromUntouchedNewTab(_ pending: NewTabReturn?, untouched: Bool) {
+        guard untouched, let pending, currentTab?.id == pending.made, session.tabs.isEmpty(pending.made),
+              session.tabs.focusedPane == pending.pane,
+              let back = session.tabs.existingTab(pending.back), !isShownInOtherPane(back.id) else { return }
+        Signposts.signposter.emitEvent(Signposts.barNewTab, "returned")
+        show(back)
+    }
+
+    /// The bar's New Tab button: a tab of the kind on screen, like the swipe past the last tab, so
+    /// a private page's "+" stays private. No haptic: the result is on screen (haptics plan, rule 1).
+    func newTabButtonTapped() {
+        Signposts.signposter.emitEvent(Signposts.barNewTab, "tap")
+        openNewTab(private: currentTab?.isPrivate ?? false)
+    }
+
+    /// The New Tab button's long press: the other kind, the one a tap does not open.
+    func newTabButtonMenu() -> UIMenu {
+        UIMenu(children: [
+            UIDeferredMenuElement.uncached { [weak self] completion in
+                let isPrivate = self?.currentTab?.isPrivate ?? false
+                let other = UIAction(
+                    title: isPrivate ? "New Tab" : "New Private Tab", image: UIImage(systemName: isPrivate ? "plus" : "hand.raised")
+                ) { [weak self] _ in
+                    Signposts.signposter.emitEvent(Signposts.barNewTab, "menu")
+                    self?.openNewTab(private: !isPrivate)
+                }
+                other.accessibilityIdentifier = isPrivate ? "newTabMenu.regular" : "newTabMenu.private"
+                completion([other])
+            },
+        ])
     }
 
     /// A bar swipe past the last tab let go on the New Tab card.

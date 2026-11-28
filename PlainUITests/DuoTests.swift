@@ -163,7 +163,9 @@ final class DuoTests: XCTestCase {
         XCTAssertTrue(sidebar.waitForExistence(timeout: 3), "Left: the sidebar shows")
         XCTAssertLessThan(sidebar.frame.minX, window.midX)
         XCTAssertFalse(strip.exists)
-        XCTAssertTrue(app.buttons["sideTabs.newTab"].exists)
+        // One New Tab button: the bar's "+" on a page, so the sidebar shows none of its own.
+        XCTAssertFalse(app.buttons["sideTabs.newTab"].exists)
+        XCTAssertTrue(app.buttons["newTab"].firstMatch.exists)
 
         // The Tabs button hides the sidebar and brings it back.
         app.buttons["tabs"].tap()
@@ -207,9 +209,11 @@ final class DuoTests: XCTestCase {
         rows.matching(NSPredicate(format: "label == 'Plain Test B'")).firstMatch.tap()
         waitForPill(app, showing: "/b")
 
-        // New Tab from the strip goes straight to the search field.
+        // New Tab is the top bar's "+" over the strip (the strip has none of its own), straight to
+        // the search field.
         chooseTabLayout(app, "Above")
-        app.buttons["tabStrip.newTab"].tap()
+        XCTAssertFalse(app.buttons["tabStrip.newTab"].exists, "one New Tab button on screen")
+        app.buttons["newTab"].firstMatch.tap()
         XCTAssertTrue(app.textFields["searchField"].waitForExistence(timeout: 3))
     }
 }

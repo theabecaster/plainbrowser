@@ -321,6 +321,9 @@ extension BrowserViewController {
     func dismissSearchSheet(_ how: SearchSheet.Dismissal) {
         guard isEditingAddress else { return }
         Signposts.signposter.emitEvent(Signposts.searchSheetDismiss, "\(how.rawValue, privacy: .public)")
+        // An untouched New Tab goes back to its page (`+Tabs`) first, so the sheet collapses
+        // into that page's pill and bar, not the start screen's it is leaving.
+        returnFromUntouchedNewTab(tabsUI.newTabReturn, untouched: (pill.textField.text ?? "").isEmpty)
         endEditing()
     }
 

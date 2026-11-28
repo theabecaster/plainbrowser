@@ -129,7 +129,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             }
         case .ended, .cancelled, .failed:
             switch mode {
-            case .tabs: release(velocity: pan.state == .ended ? velocity.x : 0)
+            case .tabs: release(velocity: pan.state == .ended ? velocity.x : 0, ended: pan.state == .ended)
             case .gallery: releaseGallery(velocity: pan.state == .ended ? velocity : .zero)
             case .bump: releaseBump()
             case .none: break
@@ -347,7 +347,9 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         return view
     }
 
-    private func release(velocity: CGFloat) {
+    /// `ended` false (the system cancelled the touch): the New Tab card never commits; only a
+    /// finger let go opens a tab.
+    private func release(velocity: CGFloat, ended: Bool = true) {
         guard let swipe, let browser else { return }
         let width = browser.webContainer.bounds.width
         // Where a flick would carry the page with UIScrollView's normal deceleration.
@@ -357,8 +359,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         if swipe.neighbour != nil, swipe.side != 0, abs(projected) > width / 2,
            (projected < 0) == (swipe.side > 0) {
             target = -CGFloat(swipe.side) * width
-        } else if swipe.isNewTabCard, -displayed(swipe.offset, swipe: swipe, width: width) >= FixedChoices.newTabSwipeThreshold,
-                  velocity < FixedChoices.galleryFlickSpeed {
+        } else if swipe.isNewTabCard, swipe.latch.isArmed, ended, velocity < FixedChoices.galleryFlickSpeed {
             target = -width
         }
         // One haptic per outcome, as the spring starts (docs/ui-reference.md, "Haptics", rule 3):

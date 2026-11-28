@@ -64,3 +64,4 @@ since, and it passes alone). Gallery tab reads ~1.5 s against ~0.6 s for the gal
 | 2026-11-27 12:00 | 6c1231f | device | 225.4 | 198.1 | 0 | 680 | 526 | 214.3 | pass (gallery/swipe rerun alone after a notification interrupted them) |
 | 2026-11-27 14:11 | 5094071 | sim | 968.3 | 507.2 | n/a | 583.7 | 329.3 | 889.3 | 468.3 | 9.3 | 56 | 1489.9 | 531.3 | 72 | n/a | FAIL |
 | 2026-11-27 20:30 | eb5ddec | device | 235.5 | 212.3 | 0 | 574.3 | 313.3 | 218 | 533.4 | 11.7 | — | 555.3 | 536.3 | 72.7 | 0 | FAIL |
+| 2026-11-27 23:21 | 75d1fa6 | sim | 833.2 | 456.2 | n/a | 482.9 | 292.7 | 643.1 | 507.3 | 9.1 | 65 | 498.9 | 484.4 | 67.2 | n/a | pass (new-tab lane, before the search-sheet rebase; dev before it on the same host: new tab 549.8, its run FAIL on tests) |

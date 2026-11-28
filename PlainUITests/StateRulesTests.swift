@@ -46,9 +46,27 @@ final class StateRulesTests: XCTestCase {
 
     /// Closes the search field by tapping the space above it.
     private func closeSearch(_ app: XCUIApplication) {
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        // The sheet's grabber, or Cancel where the field is in the top bar (the inner screen).
+        let grabber = app.buttons["search.close"]
+        let cancel = app.buttons["search.cancel"]
+        if grabber.exists, grabber.isHittable {
+            grabber.tap()
+        } else if cancel.exists, cancel.isHittable {
+            cancel.tap()
+        } else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        }
         XCTAssertTrue(app.buttons["addressPill"].waitForExistence(timeout: 2))
         Thread.sleep(forTimeInterval: 0.6)
+    }
+
+    /// Closes a New Tab's field but keeps the empty tab: something typed, so the close is not the
+    /// untouched one that goes back to the page (docs/research/new-tab.md).
+    private func keepNewTabAndCloseSearch(_ app: XCUIApplication) {
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        field.typeText("x")
+        closeSearch(app)
     }
 
     /// Picks an item from the tabs slot's long-press menu.
@@ -94,7 +112,7 @@ final class StateRulesTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [tried], timeout: 10), .completed, "the pill shows the address that was tried")
     }
 
-    /// Nothing open: no switcher, no Back, Forward or Share; More and the shortcuts reach the rest.
+    /// Nothing open: no switcher, no Back, Forward or New Tab; More and the shortcuts reach the rest.
     func testEmptyStartScreenHasNoSwitcher() throws {
         let app = try launch()
         closeSearch(app)
@@ -102,7 +120,8 @@ final class StateRulesTests: XCTestCase {
         XCTAssertFalse(app.buttons["tabs"].exists, "nothing to switch to and already in a new tab")
         XCTAssertFalse(app.buttons["back"].exists)
         XCTAssertFalse(app.buttons["forward"].exists)
-        XCTAssertFalse(app.buttons["share"].exists)
+        let plus = app.buttons["newTab"].firstMatch
+        XCTAssertFalse(plus.exists && plus.isHittable, "already in a new tab")
         XCTAssertTrue(app.buttons["more"].exists)
         if !app.toolbars.firstMatch.exists {
             // The glass bar: More is a round button beside the pill, not a full-width bar.
@@ -217,7 +236,7 @@ final class StateRulesTests: XCTestCase {
         go(app, to: "/a")
         waitForPage(app, "Page A")
         tabsMenu(app, pick: "New Tab")
-        closeSearch(app)
+        keepNewTabAndCloseSearch(app)
         // The tabs menu on an empty tab has no New Tab: it would be this tab again.
         app.buttons["tabs"].press(forDuration: 1.0)
         XCTAssertTrue(app.buttons["menu.newPrivateTab"].waitForExistence(timeout: 3))
@@ -311,7 +330,7 @@ final class StateRulesTests: XCTestCase {
         go(app, to: "/b")
         waitForPage(app, "Page B")
         tabsMenu(app, pick: "New Tab")
-        closeSearch(app)
+        keepNewTabAndCloseSearch(app)
         app.buttons["tabs"].tap()
         let gallery = app.scrollViews["tabGallery"]
         XCTAssertTrue(gallery.waitForExistence(timeout: 3))

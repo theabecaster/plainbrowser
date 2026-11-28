@@ -207,8 +207,10 @@ public struct ControlRules: Sendable, Equatable {
         return base.dimmingInsteadOfHiding(state.usesVerticalBar)
     }
 
-    /// Nothing to share on Start. A failed page shares the address that was tried.
-    public var share: ControlVisibility { isStart ? .hidden : .shown }
+    /// New Tab in the bar (docs/research/new-tab.md): from any page, regular or private, loaded or
+    /// not. Hidden on Start: the tab on screen is already a new tab, and New Tab there would only
+    /// reuse it (principle 8). Share, which had this slot, is the page sheet's last tile.
+    public var newTab: ControlVisibility { isStart ? .hidden : .shown }
 
     /// History, Settings and Edit Favorites apply everywhere.
     public var more: ControlVisibility { .shown }

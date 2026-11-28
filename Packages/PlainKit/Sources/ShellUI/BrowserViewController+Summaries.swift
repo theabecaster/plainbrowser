@@ -78,6 +78,8 @@ extension BrowserViewController {
 
     func browseForMe(_ query: String) {
         Haptic.tap.play()
+        // Browse for Me from a New Tab keeps that tab: its sources open from there.
+        tabsUI.newTabReturn = nil
         let isPrivate = currentTab?.isPrivate ?? false
         endAddressEditing()
         let input = SummaryRun.Input.search(query, engine: data.searchEngine)

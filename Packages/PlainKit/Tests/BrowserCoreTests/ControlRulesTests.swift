@@ -60,7 +60,7 @@ import Testing
         let rules = ControlRules(Self.firstRun)
         #expect(rules.back == .hidden)
         #expect(rules.forward == .hidden)
-        #expect(rules.share == .hidden)
+        #expect(rules.newTab == .hidden)
         #expect(rules.more == .shown)
         #expect(rules.tabsSlot == .hidden)
         #expect(!rules.swipeUpOpensGallery)
@@ -104,7 +104,7 @@ import Testing
         #expect(rules.menuShowAllTabs)
         #expect(rules.back == .hidden)
         #expect(rules.forward == .hidden)
-        #expect(rules.share == .hidden)
+        #expect(rules.newTab == .hidden)
         #expect(!rules.offersNewTabCard, "swiping past an empty tab would make a second empty tab")
         #expect(rules.startShortcuts == [.privateTab])
         #expect(!rules.menuNewTab, "New Tab would reuse the empty tab on screen")
@@ -142,7 +142,7 @@ import Testing
         #expect(rules.menuShowAllTabs, "same predicate as the swipe up")
         #expect(rules.back == .dimmed)
         #expect(rules.forward == .hidden)
-        #expect(rules.share == .shown)
+        #expect(rules.newTab == .shown)
         #expect(rules.offersNewTabCard)
         #expect(rules.pullToRefresh)
         #expect(rules.menuPreviousTab == .hidden)
@@ -231,7 +231,7 @@ import Testing
         #expect(rules.desktopSite)
         #expect(rules.blockingToggle)
         #expect(!rules.pullToRefresh, "Try Again owns it")
-        #expect(rules.back == .dimmed && rules.share == .shown)
+        #expect(rules.back == .dimmed && rules.newTab == .shown)
     }
 
     @Test func readLaterFollowsFavoritesAndTheCopyOpensOnlyForNetworkFailures() {
@@ -577,6 +577,41 @@ import Testing
         #expect(GalleryRules.afterLastCard(screenTabStillOpen: true, otherListCount: 0) == .openScreenTab)
         #expect(GalleryRules.afterLastCard(screenTabStillOpen: false, otherListCount: 2) == .switchList)
         #expect(GalleryRules.afterLastCard(screenTabStillOpen: false, otherListCount: 0) == .search)
+    }
+
+    // MARK: The bar's New Tab button (docs/research/new-tab.md)
+
+    @Test func newTabButtonShowsOnEveryPageAndNeverOnStart() {
+        // Every page condition, regular or private, first tab or last, side tabs or not.
+        for condition: PageCondition in [.loading, .loaded, .failed, .crashed, .awaitingResubmit] {
+            for isPrivate in [false, true] {
+                for hasNext in [false, true] {
+                    var state = Self.page(others: 1, condition: condition, isPrivate: isPrivate, hasNext: hasNext)
+                    #expect(ControlRules(state).newTab == .shown, "\(condition), private \(isPrivate), next \(hasNext)")
+                    state.sideTabs = true
+                    #expect(ControlRules(state).newTab == .shown)
+                }
+            }
+        }
+        var reader = Self.page()
+        reader.isReaderOpen = true
+        #expect(ControlRules(reader).newTab == .shown)
+        // Start: already a new tab, with or without others, regular or private.
+        #expect(ControlRules(Self.firstRun).newTab == .hidden)
+        #expect(ControlRules(Self.emptyTab()).newTab == .hidden)
+        #expect(ControlRules(Self.emptyTab(others: 3)).newTab == .hidden)
+        #expect(ControlRules(Self.emptyTab(isPrivate: true)).newTab == .hidden)
+    }
+
+    @Test func newTabButtonAndTheSwipePastTheLastTabAgreeOnPages() {
+        // The card is the same action as the button, offered only where the swipe can reach it.
+        for hasNext in [false, true] {
+            let rules = ControlRules(Self.page(others: 2, hasNext: hasNext))
+            #expect(rules.newTab == .shown)
+            #expect(rules.offersNewTabCard == !hasNext)
+        }
+        let empty = ControlRules(Self.emptyTab(others: 2))
+        #expect(empty.newTab == .hidden && !empty.offersNewTabCard, "neither makes a second empty tab")
     }
 }
 

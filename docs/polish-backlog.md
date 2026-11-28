@@ -468,3 +468,12 @@ Newest feature last.
   background the app, so Save Image and the summary-ends test skip there.
 - **Clear History and Data keeps site permissions** (docs/privacy.md says site settings are
   deleted with it); pre-existing, found while reading the code.
+
+## New Tab in the bar (2026-11-28)
+
+- **The bar buttons' long-press menus lift a blurred backing** (the "+" and Tabs): over body text
+  the lifted capsule's backing reads muddy (Codex design review). It is UIKit's button-menu lift;
+  check whether `ChromeScrim` under the glass is carried into the preview and, if so, keep it to
+  the preview's own shape.
+- **Motion on the device:** the "+" tap and the untouched return were checked in simulator
+  recordings; check them on the Duo, both screens.

@@ -279,9 +279,9 @@ extension Appearance {
     /// The section footer: one sentence on what the current choice does.
     public var footer: String {
         switch self {
-        case .system: "Plain and websites follow your iPhone's light or dark setting."
-        case .light: "Plain and websites stay light."
-        case .dark: "Plain stays dark, and so do websites with a dark design."
+        case .system: "Plain's own colors follow your iPhone's light or dark setting."
+        case .light: "Plain's own colors stay light."
+        case .dark: "Plain's own colors stay dark."
         }
     }
 }
@@ -306,7 +306,7 @@ enum Wording {
     /// Shown only where a tab list fits, which has a top bar and no swipe up from the address bar:
     /// the Tabs button shows them all.
     static let tabLayoutFooter = "Where your tabs show on this wide screen. The Tabs button shows them all."
-    static let pageAppearanceFooter = "How websites look, apart from Plain's own colors. Off shows each site as it was made; choose for one site from the address bar."
+    static let pageAppearanceFooter = "How websites look by default; a site can have its own from the address bar. Off shows each site as it was made."
     static let tabLayoutUnavailableFooter = "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs."
     static let searchEngineFooter = "Searches from the address bar use this engine."
     static let customEngineFooter = "Paste a search results address with %s where the search words go."

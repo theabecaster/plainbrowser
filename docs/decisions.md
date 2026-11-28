@@ -918,9 +918,16 @@ below; its engine, suggestion and per-site memory stay.
   "Dark Pages" / "Show every website dark, even ones made only in light?" / No Thanks, Turn On.
   Turn On makes Dark the default.
 - **Settings:** the Dark Pages switch becomes **Page Appearance** (Off, Dark, Light), the default,
-  under Appearance, footer "How websites look, apart from Plain's own colors. Off shows each site
-  as it was made; choose for one site from the address bar." It stays because the default needs
-  a place that isn't a page, and it replaces the switch rather than adding a row.
+  under Appearance, footer "How websites look by default; a site can have its own from the
+  address bar. Off shows each site as it was made." Appearance's footers now speak of Plain's own
+  colors only ("Plain's own colors stay dark"), so the two rows never claim each other's job. It
+  stays because the default needs a place that isn't a page, and it replaces the switch rather
+  than adding a row.
+- **The status bar belongs to the page.** On phones the page runs under the status bar (as in
+  Safari), so the strip there shows the page's top in the page's colors and iOS picks the status
+  bar's ink from what is under it. A page shown Dark in a light Plain has a dark strip with white
+  ink; that is the page, not Plain's theme changing. The bars, the pill and the sheets keep
+  Plain's colors (design review 2026-11-28 raised it; kept on purpose).
 - **Per site, private, motion, feel:** each site's choice is remembered (Storage
   `sitePageAppearance`, the sites turned off before moved in as Off); a private tab's picks last
   for its session and never set the default; every pick plays the selection tick and crossfades

@@ -51,6 +51,12 @@ extension BrowserViewController {
     /// The model's answer changed (Apple Intelligence turned on, the model ready): the entries
     /// follow at once, the search sheet's row included.
     func summaryAvailabilityChanged() {
+        // A summary on its way when the model goes away ends in one line, not a stuck spinner; a
+        // finished one stays to be read.
+        if !session.summaries.isAvailable, let run = summaryUI.run, run.isRunning {
+            Signposts.signposter.emitEvent(Signposts.systemAccessNotice, "summary ended: model unavailable")
+            run.end(with: .unavailable)
+        }
         updateButtons()
         guard isEditingAddress else { return }
         // As `queryChanged` sees it: the page's own address, untouched, is not a query.

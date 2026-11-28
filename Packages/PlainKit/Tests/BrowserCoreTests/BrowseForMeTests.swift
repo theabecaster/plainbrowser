@@ -149,7 +149,7 @@ import Testing
     }
 
     @Test func failuresSayWhatHappenedInPlainWords() {
-        let all: [SummaryFailure] = [.noResults, .nothingReadable, .offline, .declined, .unsupportedLanguage, .unavailable, .failed]
+        let all: [SummaryFailure] = [.noResults, .nothingReadable, .offline, .declined, .unsupportedLanguage, .unavailable, .busy, .failed]
         for failure in all {
             #expect(failure.message.hasSuffix("."))
             #expect(!failure.message.contains("Error"))

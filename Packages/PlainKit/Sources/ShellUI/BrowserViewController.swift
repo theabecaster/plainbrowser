@@ -227,6 +227,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
         wireProfiles()
+        // Which private sites were told a feature is off ends with the private session.
+        session.privateSessionDidEnd = { [weak self] in self?.engineUI.privateAccessNotices = SystemAccessNoticeMemory() }
         session.summaries.onAvailabilityChange = { [weak self] in self?.summaryAvailabilityChanged() }
         session.pool.onTranslationFailed = { [weak self] tab in
             guard let self, tab === self.currentTab else { return }
@@ -1472,9 +1474,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         if rules.readLater, let isSaved = marks?.isSaved {
             keep.append(readLaterMenuItem(for: tab, url: url, isSaved: isSaved))
         }
-        let siteItems = siteMenuItems(
+        var siteItems = siteMenuItems(
             for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
         )
+        // The permissions the site asked for, with what iOS allows (Off in Settings).
+        if !siteItems.isEmpty { siteItems += sitePermissionMenuItems(for: tab) }
         if siteItems.count > 1, let host = url.host() {
             // Desktop Site, blocking, cookie banners and dark pages: set once per site, then remembered.
             let site = UIMenu(

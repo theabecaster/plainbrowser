@@ -41,8 +41,11 @@ public enum SummaryModelError: Error, Equatable {
     case unsupportedLanguage
     /// The prompt didn't fit the context, even after fitting.
     case contextExceeded
-    /// The model can't run now (assets missing, rate limited in the background).
+    /// The model can't run now (assets missing, Apple Intelligence unavailable).
     case unavailable
+    /// The system held the model back for now (rate limited, for example while Plain was in the
+    /// background): a second try can work.
+    case busy
     case failed
 }
 

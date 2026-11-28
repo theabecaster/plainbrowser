@@ -21,6 +21,13 @@ final class EngineUIState {
     /// Tabs whose page kept crashing after the engine's automatic reloads.
     var crashedTabs: Set<UUID> = []
     let prompts = PromptQueue()
+    /// Which sites were told that a feature is off for Plain: once per site until it changes.
+    /// Private tabs keep theirs apart, dropped with the private session.
+    var accessNotices = SystemAccessNoticeMemory()
+    var privateAccessNotices = SystemAccessNoticeMemory()
+    /// The current tab's network error page was shown because of a switch of Plain's (cellular
+    /// data off for Plain): turning it back on retries the page.
+    var networkBlockedTab: UUID?
     /// Checks a few times a second, while the find bar is open, whether it has closed: UIKit
     /// tells no one when the system find bar goes away (it can close without the keyboard).
     var findWatch: Task<Void, Never>?
@@ -365,13 +372,26 @@ extension BrowserViewController {
             })
         } else if let error = tab.loadError, !tab.isLoading {
             let retry = error.url ?? tab.url
-            state.show(.init(message: PageStateView.message(for: error), button: "Try Again") { [weak tab] in
+            let tryAgain = { [weak tab] in
                 Signposts.signposter.emitEvent(Signposts.pageStateAction, "try again")
                 if let retry { tab?.load(retry) } else { tab?.reload() }
-            })
+            }
+            let access = session.pool.systemAccess
+            if PageStateView.isNetworkFailure(error, simulated: access.simulatesNetworkBlock),
+               let block = access.networkBlock {
+                // A switch of Plain's, not the connection: say which, and where to turn it on.
+                engineUI.networkBlockedTab = tab.id
+                state.show(.init(
+                    message: block.notice.message, button: "Open Settings",
+                    action: { Self.openSettings() }, secondary: ("Try Again", tryAgain)
+                ))
+            } else {
+                state.show(.init(message: PageStateView.message(for: error), button: "Try Again", action: tryAgain))
+            }
         } else {
             state.show(nil)
         }
+        if engineUI.networkBlockedTab == tab.id, state.isHidden || tab.loadError == nil { engineUI.networkBlockedTab = nil }
         if !isShowingReader { webContainer.bringSubviewToFront(state) }
     }
 

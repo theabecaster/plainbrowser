@@ -138,8 +138,12 @@ public enum SummaryFailure: Sendable, Equatable {
     case declined
     /// The pages or the question are in a language the model doesn't support.
     case unsupportedLanguage
-    /// The model became unavailable on the way (Apple Intelligence turned off, the app left).
+    /// The model became unavailable on the way (its assets went away, Apple Intelligence is off
+    /// or can't run here).
     case unavailable
+    /// The system held the model back for now (rate limited, for example while Plain was in the
+    /// background).
+    case busy
     /// Anything else.
     case failed
 
@@ -152,6 +156,7 @@ public enum SummaryFailure: Sendable, Equatable {
         case .declined: "Apple Intelligence can't summarize this."
         case .unsupportedLanguage: "Apple Intelligence doesn't support this language yet."
         case .unavailable: "Apple Intelligence isn't available right now."
+        case .busy: "Apple Intelligence is busy. Try again in a moment."
         case .failed: "The summary couldn't be written."
         }
     }
@@ -160,7 +165,7 @@ public enum SummaryFailure: Sendable, Equatable {
     /// (declined, unsupported, unavailable) would come out the same.
     public var canRetry: Bool {
         switch self {
-        case .nothingReadable, .offline, .failed: true
+        case .nothingReadable, .offline, .failed, .busy: true
         case .noResults, .pageUnreadable, .declined, .unsupportedLanguage, .unavailable: false
         }
     }

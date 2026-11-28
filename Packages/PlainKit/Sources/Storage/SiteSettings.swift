@@ -21,6 +21,22 @@ extension AppDatabase {
         }
     }
 
+    /// Every remembered answer for `site`, permission to answer (Site Settings' rows).
+    public func sitePermissions(forSite site: String) async throws -> [String: Bool] {
+        try await writer.read { db in
+            let rows = try Row.fetchAll(
+                db, sql: "SELECT permission, allowed FROM \(Schema.sitePermission) WHERE site = ?", arguments: [site]
+            )
+            var answers: [String: Bool] = [:]
+            for row in rows {
+                let permission: String = row["permission"]
+                let allowed: Bool = row["allowed"]
+                answers[permission] = allowed
+            }
+            return answers
+        }
+    }
+
     public func setSitePermission(_ allowed: Bool, _ permission: String, forSite site: String) async throws {
         try await writer.write { db in
             try db.execute(

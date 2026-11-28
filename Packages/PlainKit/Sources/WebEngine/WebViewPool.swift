@@ -122,6 +122,17 @@ public final class WebViewPool {
     /// Permission prompts in flight, so two requests for the same site and permissions ask once.
     private var pendingPermissionAsks: [String: Task<Bool, Never>] = [:]
     private var lifecycleObservers: [any NSObjectProtocol] = []
+    /// What iOS lets Plain use (camera, microphone, location, Photos, cellular data), read after
+    /// the first frame and on each return to the app.
+    public let systemAccess = SystemAccessMonitor()
+    /// The switched-off features whose requests pages are watched for (`AccessRequestWatch`);
+    /// empty while everything is on, so pages get no script of Plain's in their world.
+    private(set) var accessWatch: Set<SystemFeature> = []
+    private var systemAccessStarted = false
+    /// Remembered permission answers per site (`rememberedPermissions(for:)`).
+    private var siteAnswers: [String: [SitePermission: Bool]] = [:]
+    /// Bumped when the private session ends, so a private read still on its way is dropped.
+    private var privateSessionGeneration = 0
     /// False while the app is in the background or inactive. Tests never leave the active state.
     private(set) var isAppActive = true
 
@@ -260,6 +271,7 @@ public final class WebViewPool {
         controller.addUserScript(darkPagesScript(isPrivate: isPrivate))
         controller.addUserScript(DarkPages.frameScript)
         if translator != nil { controller.addUserScript(PageTranslation.languageScript) }
+        if !accessWatch.isEmpty { controller.addUserScript(AccessRequestWatch.script) }
     }
 
     /// Dark pages for the tabs of one kind, built from its sites list once per change of the list.
@@ -331,6 +343,7 @@ public final class WebViewPool {
     /// It loads an empty HTML string, which leaves no back/forward item (measured: the first real
     /// load has an empty back list), so Back never leads to a blank page.
     public func warmUp() {
+        startSystemAccess()
         guard warm == nil else { return }
         let state = Signposts.signposter.beginInterval(Signposts.webViewWarmUp)
         let (configuration, controller) = makeConfiguration()
@@ -491,6 +504,9 @@ public final class WebViewPool {
         privateSiteChoices = nil
         privatePasskeyNoticeSites = []
         privateDarkPagesStore = nil
+        // Private answers go with the session; a read still on its way is dropped.
+        siteAnswers = siteAnswers.filter { !$0.key.hasPrefix(Self.privateAnswersPrefix) }
+        privateSessionGeneration += 1
         darkPagesScripts[true] = nil
         Task { await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) }
     }
@@ -1055,6 +1071,99 @@ public final class WebViewPool {
         tab?.resetMediaState()
     }
 
+    // MARK: - Site Settings' permissions
+
+    /// The remembered permission answers of the sites tabs show, read when a page commits, so the
+    /// page sheet's Site Settings lists them at once (a menu is built without waiting).
+    private func answersKey(for tab: Tab) -> String? {
+        guard let url = tab.url, let site = Self.site(of: url) else { return nil }
+        return Self.answersKey(site, isPrivate: tab.isPrivate)
+    }
+
+    private static func answersKey(_ site: String, isPrivate: Bool) -> String {
+        (isPrivate ? privateAnswersPrefix : "") + site
+    }
+
+    private static let privateAnswersPrefix = "private "
+
+    /// What the user answered for the site `tab` shows: nothing for a permission never asked.
+    public func rememberedPermissions(for tab: Tab) -> [SitePermission: Bool] {
+        answersKey(for: tab).flatMap { siteAnswers[$0] } ?? [:]
+    }
+
+    /// The site `url` committed in `tab`: reads its answers (one query, off the main thread).
+    func loadRememberedPermissions(for tab: Tab, url: URL?) {
+        guard let url, let site = Self.site(of: url) else { return }
+        let key = Self.answersKey(site, isPrivate: tab.isPrivate)
+        let store = siteChoices(for: tab).permissions
+        let generation = privateSessionGeneration
+        Task { [weak self] in
+            let answers = await store.answers(forSite: site)
+            guard let self, !tab.isPrivate || generation == privateSessionGeneration else { return }
+            siteAnswers[key] = answers
+        }
+    }
+
+    /// Site Settings changed a permission for the site `tab` shows. A permission taken back
+    /// applies from the next page on (`Tab.reload()` by the caller).
+    public func setPermission(_ permission: SitePermission, allowed: Bool, for tab: Tab) {
+        guard let url = tab.url, let site = Self.site(of: url) else { return }
+        siteAnswers[Self.answersKey(site, isPrivate: tab.isPrivate), default: [:]][permission] = allowed
+        let store = siteChoices(for: tab).permissions
+        Task { await store.setAllowed(allowed, permission, forSite: site) }
+    }
+
+    // MARK: - Switched-off features (docs/research/permissions-states.md)
+
+    private func startSystemAccess() {
+        guard !systemAccessStarted else { return }
+        systemAccessStarted = true
+        systemAccess.onChange = { [weak self] changed in self?.systemAccessDidChange(changed) }
+        systemAccess.start()
+    }
+
+    /// What iOS allows changed: pages are watched for requests of exactly the features that are
+    /// off now (from their next page on), and the shell updates what it says.
+    private func systemAccessDidChange(_ changed: Set<SystemFeature>) {
+        let watched = AccessRequestWatch.watched(by: systemAccess)
+        let wasWatching = !accessWatch.isEmpty
+        accessWatch = watched
+        if watched.isEmpty == wasWatching {
+            var controllers = slots.values.map(\.controller)
+            if let warm { controllers.append(warm.controller) }
+            // WebKit removes user scripts only all at once: keep every other script and swap ours.
+            for controller in controllers {
+                let others = controller.userScripts.filter { !AccessRequestWatch.isWatchScript($0) }
+                controller.removeAllUserScripts()
+                others.forEach(controller.addUserScript)
+                if !watched.isEmpty { controller.addUserScript(AccessRequestWatch.script) }
+            }
+            for slot in slots.values {
+                slot.setWatchesAccess(!watched.isEmpty)
+                // A user script runs from the next document on: the pages already open are
+                // watched from now (the script leaves what it already wrapped alone).
+                if !watched.isEmpty { slot.webView.evaluateJavaScript(AccessRequestWatch.source, in: nil, in: .page) { _ in } }
+                // (Frames already loaded inside those pages are watched from their next load.)
+            }
+        }
+        host?.pool(self, systemAccessDidChange: changed)
+    }
+
+    /// A page asked for features iOS has off for Plain (`AccessRequestWatch`). WebKit has already
+    /// denied it; the shell says why. Only the tab on screen is heard, as only it may ask.
+    func pageAskedForSwitchedOff(_ features: [SystemFeature], in tab: Tab) {
+        let blocked = features.filter { systemAccess.access($0).isBlocked }
+        guard !blocked.isEmpty, isAttached(tab), let host, let url = tab.url, let site = Self.site(of: url) else { return }
+        host.tab(tab, wasDenied: blocked, forSite: site)
+    }
+
+    /// `https://example.com`, with the port only when it isn't the scheme's default, as
+    /// `TabWebViewHandler.site(of:)` names a security origin.
+    static func site(of url: URL) -> String? {
+        guard let scheme = url.scheme, let host = url.host(), !host.isEmpty else { return nil }
+        return url.port.map { "\(scheme)://\(host):\($0)" } ?? "\(scheme)://\(host)"
+    }
+
     // MARK: - Events from the tab handler
 
     func slot(for tab: Tab) -> Slot? {
@@ -1148,6 +1257,14 @@ public final class WebViewPool {
     /// Asks once per site and permission, then answers from `permissionStore`. Only the tab on
     /// screen can ask; background requests are denied without being remembered.
     func decide(_ permissions: [SitePermission], site: String, for tab: Tab) async -> Bool {
+        // Off for Plain in iOS: no question of Plain's could help. WebKit usually refuses these
+        // before asking (a simulator's stand-in cameras skip that check); either way the page is
+        // refused, nothing is remembered, and the shell says why.
+        let blocked = permissions.compactMap(\.systemFeature).filter { systemAccess.access($0).isBlocked }
+        if !blocked.isEmpty {
+            if isAttached(tab), let host { host.tab(tab, wasDenied: blocked, forSite: site) }
+            return false
+        }
         // A private tab's answers last for its private session and never reach disk.
         let permissionStore = siteChoices(for: tab).permissions
         var unknown: [SitePermission] = []
@@ -1173,8 +1290,13 @@ public final class WebViewPool {
             return allowed
         }
         pendingPermissionAsks[key] = ask
+        let generation = privateSessionGeneration
         let allowed = await ask.value
         pendingPermissionAsks[key] = nil
+        // A private answer that arrives after its session ended is not kept.
+        if !tab.isPrivate || generation == privateSessionGeneration {
+            for permission in unknown { siteAnswers[Self.answersKey(site, isPrivate: tab.isPrivate), default: [:]][permission] = allowed }
+        }
         return allowed
     }
 
@@ -1250,7 +1372,22 @@ extension WebViewPool {
             controller.addScriptMessageHandler(
                 TranslationMessageHandler(slot: self), contentWorld: PageTranslation.world, name: PageTranslation.handlerName
             )
+            setWatchesAccess(!pool.accessWatch.isEmpty)
             observe()
+        }
+
+        /// Whether the page world's `AccessRequestWatch` handler is on this tab's controller: only
+        /// while a feature a page can ask for is off for Plain.
+        private(set) var watchesAccess = false
+
+        func setWatchesAccess(_ watches: Bool) {
+            guard watches != watchesAccess, let tab else { return }
+            watchesAccess = watches
+            if watches {
+                controller.add(AccessRequestWatch.Handler(tab: tab), contentWorld: .page, name: AccessRequestWatch.handlerName)
+            } else {
+                controller.removeScriptMessageHandler(forName: AccessRequestWatch.handlerName, contentWorld: .page)
+            }
         }
 
         /// When a finger last went down inside an iframe, in milliseconds since 1970 (the page's

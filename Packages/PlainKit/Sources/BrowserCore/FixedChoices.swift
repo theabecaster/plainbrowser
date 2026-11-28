@@ -590,6 +590,17 @@ public enum FixedChoices {
     /// server: the pages read stay on the phone. Where the model can't run, the entries are not
     /// there at all (docs/state-rules.md §4, §6), and they appear by themselves once it is ready.
     public static let summariesOnDeviceOnly = true
+    /// While Apple's model is still downloading or preparing (`modelNotReady`, which Apple says
+    /// resolves by itself), Plain looks again this often while it is on screen, besides each
+    /// return to the app, so Browse for Me and Summarize Page appear soon after the model is
+    /// ready. The check is one cheap read off the main thread.
+    public static let aiNotReadyRecheck = Duration.seconds(30)
+    /// A line saying a feature is off for Plain (a site's camera, microphone or location request
+    /// while iOS has it off) shows once per site until the switch changes, in memory only
+    /// (`SystemAccessNoticeMemory`): a site that asks on every page gets one line, and Plain keeps
+    /// no record of which sites asked. Its button reads "Settings", short enough for the
+    /// narrowest toast; the error page, which has room, says "Open Settings".
+    public static let switchedOffToastButton = "Settings"
     /// Browse for Me reads this many results, as Arc Search does: enough points of view to
     /// cross-check, few enough to read in a few seconds and to fit the model's context.
     public static let browseSources = 5

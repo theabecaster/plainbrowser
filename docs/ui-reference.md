@@ -19,6 +19,18 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - **Address bar, two doors (Arc):** a tap on the pill opens an empty field to go somewhere new; what is submitted from a page opens a new tab (Back on its first page returns to the page). On the search engine's results page the pill shows the query, and a tap brings it back selected, to refine in the same tab. Editing the page's own address is the page sheet's host, or the page's row above the field.
 - **Automatic, with a way out:** cookie banners are answered (rejected where the banner allows it) on every site, and a foreign page offers Translate Page in its menu. Each has its switch or item on the page, never in Settings. The one hint Plain gives about a feature is a single toast the first time ever it applies ("This page is in French", Translate); after that the menu is the way.
 - **On-device AI:** Browse for Me is a row above the search field while the text would search; Summarize Page is a tile in the page sheet on articles. Both write on the phone with Apple Intelligence and are left out where it can't run (no hint, no dimmed item). The summary is a paper sheet with its title and Done pinned at the top: the query or page title in New York, an honest progress line, then short headings and bullet points, each ending with small numbered citations in Lagoon that open their source, and the numbered sources at the end.
+- **Switched-off features** (camera, microphone, location, Photos, cellular data; research in
+  docs/research/permissions-states.md): Plain never asks or explains at launch, and puts no screen
+  before iOS's own prompt, which appears when a site first asks. Right after the user says no
+  there, nothing more. Later, when something the user or a site wanted is blocked by a switch of
+  Plain's in Settings, one line says so where it happened, in Plain's words: a toast ("Camera is
+  off for Plain", "Saving to Photos is off for Plain") with Settings, which opens Plain's page in
+  the Settings app; on the error page, "Cellular data is off for Plain." with Open Settings. A
+  site's request is explained once per site until the switch changes; Save Image, the user's own
+  action, every time. Screen Time's limits are explained with no button, since Plain's page can't
+  change them. Never an alert, never a dead button, never a repeated nag; silent where nothing
+  wanted is blocked (Spotlight, Handoff, Siri, Low Power Mode). Site Settings lists the
+  permissions a site asked for with their value, "Off in Settings" included.
 - **Context menus on links, tabs and favorites:** Open in New Tab, Open in Other Pane, Copy Link, Share, Close, Pin, Rename favorite.
 - **Profiles live in the tab switcher, not Settings:** with a second profile a capsule over the cards names the profile shown, and its menu switches, makes, renames and deletes profiles. While Personal is the only one, New Profile is in the switcher's More menu. Clear History and Data clears every profile.
 - **Swipe actions:** quick actions with no confirmation, for example close a tab or delete a history row.
@@ -99,9 +111,14 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   offline.", "Plain can't find this site.", "The site isn't answering.", "The site took too
   long to answer.", "This site's connection isn't private.", "This address doesn't work.",
   "This site keeps redirecting.", "The site sent something Plain can't show.", "Plain doesn't
-  open pages on this port.", else "Plain couldn't open this page."
+  open pages on this port.", "This site is restricted on this iPhone." (Screen Time), else
+  "Plain couldn't open this page."
+  They name the real cause: "Cellular data is off for Plain." is not "You're offline."
 - The intro promises only what this screen can do: "Made for iPhone Duo" shows only where the
   window can be a foldable's (a vertical bar edge, or both size classes regular), from traits.
+- A feature that is off reads "<Feature> is off for Plain"; one Screen Time blocks reads
+  "<Feature> is restricted" (Apple's word in Screen Time). The toast's button is "Settings"; a page's button,
+  which has room, is "Open Settings".
 - An item captioned under its symbol uses the same short caption everywhere it shows (the page menu's rows and the start screen's shortcuts: "Private Tab", "Reopen Tab", "Archive"), with the full name for VoiceOver.
 - The same action has the same symbol everywhere: Copy Link is `link`, Share `square.and.arrow.up`, Close Tab `xmark`.
 

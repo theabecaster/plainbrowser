@@ -778,6 +778,9 @@ public final class TabGalleryViewController: UIViewController {
         toast.hide(animated: true)
         guard let id = offered ? dataSource.reopenOfferedTab() : dataSource.reopenClosedTab() else { return }
         reloadTabs(animated: true)
+        // A light tap as the card comes back: it may land off to one side, and a toast button has
+        // no other answer (haptics plan, §4.4).
+        Haptic.tap.play(in: view)
         scrollToTab(id, animated: true)
     }
 
@@ -792,6 +795,8 @@ public final class TabGalleryViewController: UIViewController {
         sheet.addAction(UIAlertAction(title: title, style: .destructive) { [weak self] _ in
             guard let self else { return }
             Signposts.signposter.emitEvent(Signposts.galleryCloseAll)
+            // One soft close for the batch, on the destructive choice; the dialog was silent.
+            Haptic.close.play(in: view)
             dataSource.closeAllTabs()
             reloadTabs(animated: false)
             if dataSource.tabs.isEmpty {

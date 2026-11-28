@@ -177,10 +177,12 @@ extension BrowserViewController {
         return action
     }
 
-    /// Reopen Closed Tab from a menu or the start screen: the last closed batch, on screen.
+    /// Reopen Closed Tab from a menu or the start screen: the last closed batch, on screen, with a
+    /// light tap (haptics plan, §4.11). ⌘⇧T comes here inside `Haptic.withoutFeedback`: silent.
     func reopenLastClosed(source: StaticString) {
         let ids = session.tabs.reopenLastClosed()
         guard !ids.isEmpty, let tab = session.tabs.selected else { return Haptic.nothingThere.play() }
+        Haptic.tap.play(in: view)
         endAddressEditing()
         show(tab)
     }
@@ -366,6 +368,8 @@ extension BrowserViewController {
             guard !session.tabs.reopenClosed(batch).isEmpty, let tab = session.tabs.selected else {
                 return Haptic.nothingThere.play()
             }
+            // The toast's button has no other answer than the page coming back (haptics plan, §4.7).
+            Haptic.tap.play(in: view)
             endAddressEditing()
             show(tab)
         }

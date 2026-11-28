@@ -54,8 +54,9 @@ final class SearchSheetTests: XCTestCase {
         XCTAssertTrue(card.exists)
         XCTAssertLessThan(field.frame.midY, window.height * 0.4, "the field is at the top")
         XCTAssertLessThan(field.frame.minY - card.frame.minY, 40, "the field is the sheet's first thing")
-        let page = app.buttons["focus.currentPage"]
-        XCTAssertTrue(page.waitForExistence(timeout: 1), "the page's own row")
+        XCTAssertTrue(app.buttons["field.copy"].waitForExistence(timeout: 1), "Copy inside the field, on the page's address")
+        let page = app.buttons["suggestion.page.0"]
+        XCTAssertTrue(page.waitForExistence(timeout: 1), "a recent page's row")
         let favorite = app.buttons["favorite.0"]
         XCTAssertTrue(favorite.exists)
         XCTAssertGreaterThan(favorite.frame.minY, field.frame.maxY - 1, "favorites under the field")

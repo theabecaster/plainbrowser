@@ -279,11 +279,9 @@ final class ClarityCaptureTests: XCTestCase {
 
         // The page's own address, with Copy in the field; then the copied link offered elsewhere.
         tap(app.buttons["addressPill"], or: nil)
-        if tap(app.buttons["focus.currentPage"], or: nil) {
-            pause(1)
-            shot("address-05-edit-own-address")
-            if tap(app.buttons["field.copy"], or: nil) { pause(0.6); shot("address-06-copied") }
-        }
+        pause(1)
+        shot("address-05-own-address")
+        if tap(app.buttons["field.copy"], or: nil) { pause(0.6); shot("address-06-copied") }
         closeField(app)
         go(app, "/b", "Page B")
         tap(app.buttons["addressPill"], or: nil)

@@ -2689,3 +2689,38 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
 - **Side pane picker:** the selected segment carries its word beside its symbol (one template
   image, as a segment holds an image or a title), the others stay symbols, and every segment has
   its name for VoiceOver.
+
+## Fullscreen video: the native player, as Safari on iPhone (2026-11-28)
+
+- **Chosen:** element fullscreen (`WKPreferences.isElementFullscreenEnabled`, the Fullscreen API
+  on any element) is off on iPhone, the Duo's two screens included, and on for any other idiom
+  (`EngineChoices.allowsElementFullscreen(on:)`). A video's own fullscreen, and a site player that falls
+  back to it when the API is absent, is then the system's native player: swipe down to close, picture in picture, AirPlay, rotation, the controls users
+  know. The app declares the `audio` background mode, so sound goes on in the background and
+  with the screen locked, a fullscreen video moves to picture in picture when the user leaves,
+  and lock-screen controls keep working. Research and sources: docs/research/media-playback.md.
+- **Why:** Safari never offers the Fullscreen API on iPhone (MDN compat data; WebKit leaves the
+  choice to the app). Plain had it on everywhere, so site players that use the API when it
+  exists fullscreened their own web player box: most likely the "weird" player the owner saw
+  (the pattern is reproduced in the UI tests; the live sites are on the owner's device list). Without the
+  background mode iOS suspends the app as it leaves the screen, which ends audio, blocks the
+  automatic picture in picture and leaves Now Playing dead (Apple, "Configuring your app for
+  media playback").
+- **Why by idiom, not by window size:** Safari's choice is per device class, and the Duo runs
+  iPhone Safari on both screens. A page must not see the API appear or vanish on a fold. The
+  preference is shared by every web view's configuration copy (and process-wide in WebKit), so a
+  per-pane switch would mean a separate `WKPreferences` per web view and possibly a different
+  web process per value: cost for no Safari-matching gain.
+- **Unchanged, already Safari's:** inline playback only with `playsinline` on iPhone (WebKit's
+  small-screen default), muted autoplay (`mediaTypesRequiringUserActionForPlayback = .audio`),
+  PiP and AirPlay allowed, all four orientations, busy tabs (playing, PiP, fullscreen) never
+  discarded. WebKit sets the audio session and pauses video that is not in PiP or on AirPlay
+  when the app leaves the screen, as in Safari.
+- **Shell:** nothing hides or changes. The native player is presented above Plain's window, so
+  bars, swipes and haptics can't act under it, and closing it returns to the page at the same
+  scroll position (`MediaTests`).
+- **Better than Safari:** none needed beyond parity; picture in picture keeps playing while
+  another tab is open (an audible page keeps its process, `WebPageProxy::updateThrottleState`),
+  now guarded by a test.
+- **Perf:** no new framework is loaded; a configuration flag and an Info.plist key. Launch and
+  memory budgets are untouched by construction.

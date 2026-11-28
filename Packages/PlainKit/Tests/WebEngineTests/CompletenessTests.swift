@@ -260,15 +260,32 @@ struct CompletenessTests {
 
     // MARK: Media
 
-    @Test func mediaConfigurationAllowsInlinePictureInPictureAndFullscreen() async throws {
+    @Test func mediaConfigurationMatchesSafari() async throws {
         let harness = try await Harness(route: M4Pages.route)
         defer { harness.cleanUp() }
         let tab = try await harness.loadedTab("/a")
         let configuration = try #require(harness.pool.existingWebView(for: tab)).configuration
         #expect(configuration.allowsInlineMediaPlayback)
         #expect(configuration.allowsPictureInPictureMediaPlayback)
-        #expect(configuration.preferences.isElementFullscreenEnabled)
+        #expect(configuration.allowsAirPlayForMediaPlayback)
         #expect(configuration.mediaTypesRequiringUserActionForPlayback == .audio)
+        // Element fullscreen as Safari has it: never on an iPhone (these tests run on one).
+        #expect(configuration.preferences.isElementFullscreenEnabled
+            == EngineChoices.allowsElementFullscreen(on: UIDevice.current.userInterfaceIdiom))
+        #expect(!EngineChoices.allowsElementFullscreen(on: .phone))
+        #expect(EngineChoices.allowsElementFullscreen(on: .pad))
+    }
+
+    /// On an iPhone, a page sees no Fullscreen API, so a site's player falls back to the video's
+    /// own fullscreen (the native player), as in Safari.
+    @Test func pagesOnAnIPhoneSeeNoElementFullscreen() async throws {
+        try #require(UIDevice.current.userInterfaceIdiom == .phone)
+        let harness = try await Harness(route: M4Pages.route)
+        defer { harness.cleanUp() }
+        let tab = try await harness.loadedTab("/a")
+        let webView = try #require(harness.pool.existingWebView(for: tab))
+        let enabled = try await webView.evaluateJavaScript("document.fullscreenEnabled === true || document.webkitFullscreenEnabled === true")
+        #expect(enabled as? Bool == false)
     }
 
     @Test func playingMediaIsReportedAndKeepsTheTabFromBeingDiscarded() async throws {

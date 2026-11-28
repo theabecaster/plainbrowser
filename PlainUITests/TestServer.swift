@@ -34,6 +34,8 @@ final class TestServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "TestServer")
     private var loads = 0
+    /// Requests for `/long?reload=slow` so far: the first answers at once, later ones slowly.
+    private var slowReloads = 0
     private(set) var port: UInt16 = 0
 
     init() throws {
@@ -92,7 +94,12 @@ final class TestServer: @unchecked Sendable {
 
             """
             // `/slow` answers after a few seconds: a page that stays loading (Stop, the progress bar).
-            let delay: Double = path.hasPrefix("/slow") ? 8 : 0
+            // `/long?reload=slow` loads at once and reloads slowly: a pull to refresh keeps spinning.
+            var delay: Double = path.hasPrefix("/slow") ? 8 : 0
+            if path.contains("reload=slow") {
+                self.slowReloads += 1
+                if self.slowReloads > 1 { delay = 3 }
+            }
             self.queue.asyncAfter(deadline: .now() + delay) {
                 connection.send(content: Data((header + body).utf8), completion: .contentProcessed { _ in
                     connection.cancel()

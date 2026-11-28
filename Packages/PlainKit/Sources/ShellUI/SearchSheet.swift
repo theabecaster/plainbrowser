@@ -984,7 +984,7 @@ final class SuggestionRow: UIControl {
             accessibilityHint = String(localized: "Reopens the closed tab")
         case .hint(let sentence):
             setLines(sentence, nil)
-            setSymbol("sparkle.magnifyingglass")
+            setSymbol("binoculars")
             pick = nil
             isEnabled = false
             accessibilityIdentifier = "focus.hint"

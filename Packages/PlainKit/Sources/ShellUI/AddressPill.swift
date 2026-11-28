@@ -71,12 +71,12 @@ final class AddressPill: UIView {
         self?.onMic()
     }
     private lazy var browseButton = makeOption(
-        symbol: "sparkles", identifier: "field.browse", label: String(localized: "Browse for Me")
+        symbol: "binoculars", identifier: "field.browse", label: String(localized: "Browse for Me")
     ) { [weak self] in
         self?.onBrowse()
     }
     private lazy var optionsView = UIView()
-    /// Behind the sparkles while Browse for Me is armed: the state stays plain while typing, when
+    /// Behind the binoculars while Browse for Me is armed: the state stays plain while typing, when
     /// the placeholder that names it is gone.
     private lazy var armedBacking: UIView = {
         let side: CGFloat = 28
@@ -352,7 +352,7 @@ final class AddressPill: UIView {
         case .options(let mic, let browse, let armed):
             setGlyph(micButton, "mic", tint: Palette.textSecondary)
             micButton.accessibilityLabel = String(localized: "Dictate")
-            setGlyph(browseButton, "sparkles", tint: armed ? Palette.accentOnGlass : Palette.textSecondary)
+            setGlyph(browseButton, "binoculars", tint: armed ? Palette.accentOnGlass : Palette.textSecondary)
             browseButton.accessibilityValue = armed ? String(localized: "On") : nil
             layOutOptions([mic ? micButton : nil, browse ? browseButton : nil].compactMap { $0 })
             if armedBacking.superview == nil { browseButton.insertSubview(armedBacking, at: 0) }

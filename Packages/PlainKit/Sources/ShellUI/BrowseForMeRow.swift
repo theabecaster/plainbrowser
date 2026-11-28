@@ -22,7 +22,7 @@ final class BrowseForMeRow: UIControl {
         layer.cornerRadius = Radius.large
         layer.cornerCurve = .continuous
 
-        icon.image = UIImage(systemName: "sparkles")
+        icon.image = UIImage(systemName: "binoculars")
         icon.tintColor = Palette.accentOnPaper
         icon.contentMode = .center
         icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body, scale: .medium)

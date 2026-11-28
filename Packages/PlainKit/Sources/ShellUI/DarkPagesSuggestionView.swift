@@ -57,7 +57,7 @@ final class DarkPagesSuggestionView: UIView {
         message.numberOfLines = 0
 
         configure(noThanks, title: String(localized: "No Thanks"), color: Palette.textPrimary, weight: .regular, id: "darkPagesSuggestion.noThanks")
-        configure(turnOn, title: String(localized: "Turn On"), color: Palette.accentOnGlass, weight: .semibold, id: "darkPagesSuggestion.turnOn")
+        configure(turnOn, title: String(localized: "Turn On"), color: Palette.accentTextOnGlass, weight: .semibold, id: "darkPagesSuggestion.turnOn")
         noThanks.addAction(UIAction { [weak self] _ in self?.finish(.noThanks) }, for: .primaryActionTriggered)
         turnOn.addAction(UIAction { [weak self] _ in self?.finish(.turnOn) }, for: .primaryActionTriggered)
 

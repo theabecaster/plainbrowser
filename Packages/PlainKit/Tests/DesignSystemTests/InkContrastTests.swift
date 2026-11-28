@@ -85,6 +85,28 @@ final class InkContrastTests: XCTestCase {
         }
     }
 
+    /// The words on a glass card (the Dark Pages suggestion: its title, sentence and No Thanks in
+    /// the label color, Turn On in `accentTextOnGlass`) keep 4.5:1 in both themes over a white
+    /// and a black page. The glass is modeled as its tint over the page, which is lighter than the
+    /// rendered glass by night (measured on the Duo over a white page: rgb(39, 66, 85), the model
+    /// gives rgb(59, 84, 103)) and darker than it by day, so the check errs on the safe side.
+    func testCardWordsKeepBodyContrastOnGlassOverAnyPage() {
+        let pages: [RGB] = [(255, 255, 255), (0, 0, 0)]
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let t = traits(style)
+            let tint = components(Palette.glassTint, t)
+            for page in pages {
+                let glass = over(tint.rgb, alpha: tint.alpha, page)
+                for (name, color) in [("label", UIColor.label), ("accentTextOnGlass", Palette.accentTextOnGlass)] {
+                    let words = components(color, t)
+                    let ratio = contrast(over(words.rgb, alpha: words.alpha, glass), glass)
+                    print("InkContrast card \(style == .dark ? "dark" : "light") page \(Int(page.r)) \(name): \(String(format: "%.2f", ratio))")
+                    XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(name) on \(style == .dark ? "dark" : "light") glass over page \(page)")
+                }
+            }
+        }
+    }
+
     /// The private start screen is drawn dark on its own paper, with the night's glow.
     func testSecondaryInkKeepsBodyContrastOnPrivatePaper() {
         let t = traits(.dark)

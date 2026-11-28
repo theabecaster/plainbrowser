@@ -107,6 +107,12 @@ public enum Palette {
     /// so labels keep their contrast on the dark glass.
     public static let accentOnGlass = UIColor(light: accent, dark: UIColor(rgb: 0x8DB6FF))
 
+    /// Lagoon Blue for an action's words on a glass card (the Dark Pages suggestion's Turn On):
+    /// 4.5:1 or more on the card's glass whatever page is behind it. A step deeper than
+    /// `accentOnGlass` by day (Lagoon is 3.9:1 on paper glass), a step lighter by night (the
+    /// glass over a white page lifts toward the blue).
+    public static let accentTextOnGlass = UIColor(light: UIColor(rgb: 0x1A52D0), dark: UIColor(rgb: 0xB3CEFF))
+
     /// The soft shadow under tab cards, so they lift off the Paper background.
     public static let floatingShadow = UIColor(light: UIColor(rgb: 0x0A2133), dark: .black)
 

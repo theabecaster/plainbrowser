@@ -249,7 +249,15 @@ final class PrivateModeTests: XCTestCase {
         closeSearch(app)
         pause(1)
         shotScreens("st-1-start")
-        app.buttons["start.privateTab"].tap()
+        // The Duo's inner screen has no shortcut there: a private tab from the tabs menu.
+        if app.buttons["start.privateTab"].exists {
+            app.buttons["start.privateTab"].tap()
+        } else {
+            app.buttons["tabs"].press(forDuration: 1.0)
+            let item = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Private Tab'")).firstMatch
+            XCTAssertTrue(item.waitForExistence(timeout: 3))
+            item.tap()
+        }
         closeSearch(app)
         XCTAssertTrue(app.staticTexts["start.privateTitle"].waitForExistence(timeout: 2))
         pause(1)

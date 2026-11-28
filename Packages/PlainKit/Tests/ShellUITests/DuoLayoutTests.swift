@@ -442,6 +442,13 @@ struct TopChromeGeometryTests {
         let simulator = Self.simulator()
         #expect(simulator.obscuredInset == simulator.safeTop + CGFloat(FixedChoices.topBandHostRow))
         #expect(simulator.obscuredInset < simulator.expandedInset)
+        // There the row reaches below the collapsed band: the strip going mid-page (the bar
+        // expanded) takes away only the strip's part, so the row stays on glass.
+        let simulatorStrip = Self.simulator(strip: Self.strip)
+        let midPage = simulatorStrip.expandedBandBottom + simulatorStrip.bandTranslation(reading: 0, strip: 1)
+        #expect(midPage >= simulatorStrip.rowBottom)
+        #expect(simulatorStrip.bandTranslation(reading: 1, strip: 1) == simulatorStrip.bandTranslation(progress: 1))
+        #expect(simulatorStrip.expandedBandBottom + simulatorStrip.bandTranslation(progress: 1) == simulatorStrip.collapsedBandBottom)
     }
 
     @Test func deviceCollapseShrinksTheAddressIntoTheHostOnTheStatusRow() {

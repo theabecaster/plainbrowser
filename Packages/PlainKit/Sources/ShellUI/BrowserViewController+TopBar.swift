@@ -416,7 +416,7 @@ extension BrowserViewController {
         // the status zone, moving to the host's row under a full-width status bar) and its size.
         let pillCenter = geometry.rowTop + TopChromeGeometry.rowHeight / 2 + geometry.pillTransform(progress: reading).translationY
         duo.top.band.apply(
-            progress: reading, translation: geometry.bandTranslation(progress: stripProgress),
+            progress: reading, translation: geometry.bandTranslation(reading: reading, strip: stripProgress),
             pillSize: pill.bounds.size, pillCenterOffset: pillCenter - geometry.hostCenterY
         )
         guard let strip = duo.strip?.view else { return }
@@ -434,7 +434,9 @@ extension BrowserViewController {
         guard geometry.stripHeight > 0 else { return 1 }
         var reveal = pageScrollView.map { geometry.stripReveal(offset: $0.contentOffset.y) } ?? 1
         let panes = session.tabs.panes
-        for index in shownPanes where index != session.tabs.focusedPane {
+        // A second pane under the side pane is off screen: its scroll position hides nothing.
+        let covered = duo.layout?.sidePaneCoversSecondPane == true
+        for index in shownPanes where index != session.tabs.focusedPane && !(covered && index == 1) {
             guard let id = panes[index], let tab = session.tabs.existingTab(id),
                   let scrollView = session.pool.scrollView(for: tab) else { continue }
             reveal = min(reveal, geometry.stripReveal(offset: scrollView.contentOffset.y))

@@ -343,7 +343,21 @@ struct TopChromeGeometry: Equatable {
     /// status zone). Past 1 the band stays: under a top bar the chrome never hides
     /// (docs/state-rules.md, "Duo inner screen (top bar)").
     func bandTranslation(progress: CGFloat) -> CGFloat {
-        -(expandedBandBottom - collapsedBandBottom) * min(max(progress, 0), 1)
+        bandTranslation(reading: progress, strip: progress)
+    }
+
+    /// The band's bottom without the strip: under the row, never above the collapsed band's.
+    var rowBandBottom: CGFloat { max(rowBottom + Self.gap, collapsedBandBottom) }
+
+    /// The band's vertical translation for the bar's collapse (`reading`) and the strip's progress
+    /// toward gone (`strip`, `stripProgress`) apart: the strip going (a page scrolled past its top)
+    /// takes away only the strip's part, so an expanded bar mid-page keeps its row on glass. Under a
+    /// full-width status bar the row reaches below the collapsed band; in the status zone the two
+    /// are the same, so there only the strip's part moves.
+    func bandTranslation(reading: CGFloat, strip: CGFloat) -> CGFloat {
+        let r = min(max(reading, 0), 1)
+        let s = max(min(max(strip, 0), 1), r)
+        return -(expandedBandBottom - rowBandBottom) * s - (rowBandBottom - collapsedBandBottom) * r
     }
 
     /// How much of the strip a page scrolled to `offset` (its scroll view's `contentOffset.y`)

@@ -361,6 +361,11 @@ extension BrowserViewController {
 
     /// One sentence and one button over the page when it can't show (docs/ui-reference.md).
     func updatePageState() {
+        // Nothing to say and nothing shown yet: the view is not made for a page that loads fine.
+        let needed = currentTab.map {
+            engineUI.crashedTabs.contains($0.id) || $0.isAwaitingResubmit || ($0.loadError != nil && !$0.isLoading)
+        } ?? false
+        guard needed || engineUI.madePageState != nil else { return updateStartScreen() }
         let state = engineUI.pageState
         if state.superview !== webContainer {
             state.frame = webContainer.bounds

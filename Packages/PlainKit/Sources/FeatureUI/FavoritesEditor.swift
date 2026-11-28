@@ -56,14 +56,14 @@ public struct FavoritesEditor: View {
             .sheetTitle("Favorites") {
                 if !isEditing, !model.favorites.isEmpty {
                     Button("Edit") { editMode = .active }
-                        .buttonStyle(SheetHeaderButtonStyle())
+                        .buttonStyle(SheetHeaderButtonStyle(alignment: .leading))
                         .accessibilityHint("Shows the handles to reorder and delete favorites")
                 }
             } trailing: {
                 if isEditing {
                     // Ends the editing, not the sheet: the sheet's own Done comes back after.
                     Button("Done") { editMode = .inactive }
-                        .buttonStyle(SheetHeaderButtonStyle(font: .headline))
+                        .buttonStyle(SheetHeaderButtonStyle(font: .headline, alignment: .trailing))
                 } else {
                     SheetDone(onDone: onDone)
                 }

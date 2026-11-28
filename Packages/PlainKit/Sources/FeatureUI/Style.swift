@@ -203,7 +203,7 @@ struct SheetDone: View {
         Button("Done") {
             if let onDone { onDone() } else { dismiss() }
         }
-        .buttonStyle(SheetHeaderButtonStyle(font: .headline))
+        .buttonStyle(SheetHeaderButtonStyle(font: .headline, alignment: .trailing))
     }
 }
 
@@ -215,7 +215,7 @@ private struct SheetBack: View {
         Button { dismiss() } label: {
             Label("Back", systemImage: "chevron.backward").labelStyle(.iconOnly)
         }
-        .buttonStyle(SheetHeaderButtonStyle(font: .body.weight(.semibold)))
+        .buttonStyle(SheetHeaderButtonStyle(font: .body.weight(.semibold), alignment: .leading))
         .accessibilityIdentifier("BackButton")
     }
 }
@@ -228,6 +228,9 @@ private struct SheetBack: View {
 /// long press shows it in the Large Content Viewer, as the system bar's buttons do past that size.
 struct SheetHeaderButtonStyle: ButtonStyle {
     var font: Font = .body
+    /// Where a label narrower than the target sits in it: toward the header's edge, so a symbol
+    /// lines up with the cards' edge as text does (Back's chevron sat 14 pt in).
+    var alignment: Alignment = .center
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
@@ -235,7 +238,7 @@ struct SheetHeaderButtonStyle: ButtonStyle {
             .font(font)
             .foregroundStyle(isEnabled ? Style.accent : Style.inkSecondary)
             .accessibilityShowsLargeContentViewer()
-            .frame(minWidth: Metrics.tapTarget, minHeight: Metrics.tapTarget)
+            .frame(minWidth: Metrics.tapTarget, minHeight: Metrics.tapTarget, alignment: alignment)
             .contentShape(Rectangle())
             .opacity(configuration.isPressed ? 0.35 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)

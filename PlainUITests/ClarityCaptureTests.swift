@@ -429,6 +429,11 @@ final class ClarityCaptureTests: XCTestCase {
             go(app, "/b", "Page B")
             pause(1)
             shot("profiles-08-work-page")
+            // The tabs button's VoiceOver value names the profile ("2 tabs, Work"), and so does the sheet.
+            print("[clarity] tabs button value: \(app.buttons["tabs"].value as? String ?? "none")")
+            openSheet(app)
+            shot("profiles-08b-work-sheet")
+            dismissSheet(app)
             tap(app.buttons["tabs"], or: nil)
             pause(1.5)
             shot("profiles-09-work-gallery")

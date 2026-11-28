@@ -138,10 +138,12 @@ extension BrowserViewController {
     }
 
     /// The tabs slot's face: always Tabs where it shows; the long press is the tabs menu.
-    /// VoiceOver hears how many tabs are open (no badge).
+    /// VoiceOver hears how many tabs are open and, with two or more profiles, the window's
+    /// profile ("3 tabs, Work"; no badge).
     private func applyTabsFace() {
         let open = rules.state.others + (rules.state.hasPage ? 1 : 0)
-        let value = open == 1 ? String(localized: "1 tab") : String(localized: "\(open) tabs")
+        let count = open == 1 ? String(localized: "1 tab") : String(localized: "\(open) tabs")
+        let value = shownProfileName.map { "\(count), \($0)" } ?? count
         buttonBar.setAccessibilityValue(value, for: .tabs)
         barItems[.tabs]?.accessibilityValue = value
     }

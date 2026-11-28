@@ -1490,7 +1490,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         }
         let host = url.host().map(Self.siteName) ?? url.absoluteString
         let notSecure = tab.security == .notSecure || tab.security == .certificateBypassed
-        model.address = .init(host: host, notSecure: notSecure, back: back, forward: forward, copy: copy, reload: reload)
+        model.address = .init(
+            host: host, notSecure: notSecure, profile: shownProfileName, back: back, forward: forward, copy: copy, reload: reload
+        )
 
         // Tiles: the page actions people reach for most, at most four, Share always last.
         var tiles: [UIAction] = []

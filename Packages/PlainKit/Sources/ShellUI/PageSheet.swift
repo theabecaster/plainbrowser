@@ -12,6 +12,9 @@ struct PageSheetModel {
     struct Address {
         var host: String
         var notSecure: Bool
+        /// The window's profile, named once there are two or more ("Work"), so a sign-in never
+        /// happens in the wrong one unnoticed.
+        var profile: String? = nil
         var back: UIAction?
         var forward: UIAction?
         var copy: UIAction
@@ -148,8 +151,12 @@ final class PageSheetController: UIViewController {
         host.attributedTitle = AttributedString(address.host, attributes: AttributeContainer([
             .font: Self.gridFont(.headline), .foregroundColor: Palette.ink,
         ]))
-        if address.notSecure {
-            host.subtitle = String(localized: "Not Secure")
+        // Under the host: the profile, then "Not Secure", in one quiet line.
+        let notes = [address.profile, address.notSecure ? String(localized: "Not Secure") : nil].compactMap { $0 }
+        if !notes.isEmpty {
+            host.attributedSubtitle = AttributedString(notes.joined(separator: " · "), attributes: AttributeContainer([
+                .font: Self.gridFont(.caption1), .foregroundColor: Palette.inkSecondary,
+            ]))
             host.titleAlignment = .center
         }
         host.titleLineBreakMode = .byTruncatingHead
@@ -157,7 +164,7 @@ final class PageSheetController: UIViewController {
             self?.onEditAddress()
         })
         hostButton.accessibilityIdentifier = "pageSheet.address"
-        hostButton.accessibilityLabel = address.host
+        hostButton.accessibilityLabel = ([address.host] + notes).joined(separator: ", ")
         hostButton.accessibilityHint = String(localized: "Edits the address")
         hostButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         hostButton.setContentHuggingPriority(.defaultLow, for: .horizontal)

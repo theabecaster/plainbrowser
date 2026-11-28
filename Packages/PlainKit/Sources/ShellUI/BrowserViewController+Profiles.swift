@@ -46,6 +46,14 @@ extension BrowserViewController {
         if tabsUI.start.message != message { tabsUI.start.message = message }
     }
 
+    /// The window's profile's name while there are two or more profiles; nil with Personal alone,
+    /// where naming it would say nothing, and in a private tab, which keeps nothing in any profile.
+    var shownProfileName: String? {
+        let tabs = session.tabs
+        guard tabs.profiles.count > 1, currentTab?.isPrivate != true else { return nil }
+        return tabs.store.profile(tabs.activeProfile)?.name
+    }
+
     /// The start screen's sentence: an empty private tab says what it is (the start screen
     /// otherwise looks the same, with only the glass tinted: no badge, docs/ui-reference.md); with
     /// two or more profiles a regular one names the window's profile.

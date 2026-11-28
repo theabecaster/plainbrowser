@@ -11,19 +11,34 @@ import UIKit
 /// enough it fills with Lagoon (the threshold haptic, from the shell; a tick if pulled back);
 /// after release it spins in that one color until the page's load ends. Reduce Motion: one color, no spin.
 ///
-/// Cost per scroll callback: a table lookup and one layer color, no color math and no allocation.
-/// The arrow is a symbol used as a mask over a plain view, so a new color is a layer property, not
-/// a symbol drawn again.
+/// The arrow is drawn, not an SF Symbol: `arrow.clockwise`'s image box is not centered on its
+/// circle (the open arc and the arrowhead sit off-center), so a symbol turned about its view's
+/// center wobbles, and the system's Rotate effect runs on a clock, not with a finger
+/// (docs/research/gestures.md, "The refresh arrow"). Here the arc is a true circle about the view's
+/// center: it grows with the pull (`strokeEnd`), its head rides the arc's end, and the spin turns
+/// the layer about that same center, so it stays concentric.
+///
+/// Cost per scroll callback: a table lookup, one layer color, the arc's `strokeEnd` and the head's
+/// rotation, all layer properties with implicit animations off. No color math, no path built, no
+/// image drawn, no allocation.
 final class PullIndicator: UIView {
     static let size: CGFloat = 36
+    /// The arrow's box, its circle's radius and stroke, and the gap the open arc leaves (radians).
+    private static let arrowBox: CGFloat = 20
+    private static let radius: CGFloat = 6.5
+    private static let lineWidth: CGFloat = 2.25
+    private static let gap: CGFloat = 0.9
+    /// How much of the arc shows at the start of a pull; it closes to its full sweep at the threshold.
+    private static let arcStart: CGFloat = 0.12
 
     /// A private tab's pull runs through the private palette.
     var isPrivate = false
     private(set) var isRefreshing = false
     private var isArmed = false
-    /// The arrow's color, under the symbol's mask.
+    /// The arrow's color, under the drawn arc and head (its mask).
     private let arrow = UIView()
-    private let shape = UIImageView()
+    private let arc = CAShapeLayer()
+    private let head = CAShapeLayer()
     /// The table entry last applied, so a callback that lands on the same color does nothing.
     private var lastIndex = -1
     private var refreshInterval: OSSignpostIntervalState?
@@ -35,13 +50,28 @@ final class PullIndicator: UIView {
         backgroundColor = Palette.surface
         layer.cornerRadius = Self.size / 2
         layer.cornerCurve = .continuous
-        let image = UIImage(
-            systemName: "arrow.clockwise", withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
-        )
-        shape.image = image
-        let size = image?.size ?? CGSize(width: 16, height: 18)
-        shape.frame = CGRect(origin: .zero, size: size)
-        arrow.mask = shape
+        let size = CGSize(width: Self.arrowBox, height: Self.arrowBox)
+        let mask = CALayer()
+        mask.frame = CGRect(origin: .zero, size: size)
+        // The window's scale replaces this one when the view lands in it.
+        let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 3
+        for part in [arc, head] {
+            part.frame = mask.bounds
+            part.contentsScale = scale
+            mask.addSublayer(part)
+        }
+        let (arcPath, headPath) = Self.paths(in: mask.bounds)
+        arc.path = arcPath
+        arc.fillColor = nil
+        arc.strokeColor = UIColor.black.cgColor
+        arc.lineWidth = Self.lineWidth
+        arc.lineCap = .round
+        head.path = headPath
+        head.fillColor = UIColor.black.cgColor
+        head.strokeColor = UIColor.black.cgColor
+        head.lineWidth = 1
+        head.lineJoin = .round
+        arrow.layer.mask = mask
         arrow.backgroundColor = Palette.textSecondary
         arrow.translatesAutoresizingMaskIntoConstraints = false
         addSubview(arrow)
@@ -59,16 +89,62 @@ final class PullIndicator: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// The drawn arrow is rasterized at the screen's scale, known once in a window.
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil, traitCollection.displayScale > 0 else { return }
+        let scale = traitCollection.displayScale
+        for part in [arc, head] where part.contentsScale != scale { part.contentsScale = scale }
+        arrow.layer.mask?.contentsScale = scale
+    }
+
     /// Follows a pull of `distance` points; `threshold` is where it arms.
     func follow(pull distance: CGFloat, threshold: CGFloat) {
         guard !isRefreshing else { return }
         let fraction = min(max(distance / threshold, 0), 1)
         alpha = fraction
-        // Halfway down the pulled gap, never above its resting spot.
+        // Halfway down the pulled gap, never above its resting spot. The disc itself never turns.
         let drop = max(0, distance / 2 - Self.size / 2)
-        transform = CGAffineTransform(translationX: 0, y: drop).rotated(by: fraction * .pi)
+        transform = CGAffineTransform(translationX: 0, y: drop)
+        setArc(fraction)
         guard !isArmed else { return }
         applyCycle(fraction: Double(fraction))
+    }
+
+    /// The arc shows `fraction` of its sweep (from `arcStart`), its head at its end.
+    private func setArc(_ fraction: CGFloat) {
+        let shown = Self.arcStart + (1 - Self.arcStart) * fraction
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        arc.strokeEnd = shown
+        // The head is drawn at the full sweep's end; it turns back about the circle's center.
+        head.setAffineTransform(CGAffineTransform(rotationAngle: -(1 - shown) * (2 * .pi - Self.gap)))
+        CATransaction.commit()
+    }
+
+    /// The open arc clockwise from just after twelve o'clock to just before it (the gap at the
+    /// top), and a filled arrowhead at its end pointing on along the circle. Both centered on the
+    /// box, so any rotation about the center keeps them on the same circle.
+    private static func paths(in box: CGRect) -> (CGPath, CGPath) {
+        let center = CGPoint(x: box.midX, y: box.midY)
+        let start = -CGFloat.pi / 2 + gap / 2
+        let end = start + 2 * .pi - gap
+        let arc = UIBezierPath(arcCenter: center, radius: radius, startAngle: start, endAngle: end, clockwise: true)
+        // The head: a triangle whose base straddles the arc's end, tip ahead along the tangent.
+        let tip = CGPoint(x: center.x + radius * cos(end), y: center.y + radius * sin(end))
+        let tangent = CGVector(dx: -sin(end), dy: cos(end))
+        let normal = CGVector(dx: cos(end), dy: sin(end))
+        let length: CGFloat = 4.6, half: CGFloat = 3.4
+        let head = UIBezierPath()
+        head.move(to: CGPoint(x: tip.x + tangent.dx * length * 0.6, y: tip.y + tangent.dy * length * 0.6))
+        head.addLine(to: CGPoint(
+            x: tip.x - tangent.dx * length * 0.4 + normal.dx * half, y: tip.y - tangent.dy * length * 0.4 + normal.dy * half
+        ))
+        head.addLine(to: CGPoint(
+            x: tip.x - tangent.dx * length * 0.4 - normal.dx * half, y: tip.y - tangent.dy * length * 0.4 - normal.dy * half
+        ))
+        head.close()
+        return (arc.cgPath, head.cgPath)
     }
 
     /// The arrow's color for a pull `fraction` of the way to the threshold.
@@ -125,6 +201,7 @@ final class PullIndicator: UIView {
         isRefreshing = true
         refreshInterval = Signposts.signposter.beginInterval(Signposts.pullRefreshing)
         let fill = isPrivate ? PullTint.privateFill : Palette.accent
+        setArc(1)
         Motion.animate(Motion.quick, changes: {
             self.alpha = 1
             self.transform = .identity

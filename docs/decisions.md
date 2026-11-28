@@ -2804,6 +2804,11 @@ before/after: docs/research/gestures.md; the table: docs/ui-reference.md, "Gestu
   armed fills with Lagoon (violet in a private tab), released spins in that color until the load
   ends (at most 1.5 s). Reduce Motion: one color, no spin. Tables built once; a callback is a
   lookup.
+- **The refresh arrow is drawn, not a symbol** (owner: it "spins weird"): `arrow.clockwise`'s
+  image box isn't centered on its circle, so turning it wobbled, and the system's Rotate effect
+  can't follow a pull. A `CAShapeLayer` arc on a true circle plus an arrowhead layer, as the
+  mask of the colored view: the arc grows with the pull, the spin turns about the circle's own
+  center (docs/research/gestures.md, "The refresh arrow").
 - **Not done:** dragging links out of a page on iPhone-class screens (WebKit keeps its drag
   interaction off there; turning it on needs SPI), drops onto the strip and rail (the strip
   lane's), and Safari's sideways card swipe (Plain's cards swipe up, Arc's way, decided

@@ -41,7 +41,7 @@ final class GestureCaptureTests: XCTestCase {
             XCTAssertTrue(field.waitForExistence(timeout: 2))
         }
         field.typeText(server.address(path) + "\n")
-        XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.webViews.staticTexts[heading].waitForExistence(timeout: 15))
     }
 
     func testCaptureGestureMenus() {
@@ -75,7 +75,9 @@ final class GestureCaptureTests: XCTestCase {
     /// faster toward the threshold, the fill and the spin. Then the same in a private tab.
     func testCapturePullSlowly() {
         let app = launch()
-        go(app, "/long", heading: "Long Read")
+        // The slow page (8 s to answer): its reload keeps the arrow spinning to its 1.5 s limit,
+        // long enough to see that it turns on its own center.
+        go(app, "/slow", heading: "Slow Page")
         pause(1)
         let page = app.webViews.firstMatch
         let start = page.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))

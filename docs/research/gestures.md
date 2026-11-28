@@ -107,3 +107,34 @@ colors."
   table and sets one layer color only when the entry changes. The arrow is a symbol used as a
   mask, so a color change never draws the symbol again. No display link: the pull's own scroll
   callbacks drive it.
+
+## The refresh arrow (owner, 2026-11-28)
+
+"The circle arrow looks not symmetrical so it spins weird." The indicator was the SF Symbol
+`arrow.clockwise` in an image view, turned with the view.
+
+- **Why it wobbled.** A symbol image's box is its glyph's alignment rectangle, built for text
+  (baselines, cap height), not a square centered on the circle the arrow draws: the open arc
+  and the arrowhead push the circle's center off the box's center, so a rotation about the
+  view's center swings the circle around a point beside it. Developers report the same on
+  NSImageView with the system's own Rotate effect (Apple Developer Forums 759373).
+- **The system's Rotate effect** (`RotateSymbolEffect`, SF Symbols 6, iOS 18) turns a symbol
+  about an anchor the symbol supplies, which fixes the center for symbols annotated for it; but
+  it is an indefinite, clock-driven effect: it can't follow a finger's pull, and its anchor for
+  `arrow.clockwise` is undocumented. Custom anchors are set in the SF Symbols app, whose 6.0
+  export dropped them (Forums 760497).
+- **Chosen: draw it.** One `CAShapeLayer` arc, a true circle (radius 6.5 pt, 2.25 pt round
+  stroke, a 0.9 rad gap at twelve o'clock), and a filled arrowhead `CAShapeLayer` at the arc's
+  end, both in a 20 pt square box centered in the disc, used as the mask of a plain view whose
+  layer color carries the cycle. The arc grows with the pull (`strokeEnd` from 12% to the full
+  sweep at the threshold) and the head turns about the box's center to ride its end; the spin
+  is a `transform.rotation.z` animation on the same box, so every frame is concentric. Per
+  scroll callback: `strokeEnd`, one affine rotation and (when it changes) one color, with
+  implicit animations off; no path built, nothing drawn on the CPU, no image work.
+- Sources: Apple, `RotateSymbolEffect`
+  (https://developer.apple.com/documentation/symbols/rotatesymboleffect); WWDC24 "What's new in
+  SF Symbols 6" (https://developer.apple.com/wwdc24/10188); Apple Developer Forums, "SF Symbol
+  rotate animation in NSImageView looks weird" (https://developer.apple.com/forums/thread/759373)
+  and "SF Symbols 6 app does not export 'Can Rotate' property of a layer"
+  (https://developer.apple.com/forums/thread/760497); Apple, "Annotating SF Symbols"
+  (https://developer.apple.com/documentation/technologyoverviews/annotating-sf-symbols).

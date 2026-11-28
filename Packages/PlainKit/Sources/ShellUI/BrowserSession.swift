@@ -66,7 +66,9 @@ public final class BrowserSession {
             thumbnailDirectory: thumbnailDirectory,
             pageZooms: stores.pageZooms,
             darkPages: stores.darkPages,
-            translator: translator
+            translator: translator,
+            // Each profile's icons in its own database (Personal's is the main one).
+            iconDatabases: { [profileData = stores.profileData] profile in await profileData.database(for: profile) }
         )
         summaries = SummaryService(pool: pool)
         tabs = EngineTabs(

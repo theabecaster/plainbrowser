@@ -281,21 +281,35 @@ struct TopChromeGeometry: Equatable {
         )
     }
 
-    /// The strip's frame in `lane` (`DuoLayout.stripLane`): the lane's full width less its
-    /// margins, under the row (`placeStrip`).
-    func stripFrame(lane: ClosedRange<CGFloat>) -> CGRect {
-        CGRect(
+    /// The strip's frame in `lane` (`DuoLayout.stripLane`), under the row (`placeStrip`): from
+    /// the lane's leading margin, as wide as its tabs (`contentWidth`,
+    /// `TabStripViewController.preferredWidth`), at most the lane's full width less its margins.
+    /// From the leading edge rather than centered under the address: a tab keeps its place when
+    /// another opens or closes, and only the bar's end (and New Tab on it) moves.
+    func stripFrame(lane: ClosedRange<CGFloat>, contentWidth: CGFloat? = nil) -> CGRect {
+        let full = max(0, lane.upperBound - lane.lowerBound - 2 * Self.edgeMargin)
+        return CGRect(
             x: lane.lowerBound + Self.edgeMargin, y: stripTop,
-            width: lane.upperBound - lane.lowerBound - 2 * Self.edgeMargin, height: stripHeight
+            width: min(full, contentWidth ?? full), height: stripHeight
         )
     }
 
     /// The strip's top: under the row, and in the status zone under the status items too, so the
-    /// strip always spans the lane's full width, right under the clock and battery (owner, on the
+    /// strip always spans its lane, right under the clock and battery (owner, on the
     /// device: "The tabs should go all the way to under the status bar icons"). It never stops
     /// short beside the corner: a strip cut where the status items begin read as broken. On the
     /// device the corner is the row's height around the camera, so this is the row's bottom + 4.
-    var stripTop: CGFloat { max(rowBottom, corner?.maxY ?? 0) + Self.gap }
+    ///
+    /// Under the status items it keeps `FixedChoices.tabStripStatusGap` from their bottom, more
+    /// than the gap under the row: their backing reaches below the region the system reports,
+    /// and the strip's edge must never sit under it. A corner that already runs down to the safe
+    /// area's top (the guide's band, which holds the items and their backing) needs only the
+    /// row's gap under it.
+    var stripTop: CGFloat {
+        guard let corner else { return rowBottom + Self.gap }
+        let underItems = min(corner.maxY + CGFloat(FixedChoices.tabStripStatusGap), max(corner.maxY, safeTop) + Self.gap)
+        return max(rowBottom + Self.gap, underItems)
+    }
 
     /// The bottom of the expanded chrome: the row, or the strip under it.
     var expandedBottom: CGFloat {
@@ -335,7 +349,7 @@ struct TopChromeGeometry: Equatable {
     /// over the clock on its way out (it is faded by then anyway).
     func stripTranslation(progress: CGFloat) -> CGFloat {
         var rise = Self.rowHeight + Self.gap
-        if let corner { rise = min(rise, max(0, stripTop - corner.maxY)) }
+        if let corner { rise = min(rise, max(0, stripTop - corner.maxY - Self.gap)) }
         return -rise * min(max(progress, 0), 1)
     }
 

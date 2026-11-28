@@ -63,7 +63,10 @@ final class ButtonBar: UIView {
     /// end, Tabs, New Tab and More in one at its trailing end, the pill between them, where Safari
     /// has them on the Duo's inner screen and on iPad. The leading capsule holds only what shows
     /// and grows away from Back (Forward comes in to its right), so Back never moves; the trailing
-    /// capsule keeps every slot. The pill keeps its place either way.
+    /// capsule too (in the top bar) holds only what shows and grows away from More (Tabs and New Tab come in to its
+    /// left), so More never moves and the start screen has no empty glass beside it (clarity
+    /// audit: "the inner start screen shows an empty trailing capsule"). The pill keeps its place
+    /// either way.
     private(set) var isSplit = false
     /// The split shape's leading capsule holds only the buttons that show (the top bar, as Safari
     /// has it); off, it keeps both slots and Forward hides in place (the one bottom row in compact
@@ -74,6 +77,7 @@ final class ButtonBar: UIView {
     private var glassTrailing: NSLayoutConstraint!
     private var splitConstraints: [NSLayoutConstraint] = []
     private var leadingWidth: NSLayoutConstraint?
+    private var trailingWidth: NSLayoutConstraint?
     /// The buttons in the trailing capsule of the split shape.
     static let trailingKinds: [PageButton] = [.tabs, .newTab, .more]
     /// The width of each capsule of the split shape: one 44 pt slot per button.
@@ -156,18 +160,21 @@ final class ButtonBar: UIView {
             stackTrailing.constant = 0
             let leading = glass.widthAnchor.constraint(equalToConstant: Self.splitLeadingWidth)
             leadingWidth = leading
+            let trailing = trailingGlass.widthAnchor.constraint(equalToConstant: Self.splitTrailingWidth)
+            trailingWidth = trailing
             splitConstraints = [
                 leading,
                 trailingGlass.topAnchor.constraint(equalTo: topAnchor),
                 trailingGlass.bottomAnchor.constraint(equalTo: bottomAnchor),
                 trailingGlass.trailingAnchor.constraint(equalTo: trailingAnchor),
-                trailingGlass.widthAnchor.constraint(equalToConstant: Self.splitTrailingWidth),
+                trailing,
             ]
             NSLayoutConstraint.activate(splitConstraints)
         } else {
             NSLayoutConstraint.deactivate(splitConstraints)
             splitConstraints = []
             leadingWidth = nil
+            trailingWidth = nil
             for case let button as UIButton in stack.arrangedSubviews {
                 let removed = isBesidePill && !button.isUserInteractionEnabled
                 if button.isHidden != removed { button.isHidden = removed }
@@ -176,6 +183,8 @@ final class ButtonBar: UIView {
                 let button = button(kind)
                 trailingStack.removeArrangedSubview(button)
                 stack.addArrangedSubview(button)
+                let removed = isBesidePill && !button.isUserInteractionEnabled
+                if button.isHidden != removed { button.isHidden = removed }
             }
             trailingGlass.removeFromSuperview()
             glassTrailing.isActive = true
@@ -198,6 +207,16 @@ final class ButtonBar: UIView {
             let slots = packsLeading ? max(1, leadingShown.count) : stack.arrangedSubviews.count
             let width = Self.slot * CGFloat(slots)
             if leadingWidth?.constant != width { leadingWidth?.constant = width }
+            // Tabs, New Tab and More: only what shows, packed toward More.
+            var trailingShown = 0
+            for view in trailingStack.arrangedSubviews {
+                // Only the top bar packs (`packsLeading`): a phone's one bottom row keeps its slots.
+                let hidden = packsLeading && !view.isUserInteractionEnabled
+                if !hidden { trailingShown += 1 }
+                if view.isHidden != hidden { view.isHidden = hidden }
+            }
+            let trailing = packsLeading ? Self.slot * CGFloat(max(1, trailingShown)) : Self.splitTrailingWidth
+            if trailingWidth?.constant != trailing { trailingWidth?.constant = trailing }
         }
         let showsLeading = !isSplit || !leadingShown.isEmpty
         if glass.isHidden == showsLeading { glass.isHidden = !showsLeading }
@@ -229,6 +248,7 @@ final class ButtonBar: UIView {
         // Beside the pill a hidden button gives up its slot: the bar is only what it shows. So
         // does Back or Forward in the top bar's leading capsule.
         let packs = isBesidePill || (isSplit && packsLeading && button.superview === stack)
+            || (isSplit && packsLeading && button.superview === trailingStack)
         let removed = packs && !visibility.isVisible
         if button.isHidden != removed { button.isHidden = removed }
         if isBesidePill { updateBesideWidth() }

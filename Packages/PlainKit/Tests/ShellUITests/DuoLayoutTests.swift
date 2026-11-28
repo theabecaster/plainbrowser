@@ -60,18 +60,58 @@ struct DuoLayoutTests {
         #expect(above.paneFrames == [Self.innerLandscape])
     }
 
-    @Test func innerPortraitHasNoSplitAndShowsTheStripForASidebar() {
-        // 669 pt wide: the rail would leave 617 pt, under the 640 pt minimum, and two panes would
-        // be 334 pt each. The strip fits, so Left and Right show it there.
-        for setting in [TabLayout.left, .right, .above] {
+    @Test func innerPortraitKeepsTheSidebarAsARail() {
+        // 669 pt wide: the rail leaves a 617 pt page, so Left and Right stay what they are in
+        // landscape (the owner: "in portrait the sidebar disappears"). Two panes would be 334 pt
+        // each, so no split.
+        for (setting, onRight) in [(TabLayout.left, false), (.right, true)] {
             let portrait = inner(layout: setting, panes: 2, area: Self.innerPortrait)
             #expect(portrait.tabLayoutAvailable)
-            #expect(portrait.tabLayout == .above)
-            #expect(portrait.showsStrip && !portrait.showsSidebar)
+            #expect(portrait.tabLayout == setting)
+            #expect(portrait.showsSidebar && !portrait.showsStrip)
+            #expect(portrait.sidebarOnRight == onRight)
+            #expect(portrait.sidebar == .rail)
+            #expect(portrait.sidebarDockWidth == Self.rail)
+            #expect(portrait.paneFrames == [CGRect(
+                x: onRight ? 0 : Self.rail, y: Self.statusBar, width: 669 - Self.rail, height: 951 - Self.statusBar
+            )])
+            #expect(portrait.paneFrames[0].width >= CGFloat(FixedChoices.sidebarRailMinimumPageWidth))
+            #expect(!portrait.splitAvailable)
         }
-        let portrait = inner(layout: .left, panes: 2, area: Self.innerPortrait)
-        #expect(!portrait.splitAvailable)
-        #expect(portrait.paneFrames.count == 1)
+        let above = inner(layout: .above, panes: 2, area: Self.innerPortrait)
+        #expect(above.tabLayout == .above)
+        #expect(above.showsStrip && !above.showsSidebar)
+        #expect(above.paneFrames.count == 1)
+    }
+
+    @Test func portraitExpandedOpensOverThePageAndTheBar() {
+        // 669 - 260 = 409 pt: no page fits beside Expanded and no bar either, so it floats over
+        // both; the page keeps the rail's width and the bar its lane.
+        for (setting, onRight) in [(TabLayout.left, false), (.right, true)] {
+            let rail = inner(layout: setting, sidebar: .rail, area: Self.innerPortrait)
+            #expect(rail.widestSidebar == .expanded)
+            #expect(!rail.sidebarFloats)
+            #expect(rail.expandedSidebarCoversChrome, "known before it widens, so the host can raise it first")
+            let expanded = inner(layout: setting, sidebar: .expanded, area: Self.innerPortrait)
+            #expect(expanded.sidebar == .expanded)
+            #expect(expanded.sidebarFloats)
+            #expect(expanded.expandedSidebarCoversChrome)
+            #expect(expanded.sidebarDockWidth == Self.rail)
+            #expect(expanded.paneFrames == rail.paneFrames, "the page never resizes for the drawer")
+            #expect(expanded.chromeLane == rail.chromeLane, "the bar keeps its lane under the drawer")
+            #expect(expanded.chromeLane == (onRight ? 0...(669 - Self.rail) : Self.rail...669))
+        }
+        // Landscape docks Expanded: nothing is covered.
+        #expect(!inner(layout: .left, sidebar: .expanded).expandedSidebarCoversChrome)
+        #expect(!inner(layout: .above, area: Self.innerPortrait).expandedSidebarCoversChrome)
+    }
+
+    @Test func aWindowTooNarrowForTheRailShowsTheStrip() {
+        // 640 pt: Tab Layout applies, but the rail would leave 588 pt.
+        let narrow = inner(layout: .left, area: CGRect(x: 0, y: 24, width: 640, height: 900))
+        #expect(narrow.tabLayoutAvailable)
+        #expect(narrow.tabLayout == .above)
+        #expect(narrow.showsStrip && !narrow.showsSidebar)
     }
 
     @Test func theStripShowsFromTheSecondTab() {
@@ -82,6 +122,35 @@ struct DuoLayoutTests {
         let two = inner(layout: .above, tabs: 2)
         #expect(two.showsStrip)
         #expect(two.stripHeight == CGFloat(FixedChoices.tabStripHeight))
+    }
+
+    @Test func theSidebarShowsFromTheSecondTab() {
+        for side in [TabLayout.left, .right] {
+            for area in [Self.innerLandscape, Self.innerPortrait] {
+                let one = inner(layout: side, sidebar: .expanded, tabs: 1, area: area)
+                #expect(one.tabLayout == side, "the layout in effect is still the setting")
+                #expect(!one.showsSidebar && !one.showsStrip, "one tab has nothing to switch to")
+                #expect(one.sidebar == .hidden && one.sidebarDockWidth == 0)
+                #expect(!one.sidebarFloats && !one.expandedSidebarCoversChrome)
+                #expect(one.paneFrames == [area], "the page has the whole width")
+                #expect(one.chromeLane == area.minX...area.maxX)
+                let two = inner(layout: side, sidebar: .rail, tabs: 2, area: area)
+                #expect(two.showsSidebar)
+                #expect(two.paneFrames[0].width == area.width - SidebarState.rail.width)
+            }
+        }
+    }
+
+    @Test func aSplitCountsTheRailTheSecondTabBrings() {
+        // Wide enough for two panes alone, not beside the rail: with one tab the rail is not on
+        // screen, but the split's second page would bring it, so the split is not offered.
+        let width = 2 * CGFloat(FixedChoices.splitMinimumPaneWidth) + Self.rail - 10
+        let area = CGRect(x: 0, y: 24, width: width, height: 900)
+        let one = inner(layout: .left, tabs: 1, area: area)
+        #expect(!one.showsSidebar)
+        #expect(!one.splitAvailable)
+        #expect(one.splitAvailable == inner(layout: .left, tabs: 2, area: area).splitAvailable)
+        #expect(inner(layout: .above, tabs: 1, area: area).splitAvailable)
     }
 
     @Test func compactHeightIsNeverWideEnough() {
@@ -334,12 +403,12 @@ struct TopChromeGeometryTests {
         #expect(bar.expandedInset <= 84)
         // The strip starts under the status items (69), not beside them.
         let strip = Self.device(strip: Self.strip)
-        #expect(strip.stripTop == 73)
-        #expect(strip.expandedInset == 73 + Self.strip + 4)
+        #expect(strip.stripTop == 79, "10 pt under the items")
+        #expect(strip.expandedInset == 79 + Self.strip + 4)
         #expect(bar.obscuredInset < bar.expandedInset, "WebKit wants the largest viewport inset strictly larger")
-        // 10.8% of the screen at rest (Safari 12.6%), 16.5% with the strip.
+        // 10.8% of the screen at rest (Safari 12.6%), 17.5% with the strip.
         #expect(bar.chromeShare(of: Self.landscape, collapsed: false) < 0.11)
-        #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.17)
+        #expect(strip.chromeShare(of: Self.landscape, collapsed: false) < 0.18)
         #expect(bar.chromeShare(of: Self.landscape, collapsed: true) < 0.11)
     }
 
@@ -385,12 +454,12 @@ struct TopChromeGeometryTests {
             let progress = CGFloat(step) / 10
             #expect(bar.stripTop + bar.stripTranslation(progress: progress) >= Self.deviceCluster.maxY)
         }
-        // A guide corner down to the safe area (0–81): the strip starts under it (85) and rises
-        // only to its bottom too.
+        // A guide corner down to the safe area (0–81): the strip starts under it (85), keeps the
+        // row's gap from it and so does not rise.
         let corner = CGRect(x: 816, y: 0, width: 135, height: 81)
         let beside = TopChromeGeometry(width: 951, safeTop: 81, corner: corner, stripHeight: Self.strip)
         #expect(beside.stripTop == 85)
-        #expect(beside.stripTranslation(progress: 1) == -TopChromeGeometry.gap)
+        #expect(beside.stripTranslation(progress: 1) == 0)
         // Under a full-width status bar nothing is in the way.
         #expect(Self.simulator(strip: Self.strip).stripTranslation(progress: 1) == -48)
     }
@@ -578,14 +647,14 @@ struct DuoInnerStatusRowTests {
         #expect(abs(row.trailingCapsule.midY - Self.landscape.items.midY) <= 0.5)
         // The address takes its full 560 pt (121–681), its end 6 pt before the capsule.
         #expect(row.pill.width == 560 && row.pill.minX == 121)
-        // The strip 12–939 at 74, under the items; the page's first line at 112.
-        #expect(bar.stripTop == 74)
-        #expect(bar.expandedInset == 112)
+        // The strip from 12 at 80, 10 pt under the items' row; the page's first line at 118.
+        #expect(bar.stripTop == 80)
+        #expect(bar.expandedInset == 118)
         // Margins that hug the items: the capsule at 823 (8 pt), the row on the items' row.
         let hugging = try Self.geometry(Self.landscape.with(hugging: true))
         let tight = hugging.rowFrames(lane: 0...951, leadingCapsule: Self.capsules.leading, trailingCapsule: Self.capsules.trailing)
         #expect(tight.trailingCapsule.maxX == 823)
-        #expect(hugging.rowTop == 26 && hugging.stripTop == 74 && hugging.expandedInset == 112)
+        #expect(hugging.rowTop == 26 && hugging.stripTop == 80 && hugging.expandedInset == 118)
     }
 
     @Test func portraitNumbers() throws {
@@ -595,6 +664,34 @@ struct DuoInnerStatusRowTests {
         #expect(row.trailingCapsule.maxX == 537)
         #expect(row.pill.minX == 106 && row.pill.maxX == 399)
         #expect(bar.stripFrame(lane: 0...669).maxX == 657)
+    }
+
+    /// Owner, on the device: "The tabs bar should be below the status indicators; right now
+    /// it's slightly under them."
+    @Test(arguments: screens) func theStripStartsBelowTheStatusItemsWithAGap(_ screen: Screen) throws {
+        let bar = try Self.geometry(screen)
+        let gap = CGFloat(FixedChoices.tabStripStatusGap)
+        #expect(bar.stripTop >= screen.items.maxY + gap, "the clock, the indicators and the battery ring end at 69")
+        #expect(bar.stripTop >= bar.rowBottom + TopChromeGeometry.gap, "and under the row")
+        #expect(bar.stripTop + Self.strip <= screen.safeTop + Self.strip, "no lower than a strip under the whole status zone")
+        // Leaving with the bar, it keeps the row's gap from them.
+        for step in 0...20 {
+            let top = bar.stripTop + bar.stripTranslation(progress: CGFloat(step) / 10)
+            #expect(top >= screen.items.maxY + TopChromeGeometry.gap)
+        }
+    }
+
+    @Test(arguments: screens) func theStripIsAsWideAsItsTabsUpToItsLane(_ screen: Screen) throws {
+        let bar = try Self.geometry(screen)
+        let lane = 0...screen.size.width
+        let margin = TopChromeGeometry.edgeMargin
+        let two = bar.stripFrame(lane: lane, contentWidth: 422)
+        #expect(two.minX == margin && two.width == 422, "two tabs: a compact bar from the leading margin")
+        let three = bar.stripFrame(lane: lane, contentWidth: 608)
+        #expect(three.minX == two.minX && three.width > two.width, "it grows at its end; the tabs keep their place")
+        let many = bar.stripFrame(lane: lane, contentWidth: 4000)
+        #expect(many == bar.stripFrame(lane: lane), "at most the lane")
+        #expect(many.maxX == screen.size.width - margin)
     }
 
     @Test func aCameraStillGivesTheCornerWhereNoStatusRegionIs() throws {
@@ -608,7 +705,7 @@ struct DuoInnerStatusRowTests {
         #expect(found.source == .camera)
         let bar = TopChromeGeometry(width: 951, safeTop: 81, corner: found.rect, stripHeight: Self.strip)
         #expect(abs(951 - bar.rowClearance.trailing - 819.67) < 0.01, "12 pt before the time at 831.7")
-        #expect(abs(bar.stripTop - 73.83) < 0.01)
+        #expect(abs(bar.stripTop - 79.83) < 0.01)
         // With the status region too, the region wins.
         let both = try #require(StatusCorner.read(
             width: 951, safeTop: 82, safeLeft: 0, safeRight: 0, adaptedTop: 82, adaptedLeft: 0, adaptedRight: 0,

@@ -213,6 +213,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.onPan = { [weak self] pan in self?.searchSheetPanned(pan) }
         installSearchSheetGestures()
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
+        // A favorite shows its site's icon, from the window's profile's stored ones.
+        sheet.favoriteIcons = FavoriteIcons(
+            cached: { [weak self] url, pixelSize in
+                guard let self, let site = FaviconService.site(of: url) else { return nil }
+                return session.pool.favicons.cachedIcon(site: site, scope: .profile(session.tabs.activeProfile), pixelSize: pixelSize)
+            },
+            load: { [weak self] url, pixelSize in
+                guard let self, let site = FaviconService.site(of: url) else { return nil }
+                return await session.pool.favicons.icon(site: site, scope: .profile(session.tabs.activeProfile), pixelSize: pixelSize)
+            }
+        )
 
         buildButtons()
         updateButtons()
@@ -236,6 +247,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.swipe.install(on: [pill, buttonBar])
         tabsUI.openerSwipe.install(on: view, browser: self)
         session.tabs.onChange = { [weak self] in self?.tabsDidChange() }
+        // A site's icon arrived: the lists that show it read their tabs again (once per turn).
+        session.pool.favicons.onChange = { [weak self] _ in self?.siteIconsDidChange() }
+        // The switcher's cards have no tile of their own: there a site's shape comes on one, light
+        // in both appearances (the cards' titles sit on the dimmed page either way).
+        let light = UITraitCollection(userInterfaceStyle: .light)
+        session.pool.favicons.plateColors = (
+            Palette.iconTileForDarkMark.resolvedColor(with: light).cgColor,
+            Palette.iconTileForLightMark.resolvedColor(with: light).cgColor
+        )
         wireProfiles()
         // Which private sites were told a feature is off ends with the private session.
         session.privateSessionDidEnd = { [weak self] in self?.engineUI.privateAccessNotices = SystemAccessNoticeMemory() }
@@ -854,6 +874,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
+        // The drawer over the bar steps back: the field and its rows take the screen.
+        collapseFloatingSidebar()
         focusUI.isEditingPage = false
         updateFieldAccessory()
         pill.textField.text = pageAddress?.absoluteString ?? ""

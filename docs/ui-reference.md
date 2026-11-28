@@ -62,7 +62,12 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, New Tab
   and More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
-  Layout Above adds a 34 pt strip under the bar from the second tab. Where the status items keep
+  Layout Above adds a 34 pt strip under the bar from the second tab; Left and Right show a 52 pt
+  rail of site icons beside the page instead, in landscape and portrait, which widens to titles
+  (a drag, or Show Titles at its foot). With one tab neither shows: the page has the room, and
+  the list comes in from its edge with the second tab. The strip is as wide as its tabs, from
+  the leading edge, up to the screen's width, and starts 10 pt under the status items. Every tab in a list is its own plate (the
+  one on screen a solid card ringed in Lagoon, the others a veil with a hairline). Where the status items keep
   to a corner (the inner screen) the bar sits on their row, and nothing of Plain's is behind it:
   no band, backing, blur or header-colored fill at the top in any state, only the floating
   glass. At a page's top a site's fixed header rests under the bar and rides up with the page
@@ -113,6 +118,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 ## Visual and motion
 
 - One accent color (Lagoon Blue, from `Brand/identity.md`) and semantic colors from `DesignSystem`. No hard-coded colors in features.
+- A tab is shown by its site's icon on a small lifted tile (the sidebar, the strip, the switcher's cards), the same tile for every site; a site without an icon shows its first letter in New York on that tile. The tab on screen is marked in Lagoon.
 - System text styles with Dynamic Type. Tap targets are at least 44 pt (the tappable area, not only the frame around it).
 - Text inside fixed-height chrome (the address pill) stops growing at the largest non-accessibility size, as Safari's field does; everything else grows The page sheet's grids of captioned cells (address row, tiles, chips, zoom) keep the default size, as a tab bar's items do, and show large on a long press.
 - Corner radii of 6–10 pt for controls and chips. Grouped paper rows in sheets are exempt: they keep the system's inset-grouped radius (about 26 pt), the iOS look (lead's call, 2026-11-27). Liquid Glass only on floating controls, built with one shared helper.

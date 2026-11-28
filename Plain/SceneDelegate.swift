@@ -275,7 +275,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         LaunchFirstFrame.endAtNextFrame()
         attachDatabase(to: browser)
         #if DEBUG
-        // `-PlainOpen <url>,<url>` opens pages after launch, `-PlainSplit` puts the last one in a
+        // `-PlainOpen <url>,<url>` opens pages after launch (`-PlainOpenPrivate` in private tabs,
+        // after those), `-PlainSplit` puts the last one in a
         // split's other pane, `-PlainTabLayout above|left|right` sets Tab Layout and `-PlainSidebar
         // rail|expanded|hidden` the sidebar's state (neither saved): screenshots of Duo states the
         // simulator reaches only through Device Hub.
@@ -289,11 +290,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if arguments.contains("-PlainPrivate") {
             browser.debugOpenPrivate(pages)
         } else {
+            let privatePages = value(after: "-PlainOpenPrivate")?.split(separator: ",").compactMap { URL(string: String($0)) } ?? []
             browser.debugSetUp(
-                open: pages, split: arguments.contains("-PlainSplit"), tabLayout: value(after: "-PlainTabLayout"),
+                open: pages, privatePages: privatePages, split: arguments.contains("-PlainSplit"),
+                tabLayout: value(after: "-PlainTabLayout"),
                 sidebar: value(after: "-PlainSidebar")
             )
         }
+        if let delay = value(after: "-PlainSidebarWalk").flatMap(Double.init) { browser.debugSidebarWalk(after: delay) }
         browser.debugSidePane(value(after: "-PlainSidePane"), find: value(after: "-PlainFind"))
         browser.debugNewWindow(value(after: "-PlainNewWindow"))
         #endif

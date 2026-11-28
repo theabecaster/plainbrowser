@@ -468,6 +468,35 @@ Newest feature last.
   background the app, so Save Image and the summary-ends test skip there.
 - **Clear History and Data keeps site permissions** (docs/privacy.md says site settings are
   deleted with it); pre-existing, found while reading the code.
+## Duo inner sidebar and site icons (2026-11-27)
+
+- **The widgets still show letters:** the icon would have to be written into the shared
+  favorites file. A favorite never visited since site icons shipped keeps its letter until it
+  is visited; fetching icons for favorites at save time would close that.
+- **Pinned tabs in the rail:** no control pins a tab yet; when one does, pinned tabs go first as
+  tiles without a close button (Arc's top grid).
+- **Drag a tab onto the other pane** to split (plan, section 6): the rows reorder within their
+  list only.
+- **Device checks:** the rail's first row against the real status corner with Right in landscape
+  and both sides in portrait; the drawer over the bar in portrait; 120 Hz while scrolling 50
+  tabs (Instruments, `favicon.decode` off the main thread); a fold and an unfold with the rail
+  showing; icons after a relaunch without network.
+- **Tab list tuning values beside their code** (code review, round 3): the strip's entrance
+  offset and scale (`BrowserViewController+TopBar.stripAway`) and the plates' 0.5 pt hairline
+  (`TabStripCell`, `SideTabCell`) are motion and drawing constants, like `ChromeScrim`'s; move
+  any that become product decisions to `FixedChoices`.
+- **The strip's width budget counts one gap per tab,** not per pair: 6 pt of extra glass before
+  New Tab. Tighten if it reads as loose on the device.
+- **Side pane open in portrait, the pill:** the short "Not Secure" form was not captured (no
+  launch argument opens the side pane); check on the device or add a capture.
+- **Tab strip, from design review round 2:** the tab on screen reads as outlined more than
+  raised: try a more solid card or a soft shadow. The strip's glass over a saturated page (a
+  purple one under private tabs) picks up a brassy tint: the chrome's glass, shared with the top
+  bar (the inner-top lane's material). In portrait with five or more tabs the first plate can
+  rest partly cut at the leading edge; the edge fades, but a rest position on a whole tab would
+  read better.
+- **UI tests on the inner screen are slow** (a minute per step while XCUITest waits for the app
+  to idle): `DuoTests` took an hour on a loaded Mac. Find what keeps the app from idling there.
 
 ## New Tab in the bar (2026-11-28)
 
@@ -483,6 +512,3 @@ Newest feature last.
 - **Private search sheet.** In light mode the focused field of a private tab sits on the warm
   paper sheet; a private tint for the sheet would carry the mode into that state (design review,
   private mode lane). The sheet is the search-bar lane's; do it with them.
-- **Private, Duo inner: the tab strip stays paper under the violet top bar;** a matching private
-  treatment would read as one context (design review round 2). The strip is the Duo top-bar
-  lane's.

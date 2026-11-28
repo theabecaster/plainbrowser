@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import BrowserCore
 import DesignSystem
+import PerfSignposts
 import UIKit
 import WebEngine
 
@@ -419,18 +420,129 @@ extension BrowserViewController {
     /// indicator (the scroll view leaves the safe area out, `setPageTopStart`).
     var pageBottomInset: CGFloat { view.safeAreaInsets.bottom }
 
-    // MARK: The strip's tab count
+    // MARK: The tab list's tab count
 
-    /// The strip shows from the second tab: the layout reads the count kept here, updated when the
-    /// tabs change rather than on every layout pass.
+    /// The strip and the sidebar show from the second tab: the layout reads the count kept here,
+    /// updated when the tabs change rather than on every layout pass.
     func updatePageTabCount() {
         let count = session.tabs.otherTabCount(besides: nil)
         guard count != duo.pageTabCount else { return }
         let crossed = (count > 1) != (duo.pageTabCount > 1)
         duo.pageTabCount = count
-        guard crossed, duo.layout?.tabLayout == .above, view.window != nil else { return }
+        guard crossed, duo.layout?.tabLayout != nil, view.window != nil else { return }
+        animateTabListPresence()
+    }
+
+    /// The second tab opened, or the tab list went back to one tab: the strip or the sidebar comes
+    /// in from its edge (or leaves to it) in one spring, and the page takes its new frame once,
+    /// inside the same spring. The list is built at its resting frame and only its transform and
+    /// opacity move; the one leaving goes as a picture of itself, so the layout is already the
+    /// one-tab layout while it fades. A second change mid-flight starts from what is on screen.
+    private func animateTabListPresence() {
+        let shows = { self.duo.layout.map { $0.showsStrip || $0.showsSidebar } ?? false }
+        guard !Motion.prefersCrossfade else {
+            // Reduce Motion: the list is there or gone inside one crossfade; nothing moves.
+            removeLeavingTabLists()
+            view.setNeedsLayout()
+            Motion.crossfade(view) {
+                self.updateDuoLayout()
+                self.view.layoutIfNeeded()
+            }
+            Signposts.signposter.emitEvent(Signposts.tabListPresence, "\(shows() ? "shown" : "hidden")")
+            return
+        }
+        // A change mid-flight: the pictures of the one before are done.
+        removeLeavingTabLists()
+        let stripBefore = duo.strip?.view
+        let sidebarBefore = duo.sidebar?.view
+        let onRightBefore = duo.layout?.sidebarOnRight ?? false
+        // The list about to leave, as a picture where it is on screen now (mid-entrance too).
+        var leaving: [(view: UIView, source: UIView, away: CGAffineTransform)] = []
+        for (list, away) in [
+            (stripBefore, Self.stripAway),
+            (sidebarBefore, Self.sidebarAway(width: sidebarBefore?.bounds.width ?? 0, onRight: onRightBefore)),
+        ] {
+            guard let list, !list.isHidden, let picture = list.snapshotView(afterScreenUpdates: false) else { continue }
+            let shown = list.layer.presentation() ?? list.layer
+            picture.bounds = list.bounds
+            picture.center = list.center
+            picture.transform = shown.affineTransform()
+            picture.alpha = CGFloat(shown.opacity)
+            picture.isUserInteractionEnabled = false
+            view.insertSubview(picture, aboveSubview: list)
+            leaving.append((picture, list, away))
+        }
         view.setNeedsLayout()
-        Motion.animate(Motion.quick) { self.view.layoutIfNeeded() }
+        // The new layout's constants, and the list coming in, built where it will rest.
+        duo.isChangingTabListPresence = true
+        UIView.performWithoutAnimation {
+            self.updateDuoLayout()
+            guard let layout = self.duo.layout else { return }
+            if let strip = self.duo.strip?.view, strip !== stripBefore {
+                strip.frame = self.stripRestFrame(layout)
+                strip.layoutIfNeeded()
+                strip.alpha = 0
+                strip.transform = Self.stripAway
+            }
+            if let sidebar = self.duo.sidebar?.view, sidebar !== sidebarBefore {
+                let width = layout.sidebar.width
+                let safe = self.view.safeAreaInsets
+                let bounds = self.view.bounds
+                sidebar.frame = CGRect(
+                    x: layout.sidebarOnRight ? bounds.width - safe.right - width : safe.left, y: 0,
+                    width: width, height: bounds.height
+                )
+                sidebar.layoutIfNeeded()
+                sidebar.alpha = 0
+                sidebar.transform = Self.sidebarAway(width: width, onRight: layout.sidebarOnRight)
+            }
+        }
+        duo.isChangingTabListPresence = false
+        // A list that stayed (its layout is not the one that changed) needs no picture.
+        leaving = leaving.filter { item in
+            if item.source.superview == nil { return true }
+            item.view.removeFromSuperview()
+            return false
+        }
+        let pictures = leaving.map(\.view)
+        duo.leavingTabLists = pictures
+        Signposts.signposter.emitEvent(Signposts.tabListPresence, "\(shows() ? "shown" : "hidden")")
+        Motion.animate(Motion.sidebarSettle(flicked: false), changes: {
+            // The strip rests at the bar's state (hidden with a collapsed bar).
+            if let geometry = self.duo.topGeometry {
+                self.applyTopBarCollapse(self.collapseProgress, geometry: geometry)
+            } else {
+                self.duo.strip?.view.alpha = 1
+                self.duo.strip?.view.transform = .identity
+            }
+            self.duo.sidebar?.view.alpha = 1
+            self.duo.sidebar?.view.transform = .identity
+            for item in leaving {
+                item.view.alpha = 0
+                item.view.transform = item.away
+            }
+            self.view.layoutIfNeeded()
+        }, completion: { [weak self] in
+            for picture in pictures { picture.removeFromSuperview() }
+            self?.duo.leavingTabLists.removeAll { picture in pictures.contains { $0 === picture } }
+        })
+    }
+
+    /// Ends the pictures of a tab list on its way out: the next change, a rotation or a fold has
+    /// a layout of its own, and they belong to the one before.
+    func removeLeavingTabLists() {
+        guard !duo.leavingTabLists.isEmpty else { return }
+        for picture in duo.leavingTabLists { picture.removeFromSuperview() }
+        duo.leavingTabLists = []
+    }
+
+    /// Where the strip comes from and leaves to: tucked a little up under the bar, slightly small.
+    private static let stripAway = CGAffineTransform(translationX: 0, y: -CGFloat(FixedChoices.tabStripHeight) / 2)
+        .scaledBy(x: 0.98, y: 0.9)
+
+    /// Where the sidebar comes from and leaves to: off its own edge.
+    private static func sidebarAway(width: CGFloat, onRight: Bool) -> CGAffineTransform {
+        CGAffineTransform(translationX: onRight ? width : -width, y: 0)
     }
 }
 

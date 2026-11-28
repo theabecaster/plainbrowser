@@ -387,6 +387,11 @@ public enum Signposts {
     public static let tabDiscard: StaticString = "tab.discard"
     /// Interval of a tab thumbnail snapshot, until WebKit returns the image.
     public static let tabSnapshot: StaticString = "tab.snapshot"
+    /// Interval: fetching a site's icon, from the page's answer to the icon stored (or none
+    /// found). Off the main thread but for the page's answer. The message is "stored" or "none".
+    public static let faviconFetch: StaticString = "favicon.fetch"
+    /// Interval: decoding a stored icon at a view's size, off the main thread.
+    public static let faviconDecode: StaticString = "favicon.decode"
     /// Interval from the engine asking the shell (dialog, sign-in, certificate warning, permission,
     /// external app, universal link) to the answer. The kind is the interval's message.
     public static let enginePrompt: StaticString = "engine.prompt"
@@ -481,6 +486,9 @@ public enum Signposts {
     /// Interval: the sidebar moving between Hidden, Rail and Expanded, until it rests. The message
     /// is the state it rests in.
     public static let sidebarState: StaticString = "sidebar.state"
+    /// The tab list (the strip or the sidebar) came in with the second tab, or left with the
+    /// last but one ("shown" or "hidden").
+    public static let tabListPresence: StaticString = "tabList.presence"
 
     /// `StaticString` names as `String`, for `XCTOSSignpostMetric(subsystem:category:name:)`.
     public static func name(_ name: StaticString) -> String {

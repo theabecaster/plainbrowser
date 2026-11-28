@@ -4,6 +4,7 @@ import DesignSystem
 import PerfSignposts
 import UIKit
 import UniformTypeIdentifiers
+import WebEngine
 
 /// What a row or tile in the search sheet opens.
 enum SearchPick: Equatable {
@@ -102,6 +103,11 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// "Edit Favorites" from a long press on the favorites strip.
     var onEditFavorites: () -> Void = {} {
         didSet { favoritesStrip.onEdit = onEditFavorites }
+    }
+    /// The favorites' site icons (the shell's `FaviconService`): a favorite shows its site's icon
+    /// once the site has one, its letter until then.
+    var favoriteIcons: FavoriteIcons? {
+        didSet { favoritesStrip.icons = favoriteIcons }
     }
 
     /// Bumped each time the field opens or closes (the shell), so an answer that arrives late
@@ -1260,10 +1266,13 @@ final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate, UIScrollVi
         CATransaction.commit()
     }
 
+    var icons: FavoriteIcons?
+
     func show(_ favorites: [FavoritePage]) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for (index, favorite) in favorites.enumerated() {
             let tile = FavoriteTile(favorite)
+            if let icons { tile.showIcon(from: icons) }
             tile.accessibilityIdentifier = "favorite.\(index)"
             tile.addAction(UIAction { [weak self] _ in self?.onPick(favorite.url) }, for: .touchUpInside)
             stack.addArrangedSubview(tile)
@@ -1272,17 +1281,36 @@ final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate, UIScrollVi
     }
 }
 
-/// A favorite: a monogram disc and its name.
+/// Where a favorite's site icon comes from: decoded in memory now, or read off the main thread.
+struct FavoriteIcons {
+    var cached: (URL, _ pixelSize: Int) -> SiteIcon?
+    var load: (URL, _ pixelSize: Int) async -> SiteIcon?
+}
+
+/// A favorite: its site's icon on a disc (its first letter until the site has one) and its name.
 final class FavoriteTile: UIControl {
     private let disc = UIView()
+    private let icon = UIImageView()
+    private let letter = UILabel()
+    private let url: URL
+    private var style: SiteIconStyle?
+    /// The icon's side on the 52 pt disc.
+    private static let iconSide: CGFloat = 28
 
     init(_ favorite: FavoritePage) {
+        url = favorite.url
         super.init(frame: .zero)
         let name = FavoriteTile.name(for: favorite)
         disc.backgroundColor = Palette.surface
         disc.layer.cornerRadius = Metrics.favoriteTile / 2
         disc.layer.cornerCurve = .continuous
-        let letter = UILabel()
+        icon.contentMode = .scaleAspectFit
+        icon.clipsToBounds = true
+        icon.layer.cornerRadius = Radius.small
+        icon.layer.cornerCurve = .continuous
+        icon.alpha = 0
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        disc.addSubview(icon)
         letter.text = name.first.map { String($0).uppercased() }
         letter.font = .systemFont(ofSize: 22, weight: .semibold)
         letter.textColor = Palette.accent
@@ -1311,6 +1339,10 @@ final class FavoriteTile: UIControl {
             disc.heightAnchor.constraint(equalToConstant: Metrics.favoriteTile),
             letter.centerXAnchor.constraint(equalTo: disc.centerXAnchor),
             letter.centerYAnchor.constraint(equalTo: disc.centerYAnchor),
+            icon.centerXAnchor.constraint(equalTo: disc.centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: disc.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: Self.iconSide),
+            icon.heightAnchor.constraint(equalToConstant: Self.iconSide),
             caption.topAnchor.constraint(equalTo: disc.bottomAnchor, constant: Spacing.xs),
             caption.leadingAnchor.constraint(equalTo: leadingAnchor),
             caption.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -1324,7 +1356,49 @@ final class FavoriteTile: UIControl {
     required init?(coder: NSCoder) { fatalError() }
 
     override var isHighlighted: Bool {
-        didSet { disc.backgroundColor = isHighlighted ? Palette.pressed : Palette.surface }
+        didSet { disc.backgroundColor = isHighlighted ? Palette.pressed : restingDisc }
+    }
+
+    /// The disc under the icon: a one-tone mark keeps a disc that contrasts with it.
+    private var restingDisc: UIColor {
+        switch style {
+        case .darkGlyph: Palette.iconTileForDarkMark
+        case .lightGlyph: Palette.iconTileForLightMark
+        default: Palette.surface
+        }
+    }
+
+    /// Shows the site's icon when it has one: at once if it is in memory, else faded in over the
+    /// letter once it is read (off the main thread).
+    func showIcon(from icons: FavoriteIcons) {
+        let pixelSize = Int((Self.iconSide * max(1, traitCollection.displayScale)).rounded())
+        if let cached = icons.cached(url, pixelSize) {
+            set(cached, animated: false)
+            return
+        }
+        let url = self.url
+        Task { [weak self] in
+            guard let found = await icons.load(url, pixelSize), let self else { return }
+            self.set(found, animated: self.window != nil)
+        }
+    }
+
+    private func set(_ siteIcon: SiteIcon, animated: Bool) {
+        style = siteIcon.style
+        icon.image = siteIcon.image
+        let changes = {
+            self.icon.alpha = 1
+            self.letter.alpha = 0
+            if !self.isHighlighted { self.disc.backgroundColor = self.restingDisc }
+        }
+        if animated {
+            UIView.animate(
+                withDuration: Motion.crossfadeDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState],
+                animations: changes
+            )
+        } else {
+            UIView.performWithoutAnimation(changes)
+        }
     }
 
     static func name(for favorite: FavoritePage) -> String {

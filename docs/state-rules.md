@@ -85,7 +85,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | `others ≥ 1` | Tabs (`square.on.square`) | Gallery | There is somewhere to switch to. |
 | `others = 0`, `page` | Tabs (`square.on.square`) | Gallery: this tab's card alone, centered, with the same page-to-card motion as the swipe up | Owner, 2026-11-27: "Not having a tabs button when there's only one tab is weird too — match the behavior to what dragging the URL bar up does now." Was "+" (New Tab) until then. New Tab is the bar's "+" beside it (2026-11-27, new-tab lane), with the tabs menu's New Tab and More's New Private Tab as before. |
 | `others = 0`, `start` | — | — | You are already in a new tab, and there is nothing to switch to. The tabs menu's other items (New Private Tab, Reopen Closed Tab, Archived Tabs) stay in More (section 4) and show as shortcuts on the start screen, so none of them is ever out of reach. |
-| Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. The sidebar's New Tab follows principle 8 (hidden on an empty tab). |
+| Side tabs in effect (Left, Right) | Tabs | Shows or hides the sidebar | The sidebar is the tab list, so the slot toggles it rather than opening the gallery (M3 lane); the long press keeps the tabs menu, with Show All Tabs for the gallery. Reopen, Archive and private tabs stay in More. The swipe up is off: the sidebar is the switcher. The sidebar's New Tab shows only while the bar has no "+". |
 
 - **The tabs items are never only behind a long press** (owner, 2026-11-26). New Private Tab,
   Reopen Closed Tab and Archived Tabs are in More's top section in every state where they apply,
@@ -235,7 +235,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | New Tab | Hidden when the tab on screen is an empty regular tab | It would reuse the tab already on screen. |
 | New Private Tab | Hidden when the tab on screen is an empty private tab | Same. |
 | Previous Tab / Next Tab | Shown when `list` has 2 or more tabs; each dims at its end | A pair, so it keeps its shape. Subtitles name the swipe. |
-| Show All Tabs | `others ≥ 1`, or a page on screen (with side tabs: `others ≥ 1`, as the sidebar already lists a lone tab) | Same predicate as the swipe up. |
+| Show All Tabs | `others ≥ 1`, or a page on screen (with the sidebar on screen: `others ≥ 1`, which it always is there) | Same predicate as the swipe up. |
 | Reopen Closed Tab | `closed` in the window's profile | The way back after a close, outside the gallery too. Another profile's close never comes back here. |
 | Archived Tabs | `archived` | Today the archive is reachable only from the gallery, so with no open tabs it cannot be reached. |
 | New Window | where a new window can open (both size classes regular and the app may have several scenes: the Duo's inner screen) | The system has no New Window button on iPhone; the outer screen takes no new windows. |
@@ -437,9 +437,9 @@ combines its base state with the rows that modify it (for example, private + loa
 | Downloads none / active / finished | | | | | Downloads hidden / shown "1 in progress" / shown | | | | | | toast on finish |
 | Duo outer (system vertical bar) | dim when none | dim when none | per table, dim instead of hide inside Page | ✓ | ✓ | same | same | same | same | same | same |
 | Duo inner (top bar), single pane | as Duo outer | | | | | off (no swipe up from a top bar; Tabs and the strip are at hand) | pill, sideways | | | | |
-| Tab Layout Above, two or more tabs | | | | | | | | | | | the strip shows under the top bar; one tab: no strip (nothing to switch to) |
+| Tab Layout Above, two or more tabs | | | | | | | | | | | the strip shows under the top bar; one tab: no strip (nothing to switch to). It comes in with the second tab and leaves with the last but one, in one spring |
 | Duo split | per focused pane | | | | | | | | | | Open in Other Pane shown; Close Tab acts on the focused pane |
-| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | |
+| Side tabs, Rail or Expanded | as Page | | Tabs: shows or hides the sidebar; long press for the tabs menu | | | ≠ bump (sidebar is the switcher) | neighbours | when last | | | the sidebar shows in landscape and portrait from the second tab; with one tab the row is "Duo inner, single pane" (Tabs opens the switcher); see "The sidebar" below |
 | Book pose | as the pane's state; pills and toasts avoid the fold | | | | | | | | | | |
 | Phone landscape (compact height) | as Page; no side tabs | | | | | | | | | | |
 
@@ -451,6 +451,26 @@ Notes:
 - "bump": the page lifts slightly, rubber-bands back and plays the "nothing there" haptic.
 - A popup or link-opened tab on its first page: Back is enabled and closes the tab, returning to
   its opener. The edge swipe back does the same, so button and gesture agree.
+
+### The sidebar (Tab Layout Left or Right)
+
+Where it shows: wherever Tab Layout applies and the rail leaves a page of at least 600 pt
+(`DuoLayout`): the Duo's inner screen in landscape and in portrait. A narrower window shows the
+strip and keeps the setting.
+
+| Control | Shows when | Why |
+|---|---|---|
+| The rail (site icons) | Left or Right in effect and two or more tabs, unless the Tabs button hid it | The tab list. One tab has nothing to switch to, so the page has the whole width (owner, 2026-11-27: "if I have one tab, the whole bar shows, and this looks weird"); the same rule as the strip. It comes in from its edge with the second tab and leaves with the last but one. New Tab is then the bar's "+", as on every page; the Tabs button opens the switcher, as on any page with one tab. |
+| A tab's plate | every tab, in the strip and in the titled rows | Each tab is its own shape: the one on screen a solid card ringed in Lagoon, the others a veil with a hairline, glass between them (owner: "non-selected tabs [...] are just part of the whole bar"). In the rail the tile is the shape. |
+| New Tab (first row) | only while the bar has no "+" (principle 8); on an empty tab neither shows | One New Tab on screen: the bar's "+" is it on a page. A long press offers New Private Tab. |
+| Show Titles / Hide Titles (last row) | the rail may widen: not during a split, a book pose or with the side pane open | Where Expanded can't rest, a control that does nothing would be noise. A drag on the sidebar does the same. |
+| Titles and close buttons | Expanded | The rail has room for the tile only; there Close Tab is in the tab's menu (and VoiceOver's actions). |
+| Private section (hand, then "Private") | at least one private tab | Private tabs are listed after the regular ones on the dusk tint, never mixed in. |
+| The mark on a tab | the focused pane shows it (Lagoon tint and ring); a split's other pane shows it (outline) | One strong mark: the tab the bar acts on. |
+| Expanded as a drawer | portrait: over the page and the bar's leading end; a tab picked, a touch on the page or the address field closes it | No page or bar fits beside 260 pt there. Landscape docks it beside the page. |
+
+A site icon replaces the tab's letter once the site has one; a site without an icon keeps the
+letter (docs/decisions.md, "Site icons"). Private tabs' icons are never stored.
 
 ## 9. What Safari and Arc Search do
 

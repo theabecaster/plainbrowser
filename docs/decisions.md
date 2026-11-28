@@ -2492,3 +2492,31 @@ interactions are in docs/research/haptics.md; the rules are in docs/ui-reference
 - **Tests:** `-PlainHapticLog` (isolated runs only) records every play on a hidden element the UI
   tests read (HapticsTests), and unit tests use `Haptic.recorder`. The perf gate never passes it,
   so the recorder stays nil there.
+
+## Perf pass 2: what moved off the first frame, and what stays (2026-11-27)
+
+Owner: "We need to meet our performance goals ... performance is the top priority." Measurements
+and their limits: docs/research/perf-pass-2.md.
+
+- **Made on first use, never in the launch's first frame:** the web view pool's base
+  configuration and Personal's website data store (WebKit's preferences, the store; the warm-up
+  after the first frame makes them), the on-device model's handle (`SystemLanguageModel` reads
+  the device's eligibility, about 5 ms), and the page state view (most launches never show it;
+  it is made the first time a page can't show). Nothing changes on screen.
+- **A keystroke's database read starts inside the keystroke** (`Task.immediate`), not after
+  UIKit has finished with it. The read is still off the main thread; only the rows' arrival
+  waits for the main thread. Measured: our own work in a keystroke is about 0.7 ms of 3.5; the
+  rest is the main thread finishing UIKit's handling of the keystroke.
+- **The launch focus stays before the first frame.** Focusing the field one frame later while
+  the splash holds the keyboard (invisible: the splash covers the screen) cut
+  `launch.firstFrame` by 19% on the simulator but made `launch` (the field focused) 25% later:
+  it moves the keyboard's bring-up rather than removing it. It is the lever if the owner
+  decides the first frame matters more than an invisible focus; `searchFieldMs` would then need
+  a new meaning or budget.
+- **Memory is not changed in this pass.** The thumbnails are purgeable IOSurfaces outside the
+  footprint; the ten-tab footprint is a thin spread (strings, runtime metadata, the cookie
+  banner rules, the paper surfaces, the text system) with no owner of the 13 MB over target.
+- **Rejected:** reading the database on the main thread to put the rows in the keystroke's own
+  run loop turn (AGENTS.md: no database work on the main thread). A read that finishes while
+  UIKit still handles the keystroke is taken before the run loop sleeps, so its rows go out in
+  the same commit anyway.

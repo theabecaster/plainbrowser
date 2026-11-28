@@ -125,6 +125,9 @@ final class AddressPill: UIView {
     }
     /// A bar swipe between tabs is moving the hosts: the indicator belongs to the page leaving.
     private var isSlidingHost = false
+    /// The resting pill's identifier, and the group's while the indicator and the stand-in show.
+    static let identifier = "addressPill"
+    static let groupIdentifier = "addressPillGroup"
     private var url: URL?
     private var notSecure = false
     /// The reader is open over the page, or the page is translated (`setMode`).
@@ -243,7 +246,7 @@ final class AddressPill: UIView {
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
         addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(pressed(_:))))
 
-        accessibilityIdentifier = "addressPill"
+        accessibilityIdentifier = Self.identifier
         accessibilityLabel = "Address"
         accessibilityTraits = .button
         accessibilityHint = "Search or enter an address. Long press for page actions."
@@ -312,15 +315,20 @@ final class AddressPill: UIView {
     /// indicator and a stand-in for that button (same name, value, hint and identifier) side by
     /// side; editing, the field inside is reachable.
     private func updateAccessibilityElements() {
+        // The stand-in carries the "addressPill" identifier while it stands in, so there is one
+        // address button, never two.
         if isEditing {
             isAccessibilityElement = false
             accessibilityElements = nil
+            accessibilityIdentifier = Self.identifier
         } else if showsDarkPages {
             isAccessibilityElement = false
             accessibilityElements = [darkPagesButton, addressElement]
+            accessibilityIdentifier = Self.groupIdentifier
         } else {
             accessibilityElements = nil
             isAccessibilityElement = true
+            accessibilityIdentifier = Self.identifier
         }
     }
 
@@ -757,7 +765,7 @@ private final class PillAccessibilityElement: UIAccessibilityElement {
     }
 
     override var accessibilityIdentifier: String? {
-        get { pill?.accessibilityIdentifier }
+        get { AddressPill.identifier }
         set {}
     }
 

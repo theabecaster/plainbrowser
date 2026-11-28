@@ -236,6 +236,10 @@ public final class Tab: Identifiable {
         return await pool.setDarkPagesChoice(choice, for: self, source: source)
     }
 
+    /// The site the per-site choices are remembered under (the host without `www.`), nil for a
+    /// page that is not on a site.
+    public var siteKey: String? { NavigationRules.siteKey(for: url) }
+
     /// Sets the site's choice directly.
     @discardableResult
     public func setDarkPagesChoice(_ choice: DarkPagesSiteChoice) async -> Bool {

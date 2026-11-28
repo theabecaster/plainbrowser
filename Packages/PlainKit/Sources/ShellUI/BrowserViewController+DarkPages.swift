@@ -87,7 +87,7 @@ extension BrowserViewController {
     /// a tab switch or a second change removes them at once; a page that never answers fades
     /// after `FixedChoices.darkPagesCrossfadeTimeout`; no snapshot, no crossfade.
     func crossfadeDarkPages(for tab: Tab, change: @escaping () async -> Bool) {
-        let site = NavigationRules.siteKey(for: tab.url)
+        let site = tab.siteKey
         removeDarkPagesFades()
         darkPagesUI.fadeGeneration += 1
         let generation = darkPagesUI.fadeGeneration
@@ -154,7 +154,7 @@ extension BrowserViewController {
         let panes = session.tabs.panes
         return shownPanes.compactMap { index -> UIView? in
             guard index < panes.count, let id = panes[index], let shown = session.tabs.existingTab(id),
-                  NavigationRules.siteKey(for: shown.url) == site, index < self.panes.slots.count else { return nil }
+                  shown.siteKey == site, index < self.panes.slots.count else { return nil }
             return self.panes.slots[index].container
         }
     }
@@ -178,7 +178,7 @@ extension BrowserViewController {
 
     private func scheduleDarkPagesSuggestion(for tab: Tab, document: String) {
         let store = darkPagesUI.suggestions
-        guard !tab.isPrivate, let site = NavigationRules.siteKey(for: tab.url),
+        guard !tab.isPrivate, let site = tab.siteKey,
               store.state.mayShow(onSite: site, session: store.session) else { return }
         darkPagesUI.pending?.cancel()
         darkPagesUI.pending = Task { [weak self, weak tab] in
@@ -192,7 +192,7 @@ extension BrowserViewController {
     /// The suggestion's moment came: it shows when everything still holds (the same page on
     /// screen, still `available`, nothing else up), else not for this page load.
     private func showDarkPagesSuggestion(for tab: Tab, document: String, site: String) {
-        guard tab === currentTab, tab.darkPagesDocument == document, NavigationRules.siteKey(for: tab.url) == site else { return }
+        guard tab === currentTab, tab.darkPagesDocument == document, tab.siteKey == site else { return }
         let moment = DarkPagesSuggestion.Moment(
             page: tab.darkPages.page, isPrivate: tab.isPrivate, settingsLoaded: data.darkPages != nil,
             isBarShowing: !isChromeCollapsed && !isEditingAddress && !pill.isHidden && pill.alpha > 0.99,

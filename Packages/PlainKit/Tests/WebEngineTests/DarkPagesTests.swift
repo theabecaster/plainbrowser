@@ -967,7 +967,11 @@ struct DarkPagesTests {
                 let start = clock.now
                 try await harness.load("\(path)?\(UUID().uuidString)", in: tab)
                 loads.append(clock.now - start)
-                try await waitUntil("\(label) state") { tab.darkPages == state }
+                // Off for the site, a page reports `off` only when its light check says it could
+                // use dark pages; one with a dark first screen (the apple-like hero) is `native`.
+                try await waitUntil("\(label) state") {
+                    tab.darkPages == state || (state == .offForSite && tab.darkPages == .native)
+                }
                 if state == .darkened { try await settle(tab, harness: harness) }
                 let stats = try await webView.evaluateJavaScript(
                     "globalThis.__plainDarkPages ? globalThis.__plainDarkPages.stats : null", in: nil, contentWorld: UserScripts.world

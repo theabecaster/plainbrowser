@@ -51,6 +51,11 @@ public enum Signposts {
     /// Event: the user reordered, renamed or deleted favorites.
     public static let favoritesEdit: StaticString = "favorites.edit"
 
+    /// Event: a haptic played (message: its kind). On the same timeline as the motion intervals
+    /// (`tabSwipe`, `galleryCardClose`, …), which is how its sync with the picture is checked
+    /// (docs/research/haptics.md §5).
+    public static let haptic: StaticString = "haptic"
+
     // MARK: Shell (address bar, toolbar, page)
 
     /// Interval from a tap on the URL pill to the field being first responder with the search

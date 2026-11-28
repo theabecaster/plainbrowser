@@ -197,7 +197,10 @@ final class FeatureSheetTests: XCTestCase {
             pageMenu(app, pick: item)
             let sheet = app.otherElements[identifier]
             // In a regular width History opens in the side pane, which has no Done.
-            if identifier == "historySheet", regular, !sheet.waitForExistence(timeout: 3) { continue }
+            if identifier == "historySheet", regular, !sheet.waitForExistence(timeout: 3) {
+                XCTAssertTrue(app.otherElements["sidePane"].exists, "History opened neither a sheet nor the side pane")
+                continue
+            }
             XCTAssertTrue(sheet.waitForExistence(timeout: 3))
             let done = sheet.buttons["Done"]
             XCTAssertTrue(done.waitForExistence(timeout: 3))

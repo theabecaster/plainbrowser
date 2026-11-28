@@ -627,6 +627,9 @@ public enum FixedChoices {
     /// A bar swipe past the last tab shows a New Tab card; pulled this far, letting go opens a
     /// new tab (docs/plan.md, motion table). Far enough not to happen by accident.
     public static let newTabSwipeThreshold: Double = 80
+    /// How far under `newTabSwipeThreshold` an armed New Tab card goes before it disarms (and
+    /// ticks): the haptics plan's 8–12 pt, so a finger resting on the line never chatters.
+    public static let newTabSwipeHysteresis: Double = 10
     /// A swipe up from the address bar opens the gallery once it has covered this share of the
     /// screen's height, or at any speed upward past `galleryFlickSpeed` points per second.
     public static let gallerySwipeCommit: Double = 0.3

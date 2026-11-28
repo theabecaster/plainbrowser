@@ -51,6 +51,15 @@ final class StateRulesTests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.6)
     }
 
+    /// Closes a New Tab's field but keeps the empty tab: something typed, so the close is not the
+    /// untouched one that goes back to the page (docs/research/new-tab.md).
+    private func keepNewTabAndCloseSearch(_ app: XCUIApplication) {
+        let field = app.textFields["searchField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 2))
+        field.typeText("x")
+        closeSearch(app)
+    }
+
     /// Picks an item from the tabs slot's long-press menu.
     private func tabsMenu(_ app: XCUIApplication, pick item: String, file: StaticString = #filePath, line: UInt = #line) {
         let tabs = app.buttons["tabs"]
@@ -217,7 +226,7 @@ final class StateRulesTests: XCTestCase {
         go(app, to: "/a")
         waitForPage(app, "Page A")
         tabsMenu(app, pick: "New Tab")
-        closeSearch(app)
+        keepNewTabAndCloseSearch(app)
         // The tabs menu on an empty tab has no New Tab: it would be this tab again.
         app.buttons["tabs"].press(forDuration: 1.0)
         XCTAssertTrue(app.buttons["menu.newPrivateTab"].waitForExistence(timeout: 3))
@@ -311,7 +320,7 @@ final class StateRulesTests: XCTestCase {
         go(app, to: "/b")
         waitForPage(app, "Page B")
         tabsMenu(app, pick: "New Tab")
-        closeSearch(app)
+        keepNewTabAndCloseSearch(app)
         app.buttons["tabs"].tap()
         let gallery = app.scrollViews["tabGallery"]
         XCTAssertTrue(gallery.waitForExistence(timeout: 3))

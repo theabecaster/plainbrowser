@@ -163,7 +163,9 @@ final class DuoTests: XCTestCase {
         XCTAssertTrue(sidebar.waitForExistence(timeout: 3), "Left: the sidebar shows")
         XCTAssertLessThan(sidebar.frame.minX, window.midX)
         XCTAssertFalse(strip.exists)
-        XCTAssertTrue(app.buttons["sideTabs.newTab"].exists)
+        // One New Tab button: the bar's "+" on a page, so the sidebar shows none of its own.
+        XCTAssertFalse(app.buttons["sideTabs.newTab"].exists)
+        XCTAssertTrue(app.buttons["newTab"].firstMatch.exists)
 
         // The Tabs button hides the sidebar and brings it back.
         app.buttons["tabs"].tap()

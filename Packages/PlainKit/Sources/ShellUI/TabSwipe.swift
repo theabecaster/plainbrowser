@@ -225,7 +225,7 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             // exactly this state, so what the finger felt is what happens.
             let pulled = -displayed(offset, swipe: swipe, width: width)
             let line = CGFloat(FixedChoices.newTabSwipeThreshold)
-            armed = wasArmed ? pulled >= line - Self.cardHysteresis : pulled >= line
+            armed = wasArmed ? pulled >= line - CGFloat(FixedChoices.newTabSwipeHysteresis) : pulled >= line
         } else {
             armed = false
         }
@@ -238,10 +238,6 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
         }
         swipe.isArmed = armed
     }
-
-    /// Points under the New Tab card's line before an armed card disarms (the haptics plan's
-    /// 8–12 pt hysteresis).
-    private static let cardHysteresis: CGFloat = 10
 
     /// The page's on-screen offset: 1:1 toward a neighbour, rubber-banded where there is none.
     private func displayed(_ offset: CGFloat, swipe: Swipe, width: CGFloat) -> CGFloat {

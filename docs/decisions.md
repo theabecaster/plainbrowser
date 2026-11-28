@@ -2522,7 +2522,8 @@ The findings of docs/research/clarity-audit.md left to this lane, with the owner
   `stop.circle` keeps Reload's slot and weight; `xmark.circle` is still an X, and a progress
   line under the host would move the row. Safari's in-field X stays where nothing else can close.
 - **Passkeys:** "Passkeys aren't available in Plain yet. Use your password." says what the user
-  can do now. Too long for one line on the pill's width, so a toast now wraps to two lines,
+  can do now, with the soft refusal bump (`Haptic.nothingThere`: the sign-in the user tried did
+  not happen; lead's call from the app-wide haptics plan). Too long for one line on the pill's width, so a toast now wraps to two lines,
   taller, rather than cutting the middle out of a sentence.
 - **A refused connection** says "The site refused the connection." (`LoadFailure.refused`): the
   host's TCP reset, told apart from a host that never answered by CFNetwork's POSIX code under

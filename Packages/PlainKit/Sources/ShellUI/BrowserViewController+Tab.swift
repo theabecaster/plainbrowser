@@ -557,6 +557,8 @@ extension BrowserViewController {
                 self?.closeReader(animated: true)
             }
             hide.accessibilityIdentifier = "menu.reader"
+            // On: the sheet's tile shows in the accent while the reader is open.
+            hide.state = .on
             return [hide]
         case .show:
             break

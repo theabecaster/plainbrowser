@@ -45,31 +45,132 @@ extension View {
             .listSectionSeparatorTint(Style.hairline)
     }
 
-    /// The sheet's inline title, set in New York like the intro's headlines. `navigationTitle`
-    /// stays for the back button and VoiceOver; the bar shows the serif one, centered.
+    /// A sheet's first screen: its title, Done and an optional leading control in a header pinned
+    /// above the list. Not the navigation bar: at a compact height (the Duo's outer screen) the
+    /// system hides a sheet's bar as the list scrolls, and the title and Done went with it;
+    /// asking for a visible bar (`toolbarVisibility(.visible)`) did not keep it (lead's call,
+    /// 2026-11-27). `navigationTitle` stays for VoiceOver and the pushed screens. Without
+    /// `onDone` Done dismisses the sheet.
+    func sheetTitle(_ title: String, onDone: (() -> Void)?, @ViewBuilder leading: () -> some View) -> some View {
+        modifier(SheetHeaderModifier(title: title, leading: leading(), trailing: SheetDone(onDone: onDone)))
+    }
+
+    /// The same, with nothing on the leading side.
+    func sheetTitle(_ title: String, onDone: (() -> Void)?) -> some View {
+        sheetTitle(title, onDone: onDone) { EmptyView() }
+    }
+
+    /// A screen pushed inside a sheet: the same pinned header with Back in place of Done.
     func sheetTitle(_ title: String) -> some View {
-        navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    SheetTitle(title: title)
-                }
+        modifier(SheetHeaderModifier(title: title, leading: SheetBack(), trailing: EmptyView()))
+    }
+}
+
+private struct SheetHeaderModifier<Leading: View, Trailing: View>: ViewModifier {
+    let title: String
+    let leading: Leading
+    let trailing: Trailing
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle(title)
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                SheetHeader(title: title, leading: leading, trailing: trailing)
             }
     }
 }
 
-/// A sheet's title in the bar: New York, semibold, at the bar title's size. Grows with Dynamic Type
-/// up to the point where the bar would crowd its buttons, as the system title does.
-private struct SheetTitle: View {
+/// The pinned header: the title in New York, semibold, at the bar title's size, centered between
+/// the two sides. It grows with Dynamic Type up to the point where it would crowd the buttons, as
+/// the system title does. Opaque paper, so rows scroll under it out of sight.
+struct SheetHeader<Leading: View, Trailing: View>: View {
     let title: String
+    let leading: Leading
+    let trailing: Trailing
 
     var body: some View {
-        Text(title)
-            .font(.system(.headline, design: .serif))
-            .foregroundStyle(Style.ink)
-            .lineLimit(1)
-            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-            .accessibilityAddTraits(.isHeader)
+        // Each side takes the same share of the width, so the title stays centered whatever the
+        // two sides hold, and takes the room left before it truncates.
+        HStack(spacing: 8) {
+            ZStack { Color.clear.frame(height: 1); leading }.frame(maxWidth: .infinity, alignment: .leading)
+            Text(title)
+                .font(.system(.headline, design: .serif))
+                .foregroundStyle(Style.ink)
+                .lineLimit(1)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                .accessibilityAddTraits(.isHeader)
+                .layoutPriority(1)
+            ZStack { Color.clear.frame(height: 1); trailing }.frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .frame(minHeight: 44)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+        .background { PaperBackground().ignoresSafeArea(edges: [.top, .horizontal]) }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Style.hairline).frame(height: 0.5)
+        }
+    }
+}
+
+/// Done, in the header's trailing corner.
+struct SheetDone: View {
+    var onDone: (() -> Void)?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Button("Done") {
+            if let onDone { onDone() } else { dismiss() }
+        }
+        .buttonStyle(.glass)
+        .foregroundStyle(Style.accent)
+    }
+}
+
+/// Back, on a pushed screen.
+private struct SheetBack: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Button { dismiss() } label: {
+            Label("Back", systemImage: "chevron.backward").labelStyle(.iconOnly)
+        }
+        .buttonStyle(.glass)
+        .foregroundStyle(Style.accent)
+        .accessibilityIdentifier("BackButton")
+    }
+}
+
+/// A list's search field as its first row, under the pinned header: it scrolls away with the
+/// rows, as in Safari's history (docs/decisions.md, "Search field"). Put it first in the `List`.
+struct SheetSearchRow: View {
+    let prompt: String
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+            TextField(prompt, text: $text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .accessibilityAddTraits(.isSearchField)
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Label("Clear", systemImage: "xmark.circle.fill").labelStyle(.iconOnly)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 36)
+        // A step darker than the cards, as the system's search field is: it reads as a field.
+        .background(Style.ink.opacity(0.07), in: Capsule())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
     }
 }
 
@@ -101,6 +202,9 @@ struct PaperEmptyState: View {
     let message: String
     let systemImage: String
     var footer: String?
+    /// The sentence with a symbol in it (the More button, as the bar draws it), shown in place of
+    /// `message`, which VoiceOver then reads.
+    var symbolMessage: Text?
 
     var body: some View {
         VStack(spacing: Spacing.s) {
@@ -109,9 +213,10 @@ struct PaperEmptyState: View {
                 .foregroundStyle(Style.inkSecondary)
                 .accessibilityHidden(true)
                 .padding(.bottom, Spacing.xs)
-            Text(message)
+            (symbolMessage ?? Text(message))
                 .font(.body)
                 .foregroundStyle(Style.inkSecondary)
+                .accessibilityLabel(message)
             if let footer {
                 Text(footer)
                     .font(.footnote)
@@ -124,6 +229,15 @@ struct PaperEmptyState: View {
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("sheetEmptyState")
     }
+}
+
+/// The empty states that point at the page sheet show its button, More, as the bar draws it:
+/// a first-time user knows the button by its picture, and nothing on screen is called "the page
+/// menu".
+extension Wording {
+    private static var more: Image { Image(systemName: "line.3.horizontal.circle") }
+    static var favoritesEmptySymbol: Text { Text("Tap \(more) on a page, then Favorite.") }
+    static var readingListEmptySymbol: Text { Text("Tap \(more) on a page, then Read Later.") }
 }
 
 /// A read that failed, in place of the list: one sentence and Try Again (docs/state-rules.md §6,
@@ -143,17 +257,4 @@ struct ReadFailedView: View {
     }
 }
 
-/// The sheet's one "Done" button. Uses `onDone` when the presenter gives one, else dismisses.
-struct DoneButton: ToolbarContent {
-    var onDone: (() -> Void)?
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .confirmationAction) {
-            Button("Done") {
-                if let onDone { onDone() } else { dismiss() }
-            }
-        }
-    }
-}
 #endif

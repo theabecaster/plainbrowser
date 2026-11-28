@@ -166,10 +166,18 @@ public final class EmptyTabView: UIView {
             configuration.contentInsets = .init(top: Spacing.s, leading: Spacing.s, bottom: Spacing.s, trailing: Spacing.s)
             configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
                 var attributes = attributes
-                attributes.font = UIFont.preferredFont(forTextStyle: .footnote)
+                // A caption under a symbol in a 108 pt cell: past the largest standard size it broke
+                // mid-word ("Pri-vate Tab"), so it stops there, as the page sheet's captions do.
+                let category = UITraitCollection.current.preferredContentSizeCategory
+                let limit = UIContentSizeCategory.extraExtraExtraLarge
+                attributes.font = UIFont.preferredFont(
+                    forTextStyle: .footnote,
+                    compatibleWith: UITraitCollection(preferredContentSizeCategory: category > limit ? limit : category)
+                )
                 return attributes
             }
             let item = UIButton(configuration: configuration)
+            item.maximumContentSizeCategory = .extraExtraExtraLarge
             item.accessibilityIdentifier = shortcut.id
             item.accessibilityLabel = shortcut.accessibilityLabel ?? shortcut.title
             item.titleLabel?.numberOfLines = 2

@@ -81,16 +81,11 @@ public struct DownloadsView<Source: DownloadListSource>: View {
                     PaperEmptyState(message: "Files you download show up here.", systemImage: "arrow.down.circle")
                 }
             }
-            .sheetTitle("Downloads")
-            .toolbar {
-                // An icon, so the title stays centered between it and Done.
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { showInFiles(source.directory) } label: {
-                        Label("Show in Files", systemImage: "folder")
-                    }
-                    .labelStyle(.iconOnly)
+            .sheetTitle("Downloads", onDone: onDone) {
+                Button { showInFiles(source.directory) } label: {
+                    Label("Show in Files", systemImage: "folder").labelStyle(.iconOnly)
                 }
-                DoneButton(onDone: onDone)
+                .buttonStyle(.glass)
             }
             .quickLookPreview($preview, in: items.compactMap(\.fileURL))
         }

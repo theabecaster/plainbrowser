@@ -43,23 +43,12 @@ public struct HistoryView: View {
         .task { await model.load() }
     }
 
-    /// The sheet: a bar with Clear, the title and Done, and the search field under it.
+    /// The sheet: a pinned header with Clear, the title and Done; the search field is the list's
+    /// first row and scrolls away with the rows.
     private var sheetBody: some View {
         NavigationStack {
-            list
-                // Search sits under the title and scrolls away with the rows, as in Safari's
-                // history: the bottom field's glass, and a field kept on screen (`.always`, which
-                // floats once the bar hides on scroll), showed a ghost of the row behind it on paper.
-                .searchable(
-                    text: $model.query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search History"
-                )
-                // Rows scrolled under the field fade out at a hard edge instead of showing through it.
-                .scrollEdgeEffectStyle(.hard, for: .top)
-                .sheetTitle("History")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { clearMenu }
-                    DoneButton(onDone: onDone)
-                }
+            list(searchRow: true)
+                .sheetTitle("History", onDone: onDone) { clearMenu }
         }
     }
 
@@ -82,7 +71,7 @@ public struct HistoryView: View {
                     .font(.subheadline)
             }
             .padding(.horizontal, 12)
-            list
+            list(searchRow: false)
         }
         .background { PaperBackground().ignoresSafeArea() }
     }
@@ -98,8 +87,9 @@ public struct HistoryView: View {
         .disabled(model.isLoaded && !model.hasHistory)
     }
 
-    private var list: some View {
+    private func list(searchRow: Bool) -> some View {
         List {
+            if searchRow { SheetSearchRow(prompt: "Search History", text: $model.query) }
             ForEach(model.days) { day in
                 Section(day.title) {
                     ForEach(day.rows) { row in

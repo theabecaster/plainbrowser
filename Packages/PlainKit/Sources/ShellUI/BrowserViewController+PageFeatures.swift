@@ -66,6 +66,8 @@ extension BrowserViewController {
                 tab?.showOriginal()
             }
             show.accessibilityIdentifier = "menu.translate"
+            // On: the sheet's tile shows in the accent while the page is translated.
+            show.state = .on
             return [show]
         case .translate:
             let translate = UIAction(

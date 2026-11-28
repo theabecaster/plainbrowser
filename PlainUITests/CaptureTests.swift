@@ -99,7 +99,7 @@ final class CaptureTests: XCTestCase {
         pause(1)
         shot("s3-search-engine")
         let back = app.otherElements["settingsSheet"].buttons["BackButton"]
-        if back.exists { back.tap() } else { app.navigationBars["Search Engine"].buttons.firstMatch.tap() }
+        if back.exists { back.tap() } else { app.buttons["BackButton"].firstMatch.tap() }
         pause(0.8)
         app.buttons["Done"].tap()
         pause(1)
@@ -280,7 +280,7 @@ final class CaptureTests: XCTestCase {
         app.buttons["Archived Tabs"].tap()
         pause(1.5)
         shot("t7-archive")
-        app.navigationBars.buttons["Done"].tap()
+        app.buttons["Done"].firstMatch.tap()
         pause(1)
         // The regular list while a private tab is on screen has no Done (state rules §6): a
         // card leads back to a page.
@@ -308,7 +308,7 @@ final class CaptureTests: XCTestCase {
         if show.waitForExistence(timeout: 3) { show.tap() }
         pause(1.5)
         shot("t10-downloads")
-        app.navigationBars.buttons["Done"].tap()
+        app.buttons["Done"].firstMatch.tap()
         pause(1)
     }
 
@@ -493,7 +493,7 @@ final class CaptureTests: XCTestCase {
             app.buttons["menu.settings"].tap()
             pause(1.5)
             shot("p3-settings-\(name)")
-            app.navigationBars.buttons["Done"].tap()
+            app.buttons["Done"].firstMatch.tap()
             pause(1)
 
             // A new tab beside the page: its start screen with the keyboard down, then the gallery

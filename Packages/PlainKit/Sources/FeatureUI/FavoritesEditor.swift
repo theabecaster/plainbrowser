@@ -53,11 +53,10 @@ public struct FavoritesEditor: View {
                 if model.loadFailed {
                     ReadFailedView(message: Wording.favoritesReadFailed, systemImage: "star") { await model.load() }
                 } else if model.isLoaded, model.favorites.isEmpty {
-                    PaperEmptyState(message: "Add favorites from the page menu.", systemImage: "star")
+                    PaperEmptyState(message: Wording.favoritesEmpty, systemImage: "star", symbolMessage: Wording.favoritesEmptySymbol)
                 }
             }
-            .sheetTitle("Favorites")
-            .toolbar { DoneButton(onDone: onDone) }
+            .sheetTitle("Favorites", onDone: onDone)
             .alert("Rename Favorite", isPresented: Binding(
                 get: { renaming != nil }, set: { if !$0 { renaming = nil } }
             ), presenting: renaming) { favorite in

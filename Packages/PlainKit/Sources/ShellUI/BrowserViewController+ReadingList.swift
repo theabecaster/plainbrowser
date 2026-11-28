@@ -15,12 +15,14 @@ extension BrowserViewController {
     func readLaterMenuItem(for tab: Tab, url: URL, isSaved: Bool) -> UIAction {
         let item = UIAction(
             title: isSaved ? "Remove from Reading List" : "Read Later",
-            image: UIImage(systemName: isSaved ? "eyeglasses.slash" : "eyeglasses")
+            image: UIImage(systemName: "eyeglasses")
         ) { [weak self, weak tab] _ in
             guard let self, let tab else { return }
             if isSaved { self.removeFromReadingList(url) } else { self.saveForLater(tab, url: url) }
         }
         item.accessibilityIdentifier = "menu.readLater"
+        // On: the sheet shows "Saved" in the accent; a tap removes it.
+        if isSaved { item.state = .on }
         return item
     }
 

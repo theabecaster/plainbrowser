@@ -1469,6 +1469,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
                 self?.setFavorite(!isFavorite, url: url, title: title)
             }
             favorite.accessibilityIdentifier = "menu.favorite"
+            // On: the sheet shows the filled star in the accent; a tap removes it.
+            if isFavorite { favorite.state = .on }
             keep.append(favorite)
         }
         if rules.readLater, let isSaved = marks?.isSaved {

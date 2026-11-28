@@ -87,6 +87,7 @@ final class PageSheetController: UIViewController {
         super.viewDidLoad()
         Paper.apply(to: view)
         view.accessibilityIdentifier = "pageSheet"
+        view.addInteraction(UILargeContentViewerInteraction())
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.alwaysBounceVertical = false
         view.addSubview(scroll)
@@ -145,7 +146,7 @@ final class PageSheetController: UIViewController {
         }
         var host = UIButton.Configuration.plain()
         host.attributedTitle = AttributedString(address.host, attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .headline), .foregroundColor: Palette.ink,
+            .font: Self.gridFont(.headline), .foregroundColor: Palette.ink,
         ]))
         if address.notSecure {
             host.subtitle = String(localized: "Not Secure")
@@ -178,11 +179,13 @@ final class PageSheetController: UIViewController {
             row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: Spacing.xs),
             row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -Spacing.xs),
         ])
+        card.maximumContentSizeCategory = Self.gridLimit
         return card
     }
 
     private func tilesRow(_ actions: [UIAction]) -> UIView {
         let row = UIStackView(arrangedSubviews: actions.map { tile($0) })
+        row.maximumContentSizeCategory = Self.gridLimit
         row.axis = .horizontal
         row.distribution = .fillEqually
         row.alignment = .top
@@ -193,17 +196,23 @@ final class PageSheetController: UIViewController {
     /// A tile: the symbol on a card, the caption under it.
     private func tile(_ action: UIAction) -> UIView {
         var configuration = UIButton.Configuration.filled()
+        // A mode that is on (the reader open, the page translated) shows in the accent, so the
+        // sheet says which mode the page is in; the tile turns it off.
+        let isOn = action.state == .on
         configuration.baseBackgroundColor = Palette.paperCard
-        configuration.baseForegroundColor = Palette.ink
+        configuration.baseForegroundColor = isOn ? Palette.accentOnPaper : Palette.ink
         configuration.background.cornerRadius = Radius.large
-        configuration.background.strokeColor = Palette.paperHairline
-        configuration.background.strokeWidth = 1 / max(1, traitCollection.displayScale)
+        configuration.background.strokeColor = isOn ? Palette.accentOnPaper : Palette.paperHairline
+        configuration.background.strokeWidth = (isOn ? 1.5 : 1) / max(1, traitCollection.displayScale)
         configuration.image = action.image
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .title2)
         configuration.imagePlacement = .top
         configuration.imagePadding = Spacing.s
-        configuration.attributedTitle = AttributedString(Self.caption(action.title), attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .footnote), .foregroundColor: Palette.inkSecondary,
+        // While the first translated text is on its way the tile says so ("Translating…").
+        let caption = (isOn ? action.subtitle : nil) ?? Self.caption(action.title)
+        configuration.attributedTitle = AttributedString(caption, attributes: AttributeContainer([
+            .font: Self.gridFont(.footnote),
+            .foregroundColor: isOn ? Palette.accentOnPaper : Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.contentInsets = NSDirectionalEdgeInsets(top: Spacing.m, leading: Spacing.xs, bottom: Spacing.s, trailing: Spacing.xs)
@@ -211,6 +220,8 @@ final class PageSheetController: UIViewController {
         Self.identify(button, as: action)
         button.isEnabled = !action.attributes.contains(.disabled)
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 72).isActive = true
+        if isOn { button.accessibilityTraits.insert(.selected) }
+        Self.showLarge(button, title: caption, image: action.image)
         return button
     }
 
@@ -238,6 +249,7 @@ final class PageSheetController: UIViewController {
             row.translatesAutoresizingMaskIntoConstraints = false
             card.addSubview(row)
             Self.pin(row, in: card, inset: Spacing.xs)
+            card.maximumContentSizeCategory = Self.gridLimit
             return card
         case .stepper(let actions):
             let card = Self.card()
@@ -245,7 +257,7 @@ final class PageSheetController: UIViewController {
                 let button = UIButton(configuration: .plain(), primaryAction: perform(action, dismisses: false))
                 if action.image == nil {
                     button.configuration?.attributedTitle = AttributedString(action.title, attributes: AttributeContainer([
-                        .font: UIFont.monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .medium),
+                        .font: UIFont.monospacedDigitSystemFont(ofSize: Self.gridFont(.body).pointSize, weight: .medium),
                     ]))
                 } else {
                     button.configuration?.image = action.image
@@ -261,6 +273,7 @@ final class PageSheetController: UIViewController {
             card.addSubview(row)
             Self.pin(row, in: card, inset: 0)
             card.heightAnchor.constraint(greaterThanOrEqualToConstant: Metrics.tapTarget + Spacing.xs).isActive = true
+            card.maximumContentSizeCategory = Self.gridLimit
             return card
         }
     }
@@ -310,9 +323,12 @@ final class PageSheetController: UIViewController {
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
         configuration.imagePlacement = .top
         configuration.imagePadding = Spacing.xs
-        configuration.baseForegroundColor = Palette.ink
+        // Kept (a favorite, saved for later): in the accent, as the tiles show a mode that is on.
+        let isOn = (element as? UIAction)?.state == .on
+        configuration.baseForegroundColor = isOn ? Palette.accentOnPaper : Palette.ink
         configuration.attributedTitle = AttributedString(Self.caption(element.title), attributes: AttributeContainer([
-            .font: UIFont.preferredFont(forTextStyle: .footnote), .foregroundColor: Palette.inkSecondary,
+            .font: Self.gridFont(.footnote),
+            .foregroundColor: isOn ? Palette.accentOnPaper : Palette.inkSecondary,
         ]))
         configuration.titleLineBreakMode = .byTruncatingTail
         configuration.contentInsets = NSDirectionalEdgeInsets(top: Spacing.s, leading: Spacing.xxs, bottom: Spacing.s, trailing: Spacing.xxs)
@@ -326,8 +342,10 @@ final class PageSheetController: UIViewController {
         } else if let action = element as? UIAction {
             button.addAction(perform(action, dismisses: true), for: .primaryActionTriggered)
             Self.identify(button, as: action)
+            if isOn { button.accessibilityTraits.insert(.selected) }
             button.isEnabled = !action.attributes.contains(.disabled)
         }
+        Self.showLarge(button, title: Self.caption(element.title), image: element.image)
         return button
     }
 
@@ -393,16 +411,37 @@ final class PageSheetController: UIViewController {
         ])
     }
 
+    /// The largest text size of the sheet's fixed grids (the address row, the tiles, the chips and
+    /// the zoom row): three or four cells share the width, so as the text grew their captions were
+    /// cut ("Summar…" at Extra Large on the narrowest iPhone, "Rea…" and "Su…" at the accessibility
+    /// sizes) and the address row's buttons ran into each other. They keep the default size, as a
+    /// tab bar's items do, and a long press shows a cell large (the large content viewer); the
+    /// rows under them keep growing.
+    private static let gridLimit = UIContentSizeCategory.large
+
+    /// A cell of a fixed grid in the large content viewer, at the accessibility text sizes.
+    private static func showLarge(_ button: UIButton, title: String, image: UIImage?) {
+        button.showsLargeContentViewer = true
+        button.largeContentTitle = title
+        button.largeContentImage = image
+    }
+
+    private static func gridFont(_ style: UIFont.TextStyle) -> UIFont {
+        let category = UITraitCollection.current.preferredContentSizeCategory
+        let capped = category > gridLimit ? gridLimit : category
+        return .preferredFont(forTextStyle: style, compatibleWith: UITraitCollection(preferredContentSizeCategory: capped))
+    }
+
     /// The short caption a tile or chip shows; VoiceOver keeps the full name.
     private static func caption(_ title: String) -> String {
         let captions = [
             "Find on Page": String(localized: "Find"), "Translate Page": String(localized: "Translate"),
-            "Show Original": String(localized: "Original"), "Show Reader": String(localized: "Reader"),
+            "Show Original": String(localized: "Translated"), "Show Reader": String(localized: "Reader"),
             "Hide Reader": String(localized: "Reader"),
             "New Private Tab": String(localized: "Private Tab"), "Reopen Closed Tab": String(localized: "Reopen Tab"),
             "Archived Tabs": String(localized: "Archive"), "Add to Favorites": String(localized: "Favorite"),
-            "Remove from Favorites": String(localized: "Unfavorite"), "Edit Favorites": String(localized: "Favorites"),
-            "Remove from Reading List": String(localized: "Remove"), "Summarize Page": String(localized: "Summarize"),
+            "Remove from Favorites": String(localized: "Favorite"), "Edit Favorites": String(localized: "Favorites"),
+            "Remove from Reading List": String(localized: "Saved"), "Summarize Page": String(localized: "Summarize"),
         ]
         return captions[title] ?? title
     }

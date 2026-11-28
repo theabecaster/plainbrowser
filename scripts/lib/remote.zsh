@@ -35,14 +35,25 @@ remote_sync() {
   ssh $host "cd ~/plain-lanes/$lane && { [ -d .git ] || git init -q; git add -A >/dev/null 2>&1; git -c user.email=lane@local -c user.name=lane commit -qm snapshot >/dev/null 2>&1 || true; }"
 }
 
-# Syncs, then runs <command> in the lane in a free job slot, else waits for slot 1, in a login
-# shell (for Homebrew's PATH). Returns the command's exit status. `lockf -t 0` exits 75 when the
-# slot is taken.
+# Syncs, then runs <command> in the lane in whichever of the host's two job slots frees first
+# (polled every 20 s), in a login shell (for Homebrew's PATH). Returns the command's exit status.
+# `lockf -t 0` exits 75 when the slot is taken. While another lane holds the host's priority mark
+# (/tmp/plain-priority.<lane>, under 3 hours old; PLAIN_PRIORITY=1 in the shared runner sets it),
+# the job waits for it to go, as the runner's own jobs do.
 remote_run() {
-  local host=$1 lane=$2 cmd=$3 q
+  local host=$1 lane=$2 cmd=$3 q r held
   remote_sync $host $lane
   q=${(q)cmd}
-  ssh $host "cd ~/plain-lanes/$lane && for s in 1 2; do /usr/bin/lockf -s -t 0 -k /tmp/plain-sim-\$s.lock zsh -lc $q; r=\$?; [ \$r -ne 75 ] && exit \$r; done; /usr/bin/lockf -k /tmp/plain-sim-1.lock zsh -lc $q"
+  # Exits 1 while another lane's fresh priority mark is on the host. sh, not the login shell:
+  # zsh stops on a glob that matches nothing.
+  held='for f in /tmp/plain-priority.*; do [ -e "$f" ] || continue; [ "$f" = /tmp/plain-priority.'$lane' ] && continue; [ -n "$(find "$f" -mmin -180 2>/dev/null)" ] && exit 1; done; exit 0'
+  while true; do
+    ssh $host "cd ~/plain-lanes/$lane || exit 1; /bin/sh -c ${(q)held} || exit 75
+      for s in 1 2; do /usr/bin/lockf -s -t 0 -k /tmp/plain-sim-\$s.lock zsh -lc $q; r=\$?; [ \$r -ne 75 ] && exit \$r; done; exit 75"
+    r=$?
+    (( r != 75 )) && return $r
+    sleep 20
+  done
 }
 
 # Runs <command> on this Mac (the owner's) in the checkout, in its one slot shared by every lane

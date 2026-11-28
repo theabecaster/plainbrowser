@@ -47,7 +47,8 @@ final class CornerTests: XCTestCase {
         // The page side stays at the minimum.
         XCTAssertEqual(panel.effectiveRadius(corner: .topLeft), min(VerticalBarBacking.radius, panel.bounds.width / 2), accuracy: 0.5)
         // A screen with round corners (every supported iPhone but the SE, 375x667) reports them.
-        if root.bounds.size != CGSize(width: 375, height: 667) {
+        let size = root.bounds.size
+        if CGSize(width: min(size.width, size.height), height: max(size.width, size.height)) != CGSize(width: 375, height: 667) {
             XCTAssertGreaterThan(display, 30, "the display's corners were not resolved")
         }
 

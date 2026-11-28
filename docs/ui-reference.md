@@ -77,7 +77,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   down from it, with Cancel beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab,
   17% with the strip; nothing while reading.
 - **The side pane's divider** (wide screens): the seam between the page and the side pane is a
-  hairline with a short ink capsule in its middle (4 × 36 pt, tertiary ink, a 1 pt paper edge; no
+  hairline with a short ink capsule in its middle (5 × 40 pt, secondary ink, a 1 pt paper edge; no
   glass, it is part of the seam), inside a 44 pt target. Drag it and it rests at Narrow, Half or
   Two Thirds, whichever leave the page 375 pt; drag the pane thin and it closes, drag the page thin
   and the pane takes the whole width (the page keeps its place out of sight, the top bar spans the

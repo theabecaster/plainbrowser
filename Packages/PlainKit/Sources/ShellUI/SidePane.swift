@@ -204,7 +204,8 @@ final class SidePaneController: UIViewController {
 
     private func setExpandLook(takesOver: Bool) {
         showsTakeOver = takesOver
-        let symbol = takesOver ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+        // Show Page names where it goes (the split back), Full Width how it grows.
+        let symbol = takesOver ? "rectangle.split.2x1" : "arrow.up.left.and.arrow.down.right"
         let image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(weight: .semibold))
         expandButton.setImage(image, for: .normal)
         expandButton.accessibilityLabel = takesOver ? String(localized: "Show Page") : String(localized: "Full Width")

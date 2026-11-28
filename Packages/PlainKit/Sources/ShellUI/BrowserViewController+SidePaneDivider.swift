@@ -300,7 +300,8 @@ final class SidePaneDividerController: NSObject, UIGestureRecognizerDelegate, UI
         handle.isArmed = close || takeOver
         Motion.animate(Motion.sidePaneArm, changes: { [veil] in
             pane.view.alpha = close ? 0.55 : 1
-            veil.alpha = takeOver ? 1 : 0
+            // A light ink veil: the page stays readable as context while the grip carries the state.
+            veil.alpha = takeOver ? 0.45 : 0
         })
     }
 
@@ -797,7 +798,7 @@ final class SidePaneDividerHandle: UIView {
     private var pillSize: CGSize {
         if isArmed || state == .dragging { return CGSize(width: 6, height: 52) }
         if isHovered { return CGSize(width: 6, height: 44) }
-        return CGSize(width: 4, height: 36)
+        return CGSize(width: 5, height: 40)
     }
 
     private func placePill() {
@@ -808,7 +809,9 @@ final class SidePaneDividerHandle: UIView {
     }
 
     private func restyle(animated: Bool) {
-        let color: UIColor = isArmed ? Palette.accent : (state == .dragging || isHovered ? .secondaryLabel : .tertiaryLabel)
+        // Secondary ink at rest (tertiary read as a hairline on the paper, design review 1), the
+        // label's ink under the pointer or the finger, the accent once a line is armed.
+        let color: UIColor = isArmed ? Palette.accent : (state == .dragging || isHovered ? .label : .secondaryLabel)
         let changes = { [self] in
             pill.backgroundColor = color
             placePill()

@@ -180,7 +180,7 @@ take-over: the next open is beside the page. A relaunch restores both the width 
 - Armed: the pane being closed turns see-through (55%); the page about to be covered dims under
   the gallery's ink veil (`Motion.sidePaneArm`). The top bar holds still while the divider moves
   and glides to its new lane (over the page, or across the pane) once, at the rest.
-- Handle: a 4 × 36 pt capsule in tertiary ink with a 1 pt paper edge, on the existing hairline,
+- Handle: a 5 × 40 pt capsule in secondary ink with a 1 pt paper edge, on the existing hairline,
   vertically centered, inside a 44 × 88 pt target; 6 × 44 pt and secondary ink under the pointer;
   6 × 52 pt while dragged; the accent once a line is armed. No glass: it is part of the seam, not a
   floating control.

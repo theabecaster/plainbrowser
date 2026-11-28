@@ -6,6 +6,9 @@ import UIKit
 /// ring draw like a written P, the dawn rises in the window, and the coral fold folds over along
 /// its crease. Static elsewhere (the default-browser step, the empty-tab card).
 ///
+/// It wears the chosen app icon's colors (`SplashTheme`, the generator's values), so the mark in
+/// the app is the icon on the Home Screen: Dawn's cream paper, coral fold and dawn by default.
+///
 /// Every animation runs on the render server at up to 120 Hz; the main thread only starts them.
 final class StemMarkView: UIView {
     private let geometry = StemGeometry()
@@ -34,13 +37,20 @@ final class StemMarkView: UIView {
     /// The ring's soft shadow on the paper under it, so cream paper holds its edge on cream paper.
     private let shade = CALayer()
     private let shadowed: Bool
+    /// The icon whose colors the mark wears.
+    private(set) var theme: SplashTheme
+    /// The paper's fills on the ring and on the flap's front: body, top-left light, warm lower right.
+    private var paperFills: [(body: CAGradientLayer, light: CAGradientLayer, warm: CAGradientLayer)] = []
 
     /// Total length of `assemble()`: under the 1.2 s budget.
     static let assembleDuration: CFTimeInterval = 1.12
 
-    /// - Parameter shadowed: casts the ring's shadow on the paper under it (the intro's paper).
-    init(shadowed: Bool = false) {
+    /// - Parameters:
+    ///   - shadowed: casts the ring's shadow on the paper under it (the intro's paper).
+    ///   - theme: the app icon whose colors it wears (`SplashTheme.theme(for: AppIcons.current)`).
+    init(shadowed: Bool = false, theme: SplashTheme = .dawn) {
         self.shadowed = shadowed
+        self.theme = theme
         super.init(frame: .zero)
         isUserInteractionEnabled = false
         isAccessibilityElement = true
@@ -97,13 +107,11 @@ final class StemMarkView: UIView {
         viewLayer.mask = windowMask
         let viewBox = CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)
         sky.frame = viewBox
-        sky.colors = BrandArt.dawnSky.map(\.cgColor)
         sky.locations = [0, 0.6, 1]
         sky.startPoint = CGPoint(x: 0.5, y: 0)
         sky.endPoint = CGPoint(x: 0.5, y: (g.horizonY - viewBox.minY) / viewBox.height)
         glow.type = .radial
         glow.frame = CGRect(x: g.sunCenter.x - 200, y: g.sunCenter.y - 200, width: 400, height: 400)
-        glow.colors = [BrandArt.sun[0].cgColor, BrandArt.sun[0].withAlphaComponent(0).cgColor]
         glow.startPoint = CGPoint(x: 0.5, y: 0.5)
         glow.endPoint = CGPoint(x: 1, y: 1)
         let sr = StemGeometry.sunRadius
@@ -111,7 +119,6 @@ final class StemMarkView: UIView {
         sun.frame = CGRect(x: g.sunCenter.x - sr, y: g.sunCenter.y - sr, width: 2 * sr, height: 2 * sr)
         sun.cornerRadius = sr
         sun.masksToBounds = true
-        sun.colors = BrandArt.sun.map(\.cgColor)
         sun.locations = [0, 0.42, 1]
         sun.startPoint = CGPoint(x: 0.5, y: 0.375)
         sun.endPoint = CGPoint(x: 1.125, y: 1.0)
@@ -119,9 +126,7 @@ final class StemMarkView: UIView {
         let planetCenter = CGPoint(x: g.sunCenter.x, y: g.horizonY + pr)
         rim.path = CGPath(ellipseIn: CGRect(x: planetCenter.x - pr - 4, y: planetCenter.y - pr - 4,
                                             width: 2 * pr + 8, height: 2 * pr + 8), transform: nil)
-        rim.fillColor = BrandArt.rim.cgColor
         rim.opacity = 0.9
-        rim.shadowColor = BrandArt.rim.cgColor
         rim.shadowOpacity = 0.9
         rim.shadowRadius = 6
         rim.shadowOffset = .zero
@@ -129,7 +134,6 @@ final class StemMarkView: UIView {
         planet.frame = CGRect(x: planetCenter.x - pr, y: planetCenter.y - pr, width: 2 * pr, height: 2 * pr)
         planet.cornerRadius = pr
         planet.masksToBounds = true
-        planet.colors = BrandArt.planet.map(\.cgColor)
         // Centred on the sun (the planet's top), reaching the window's bottom.
         planet.startPoint = CGPoint(x: 0.5, y: 0)
         planet.endPoint = CGPoint(x: 0.5 + (viewBox.maxY - g.horizonY + 40) / (2 * pr), y: (viewBox.maxY - g.horizonY + 40) / (2 * pr))
@@ -142,11 +146,10 @@ final class StemMarkView: UIView {
         let paperMask = CAShapeLayer()
         paperMask.path = g.paper
         paper.mask = paperMask
-        for sub in Self.paperFill(full) { paper.addSublayer(sub) }
+        for sub in paperFill(full) { paper.addSublayer(sub) }
         // The flap's contact shadow on the ring, under the lifted edge.
         flapShadow.frame = full
         flapShadow.shadowPath = g.flap
-        flapShadow.shadowColor = BrandArt.flapShade.cgColor
         flapShadow.shadowRadius = 9
         flapShadow.shadowOffset = CGSize(width: 3, height: 9)
         flapShadow.shadowOpacity = 0.32
@@ -159,7 +162,6 @@ final class StemMarkView: UIView {
         flap.anchorPoint = CGPoint(x: g.creasePoint.x / 1024, y: g.creasePoint.y / 1024)
         flap.position = g.creasePoint
         flapBack.frame = full
-        flapBack.colors = BrandArt.curl.map(\.cgColor)
         flapBack.locations = [0, 0.18, 0.6, 1]
         let edge = g.creasePoint + g.normal * (StemGeometry.outer - StemGeometry.creaseDistance)
         flapBack.startPoint = CGPoint(x: g.creasePoint.x / 1024, y: g.creasePoint.y / 1024)
@@ -172,7 +174,7 @@ final class StemMarkView: UIView {
         let frontMask = CAShapeLayer()
         frontMask.path = g.cap
         flapFront.mask = frontMask
-        for sub in Self.paperFill(full) { flapFront.addSublayer(sub) }
+        for sub in paperFill(full) { flapFront.addSublayer(sub) }
         flapFront.isDoubleSided = false
         flapFront.zPosition = 0.5
         flap.addSublayer(flapBack)
@@ -198,15 +200,15 @@ final class StemMarkView: UIView {
             stroke.lineCap = .butt
             drawMask.addSublayer(stroke)
         }
+        paint()
         showAssembled()
     }
 
-    /// Paper's linear body, its top-left light and its warm lower right.
-    private static func paperFill(_ full: CGRect) -> [CALayer] {
+    /// Paper's linear body, its top-left light and its warm lower right (colored by `paint()`).
+    private func paperFill(_ full: CGRect) -> [CALayer] {
         let box = StemGeometry.box
         let body = CAGradientLayer()
         body.frame = full
-        body.colors = BrandArt.paper.map(\.cgColor)
         body.locations = [0, 0.5, 1]
         body.startPoint = CGPoint(x: box.minX / 1024, y: box.minY / 1024)
         body.endPoint = CGPoint(x: (box.minX + box.width * 0.35) / 1024, y: box.maxY / 1024)
@@ -214,17 +216,44 @@ final class StemMarkView: UIView {
         light.type = .radial
         let lr = StemGeometry.outer * 1.2
         light.frame = CGRect(x: box.minX + 60 - lr, y: box.minY + 40 - lr, width: 2 * lr, height: 2 * lr)
-        light.colors = [UIColor.white.withAlphaComponent(0.9).cgColor, UIColor.white.withAlphaComponent(0).cgColor]
         light.startPoint = CGPoint(x: 0.5, y: 0.5)
         light.endPoint = CGPoint(x: 1, y: 1)
         let warm = CAGradientLayer()
         warm.type = .radial
         let wr = StemGeometry.outer * 1.6
         warm.frame = CGRect(x: box.maxX - wr, y: box.maxY - wr, width: 2 * wr, height: 2 * wr)
-        warm.colors = [BrandArt.paperWarm.withAlphaComponent(0.38).cgColor, BrandArt.paperWarm.withAlphaComponent(0).cgColor]
         warm.startPoint = CGPoint(x: 0.5, y: 0.5)
         warm.endPoint = CGPoint(x: 1, y: 1)
+        paperFills.append((body, light, warm))
         return [body, light, warm]
+    }
+
+    /// Wears another icon's colors, at once (no animation).
+    func apply(_ theme: SplashTheme) {
+        guard theme != self.theme else { return }
+        self.theme = theme
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        paint()
+        CATransaction.commit()
+    }
+
+    /// Every color of the mark, from `theme`: the icon's paper, fold and the view in its window.
+    private func paint() {
+        let t = theme
+        sky.colors = t.sky.map(\.cgColor)
+        glow.colors = [t.sun[0].alpha(t.glow).cgColor, t.sun[0].alpha(0).cgColor]
+        sun.colors = t.sun.map(\.cgColor)
+        rim.fillColor = t.rim.cgColor
+        rim.shadowColor = t.rim.cgColor
+        planet.colors = t.planet.map(\.cgColor)
+        flapShadow.shadowColor = t.flapShade.cgColor
+        flapBack.colors = t.curl.map(\.cgColor)
+        for fill in paperFills {
+            fill.body.colors = t.paper.map(\.cgColor)
+            fill.light.colors = [UIColor.white.withAlphaComponent(t.highlight).cgColor, UIColor.white.withAlphaComponent(0).cgColor]
+            fill.warm.colors = [t.paperWarm.alpha(0.38).cgColor, t.paperWarm.alpha(0).cgColor]
+        }
     }
 
     // MARK: States
@@ -279,7 +308,7 @@ final class StemMarkView: UIView {
         // The dawn: the window lights from night, the sun rises, its glow blooms.
         add(basic("opacity", from: 0, to: 1, at: now + 0.18, duration: 0.4), to: viewLayer)
         let night = BrandArt.nightSky.map(\.cgColor)
-        add(basic("colors", from: night, to: BrandArt.dawnSky.map(\.cgColor), at: now + 0.2, duration: 0.7, timing: write), to: sky)
+        add(basic("colors", from: night, to: theme.sky.map(\.cgColor), at: now + 0.2, duration: 0.7, timing: write), to: sky)
         add(basic("position.y", from: sun.position.y + 96, to: sun.position.y, at: now + 0.28, duration: 0.72, timing: write), to: sun)
         add(basic("opacity", from: 0, to: 1, at: now + 0.45, duration: 0.55), to: glow)
 

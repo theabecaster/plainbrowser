@@ -31,7 +31,7 @@ public struct DefaultBrowserCard: View {
 
     public var body: some View {
         VStack(spacing: 14) {
-            StemMark(shadowed: false)
+            StemMark(shadowed: false, icon: AppIcons.current)
                 .frame(width: 76, height: 80)
                 // Keeps the cream ring's edge on the cream start screen.
                 .shadow(color: Color(uiColor: Palette.floatingShadow).opacity(0.25), radius: 10, y: 4)

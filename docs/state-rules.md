@@ -325,9 +325,10 @@ above still says what it shows, and the splash only covers it.
 | Reduce Motion | The icon's world, then a 0.2 s crossfade to the app; no dive | The motion table's rule. |
 | An isolated test run | None, unless `-PlainSplash` is given | Hundreds of UI tests launch the app; the perf launch tests and the splash's own tests pass it. |
 
-The splash follows the Home Screen icon as it is (`AppIcons.current`) and the system's light or
-dark, like the icon and the launch screen under it, not the app's own Appearance setting. Dawn
-has dark art; Night, Coral and Paper look the same in both.
+The splash follows the Home Screen icon as it is (`AppIcons.current`), not the app's own
+Appearance setting. Every icon looks the same on a light and a dark Home Screen, so the splash
+does too: it is the picture in the icon picker. The intro's mark wears the same icon's colors,
+and the icon picked on the intro's icon step from then on.
 
 ### Tab gallery (Gallery mode, reachable with a card to show: `others ≥ 1`, or a page on screen)
 

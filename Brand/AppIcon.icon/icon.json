@@ -38,10 +38,6 @@
               "value": "ring.svg"
             },
             {
-              "appearance": "dark",
-              "value": "ring-dark.svg"
-            },
-            {
               "appearance": "tinted",
               "value": "ring-tinted.svg"
             }
@@ -69,10 +65,6 @@
               "value": "view.svg"
             },
             {
-              "appearance": "dark",
-              "value": "view-dark.svg"
-            },
-            {
               "appearance": "tinted",
               "value": "view-tinted.svg"
             }
@@ -98,10 +90,6 @@
           "image-name-specializations": [
             {
               "value": "bloom.svg"
-            },
-            {
-              "appearance": "dark",
-              "value": "bloom-dark.svg"
             }
           ],
           "hidden-specializations": [
@@ -152,8 +140,8 @@
       "appearance": "dark",
       "value": {
         "linear-gradient": [
-          "srgb:0.04,0.13,0.20,1.0",
-          "srgb:0.06,0.06,0.20,1.0"
+          "srgb:0.20,0.86,0.78,1.0",
+          "srgb:0.16,0.45,1.0,1.0"
         ],
         "orientation": {
           "start": {

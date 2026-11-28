@@ -58,28 +58,23 @@ import Testing
             return "SRGB:\(n(c.r)),\(n(c.g)),\(n(c.b)),1.0"
         }
         for choice in AppIconChoice.allCases {
-            for dark in [false, true] {
-                let t = SplashTheme.theme(for: choice, dark: dark)
-                for c in t.field { #expect(source.contains(fill(c)), "\(choice) field \(fill(c))") }
-                let colors = [t.bloomNear, t.bloomFar, t.paperWarm, t.flapShade, t.rim] + t.paper + t.curl + t.sky + t.planet + t.sun
-                for c in colors { #expect(source.contains(hex(c)), "\(choice) \(hex(c))") }
-            }
+            let t = SplashTheme.theme(for: choice)
+            for c in t.field { #expect(source.contains(fill(c)), "\(choice) field \(fill(c))") }
+            let colors = [t.bloomNear, t.bloomFar, t.paperWarm, t.flapShade, t.rim] + t.paper + t.curl + t.sky + t.planet + t.sun
+            for c in colors { #expect(source.contains(hex(c)), "\(choice) \(hex(c))") }
         }
     }
 
-    /// Dawn has dark art, as the icon does; the alternates look the same light and dark.
-    @Test func onlyDawnHasDarkArt() {
-        #expect(SplashTheme.theme(for: .dawn, dark: true) != SplashTheme.theme(for: .dawn, dark: false))
-        for choice in [AppIconChoice.night, .coral, .paper] {
-            #expect(SplashTheme.theme(for: choice, dark: true) == SplashTheme.theme(for: choice, dark: false))
-        }
-        #expect(SplashTheme.theme(for: .coral, dark: false).curl != SplashTheme.dawn.curl)
+    /// Four worlds, one per icon (light and dark alike, as the Home Screen shows them).
+    @Test func eachIconHasItsOwnWorld() {
+        let themes = AppIconChoice.allCases.map { SplashTheme.theme(for: $0) }
+        #expect(Set(themes.map { "\($0.field)" }).count == themes.count)
+        #expect(SplashTheme.theme(for: .coral).curl != SplashTheme.dawn.curl)
         #expect(SplashTheme.paper.paper != SplashTheme.dawn.paper)
     }
 
     @Test func statusBarTextSuitsTheField() {
         #expect(!SplashTheme.dawn.statusBarIsLight)
-        #expect(SplashTheme.dawnDark.statusBarIsLight)
         #expect(SplashTheme.night.statusBarIsLight)
         #expect(!SplashTheme.paper.statusBarIsLight)
         #expect(!SplashTheme.coral.statusBarIsLight)
@@ -225,7 +220,7 @@ import Testing
 
     @Test func thePicturesShowTheIconsWorld() throws {
         for choice in AppIconChoice.allCases {
-            let theme = SplashTheme.theme(for: choice, dark: false)
+            let theme = SplashTheme.theme(for: choice)
             let art = try #require(SplashArt.draw(theme: theme, scale: 2))
             let tile = SplashLayout.tileFrame(scale: 2)
             func markPixel(_ q: CGPoint) -> (r: Int, g: Int, b: Int, a: Int) {

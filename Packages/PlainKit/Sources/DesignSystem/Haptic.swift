@@ -165,7 +165,8 @@ extension Haptic {
     /// app is not active: an outcome that finished in the background plays with its toast.
     public func play(in view: UIView? = nil, at point: CGPoint? = nil) {
         guard UIApplication.shared.applicationState == .active else { return }
-        guard admit(), let window = Self.window(for: view) else { return }
+        // The window first: a play with nowhere to go neither records nor holds the throttle.
+        guard let window = Self.window(for: view), admit() else { return }
         let location = point.flatMap { point in view.map { $0.convert(point, to: window) } }
         WindowGenerators.for(window).fire(self, at: location, in: window)
     }

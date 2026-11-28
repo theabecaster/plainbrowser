@@ -73,7 +73,7 @@ two-hit pattern. A *bump* is a faint soft impact, at most one a second.
 - [ ] `[run 1]` Settings > Clear History and Data, after its dialog: success when it finishes; the dialog itself is silent.
 - [ ] `[run 1]` History > Clear (Last Hour, Today, All), after its dialog: success as the rows go.
 - [ ] `[run 1]` Settings > App Icon: a tick on the tile, then the system's own alert. If iOS refuses, a bump as the check goes back.
-- [ ] `[run 1]` Intro (`-PlainShowIntro`): a light tap when the mark lands, a tick on an icon tile, success on Let's Go (or Not Now on the last step). Skip: silent.
+- [ ] `[run 1]` Intro (`-PlainShowIntro`): a light tap when the mark lands, a tick on an icon tile, success on Let’s Go. Skip, Not Now and Set as Default: silent.
 
 ## Timing (Instruments, Points of Interest)
 

@@ -58,7 +58,8 @@ final class HapticProbe {
     }
 
     @Test func historyClearSucceedsAfterTheRowsAreGone() async {
-        let model = HistoryModel(store: FakeHistory(HistoryModelTests.sample), now: { HistoryModelTests.now },
+        let now = HistoryModelTests.now
+        let model = HistoryModel(store: FakeHistory(HistoryModelTests.sample), now: { now },
                                  calendar: HistoryModelTests.calendar, locale: Locale(identifier: "en_US"))
         await model.load()
         let kinds = await HapticProbe.run { await model.clear(.all) }
@@ -67,7 +68,8 @@ final class HapticProbe {
     }
 
     @Test func historyClearFailureIsSilent() async {
-        let model = HistoryModel(store: UnclearableHistory(), now: { HistoryModelTests.now },
+        let now = HistoryModelTests.now
+        let model = HistoryModel(store: UnclearableHistory(), now: { now },
                                  calendar: HistoryModelTests.calendar, locale: Locale(identifier: "en_US"))
         let kinds = await HapticProbe.run { await model.clear(.all) }
         #expect(kinds == [])

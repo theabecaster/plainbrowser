@@ -203,7 +203,10 @@ final class TabSwipe: NSObject, UIGestureRecognizerDelegate {
             swipe.offset = startOffset
             // The latch takes the state the page is in, silently: a grab past the line plays no
             // threshold of its own, and a release from here judges against where it was grabbed.
-            if let browser, let value = latchValue(swipe, browser: browser) { swipe.latch.sync(value) }
+            // The stopped value is already on screen: a settling New Tab card runs 1:1, unbanded.
+            if let browser, let value = latchValue(swipe, browser: browser) {
+                swipe.latch.sync(swipe.isNewTabCard ? -startOffset : value)
+            }
             return
         }
         guard let browser, let current = browser.currentTab else {

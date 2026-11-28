@@ -173,22 +173,21 @@ final class HapticsTests: XCTestCase {
 
     // MARK: Refusals and outcomes
 
-    /// Return in an empty field bumps; a second Return right after stays silent (rate limit).
-    func testRefusalIsRateLimited() throws {
+    /// Return in an empty field bumps once (the rate limit itself is HapticTests').
+    func testReturnInAnEmptyFieldBumps() throws {
         let app = try launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
-        app.expectHaptics(["nothingThere"]) {
-            field.typeText("\n")
-            field.typeText("\n")
-        }
+        app.expectHaptics(["nothingThere"]) { field.typeText("\n") }
     }
 
     /// A download plays a tap as it starts and a success with its toast.
     func testDownloadTapsThenSucceedsWithItsToast() throws {
         let app = try launch()
         go(app, to: "/files", heading: "Files")
-        let link = app.webViews.links["Download notes"]
+        // The slow file: it starts at once and lands half a second later, so the two outcomes
+        // are two moments (inside 60 ms the throttle would rightly keep only the first).
+        let link = app.webViews.links["Download notes slowly"]
         XCTAssertTrue(link.waitForExistence(timeout: 5))
         app.expectHaptics(["tap", "success"]) { link.tap() }
         XCTAssertTrue(app.buttons["toastButton"].waitForExistence(timeout: 3), "the downloaded toast")

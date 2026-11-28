@@ -93,6 +93,15 @@ final class TestServer: @unchecked Sendable {
             """
             // `/slow` answers after a few seconds: a page that stays loading (Stop, the progress bar).
             let delay: Double = path.hasPrefix("/slow") ? 8 : 0
+            // `/file.txt?slow`: the headers at once (the download starts), the file half a second
+            // later (it finishes), so the two moments stay apart (HapticsTests).
+            if isFile, path.contains("slow") {
+                connection.send(content: Data(header.utf8), completion: .contentProcessed { _ in })
+                self.queue.asyncAfter(deadline: .now() + 0.5) {
+                    connection.send(content: Data(body.utf8), completion: .contentProcessed { _ in connection.cancel() })
+                }
+                return
+            }
             self.queue.asyncAfter(deadline: .now() + delay) {
                 connection.send(content: Data((header + body).utf8), completion: .contentProcessed { _ in
                     connection.cancel()
@@ -123,7 +132,7 @@ final class TestServer: @unchecked Sendable {
             return ("200 OK", html("Plain Launch", "<style>html,body{background:#2973FF;color:#fff;min-height:100%}</style>"
                 + "<h1>Launch Page</h1><p>The last tab, back from the first frame.</p>"))
         case "/files":
-            return ("200 OK", html("Plain Files", "<h1>Files</h1><p><a href=\"/file.txt\">Download notes</a></p>"))
+            return ("200 OK", html("Plain Files", "<h1>Files</h1><p><a href=\"/file.txt\">Download notes</a></p><p><a href=\"/file.txt?slow\">Download notes slowly</a></p>"))
         case "/file.txt":
             return ("200 OK", "Notes from the Plain test server.\n")
         case "/count":

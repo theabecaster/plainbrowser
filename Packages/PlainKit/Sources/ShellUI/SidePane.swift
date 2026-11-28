@@ -448,16 +448,15 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
     /// matches for what is typed it bumps (docs/ui-reference.md, "Haptics"). A search still on its
     /// way stays silent.
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        let query = field.text ?? ""
+        let isCurrent = query == shownQuery
         guard !result.matches.isEmpty else {
-            let query = field.text ?? ""
-            if !query.trimmingCharacters(in: .whitespaces).isEmpty, query == shownQuery {
-                Haptic.nothingThere.play(in: field)
-            }
+            if isCurrent, !query.trimmingCharacters(in: .whitespaces).isEmpty { Haptic.nothingThere.play(in: field) }
             return false
         }
         let next = (current ?? -1) + 1
         reveal(next % result.matches.count)
-        if next == result.matches.count { Haptic.selection.play(in: table) }
+        if isCurrent, next == result.matches.count { Haptic.selection.play(in: table) }
         return false
     }
 

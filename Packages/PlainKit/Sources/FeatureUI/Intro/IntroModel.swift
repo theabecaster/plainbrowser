@@ -116,8 +116,8 @@ final class IntroModel {
         finish(completed: false)
     }
 
-    /// Ends the intro. Finishing it (Let's Go, Not Now on the last step) plays the one success
-    /// that marks a completion, as the dissolve starts; Skip ends it silently.
+    /// Ends the intro. Let's Go plays the one success that marks a completion, as the dissolve
+    /// starts; Skip, Not Now and Set as Default (which leaves for Settings) end it silently.
     func finish(completed: Bool = true) {
         guard !didFinish else { return }
         didFinish = true

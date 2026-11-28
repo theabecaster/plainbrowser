@@ -35,10 +35,10 @@ final class LaunchUIState {
     var cover: LaunchCoverView?
     /// When the picture went up: it stays at most `FixedChoices.launchPictureMaxHold` from here.
     var coverShownAt = ContinuousClock.now
-    /// A fresh search is open over a page (state rules, "Launch and return"): the sheet goes clear,
-    /// the frost dims the page behind it, and a submitted search opens a new tab.
+    /// A fresh search is open over a page (state rules, "Launch and return"): a submitted search
+    /// opens a new tab.
     var isFreshSearch = false
-    /// Between the page and the search sheet: the page shows through, dimmed and blurred.
+    /// Between the page and the open search sheet: the page shows through, sharp and dimmed.
     let frost = FrostView()
     /// The launch splash covers the first screen: the field's keyboard waits for it to open.
     var keyboardHeld = false
@@ -138,7 +138,6 @@ extension BrowserViewController {
             // build): the restored tab shows through behind it, as a fresh search over it.
             launchUI.isFreshSearch = true
             updateStartScreen()
-            Motion.animate(Motion.urlFocus) { self.launchUI.frost.alpha = 1 }
         }
         updateButtons()
     }
@@ -320,18 +319,14 @@ final class LaunchCoverView: UIView {
     }
 }
 
-/// Frosted paper over the page behind a fresh search: the page reads as "still there" without
-/// competing with the suggestions. Takes no touches: the search sheet above it handles them.
+/// The dim over the page while the search sheet is open: the page stays sharp, a step darker
+/// (Arc Search dims it about a fifth), so it reads as "still there, tap to go back". Takes no
+/// touches: the search sheet above it handles them.
 final class FrostView: UIView {
-    /// Paper over the page, no blur: the system materials blur so much that a page loses its
-    /// headings and layout (design review), and the tab must stay recognisable behind the search.
-    /// The suggestion rows and the field carry their own paper, so they read over it.
-    static let paperOpacity: CGFloat = 0.7
-
     init() {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
-        backgroundColor = Palette.background.withAlphaComponent(Self.paperOpacity)
+        backgroundColor = Palette.sheetScrim
     }
 
     @available(*, unavailable)

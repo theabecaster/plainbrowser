@@ -12,6 +12,10 @@ public enum Motion {
     /// URL bar grows into the search sheet. The table's `.snappy(duration: 0.3)` with bounce 0:
     /// `.snappy` carries 0.15 bounce of its own, so this is the same duration with none.
     public static let urlFocus = Animation.spring(duration: 0.3, bounce: 0)
+    /// The pill growing into the search sheet and shrinking back, run frame by frame so a finger
+    /// can take the sheet mid-flight. Arc Search's move, measured: no overshoot, 90% of the way
+    /// in about 170 ms, at rest by 300 ms (docs/research/arc-address-expand.md).
+    public static let searchSheet = Spring(duration: 0.28, bounce: 0)
     /// Small state changes: a row highlight, an armed indicator.
     public static let quick = Animation.snappy(duration: 0.15)
     /// Address-bar suggestions changing while typing: new rows fade in, old ones fade out where

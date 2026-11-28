@@ -339,6 +339,23 @@ public enum FixedChoices {
     /// How long the copy button in the address bar shows its check mark: long enough to read,
     /// short enough to copy again.
     public static let copiedConfirmation: TimeInterval = 1.2
+    /// The open search sheet's top edge, as a share of the screen's height: Arc Search's place
+    /// (127 of 678 pt), high enough for rows over the keyboard, low enough that the page above
+    /// stays a place to tap back to (docs/research/arc-address-expand.md).
+    public static let searchSheetTopShare = 0.187
+    /// Under this height in points (a phone on its side) the search sheet starts right under the
+    /// safe area: the keyboard takes more than half the screen there, and the rows need the rest.
+    public static let searchSheetShortScreen = 560.0
+    /// A drag released with the search sheet less open than this collapses it; more springs back.
+    /// A little over a quarter of the way down: a deliberate pull, not a brush.
+    public static let searchSheetCollapseProgress = 0.72
+    /// A flick down this fast (points per second) collapses the search sheet from anywhere, and a
+    /// flick up this fast keeps it: the tab cards' flick, so one hand speed means "throw" everywhere.
+    public static let searchSheetFlickVelocity = 500.0
+    /// Dictation in the search field stops after this long without a new word, as the keyboard's
+    /// own dictation does: long enough for a breath, short enough that the field is not left
+    /// listening.
+    public static let dictationQuietEnd = Duration.seconds(2)
     /// A web address on the pasteboard is offered ("Open Copied Link") only this long after Plain
     /// first sees it, as Chrome does: an old copy is no longer an intention.
     public static let copiedLinkFreshness: TimeInterval = 10 * 60

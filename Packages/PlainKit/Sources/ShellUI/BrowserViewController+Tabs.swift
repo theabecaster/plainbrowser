@@ -13,8 +13,9 @@ extension BrowserViewController {
     /// The bar's gestures (swipe between tabs, swipe up to the gallery) apply: the bar is expanded
     /// and nothing covers it.
     var acceptsBarGestures: Bool {
-        !isEditingAddress && !isShowingGallery && presentedViewController == nil && !isChromeCollapsed
-            && currentRules().acceptsBarGestures
+        // Not while the search sheet still holds the pill (the last frames of its close).
+        !isEditingAddress && !sheetUI.isLaidOutOpen && !isShowingGallery && presentedViewController == nil
+            && !isChromeCollapsed && currentRules().acceptsBarGestures
     }
 
     /// The tabs slot (docs/state-rules.md §3): the gallery whenever it has a card, one page tab

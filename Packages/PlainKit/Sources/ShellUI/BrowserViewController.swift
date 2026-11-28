@@ -10,7 +10,7 @@ import WebEngine
 import WebKit
 
 /// The browser's root screen: the page, the URL pill at the bottom, the page's buttons, and the
-/// search sheet the pill grows into.
+/// search sheet the pill grows into (`+SearchSheet`).
 ///
 /// Launch order (docs/plan.md, "Engine rules"; docs/state-rules.md, "Launch and return"):
 /// 1. The first frame shows what `LaunchPlan` says: with no tab, the search sheet with the field
@@ -89,7 +89,14 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     // Layout.
     private var pillOnBar: NSLayoutConstraint!
     private var pillOnEdge: NSLayoutConstraint!
-    private var pillOnKeyboard: NSLayoutConstraint!
+    /// The pill as the open sheet's field: its top from the root view's top (`+SearchSheet`).
+    private var pillOpenTop: NSLayoutConstraint!
+    /// The chrome's row: the lane less its margins, at most 640 pt, centered.
+    let chromeRow = UILayoutGuide()
+    /// The pill's frame as the root view's layout has it. The pill sits two levels down (inside
+    /// the glass container), where a frame is applied only after the root view's own pass; a
+    /// guide of the root view answers from the layout itself, in `viewDidLayoutSubviews` too.
+    let pillFrameGuide = UILayoutGuide()
     /// The button bar's own constraints, activated again when it comes back after a vertical bar.
     private var buttonBarConstraints: [NSLayoutConstraint] = []
     /// The chrome's row: the lane less its margins, at most 640 pt, centered. The pill and the bar
@@ -103,13 +110,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     private var pillInSingleRow: [NSLayoutConstraint] = []
     /// Set while `applyEditingLayout` runs, which lays out the bar's shape in its own animation.
     private var isApplyingEditingLayout = false
-    private var geometry = ChromeGeometry(viewHeight: 0, safeBottom: 0, hasButtonBar: true)
+    private(set) var geometry = ChromeGeometry(viewHeight: 0, safeBottom: 0, hasButtonBar: true)
     private(set) var usesVerticalBar = false
 
     // State.
     private(set) var isEditingAddress = true
     private var didFocusAtLaunch = false
     private var didWarmUp = false
+    /// The search sheet's open and close: one progress value, driven frame by frame (`+SearchSheet`).
+    let sheetUI = SearchSheetUIState()
     private var collapse = ChromeCollapse()
     private var collapseInterval: OSSignpostIntervalState?
     /// Runs the toolbar snap frame by frame, so a drag can take the bar from where it is on screen.
@@ -186,6 +195,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
         pill.onCopy = { [weak self] in self?.copyPageAddress() }
+        pill.onBrowse = { [weak self] in self?.toggleBrowseArmed() }
+        pill.onMic = { [weak self] in self?.toggleDictation() }
+        pill.onEscape = { [weak self] in self?.dismissSearchSheet(.escape) }
         pill.searchQuery = { [weak self] url in self?.data.searchEngine.query(inResults: url) }
         pill.onLongPress = { [weak self] in
             guard let self else { return }
@@ -197,12 +209,10 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             self.open(pick)
         }
         sheet.onBrowse = { [weak self] query in self?.browseForMe(query) }
-        sheet.onDismiss = { [weak self] in self?.endEditing() }
+        sheet.onDismiss = { [weak self] how in self?.dismissSearchSheet(how) }
+        sheet.onPan = { [weak self] pan in self?.searchSheetPanned(pan) }
+        installSearchSheetGestures()
         sheet.onEditFavorites = { [weak self] in self?.showFavoritesEditor() }
-        // A swipe down closes the search, as a sheet closes (Arc Search's way back to the tab).
-        let swipeDown = UISwipeGestureRecognizer(target: self, action: #selector(sheetSwipedDown))
-        swipeDown.direction = .down
-        sheet.addGestureRecognizer(swipeDown)
 
         buildButtons()
         updateButtons()
@@ -289,7 +299,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
         pillOnBar = pill.bottomAnchor.constraint(equalTo: buttonBar.topAnchor, constant: -ChromeGeometry.gap)
         pillOnEdge = pill.bottomAnchor.constraint(equalTo: rest.topAnchor)
-        pillOnKeyboard = pill.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -Spacing.s)
+        pillOpenTop = pill.topAnchor.constraint(equalTo: view.topAnchor)
 
         // The chrome's lane: the focused pane, off an active fold and the camera (`DuoLayout`).
         let lane = duo.chromeLane
@@ -298,7 +308,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Set before every layout pass (`updateDuoLayout`, from `viewWillLayoutSubviews`).
         duo.laneWidth = lane.widthAnchor.constraint(equalToConstant: 0)
 
-        let row = UILayoutGuide()
+        let row = chromeRow
         view.addLayoutGuide(row)
 
         func capWidth(centerX: NSLayoutXAxisAnchor, width: NSLayoutDimension) -> [NSLayoutConstraint] {
@@ -356,8 +366,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             sheet.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             sheet.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             sheet.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            sheet.content.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: Spacing.s),
-            duo.top.sheetOverPill as NSLayoutConstraint,
 
             duo.top.pillHeight as NSLayoutConstraint,
 
@@ -367,9 +375,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             tabsUI.toast.centerXAnchor.constraint(equalTo: pill.centerXAnchor),
             tabsUI.toast.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
             tabsUI.toast.widthAnchor.constraint(lessThanOrEqualTo: pill.widthAnchor),
-        ] + capWidth(centerX: row.centerXAnchor, width: row.widthAnchor)
-            + capWidth(centerX: sheet.content.centerXAnchor, width: sheet.content.widthAnchor))
+        ] + capWidth(centerX: row.centerXAnchor, width: row.widthAnchor))
 
+        view.addLayoutGuide(pillFrameGuide)
+        NSLayoutConstraint.activate([
+            pillFrameGuide.topAnchor.constraint(equalTo: pill.topAnchor),
+            pillFrameGuide.leadingAnchor.constraint(equalTo: pill.leadingAnchor),
+            pillFrameGuide.widthAnchor.constraint(equalTo: pill.widthAnchor),
+            pillFrameGuide.heightAnchor.constraint(equalTo: pill.heightAnchor),
+        ])
         pillSpansRow = pill.trailingAnchor.constraint(equalTo: row.trailingAnchor)
         pillBesideBar = pill.trailingAnchor.constraint(equalTo: buttonBar.leadingAnchor, constant: -ChromeGeometry.gap)
         barSpansRow = buttonBar.leadingAnchor.constraint(equalTo: row.leadingAnchor)
@@ -484,11 +498,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     func updatePillRestConstraint() {
         let onTop = chromeOnTop
         let hasBar = buttonBar.superview != nil
-        let beside = !onTop && rules.barBesidePill && hasBar
+        let beside = sheetUI.barBeside.map { $0 && !onTop && hasBar } ?? restingBarBeside
         let singleRow = usesSingleRow && !beside
-        // Under a top bar the pill leaves it only to edit, above the keyboard.
-        let pillOnTop = onTop && !isEditingAddress
-        pillOnKeyboard.isActive = false
+        // The open sheet's field: the pill at the sheet's top. Under a top bar the pill stays in
+        // the bar's row, widens to the field's size, and the sheet grows down from it.
+        let open = sheetUI.isLaidOutOpen
+        let pillOnTop = onTop
+        pillOpenTop.isActive = false
         pillOnBar.isActive = false
         pillOnEdge.isActive = false
         pillOnRowLeading.isActive = false
@@ -496,11 +512,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pillBesideBar.isActive = false
         NSLayoutConstraint.deactivate(pillInSingleRow)
         if hasBar { NSLayoutConstraint.deactivate(buttonBarConstraints) }
-        setTopBarConstraints(pill: pillOnTop, bar: onTop && hasBar)
-        if isEditingAddress {
-            pillOnKeyboard.isActive = true
-        } else if pillOnTop {
+        setTopBarConstraints(pill: pillOnTop, bar: onTop && hasBar, open: open)
+        if pillOnTop {
             // The top bar places it.
+        } else if open {
+            pillOpenTop.isActive = true
         } else if usesVerticalBar || beside || singleRow {
             pillOnEdge.isActive = true
         } else {
@@ -511,11 +527,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Compact height: the same two capsules at the bottom row's ends, the pill between them.
         buttonBar.setSplit((onTop || singleRow) && hasBar, packsLeading: !singleRow)
         buttonBar.setBesidePill(beside)
-        if singleRow, !isEditingAddress {
+        if singleRow, !open {
             NSLayoutConstraint.activate(pillInSingleRow)
         } else if !pillOnTop {
             pillOnRowLeading.isActive = true
-            if beside { pillBesideBar.isActive = true } else { pillSpansRow.isActive = true }
+            if beside, !open { pillBesideBar.isActive = true } else { pillSpansRow.isActive = true }
         }
         if hasBar, !onTop {
             NSLayoutConstraint.activate(buttonBarConstraints.filter { $0 !== barSpansRow })
@@ -527,8 +543,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// sits beside the pill, on a page under it. Called whenever the rules change; the editing
     /// layout moves the bar itself, inside the keyboard's animation.
     func updateBarShapeIfNeeded() {
-        let beside = !chromeOnTop && rules.barBesidePill && buttonBar.superview != nil
-        guard pillOnBar != nil, beside != buttonBar.isBesidePill, !isApplyingEditingLayout else { return }
+        let beside = restingBarBeside
+        guard pillOnBar != nil, beside != buttonBar.isBesidePill, !isApplyingEditingLayout, !sheetUI.isLaidOutOpen else { return }
         updatePillRestConstraint()
         guard view.window != nil else { return }
         Motion.animate(Motion.reflow) { self.view.layoutIfNeeded() }
@@ -538,6 +554,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         super.viewWillLayoutSubviews()
         // Every Duo state comes from the bounds, size classes and the fold's regions here.
         updateDuoLayout()
+        // The open sheet's field, before the pass that places it.
+        let fieldTop = searchFieldTop
+        if pillOpenTop.constant != fieldTop { pillOpenTop.constant = fieldTop }
     }
 
     override public func viewDidLayoutSubviews() {
@@ -548,6 +567,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         )
         let top = duo.layout?.chromeOnTop == true
             ? makeTopGeometry(stripHeight: duo.layout?.stripHeight ?? 0) : nil
+        // The open sheet follows every pass: the bounds, the lane, the keyboard's layout.
+        layOutSearchSheet()
         guard next != geometry || top != duo.topGeometry else { return }
         geometry = next
         duo.topGeometry = top
@@ -603,6 +624,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     @objc private func firstFrameDidCommit(_ link: CADisplayLink) {
         link.invalidate()
         startSession()
+        // After the first frame: whether the field's microphone can run here.
+        prepareDictation()
     }
 
     /// Call when the address bar's data changed outside the shell (the database opened), so an
@@ -630,7 +653,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // veil, and what is submitted opens in a new tab. On the start screen it loads in place.
         // Editing the page's address is its own door: the page's row, or the page sheet.
         let overPage = currentTab.map { !session.tabs.isEmpty($0.id) } ?? false
-        pill.setCopyShown(false)
+        updateFieldAccessory()
         if overPage, let address = pageAddress, let query = data.searchEngine.query(inResults: address) {
             // On the engine's results page the search comes back, selected, to refine in place
             // (Safari): a new query replaces the results rather than stacking tabs of them.
@@ -644,8 +667,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             pill.textField.text = ""
         }
         updateStartScreen()
-        // The layout switches before the keyboard starts, so the keyboard's own animation carries
-        // the pill up (keyboardLayoutGuide) and it never falls behind the rising keyboard.
+        // The sheet is laid out open and starts to grow in this frame; the keyboard follows on
+        // its own.
         applyEditingLayout(true, animated: true)
         if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
         Signposts.signposter.endInterval(Signposts.urlBarFocus, interval)
@@ -665,6 +688,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // again, without reading it.
         refreshCopiedLink()
         queryChanged()
+        // The rows are in place on the sheet's first frame.
+        sheet.applyPendingNow()
     }
 
     public func textFieldDidEndEditing(_ textField: UITextField) {
@@ -672,7 +697,9 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         data.cancelSuggestions()
         sheet.session += 1
         focusUI.isEditingPage = false
-        pill.setCopyShown(false)
+        focusUI.browseArmed = false
+        focusUI.dictation.stop()
+        updateFieldAccessory()
         updateStartForTyping(query: "")
         applyEditingLayout(false, animated: true)
     }
@@ -680,6 +707,13 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     public func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         let signposter = Signposts.signposter
         let state = signposter.beginInterval(Signposts.addressSubmit)
+        // Browse for Me armed from the field: Return browses for what would search.
+        if focusUI.browseArmed, session.summaries.isAvailable,
+           let query = textField.text?.trimmingCharacters(in: .whitespacesAndNewlines), Self.isSearch(query) {
+            signposter.endInterval(Signposts.addressSubmit, state, "browse")
+            browseForMe(query)
+            return false
+        }
         guard let input = AddressBarInput(textField.text ?? ""),
               let url = input.destination(searchingWith: data.searchEngine)
         else {
@@ -699,13 +733,15 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // empty field, until the user types.
         let isCurrentAddress = !query.isEmpty && query == pageAddress?.absoluteString
         sheet.setFavoritesAllowed(query.isEmpty || isCurrentAddress)
-        // Copy sits in the field while it still shows the page's own address.
-        pill.setCopyShown(focusUI.isEditingPage && isCurrentAddress)
+        // Copy sits in the field while it still shows the page's own address; an empty field
+        // offers its options; a typed one, the clear button.
+        updateFieldAccessory()
         updateBrowseForMe(query: isCurrentAddress ? "" : query)
         guard !isCurrentAddress, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             // Before typing: never empty (docs/decisions.md, "Address focus").
             let items = focusItems()
-            updateStartForTyping(query: query, showsRows: !items.isEmpty)
+            // The sheet covers the start screen's mark whatever it holds: the mark steps back.
+            updateStartForTyping(query: query, showsRows: true)
             sheet.show(items: items)
             return
         }
@@ -753,12 +789,46 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         Signposts.signposter.endInterval(Signposts.addressSubmit, state, "picked")
     }
 
-    @objc private func sheetSwipedDown() {
-        endAddressEditing()
+    /// A hardware keyboard: Command-L opens the search sheet (every browser's Open Location).
+    /// Escape closes it (the field's own key, `AddressPill.onEscape`, and a key command for
+    /// when the text system passes it on), and so does Command-period, iOS's other Cancel.
+    override public var keyCommands: [UIKeyCommand]? {
+        if isEditingAddress {
+            let escape = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(cancelPressed))
+            escape.wantsPriorityOverSystemBehavior = true
+            let period = UIKeyCommand(
+                title: String(localized: "Cancel"), action: #selector(cancelPressed), input: ".", modifierFlags: .command
+            )
+            period.wantsPriorityOverSystemBehavior = true
+            return [escape, period]
+        }
+        guard canOpenLocation else { return nil }
+        let open = UIKeyCommand(
+            title: String(localized: "Open Location"), action: #selector(openLocationPressed), input: "l",
+            modifierFlags: .command
+        )
+        return [open]
     }
 
-    /// Closes the search sheet: the layout switches first, so the pill rides the keyboard down.
-    private func endEditing() {
+    /// The bar is on screen to open from: not the gallery, a sheet, or Find on Page.
+    private var canOpenLocation: Bool {
+        !isEditingAddress && !sheetUI.isLaidOutOpen && !isShowingGallery && presentedViewController == nil
+            && !currentRules().state.isFindOpen
+    }
+
+    @objc private func cancelPressed() {
+        dismissSearchSheet(.escape)
+    }
+
+    @objc private func openLocationPressed() {
+        guard canOpenLocation else { return }
+        // A collapsed bar comes back at once: the key asked for the field, not for the bar.
+        if collapse.progress > 0 || snap.isRunning { settleCollapse(at: 0, animated: false) }
+        pillTapped()
+    }
+
+    /// Closes the search sheet: it shrinks back into the pill while the keyboard leaves.
+    func endEditing() {
         applyEditingLayout(false, animated: true)
         pill.textField.resignFirstResponder()
     }
@@ -772,7 +842,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Opens the search sheet with the field focused (a new tab, the last tab closed).
     func beginAddressEditing() {
         focusUI.isEditingPage = false
-        pill.setCopyShown(false)
+        updateFieldAccessory()
         pill.textField.text = pageAddress?.absoluteString ?? ""
         applyEditingLayout(true, animated: true)
         if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
@@ -786,23 +856,17 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         (snap.isRunning ? snap.target : collapse.progress) > 0
     }
 
-    /// Moves between the resting pill and the open search sheet. The pill itself grows into the
-    /// field above the keyboard (`.snappy(0.3)`, bounce 0, following `keyboardLayoutGuide`).
-    ///
-    /// The pill's move is laid out inside the keyboard's animation, which UIKit runs for views
-    /// tied to `keyboardLayoutGuide`, so it tracks the keyboard frame by frame. The sheet's
-    /// fade, the field's rim and the bar use the spring.
+    /// Moves between the resting pill and the open search sheet: the mode changes at once (the
+    /// rules, the field's text and options), and the sheet grows from the pill or shrinks back
+    /// into it (`+SearchSheet`).
     func applyEditingLayout(_ editing: Bool, animated: Bool) {
-        let changed = editing != isEditingAddress || pillOnKeyboard.isActive != editing
+        let changed = editing != isEditingAddress
         isEditingAddress = editing
         // A fresh search lasts as long as its field: closing it uncovers the page.
         if !editing {
             launchUI.isFreshSearch = false
             focusUI.isEditingPage = false
         }
-        // The page stays behind the veil for both intents: searching over it, or editing its
-        // address.
-        let frostAlpha: CGFloat = editing && (launchUI.isFreshSearch || focusUI.isEditingPage) ? 1 : 0
         guard changed || !animated else { return }
         // Editing is a mode: the bar's controls and gestures follow the rules for it, and the start
         // screen's button and shortcuts step aside for the field.
@@ -810,31 +874,18 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         updateButtons()
         isApplyingEditingLayout = false
         tabsUI.start.isSearchFieldActive = editing
+        pill.setEditing(editing)
         if editing {
-            sheet.isHidden = false
             settleCollapse(at: 0, animated: false)
+            openSearchSheet(animated: animated)
+        } else {
+            closeSearchSheet(animated: animated)
         }
-        updatePillRestConstraint()
-        let changes = {
-            self.pill.setEditing(editing)
-            self.sheet.alpha = editing ? 1 : 0
-            self.sheet.content.transform = editing ? .identity : CGAffineTransform(translationX: 0, y: Spacing.l)
-            self.buttonBar.alpha = editing ? 0 : ChromeGeometry.barAlpha(progress: self.collapse.progress)
-            self.launchUI.frost.alpha = frostAlpha
-        }
-        guard animated else {
-            UIView.performWithoutAnimation {
-                changes()
-                self.view.layoutIfNeeded()
-            }
-            sheet.isHidden = !editing
-            return
-        }
-        view.setNeedsLayout()
-        Motion.animate(Motion.urlFocus, crossfading: view, changes: changes) { [weak self] in
-            guard let self, !self.isEditingAddress else { return }
-            self.sheet.isHidden = true
-        }
+    }
+
+    /// The chrome's place for the bar's own collapse, after the sheet let go of it.
+    func restoreChromePlacement() {
+        applyCollapse(collapse.progress)
     }
 
     // MARK: Page
@@ -943,6 +994,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Places the pill and button bar for collapse `progress` with transform and alpha only.
     func applyCollapse(_ progress: CGFloat) {
+        // While the search sheet holds the pill and the bar, their place is its progress.
+        guard !sheetUI.isLaidOutOpen else { return applyFocusProgress(sheetUI.driver.value) }
         if let top = duo.topGeometry {
             applyTopBarCollapse(progress, geometry: top)
             return

@@ -74,6 +74,18 @@ public enum Signposts {
     /// (`keyboardDidShow`; `OpenIntervals`). The perf gate's `focusMs`: the system keyboard's own
     /// rise is inside it, so the app's part is what delays the rise's start.
     public static let urlBarReady: StaticString = "urlBar.ready"
+    /// Interval: the search sheet growing from the pill ("open") or shrinking back into it
+    /// ("close"), from the first frame of the motion to its rest. Ends "retargeted" when the other
+    /// direction took over mid-flight.
+    public static let searchSheetMorph: StaticString = "urlBar.sheetMorph"
+    /// Event: how the open search sheet was closed without going anywhere ("outside": a tap on
+    /// the dimmed page; "grabber"; "cancel"; "swipe"; "escape").
+    public static let searchSheetDismiss: StaticString = "urlBar.sheetDismiss"
+    /// Interval: a finger dragging the search sheet down, from the drag's start to its release
+    /// ("collapsed" or "kept").
+    public static let searchSheetDrag: StaticString = "urlBar.sheetDrag"
+    /// Event: an option in the empty field was used ("mic", "micStop", "browseArm", "browseDisarm").
+    public static let fieldOption: StaticString = "urlBar.fieldOption"
     /// Interval from a keystroke in the address bar to its local suggestions (history and
     /// favorites) being on screen. Engine suggestions arrive later and are not part of it.
     public static let suggestionsShown: StaticString = "search.suggestions"

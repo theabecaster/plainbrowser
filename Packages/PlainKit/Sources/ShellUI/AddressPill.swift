@@ -369,9 +369,10 @@ final class AddressPill: UIView {
 
     /// `-PlainPerfLeanField`, isolated test runs only: the field predicts, rewrites and
     /// grammar-checks nothing outside private tabs too, so a device run can measure what those
-    /// traits cost the keyboard (`PerfTests.testMemoryWithTenTabsLeanField`). On one test Mac they
-    /// held 11 MB at ten tabs, on the other nothing (docs/research/perf-pass-3.md); whether the
-    /// address field gives them up is the owner's call once the device has answered.
+    /// traits cost the keyboard (`PerfTests.testMemoryWithTenTabsLeanField`). The simulators showed
+    /// no time or memory for them once an outlier was repeated; a phone may load prediction models
+    /// a simulator doesn't (docs/research/perf-pass-3.md). Only a real difference on the device
+    /// would make giving them up the owner's call.
     static let leanFieldExperiment = TestIsolation.isActive
         && ProcessInfo.processInfo.arguments.contains("-PlainPerfLeanField")
 

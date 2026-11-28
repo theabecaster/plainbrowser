@@ -2836,9 +2836,10 @@ limits: docs/research/perf-pass-3.md.
   may still run, as for the gallery's spare), only while active and not after a memory warning.
   So a New Tab that comes a second or more after the last one makes no `WKWebView` in its tap.
 - **The address field keeps its prediction traits** (inline predictions, Writing Tools, grammar
-  outside private tabs). Turning them off saved no time on a quiet simulator, and 11 MB at ten
-  tabs on one test Mac but nothing on the other; `testMemoryWithTenTabsLeanField` measures it on
-  the device, and the owner decides with that number.
+  outside private tabs). Turning them off saved no time and, once one outlier run was repeated,
+  no memory on the simulators; a phone may load prediction models a simulator doesn't, so
+  `testMemoryWithTenTabsLeanField` measures it on the device. Only a real difference there
+  would make it the owner's decision.
 - **Not changed:** the start screen's shortcuts stay in the first frame (built after it: no gain);
   the keystroke's rows are not moved ahead of the main queue's accessibility work (they would
   reach the screen in the same commit: a metric game); fewer kept web views and smaller pictures

@@ -14,9 +14,9 @@ launches and 510 ms focus are reachable on the Duo at all is the device run's an
 | Launch, field focused (150) | 212.3 | nothing measurable on a quiet host (lean traits: −0.8%, noise) | ~unchanged; the floor decides |
 | Launch, last tab (150) | 218 | — | ~unchanged; 117–182 ms over the unfocused floor on the sim |
 | Pill tap to keyboard (510) | 533.4 | — (Plain's own frames ~6% of the pre-keyboard time) | ~unchanged |
-| New Tab to keyboard (510) | 536.3 | warm web view made again after each take: no `WKWebView.init` in the tap (A/B below) | a few ms |
-| Keystroke to suggestions (8.3) | 11.7 | — (test runner's accessibility work queued ahead of the rows) | ~unchanged |
-| Memory, ten tabs (60) | 72.7 | 71.3 → 68.6 MB (cookie rules) | ~−2.6 MB, more if the device holds the keyboard models (2.3) |
+| New Tab to keyboard (510) | 536.3 | warm web view made again after each take: no `WKWebView.init` in the tap; 517 → 484 ms pooled (15 vs 15, rounds +18 / 0 / −77 under load) | a few ms |
+| Keystroke to suggestions (8.3) | 11.7 | — (test runner's accessibility work queued ahead of the rows; Plain 5.96 vs the bare field's 3.99 ms) | ~unchanged |
+| Memory, ten tabs (60) | 72.7 | 71.3 → 68.6 MB (cookie rules) | ~−2.6 MB (the lean-field experiment, 2.3, measures the keyboard's share) |
 | Link tap to first paint (100) | — | made measurable in pass 2 | the device run says |
 
 The device gate of 2026-11-27 20:30 (`eb5ddec`) left these over target: cold launch to first
@@ -138,15 +138,28 @@ quotes and dashes), as an interleaved A/B:
 | job C (macdesk, ~30) | **67.6 → 56.1 MB** (−11.4 MB, both rounds, peak 80 → 69) | — | — |
 | job D (m6desk, ~10, 4 rounds = 20 vs 20 iterations) | 68.8 → 68.8 MB | −0.8% (noise) | +3.9% (noise) |
 | job D, each trait alone (m6desk) | 68.5–69.3 MB (base 69.1) | | |
+| job F (macdesk, the shipped `-PlainPerfLeanField` switch) | 68.29 → 68.06 MB | | |
 
-So it buys no time on a quiet simulator (job A's gains were the load), and memory only on one test
-Mac: there the keyboard held ~11 MB for these features (likely the on-device prediction and Writing
-Tools models, which depend on what the host offers the simulator), on the other nothing. Whether
-the Duo behaves like macdesk is the device's answer: `testMemoryWithTenTabsLeanField` runs the
-ten-tab memory test with `-PlainPerfLeanField` (isolated runs only, AddressPill) beside the
-reference. If it shows the 11 MB, the owner decides whether the address field gives up inline
-predictions, Writing Tools and grammar checking outside private tabs (it already corrects and
-spell-checks nothing; Plain's own rows are its predictions).
+So it buys no time on a quiet simulator (job A's gains were the load) and no memory either: job
+C's −11 MB did not come back in three later runs on both test Macs, the last on the same Mac
+through the shipped switch, so it is not counted. A simulator may not load the on-device
+prediction and Writing Tools models a phone does, so the device keeps the question open:
+`testMemoryWithTenTabsLeanField` runs the ten-tab memory test with `-PlainPerfLeanField`
+(isolated runs only, AddressPill) beside the reference. Only if the Duo shows a real difference
+is there anything for the owner to decide (the field already corrects and spell-checks nothing;
+Plain's own rows are its predictions).
+
+### 2.4 The keystroke and memory floors
+
+Job F, macdesk, the reference beside Plain in one run:
+
+| | Plain | Reference | Plain over the floor |
+|---|---|---|---|
+| Keystroke to rows (`search.suggestions` vs `reference.keystroke`, the same off-main hop) | 5.96 ms | 3.99 ms | ~2 ms |
+| Footprint (`testMemoryWithTenTabs` vs `testReferenceMemory`, keyboard up) | 68.3 MB | 30.9 MB | ~37 MB for ten tabs, their web views' app side, the shell and its caches |
+
+The 8.3 ms keystroke target leaves ~4 ms over UIKit's and the test runner's own keystroke work
+on this simulator; the device's `reference.keystroke` says how much it leaves on the Duo.
 
 ## 3. Complexity
 
@@ -160,7 +173,7 @@ the shape is the point). `ComplexityCurveTests` runs with `PLAIN_CURVES=1`.
 | Adaptive picks (`InputHistory.matches`) | picks for the prefix | O(log n + m), primary-key range | plan: `SEARCH i USING INDEX sqlite_autoindex_inputHistory_1 (input>? AND input<?)`, join by `url` index | Fine |
 | Tab session read at launch (`loadTabSession`, off main) | open tabs | O(n) | 10: 0.80 ms, 100: 1.64, 1,000: 10.3 | Linear, off the main thread |
 | `TabStore(session:)` on the main thread | open tabs | O(n) | 10: 0.034 ms, 100: 0.158, 1,000: 1.37 | Linear; under the 5 ms budget at 1,000 |
-| Closing one tab (`TabStore.close`) | tabs in the window | O(n) per close (list `firstIndex`/`removeAll`, the session snapshot) | 50 closes at 100 tabs 1.3 ms; 500 at 1,000: 110 ms (0.22 ms each) | O(n²) only when closing one by one; Close All and archiving already batch (`closeTabs`) |
+| Closing one tab (`TabStore.close`) | tabs in the window | O(n) per close (list `firstIndex`/`removeAll`, the session snapshot) | with the session snapshot each close builds: 5 closes at 10 tabs 0.07 ms, 50 at 100: 2.0 ms, 500 at 1,000: 162 ms (0.32 ms each) | O(n²) only when closing one by one; Close All and archiving already batch (`closeTabs`) |
 | Cookie banner rules per frame | R rules | before O(R) regex matches; now O(U + labels + k), U = 35 unindexed | see below | Changed this pass |
 
 **Follow-up for the history query (not changed in this pass).** The slow keystrokes at 100k are the
@@ -218,7 +231,9 @@ line break (ICU's `$` also matches before a final one) takes the full check.
    attach inside the tap (15 + 9 + 4 of the 422 pre-keyboard samples in the New Tab trace). It
    runs one second after the take, in the run loop's default mode (not during a scroll or a
    tracked gesture; an animation can still be running), only while the app is active and not after
-   a memory warning, the same policy as the gallery's spare. The A/B is in job F's numbers below.
+   a memory warning, the same policy as the gallery's spare. Interleaved A/B (job F, macdesk, load
+   ~130, 3 rounds of 5): New Tab to keyboard 517.3 → 484.2 ms pooled, keyboard start 109.7 → 87.4
+   ms; the rounds disagree under that load (+18, 0, −77 ms), the mechanism (the trace) does not.
 3. **The perf reference** (`Plain/PerfReference.swift`, `PerfTests.testReference*`,
    `testMemoryWithTenTabsLeanField`, the gate's report-only lines; section 1). Test runs only.
 4. **The complexity curves** (`StorageTests/ComplexityCurveTests.swift`, `PLAIN_CURVES=1`).

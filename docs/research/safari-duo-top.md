@@ -65,4 +65,47 @@ background bar."
 
 ## Plain: scenarios checked on the inner screen
 
-See the table at the end of this file (filled from the captures in this lane).
+Device Hub's iPhone Duo simulator, unfolded (the real inner screen, 2853x2007 px), iOS 27.2,
+2026-11-27/28. Each walk is the Debug driver `-PlainTopWalk` (rest, mid-page, the collapse spring,
+reading on, a tap on the band, the reveal spring, back to the top) recorded with `simctl io
+recordVideo` on the inner display; stills at the end of each step and 60 fps strips of the top
+160 pt around each transition. Local fixtures (fixed header, sticky header, dark page with a
+black or red header, long text, a short page, colored stripes, a web app with its own top and
+bottom bars, a readable article) plus apple.com, wikipedia.org and a code-hosting site. Round 1
+captures are before the design review's fixes (strip over headers, bare host), round 2 after.
+
+| Scenario | Result |
+|---|---|
+| Fixed header, one tab, light | Pass. The header rests at the band's bottom (73 pt) at rest, mid-page, collapsed and on reveal; the band's height does not change; nothing moves in the page. |
+| Fixed and sticky headers, three tabs | Round 1: fail, the strip (73 to 111 pt) covered the header mid-page and controls faded over its text. Fixed: the strip follows the page's top (`stripReveal`); round 2 pass in landscape and portrait. |
+| Dark appearance on a dark page with a red header | Pass. The band takes the header's color under the glass, as Safari's does; the host capsule is navy with light text. |
+| Pages with their own top and bottom bars | Pass. The web app's bar sits right under the band; its bottom bar rests above the home indicator. |
+| Real sites (apple.com, wikipedia.org, a code-hosting site) | Pass. A black site header sits right under the band at the top; the band blurs the page under it mid-page. |
+| Busy page (colored stripes, white and black) | Pass. The glass refracts the stripes; the host and the pill stay legible, light and dark. |
+| Very short page | Pass. First line under the band; the bar never collapses (the page is too short). |
+| Find on Page | Pass. Find opens in the side pane (keyboard up); the band spans the page only. |
+| Reader | Pass. The reader starts under the band and collapses to the slim band like a page. (The reader's own crossfade shows both texts for a frame: not this lane.) |
+| Back and forward restoring the scroll position | Pass. Back restores mid-page with the bar expanded; the band blurs the text under it. |
+| Private (dark) | Pass. Violet band and capsule. |
+| Split panes | Pass, with one gap: the band spans both panes; the strip shows only while both panes' tops are in view. A pane resting at its very top while the bar is collapsed shows its page start 38 pt under the band. |
+| Side pane (History) | Pass. The band stops at the side pane; the status items sit over the pane's header. |
+| Left rail | Pass. The band starts beside the rail; the rail's New Tab stays on the row. |
+| One tab against many | Pass. One tab: the band is 73 pt in both states. Many: 111 pt at a page's top, 73 pt mid-page and collapsed. |
+| Keyboard up from a page's form | Not captured as its own walk (Find's keyboard was). The keyboard brings the bar back, as before (`keyboardWillShow`). |
+| Status bar tap while collapsed | Changed after the captures: the bar now comes back as the page scrolls to its top. Round 2 stills show the old path for one frame (the slim band over a page top). |
+| Pull to refresh at the top | Not captured (needs a finger). The indicator still sits under the expanded band (`pullIndicatorTop`). |
+| Link from another app | Not verified: `simctl openurl` raises the simulator's "Open in Plain?" prompt, which the walk did not answer. A new page brings the bar back (`expandForNewPage`). |
+| Fold and unfold while collapsed | Not verified: Device Hub reported Closed and Open, but the inner display's recording showed no change behind the prompt above. A hidden rest from the outer screen now rests at the slim band on unfold (`settleHiddenChromeForTopBar`). |
+| Rotation while collapsed | Not verified: the recording was already portrait when the walk started (DuoTests left the simulator rotated). Portrait walks themselves pass. |
+| Landscape and portrait | Pass in both (portrait: 669 pt wide, the same 73 / 111 pt band). |
+| DuoTests (UI tests, unfolded) | 4 tests, 0 failures. |
+
+### Glass cost (simulator)
+
+Real Duo inner screen in the simulator, the stripes page with a frame counter (TestServer's
+`/light-site` proxy: frames the page drew while scrolling, frames over 25 ms, the worst), three
+scrolls of 4,000 pt in 2 s each, driven frame by frame with the bar expanded (the band at its
+largest over a moving page). Band on: 405 frames, 1 over 25 ms, worst 86 ms. Band off
+(`-PlainNoTopBand`): 406 frames, 1 over 25 ms, worst 82 ms. The same within noise; the one long
+frame in each run is the first of a scroll. The simulator renders on the Mac's GPU, so this is
+no hitch measurement: the device gate's `testPageScrollHitches` is the check for 120 Hz.

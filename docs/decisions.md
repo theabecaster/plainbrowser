@@ -2566,3 +2566,13 @@ docs/research/safari-duo-top.md.
 - **Find and the gallery** fade the band with the capsules, so an empty band never stays at
   the top (`updateTopBandAlpha`, one place for both). Editing keeps it: on the inner screen the
   field widens in its row, on the band (the search sheet's dropdown).
+- **Performance:** motion is transform and alpha only (the band's glass, the host capsule, the
+  strip, the capsules); the page's insets change only with the layout. The strip's reveal is
+  re-applied from `scrollViewDidScroll` only when it changes (a page's first 38 pt). One more
+  glass surface: on the real inner screen in the simulator, three 4,000 pt scrolls over a
+  striped page drew 405 frames with the band and 406 without, one over 25 ms in each
+  (docs/research/safari-duo-top.md, "Glass cost"). The device's hitch gate is the check at 120 Hz.
+- **Scenarios** (fixed and sticky headers, dark pages, pages with their own bars, short pages,
+  Find, the reader, Back, private, split, side pane, rail, one and many tabs, both orientations):
+  docs/research/safari-duo-top.md. Not verified on the simulator: fold and rotation while
+  collapsed, a link from another app, pull to refresh.

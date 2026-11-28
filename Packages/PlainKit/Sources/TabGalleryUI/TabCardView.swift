@@ -232,8 +232,8 @@ final class TabCardView: UIView {
         // of a cascade card), and goes when less than half of the card shows: a covered corner
         // offers no target. The title row stops before it.
         let shownEdge = min(width, size.width)
-        let showsClose = alpha > 0.5 && shownEdge >= size.width * TabGalleryMetrics.closeMinimumShownFraction
-        closeButton.isHidden = !showsClose
+        let showsClose = shownEdge >= size.width * TabGalleryMetrics.closeMinimumShownFraction
+        if closeButton.isHidden == showsClose { closeButton.isHidden = !showsClose }
         if showsClose {
             let x = shownEdge - closeButton.bounds.width
             if abs(closeButton.frame.minX - x) > 0.25 { closeButton.frame.origin.x = x }
@@ -288,7 +288,7 @@ final class TabCardView: UIView {
         closePlate.backgroundColor = isPrivateTab
             ? Palette.privateGlassTint
             : UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.16) : UIColor(white: 0, alpha: 0.07) }
-        closeGlyph.tintColor = Palette.textSecondary
+        closeGlyph.tintColor = Palette.textPrimary.withAlphaComponent(0.7)
         let layer = thumbnailContainer.layer
         if isSelectedTab, marksSelection {
             // Lagoon (the accent) marks the active tab, and only in the grid: in the cascade

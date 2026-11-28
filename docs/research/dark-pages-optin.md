@@ -180,7 +180,10 @@ through Clear History and Data):
    `color-scheme` with dark or `only`, or a readable `prefers-color-scheme: dark` rule.
 4. **Mostly light:** the root's (or body's) own background is light (luminance ≥ 0.5, or none),
    **and** a small sample of what shows (5 points: the center and the four quarter points of the
-   viewport, each the first opaque background up its ancestors) is mostly light (≥ 3 of 5).
+   viewport, each the first opaque background up its ancestors) is mostly light: a picture,
+   video or canvas counts neither way, and at least 3 of the other points are light (all of
+   them when fewer are left, and never fewer than 2). On a wide screen a full-width picture
+   covers most points, so counting it as not light hid the suggestion there.
    The sample is in the light check only, so the check is stricter than the darkening's own
    judgement: anything it calls eligible, the darkening darkens.
 5. **Private tabs:** dark pages applies in private tabs (darkening stores nothing); their site
@@ -444,6 +447,9 @@ paths). Captures read on the iPhone 17, 13 mini and Duo outer, all three states 
 themes. Codex: compile pass clean; code review 5 blocking, fixed; design review 2 blocking (the
 Appearance footers, fixed; the status bar strip, kept and recorded in decisions.md).
 
-Open: on the Duo inner simulator the suggestion card did not show in the capture run, so the
-inner screen was not captured. Likely the scene-activation or keyboard check in
-`showDarkPagesSuggestion`; to check on the device.
+Inner screen (2026-11-28): the card did not show on the Duo's inner screen. Logged there, the
+moment's checks never ran: the light check judged `/light-site` native, because its full-width
+picture covered 3 of the 5 points at 951 pt and pictures counted as not light. Pictures now leave
+the vote (rule 4); the card sits under the lowest of the pill, the button row and the tab strip.
+`DarkPagesTests.offByDefaultPicturesLeaveTheLightCheck` and
+`DarkPagesUITests.testInnerScreenSuggestionShowsOnceUnderTheTopBarAndStrip` cover it.

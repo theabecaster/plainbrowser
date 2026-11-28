@@ -131,6 +131,9 @@ public final class WebViewPool {
     private var systemAccessStarted = false
     /// Remembered permission answers per site (`rememberedPermissions(for:)`).
     private var siteAnswers: [String: [SitePermission: Bool]] = [:]
+    /// Permissions each site asked for while iOS had them off for Plain, so Site Settings can show
+    /// their row (Off in Settings). In memory only: nothing was answered, so nothing is kept.
+    private var askedWhileOff: [String: Set<SitePermission>] = [:]
     /// Bumped when the private session ends, so a private read still on its way is dropped.
     private var privateSessionGeneration = 0
     /// False while the app is in the background or inactive. Tests never leave the active state.
@@ -506,6 +509,7 @@ public final class WebViewPool {
         privateDarkPagesStore = nil
         // Private answers go with the session; a read still on its way is dropped.
         siteAnswers = siteAnswers.filter { !$0.key.hasPrefix(Self.privateAnswersPrefix) }
+        askedWhileOff = askedWhileOff.filter { !$0.key.hasPrefix(Self.privateAnswersPrefix) }
         privateSessionGeneration += 1
         darkPagesScripts[true] = nil
         Task { await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) }
@@ -1091,6 +1095,17 @@ public final class WebViewPool {
         answersKey(for: tab).flatMap { siteAnswers[$0] } ?? [:]
     }
 
+    /// The permissions the site `tab` shows asked for while iOS had them off for Plain.
+    public func permissionsAskedWhileOff(for tab: Tab) -> Set<SitePermission> {
+        answersKey(for: tab).flatMap { askedWhileOff[$0] } ?? []
+    }
+
+    /// Notes that `site` asked for `features` while they were off for Plain.
+    private func noteAskedWhileOff(_ features: [SystemFeature], site: String, isPrivate: Bool) {
+        let permissions = SitePermission.allCases.filter { $0.systemFeature.map(features.contains) == true }
+        askedWhileOff[Self.answersKey(site, isPrivate: isPrivate), default: []].formUnion(permissions)
+    }
+
     /// The site `url` committed in `tab`: reads its answers (one query, off the main thread).
     func loadRememberedPermissions(for tab: Tab, url: URL?) {
         guard let url, let site = Self.site(of: url) else { return }
@@ -1154,6 +1169,7 @@ public final class WebViewPool {
     func pageAskedForSwitchedOff(_ features: [SystemFeature], in tab: Tab) {
         let blocked = features.filter { systemAccess.access($0).isBlocked }
         guard !blocked.isEmpty, isAttached(tab), let host, let url = tab.url, let site = Self.site(of: url) else { return }
+        noteAskedWhileOff(blocked, site: site, isPrivate: tab.isPrivate)
         host.tab(tab, wasDenied: blocked, forSite: site)
     }
 
@@ -1262,6 +1278,7 @@ public final class WebViewPool {
         // refused, nothing is remembered, and the shell says why.
         let blocked = permissions.compactMap(\.systemFeature).filter { systemAccess.access($0).isBlocked }
         if !blocked.isEmpty {
+            noteAskedWhileOff(blocked, site: site, isPrivate: tab.isPrivate)
             if isAttached(tab), let host { host.tab(tab, wasDenied: blocked, forSite: site) }
             return false
         }

@@ -105,6 +105,11 @@ import Testing
         #expect(SystemAccessRules.siteValue(remembered: true, system: .denied) == .offInSettings)
         #expect(SystemAccessRules.siteValue(remembered: false, system: .servicesOff) == .offInSettings)
         #expect(SystemAccessRules.siteValue(remembered: true, system: .restricted) == .notAllowedOnPhone)
+        // Asked while off for Plain: no answer, still a row with the way to change it.
+        #expect(SystemAccessRules.siteValue(remembered: nil, askedWhileOff: true, system: .denied) == .offInSettings)
+        #expect(SystemAccessRules.siteValue(remembered: nil, askedWhileOff: true, system: .servicesOff) == .offInSettings)
+        #expect(SystemAccessRules.siteValue(remembered: nil, askedWhileOff: true, system: .restricted) == .notAllowedOnPhone)
+        #expect(SystemAccessRules.siteValue(remembered: nil, askedWhileOff: true, system: .allowed) == nil, "on again: it asks again")
         #expect(SitePermissionValue.offInSettings.label == "Off in Settings")
         #expect(SitePermissionValue.notAllowedOnPhone.label == "Restricted")
     }

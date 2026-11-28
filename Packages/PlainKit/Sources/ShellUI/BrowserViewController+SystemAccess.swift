@@ -75,12 +75,15 @@ extension BrowserViewController {
     /// asked.
     func sitePermissionMenuItems(for tab: Tab) -> [UIMenuElement] {
         let answers = session.pool.rememberedPermissions(for: tab)
-        guard !answers.isEmpty else { return [] }
+        let askedWhileOff = session.pool.permissionsAskedWhileOff(for: tab)
+        guard !answers.isEmpty || !askedWhileOff.isEmpty else { return [] }
         let monitor = session.pool.systemAccess
         var items: [UIMenuElement] = []
         for permission in SitePermission.allCases {
             let system = permission.systemFeature.map { monitor.access($0) } ?? .allowed
-            guard let value = SystemAccessRules.siteValue(remembered: answers[permission], system: system) else { continue }
+            guard let value = SystemAccessRules.siteValue(
+                remembered: answers[permission], askedWhileOff: askedWhileOff.contains(permission), system: system
+            ) else { continue }
             let action = UIAction(
                 title: Self.permissionTitle(permission), subtitle: value.label,
                 image: UIImage(systemName: Self.permissionSymbol(permission)), state: value == .allowed ? .on : .off

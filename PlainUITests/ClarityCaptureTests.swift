@@ -692,6 +692,14 @@ final class ClarityCaptureTests: XCTestCase {
         for label in ["Don’t Allow", "Don't Allow", "Deny"] where tapLabel(app, label) { break }
         pause(1)
         shot("misc-07-location-denied")
+        // Where the answer can be changed: Site Settings' Location row, Not Allowed.
+        openSheet(app)
+        if tap(app.buttons["menu.siteSettings"], or: nil) {
+            pause(1)
+            shot("misc-07b-location-site-settings")
+            dismissMenu(app)
+        }
+        dismissSheet(app)
 
         // Dark: the app dark, a light site darkened, the switch for the site, then off.
         openSheet(app)
@@ -730,6 +738,19 @@ final class ClarityCaptureTests: XCTestCase {
             } else {
                 dismissSheet(app)
             }
+        }
+        app.terminate()
+
+        // Location off for Plain in iOS: the site asks, WebKit refuses, and Site Settings has the
+        // row that says where to turn it on (Off in Settings).
+        app = launch(["-PlainSystemAccess", "location=denied"])
+        go(app, "/location", nil)
+        pause(2.5)
+        openSheet(app)
+        if tap(app.buttons["menu.siteSettings"], or: nil) {
+            pause(1)
+            shot("misc-07c-location-off-site-settings")
+            dismissMenu(app)
         }
         app.terminate()
 

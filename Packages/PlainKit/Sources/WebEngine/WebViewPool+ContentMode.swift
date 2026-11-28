@@ -1,0 +1,322 @@
+#if canImport(UIKit)
+import BrowserCore
+import os
+import PerfSignposts
+import UIKit
+import WebKit
+
+/// Desktop or mobile across the fold (docs/decisions.md, "Desktop or mobile across the fold").
+///
+/// A navigation takes the mode its pane wants when it starts (`TabWebViewHandler`). When a pane
+/// changes size afterwards, the shell says so (`panesWillChange()`, `panesDidChange()`), and
+/// once the change has settled each page on screen whose wanted mode differs is switched by a
+/// reload in place, under a picture of itself, scrolled back to where it was, when nothing would
+/// be lost (`ContentModeRules`). Otherwise it keeps its mode until its next navigation. A tab
+/// coming on screen is checked the same way after it is attached.
+///
+/// Cost: nothing on launch, on scroll or during the fold's animation. A settled pane change
+/// compares two values per attached tab; only a page that needs the other mode runs one page
+/// script, then reloads.
+final class ContentModeCoordinator {
+    var debounce = ContentModeDebounce()
+    var panesChanging = false
+    var pending: Task<Void, Never>?
+}
+
+/// A tab's mode bookkeeping, kept on its slot.
+struct SlotContentMode {
+    /// The mode the navigation in flight was given; it becomes the tab's when it commits.
+    var pending: ContentMode?
+    /// The navigation in flight goes back or forward: its page may come from the back-forward
+    /// cache, in the mode it had then.
+    var pendingIsBackForward = false
+    /// The page kept its mode because it was loading: check it again when the load ends.
+    var checkWhenLoaded = false
+    /// The switch in progress: its picture over the page and where to scroll back to.
+    var running: ContentModeSwitch?
+}
+
+/// What `ContentModeScripts.probe` answered, in Swift values.
+struct ContentModeProbe: Sendable {
+    var hasTypedInput: Bool
+    var isEditing: Bool
+    /// The document's own mode (`navigator.platform`); nil if the page didn't say.
+    var isDesktop: Bool?
+    var isScrolled: Bool
+    var fraction: Double
+    var anchorID: String?
+    var anchorPath: [Int]?
+    var anchorInto: Double
+    var anchorText: String
+
+    init(_ answer: [String: Any]) {
+        // Anything missing counts as "something would be lost".
+        hasTypedInput = answer["typed"] as? Bool ?? true
+        isEditing = answer["editing"] as? Bool ?? true
+        isDesktop = answer["desktop"] as? Bool
+        isScrolled = answer["scrolled"] as? Bool ?? true
+        fraction = answer["fraction"] as? Double ?? 0
+        let anchor = answer["anchor"] as? [String: Any]
+        anchorID = anchor?["id"] as? String
+        anchorPath = (anchor?["path"] as? [Any])?.compactMap { ($0 as? NSNumber)?.intValue }
+        anchorInto = anchor?["into"] as? Double ?? 0
+        anchorText = anchor?["text"] as? String ?? ""
+    }
+
+    /// The arguments of `ContentModeScripts.restore`.
+    func restoreArguments(top: Double) -> [String: Any] {
+        var anchor: Any = NSNull()
+        if let anchorPath {
+            anchor = ["id": anchorID ?? NSNull(), "path": anchorPath, "into": anchorInto, "text": anchorText] as [String: Any]
+        }
+        return ["top": top, "fraction": fraction, "anchor": anchor]
+    }
+}
+
+/// One reload in the other mode.
+final class ContentModeSwitch {
+    let target: ContentMode
+    let restore: [String: Any]
+    var cover: UIView?
+    var deadline: Task<Void, Never>?
+    let interval: OSSignpostIntervalState
+
+    init(target: ContentMode, restore: [String: Any], cover: UIView?, interval: OSSignpostIntervalState) {
+        self.target = target
+        self.restore = restore
+        self.cover = cover
+        self.interval = interval
+    }
+}
+
+extension WebViewPool {
+    // MARK: Events from the shell
+
+    /// A pane is about to change size (a fold, an unfold, a rotation): checks wait for it.
+    public func panesWillChange() {
+        modeChecks.panesChanging = true
+        _ = modeChecks.debounce.paneDidChange()
+        modeChecks.pending?.cancel()
+        modeChecks.pending = nil
+    }
+
+    /// The panes have their new sizes (a transition ended, a split or the side pane opened or
+    /// closed). The pages on screen are checked `FixedChoices.contentModeSettleDelay` later, unless
+    /// another change comes first.
+    public func panesDidChange() {
+        modeChecks.panesChanging = false
+        scheduleContentModeCheck(after: FixedChoices.contentModeSettleDelay)
+    }
+
+    func scheduleContentModeCheck(after delay: Duration) {
+        guard FixedChoices.contentModeFollowsFold, !modeChecks.panesChanging else { return }
+        let generation = modeChecks.debounce.paneDidChange()
+        modeChecks.pending?.cancel()
+        modeChecks.pending = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self, modeChecks.debounce.isCurrent(generation) else { return }
+            for slot in attachedSlots() {
+                await checkContentMode(of: slot, generation: generation)
+            }
+        }
+    }
+
+    // MARK: The check
+
+    private func pageState(of slot: Slot, tab: Tab) -> ContentModeRules.PageState {
+        let webView = slot.webView
+        let scheme = webView.url?.scheme?.lowercased()
+        return ContentModeRules.PageState(
+            isWebPage: scheme == "http" || scheme == "https",
+            isPDF: tab.isPDF,
+            isFormResult: tab.isFormResult || tab.isAwaitingResubmit,
+            isLoading: webView.isLoading,
+            isPlayingMedia: tab.isPlayingMedia || slot.media != .idle,
+            isInPictureInPicture: tab.isInPictureInPicture,
+            isFullscreen: webView.fullscreenState != .notInFullscreen,
+            isCapturing: webView.cameraCaptureState != .none || webView.microphoneCaptureState != .none,
+            isDownloading: downloads.hasActiveDownload(fromTab: tab.id),
+            isFindActive: webView.findInteraction?.isFindNavigatorVisible ?? false,
+            isTranslated: tab.translation != .original
+        )
+    }
+
+    private func checkContentMode(of slot: Slot, generation: Int) async {
+        guard let tab = slot.tab, slot.container != nil, slot.contentMode.running == nil, !slot.isRestoring,
+              let url = slot.webView.url
+        else { return }
+        let wanted = contentMode(for: url, in: tab)
+        let state = pageState(of: slot, tab: tab)
+        let first = ContentModeRules.decide(current: tab.contentMode, wanted: wanted, state: state)
+        switch first {
+        case .none, .reload:
+            return
+        case .keep(let reason):
+            kept(reason, slot: slot)
+            return
+        case .askPage:
+            break
+        }
+
+        let webView = slot.webView
+        let zoom = max(webView.scrollView.zoomScale, 0.01)
+        let top = Double(webView.obscuredContentInsets.top / zoom)
+        let answer = await withWebKitTimeout(fallback: nil as ContentModeProbe?) { done in
+            webView.callAsyncJavaScript(
+                ContentModeScripts.probe, arguments: ["top": top], in: nil, in: UserScripts.world
+            ) { result in
+                done(((try? result.get()) as? [String: Any]).map(ContentModeProbe.init))
+            }
+        }
+        // The world may have moved on while the page answered.
+        guard modeChecks.debounce.isCurrent(generation), slot.tab === tab, slot.container != nil,
+              slot.contentMode.running == nil, webView.url == url
+        else { return }
+        var current = tab.contentMode
+        if let desktop = answer?.isDesktop {
+            // A page from the back-forward cache keeps the mode it was loaded in.
+            current = desktop ? .desktop : .mobile
+            if current != tab.contentMode { tab.set(\.contentMode, current) }
+        }
+        let report = answer.map { ContentModeRules.PageReport(hasTypedInput: $0.hasTypedInput, isEditing: $0.isEditing) }
+        let decision = ContentModeRules.decide(
+            current: current, wanted: wanted, state: pageState(of: slot, tab: tab), report: report
+        )
+        switch decision {
+        case .none, .askPage:
+            return
+        case .keep(let reason):
+            kept(reason, slot: slot)
+        case .reload(let target):
+            // A page at its top needs no restore: the reload starts there.
+            let restore = answer.flatMap { $0.isScrolled ? $0.restoreArguments(top: top) : nil } ?? [:]
+            beginSwitch(slot, to: target, restore: restore)
+        }
+    }
+
+    private func kept(_ reason: ContentModeRules.KeepReason, slot: Slot) {
+        Signposts.signposter.emitEvent(Signposts.contentModeKept, "\(reason.rawValue)")
+        if reason == .loading { slot.contentMode.checkWhenLoaded = true }
+    }
+
+    // MARK: The switch
+
+    private func beginSwitch(_ slot: Slot, to target: ContentMode, restore: [String: Any]) {
+        let signposter = Signposts.signposter
+        let interval = signposter.beginInterval(
+            Signposts.contentModeSwitch, id: signposter.makeSignpostID(), "\(target.rawValue)"
+        )
+        let webView = slot.webView
+        var cover: UIView?
+        if let container = slot.container, webView.window != nil,
+           let picture = webView.snapshotView(afterScreenUpdates: false) {
+            picture.frame = webView.frame
+            picture.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            container.insertSubview(picture, aboveSubview: webView)
+            cover = picture
+        }
+        let change = ContentModeSwitch(
+            target: target, restore: restore, cover: cover, interval: interval
+        )
+        slot.contentMode.running = change
+        change.deadline = Task { [weak self, weak slot] in
+            try? await Task.sleep(for: FixedChoices.contentModeCoverLimit)
+            guard !Task.isCancelled, let self, let slot, slot.contentMode.running === change else { return }
+            await finishSwitch(slot, restoring: true, outcome: "limit")
+        }
+        // The navigation delegate gives the reload the mode the pane wants now.
+        webView.reload()
+    }
+
+    /// The reloaded page finished (or the limit passed): reset the zoom WebKit restored from the
+    /// old layout, scroll back to the anchor, then fade the picture.
+    func finishSwitch(_ slot: Slot, restoring: Bool, outcome: String) async {
+        guard let change = slot.contentMode.running else { return }
+        change.deadline?.cancel()
+        let webView = slot.webView
+        if restoring, slot.container != nil {
+            let scrollView = webView.scrollView
+            if scrollView.zoomScale != scrollView.minimumZoomScale {
+                scrollView.setZoomScale(scrollView.minimumZoomScale, animated: false)
+            }
+            if !change.restore.isEmpty {
+                _ = await withWebKitTimeout(fallback: ()) { done in
+                    webView.callAsyncJavaScript(
+                        ContentModeScripts.restore, arguments: change.restore, in: nil, in: UserScripts.world
+                    ) { _ in done(()) }
+                }
+            }
+        }
+        guard slot.contentMode.running === change else { return }
+        slot.contentMode.running = nil
+        removeCover(of: change, animated: slot.container != nil)
+        Signposts.signposter.endInterval(Signposts.contentModeSwitch, change.interval, "\(outcome)")
+    }
+
+    /// Ends a switch at once: the tab left the screen or its web view is going away.
+    func cancelSwitch(_ slot: Slot) {
+        guard let change = slot.contentMode.running else { return }
+        change.deadline?.cancel()
+        slot.contentMode.running = nil
+        removeCover(of: change, animated: false)
+        Signposts.signposter.endInterval(Signposts.contentModeSwitch, change.interval, "cancelled")
+    }
+
+    private func removeCover(of change: ContentModeSwitch, animated: Bool) {
+        guard let cover = change.cover else { return }
+        change.cover = nil
+        guard animated, cover.window != nil else {
+            cover.removeFromSuperview()
+            return
+        }
+        UIView.animate(withDuration: FixedChoices.contentModeCrossfade, delay: 0, options: [.curveEaseOut]) {
+            cover.alpha = 0
+        } completion: { _ in
+            cover.removeFromSuperview()
+        }
+    }
+
+    // MARK: Events from the navigation delegate
+
+    /// A main-frame navigation was allowed with `mode`.
+    func contentModeWillNavigate(_ slot: Slot, mode: ContentMode, isBackForward: Bool) {
+        slot.contentMode.pending = mode
+        slot.contentMode.pendingIsBackForward = isBackForward
+    }
+
+    /// The page committed: it is in the mode its navigation was given.
+    func contentModeDidCommit(_ slot: Slot) {
+        guard let tab = slot.tab, let mode = slot.contentMode.pending else { return }
+        slot.contentMode.pending = nil
+        tab.set(\.contentMode, mode)
+    }
+
+    func contentModeDidFinish(_ slot: Slot) {
+        let backForward = slot.contentMode.pendingIsBackForward
+        slot.contentMode.pendingIsBackForward = false
+        if slot.contentMode.running != nil {
+            Task { [weak self, weak slot] in
+                guard let self, let slot else { return }
+                await finishSwitch(slot, restoring: true, outcome: "painted")
+            }
+            return
+        }
+        // Back or forward may have shown a cached page in its old mode, and a page that kept its
+        // mode while loading can switch now.
+        if slot.container != nil, backForward || slot.contentMode.checkWhenLoaded {
+            slot.contentMode.checkWhenLoaded = false
+            scheduleContentModeCheck(after: FixedChoices.contentModeAttachDelay)
+        }
+    }
+
+    /// A load failed. `silently`: it was cancelled or replaced (a redirect, a new navigation),
+    /// which ends nothing: the navigation after it finishes the switch, or the limit does.
+    func contentModeDidFail(_ slot: Slot, silently: Bool) {
+        guard !silently, slot.contentMode.running != nil else { return }
+        Task { [weak self, weak slot] in
+            guard let self, let slot else { return }
+            await finishSwitch(slot, restoring: false, outcome: "failed")
+        }
+    }
+}
+#endif

@@ -32,7 +32,8 @@ public final class WebViewPool {
 
     /// The size of a page pane when the tab is not attached: the shell sets it to its main pane's
     /// size. Attached tabs use their container's bounds. Desktop or mobile is decided from it when
-    /// a navigation starts, never on resize (a switch would force a reload).
+    /// a navigation starts; a page on screen follows a later size change only through
+    /// `panesDidChange()` (`WebViewPool+ContentMode`).
     public var defaultPaneSize = CGSize(width: 390, height: 844)
 
     /// The app's light or dark colors as the window shows them (Settings > Appearance, or iOS
@@ -126,6 +127,8 @@ public final class WebViewPool {
     let trustExceptions = ServerTrustExceptions()
 
     private var slots: [UUID: Slot] = [:]
+    /// Desktop or mobile checks after a pane changes size (`WebViewPool+ContentMode`).
+    let modeChecks = ContentModeCoordinator()
     /// Private tabs' website data store: one non-persistent store shared by every private tab, made
     /// with the first one and dropped by `endPrivateSession()`, so the next private tab starts with
     /// no cookies or storage.
@@ -588,6 +591,7 @@ public final class WebViewPool {
         slot.lastUse = tick()
         let webView = slot.webView
         if webView.superview !== container {
+            cancelSwitch(slot)
             webView.frame = container.bounds
             webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             container.addSubview(webView)
@@ -601,6 +605,8 @@ public final class WebViewPool {
             webView.load(URLRequest(url: url))
         }
         enforceTiers()
+        // A tab coming on screen in the other mode (a background tab after a fold) switches too.
+        scheduleContentModeCheck(after: FixedChoices.contentModeAttachDelay)
         signposter.endInterval(Signposts.tabAttach, interval)
     }
 
@@ -609,6 +615,7 @@ public final class WebViewPool {
     public func detach(_ tab: Tab) {
         guard let slot = slots[tab.id], slot.container != nil else { return }
         thumbnails.capture(slot.webView, for: tab)
+        cancelSwitch(slot)
         slot.webView.removeFromSuperview()
         slot.container = nil
         // Protected until WebKit says whether media is playing; then the limits apply again.
@@ -1255,6 +1262,7 @@ public final class WebViewPool {
     private func tearDown(_ slot: Slot) {
         let tab = slot.tab
         slot.pendingSave?.cancel()
+        cancelSwitch(slot)
         slot.invalidate()
         let webView = slot.webView
         webView.stopLoading()
@@ -1379,6 +1387,11 @@ public final class WebViewPool {
 
     func slot(for tab: Tab) -> Slot? {
         slots[tab.id]
+    }
+
+    /// The slots whose page is on screen.
+    func attachedSlots() -> [Slot] {
+        slots.values.filter { $0.container != nil }
     }
 
     /// `createWebViewWith`: a popup, `window.open` or `target=_blank`. The new web view must use
@@ -1560,6 +1573,8 @@ extension WebViewPool {
         var pendingNavigationIsFormSubmission = false
         /// Set from the main-frame response: the page being loaded is a PDF.
         var pendingNavigationIsPDF = false
+        /// Desktop or mobile: the mode in flight and a switch in progress.
+        var contentMode = SlotContentMode()
         /// Translate Page on the current document.
         var translation = SlotTranslation()
         /// What each frame's media script last reported, by the frame's own id.

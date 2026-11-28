@@ -301,6 +301,13 @@ enum Pages {
             return .html(page(title: "Form", body: "<form id=f method=post action='/b'><input name=q value=1></form>"))
         case "/ua":
             return .html(page(title: "UA", body: "<p>ua</p>"))
+        case "/long":
+            // Paragraphs without ids (the anchor goes by path), a field, and a wide block: a page
+            // that reads differently at desktop and phone widths.
+            let paragraphs = (1...120).map {
+                "<p>Para \($0). The quick brown fox jumps over the lazy dog, again and again, so the line wraps.</p>"
+            }.joined()
+            return .html(page(title: "Long", body: "<input id=field name=q><select id=pick><option>a<option>b</select>" + paragraphs))
         default:
             return .notFound
         }

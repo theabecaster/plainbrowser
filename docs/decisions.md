@@ -2353,3 +2353,39 @@ GPU mesh used for the sticker peel. We don't need a sticker peel." Rules in docs
   the splash is the flat art with its own soft shadows) and the tinted and clear icon
   appearances (the app cannot read which one the Home Screen uses; the splash shows the
   colorway's own art).
+
+## Haptics: abundant yet purposeful (2026-11-27)
+
+The owner asked for haptics "everywhere it makes sense to show the user a confirmation or a
+denial", at the app's level of feel. The research, the language and the inventory of 207
+interactions are in docs/research/haptics.md; the rules are in docs/ui-reference.md, "Haptics".
+
+- **One enum, eight kinds, view-attached generators.** `Haptic` (DesignSystem) keeps its names
+  and adds `drop` (rigid 0.6, a dragged item landing) and `failed`. Generators are made with
+  `init(view:)` / `init(style:view:)` on the window that plays them (the view-less initializers
+  are deprecated), one set per window, made on first use and let go with the window. A point can
+  be passed for Apple Pencil Pro and haptic trackpads. `Haptic.x.play()` with no arguments still
+  works.
+- **`threshold` is a medium impact at 0.7, not rigid.** Rigid read as a click; a gesture crossing
+  into a new outcome is a firmer, rounder moment, and rigid now means a drop.
+- **`failed` is the notification warning, never error.** Error's three hits read as an alarm;
+  Plain's failures are recoverable and always say why with Try Again.
+- **A 60 ms throttle, first wins** (`FixedChoices.hapticMinimumGap`). Two calls that close are one
+  event, and the first is the one in sync with the picture. `nothingThere` keeps its own 1 s gap.
+- **Gates:** nothing plays inside `Haptic.withoutFeedback` (key commands) or while the app is not
+  active (an outcome plays with its toast). Each play emits the `haptic` signpost, so Instruments
+  shows it on the motion's timeline. `prepare()` goes through once until the next fire.
+- **`ThresholdLatch`** writes the both-ways rule once: `threshold` crossing in, `selection` back
+  out past 10 pt of hysteresis, fed with what is on screen after the transform. The bar swipe,
+  the New Tab card, the swipe up into the gallery and a card's close line use it. A release
+  plays at the spring's start, never at its completion.
+- **No `.sensoryFeedback` in SwiftUI.** It can't be throttled, recorded or tied to a window, and it
+  would split the vocabulary; FeatureUI calls `Haptic` from its actions.
+- **No Core Haptics.** No surface is better with a custom pattern: a continuous charge-up on a
+  pull would be a haptic during a scroll, and the launch splash plays every cold launch. It
+  would cost engine start latency, audio-session interplay with page media and reset handling.
+- **No capability gate.** Generators are silent without a Taptic Engine and cost nothing; gating
+  on `CHHapticEngine` would also silence Apple Pencil Pro and haptic trackpads on iPad.
+- **Tests:** `-PlainHapticLog` (isolated runs only) records every play on a hidden element the UI
+  tests read (HapticsTests), and unit tests use `Haptic.recorder`. The perf gate never passes it,
+  so the recorder stays nil there.

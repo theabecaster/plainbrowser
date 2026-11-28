@@ -462,7 +462,7 @@ extension BrowserViewController: GalleryHost {
         // Over a blank tab's web view, under the page-state message.
         if showsStart {
             webContainer.bringSubviewToFront(start)
-            webContainer.bringSubviewToFront(engineUI.pageState)
+            if let state = engineUI.madePageState { webContainer.bringSubviewToFront(state) }
         }
     }
 

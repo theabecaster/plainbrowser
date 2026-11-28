@@ -818,6 +818,8 @@ Research and sources: docs/research/dark-mode.md.
   a window ignores `overrideUserInterfaceStyle` (measured), so the pool sets
   `traitOverrides.userInterfaceStyle` on each web view to the style the browser's window shows,
   and background tabs load in the right colors.
+- **Superseded 2026-11-27 (below, "Dark Pages: off by default, one suggestion"):** dark pages
+  was automatic for everyone. The rest of this bullet is the engine's eligibility, which holds.
 - **Dark pages is automatic, with a per-site switch** (`FixedChoices.darkPagesOn`). It runs only
   while the app is dark, never on a page that declares a dark `color-scheme`, asks for
   `only light`, has a readable `prefers-color-scheme: dark` rule, or already has a dark
@@ -863,6 +865,37 @@ Research and sources: docs/research/dark-mode.md.
 - **The site list is baked into the script.** A page must know at document start whether it is
   off, and a user script cannot ask the app synchronously. The pool builds the script with the
   list and swaps it in every controller when the list changes (rare), keeping the other scripts.
+
+## Dark Pages: off by default, one suggestion, an indicator in the field (2026-11-27)
+
+Owner: "By default keep it off … show a little banner as a suggestion … an indicator in the
+address text field." Research, plan and the Codex plan review: docs/research/dark-pages-optin.md.
+
+- **Off by default** (`FixedChoices.darkPagesDefaultEnabled`), for upgraders too: it was on for
+  two TestFlight days without anyone choosing it, and the suggestion is how an upgrader learns
+  the default changed. Every engine gets some pages wrong (Safari 27.3's included); a user who
+  chose it forgives a broken page and knows where the switch is. Safari 27.3 ships the same
+  shape: off, a Try on bright pages in dark mode, a per-site switch.
+- **A switch and per-site choices.** Settings › Appearance › Dark Pages (`BrowserSettings.darkPages`)
+  darkens sites automatically; a site's own choice (on, off, automatic; Site Settings or the
+  indicator) beats it either way and is never cleared by it. Sites turned off before stay off.
+- **One owner, complete at launch.** `StorageSiteDarkPagesStore` holds the switch and the site
+  lists, with a launch copy of all of it in user defaults, so a restored page never darkens a site
+  the user turned off before the database opens. Every window's pool follows it.
+- **Pages it doesn't apply to are never touched.** No guard, no twins; one light check after
+  load (sliced, visible pages only, stricter than the darkening's judgement: the root and a
+  five-point sample) reports `available` or `off` for the indicator, Site Settings and the
+  suggestion. Light colors read nothing.
+- **The indicator** is `circle.lefthalf.filled` (Apple's Dark Mode symbol; the moon is Focus) at the
+  pill's leading edge, 44 pt: accent while applied, ink while the user turned it off here (a
+  working switch, not a disabled one), absent otherwise. A tap toggles the site with a tick and a
+  0.25 s crossfade from a snapshot, no reload. VoiceOver: "Dark Pages", On / Off.
+- **The suggestion** is a small glass card (title, one sentence, No Thanks / Turn On) by the bar,
+  above it at the bottom and under it in the top bar, 2 s after a light page in dark colors was
+  checked, for 8 s, never over a sheet, the keyboard, a toast, the reader or a collapsed bar, never
+  in a private tab. Turn On and No Thanks are final; untouched, it comes back on another site in a
+  later session. A card, not the one-line toast: it asks a question with two worded answers, like a
+  TipKit tip; ✕ would read as "not now".
 
 ## Paper texture (2026-11-26)
 

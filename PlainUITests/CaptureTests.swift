@@ -491,7 +491,7 @@ final class CaptureTests: XCTestCase {
         shot("cc-private-\(name)")
     }
 
-    /// The Paper surfaces: the intro, the start screen (keyboard up and down), the reader view,
+    /// The Paper surfaces: the intro, the start screen (keyboard up and down), the page sheet, the reader view,
     /// Settings and the gallery. Set the simulator's appearance first (`xcrun simctl ui <udid>
     /// appearance dark`); `PLAIN_CAPTURE_TAG` names the shots (light, dark).
     func testCapturePaper() throws {
@@ -522,6 +522,8 @@ final class CaptureTests: XCTestCase {
             app.buttons["more"].tap()
             let reader = app.buttons["Show Reader"]
             if reader.waitForExistence(timeout: 3) {
+                pause(1)
+                shot("p1a-page-sheet-\(name)")
                 reader.tap()
                 XCTAssertTrue(app.webViews["readerView"].waitForExistence(timeout: 5))
                 pause(1.5)

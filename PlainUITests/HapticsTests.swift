@@ -78,7 +78,8 @@ final class HapticsTests: XCTestCase {
         XCTAssertTrue(app.webViews.staticTexts["Page A"].waitForExistence(timeout: 5))
         Thread.sleep(forTimeInterval: 0.6)
         app.expectHaptics(["selection"]) {
-            drag(from: pillPoint(app), by: CGVector(dx: -70, dy: 0), speed: 2500, hold: 0)
+            // Well short of half the width, lifted while moving: the projection carries it over.
+            drag(from: pillPoint(app, x: 0.7), by: CGVector(dx: -min(140, width * 0.3), dy: 0), speed: 1200, hold: 0)
         }
         XCTAssertTrue(app.webViews.staticTexts["Page B"].waitForExistence(timeout: 5))
     }

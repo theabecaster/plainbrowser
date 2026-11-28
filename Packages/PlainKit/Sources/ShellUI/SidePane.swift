@@ -303,6 +303,8 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
     /// The page the matches belong to.
     private weak var searchedPage: WKWebView?
     private var current: Int?
+    /// The query the shown results are for: a Return before a newer search lands stays silent.
+    private var shownQuery: String?
 
     init(browser: BrowserViewController?) {
         self.browser = browser
@@ -420,6 +422,7 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
 
     private func show(_ found: PageFindResult, for page: WKWebView?) {
         result = found
+        shownQuery = field.text
         searchedPage = page
         current = nil
         table.reloadData()
@@ -441,10 +444,20 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
         }
     }
 
-    /// Return goes to the next match.
+    /// Return goes to the next match. Past the last it wraps to the first with a tick; with no
+    /// matches for what is typed it bumps (docs/ui-reference.md, "Haptics"). A search still on its
+    /// way stays silent.
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        guard !result.matches.isEmpty else { return false }
-        reveal(((current ?? -1) + 1) % result.matches.count)
+        guard !result.matches.isEmpty else {
+            let query = field.text ?? ""
+            if !query.trimmingCharacters(in: .whitespaces).isEmpty, query == shownQuery {
+                Haptic.nothingThere.play(in: field)
+            }
+            return false
+        }
+        let next = (current ?? -1) + 1
+        reveal(next % result.matches.count)
+        if next == result.matches.count { Haptic.selection.play(in: table) }
         return false
     }
 
@@ -454,7 +467,7 @@ final class SidePaneFind: UIViewController, SidePaneContent, UITableViewDataSour
         table.selectRow(at: IndexPath(row: index, section: 0), animated: true, scrollPosition: .middle)
         Task { [weak self] in
             guard await PageFind.reveal(index, in: page) else {
-                Haptic.nothingThere.play()
+                Haptic.nothingThere.play(in: self?.view)
                 self?.search()
                 return
             }

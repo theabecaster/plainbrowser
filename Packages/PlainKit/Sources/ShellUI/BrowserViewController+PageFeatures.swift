@@ -18,18 +18,21 @@ extension DownloadCoordinator: DownloadListSource {}
 extension BrowserViewController {
     /// Zoom as one row of the page sheet: − (Zoom Out), the percentage (back to 100%), + (Zoom
     /// In) (docs/ui-reference.md, page menu). Remembered per site by the engine. The sheet stays
-    /// up and shows the new percentage after each step.
+    /// up and shows the new percentage after each step: a tick per step, a light tap at 100% (the
+    /// detent, as a slider's), in the action that redraws it.
     func zoomActions(for tab: Tab) -> [UIAction] {
         let zoomOut = UIAction(
             title: "Zoom Out", image: UIImage(systemName: "minus"), attributes: tab.canZoomOut ? [] : [.disabled]
         ) { [weak tab] _ in
             tab?.zoomOut()
+            Self.playZoomStep(tab)
         }
         zoomOut.accessibilityIdentifier = "menu.zoomOut"
         let percent = UIAction(
             title: "\(tab.zoomPercent)%", attributes: tab.zoomPercent == 100 ? [.disabled] : []
         ) { [weak tab] _ in
             tab?.resetZoom()
+            Self.playZoomStep(tab)
         }
         percent.accessibilityIdentifier = "menu.zoomReset"
         percent.accessibilityLabel = "Zoom \(tab.zoomPercent)%, Actual Size"
@@ -37,9 +40,15 @@ extension BrowserViewController {
             title: "Zoom In", image: UIImage(systemName: "plus"), attributes: tab.canZoomIn ? [] : [.disabled]
         ) { [weak tab] _ in
             tab?.zoomIn()
+            Self.playZoomStep(tab)
         }
         zoomIn.accessibilityIdentifier = "menu.zoomIn"
         return [zoomOut, percent, zoomIn]
+    }
+
+    private static func playZoomStep(_ tab: Tab?) {
+        guard let tab else { return }
+        (tab.zoomPercent == 100 ? Haptic.tap : Haptic.selection).play()
     }
 
     /// Save PDF to Files, only on a PDF page.
@@ -208,7 +217,8 @@ extension BrowserViewController {
                 return
             }
             guard let file, !data.isEmpty else {
-                Haptic.nothingThere.play()
+                // The user waited for it: the warning, with the sentence that says so.
+                Haptic.failed.play()
                 return self.tabsUI.toast.show("This page couldn't be saved as a PDF")
             }
             let sheet = UIActivityViewController(activityItems: [file], applicationActivities: nil)
@@ -251,13 +261,16 @@ extension BrowserViewController {
         switch download.state {
         case .finished:
             let message = "\(download.filename) downloaded"
+            // The outcome plays with its toast, not when the file lands: behind a sheet or the
+            // gallery the toast waits, and so does the haptic (docs/ui-reference.md, "Haptics").
             showToastWhenFree { [weak self] in
+                Haptic.success.play()
                 self?.tabsUI.toast.show(message, button: "Show") { [weak self] in self?.showDownloads() }
             }
         case .failed:
-            Haptic.nothingThere.play()
             let message = "\(download.filename) didn't download"
             showToastWhenFree { [weak self] in
+                Haptic.failed.play()
                 self?.tabsUI.toast.show(message, button: "Show") { [weak self] in self?.showDownloads() }
             }
         case .inProgress, .cancelled:

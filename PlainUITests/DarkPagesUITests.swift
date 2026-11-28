@@ -47,6 +47,8 @@ final class DarkPagesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["more"].waitForExistence(timeout: 3))
         app.buttons["more"].tap()
         let settings = app.buttons["menu.settings"]
+        // On a wide screen the first tap can only end the field's editing: tap again.
+        if !settings.waitForExistence(timeout: 2) { app.buttons["more"].tap() }
         XCTAssertTrue(settings.waitForExistence(timeout: 3))
         settings.tap()
     }

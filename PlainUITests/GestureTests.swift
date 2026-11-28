@@ -85,11 +85,12 @@ final class GestureTests: XCTestCase {
         app.typeKey("t", modifierFlags: [.command, .shift])
         waitForPage(app, "Page C")
 
-        // ⌘L: the field; Escape: back to the page.
+        // ⌘L: the field; ⌘. (iOS's Cancel): back to the page. Escape in the field is the search
+        // sheet's own (AddressField); the simulator's typed Escape doesn't reach a focused field.
         app.typeKey("l", modifierFlags: .command)
         wait({ field.exists && field.hasKeyboardFocus }, "⌘L opens the field")
-        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
-        wait({ !(field.exists && field.hasKeyboardFocus) }, "Escape closes the field")
+        app.typeKey(".", modifierFlags: .command)
+        wait({ !(field.exists && field.hasKeyboardFocus) }, "⌘. closes the field")
         waitForPage(app, "Page C")
 
         // ⌘⇧\: the overview; again: back to the page.
@@ -98,6 +99,11 @@ final class GestureTests: XCTestCase {
         XCTAssertTrue(gallery.waitForExistence(timeout: 3), "⌘⇧\\ shows all tabs")
         app.typeKey("\\", modifierFlags: [.command, .shift])
         wait({ !gallery.exists || !gallery.isHittable }, "⌘⇧\\ again goes back to the page")
+        // Escape leaves the overview too.
+        app.typeKey("\\", modifierFlags: [.command, .shift])
+        wait({ gallery.exists && gallery.isHittable }, "the overview is up again")
+        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
+        wait({ !gallery.exists || !gallery.isHittable }, "Escape leaves the overview")
     }
 
     func testCommandRReloads() throws {

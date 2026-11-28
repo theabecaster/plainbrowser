@@ -4,12 +4,14 @@
 #   2. The Smoke test plan (UI tests minus perf) on two simulators this script owns:
 #      <prefix>-duo (iPhone Duo) and <prefix>-17 (iPhone 17); the prefix is PLAIN_SIM_PREFIX,
 #      default `plain`. Agents running in parallel each set their own (e.g. plain-r).
-# The simulators are created when missing and deleted afterwards, unless KEEP_SIMS=1.
+# The simulators are made when missing (cloned from the Mac's template for that device,
+# scripts/lib/sim.zsh) and deleted afterwards, unless KEEP_SIMS=1.
 # Only simulators named plain-* are ever touched.
 # Each test is capped by XCTest's execution time allowance, so a stuck test cannot hang the run.
 # Usage: scripts/test.sh            KEEP_SIMS=1 scripts/test.sh     PLAIN_SIM_PREFIX=plain-r scripts/test.sh
 set -euo pipefail
 source "${0:A:h}/lib/common.zsh"
+source "${0:A:h}/lib/sim.zsh"
 
 PREFIX=${PLAIN_SIM_PREFIX:-plain}
 [[ $PREFIX == plain || $PREFIX == plain-* ]] || { print -u2 "PLAIN_SIM_PREFIX must start with plain"; exit 1; }
@@ -17,10 +19,6 @@ typeset -A SIMS=(
   $PREFIX-duo "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4"
   $PREFIX-17  "com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-27-2"
 )
-
-sim_udid() {
-  xcrun simctl list devices -j | jq -r --arg n "$1" '[.devices[][] | select(.name == $n)][0].udid // empty'
-}
 
 # Every UI test launch must use throwaway state, wherever it runs. Refuse otherwise.
 scripts/lib/check-isolation.zsh
@@ -46,7 +44,8 @@ failed=0
 for name in $PREFIX-duo $PREFIX-17; do
   udid=$(sim_udid $name)
   if [[ -z "$udid" ]]; then
-    udid=$(xcrun simctl create $name ${=SIMS[$name]})
+    # A clone of the Mac's template for this device (scripts/lib/sim.zsh), first boot done.
+    udid=$(sim_new $name ${=SIMS[$name]})
     created+=$name
   fi
   echo "== UI smoke on $name"

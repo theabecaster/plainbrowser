@@ -244,6 +244,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | The other windows (one item each: the page it shows, its tab count) | another window exists (connected or in the app switcher) | iPhone has no window list (iPad's Show All Windows); a tap brings that window forward. |
 | Close Tab | `page` | Closing an empty tab does nothing useful; it goes away by itself. |
 | Close All Private Tabs | A private tab on screen and 2 or more private pages in `list` | Ends private browsing in one step, where Safari and Chrome keep Close All. With one, Close Tab does it. The screen goes to the regular tab seen last, else the search field. |
+| Close All N Tabs | A regular tab on screen and 2 or more tabs of `list` it would close (pinned tabs stay) | Safari's tabs button has it. It asks first (a confirmation names the count), then the Reopen toast and the system's undo bring the batch back. With one, Close Tab does it. |
 
 ## 6. Other surfaces
 
@@ -257,7 +258,7 @@ Duo's outer screen. Without a page (the start screen) it holds the rows from the
 | Reader | The focused page's article; "This page has no article to read." when the page's check says no; "Open a page to read it here." on Start | One sentence, no dead end. |
 | Find | Field, count ("12 matches"), list; "Type to find on this page." before typing; "No matches" | Return goes to the next match. Marks come off when the pane closes or the section changes. |
 | History | The History screen without Done | The pane has its own close. |
-| Edge swipe from the trailing edge | Opens it where it can show and it is closed | Takes the edge from WebKit's swipe forward there; Forward stays in the top bar. |
+| Edge swipe from the trailing edge | Opens it where it can show, it is closed, and the page has nothing forward (`canGoForward` false); with a page forward the edge is WebKit's swipe forward | Each edge is the page's history first, Plain's extra only where history has nothing, as Back's edge and the opener swipe (§8). A Safari user's swipe forward works on the inner screen too (docs/research/gestures.md). More's Show Side Pane is always there. |
 | Swipe toward the edge on the pane | Closes it | Same direction as it came in. |
 
 

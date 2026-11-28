@@ -251,7 +251,7 @@ final class AddressPill: UIView {
             // Headline: the body size, semibold.
             marked.append(NSAttributedString(
                 string: String(localized: "Private"),
-                attributes: [.foregroundColor: Palette.privateAccent, .font: UIFont.preferredFont(forTextStyle: .headline)]
+                attributes: [.foregroundColor: Palette.privateAccent, .font: UIFont.preferredFont(forTextStyle: .headline, compatibleWith: cappedTraits)]
             ))
             marked.append(NSAttributedString(string: "  ", attributes: [.foregroundColor: Palette.privateAccent]))
         }
@@ -266,9 +266,15 @@ final class AddressPill: UIView {
         return marked
     }
 
+    /// The text size the host label draws at: the user's, capped where the label is.
+    private static var cappedTraits: UITraitCollection {
+        let size = UITraitCollection.current.preferredContentSizeCategory
+        return UITraitCollection(preferredContentSizeCategory: min(size, .extraExtraExtraLarge))
+    }
+
     /// The private mark at the pill's text size, in the private accent, centered on the capitals.
     private static func privateMark() -> NSTextAttachment {
-        let font = UIFont.preferredFont(forTextStyle: .body)
+        let font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: cappedTraits)
         let configuration = UIImage.SymbolConfiguration(font: font, scale: .small)
         guard let symbol = UIImage(systemName: "hand.raised.fill", withConfiguration: configuration)?
             .withTintColor(Palette.privateAccent, renderingMode: .alwaysOriginal) else { return NSTextAttachment() }

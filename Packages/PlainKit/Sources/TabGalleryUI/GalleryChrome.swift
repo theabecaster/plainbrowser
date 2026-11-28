@@ -269,12 +269,13 @@ final class GalleryModeSwitch: UIView {
     @discardableResult
     func set(isPrivate: Bool, regularCount: Int, privateCount: Int) -> Bool {
         guard isPrivate != self.isPrivate || regularCount != counts.regular || privateCount != counts.private else { return false }
-        let before = fittingWidth(showingCounts: showsCounts)
+        // The counted width too: while the counts are hidden, a shorter count may let them back.
+        let before = (fittingWidth(showingCounts: showsCounts), fittingWidth(showingCounts: true))
         self.isPrivate = isPrivate
         counts = (regularCount, privateCount)
         applyTitles()
         setNeedsLayout()
-        return fittingWidth(showingCounts: showsCounts) != before
+        return (fittingWidth(showingCounts: showsCounts), fittingWidth(showingCounts: true)) != before
     }
 
     private func title(privateSide isPrivateSide: Bool, showingCounts: Bool) -> NSAttributedString {

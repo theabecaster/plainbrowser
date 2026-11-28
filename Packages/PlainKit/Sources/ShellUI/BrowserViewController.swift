@@ -693,7 +693,11 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         sheet.session += 1
         applyEditingLayout(true, animated: didFocusAtLaunch)
         if let text = textField.text, !text.isEmpty, focusUI.selectsAllOnOpen {
-            if sheetUI.driver.value < 1 {
+            // A keyboard that composes (Japanese, Chinese, Korean) needs UIKit's own replacement
+            // of a real selection, so its text is selected at once.
+            let language = textField.textInputMode?.primaryLanguage ?? ""
+            let composes = ["ja", "zh", "ko"].contains { language.hasPrefix($0) }
+            if sheetUI.driver.value < 1, !composes {
                 // Selected once the field is at rest (`searchSheetDidSettleOpen`); until then a
                 // keystroke replaces it all the same, and no caret rides along.
                 focusUI.pendingSelection = text
@@ -782,6 +786,16 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             replacing: range.location..<NSMaxRange(range), of: text.length, result: result, pageAddress: address
         ))
         return true
+    }
+
+    public func textFieldDidChangeSelection(_ textField: UITextField) {
+        // The user put the caret somewhere during the open: their choice, not the selection
+        // Plain was about to make. (Opening leaves the caret at the end; only a move counts.)
+        guard focusUI.pendingSelection != nil, let range = textField.selectedTextRange else { return }
+        let end = textField.endOfDocument
+        guard textField.compare(range.start, to: end) != .orderedSame || !range.isEmpty else { return }
+        focusUI.pendingSelection = nil
+        pill.holdSelectionHighlight(false)
     }
 
     public func textFieldShouldClear(_ textField: UITextField) -> Bool {

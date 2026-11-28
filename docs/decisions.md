@@ -2739,8 +2739,10 @@ shows only in the empty field, so its text is always a new query.
   rest (frame strip, iPhone 17); hiding it with a clear tint hid the highlight but not the
   handles. Until then the field's tint is clear (no caret rides along), and the text counts as
   selected: a keystroke during the open replaces all of it (`pendingSelection`), as it would
-  over the selection. A keystroke that starts marked text (an input method composing) in that
-  first third of a second is left to UIKit and counts as an edit at the caret.
+  over the selection.
+  With a keyboard that composes (Japanese, Chinese, Korean) the text is selected at once, so the
+  input method replaces a real selection; a caret the user moves during the open cancels the
+  pending selection.
 
 **Validated against the references.** Safari (iOS 26/27): on a page the field shows the URL
 selected and typing replaces it; Return goes in the same tab, and there is no Copy in the field

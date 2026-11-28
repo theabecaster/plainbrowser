@@ -203,7 +203,10 @@ final class DarkPagesUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.6)
         let words = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Dark Pages.'"))
         XCTAssertEqual(words.count, 1, "one card, in the window looked at")
-        let card = words.firstMatch.frame.union(suggestion(app).frame).union(app.buttons["darkPagesSuggestion.noThanks"].frame)
+        // The card's glass, padding and all; its sentence and buttons where VoiceOver shows no frame.
+        let container = app.otherElements["darkPagesSuggestion"]
+        let card = container.exists ? container.frame
+            : words.firstMatch.frame.union(suggestion(app).frame).union(app.buttons["darkPagesSuggestion.noThanks"].frame)
         let pill = app.buttons["addressPill"].frame
         XCTAssertGreaterThanOrEqual(card.minY, pill.maxY, "under the top bar's row: \(card) vs pill \(pill)")
         XCTAssertGreaterThanOrEqual(card.minY, strip.frame.maxY, "not over the strip: \(card) vs strip \(strip.frame)")

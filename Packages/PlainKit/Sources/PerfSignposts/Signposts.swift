@@ -496,6 +496,17 @@ public enum Signposts {
     public static let sidePaneSection: StaticString = "sidePane.section"
     /// Interval: Find in the side pane, from a query to its list of matches.
     public static let sidePaneFind: StaticString = "sidePane.find"
+    /// Interval: a finger on the side pane's divider, from the drag's start until it lifts. The
+    /// message says where it settles ("narrow", "half", "wide", "full", "close", "cancelled").
+    public static let sidePaneDrag: StaticString = "sidePane.drag"
+    /// Interval: the divider settling (after a drag, a double tap, the menu, a key, VoiceOver or
+    /// the expand button) until it rests and the page and the pane have their new frames.
+    public static let sidePaneSettle: StaticString = "sidePane.settle"
+    /// Interval: one commit of a new width to the page's web views or the pane's content: the
+    /// layout pass that gives them their new frames (one per side per settle).
+    public static let sidePaneCommit: StaticString = "sidePane.commit"
+    /// Event: the divider came to rest at a new width ("narrow", "half", "wide", "full").
+    public static let sidePaneWidth: StaticString = "sidePane.width"
     /// Event: a new window was asked for (Open in New Window, New Window).
     public static let windowOpen: StaticString = "window.open"
     /// Event: another window was brought forward from the tabs menu.

@@ -730,6 +730,51 @@ public enum FixedChoices {
     /// gives, so the end of the pane reads as an end.
     public static let sidePaneOverdragFactor = 0.25
 
+    // MARK: The side pane's divider (docs/research/resizable-pane.md)
+
+    /// The widths the divider rests at, as a share of the pages' width: Narrow (the opening width,
+    /// `sidePaneFraction`), Half and Two Thirds, the thirds and the half that iPadOS, Android's
+    /// split screen and Windows Snap all offer. A rest shows only where it leaves the page
+    /// `sidePanePageMinimumWidth` and sits `sidePaneSnapSpacing` past the one before it, so the
+    /// inner screen gets Narrow and Half and a wide iPad window all three. No free widths: the
+    /// divider always rests where a page and a pane both read, and a width survives a rotation.
+    public static let sidePaneHalfFraction = 0.5
+    public static let sidePaneWideFraction = 2.0 / 3
+    /// The narrowest page beside the pane: a split pane's minimum (the narrowest current iPhone).
+    /// Narrower, pages get cramped mobile layouts, so the divider offers no rest there and a drag
+    /// on toward the edge hands the screen to the pane.
+    public static let sidePanePageMinimumWidth: Double = splitMinimumPaneWidth
+    /// Two rests closer than this are one: a rest that moves the page by less than a thumb's
+    /// width is not worth a stop.
+    public static let sidePaneSnapSpacing: Double = 64
+    /// Dragged until the pane is this share of its minimum width, letting go closes it; dragged
+    /// until the page is this share of its minimum, the pane takes the whole width. AppKit's split
+    /// view collapses a pane halfway between its minimum and zero, and so does Plain, both ways.
+    public static let sidePaneDismissShare = 0.5
+    /// A release faster than this (pt/s) goes on to the next rest in its direction, as Android's
+    /// split screen does past 400 dp/s; slower, the divider settles on the rest nearest its
+    /// projected stop. The edge swipe's flick speed, so the pane's two drags feel the same.
+    public static let sidePaneDividerFlick = sidePaneFlickVelocity
+    /// A release this fast (pt/s) past the last rest, moving outward, closes the pane or hands it
+    /// the width without reaching the line (Android's 600 dp/s).
+    public static let sidePaneDividerDismissFlick = 600.0
+    /// How far ahead (seconds of the release velocity) a slow release is carried before the
+    /// nearest rest is picked (WWDC18, "Designing Fluid Interfaces": the projected stop, not the
+    /// finger): the sidebar's drag beside it projects the same 0.18 s, so both edges agree.
+    public static let sidePaneProjection = 0.18
+    /// A finger still for this long (seconds) before it lifts throws nothing: the divider settles on
+    /// the nearest rest, however fast it last moved (UIKit's pan reports the last move's speed).
+    public static let sidePaneReleaseStillness = 0.06
+    /// The divider takes touches this wide, centered on the seam (Apple's 44 pt target; Android's
+    /// split divider takes 48 dp). The seam itself stays a hairline.
+    public static let sidePaneDividerTarget: Double = 44
+    /// A drag on the divider starts after this much sideways travel, and only when it is more
+    /// sideways than up or down, so a page or list scrolled near the seam still scrolls.
+    public static let sidePaneDividerSlop: Double = 6
+    /// The divider ticks when it passes a rest, not again until it has moved this far from it, so a
+    /// finger resting on a rest never chatters.
+    public static let sidePaneSnapTickHysteresis: Double = 4
+
     // MARK: Tab switching and toasts
 
     /// A bar swipe past the last tab shows a New Tab card; pulled this far, letting go opens a

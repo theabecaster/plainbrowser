@@ -1908,6 +1908,68 @@ history next to the page. Research: `docs/research/duo-pane-windows.md`.
   Reader section shows an article. Find's search is one async call into the page per query.
   Signposts: `sidePane.open`, `sidePane.close`, `sidePane.section`, `sidePane.find`.
 
+## The side pane's divider: resize, rests, take-over (2026-11-28)
+
+Owner: resize the split between the page and the side pane, "being smart: when the web view is too
+skinny to be useful, just snap the Reader to the full view", like the Duo's split apps and desktop
+windows. Research, the full behavior and the measurements: `docs/research/resizable-pane.md`.
+
+- **Rests, no free widths:** Narrow (30%, at least 250 pt: the opening width), Half and Two Thirds
+  of the pages' span, each only where it leaves the page `sidePanePageMinimumWidth` (375 pt, a split
+  pane's minimum) and sits 64 pt past the rest before it. iPadOS, Android's split screen and
+  Windows all step; a few rests make every width a readable one and let a width survive a
+  rotation: Half asked for in the inner portrait shows Narrow and comes back in landscape. All
+  from the span (bounds and the sidebar), never the device (`SidePaneDividerGeometry`).
+- **Dismiss lines:** the pane at half its minimum (125 pt) closes on release; the page at half its
+  minimum (187.5 pt) hands the pane the whole span ("take over"). AppKit's halfway-to-zero collapse
+  rule, used both ways. A release outward faster than 600 pt/s past the last rest does it without
+  the line (Android); faster than 500 pt/s goes to the next rest; slower, the nearest rest to the
+  release projected 0.18 s ahead (the sidebar's projection).
+- **Take-over keeps the page:** the page's web views keep their frames out of sight
+  (`DuoLayout.sidePaneTakesOver`; the top bar spans the pane), so coming back relayouts nothing.
+  Ways back: drag the handle (22 pt inside the pane's leading edge), the header's Show Page
+  button, the handle's menu, the × or Hide Side Pane (the page gets its full width), and anything
+  that opens the page from the pane (a Reader link, a History row, a Find match). The gallery fades
+  in over it (there is no page on screen to zoom).
+- **What is remembered, per window (`SceneState`):** the width (one for Reader, Find and History:
+  switching never moves the page) and, while open, the take-over. Closing forgets the take-over,
+  so the pane always reopens beside the page. No setting: the width is the user's last drag.
+- **In a split** the pane holds the second pane's place (unchanged): its one rest is the split
+  line, so the split keeps the width the user gave it; it still takes over and closes. **Partly
+  folded** the fold is the divider: no handle.
+- **Performance:** no web view lays out while the divider moves. The pane's column moves (its
+  header follows; its content is frozen at its width, `freezeContent`), the page keeps its frame
+  under the pane or shows its own `underPageBackgroundColor` past its edge, and each side commits
+  once per settle: the growing side as the settle starts (its new part is under the other side),
+  the shrinking one at the rest, in the one layout that also gives the pane its column. While
+  it moves the pane is a card as wide as the pages, laid out once per move (header and content
+  frozen) and slid by a transform, clipped to the pages by a mask: a frame changes no constraint
+  and runs no layout. The bar, the header's place and the page wait for the rest and glide there.
+  (Main thread work per frame on the simulator, `-PlainMeasureDivider`: 3.3 to 4.4 ms p95 with the
+  bar's lane following and a root layout per frame, 1.5 to 2.2 ms with the root's Duo pass
+  skipped, then the card: see docs/research/resizable-pane.md, "Results".) Signposts `sidePane.drag`, `sidePane.settle`,
+  `sidePane.commit`, `sidePane.width`; Debug `-PlainMeasureDivider` logs frame times and the main
+  thread's work per frame, `-PlainDividerLive` resizes the page every frame for comparison.
+- **Haptics and motion:** a tick at each rest passed (not when leaving the rest it started on), the
+  threshold where a line arms, a tick where it disarms, a silent release after either, a tap for a
+  throw that dismisses without arming. Settle: `Motion.sidePaneSettle` (0.32 s, bounce 0; 0.1 after
+  a flick), frame by frame with the release velocity, catchable. Reduce Motion: a crossfade.
+- **Other ways in:** a double tap on the handle returns to Narrow (AppKit's double click restores
+  the ideal width; at Narrow it bumps, nothing there); a long press opens its menu (the rests that
+  fit, Full Width, Hide Side Pane: the gesture's menu equivalent); VoiceOver adjusts it (Narrow, the
+  rests, Full Width; the value says the rest and its share); Control-Command-] and -[ step it and
+  Control-Command-S shows or hides the pane. The pointer turns into a short beam held to the seam
+  and the handle grows. Keys, the pointer and VoiceOver play no haptics.
+- **Touches:** a 44 pt strip on the seam (on the pane only while it has the whole width, clear of
+  a rail's own drag). A pan there begins only sideways, after 6 pt, so a page or list scrolled near
+  the seam still scrolls; the page's and the pane's own pans that start there wait for it to fail.
+  The pane's swipe toward the edge ignores the strip.
+- **Edge cases** (each with its test or check in the research file's table): rotation and fold
+  mid-drag stop it at the window's width (the transition maps it); the pane's section switching
+  keeps the width; Find's keyboard stays up through a resize; a fullscreen video, a sheet, the
+  gallery and the search sheet keep the divider from starting; private windows behave the same
+  (the width is layout, not history).
+
 ## Open in New Window: one tab store, a scene per window (2026-11-27)
 
 Plan, section 6, item 6. The Duo's inner screen takes several windows of one app the iPad way;

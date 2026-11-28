@@ -51,6 +51,7 @@ two-hit pattern. A *bump* is a faint soft impact, at most one a second.
 ## Inner screen (unfolded)
 
 - [ ] `[run 1]` Side pane Find: Return past the last match ticks as it wraps to the first; Return with no matches bumps; Return while results are still coming stays silent.
+- [ ] `[divider]` Side pane divider: drag from Narrow toward the page: one tick passing Half, a firm tap where the pane would take the whole width, a tick if you pull back; letting go after the firm tap is silent. Drag the pane thin: a firm tap where it would close. A fast throw toward the edge closes it with one light tap. Leaving Narrow by itself is silent. Double tap the handle at Narrow: one soft bump.
 - [ ] `[later]` Strip and sidebar reorder: a tick per place and a drop. Sidebar resize: a firm tap into titles, a tick back to the rail.
 - [ ] `[run 1]` Fold and unfold, rotation: silent.
 

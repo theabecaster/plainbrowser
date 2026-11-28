@@ -363,6 +363,11 @@ Columns: interaction | haptic | exact moment | strength | where (file, function)
 | Sidebar resize drag crosses rail ↔ titles | **add** `.threshold` into expanded, `.selection` back to rail. Key it to the existing `showsTitles` flip | `sidebarResized` `.changed`, when `duo.sidebar?.showsTitles` changes value | medium / tick | `ShellUI/BVC+SideTabs.swift` `sidebarResized` | S |
 | Sidebar resize release / flick to a state | none: the spring settles where already announced. A flick that changes state without crossing: `.tap` | `.ended` | light | same | S |
 | Sidebar titles toggle button (S) | keep S's `.selection`: a toggle | — | tick | S `onToggleTitles` | S |
+| Side pane divider passes a rest (Narrow, Half, Two Thirds) | **add** `.selection` | when the divider is 4 pt past the rest; not when it leaves the rest it started on | tick | `ShellUI/SidePaneDivider.swift` `SidePaneDividerDrag.move` | divider |
+| Divider past the close line (pane at 125 pt) or the take-over line (page at 187.5 pt) | **add** `.threshold`, `.selection` back (10 pt hysteresis, `ThresholdLatch`) | `.changed` frame that crosses | medium / tick | same | divider |
+| Divider release | none when armed or on a rest; `.tap` for a throw that closes or takes over without arming | `.ended`, as the spring starts | light | `SidePaneDividerDrag.releaseHaptic` | divider |
+| Double tap on the handle at Narrow (nothing to do) | **add** `.nothingThere` with a bump of the capsule | on the tap | soft 0.5 | `BVC+SidePaneDivider.swift` `doubleTapped` | divider |
+| Handle menu, expand button, keys, VoiceOver adjust, pointer hover | none (system menu's own; result on screen; rule 8) | — | — | `BVC+SidePaneDivider.swift` | divider |
 | Portrait drawer opens / closes (S) | none: sheet-like | — | — | S | S |
 | Strip appears with the 2nd tab / leaves | none: automatic, not user-caused | — | — | S | S |
 | Split pane created (Open in Other Pane) | none: the layout change is the feedback | — | — | `BVC+Panes.swift` | — |

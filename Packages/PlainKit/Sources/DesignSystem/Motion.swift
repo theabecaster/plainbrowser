@@ -72,6 +72,16 @@ public enum Motion {
     }
     /// The sidebar's edge under the finger: tracks 1:1 and hands its velocity to the settle.
     public static let sidebarTrack = Animation.interactiveSpring
+    /// The side pane's divider settling on a rest, closing the pane or handing it the whole width,
+    /// frame by frame with the release velocity (`SpringDriver`), so a finger can catch it. The
+    /// sidebar's settle beside it, a touch shorter since it often travels less: no bounce unless a
+    /// flick drove it, and then a slight one.
+    public static func sidePaneSettle(flicked: Bool) -> Spring {
+        Spring(duration: 0.32, bounce: flicked ? 0.1 : 0)
+    }
+    /// The divider's handle and the side that would go (a dim, the bar spanning the pane) answering
+    /// a line crossed while the finger is down.
+    public static let sidePaneArm = Animation.spring(duration: 0.2, bounce: 0)
     /// The Reduce Motion replacement for any movement.
     public static let crossfadeDuration: TimeInterval = 0.2
 

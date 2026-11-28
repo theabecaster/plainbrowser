@@ -510,3 +510,19 @@ Newest feature last.
 - **Private search sheet.** In light mode the focused field of a private tab sits on the warm
   paper sheet; a private tint for the sheet would carry the mode into that state (design review,
   private mode lane). The sheet is the search-bar lane's; do it with them.
+
+## The side pane's divider (2026-11-28)
+
+- **Frozen header during a move.** The pane moves as a card with its header frozen, so while it
+  widens the picker keeps its old size and while it narrows the expand and close buttons slide
+  off the edge; at the rest the picker grows to its width in one step. Design review 1: keep the
+  trailing controls in view (or fade the card's edge) and grow the picker with the settle.
+- **Bar glide at the rest.** The top bar's capsules fade for a few frames while they glide to
+  their new lane (the glass container morphing). Keep their opacity steady.
+- **Portrait header spacing.** At Narrow in the inner portrait the picker is packed tight with a
+  wide gap before the expand and close buttons.
+- **Reader line length at Full Width.** The reader's text runs about 95 characters a line across
+  the inner screen; cap the measure while the pane has the whole width.
+- **Rotation through XCUIDevice.** It doesn't rotate the Duo's inner screen, so the UI test
+  skips there; the lane's job rotated through Device Hub and checked shots (Half, portrait Narrow,
+  Half again). An iPad simulator runs the test.

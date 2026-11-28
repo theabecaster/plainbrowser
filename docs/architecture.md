@@ -419,7 +419,11 @@ BrowserCore's `SystemAccess.swift`).
 - **Side pane.** `DuoLayout.sidePaneColumn` places it (trailing 30%, a split's second pane, or the
   far side of an active fold); `+SidePane` docks it, slides it and runs its edge swipe;
   `SidePaneController` holds Reader (`ReaderPresenter`), Find (`PageFind` in WebEngine) and
-  History (FeatureUI's `HistoryView`).
+  History (FeatureUI's `HistoryView`). Its divider: `SidePaneDivider` (the rests, the close and
+  take-over lines, the drag's haptics and release, as plain values tested on macOS),
+  `DuoLayout.sidePaneDivider` and `sidePaneTakesOver` (the pane over the whole span, the pages kept
+  at their frames out of sight), and `+SidePaneDivider` (`SidePaneDividerController`: the handle,
+  the strip's pan, the `SpringDriver` settle, the commits, the menu, VoiceOver, the pointer, keys).
 
 ## Tab gallery, bar swipe and private tabs (M2)
 

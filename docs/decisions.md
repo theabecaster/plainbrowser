@@ -711,7 +711,9 @@ Show it only where needed, elegantly; follow what credible research says."
   itself; a tap on its Browse for Me row plays it again, as the blocking demo's toggle flips. Every
   part holds its place from the first frame, so nothing moves while it plays. The step sits near
   the window and stays anchored there, so nothing moves when the buttons change; under Reduce
-  Motion the finished example shows at once. One line under it,
+  Motion the finished example shows at once. Its text follows Dynamic Type up to the largest
+  standard size (chips keep only their numbers where they can't fit); past it the step scrolls
+  above the buttons. One line under it,
   by state:
   - available: "Written on your iPhone, with every source cited." Next. Nothing to do.
   - Apple Intelligence off: the same line, and in the buttons the route, "Settings › Apple

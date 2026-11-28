@@ -141,12 +141,12 @@ extension BrowserViewController {
         installTopBand()
     }
 
-    /// The band's opacity from everything that takes the bar away: the search field above the
-    /// keyboard, the find bar, the gallery's fade. One place, so none of them undoes another (a
-    /// New Tab from the gallery opens the field while the gallery fades out).
+    /// The band's opacity from everything that takes the bar away: the find bar, the gallery's
+    /// fade. One place, so neither undoes the other. Editing keeps it: on the top bar the field
+    /// widens in its row, on the band (the search sheet's dropdown).
     func updateTopBandAlpha() {
         let top = duo.top
-        let alpha = isEditingAddress || top.isHiddenForFind ? 0 : top.galleryFade
+        let alpha = top.isHiddenForFind ? 0 : top.galleryFade
         if top.band.alpha != alpha { top.band.alpha = alpha }
     }
 

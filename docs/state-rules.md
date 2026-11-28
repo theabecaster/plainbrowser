@@ -191,8 +191,11 @@ base URL, and that sets a boundary there"; docs/research/safari-duo-top.md).
   the address (a double tap shows the toolbar).
 - Hidden is never reached under a top bar. A bar the outer screen left hidden rests at Pill when
   the Duo unfolds.
-- Editing (the pill above the keyboard) and Find fade the band with the capsules: an empty band
-  never stays at the top.
+- With two or more tabs the strip (and the band under it) shows while the page's top is in view
+  and goes as the page scrolls the strip's height; mid-page the bar comes back without it, so it
+  never covers a fixed header resting at the band's bottom.
+- Find and the gallery fade the band with the capsules: an empty band never stays at the top.
+  Editing keeps it (the field widens in its row on the band).
 - Under a full-width status bar (iPad-size windows) the band runs from the top edge to under the
   row; while reading it is the status bar plus a 30 pt host row.
 

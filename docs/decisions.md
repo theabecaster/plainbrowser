@@ -2540,16 +2540,29 @@ docs/research/safari-duo-top.md.
   strip makes the two differ (111 against 73).
 - **Not taken from Safari:** hiding the status items while collapsed (its slim band is 45 pt
   because the status bar goes; the owner asked for the host clear of the status items, so the
-  band is the status row's height); the host's own capsule (a third layer of glass); the timed
-  morph (Plain's bar follows the finger 1:1 and springs, as on every screen); moving the page's
-  inset with the band (WebKit relayouts fixed elements on every inset change, the jump the
-  owner rejected).
+  band is the status row's height); the timed morph (Plain's bar follows the finger 1:1 and
+  springs, as on every screen); moving the page's inset with the band (WebKit relayouts fixed
+  elements on every inset change, the jump the owner rejected).
+- **The host sits in a small glass capsule** (`TopBand.hostCapsule`, 12 x 5 pt around the
+  text, Safari's is 23 pt high): bare text on the band read as an empty status bar, not as the
+  address field made small (Codex design review, round 1). The pill's text shrinks into it.
+- **The strip follows the page's top** (`TopChromeGeometry.stripReveal`): with two or more tabs
+  the strip and the band under it show while the page's top is in view and go as the page
+  scrolls the strip's height (38 pt), in step with it, so the band's bottom tracks the page's
+  top there, as Safari's does. Mid-page the bar comes back without the strip, as with one tab.
+  Round 1 of the design review found the strip covering a fixed header mid-page (the header
+  rests at the slim band's bottom, 73 pt; the strip runs to 111): keeping the strip there would
+  need the page's inset to follow it, which jumps the header. Tabs, the sidebar and the
+  switcher still switch tabs mid-page.
 - **Glass, more Apple-like, Plain's colors:** the floating controls' tint is lighter
   (`Palette.glassTint` Paper at 0.55 in light, Deep Lagoon at 0.6 in dark, was 0.88 and 0.84;
   private violet at 0.6 and 0.64), and the soft ground under each control (`ChromeScrim`) is
   0.5 / 0.62 (was 0.82 / 0.92), so the glass refracts and blurs the page and shows its rim
-  instead of reading as a paper fill. The band's tint is a step lighter again
-  (`bandGlassTint`, 0.42 / 0.5) so the capsules on it read as their own layer. Shared by the
-  outer screen and phones (one pill, one button bar).
-- **Editing and Find:** the band fades with the capsules, so an empty band never stays at the
-  top.
+  instead of reading as a paper fill. The band's tint is lighter again (`bandGlassTint`, 0.3 /
+  0.42) so the capsules on it read as their own layer, and on the band the capsules have no
+  paper ground at all (`setScrimShown(false)`): the band keeps them legible and their glass
+  shows its own refraction (design review, round 1: "creamy and opaque"). Shared by the outer
+  screen and phones (one pill, one button bar), where the ground stays.
+- **Find and the gallery** fade the band with the capsules, so an empty band never stays at
+  the top (`updateTopBandAlpha`, one place for both). Editing keeps it: on the inner screen the
+  field widens in its row, on the band (the search sheet's dropdown).

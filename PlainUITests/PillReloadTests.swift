@@ -178,6 +178,44 @@ final class PillReloadTests: XCTestCase {
         XCTAssertFalse(field.exists && field.hasKeyboardFocus, "the tap only brought the bar back")
     }
 
+    /// With Page Appearance at the leading end, VoiceOver reads left to right: the glyph, the
+    /// address, then Reload; both glyphs show, the host between them.
+    func testVoiceOverReadsPageAppearanceThenAddressThenReload() throws {
+        let app = try launch()
+        closeSearch(app)
+        // Plain dark, then a light-only page offers dark pages; taking it shows the glyph.
+        app.buttons["more"].tap()
+        let settings = app.buttons["menu.settings"]
+        if !settings.waitForExistence(timeout: 2) { app.buttons["more"].tap() }
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+        let row = app.buttons["settings.appearance"]
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        let enabled = NSPredicate(format: "isEnabled == true")
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: enabled, object: row)], timeout: 5), .completed)
+        row.tap()
+        XCTAssertTrue(app.buttons["Dark"].waitForExistence(timeout: 2))
+        app.buttons["Dark"].tap()
+        app.buttons["Done"].tap()
+        go(app, to: server.address("/light-site"))
+        let suggestion = app.buttons["darkPagesSuggestion.turnOn"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 12), "a light page in dark colors suggests dark pages")
+        suggestion.tap()
+        let appearance = app.buttons["pill.pageAppearance"]
+        XCTAssertTrue(appearance.waitForExistence(timeout: 5))
+        let reload = app.buttons["pill.reload"]
+        XCTAssertTrue(reload.waitForExistence(timeout: 3), "both glyphs show")
+        let address = app.buttons["addressPill"]
+        XCTAssertTrue(address.exists)
+        XCTAssertLessThan(appearance.frame.maxX, reload.frame.minX)
+
+        let group = app.otherElements["addressPillGroup"]
+        XCTAssertTrue(group.waitForExistence(timeout: 3))
+        let order = group.children(matching: .any).allElementsBoundByIndex.map(\.identifier)
+            .filter { ["pill.pageAppearance", "addressPill", "pill.reload"].contains($0) }
+        XCTAssertEqual(order, ["pill.pageAppearance", "addressPill", "pill.reload"], "VoiceOver's order: \(order)")
+    }
+
     func testPrivateTabsKeepIt() throws {
         let app = try launch()
         closeSearch(app)
@@ -290,6 +328,25 @@ final class PillReloadCaptureTests: XCTestCase {
         app.buttons["back"].tap()
         pause(1)
 
+        // In a dark row, a light-only page offers dark pages: taken, Page Appearance shows at the
+        // leading end beside Reload.
+        open(app, server.address("/light-site"))
+        _ = app.webViews.staticTexts["Light Only"].waitForExistence(timeout: 15)
+        let suggestion = app.buttons["darkPagesSuggestion.turnOn"]
+        if suggestion.waitForExistence(timeout: 12) {
+            suggestion.tap()
+            _ = app.buttons["pill.pageAppearance"].waitForExistence(timeout: 5)
+        }
+        pause(1.5)
+        shot("10-two-glyphs")
+
+        // A long host (nip.io answers with the address in its name, here the Mac's loopback; it
+        // needs the network): how it centres and truncates between the glyphs.
+        open(app, "http://www.a-rather-long-host-name-for-plain.127.0.0.1.nip.io:\(server.port)/light-site")
+        _ = app.webViews.staticTexts["Light Only"].waitForExistence(timeout: 15)
+        pause(2)
+        shot("11-long-host")
+
         // Private.
         if more.waitForExistence(timeout: 2) {
             more.tap()
@@ -306,8 +363,9 @@ final class PillReloadCaptureTests: XCTestCase {
 
     private func open(_ app: XCUIApplication, _ address: String) {
         let field = app.textFields["searchField"]
-        if !(field.exists && field.hasKeyboardFocus) {
-            app.buttons["addressPill"].tap()
+        // A collapsed bar takes the first tap to come back; the next opens the field.
+        for _ in 0..<3 where !(field.exists && field.hasKeyboardFocus) {
+            app.buttons["addressPill"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
             _ = field.waitForExistence(timeout: 2)
             pause(0.6)
         }

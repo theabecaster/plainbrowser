@@ -384,6 +384,17 @@ public enum Signposts {
     public static let introStep: StaticString = "intro.step"
     /// Animation interval: the blocking demo's page going clean or cluttered (the toggle).
     public static let introBlockingDemo: StaticString = "intro.blockingDemo"
+    /// Animation interval: the Browse for Me demo playing (a question, its sources, the cited
+    /// points), by itself on arrival or again from a tap on its row.
+    public static let introBrowseDemo: StaticString = "intro.browseDemo"
+    /// Animation interval: the default-browser step's demo (a link opening in Plain), by itself
+    /// on arrival or again from a tap on its message.
+    public static let introLinkDemo: StaticString = "intro.linkDemo"
+    /// Event: Turn On Apple Intelligence was tapped on the intro's Browse for Me step.
+    public static let introAISettings: StaticString = "intro.aiSettings"
+    /// Event: the intro's Browse for Me step re-read the model's availability; the message names
+    /// the answer.
+    public static let introAIAvailability: StaticString = "intro.aiAvailability"
     /// Animation interval: the intro dissolving into the search field, until it is gone.
     public static let introFinish: StaticString = "intro.finish"
     /// Event: the intro was skipped; the message names the step it was skipped from.

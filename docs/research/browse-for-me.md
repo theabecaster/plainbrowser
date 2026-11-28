@@ -169,6 +169,9 @@ From the iOS 27.2 SDK interface unless linked.
   - Apple Intelligence off, which iOS 27 has on by default, so turning it off was a choice;
   - the model not ready, where they appear by themselves once it is.
   The answer is read again whenever Plain becomes active.
+  The one exception is the first-run intro: where Apple Intelligence can run, its Browse for Me
+  step shows the feature once, with Turn On Apple Intelligence while it is off
+  (docs/decisions.md, "Setup steps in the intro").
   A one-time explanation would need a place to show, and every place would be a button that
   can't work (state rules, principle 1).
 - **Results source:** the user's engine when its page parses in a hidden view, then DuckDuckGo

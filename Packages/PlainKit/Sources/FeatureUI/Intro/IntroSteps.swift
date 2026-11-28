@@ -65,6 +65,9 @@ private struct StepView: View {
             .accessibilityHint("Ends the introduction")
         }
         .frame(height: IntroLayout.topRow)
+        // Inside the window, which stops at its widest on wide screens (the Duo's inner screen):
+        // spread over the whole width, the rings and Skip landed white on the paper.
+        .frame(maxWidth: IntroLayout.windowMaxWidth)
     }
 
     @ViewBuilder private var content: some View {
@@ -73,6 +76,7 @@ private struct StepView: View {
         case .inside: InsideStep(canUnfold: model.canUnfold)
         case .icon: IconStep(model: model)
         case .blocking: BlockingStep(model: model)
+        case .browseForMe: BrowseForMeStep(model: model)
         case .defaultBrowser: DefaultBrowserStep()
         }
     }
@@ -95,6 +99,31 @@ private struct StepView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .accessibilityIdentifier("introNotNow")
             }
+            .entrance(6)
+        case .browseForMe where model.browseForMe == .turnOn:
+            // The one thing to set up: Settings, or on without it. Neither waits for the other.
+            VStack(spacing: 4) {
+                // Where the switch is: with the button that goes there, so it is on screen at
+                // every text size (the step above it may scroll).
+                Text("Settings › Apple Intelligence & Siri")
+                    .font(.subheadline)
+                    .opacity(0.72)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 8)
+                    .accessibilityIdentifier("introAITurnOnLine")
+                Button { AppleIntelligenceSettings.open() } label: {
+                    IntroButtonLabel(title: "Turn On Apple Intelligence")
+                }
+                .introPrimaryButton()
+                .accessibilityIdentifier("introTurnOnAI")
+                Button("Not Now") { model.next() }
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(IntroStyle.text.opacity(0.7))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .accessibilityIdentifier("introAINotNow")
+            }
+            .transition(.opacity)
             .entrance(6)
         default:
             Button { model.next() } label: {
@@ -307,6 +336,85 @@ private struct BlockingStep: View {
     }
 }
 
+/// Browse for Me, shown: a question becoming a cited answer, then one line for the device's
+/// state. Only where Apple Intelligence can run (`IntroSetup.browseForMe`); the line and the
+/// buttons change in place when it is turned on or finishes getting ready.
+private struct BrowseForMeStep: View {
+    @Bindable var model: IntroModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        // Near the window, with a little more room on a tall screen, and anchored there: when
+        // the buttons change (back from Settings) nothing above them moves. Where it can't fit
+        // (the largest text sizes) the step scrolls, like the inside step.
+        ViewThatFits(in: .vertical) {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0).frame(maxHeight: 36)
+                parts
+                Spacer(minLength: 0)
+            }
+            ScrollView {
+                VStack(spacing: 0) { parts }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 8)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    @ViewBuilder private var parts: some View {
+        DisplayText(lead: "Let Plain ", emphasis: "browse", trail: " for you")
+            .padding(.top, 10)
+            .entrance(1)
+        BrowseForMeDemo(model: model)
+            // It grows with the text up to the largest standard size; past it the card would push
+            // its own answer off the step (VoiceOver reads its label at any size).
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            .padding(.top, 18)
+            .entrance(2)
+        status
+            .font(.subheadline)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 360, minHeight: 22)
+            .padding(.top, 12)
+            .entrance(3)
+    }
+
+    @ViewBuilder private var status: some View {
+        switch model.browseForMe {
+        case .gettingReady:
+            HStack(spacing: 8) {
+                // A still mark: the line itself is what changes, once the model is ready.
+                Image(systemName: "arrow.down.circle")
+                    .accessibilityHidden(true)
+                Text("Apple Intelligence is getting ready…")
+            }
+            .opacity(0.72)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("introAIGettingReady")
+        case .ready where model.aiBecameReady:
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, Color(uiColor: Palette.accentOnPaper))
+                    .accessibilityHidden(true)
+                Text("Apple Intelligence is ready.")
+            }
+            .fontWeight(.semibold)
+            .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("introAIReady")
+        case .ready, .turnOn, nil:
+            // Off, the same line: the button below says what to do, and the route sits with it.
+            Text("Written on your iPhone, with every source cited.")
+                .opacity(0.72)
+                .accessibilityIdentifier("introAIAvailableLine")
+        }
+    }
+}
+
 private struct DefaultBrowserStep: View {
     var body: some View {
         VStack(spacing: 0) {
@@ -318,12 +426,16 @@ private struct DefaultBrowserStep: View {
             Spacer(minLength: 16)
             DisplayText(lead: "Make Plain your ", emphasis: "default", trail: "")
                 .entrance(2)
-            Text("Links from Mail, Messages and every other app open in Plain, with blocking on.")
-                .font(.body)
+            // Shown, not told: a link from another app opening in Plain, already blocked.
+            LinkHandoffDemo()
+                .padding(.top, 18)
+                .entrance(3)
+            Text("Links from every app open here, with blocking on.")
+                .font(.subheadline)
                 .opacity(0.72)
                 .multilineTextAlignment(.center)
                 .padding(.top, 12)
-                .entrance(3)
+                .entrance(4)
             Spacer(minLength: 12)
             Spacer(minLength: 0)
         }

@@ -26,6 +26,12 @@ public final class FoundationSummaryModel: SummaryModel {
         return await Task.detached(priority: .utility) { Self.availability(of: model) }.value
     }
 
+    /// The system model's answer, read off the main thread, for screens that come before the
+    /// browser (the first-run intro). The same mapping as a summary's check.
+    public nonisolated static func currentAvailability() async -> AIAvailability {
+        await Task.detached(priority: .userInitiated) { availability(of: SystemLanguageModel.default) }.value
+    }
+
     nonisolated static func availability(of model: SystemLanguageModel) -> AIAvailability {
         switch model.availability {
         case .available:

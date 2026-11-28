@@ -102,7 +102,7 @@ public enum Palette {
 
     /// Supporting text on paper: a row's address or value, a footer. Ink thinned to keep 4.5:1 on
     /// the ground and the cards.
-    public static let inkSecondary = UIColor { traits in
+    public static let inkSecondary = UIColor.anyThread { traits in
         let high = traits.accessibilityContrast == .high
         return traits.userInterfaceStyle == .dark
             ? UIColor(rgb: 0xFFF6E6, alpha: high ? 0.9 : 0.76)
@@ -111,7 +111,7 @@ public enum Palette {
 
     /// A card of rows on the Paper ground: a hair lighter by day, a hair lifted by night. Flat
     /// and opaque, so a row costs no texture and no blending.
-    public static let paperCard = UIColor { traits in
+    public static let paperCard = UIColor.anyThread { traits in
         let high = traits.accessibilityContrast == .high
         return traits.userInterfaceStyle == .dark
             ? UIColor(rgb: high ? 0x1A3850 : 0x11293D)
@@ -119,7 +119,7 @@ public enum Palette {
     }
 
     /// The hairline between rows on a card, in the ink's own tone.
-    public static let paperHairline = UIColor { traits in
+    public static let paperHairline = UIColor.anyThread { traits in
         let high = traits.accessibilityContrast == .high
         return traits.userInterfaceStyle == .dark
             ? UIColor(rgb: 0xFFF6E6, alpha: high ? 0.42 : 0.14)
@@ -128,7 +128,7 @@ public enum Palette {
 
     /// Lagoon Blue for actions and checkmarks on paper: a step deeper by day (`#2366F0`, 4.7:1 on
     /// the card, where Lagoon itself gives 4.1:1) and the lighter glass step by night.
-    public static let accentOnPaper = UIColor { traits in
+    public static let accentOnPaper = UIColor.anyThread { traits in
         let high = traits.accessibilityContrast == .high
         return traits.userInterfaceStyle == .dark
             ? UIColor(rgb: high ? 0xB3CEFF : 0x8DB6FF)
@@ -144,7 +144,14 @@ public enum Palette {
 }
 
 extension UIColor {
-    convenience init(rgb: UInt32, alpha: CGFloat = 1) {
+    /// A dynamic color whose provider may run on any thread. SwiftUI resolves colors on its render
+    /// thread during some animations, where a provider isolated to the main actor (the module's
+    /// default) traps; these providers only pick between fixed colors, so they need no actor.
+    nonisolated static func anyThread(_ provider: @escaping @Sendable (UITraitCollection) -> UIColor) -> UIColor {
+        UIColor(dynamicProvider: provider)
+    }
+
+    nonisolated convenience init(rgb: UInt32, alpha: CGFloat = 1) {
         self.init(
             red: CGFloat((rgb >> 16) & 0xFF) / 255,
             green: CGFloat((rgb >> 8) & 0xFF) / 255,
@@ -153,8 +160,8 @@ extension UIColor {
         )
     }
 
-    convenience init(light: UIColor, dark: UIColor) {
-        self.init { $0.userInterfaceStyle == .dark ? dark : light }
+    nonisolated convenience init(light: UIColor, dark: UIColor) {
+        self.init(dynamicProvider: { @Sendable traits in traits.userInterfaceStyle == .dark ? dark : light })
     }
 }
 #endif

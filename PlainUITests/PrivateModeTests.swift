@@ -246,18 +246,14 @@ final class PrivateModeTests: XCTestCase {
     func testCaptureStartScreens() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PLAIN_CAPTURE"] == "1", "capture runs on request only")
         let app = try launch()
-        closeSearch(app)
+        // The inner screen's search sheet closes with Cancel beside its field.
+        if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() } else { closeSearch(app) }
         pause(1)
         shotScreens("st-1-start")
-        // The Duo's inner screen has no shortcut there: a private tab from the tabs menu.
-        if app.buttons["start.privateTab"].exists {
-            app.buttons["start.privateTab"].tap()
-        } else {
-            app.buttons["tabs"].press(forDuration: 1.0)
-            let item = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'New Private Tab'")).firstMatch
-            XCTAssertTrue(item.waitForExistence(timeout: 3))
-            item.tap()
-        }
+        // The Duo's inner screen has no private shortcut on its start screen (and no tabs to
+        // open one from): its private start is the phones' in the same colors.
+        guard app.buttons["start.privateTab"].exists else { return }
+        app.buttons["start.privateTab"].tap()
         closeSearch(app)
         XCTAssertTrue(app.staticTexts["start.privateTitle"].waitForExistence(timeout: 2))
         pause(1)

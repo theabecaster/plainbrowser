@@ -14,8 +14,10 @@ final class SideTabs: SideTabsDataSource {
         engineTabs = tabs
     }
 
-    var regularTabs: [TabGalleryItem] { engineTabs.galleryItems(private: false) }
-    var privateTabs: [TabGalleryItem] { engineTabs.galleryItems(private: true) }
+    var showsPrivate: Bool { host?.showsPrivateMode ?? false }
+    var tabs: [TabGalleryItem] { engineTabs.galleryItems(private: showsPrivate) }
+    var regularCount: Int { engineTabs.pageEntries(private: false).count }
+    var privateCount: Int { engineTabs.pageEntries(private: true).count }
     var focusedTabID: UUID? { engineTabs.selectedID }
     var otherPaneTabID: UUID? { host?.otherShownPaneTabID }
     var canOpenInOtherPane: Bool { host?.canSplit ?? false }
@@ -49,6 +51,14 @@ final class SideTabs: SideTabsDataSource {
     func openInOtherPane(_ id: UUID) {
         guard let host else { return }
         host.openInOtherPane(engineTabs.tab(id))
+    }
+
+    func showMode(private isPrivate: Bool) {
+        host?.showTabMode(private: isPrivate)
+    }
+
+    func closeAllPrivateTabs() {
+        host?.closeAllPrivateTabs()
     }
 }
 

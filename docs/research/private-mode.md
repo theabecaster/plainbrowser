@@ -119,3 +119,38 @@ press) delete their data on close [15].
 26. https://developer.apple.com/forums/thread/120631
 27. https://codereview.chromium.org/2901023002
 28. https://developer.apple.com/forums/thread/817164
+
+## Wide screens and colour (2026-11-28)
+
+Owner: on the inner screen "it mixes the private and regular tabs ... it should be more like the
+outer screen, where it's a clear mode"; and the violet "takes away the premium feel and gives
+AI-slop vibes". Decisions: docs/decisions.md, "Private as a clear mode on wide screens, in Night
+and Horizon".
+
+**How wide layouts do it.**
+- Safari on iPad: private browsing is a tab group in the sidebar; while it is on "the Safari
+  background is gray", and leaving is picking another group, after which the private tabs stay
+  open and lock [29][30]. One list at a time, never mixed.
+- Chrome on iPad and Android: Incognito is its own tab grid beside the regular one, with a toggle
+  at the top of the switcher [10][31].
+
+**How they colour it.**
+- Safari: a dark bar on iPhone [2], a grey background on iPad [29]. Chrome: a dark grey scheme,
+  "to distinguish it from normal mode", which themes may not change [32][33]. Arc Search: a dark
+  bar [14].
+- Purple: Firefox's private windows and its mask [12], Firefox Focus's whole brand ("a sultry
+  purple" logo, the "purple curtain") [34][35], and Brave's private windows. So purple says
+  "another browser's private mode", and in 2026 the violet-gradient look reads as generated.
+- High-end dark interfaces (Apple's dark materials, camera and watch faces, luxury car and audio
+  apps) are neutral or warm graphite with a single warm light, never a saturated hue.
+
+**Implication.** Night (warm graphite) with one warm light from Plain's own mark (Horizon,
+`#FFC08E`), carried by the mark and the word "Private" so colour is never the only cue.
+
+29. https://support.apple.com/guide/ipad/browse-the-web-privately-ipad8ea0fc1a/17.0/ipados
+30. https://tidbits.com/2021/09/23/hot-new-features-in-safari-in-ios-15-and-ipados-15/
+31. https://techradar.com/news/chromes-new-tab-switcher-for-smartphones-is-a-bit-of-a-mess-but-still-useful (secondhand)
+32. https://techradar.com/news/chrome-is-getting-a-better-dark-mode-when-you-go-incognito (secondhand)
+33. https://chromewebstore.google.com/detail/material-incognito-dark-t/ahifcnpnjgbadkjdhagpfjfkmlapfoel (secondhand)
+34. https://www.vice.com/en/article/firefox-focus-browser-app/ (secondhand)
+35. https://blog.mozilla.org/en/products/firefox/firefox-focus-or-firefox/

@@ -525,7 +525,7 @@ final class AddressPill: UIView {
         if scrim.isHidden == shown { scrim.isHidden = !shown }
     }
 
-    /// Paper glass, or the private look while a private tab is on screen: deep violet glass drawn
+    /// Paper glass, or the private look while a private tab is on screen: Night glass drawn
     /// dark (light text), the private mark before the host and in the field, and a dark keyboard
     /// that predicts and rewrites nothing (docs/decisions.md, "Private mode you can't miss").
     func setPrivate(_ isPrivate: Bool) {
@@ -536,7 +536,7 @@ final class AddressPill: UIView {
         scrim.isPrivate = isPrivate
         overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
         // On the effect view too: glass picks light or dark content from what is behind it, and
-        // over a white page it drew dark text on the violet. Set there, it stays dark.
+        // over a white page it drew dark text on Night. Set there, it stays dark.
         glass.overrideUserInterfaceStyle = overrideUserInterfaceStyle
         accessibilityLabel = isPrivate ? "Private Address" : "Address"
         // The field says it too, for VoiceOver while editing (the pill is no element then).
@@ -545,7 +545,7 @@ final class AddressPill: UIView {
         hostLabel.lineBreakMode = isPrivate ? .byTruncatingMiddle : .byTruncatingHead
         display(url: url, notSecure: notSecure)
         // The field itself too: on the search sheet it sits over the paper card, so its own
-        // controls (Dictate, Browse for Me) would take the card's light style on the violet.
+        // controls (Dictate, Browse for Me) would take the card's light style on Night.
         textField.overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
         // The field's text too, fixed light on the always-dark private glass.
         textField.textColor = isPrivate ? .white : Palette.textPrimary

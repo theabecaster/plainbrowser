@@ -96,20 +96,29 @@ and the two-finger scrub closes the search field or the overview.
   gaps between capsules, so they float apart.
 - **The Duo's outer screen keeps the system's vertical bar** beside the page (status items, then
   Back, Forward, Tabs, New Tab and More in one capsule). Behind it Plain puts one floating panel of
-  its glass (paper, navy in dark mode, violet in a private tab), 6 pt in from the page and the
+  its glass (paper, navy in dark mode, Night in a private tab), 6 pt in from the page and the
   screen's edges with round corners; the page never runs under it.
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
   pill in a fixed place, Tabs, New Tab and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
-- **Tab cards carry a ×:** top-trailing in the title row, a 24 pt plate (ink veil; the private violet on private cards) inside a 44 pt target, a bold 10 pt glyph in secondary text. A tap closes the tab with the same lift-and-fade as the flick, and a soft haptic. The target never takes a lift or a sideways scroll: a drag that starts on it still lifts or scrolls. VoiceOver: "Close <title>", right after its card.
+- **Tab cards carry a ×:** top-trailing in the title row, a 24 pt plate (ink veil; Night on private cards) inside a 44 pt target, a bold 10 pt glyph in secondary text. A tap closes the tab with the same lift-and-fade as the flick, and a soft haptic. The target never takes a lift or a sideways scroll: a drag that starts on it still lifts or scrolls. VoiceOver: "Close <title>", right after its card.
 
 
-- **Private mode shows in the chrome itself, never on the page:** deep violet glass drawn dark on
-  the pill and buttons, the private mark (`hand.raised.fill`) before the host and in the field,
-  a dark keyboard, the empty private tab's start screen drawn dark and titled "Private", and the
-  switcher's "Private | Tabs" switch with the shown side filled. The two sides are always named;
-  the way out is the other word ("Tabs"), "Leave Private" on an empty private tab, or Close All
-  Private Tabs.
+- **Private mode shows in the chrome itself, never on the page:** Night glass (a warm graphite,
+  `Palette.night`) drawn dark on the pill and buttons, the private mark (`hand.raised.fill`, in
+  Horizon, `Palette.horizon`) and the word "Private" before the host, the mark in the field over a
+  dark keyboard and a Night search sheet, the empty private tab's start screen drawn dark on Night
+  with a low Horizon glow and titled "Private", and the "Private | Tabs" switch with the shown side
+  filled (Horizon with ink for Private). Never violet, never a colour alone: Night, the mark and
+  the word say it together. The two sides are always named; the way out is the other word
+  ("Tabs"), "Leave Private" on an empty private tab, or Close All Private Tabs.
+- **On wide screens private is a mode, as on the phone:** the strip and the sidebar list the
+  shown mode's tabs only, never the two mixed. The switch sits where the list lives: at the
+  strip's trailing end (the switcher's control at a tab's height), and as the sidebar's first two
+  rows, Private and Tabs (Safari's iPad sidebar order of rows; the shown one on its plate, in the
+  rail too). One tap each way; the list's tab seen last comes back, else a new tab of that kind.
+  While private the strip, the band and the whole sidebar column are Night. A split shows one
+  mode.
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, New Tab
   and More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
@@ -126,7 +135,7 @@ and the two-finger scrub closes the search field or the overview.
   tap on it brings the bar back. The page's top boundary is the band's bottom in every state: a
   site's fixed header rests under it and nothing in the page moves when the bar collapses or
   comes back; the strip shows while the page's top is in view, so it never covers a header
-  mid-page. Private, the band, the host capsule and the strip are the private violet glass, drawn dark. The page's first line starts under the expanded band and slides under the glass. To
+  mid-page. Private, the band, the host capsule, the strip and the sidebar are Night, drawn dark. The page's first line starts under the expanded band and slides under the glass. To
   type an address, the pill stays in the bar and the search sheet grows down from it, with Cancel
   beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab, 17.5% with
   the strip at a page's top; 11% while reading.

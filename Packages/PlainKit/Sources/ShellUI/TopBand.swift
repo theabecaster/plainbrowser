@@ -137,9 +137,9 @@ final class TopBand: UIView {
         accessibilityValue = text.string.replacingOccurrences(of: "\u{FFFC} ", with: "")
     }
 
-    /// The glass tint: Paper, or the private violet while a private tab is on screen, drawn dark
+    /// The glass tint: Paper, or Night while a private tab is on screen, drawn dark
     /// like the pill and the buttons (`AddressPill.setPrivate`): glass picks light or dark content
-    /// from what is behind it, so over a white page it would draw the host dark on the violet.
+    /// from what is behind it, so over a white page it would draw the host dark on Night.
     func setPrivate(_ isPrivate: Bool) {
         let effect = UIGlassEffect(style: .regular)
         effect.tintColor = isPrivate ? Palette.privateBandGlassTint : Palette.bandGlassTint

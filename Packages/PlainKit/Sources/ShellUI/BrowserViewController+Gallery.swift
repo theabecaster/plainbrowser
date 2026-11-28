@@ -480,7 +480,7 @@ extension BrowserViewController: GalleryHost {
         if showsStart, !isEditingAddress, start.isReceded { start.setReceded(false, animated: true) }
         if showsStart {
             applyStartShortcuts()
-            // An empty private tab says what it is, on the private dusk; with profiles, the
+            // An empty private tab says what it is, on Night; with profiles, the
             // window's is named.
             start.setPrivate(currentTab?.isPrivate == true)
             updateStartScreenMessage()
@@ -594,6 +594,8 @@ extension BrowserViewController: GalleryHost {
 
     /// The tabs changed outside the gallery (a title, a thumbnail, the archive): it shows them.
     func tabsDidChange() {
+        // An empty pane takes its neighbour's mode, which may have just closed.
+        if currentTab == nil { setPrivateChrome(showsPrivateMode) }
         // The rules first: the sidebar's New Tab reads them.
         updateButtons()
         scheduleGalleryPrewarm()

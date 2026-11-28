@@ -175,7 +175,10 @@ final class SideTabsViewTests: XCTestCase {
             strip.collectionView.layoutIfNeeded()
             return strip.collectionView.visibleCells.map(\.frame.width)
         }
-        XCTAssertEqual(strip.preferredWidth, 422, "two tabs at 180 pt, their gaps and New Tab")
+        // The Private | Tabs switch ends the strip, 2 pt in from its edge.
+        let switchWidth = strip.modeSwitch.sizeThatFits(.zero).width
+        XCTAssertGreaterThan(switchWidth, 100)
+        XCTAssertEqual(strip.preferredWidth, 378 + switchWidth + 2, "two tabs at 180 pt, their gaps and the switch")
         strip.view.frame = CGRect(x: 12, y: 80, width: strip.preferredWidth, height: 34)
         strip.view.layoutIfNeeded()
         XCTAssertEqual(tabWidths().count, 2)
@@ -191,7 +194,7 @@ final class SideTabsViewTests: XCTestCase {
         data.regularTabs.append(TabGalleryItem(id: UUID(), title: "Third", url: URL(string: "https://third.example")))
         strip.reloadTabs()
         XCTAssertEqual(resized, 1)
-        XCTAssertEqual(strip.preferredWidth, 608)
+        XCTAssertEqual(strip.preferredWidth, 564 + switchWidth + 2)
         strip.view.layoutIfNeeded()
         XCTAssertEqual(tabWidths().count, 3)
         for width in tabWidths() { XCTAssertEqual(width, 180, accuracy: 1, "a grown strip leaves no empty glass") }
@@ -200,7 +203,7 @@ final class SideTabsViewTests: XCTestCase {
         strip.onPreferredWidthChange = nil
         strip.view.frame.size.width = 500
         strip.view.layoutIfNeeded()
-        for width in tabWidths() { XCTAssertEqual(width, floor((500 - 44 - 6 - 18) / 3), accuracy: 1) }
+        for width in tabWidths() { XCTAssertEqual(width, floor((500 - 6 - switchWidth - 2 - 18) / 3), accuracy: 1) }
     }
 
     private func scrollCost(of scroll: UIScrollView, vertical: Bool) async throws -> (count: Int, p95: Duration, max: Duration) {
@@ -230,11 +233,76 @@ final class SideTabsViewTests: XCTestCase {
     }
 }
 
+extension SideTabsViewTests {
+    private func control(_ identifier: String, in view: UIView) -> UIControl? {
+        if let control = view as? UIControl, control.accessibilityIdentifier == identifier { return control }
+        for child in view.subviews { if let found = control(identifier, in: child) { return found } }
+        return nil
+    }
+
+    /// Private is a mode on wide screens: the sidebar lists one mode's tabs, never both, and its
+    /// head's Private and Tabs rows switch between them, one tap each way; the shown side does
+    /// nothing (docs/decisions.md, "Private as a clear mode on wide screens").
+    func testTheSidebarShowsOneModeAndItsHeadSwitchesIt() throws {
+        let data = FakeSideTabs(count: 3, cached: true)
+        data.privateTabs = (0..<2).map { TabGalleryItem(id: UUID(), title: "Private \($0)", url: URL(string: "https://p\($0).example"), isPrivate: true) }
+        let sidebar = showSidebar(data, width: SidebarState.expanded.width)
+        XCTAssertEqual(cells(sidebar).count, 3, "the regular tabs only")
+        let privateRow = try XCTUnwrap(control("sideTabs.private", in: sidebar.view))
+        let tabsRow = try XCTUnwrap(control("sideTabs.regular", in: sidebar.view))
+        XCTAssertTrue(tabsRow.accessibilityTraits.contains(.selected))
+        XCTAssertEqual(privateRow.accessibilityValue, "2 tabs")
+        tabsRow.sendActions(for: .touchUpInside)
+        XCTAssertEqual(data.modeRequests, [], "the shown side does nothing")
+        privateRow.sendActions(for: .touchUpInside)
+        XCTAssertEqual(data.modeRequests, [true])
+        sidebar.collectionView.layoutIfNeeded()
+        XCTAssertEqual(cells(sidebar).count, 2, "the private tabs only")
+        XCTAssertTrue(privateRow.accessibilityTraits.contains(.selected))
+        XCTAssertFalse(tabsRow.accessibilityTraits.contains(.selected))
+        tabsRow.sendActions(for: .touchUpInside)
+        XCTAssertEqual(data.modeRequests, [true, false])
+        sidebar.collectionView.layoutIfNeeded()
+        XCTAssertEqual(cells(sidebar).count, 3)
+    }
+
+    /// The strip: one mode's tabs, the switch at its end.
+    func testTheStripShowsOneModeAndItsEndSwitchesIt() throws {
+        let data = FakeSideTabs(count: 3, cached: true)
+        data.privateTabs = [TabGalleryItem(id: UUID(), title: "Private", url: URL(string: "https://p.example"), isPrivate: true)]
+        let strip = TabStripViewController(dataSource: data)
+        let host = UIViewController()
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.addChild(strip)
+        host.view.addSubview(strip.view)
+        strip.didMove(toParent: host)
+        strip.view.frame = CGRect(x: 12, y: 80, width: 900, height: 34)
+        strip.view.layoutIfNeeded()
+        strip.collectionView.layoutIfNeeded()
+        XCTAssertEqual(strip.collectionView.numberOfItems(inSection: 0), 3)
+        XCTAssertFalse(strip.modeSwitch.isPrivate)
+        strip.modeSwitch.privateSide.sendActions(for: .primaryActionTriggered)
+        XCTAssertEqual(data.modeRequests, [true])
+        XCTAssertEqual(strip.collectionView.numberOfItems(inSection: 0), 1, "the private tab only")
+        XCTAssertTrue(strip.modeSwitch.isPrivate)
+        strip.modeSwitch.privateSide.sendActions(for: .primaryActionTriggered)
+        XCTAssertEqual(data.modeRequests, [true], "the shown side does nothing")
+        strip.modeSwitch.tabsSide.sendActions(for: .primaryActionTriggered)
+        XCTAssertEqual(strip.collectionView.numberOfItems(inSection: 0), 3)
+    }
+}
+
 /// Tabs for the sidebar and the strip, with an icon each.
 @MainActor
 private final class FakeSideTabs: SideTabsDataSource {
     var regularTabs: [TabGalleryItem]
     var privateTabs: [TabGalleryItem] = []
+    var showsPrivate = false
+    var tabs: [TabGalleryItem] { showsPrivate ? privateTabs : regularTabs }
+    var regularCount: Int { regularTabs.count }
+    var privateCount: Int { privateTabs.count }
+    private(set) var modeRequests: [Bool] = []
     var focusedTabID: UUID?
     var otherPaneTabID: UUID?
     var canOpenInOtherPane = false
@@ -275,5 +343,11 @@ private final class FakeSideTabs: SideTabsDataSource {
     private(set) var newTabs = 0
     func newTab(private isPrivate: Bool) { newTabs += 1 }
     func openInOtherPane(_ id: UUID) {}
+    func showMode(private isPrivate: Bool) {
+        modeRequests.append(isPrivate)
+        showsPrivate = isPrivate
+        focusedTabID = tabs.last?.id
+    }
+    func closeAllPrivateTabs() { privateTabs = [] }
 }
 #endif

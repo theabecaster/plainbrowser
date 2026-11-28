@@ -72,36 +72,64 @@ public enum Palette {
         light: UIColor(rgb: 0xFFFFFF, alpha: 0.35), dark: UIColor(rgb: 0x16344A, alpha: 0.45)
     )
 
-    // MARK: Private browsing
+    // MARK: Private browsing: Night and Horizon
 
-    /// The glass tint of the chrome while a private tab is on screen: a deep dusk violet in both
-    /// appearances, drawn with the dark style (light text and glyphs), as Safari darkens its bar.
-    /// Owner, 2026-11-27: "it's hard to tell when you are in it and when you're not"; the old
-    /// lilac read as Paper in light mode. White text on it is above 10:1.
+    // Private reads at a glance by three things that are not colour alone: the chrome turns to
+    // Night (dark glass in a light app and a dark one), the hand mark and the word "Private" lead
+    // the address, and the shown side of the Private | Tabs switch is filled in Horizon. Owner,
+    // 2026-11-28: the violet "takes away the premium feel and gives AI-slop vibes"; the two
+    // colours come from the mark itself (docs/decisions.md, "Private as a clear mode on wide
+    // screens, in Night and Horizon").
+
+    /// Night: a warm graphite, the mark's night sky with the colour taken out. Neutral, so it
+    /// never reads as the dark app's Deep Lagoon navy glass, and warm, so it sits with Paper.
+    public static let night = UIColor(rgb: 0x1B1A19)
+    /// Night a step lifted, for glass in the dark app, so it still separates from a black page.
+    public static let nightLifted = UIColor(rgb: 0x242321)
+    /// Horizon: the mark's dawn where it meets the planet (Brand/identity.md, "View sky" `#FFC08E`).
+    /// The one warm light on Night: the private mark, the filled Private side. 8:1 or more on the
+    /// private glass over any page.
+    public static let horizon = UIColor(rgb: 0xFFC08E)
+
+    /// The glass tint of the chrome while a private tab is on screen: Night in both appearances,
+    /// drawn with the dark style (light text and glyphs), as Safari darkens its bar. White text on
+    /// it is 10:1 or more over a white page.
     public static let privateGlassTint = UIColor(
-        light: UIColor(rgb: 0x2E2560, alpha: 0.9), dark: UIColor(rgb: 0x3A2D7A, alpha: 0.86)
+        light: night.withAlphaComponent(0.9), dark: nightLifted.withAlphaComponent(0.86)
     )
 
-    /// The top band's private tint: `privateGlassTint`'s deep violet, a little lighter, so the
-    /// capsules on it read as their own layer; drawn dark like them (`TopBand.setPrivate`).
+    /// The top band's private tint: Night, a little lighter, so the capsules on it read as their
+    /// own layer; drawn dark like them (`TopBand.setPrivate`).
     public static let privateBandGlassTint = UIColor(
-        light: UIColor(rgb: 0x2E2560, alpha: 0.72), dark: UIColor(rgb: 0x3A2D7A, alpha: 0.64)
+        light: night.withAlphaComponent(0.8), dark: nightLifted.withAlphaComponent(0.74)
     )
 
-    /// The private mark (`hand.raised.fill`) on the private glass and the start screen: a light
-    /// violet, 5:1 or more on `privateGlassTint`.
-    public static let privateAccent = UIColor(rgb: 0xC2B4FF)
+    /// The private mark (`hand.raised.fill`) on the private glass and the start screen: Horizon.
+    public static let privateAccent = horizon
 
-    /// The tab switcher's selected Private segment: white text on it is about 5:1.
-    public static let privateSelection = UIColor(rgb: 0x6E5AE6)
+    /// The selected Private side of the Private | Tabs switch: a Horizon capsule with ink on it
+    /// (`privateSelectionInk`, 10:1).
+    public static let privateSelection = horizon
+    /// The text on `privateSelection`.
+    public static let privateSelectionInk = UIColor(rgb: 0x0A2133)
 
     /// The tab switcher's selected Tabs segment (on the always-dark gallery) and the text on it.
     public static let galleryModeLight = UIColor(rgb: 0xF4F1EA)
     public static let galleryModeInk = UIColor(rgb: 0x0A2133)
 
-    /// The tab gallery's background while it shows private tabs, the private start screen (always
-    /// drawn dark) and the strip behind the status bar.
-    public static let privateBackground = UIColor(light: UIColor(rgb: 0xEEEBF6), dark: UIColor(rgb: 0x15122A))
+    /// The background of what is private and drawn dark (the gallery's private list, the private
+    /// start screen, the sidebar in private): Night, a step deeper than the glass. In a light app
+    /// the strip behind the status bar takes the light step: Paper in shadow, with no hue.
+    public static let privateBackground = UIColor(light: UIColor(rgb: 0xE9E7E3), dark: UIColor(rgb: 0x121110))
+
+    /// The search sheet's card in a private tab: Night over the blur, drawn dark (opaque under
+    /// Increase Contrast), so the field, the rows and the dark keyboard read as one private surface.
+    public static let privateSheetTint = UIColor.anyThread { traits in
+        UIColor(rgb: 0x1B1A19, alpha: traits.accessibilityContrast == .high ? 1 : 0.84)
+    }
+
+    /// The private start screen's glow: a low Horizon at the bottom, the dawn before it breaks.
+    public static let privateGlow = horizon.withAlphaComponent(0.12)
 
     /// Lagoon Blue for text and symbols on glass: in dark mode a lighter step of the same blue,
     /// so labels keep their contrast on the dark glass.
@@ -124,8 +152,8 @@ public enum Palette {
     /// (owner, on the Duo: "non-selected tabs [...] are just part of the whole bar"). Half the
     /// card's weight: the tab on screen stays the one solid card.
     public static let tabPlate = UIColor(light: UIColor(rgb: 0xFFFFFF, alpha: 0.5), dark: UIColor(rgb: 0x16344A, alpha: 0.55))
-    /// A private tab's plate: the dusk tint, as its page.
-    public static let privateTabPlate = UIColor(light: UIColor(rgb: 0xEEEBF6, alpha: 0.85), dark: UIColor(rgb: 0x15122A, alpha: 0.85))
+    /// A private tab's plate: Night, as its glass (the private list is drawn dark).
+    public static let privateTabPlate = UIColor(light: UIColor(rgb: 0xE9E7E3, alpha: 0.85), dark: UIColor(rgb: 0x2C2A28, alpha: 0.85))
     /// The hairline around a tab's plate: it keeps the plate's edge over a white page or a dark one.
     public static let tabPlateEdge = UIColor(light: UIColor(rgb: 0x0A2133, alpha: 0.12), dark: UIColor(rgb: 0xFFF6E6, alpha: 0.14))
 

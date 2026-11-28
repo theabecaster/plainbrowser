@@ -97,6 +97,20 @@ public enum Motion {
         }
     }
 
+    /// A change of mode (into private or out of it): the material changes in `quick`, and a tab
+    /// list swaps its rows in this crossfade, with nothing moving (docs/decisions.md, "Private
+    /// mode you can't miss").
+    public static let modeChangeDuration: TimeInterval = 0.18
+
+    /// Swaps `view`'s contents for another mode's in one `modeChangeDuration` crossfade.
+    public static func crossfadeMode(_ view: UIView, changes: @escaping () -> Void) {
+        UIView.transition(
+            with: view, duration: modeChangeDuration,
+            options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState],
+            animations: changes
+        )
+    }
+
     /// Applies `changes` at once inside a 0.2 s crossfade of `view`: the Reduce Motion form of a
     /// move, for motion that is not a `UIView` animation (a `SpringDriver`).
     public static func crossfade(_ view: UIView, changes: @escaping () -> Void, completion: (() -> Void)? = nil) {

@@ -163,6 +163,19 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// Over and under a row's text.
     static let rowTextInset: CGFloat = 5
 
+    /// The card's look: Paper over the blur, or Night drawn dark while private, as the field on
+    /// it and the keyboard under it, so typing in a private tab looks private from edge to edge
+    /// (docs/decisions.md, "Private as a clear mode on wide screens"). Set inside the chrome's
+    /// mode change.
+    private(set) var isPrivate = false
+
+    func setPrivate(_ isPrivate: Bool) {
+        guard isPrivate != self.isPrivate else { return }
+        self.isPrivate = isPrivate
+        overrideUserInterfaceStyle = isPrivate ? .dark : .unspecified
+        tint.backgroundColor = isPrivate ? Palette.privateSheetTint : Palette.sheetTint
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         accessibilityIdentifier = "searchSheet"

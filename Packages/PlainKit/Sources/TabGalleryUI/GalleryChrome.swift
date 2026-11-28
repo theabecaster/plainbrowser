@@ -217,10 +217,23 @@ final class GalleryBottomBar: UIView {
 
 /// The switcher's two lists as one two-state control, Safari's "Private | N Tabs": Private on the
 /// leading side (Safari's order), each side named, with its count. The side shown sits on a
-/// filled capsule: violet for Private, light for Tabs, so the mode reads from across the room and
+/// filled capsule: Horizon for Private, light for Tabs, so the mode reads from across the room and
 /// the way back is the other word, one tap away (owner, 2026-11-27: "confusing how to turn off
 /// private mode"; NN/g: name the modes, show the active one, keep the exit labelled).
+///
+/// The same control ends the tab strip on wide screens (`Style.strip`: the strip's height, on its
+/// glass), so the phone's switcher and the inner screen's tab list enter and leave private the
+/// same way (docs/decisions.md, "Private as a clear mode on wide screens").
 final class GalleryModeSwitch: UIView {
+    enum Style {
+        /// The switcher's bar: always on dark glass.
+        case gallery
+        /// The end of the tab strip: on the strip's glass (Paper, or Night while private), as
+        /// tall as a tab.
+        case strip
+    }
+
+    let style: Style
     let privateSide = UIButton(type: .custom)
     let tabsSide = UIButton(type: .custom)
     private let thumb = UIView()
@@ -233,11 +246,13 @@ final class GalleryModeSwitch: UIView {
     /// A side was tapped: true for Private.
     var onSelect: (Bool) -> Void = { _ in }
 
-    private static let sideInset: CGFloat = 12
-    private static let minSide: CGFloat = 64
+    private var sideInset: CGFloat { style == .gallery ? 12 : 10 }
+    private var minSide: CGFloat { style == .gallery ? 64 : 52 }
+    private var textStyle: UIFont.TextStyle { style == .gallery ? .subheadline : .footnote }
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(style: Style = .gallery) {
+        self.style = style
+        super.init(frame: .zero)
         // The bar's cap (AddressPill) would push the capsule off the Duo's outer screen; the Large
         // Content Viewer shows the words big.
         maximumContentSizeCategory = .extraLarge
@@ -249,14 +264,14 @@ final class GalleryModeSwitch: UIView {
             button.addAction(UIAction { [weak self] _ in self?.onSelect(isPrivateSide) }, for: .primaryActionTriggered)
             addSubview(button)
         }
-        privateSide.accessibilityIdentifier = "galleryPrivate"
+        privateSide.accessibilityIdentifier = style == .gallery ? "galleryPrivate" : "tabStrip.private"
         privateSide.accessibilityLabel = String(localized: "Private")
         privateSide.largeContentTitle = String(localized: "Private")
-        tabsSide.accessibilityIdentifier = "galleryRegular"
+        tabsSide.accessibilityIdentifier = style == .gallery ? "galleryRegular" : "tabStrip.regular"
         tabsSide.accessibilityLabel = String(localized: "Tabs")
         tabsSide.largeContentTitle = String(localized: "Tabs")
-        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (view: GalleryModeSwitch, _) in
-            view.applyTitles()
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self, UITraitUserInterfaceStyle.self]) {
+            (view: GalleryModeSwitch, _) in view.applyTitles()
         }
         applyTitles()
     }
@@ -278,12 +293,21 @@ final class GalleryModeSwitch: UIView {
         return (fittingWidth(showingCounts: showsCounts), fittingWidth(showingCounts: true)) != before
     }
 
+    /// The text of a side: ink on the filled capsule (Horizon, or the light Tabs one), light on
+    /// the gallery's dark glass, the glass's own secondary ink on the strip.
+    private func textColor(selected: Bool, privateSide isPrivateSide: Bool) -> UIColor {
+        if selected {
+            if isPrivateSide { return Palette.privateSelectionInk }
+            return style == .gallery ? Palette.galleryModeInk : Palette.textPrimary
+        }
+        return style == .gallery ? .white : Palette.textSecondary
+    }
+
     private func title(privateSide isPrivateSide: Bool, showingCounts: Bool) -> NSAttributedString {
-        let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traitCollection)
+        let font = UIFont.preferredFont(forTextStyle: textStyle, compatibleWith: traitCollection)
         let selected = isPrivateSide == isPrivate
         let count = isPrivateSide ? counts.private : counts.regular
-        // On the light Tabs capsule the text is dark; everywhere else light on the dark glass.
-        let color: UIColor = selected && !isPrivateSide ? Palette.galleryModeInk : .white
+        let color = textColor(selected: selected, privateSide: isPrivateSide).resolvedColor(with: traitCollection)
         let title = NSMutableAttributedString(
             string: isPrivateSide ? String(localized: "Private") : String(localized: "Tabs"),
             attributes: [.font: font.withWeight(.semibold), .foregroundColor: color]
@@ -304,26 +328,38 @@ final class GalleryModeSwitch: UIView {
             button.accessibilityValue = count == 1 ? String(localized: "1 tab") : String(localized: "\(count) tabs")
             button.accessibilityTraits = isPrivateSide == isPrivate ? [.button, .selected] : .button
         }
-        thumb.backgroundColor = isPrivate ? Palette.privateSelection : Palette.galleryModeLight
+        switch style {
+        case .gallery:
+            thumb.backgroundColor = isPrivate ? Palette.privateSelection : Palette.galleryModeLight
+        case .strip:
+            // Tabs: a solid card with a hairline, as the tab on screen, but a capsule, so it never
+            // reads as one more tab.
+            thumb.backgroundColor = isPrivate ? Palette.privateSelection : Palette.surface
+            thumb.layer.borderWidth = isPrivate ? 0 : 0.5
+            thumb.layer.borderColor = Palette.tabPlateEdge.resolvedColor(with: traitCollection).cgColor
+        }
     }
 
-    private static func sideWidth(_ title: NSAttributedString) -> CGFloat {
+    private func sideWidth(_ title: NSAttributedString) -> CGFloat {
         max(minSide, ceil(title.size().width) + sideInset * 2)
     }
 
     private func sideWidth(_ button: UIButton) -> CGFloat {
-        Self.sideWidth(button.attributedTitle(for: .normal) ?? NSAttributedString())
+        sideWidth(button.attributedTitle(for: .normal) ?? NSAttributedString())
     }
 
     /// The switch's width with or without the counts, measured without changing what it shows.
     func fittingWidth(showingCounts: Bool) -> CGFloat {
-        Self.sideWidth(title(privateSide: true, showingCounts: showingCounts))
-            + Self.sideWidth(title(privateSide: false, showingCounts: showingCounts))
+        sideWidth(title(privateSide: true, showingCounts: showingCounts))
+            + sideWidth(title(privateSide: false, showingCounts: showingCounts))
     }
 
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         CGSize(width: sideWidth(privateSide) + sideWidth(tabsSide), height: Metrics.tapTarget)
     }
+
+    /// The filled capsule's height: the gallery's bar less a hair, or a strip tab's.
+    private var thumbHeight: CGFloat { style == .gallery ? Metrics.tapTarget - 2 * Spacing.xxs : 30 }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -334,7 +370,7 @@ final class GalleryModeSwitch: UIView {
         privateSide.frame = CGRect(x: rightToLeft ? tabsWidth : 0, y: 0, width: privateWidth, height: bounds.height)
         tabsSide.frame = CGRect(x: rightToLeft ? 0 : privateWidth, y: 0, width: tabsWidth, height: bounds.height)
         let selected = isPrivate ? privateSide.frame : tabsSide.frame
-        let thumbFrame = selected.insetBy(dx: 0, dy: Spacing.xxs)
+        let thumbFrame = selected.insetBy(dx: 0, dy: max(0, (bounds.height - thumbHeight) / 2))
         if thumb.frame != thumbFrame { thumb.frame = thumbFrame }
         thumb.layer.cornerRadius = thumbFrame.height / 2
     }

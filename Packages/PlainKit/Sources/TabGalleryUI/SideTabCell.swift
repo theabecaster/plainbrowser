@@ -226,16 +226,28 @@ final class SideTabCell: UICollectionViewCell {
     }
 }
 
-/// One of the sidebar's own rows (New Tab, Show Titles): a symbol where the tabs' tiles stand and
-/// its name where their titles start, so it reads as a button in the rail and as a row in Expanded.
+/// One of the sidebar's own rows (New Tab, Show Titles, Private and Tabs): a symbol where the tabs'
+/// tiles stand and its name where their titles start, so it reads as a button in the rail and as a
+/// row in Expanded.
 final class SideActionRow: UIControl {
     private let tile = UIView()
     private let symbol = UIImageView()
     private let label = UILabel()
+    /// A mode row's plate while its mode is on (`setMode`): it spans what the sidebar shows, as
+    /// the tab on screen's mark does, so the mode reads in the rail too.
+    private let selection = UIView()
+    /// A mode row's count, after its name.
+    private let countLabel = UILabel()
+    private var visibleWidth = SidebarState.rail.width
 
     /// - Parameter prominent: the row's symbol sits on a Lagoon-tinted tile (New Tab).
     init(symbolName: String, title: String, prominent: Bool) {
         super.init(frame: .zero)
+        selection.isHidden = true
+        selection.isUserInteractionEnabled = false
+        selection.layer.cornerRadius = Radius.medium
+        selection.layer.cornerCurve = .continuous
+        addSubview(selection)
         tile.layer.cornerRadius = Radius.medium
         tile.layer.cornerCurve = .continuous
         tile.backgroundColor = prominent ? Palette.pressed : .clear
@@ -251,6 +263,11 @@ final class SideActionRow: UIControl {
         label.textColor = prominent ? Palette.accentOnPaper : Palette.inkSecondary
         label.isUserInteractionEnabled = false
         addSubview(label)
+        countLabel.font = UIFont.monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .regular)
+        countLabel.textAlignment = .right
+        countLabel.isUserInteractionEnabled = false
+        countLabel.isHidden = true
+        addSubview(countLabel)
         isAccessibilityElement = true
         accessibilityTraits = .button
         showsLargeContentViewer = true
@@ -285,7 +302,31 @@ final class SideActionRow: UIControl {
     }
 
     func setVisibleWidth(_ width: CGFloat) {
-        label.alpha = SideTabMetrics.titleAlpha(visibleWidth: width)
+        visibleWidth = width
+        let alpha = SideTabMetrics.titleAlpha(visibleWidth: width)
+        label.alpha = alpha
+        countLabel.alpha = alpha
+        selection.frame = SideTabMetrics.markFrame(rowHeight: bounds.height, visibleWidth: width)
+    }
+
+    /// Makes the row one side of the Private | Tabs switch at the sidebar's head: `selected` while
+    /// its mode is on (Private on a Horizon plate with ink on it, Tabs on a card with a hairline,
+    /// both spanning the row as the tab on screen's mark does), its count after its name.
+    func setMode(selected: Bool, isPrivateRow: Bool, count: Int) {
+        selection.isHidden = !selected
+        selection.backgroundColor = isPrivateRow ? Palette.privateSelection : Palette.surface
+        selection.layer.borderWidth = selected && !isPrivateRow ? 0.5 : 0
+        selection.layer.borderColor = Palette.tabPlateEdge.resolvedColor(with: traitCollection).cgColor
+        let ink: UIColor = selected ? (isPrivateRow ? Palette.privateSelectionInk : Palette.ink) : Palette.inkSecondary
+        symbol.tintColor = ink
+        label.textColor = ink
+        label.font = UIFont.preferredFont(forTextStyle: .subheadline).withWeight(selected ? .semibold : .regular)
+        countLabel.textColor = ink.withAlphaComponent(0.72)
+        countLabel.text = count > 0 ? "\(count)" : nil
+        countLabel.isHidden = count == 0
+        accessibilityValue = count == 1 ? String(localized: "1 tab") : String(localized: "\(count) tabs")
+        accessibilityTraits = selected ? [.button, .selected] : .button
+        setNeedsLayout()
     }
 
     /// Where VoiceOver, Switch Control and UI tests touch the row: its tile, which shows in the
@@ -316,8 +357,11 @@ final class SideActionRow: UIControl {
         tile.frame = SideTabMetrics.tileFrame(rowHeight: bounds.height)
         tile.transform = transform
         symbol.frame = tile.bounds
+        selection.frame = SideTabMetrics.markFrame(rowHeight: bounds.height, visibleWidth: visibleWidth)
         let x = SideTabMetrics.rail
-        label.frame = CGRect(x: x, y: 0, width: max(0, bounds.width - x - Spacing.m), height: bounds.height)
+        let countWidth: CGFloat = countLabel.isHidden ? 0 : 40
+        countLabel.frame = CGRect(x: bounds.width - Spacing.m - countWidth, y: 0, width: countWidth, height: bounds.height)
+        label.frame = CGRect(x: x, y: 0, width: max(0, bounds.width - x - Spacing.m - countWidth), height: bounds.height)
     }
 }
 #endif

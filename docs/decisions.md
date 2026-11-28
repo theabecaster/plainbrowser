@@ -3355,3 +3355,98 @@ the selected icon properly."
   now guarded by a test.
 - **Perf:** no new framework is loaded; a configuration flag and an Info.plist key. Launch and
   memory budgets are untouched by construction.
+||||||| parent of b4a7b122 (Private as a clear mode on wide screens, in Night and Horizon: one mode per strip, sidebar and split, a Private | Tabs switch where the list lives, violet replaced)
+
+||||||| parent of 7359c9f6 (Private as a clear mode on wide screens, in Night and Horizon: one mode per strip, sidebar and split, a Private | Tabs switch where the list lives, violet replaced)
+
+## Private as a clear mode on wide screens, in Night and Horizon (2026-11-28)
+
+Owner, on TestFlight: "Private mode on regular phone screens and the Duo outer screen is great and
+clear. However it doesn't go very well for the inner Duo and iPad layouts: it mixes the private
+and regular tabs. It should be more like the outer screen, where it's a clear mode ... as well as
+clear entry and exits from private mode. Also I don't like the purple dark-mode colors ... that
+purple takes away the premium feel and gives AI-slop vibes." Supersedes the violet of "Private
+mode you can't miss" (its cues and rules stay); research added to docs/research/private-mode.md.
+
+- **One window, one mode.** The strip and the sidebar list the shown mode's tabs only (was: the
+  regular tabs, then a private section after them). The mode is the focused pane's tab's; on a
+  split's empty pane it is the other pane's (`showsPrivateMode`). Each window reads its own panes,
+  so two windows can be in different modes. Relaunch is never private (private tabs are never
+  kept), unchanged.
+- **The switch lives where the list lives,** one tap each way, both sides named with their counts:
+  at the strip's trailing end, the switcher's own control at a tab's height (`GalleryModeSwitch`,
+  `.strip`), so the phone's switcher and the inner screen enter and leave the same way; at the
+  sidebar's head, two rows, Private then Tabs, the shown one on a plate that spans what the column
+  shows (in the rail too), as Safari's iPad sidebar lists Private beside the tab groups. A
+  horizontal two-segment control can't fit a 52 pt rail, and rows are the sidebar's own grammar.
+  Entering takes the private tab seen last, else a new private tab with the field up over the
+  private start screen; closing the field untouched stays private (the mode was asked for, so the
+  "back to the page" return of New Tab does not apply). Leaving takes the regular tab seen last,
+  else a new tab. The mode left keeps its tabs, as on the phone.
+- **Also explicit:** "+" opens the shown mode's kind and its long press the other (unchanged on a
+  page, now also on an empty pane); the sidebar's New Tab row reads New Private Tab while
+  private; a long press on the Private side (strip or sidebar) offers New Private Tab and, with
+  any open, Close All Private Tabs (no confirmation, as in the tabs menu; nothing comes back).
+  Leave Private on the private start screen and Close All in the switcher and tabs menu stay.
+- **A split shows one mode.** A tab of the other kind coming into the focused pane (the switch,
+  New Private Tab, a card of the other list) closes the other pane first; its tab stays open in
+  its list, and the window shows one pane (`endSplitOfOtherMode`). Open in Other Pane is offered
+  only for the window's mode (the gallery's other list doesn't offer it; a call for another
+  mode's tab opens it in the focused pane). An empty pane beside a private page is private: its
+  chrome is Night and typing there opens a private tab. Why not allow a mixed split: the top bar
+  spans both panes and can only be one material, and the list can only show one mode; a mixed
+  split would be the mixing the owner rejected.
+- **The look changes as one material change** (`Motion.quick` for the glass and the column, the
+  lists swap their rows in one 0.18 s crossfade, `Motion.crossfadeMode`): nothing slides, the
+  strip only resizes if its width changes. While private the band, capsules, strip, the whole
+  sidebar column and the search sheet are Night, drawn dark.
+- **Not changed:** the side pane keeps Paper and its History is the regular history, as the History
+  sheet in a private tab; a row opens in the private tab and nothing is recorded. Drag between
+  modes can't happen: each list holds one mode, and drops from outside it are refused.
+
+**Colour: Night and Horizon, replacing the violet.** Research (docs/research/private-mode.md,
+"Colour"): Safari darkens its bar and, on iPad, greys the background; Chrome's Incognito is a
+dark grey scheme; Arc's is a dark bar; the purple ones are Firefox's private windows and Firefox
+Focus (its brand), Brave, and the gradient-violet look the owner calls AI slop. Premium dark UIs
+(Apple's own dark materials, watch faces, camera apps) are neutral graphite with one warm light.
+- `Palette.night` `#1B1A19`: a warm graphite, the mark's night sky with the colour taken out.
+  Neutral, so a private bar never reads as the dark app's Deep Lagoon navy glass; warm, so it sits
+  with Paper. `nightLifted` `#242321` for glass in the dark app, so it separates from a black page.
+  Glass: 0.9 / 0.86 (white text 13:1 / 10:1 over a white page, 17:1 over black); the band a step
+  lighter, 0.8 / 0.74 (the host sits on its capsule at the full tint).
+- `Palette.horizon` `#FFC08E`: the mark's own dawn where it meets the planet (Brand/identity.md,
+  "View sky"). The one warm light on Night: the private mark, the word "Private" on the pill, the
+  filled Private side (with `privateSelectionInk` `#0A2133` on it, 10:1). On the private glass it
+  is 8:1 over a white page, 11:1 over black. Story: private is the night before Plain's dawn.
+- `privateBackground` `#121110` (dark) for what is drawn dark (start screen, gallery, sidebar),
+  `#E9E7E3` (light: Paper in shadow, no hue) behind the status bar in a light app;
+  `privateSheetTint` Night 0.84 (opaque under Increase Contrast); `privateGlow` Horizon at 0.12,
+  a low dawn at the start screen's foot; `privateTabPlate` Night lifted.
+- **Not colour alone:** Night, the hand mark and the word "Private" before the host, the titled
+  start screen and the named, filled switch side say it together (NN/g: two cues at least). Why
+  not black like Safari: a dark page or the dark app would look private; Night is warmer and
+  lighter than black and comes with the mark and the word. Why not a Lagoon or coral accent:
+  Lagoon is the regular focus and links, coral the one thing that matters on a page; Horizon is
+  the brand's colour no control used yet.
+
+| Edge case (phone and outer screen) | Inner screen and iPad-size windows | Tested |
+|---|---|---|
+| The mode is unmistakable | Night band, capsules, strip, sidebar and search sheet; mark and "Private" in the pill and the collapsed band's host | captures |
+| One tap in, one tap out, both named | Private \| Tabs at the strip's end and the sidebar's head | `PrivateWideTests` strip, sidebar |
+| The list shows one mode | strip and sidebar list the shown mode only | `PrivateWideTests`, `SideTabsViewTests` |
+| Entry with none open | a new private tab, field up over the private start screen; closing it stays private | `testEnteringPrivateFromTheSwitchStaysPrivate` |
+| Exit returns to the tab seen last | the switch's Tabs, also Private brings the private tab back | strip test |
+| New Private Tab from "+" long press | the top bar's "+" (shown mode's kind on tap) | `testNewTabOpensTheShownModeAndItsLongPressTheOther` |
+| Leave Private on the start screen | unchanged; also on an empty split pane beside a private page | captures |
+| Close All Private Tabs | switcher, tabs menu, and the switch's Private side | `testCloseAllPrivateTabsFromTheSwitch` |
+| Last private tab closed | the regular tab seen last (unchanged) | `PrivateModeTests` |
+| Relaunch never private | unchanged (private tabs are never kept) | `PrivateModeTests.testRelaunchIsNeverPrivate` |
+| Per window | each window's mode is its own panes' | by construction |
+| Dark keyboard, no predictions | unchanged, and the search sheet is Night | captures |
+| Status bar light over the private start | unchanged | captures |
+| Wide only: split panes | one mode per split; the other mode ends it; empty pane follows its neighbour | `testASplitEndsWhenTheModeChanges` |
+| Wide only: the side pane | stays Paper; History opens in the private tab, records nothing | by construction |
+| Wide only: drag between modes | impossible: one mode per list, foreign drops refused | by construction |
+| Wide only: strip with 1 vs many tabs | the strip shows from two page tabs of either mode, so one private and one regular show it with the switch; one tab in all: no strip, the Tabs button's switcher is the way (as on the phone) | captures strip-1/2/5 |
+| Wide only: sidebar rail vs expanded | the rows and their plate work at 52 pt and 260 pt; titles and counts fade with the width | captures rail/expanded |
+| Wide only: portrait, landscape, narrower windows | layout from size classes and bounds only; the switch's counts never drop on the strip (it scrolls its tabs instead) | captures |

@@ -364,6 +364,9 @@ extension BrowserViewController {
     /// Opens `tab` in the other pane: the split opens when it isn't, else the other pane shows it.
     func openInOtherPane(_ tab: Tab) {
         guard canSplit else { return }
+        // A split shows one mode: a tab of the other kind takes the focused pane instead (and
+        // ends the split), never the pane beside a page of this one.
+        guard tab.isPrivate == showsPrivateMode else { return show(tab) }
         let signposter = Signposts.signposter
         let interval = signposter.beginInterval(Signposts.splitOpen, id: signposter.makeSignpostID(), "tab")
         defer { signposter.endInterval(Signposts.splitOpen, interval) }

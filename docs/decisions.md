@@ -2521,7 +2521,8 @@ like separate things; they're just part of the whole bar."
   ticks once as the titles come in and once as they go, with a band between
   (`FixedChoices.sidebarTitlesTick`: in past 0.6 of the way, out under 0.4) so the edge never
   chatters; a tab dragged to reorder in the strip or the sidebar ticks at each new place and
-  lands with `.threshold` (a drop of its own comes with the haptics lane).
+  lands with `.drop`. Neither list applies a snapshot inside the reorder handler (a crash on
+  TestFlight in the strip): the reload runs once the reorder is committed.
 - **Design review, round 2** (Codex, on captures of the real inner screen): a private tab in the
   strip carries a small hand before its title (the strip has no "Private" header, and the tab
   on screen is a white card like any other); VoiceOver reads "Private" first. Left for the
@@ -2537,3 +2538,142 @@ like separate things; they're just part of the whole bar."
   scrolling. The longest single step was 2 to 6 ms on a quiet host and 42 to 64 ms once in a run
   on a loaded one (the host, not the list: it moved between the rail and the strip from run to
   run). To confirm on the device with Instruments.
+
+
+## Search sheet: the pill grows into it (2026-11-27)
+
+Owner, on TestFlight: "I don't like the way the address bar expands out. Really look at what Arc
+does. It's not even clear how I dismiss the one you implemented. I like how the bar/text field
+ends up at the top, and I like how the transition grows into the expanded thing. And also the
+options on the text field and the sizing of the text field." The field rests at the bottom as
+before; expanded, it goes to the top. Arc Search's expand was read frame by frame from the owner's
+recording; the spec, the frames, the transition table and the reasons are in
+docs/research/arc-address-expand.md. This supersedes the layout in "Address focus and the page
+sheet" (the field above the keyboard, rows hanging over it, a paper veil): the two intents, the
+rows' content and the copied-link rules there stand.
+
+**What changed.**
+
+- **One sheet, one motion.** A tap grows the pill into a paper card over the dimmed, still sharp
+  page: the pill rides up to the card's top (18.7% down the screen, Arc's place) and is the field;
+  rows run top down under it; the card runs to the bottom edge behind the keyboard. One progress
+  value (0 rest, 1 open) on `SpringDriver` with `Motion.searchSheet` (0.28 s, no bounce: Arc's
+  move measured at 90% in ~170 ms, no overshoot). The open layout is made once, before the first
+  frame; frames set transforms and opacities only. Closing is the same motion backwards, and the
+  resting constraints come back at progress 0, where the motion left the pill.
+- **The field no longer follows the keyboard.** `keyboardLayoutGuide` only bounds the rows now
+  (whole rows only, as before, cut at the keyboard instead of the top).
+- **Rows top down.** Favorites sit between the field and the rows while the field is empty;
+  Browse for Me's row is the first place under the field while typing; the best suggestion is the
+  first row. The paper "plate" behind the rows is gone: the card is the surface.
+- **The veil is a dim.** `FrostView` was 70% paper over the whole page; it is now a light dim
+  (`Palette.sheetScrim`), because the card carries the content and the page above it should stay
+  readable as the place to go back to.
+- **The way out.** The handle at the card's top (tap, or the swipe it marks), an interactive swipe
+  down on the card or the field, a tap on the dimmed page; Cancel beside the field under a top
+  bar. Why the handle and not Cancel on phones: research note §4.
+- **Under a top bar (Duo inner).** The pill stays in the bar's row and widens into the field (up
+  to `FixedChoices.topBarPillMaxWidth`, with Cancel's room kept beside it; the bar's buttons fade,
+  so it need not stay between them); the card grows down from it (a clip whose height follows the
+  progress; its content is pinned to the top and never lays out). Before, the pill left the bar
+  for the keyboard and came back, a jump across the screen.
+- **The motion shows all of itself.** `SpringDriver.animate(fromFirstFrame:)`: the spring's clock
+  starts at the first frame after the tap and a late frame moves it on by 1/30 s at most, so the
+  keyboard's start (a stall of several frames on the main thread) stretches the motion a little
+  instead of cutting to its end.
+- **Hardware keyboard.** Command-L opens the sheet; Escape or Command-period closes it.
+- **Field options.** Microphone (on-device dictation, `FieldDictation`; Speech and the microphone
+  are asked for on the first tap; `NSSpeechRecognitionUsageDescription` added) and Browse for Me
+  (arms Return) in the empty field; the system clear button once typed; Copy as before.
+  `FixedChoices.dictationQuietEnd` = 2 s.
+
+**Considered and not taken.**
+
+- *A Cancel button beside the field on phones.* Clear, but it narrows the field the owner asked to
+  keep at Arc's size, and puts a second control beside the field's own ×.
+- *Animating constraints inside the keyboard's animation (as before).* The keyboard's curve is not
+  Arc's move, it cannot be caught mid-flight, and it lays out every frame.
+- *Masking a full-screen surface from the pill's outline to the card.* A mask over a blur costs an
+  offscreen pass per frame; a translation costs nothing, and the card below the pill's row is
+  hidden by its own opacity ramp for the first frames.
+- *Moving the field on the inner screen.* It is already at the top; moving it anywhere would be
+  the jump the owner objected to.
+- *Server dictation.* Never: speech stays on the phone or the microphone is not offered.
+
+**Costs.** Closing lays the root view out twice more at its start (once resting, once open) to
+read where the pill will rest; both passes run in the same turn and nothing is shown between
+them. The card is a blur under the keyboard for as long as the sheet is open (one more blurred
+surface than before; the paper veil had none).
+
+**Checked (simulators, 2026-11-27).** Captures read for each; the UI tests in
+`PlainUITests/SearchSheetTests.swift`.
+
+- Duo outer (466×678), dark and light: rest, first frames, open, typing, armed, closed, page
+  sheet, edit address. 60 fps strips of the open and the close beside Arc's (research note §5).
+  `SearchSheetTests` 9 of 9, `AddressFocusTests` 6 of 6, and the suggestion, state-rule, summary
+  and feature-sheet tests that touch the sheet.
+- iPhone 17e (390×844), light and dark: portrait, landscape (the sheet starts under the safe
+  area), a rotation while open (lays out again, then closes to the resting pill), Dynamic Type
+  at accessibility XL and at XXXL, Reduce Motion (a crossfade, no movement; 9 of 9).
+- iPhone 18 Pro Max, light and dark: 10 of 10.
+- Duo inner, the real inner screen (Device Hub), dark, with the status corner: landscape
+  stills (the field widens in its row and stops short of the clock, Cancel beside it, the card
+  grows down, the page dimmed on both sides, a tap opens and Cancel closes to the resting bar),
+  `SearchSheetTests` 7 of 10 (the three swipe tests skip: a top bar's sheet has no swipe),
+  split panes and the side pane, portrait, book pose, and a fold while open: inner, closed (the
+  outer screen's sheet with its handle), book pose, open again, rotated, each laid out again,
+  then closed to the resting bar. Also the simulator's resizable window (951×669, 669×951,
+  475×669) driven from the keyboard, light and dark.
+- After the merge with dev's one-row bar for a phone on its side: rest, open, typing and closed
+  on the iPhone 17e in landscape.
+- `urlBar.ready`, simulator, Debug: 501–570 ms after the first run (863 ms cold); the device
+  gate decides.
+
+**Known.** `LaunchTests.testLongAwayOpensSearchOverTheLastTab` reads the first screenshot; on a
+loaded host the launch picture is sometimes not decoded by then (it fades in a moment later, as
+designed) and the test fails. Command-L depends on the browser being in the responder chain; in
+UI test runs it missed two opens right after a page load. XCUITest's Escape never reached the
+field in the simulator, so Escape is unverified there; Command-period closes.
+
+## A close button on every tab card (2026-11-27)
+
+The owner asked for a close button besides the swipe. Each card gets a × in its title row's trailing corner: a 24 pt plate inside a 44 pt target, drawn without a glass view (one per card would cost every scroll frame). It calls the card's existing close hook, so the motion, haptic, signpost and Reopen toast are the swipe's own. It lives in the card's body, outside the masked title row, so the mask never clips it; it sits at the edge of the part of the card that shows, so the focused cascade card (the next card over its trailing 22%) keeps one, and a card covered by more than half hides it. The gallery's scroll view cancels touches on it, so a sideways drag that starts on the × still scrolls.
+## Haptics: abundant yet purposeful (2026-11-27)
+
+The owner asked for haptics "everywhere it makes sense to show the user a confirmation or a
+denial", at the app's level of feel. The research, the language and the inventory of 207
+interactions are in docs/research/haptics.md; the rules are in docs/ui-reference.md, "Haptics".
+
+- **One enum, eight kinds, view-attached generators.** `Haptic` (DesignSystem) keeps its names
+  and adds `drop` (rigid 0.6, a dragged item landing) and `failed`. Generators are made with
+  `init(view:)` / `init(style:view:)` on the window that plays them (the view-less initializers
+  are deprecated), one set per window, made on first use and let go with the window. A point can
+  be passed for Apple Pencil Pro and haptic trackpads. `Haptic.x.play()` with no arguments still
+  works.
+- **`threshold` is a medium impact at 0.7, not rigid.** Rigid read as a click; a gesture crossing
+  into a new outcome is a firmer, rounder moment, and rigid now means a drop.
+- **`failed` is the notification warning, never error.** Error's three hits read as an alarm;
+  Plain's failures are recoverable and always say why with Try Again.
+- **A 60 ms throttle, first wins** (`FixedChoices.hapticMinimumGap`). Two calls that close are one
+  event, and the first is the one in sync with the picture. `nothingThere` keeps its own 1 s gap.
+- **Gates:** nothing plays inside `Haptic.withoutFeedback` (key commands) or while the app is not
+  active (an outcome plays with its toast). Each play emits the `haptic` signpost, so Instruments
+  shows it on the motion's timeline. `prepare()` goes through once until the next fire.
+- **`ThresholdLatch`** writes the both-ways rule once: `threshold` crossing in, `selection` back
+  out past 10 pt of hysteresis, fed with what is on screen after the transform. The bar swipe,
+  the New Tab card, the swipe up into the gallery and a card's close line use it. A release
+  plays at the spring's start, never at its completion.
+- **A download's start tap waits 150 ms** (`FixedChoices.hapticDownloadStartDelay`) and plays only
+  while the download still runs. On the simulator a small file finished 5 ms after it started, so
+  the 60 ms throttle kept the tap and dropped the success the user was waiting for. The start has
+  nothing on screen to sync with; the success plays with its toast.
+- **No `.sensoryFeedback` in SwiftUI.** It can't be throttled, recorded or tied to a window, and it
+  would split the vocabulary; FeatureUI calls `Haptic` from its actions.
+- **No Core Haptics.** No surface is better with a custom pattern: a continuous charge-up on a
+  pull would be a haptic during a scroll, and the launch splash plays every cold launch. It
+  would cost engine start latency, audio-session interplay with page media and reset handling.
+- **No capability gate.** Generators are silent without a Taptic Engine and cost nothing; gating
+  on `CHHapticEngine` would also silence Apple Pencil Pro and haptic trackpads on iPad.
+- **Tests:** `-PlainHapticLog` (isolated runs only) records every play on a hidden element the UI
+  tests read (HapticsTests), and unit tests use `Haptic.recorder`. The perf gate never passes it,
+  so the recorder stays nil there.

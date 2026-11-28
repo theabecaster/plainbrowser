@@ -37,6 +37,9 @@ extension TabGalleryViewController: UIDragInteractionDelegate, UIDropInteraction
         reorder = (id, slot)
         hideDraggedCard(card, hidden: true)
         dismissToastForReorder()
+        // The lift played the system's haptic; ours are the slots and the drop.
+        Haptic.selection.prepare(in: view)
+        Haptic.drop.prepare(in: view)
     }
 
     public func dragInteraction(_ interaction: UIDragInteraction, session: any UIDragSession, didEndWith operation: UIDropOperation) {
@@ -79,10 +82,13 @@ extension TabGalleryViewController: UIDragInteractionDelegate, UIDropInteraction
         guard let reorder else { return }
         Signposts.signposter.emitEvent(Signposts.galleryReorder)
         self.reorder = nil
+        let moved = order.firstIndex(of: reorder.id) != reorder.slot
         dataSource.moveTab(reorder.id, to: reorder.slot)
         // The cards already stand in their new places, so nothing moves again.
         keepDraggedCardHidden(reorder.id)
         reloadTabs(animated: true)
+        // The release is the landing: the drop, in a new place only (back home flies silently).
+        if moved { Haptic.drop.play(in: view, at: session.location(in: view)) }
     }
 
     public func dropInteraction(
@@ -136,12 +142,14 @@ extension TabGalleryViewController: UIDragInteractionDelegate, UIDropInteraction
 
     private func moveReorder(toward location: CGPoint) {
         guard let current = reorder, let target = slot(at: location), target != current.slot else { return }
-        Haptic.selection.play()
         reorder = (current.id, target)
         // Everyone else keeps their order around the dragged card's new place.
         var arranged = order.filter { $0 != current.id }
         arranged.insert(current.id, at: min(target, arranged.count))
         applyArrangement(arranged)
+        // A tick per slot, as the cards start making room. Auto-scroll ticks only when the slot
+        // changes, and the throttle caps a fast run.
+        Haptic.selection.play(in: view, at: location)
     }
 
     /// Puts every card back at its index.

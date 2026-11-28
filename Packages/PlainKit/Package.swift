@@ -129,7 +129,7 @@ let package = Package(
         .testTarget(name: "SystemIntegrationTests", dependencies: ["PlainShared", "SystemSync", "Storage", "WidgetUI"]),
         // The paper texture's generator: seamless, faint, centered on the Paper colors.
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
-        .testTarget(name: "FeatureUITests", dependencies: ["FeatureUI", "Storage", "BrowserCore"]),
+        .testTarget(name: "FeatureUITests", dependencies: ["FeatureUI", "Storage", "BrowserCore", "DesignSystem"]),
         .testTarget(name: "StorageTests", dependencies: ["Storage", .product(name: "GRDB", package: "GRDB.swift")]),
         // WebKit tests; they run on an iOS simulator (xcodebuild) and are empty on macOS.
         .testTarget(name: "ContentBlockingTests", dependencies: ["ContentBlocking"]),

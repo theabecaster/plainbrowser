@@ -160,11 +160,12 @@ public final class TabStripViewController: UIViewController, UICollectionViewDel
                       let section = transaction.finalSnapshot.sectionIdentifier(containingItem: id),
                       let index = transaction.finalSnapshot.itemIdentifiers(inSection: section).firstIndex(of: id) else { continue }
                 Signposts.signposter.emitEvent(Signposts.galleryReorder, "strip")
-                // The drop (`.threshold` until the haptics lane adds a drop of its own).
-                Haptic.threshold.play()
+                Haptic.drop.play()
                 dataSource.moveTab(id, to: index)
             }
-            reloadTabs()
+            // After the reorder has been committed: a snapshot applied inside this handler
+            // raises in UIKit (a crash on TestFlight while dragging a tab in the strip).
+            DispatchQueue.main.async { [weak self] in self?.reloadTabs() }
         }
         reloadTabs()
     }

@@ -41,10 +41,40 @@ enum SheetItem: Hashable {
     }
 }
 
-/// The search sheet the URL pill grows into: it covers the page, lists suggestions above the field,
-/// and shows favorites directly above it (and so above the keyboard) while the field is empty.
+/// Where the open search sheet sits, in the sheet's own coordinates (the root view's). The shell
+/// works it out from the bounds, the safe area and the pill's two frames before a layout pass;
+/// the sheet only places what it is told (docs/research/arc-address-expand.md).
+struct SheetPlacement: Equatable {
+    enum Style: Equatable {
+        /// The bottom bar grows up into a sheet: the card and the field ride up together, and
+        /// the card runs to the bottom edge behind the keyboard (Arc Search).
+        case sheet
+        /// The top bar's field stays where it is and the card grows down from it (a wide
+        /// screen's top bar).
+        case dropdown
+    }
+
+    var style: Style
+    /// The open card.
+    var card: CGRect
+    /// The open field (the pill), which the rows start under.
+    var field: CGRect
+    /// `.sheet`: how far below its open place the card rests while closed (the field's travel).
+    var travel: CGFloat
+    /// `.dropdown`: the card's height while closed (around the resting field).
+    var closedHeight: CGFloat
+    /// `.dropdown`: Cancel beside the field, inside the card.
+    var showsCancel: Bool
+}
+
+/// The search sheet the URL pill grows into: a paper card over the dimmed page, the field at its
+/// top (the pill itself, which the shell moves there) and the rows top-down right under it, best
+/// first; favorites sit between the field and the rows while the field is empty.
 ///
-/// The best suggestion sits nearest the field, where the thumb is.
+/// Opening and closing are one progress value (0 closed, 1 open) the shell drives frame by frame
+/// (`setProgress`): the card and everything on it are laid out once at their open place, and the
+/// progress only translates, fades and (for a dropdown) resizes the card's clip, so no frame of
+/// the motion lays anything out.
 ///
 /// Typing changes the list on every keystroke, so it changes calmly (docs/plan.md, motion table,
 /// "Suggestions change"):
@@ -58,12 +88,17 @@ enum SheetItem: Hashable {
 /// - Every change starts from what is on screen, so a keystroke mid-animation retargets it.
 /// - Reduce Motion: the whole list crossfades at once.
 final class SearchSheet: UIView, UIGestureRecognizerDelegate {
-    /// The sheet's content. The owner pins its bottom above the pill and its sides to the margins.
+    /// How the sheet was asked to close, for the signpost.
+    enum Dismissal: String { case outside, grabber, cancel, swipe, escape }
+
+    /// The rows' container, under the field.
     let content = LayoutReportingView()
     var onPick: (SearchPick) -> Void = { _ in }
-    /// A tap on the sheet outside any row: close the sheet.
-    var onDismiss: () -> Void = {}
-    /// Browse for Me for what is typed (the row above the field).
+    /// A tap on the dimmed page outside the card, the grabber or Cancel: close the sheet.
+    var onDismiss: (Dismissal) -> Void = { _ in }
+    /// A drag on the card (`.sheet`): the shell moves the progress with the finger.
+    var onPan: (UIPanGestureRecognizer) -> Void = { _ in }
+    /// Browse for Me for what is typed (the row under the field).
     var onBrowse: (String) -> Void = { _ in }
     /// "Edit Favorites" from a long press on the favorites strip.
     var onEditFavorites: () -> Void = {} {
@@ -78,14 +113,23 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     /// Bumped each time the field opens or closes (the shell), so an answer that arrives late
     /// (the Paste button's) is only taken by the field it was for.
     var session = 0
+    /// The card: the one surface the field and the rows sit on. It clips its content to its
+    /// rounded top, and a dropdown's growth is its height.
+    let card = UIView()
+    private let material = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+    private let tint = UIView()
+    /// The sheet's handle: it says "pull me down", and a tap on it closes too.
+    private let grabber = UIButton(type: .custom)
+    private let grabberBar = UIView()
+    private let cancelButton = UIButton(type: .system)
+    private let pan = UIPanGestureRecognizer()
+    /// Follows the keyboard's top, so the sheet lays out again when the keyboard moves.
+    private let keyboardProbe = UIView()
+    private(set) var placement: SheetPlacement?
+    private(set) var progress: CGFloat = 0
     private let rowsClip = PassThroughView()
-    /// The paper behind the rows, so they read over the start screen's mark even while it
-    /// recedes (docs/state-rules.md §6, start screen while typing). It covers the whole sheet, so
-    /// its texture lines up with the sheet's own paper, and a mask shows it only behind the rows.
-    private let plate = UIView()
-    private let plateMask = UIView()
     private let rowsStack = UIStackView()
-    private var rowsBottom: NSLayoutConstraint!
+    private var rowsTop: NSLayoutConstraint!
     /// The rows on screen, best first.
     private var shownRows: [SuggestionRow] = []
     /// Rows fading out where they stood, outside the stack.
@@ -98,9 +142,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     private var current: [SheetItem] = []
     private let favoritesStrip = FavoritesStrip()
     private let browseRow = BrowseForMeRow()
-    /// The rows hang from the content's bottom, or from the top of Browse for Me's place.
+    /// The rows start at the content's top, or under Browse for Me's place.
     private var rowsOnContent: NSLayoutConstraint!
-    private var rowsOverBrowse: NSLayoutConstraint!
+    private var rowsUnderBrowse: NSLayoutConstraint!
     private var showsFavorites = false
     private var hasFavorites = false
     private var favoritesShown = false
@@ -110,35 +154,62 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     private var isToppingUp = false
     private var didWarmRows = false
 
+    /// The card's corner radius as a sheet (Arc Search's, about 33 pt) and around a top bar's
+    /// field (the field's capsule plus the card's margin, so the two curves are concentric).
+    static let sheetRadius: CGFloat = 32
+    /// The card's margin around a top bar's field.
+    static let dropdownMargin: CGFloat = Spacing.s
+    /// The field's distance under the sheet's top edge (Arc Search: 16 pt); the grabber sits in it.
+    static let fieldInset: CGFloat = Spacing.l
+    /// Between the field and the first row.
+    private static let fieldGap: CGFloat = Spacing.s
+    /// The rows' inset from the card's sides.
+    private static let rowsInset: CGFloat = Spacing.s
+    private static let grabberSize = CGSize(width: 36, height: 5)
+    /// Over and under a row's text.
+    static let rowTextInset: CGFloat = 5
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        Paper.apply(to: self)
         accessibilityIdentifier = "searchSheet"
 
-        content.translatesAutoresizingMaskIntoConstraints = false
+        card.clipsToBounds = true
+        card.layer.cornerCurve = .continuous
+        card.accessibilityIdentifier = "searchCard"
+        addSubview(card)
+        material.isUserInteractionEnabled = false
+        card.addSubview(material)
+        // Paper over the blur: the card reads as Plain's paper with the page's colors faintly
+        // through it, by day and by night.
+        tint.isUserInteractionEnabled = false
+        tint.backgroundColor = Palette.sheetTint
+        card.addSubview(tint)
+
+        grabberBar.backgroundColor = Palette.sheetGrabber
+        grabberBar.layer.cornerRadius = Self.grabberSize.height / 2
+        grabberBar.isUserInteractionEnabled = false
+        grabber.addSubview(grabberBar)
+        grabber.accessibilityIdentifier = "search.close"
+        grabber.accessibilityLabel = String(localized: "Close Search")
+        grabber.accessibilityHint = String(localized: "Swipe down on the sheet, or tap the page above it")
+        grabber.addAction(UIAction { [weak self] _ in self?.onDismiss(.grabber) }, for: .touchUpInside)
+        card.addSubview(grabber)
+
+        var cancel = UIButton.Configuration.plain()
+        cancel.title = String(localized: "Cancel")
+        cancel.baseForegroundColor = Palette.accentOnPaper
+        cancel.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: Spacing.s, bottom: 0, trailing: Spacing.s)
+        cancelButton.configuration = cancel
+        cancelButton.maximumContentSizeCategory = .extraExtraExtraLarge
+        cancelButton.accessibilityIdentifier = "search.cancel"
+        cancelButton.addAction(UIAction { [weak self] _ in self?.onDismiss(.cancel) }, for: .touchUpInside)
+        cancelButton.isHidden = true
+        card.addSubview(cancelButton)
+
         content.onLayout = { [weak self] in self?.layOutRows() }
-        addSubview(content)
+        card.addSubview(content)
 
-        // Under everything: the card the rows, the favorites and the field sit on.
-        plate.isUserInteractionEnabled = false
-        plate.alpha = 0
-        Paper.apply(to: plate)
-        // By night the card is lifted a step above the veiled page (the sheets' card tone), so it
-        // reads as one surface; by day paper over a light page already does.
-        let lift = UIView()
-        lift.backgroundColor = UIColor { $0.userInterfaceStyle == .dark ? Palette.paperCard.resolvedColor(with: $0) : .clear }
-        lift.isUserInteractionEnabled = false
-        lift.frame = plate.bounds
-        lift.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        plate.addSubview(lift)
-        plateMask.backgroundColor = .black
-        plateMask.layer.cornerRadius = Radius.large
-        plateMask.layer.cornerCurve = .continuous
-        plate.mask = plateMask
-        content.addSubview(plate)
-
-        // Under the rows: the favorites sit where the first rows would, and only one of them
-        // shows at a time (favorites for an empty field, rows for a query).
+        // Under the rows: the favorites sit where the first rows would while the field is empty.
         favoritesStrip.onPick = { [weak self] url in self?.onPick(.page(url)) }
         favoritesStrip.translatesAutoresizingMaskIntoConstraints = false
         favoritesStrip.isHidden = true
@@ -161,38 +232,41 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
         rowsClip.addSubview(rowsStack)
 
-        // The stack hangs from the bottom; rows that do not fit leave at the top.
-        let stackTop = rowsStack.topAnchor.constraint(greaterThanOrEqualTo: rowsClip.topAnchor)
-        stackTop.priority = .defaultHigh
-        rowsBottom = rowsStack.bottomAnchor.constraint(equalTo: rowsClip.bottomAnchor)
-        // The content reaches as high as the owner lets it, so a row fading out at the top of a
-        // shorter list is never cut by the clip.
-        let fill = content.heightAnchor.constraint(equalToConstant: 10_000)
-        fill.priority = .defaultLow
-        rowsOnContent = rowsClip.bottomAnchor.constraint(equalTo: content.bottomAnchor)
-        rowsOverBrowse = rowsClip.bottomAnchor.constraint(equalTo: browseRow.topAnchor)
+        keyboardProbe.isHidden = true
+        keyboardProbe.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(keyboardProbe)
+
+        // The stack hangs from the top; rows that do not fit above the keyboard stay out.
+        rowsTop = rowsStack.topAnchor.constraint(equalTo: rowsClip.topAnchor)
+        rowsOnContent = rowsClip.topAnchor.constraint(equalTo: content.topAnchor)
+        rowsUnderBrowse = rowsClip.topAnchor.constraint(equalTo: browseRow.bottomAnchor)
         NSLayoutConstraint.activate([
-            rowsClip.topAnchor.constraint(equalTo: content.topAnchor),
+            rowsClip.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             rowsClip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             rowsClip.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             rowsOnContent,
             browseRow.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             browseRow.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            browseRow.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            browseRow.topAnchor.constraint(equalTo: content.topAnchor),
             rowsStack.leadingAnchor.constraint(equalTo: rowsClip.leadingAnchor),
             rowsStack.trailingAnchor.constraint(equalTo: rowsClip.trailingAnchor),
-            rowsBottom,
-            stackTop,
-            fill,
+            rowsTop,
             favoritesStrip.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             favoritesStrip.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            favoritesStrip.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            favoritesStrip.topAnchor.constraint(equalTo: content.topAnchor),
             favoritesStrip.heightAnchor.constraint(equalToConstant: FavoritesStrip.height),
+            keyboardProbe.topAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
+            keyboardProbe.leadingAnchor.constraint(equalTo: leadingAnchor),
+            keyboardProbe.widthAnchor.constraint(equalToConstant: 1),
+            keyboardProbe.heightAnchor.constraint(equalToConstant: 1),
         ])
 
         let tap = UITapGestureRecognizer(target: self, action: #selector(backgroundTapped))
         tap.delegate = self
         addGestureRecognizer(tap)
+        pan.addTarget(self, action: #selector(panned))
+        pan.delegate = self
+        card.addGestureRecognizer(pan)
 
         // A full list's rows are made now, not on the first keystroke's frame.
         spareRows = (0..<FixedChoices.maxAddressBarSuggestions).map { _ in makeRow() }
@@ -201,29 +275,121 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    // MARK: Placement and progress
+
+    /// Where the open sheet sits. The card and its content take their open frames in the next
+    /// layout pass (the caller's, before the frame that shows them).
+    func place(_ placement: SheetPlacement) {
+        guard placement != self.placement else { return }
+        self.placement = placement
+        setNeedsLayout()
+    }
+
+    /// How open the sheet is: 0 closed (nothing of it shows), 1 open. Transform and alpha only,
+    /// plus the card's own height for a dropdown, whose content is pinned to its top and does not
+    /// lay out with it.
+    func setProgress(_ progress: CGFloat) {
+        self.progress = progress
+        guard let placement else { return }
+        let p = min(max(progress, 0), 1)
+        // The surface is there almost at once (Arc: the bar turns to material in ~4 frames).
+        card.alpha = min(1, p / 0.15)
+        let inner = min(1, max(0, (p - 0.05) / 0.3))
+        content.alpha = inner
+        grabber.alpha = inner
+        cancelButton.alpha = inner
+        switch placement.style {
+        case .sheet:
+            card.transform = CGAffineTransform(translationX: 0, y: placement.travel * (1 - p))
+        case .dropdown:
+            card.transform = .identity
+            let frame = cardFrame(placement, progress: p)
+            guard card.bounds.height != frame.height else { return }
+            card.bounds.size.height = frame.height
+            card.center.y = frame.midY
+        }
+    }
+
+    /// The card's frame at `progress`, its transform aside: the open frame for a sheet (which
+    /// only translates), the grown part of it for a dropdown.
+    private func cardFrame(_ placement: SheetPlacement, progress: CGFloat) -> CGRect {
+        guard placement.style == .dropdown else { return placement.card }
+        var frame = placement.card
+        frame.size.height = placement.closedHeight + (frame.height - placement.closedHeight) * progress
+        return frame
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
+        guard let placement else { return }
+        let frame = placement.card
+        // The card as it stands at this progress, so a layout pass mid-motion changes nothing.
+        let shown = cardFrame(placement, progress: min(max(progress, 0), 1))
+        let transform = card.transform
+        card.transform = .identity
+        if card.frame != shown { card.frame = shown }
+        card.transform = transform
+        let isSheet = placement.style == .sheet
+        card.layer.cornerRadius = isSheet ? Self.sheetRadius : placement.field.height / 2 + Self.dropdownMargin
+        card.layer.maskedCorners = isSheet
+            ? [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            : [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        pan.isEnabled = isSheet
+        let surface = CGRect(origin: .zero, size: frame.size)
+        if material.frame != surface {
+            material.frame = surface
+            tint.frame = surface
+        }
+        // The handle, centered in the band over the field; its tap target is the whole band.
+        grabber.isHidden = !isSheet
+        grabber.frame = CGRect(x: frame.width / 2 - 44, y: 0, width: 88, height: Self.fieldInset)
+        grabberBar.frame = CGRect(
+            x: (grabber.bounds.width - Self.grabberSize.width) / 2, y: 6,
+            width: Self.grabberSize.width, height: Self.grabberSize.height
+        )
+        let field = placement.field.offsetBy(dx: -frame.minX, dy: -frame.minY)
+        cancelButton.isHidden = !placement.showsCancel
+        if placement.showsCancel {
+            cancelButton.frame = CGRect(
+                x: field.maxX, y: field.minY, width: frame.width - field.maxX, height: field.height
+            )
+        }
+        // The rows: under the field, down to the keyboard (or the bottom edge without one).
+        let top = field.maxY + Self.fieldGap
+        let keyboardTop = keyboardProbe.frame.minY - frame.minY
+        let bottom = min(frame.height, keyboardTop) - Spacing.xxs
+        let area = CGRect(
+            x: Self.rowsInset, y: top, width: frame.width - 2 * Self.rowsInset, height: max(0, bottom - top)
+        )
+        if content.frame != area { content.frame = area }
+        setProgress(progress)
         layOutRows()
     }
 
-    /// Fits the rows and the card to the space above the field. Runs when the sheet lays out and
-    /// when its content does: the content moves with the field (the keyboard, a fold) without the
-    /// sheet itself laying out, and the card must follow the rows exactly.
+    /// Only whole rows show: the space can change under them (keyboard, fold).
     private func layOutRows() {
         rowsClip.layoutIfNeeded()
-        // The plate covers the whole sheet, so its paper lines up with the sheet's.
-        let plateFrame = content.convert(bounds, from: self)
-        if plate.frame != plateFrame {
-            // Inside whatever animation moves the content (the keyboard), so the card moves with it.
-            plate.frame = plateFrame
-        }
         guard !isApplying else { return }
-        // The space can change under the rows (keyboard, fold): only whole rows show.
         for row in shownRows {
             let fits = fits(row)
             if row.fits != fits { setFits(fits, row) }
         }
-        plateMask.frame = rowsArea(favorites: favoritesShown)
+    }
+
+    /// The width Cancel needs beside a top bar's field.
+    var cancelWidth: CGFloat {
+        ceil(cancelButton.sizeThatFits(CGSize(width: 400, height: Metrics.tapTarget)).width)
+    }
+
+    @objc private func panned() {
+        onPan(pan)
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === pan else { return true }
+        // A drag down, more down than sideways (the favorites scroll sideways).
+        let velocity = pan.velocity(in: self)
+        return velocity.y > 0 && velocity.y > abs(velocity.x)
     }
 
     /// Shows `suggestions`, best first, the first one nearest the field. Applied once per run
@@ -239,6 +405,22 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         scheduleFlush()
     }
 
+    /// Applies a waiting list now rather than at the end of the run loop turn: the sheet is
+    /// opening, and its rows belong on the motion's first frame (the run loop may not come to
+    /// rest for several frames while the keyboard starts).
+    func applyPendingNow() {
+        guard pending != nil || flushObserver != nil else { return }
+        flush()
+    }
+
+    /// Empties the list at once (the sheet has closed and is out of sight).
+    func clear() {
+        pending = nil
+        guard !current.isEmpty || favoritesShown else { return }
+        current = []
+        UIView.performWithoutAnimation { update([], showFavorites: false, animated: false) }
+    }
+
     /// The most rows the sheet keeps: a full suggestion list, or the focused field's content
     /// (copied link, the page, recent pages, closed tabs). Rows that don't fit above the field
     /// stay out, so this only bounds the work.
@@ -247,15 +429,15 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         2 + FixedChoices.focusReadingList + FixedChoices.focusRecentPages + FixedChoices.focusClosedTabs
     )
 
-    /// Browse for Me's place above the field (`reserved`: something is typed and the on-device
+    /// Browse for Me's place under the field (`reserved`: something is typed and the on-device
     /// model can run) and the query it would browse for, or nil while the text is an address (the
     /// row fades out in place). The place opens with the first keystroke, when the focused rows
     /// give way to suggestions anyway, and stays while typing, so the suggestions never move
     /// (docs/state-rules.md §1, principle 5).
     func setBrowseForMe(reserved: Bool, query: String?) {
-        if rowsOverBrowse.isActive != reserved {
+        if rowsUnderBrowse.isActive != reserved {
             rowsOnContent.isActive = !reserved
-            rowsOverBrowse.isActive = reserved
+            rowsUnderBrowse.isActive = reserved
             browseRow.isHidden = !reserved
             setNeedsLayout()
         }
@@ -277,17 +459,13 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
     }
 
     @objc private func backgroundTapped() {
-        onDismiss()
+        onDismiss(.outside)
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        // Only taps on empty sheet, not on rows or tiles.
-        var view = touch.view
-        while let current = view, current !== self {
-            if current is UIControl { return false }
-            view = current.superview
-        }
-        return true
+        guard gestureRecognizer !== pan else { return true }
+        // Only taps on the dimmed page around the card, never on the card.
+        return touch.view === self
     }
 
     // MARK: Applying a list
@@ -376,14 +554,14 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         }
         let leaving = shownRows.filter { row in row.identity.map { shownByID[$0] === row } ?? false }
 
-        // The stack runs top to bottom, so the best row (first) goes last.
+        // The stack runs top to bottom, best first.
         for row in leaving { rowsStack.removeArrangedSubview(row); row.removeFromSuperview() }
-        for (position, row) in next.reversed().enumerated() where
+        for (position, row) in next.enumerated() where
             position >= rowsStack.arrangedSubviews.count || rowsStack.arrangedSubviews[position] !== row {
             rowsStack.insertArrangedSubview(row, at: position)
         }
         shownRows = next
-        rowsBottom.constant = showFavorites ? -FavoritesStrip.height : 0
+        rowsTop.constant = showFavorites ? FavoritesStrip.height : 0
         isApplying = true
         UIView.performWithoutAnimation { layoutIfNeeded() }
         isApplying = false
@@ -443,22 +621,13 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         // VoiceOver reads best first.
         rowsStack.accessibilityElements = next.filter(\.fits)
 
-        let plateAlpha: CGFloat = next.isEmpty && !showFavorites ? 0 : 1
-        if fillsEmpty, animated { plate.layer.removeAllAnimations(); plate.alpha = plateAlpha }
-        let area = rowsArea(favorites: showFavorites)
         if !animated {
-            plate.alpha = plateAlpha
-            UIView.performWithoutAnimation { plateMask.frame = area }
             setFavoritesShown(showFavorites, animated: false)
             return
         }
-        // The paper grows at once (rows fade in on it) and shrinks with the rows leaving.
-        if area.height >= plateMask.frame.height || plate.alpha == 0 {
-            plateMask.layer.removeAllAnimations()
-            UIView.performWithoutAnimation { plateMask.frame = area }
-        }
         let leavingNow = leaving.filter { leavingRows.contains($0) }.map { ($0, $0.leaveToken) }
-        setFavoritesShown(showFavorites, animated: true)
+        // Into an empty sheet (it just opened) the favorites show at once, like the rows.
+        setFavoritesShown(showFavorites, animated: !fillsEmpty)
         // Linear: where one text replaces another, their opacities add up to one throughout.
         let options: UIView.AnimationOptions = [.curveLinear, .allowUserInteraction, .beginFromCurrentState]
         UIView.animate(withDuration: Motion.suggestionFade, delay: 0, options: options) {
@@ -467,8 +636,6 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
                 row.alpha = alpha
             }
             for (row, _) in leavingNow { row.alpha = 0 }
-            self.plate.alpha = plateAlpha
-            if !area.isEmpty { self.plateMask.frame = area }
         } completion: { [weak self] _ in
             guard let self else { return }
             for (row, token) in leavingNow { self.finishLeaving(row, token: token) }
@@ -593,9 +760,9 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         return CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height)
     }
 
-    /// Only whole rows show: one that would be cut by the top edge stays out.
+    /// Only whole rows show: one that would be cut by the keyboard (the clip's bottom) stays out.
     private func fits(_ row: SuggestionRow) -> Bool {
-        clipFrame(of: row).minY >= -0.5
+        clipFrame(of: row).maxY <= rowsClip.bounds.height + 0.5
     }
 
     private func setFits(_ fits: Bool, _ row: SuggestionRow) {
@@ -604,29 +771,6 @@ final class SearchSheet: UIView, UIGestureRecognizerDelegate {
         row.accessibilityElementsHidden = !fits
         row.alpha = fits ? 1 : 0
         rowsStack.accessibilityElements = shownRows.filter(\.fits)
-    }
-
-    /// The card, in the plate's space: from just above the top row that shows (or the favorites)
-    /// down to the sheet's bottom, so the rows, the favorites and the field above the keyboard
-    /// sit on one paper card over the veiled page (Arc's sheet, with the field where the thumb
-    /// is). Zero with nothing to show.
-    private func rowsArea(favorites: Bool) -> CGRect {
-        // From the geometry itself (a whole row inside the clip), not the rows' `fits` flags, which
-        // a layout pass may not have caught up with yet.
-        var top = shownRows.map { clipFrame(of: $0).minY }.filter { $0 >= -0.5 }.min()
-            .map { plate.convert(CGPoint(x: 0, y: $0), from: rowsClip).y }
-        if favorites {
-            let strip = plate.convert(favoritesStrip.frame, from: content).minY
-            top = min(top ?? strip, strip)
-        }
-        guard let top else { return .zero }
-        let width = plate.convert(content.bounds, from: content)
-        let cardTop = top - Spacing.s
-        // A little wider than the rows and the field, so the field sits inside the card's edges.
-        return CGRect(
-            x: width.minX - Spacing.s, y: cardTop, width: width.width + 2 * Spacing.s,
-            height: max(0, plate.bounds.maxY - cardTop)
-        )
     }
 }
 
@@ -726,6 +870,8 @@ final class SuggestionRow: UIControl {
         accessory.configuration = copy
         accessory.accessibilityLabel = String(localized: "Copy Link")
         accessory.accessibilityIdentifier = "focus.copyAddress"
+        // The glyph stays inside its 44 pt slot at the accessibility sizes (it ran off the edge).
+        accessory.maximumContentSizeCategory = .extraExtraExtraLarge
         accessory.isHidden = true
         accessory.addAction(UIAction { [weak self] _ in self?.onAccessory() }, for: .touchUpInside)
 
@@ -758,8 +904,10 @@ final class SuggestionRow: UIControl {
             icon.widthAnchor.constraint(equalToConstant: 24),
             text.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: Spacing.m),
             textTrailing,
-            text.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: Spacing.s),
-            text.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -Spacing.s),
+            // Two lines at the default text size fit the 52 pt row (Arc Search's pitch), so four
+            // rows show over the keyboard on the Duo's outer screen; larger text grows the row.
+            text.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: SearchSheet.rowTextInset),
+            text.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -SearchSheet.rowTextInset),
             text.centerYAnchor.constraint(equalTo: centerYAnchor),
             slot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Spacing.xs),
             slot.topAnchor.constraint(equalTo: topAnchor),
@@ -842,7 +990,7 @@ final class SuggestionRow: UIControl {
             accessibilityHint = String(localized: "Reopens the closed tab")
         case .hint(let sentence):
             setLines(sentence, nil)
-            setSymbol("sparkle.magnifyingglass")
+            setSymbol("binoculars")
             pick = nil
             isEnabled = false
             accessibilityIdentifier = "focus.hint"
@@ -1024,7 +1172,7 @@ private extension SheetItem {
 }
 
 
-/// Favorites above the keyboard: a row of tiles that scrolls sideways when there are many. A long
+/// Favorites under the field: a row of tiles that scrolls sideways when there are many. A long
 /// press anywhere on it offers "Edit Favorites".
 final class FavoritesStrip: UIView, UIContextMenuInteractionDelegate, UIScrollViewDelegate {
     static let height: CGFloat = 88
@@ -1171,6 +1319,10 @@ final class FavoriteTile: UIControl {
         let caption = UILabel()
         caption.text = name
         caption.font = .preferredFont(forTextStyle: .caption1)
+        caption.adjustsFontForContentSizeCategory = true
+        // The strip keeps its height: at accessibility sizes the caption stops growing where it
+        // still fits under the disc (it was cut in half there).
+        caption.maximumContentSizeCategory = .extraExtraExtraLarge
         caption.textColor = Palette.textPrimary
         caption.textAlignment = .center
         caption.lineBreakMode = .byTruncatingTail

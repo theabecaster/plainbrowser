@@ -11,14 +11,15 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - Labels are Title Case nouns ("Search Engine", "Clear History and Data").
 - A row that doesn't apply on this screen stays, disabled, keeping its value, and its footer says why and what to use instead (Tab Layout on a narrow screen: "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs.").
 
-**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, cookie banners are rejected, translation is on the device, PDFs are Letter or A4 by region, haptics follow iOS, text follows Dynamic Type, the archive default is a week and archived tabs leave after 30 days, Appearance starts on System, and dark pages is on.
+**Fixed choices.** Every value Plain decides instead of asking lives in one file of named constants, with a short comment saying why (`BrowserCore/FixedChoices.swift`). Examples: blocking is always on, cookie banners are rejected, translation is on the device, PDFs are Letter or A4 by region, haptics follow iOS (System Haptics, no switch of Plain's), text follows Dynamic Type, the archive default is a week and archived tabs leave after 30 days, Appearance starts on System, and dark pages is on.
 
 ## Options live on the object
 
 - **Page sheet** (More, or a long press on the pill; Arc's page sheet in Plain's paper): a bottom sheet sized to its content, a popover under More on wide screens. Top to bottom: the **address row**, a capsule card with Back and Forward (dimmed at a limit), the host (a tap edits the address in the field, with Copy inside it; Return loads in the same tab), Copy Link (a check mark answers in place) and Reload (Stop while loading); **tiles**, at most four captioned cards for the page actions people reach for most: Find, Reader, Summarize (on an article in a language the user reads, where Apple Intelligence runs) or Translate (Translated while it is; the two never apply together), Share always last; a tile whose mode is on (Reader while the reader is open, Translated) shows in the accent and turns it off; then keeping the page, one captioned row: Favorite and Read Later (in the accent once kept: the filled star, "Saved"; a tap removes it) and "Site Settings" (Desktop Site, blocking, cookie banners and Dark Pages, set once per site and remembered); then **rows**: Zoom (− % +, acting in place), Save PDF to Files, Open in Other Pane / Swap Panes / Close Pane (Duo), Downloads while there are any, the tabs' places (New Private Tab, Reopen Closed Tab, Archived Tabs) and the app's places (History, Reading List, Favorites, Settings) as captioned chips. Items appear only when they apply; it fits the Duo's outer screen without scrolling. Print and Save as PDF are in the share sheet, where Safari and Chrome keep them. No blocked-trackers count: WebKit gives no public count of what a rule list blocked (docs/research/address-focus.md).
-- **Address bar, two doors (Arc):** a tap on the pill opens an empty field to go somewhere new; what is submitted from a page opens a new tab (Back on its first page returns to the page). On the search engine's results page the pill shows the query, and a tap brings it back selected, to refine in the same tab. Editing the page's own address is the page sheet's host, or the page's row above the field.
+- **Address bar, two doors (Arc):** a tap on the pill opens an empty field to go somewhere new; what is submitted from a page opens a new tab (Back on its first page returns to the page). On the search engine's results page the pill shows the query, and a tap brings it back selected, to refine in the same tab. Editing the page's own address is the page sheet's host, or the page's row under the field.
+- **The search sheet (Arc Search's, in paper):** the pill grows into a paper card over the dimmed page; the field ends at the card's top (18.7% down the screen), rows run top down under it, and the card runs to the bottom edge behind the keyboard. In the empty field: a microphone (dictation on the phone) and Browse for Me; once typed in, the clear button. The way out is always visible: the handle at the sheet's top (swipe down, or tap it) and the dimmed page above (tap it); under a top bar, Cancel beside the field. Spec and frames: docs/research/arc-address-expand.md.
 - **Automatic, with a way out:** cookie banners are answered (rejected where the banner allows it) on every site, and a foreign page offers Translate Page in its menu. Each has its switch or item on the page, never in Settings. The one hint Plain gives about a feature is a single toast the first time ever it applies ("This page is in French", Translate); after that the menu is the way.
-- **On-device AI:** Browse for Me is a row above the search field while the text would search; Summarize Page is a tile in the page sheet on articles. Both write on the phone with Apple Intelligence and are left out where it can't run (no hint, no dimmed item). The summary is a paper sheet with its title and Done pinned at the top: the query or page title in New York, an honest progress line, then short headings and bullet points, each ending with small numbered citations in Lagoon that open their source, and the numbered sources at the end.
+- **On-device AI:** Browse for Me is a row under the search field while the text would search, and a button in the empty field that arms it for Return; Summarize Page is a tile in the page sheet on articles. Both write on the phone with Apple Intelligence and are left out where it can't run (no hint, no dimmed item). The summary is a paper sheet with its title and Done pinned at the top: the query or page title in New York, an honest progress line, then short headings and bullet points, each ending with small numbered citations in Lagoon that open their source, and the numbered sources at the end.
 - **Switched-off features** (camera, microphone, location, Photos, cellular data; research in
   docs/research/permissions-states.md): Plain never asks or explains at launch, and puts no screen
   before iOS's own prompt, which appears when a site first asks. Right after the user says no
@@ -49,6 +50,7 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - **Compact height (an iPhone on its side) is one bottom row,** as Safari keeps one row there:
   Back and Forward in a capsule at the leading end (both slots kept; Forward hides in place), the
   pill in a fixed place, Tabs, Share and More in a capsule at the trailing end. About 17% of the height at rest, nothing while reading.
+- **Tab cards carry a ×:** top-trailing in the title row, a 24 pt plate (ink veil; the private violet on private cards) inside a 44 pt target, a bold 10 pt glyph in secondary text. A tap closes the tab with the same lift-and-fade as the flick, and a soft haptic. The target never takes a lift or a sideways scroll: a drag that starts on it still lifts or scrolls. VoiceOver: "Close <title>", right after its card.
 - **Wide screens (the Duo's inner screen) follow Safari there:** one top bar under the status bar,
   Back and Forward at its leading end, the address in the middle (at most 560 pt), Tabs, Share and
   More at its trailing end. The system's vertical bar is off, so the page has the full width. Tab
@@ -65,8 +67,8 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
   when the bar collapses or comes back. While
   reading, the address shrinks in place and then lifts away, the buttons and strip fade, and the
   page runs to the top edge under the status items. The page's first line starts under the bar
-  and slides under it. To type an address, the pill still rises above the keyboard with the search
-  sheet, as on every screen. Chrome at rest: about 11% of the landscape inner screen with one tab,
+  and slides under it. To type an address, the pill stays in the bar and the search sheet grows
+  down from it, with Cancel beside the field. Chrome at rest: about 11% of the landscape inner screen with one tab,
   17% with the strip; nothing while reading.
 - Plus buttons act at once when there is one obvious action, and become a menu only when there is a real choice.
 
@@ -109,7 +111,32 @@ Plain follows the interface style of Pteron, the owner's iOS remote for Rex: few
 - Corner radii of 6–10 pt for controls and chips. Grouped paper rows in sheets are exempt: they keep the system's inset-grouped radius (about 26 pt), the iOS look (lead's call, 2026-11-27). Liquid Glass only on floating controls, built with one shared helper.
 - **Sheet headers stay.** Every sheet's title and Done (and Back on a pushed screen) sit in a header pinned above the list (`sheetTitle` in `FeatureUI/Style.swift`), never in the system's bar, which hides on scroll at a compact height (the Duo's outer screen). A list's search field is its first row and scrolls away with the rows.
 - Motion vocabulary: `.snappy(0.15–0.3)` for most changes, `.spring(0.32–0.42, bounce 0–0.12)` for gesture-driven moves, `.easeInOut(0.2)` crossfade under Reduce Motion. The full table is in the plan.
-- One `Haptic` enum: `tap`, `selection`, `threshold`, `success`, and a rate-limited "nothing there" bump.
+- **Haptics** (docs/research/haptics.md has the research and the full inventory). One `Haptic` enum, eight kinds, each with one meaning:
+
+  | Kind | Feel | Meaning | Examples |
+  |---|---|---|---|
+  | `selection` (the tick) | selection | a value or state changed in place, or a gesture crossed back over its threshold | zoom step, reorder slot, a toggle, Find wrapping to the first match, un-arming a swipe |
+  | `tap` (the commit) | light impact | an action committed whose result is small, off-screen or delayed | background tab, download started, zoom back to 100%, a flick that commits without arming |
+  | `threshold` | medium impact, 0.7 | a gesture crossed into a new outcome while the finger is down | bar swipe past half, the New Tab card at 80 pt, swipe up past the commit line, a card past its close line |
+  | `drop` | rigid impact, 0.6 | a dragged item landed in a new place | gallery reorder drop |
+  | `close` | soft impact | something went away | a tab, a pane, a profile |
+  | `success` | notification success | it worked, and the result is invisible or ends a wait | Copy Link, favorite, download finished, Clear History done, the intro finished |
+  | `failed` | notification warning | a task the user started and waited for did not work | download or PDF failed |
+  | `nothingThere` | soft impact, 0.5, at most once a second | instant refusal, nothing to do | Return in an empty field, a swipe with nowhere to go, Find with no matches |
+
+  Rules:
+  1. A haptic marks a moment, not a tap. A button whose result is on screen (Back, Tabs, Reload, Share, Done, a sheet opening) plays nothing.
+  2. Outcomes after a wait, or invisible ones, get `success` or `failed`. Instant visible outcomes get nothing.
+  3. One haptic per gesture outcome. A threshold announced while the finger was down makes the release silent; a flick that commits without arming plays once, as the spring starts.
+  4. Thresholds play both ways: `threshold` crossing in, `selection` crossing back, with 10 pt of hysteresis (`ThresholdLatch`, `FixedChoices.hapticThresholdHysteresis`).
+  5. Never during scrolling, momentum, chrome collapse or reveal.
+  6. No error pattern, and nothing when a confirmation dialog appears: the haptic comes with the destructive choice.
+  7. System controls keep their own haptic (context menus, button menus, pickers, `Toggle`, swipe actions, drag lift), and Plain never adds a second.
+  8. Nothing from key commands, the pointer or hover (`Haptic.withoutFeedback`).
+  9. Reduce Motion keeps haptics: they play with the crossfade.
+  10. Nothing from the background: an outcome plays with its toast when the toast appears. Two haptics inside 60 ms are one event, and the first wins (`FixedChoices.hapticMinimumGap`).
+  11. iOS mutes haptics while the microphone or camera records, and Plain keeps it that way.
+  12. A new haptic adds a row to the inventory in docs/research/haptics.md, and its check to docs/research/haptics-checklist.md.
 
 ## Wording
 

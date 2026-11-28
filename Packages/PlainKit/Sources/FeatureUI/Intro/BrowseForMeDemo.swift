@@ -89,7 +89,7 @@ struct BrowseForMeDemo: View {
     private var row: some View {
         Button(action: replay) {
             HStack(spacing: 10) {
-                Image(systemName: "sparkles")
+                Image(systemName: "binoculars")
                     .font(.system(size: bodySize, weight: .semibold))
                     .frame(minWidth: 22)
                 Text("Browse for Me")

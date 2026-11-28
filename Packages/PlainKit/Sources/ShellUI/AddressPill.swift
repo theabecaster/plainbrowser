@@ -12,7 +12,12 @@ import UIKit
 /// Collapsed (`isCompact`), it takes taps only: it sits in the home-indicator zone, where swipes
 /// and holds belong to the system. Every other gesture attaches to the expanded pill.
 final class AddressPill: UIView {
-    let textField = UITextField()
+    let textField: UITextField = AddressField()
+    /// Escape on a hardware keyboard, while the field has the keyboard.
+    var onEscape: () -> Void {
+        get { (textField as? AddressField)?.onEscape ?? {} }
+        set { (textField as? AddressField)?.onEscape = newValue }
+    }
     let progressBar = ProgressBar()
     private let glass = Glass.makeView(shape: .capsule, interactive: true)
     /// The soft paper glow under the glass, so the host reads over any page.
@@ -37,10 +42,52 @@ final class AddressPill: UIView {
         button.frame = CGRect(x: 0, y: 0, width: Metrics.tapTarget, height: Metrics.tapTarget)
         button.accessibilityLabel = String(localized: "Copy Link")
         button.accessibilityIdentifier = "field.copy"
+        // Inside its 44 pt target at the accessibility sizes too.
+        button.maximumContentSizeCategory = .extraExtraExtraLarge
         button.addAction(UIAction { [weak self] _ in self?.copyTapped() }, for: .touchUpInside)
         return button
     }()
     private var copyToken = 0
+
+    /// What sits at the field's trailing end (docs/research/arc-address-expand.md): Arc Search's
+    /// field shows a microphone and a second option while empty, and a clear button once typed in.
+    enum Accessory: Equatable {
+        /// Nothing of Plain's: the system's clear button shows while there is text.
+        case none
+        /// Copy, while the field shows the page's own address untouched.
+        case copy
+        /// The empty field's options: dictation, and Browse for Me (armed: Return browses).
+        case options(mic: Bool, browse: Bool, armed: Bool)
+        /// Dictation is listening: the microphone, filled; a tap stops it.
+        case dictating
+    }
+
+    private(set) var accessory = Accessory.none
+    /// The microphone in the field: start dictation, or stop it.
+    var onMic: () -> Void = {}
+    /// Browse for Me in the empty field: arm it, or disarm it.
+    var onBrowse: () -> Void = {}
+    private lazy var micButton = makeOption(symbol: "mic", identifier: "field.mic", label: String(localized: "Dictate")) { [weak self] in
+        self?.onMic()
+    }
+    private lazy var browseButton = makeOption(
+        symbol: "binoculars", identifier: "field.browse", label: String(localized: "Browse for Me")
+    ) { [weak self] in
+        self?.onBrowse()
+    }
+    private lazy var optionsView = UIView()
+    /// Behind the binoculars while Browse for Me is armed: the state stays plain while typing, when
+    /// the placeholder that names it is gone.
+    private lazy var armedBacking: UIView = {
+        let side: CGFloat = 28
+        let backing = UIView(frame: CGRect(x: 0, y: 0, width: side, height: side))
+        backing.backgroundColor = Palette.accentOnGlass.withAlphaComponent(0.2)
+        backing.layer.cornerRadius = side / 2
+        backing.isUserInteractionEnabled = false
+        backing.isHidden = true
+        backing.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+        return backing
+    }()
 
     private(set) var isEditing = false
     /// The bar is collapsed, or on its way there: only the tap works.
@@ -112,6 +159,7 @@ final class AddressPill: UIView {
         rimMask.lineWidth = 2
         rim.layer.mask = rimMask
         rim.translatesAutoresizingMaskIntoConstraints = false
+        rim.alpha = 0
         addSubview(rim)
         resolveColors()
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (pill: AddressPill, _) in pill.resolveColors() }
@@ -201,7 +249,7 @@ final class AddressPill: UIView {
         self.url = url
         self.notSecure = notSecure
         let text = Self.hostText(
-            for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: textField.placeholder ?? ""
+            for: url, query: url.flatMap(searchQuery), notSecure: notSecure, placeholder: "Search or enter address"
         )
         restingText = text
         compactText = notSecure ? Self.compactNotSecureText(for: url, font: hostLabel.font) : nil
@@ -319,29 +367,94 @@ final class AddressPill: UIView {
             textField.alpha = editing ? 1 : 0
         }
         textField.isUserInteractionEnabled = editing
-        rim.alpha = editing ? 1 : 0
         progressBar.isHidden = editing
         // Resting, the pill is one button for VoiceOver; editing, the field inside is reachable.
         isAccessibilityElement = !editing
     }
 
-    /// Shows Copy inside the field (editing the page's own address) in place of the clear
-    /// button, or takes it away. No layout: the field's text area keeps its frame either way
-    /// within the pill.
-    func setCopyShown(_ shown: Bool) {
-        let showing = textField.rightView != nil && textField.rightViewMode == .always
-        guard shown != showing else { return }
-        if shown {
-            copyToken += 1
-            setCopyGlyph(copied: false)
-            textField.rightView = copyButton
-            textField.rightViewMode = .always
-            textField.clearButtonMode = .never
-        } else {
+    /// The focus rim follows the sheet's progress (0 resting, 1 open): alpha only.
+    func setFocusProgress(_ progress: CGFloat) {
+        rim.alpha = min(max(progress, 0), 1)
+    }
+
+    /// Shows `accessory` at the field's trailing end. No layout outside the field: its text area
+    /// is the field's own business within the pill.
+    func setAccessory(_ next: Accessory) {
+        guard next != accessory else { return }
+        accessory = next
+        switch next {
+        case .none:
             textField.rightView = nil
             textField.rightViewMode = .never
             textField.clearButtonMode = .whileEditing
+        case .copy:
+            copyToken += 1
+            setCopyGlyph(copied: false)
+            show(rightView: copyButton)
+        case .options(let mic, let browse, let armed):
+            setGlyph(micButton, "mic", tint: Palette.textSecondary)
+            micButton.accessibilityLabel = String(localized: "Dictate")
+            setGlyph(browseButton, "binoculars", tint: armed ? Palette.accentOnGlass : Palette.textSecondary)
+            browseButton.accessibilityValue = armed ? String(localized: "On") : nil
+            layOutOptions([mic ? micButton : nil, browse ? browseButton : nil].compactMap { $0 })
+            if armedBacking.superview == nil { browseButton.insertSubview(armedBacking, at: 0) }
+            armedBacking.center = CGPoint(x: Metrics.tapTarget / 2, y: Metrics.tapTarget / 2)
+            armedBacking.isHidden = !armed
+            show(rightView: optionsView)
+        case .dictating:
+            setGlyph(micButton, "mic.fill", tint: Palette.accentOnGlass)
+            micButton.accessibilityLabel = String(localized: "Stop Dictation")
+            layOutOptions([micButton])
+            show(rightView: optionsView)
         }
+        // The placeholder says what Return will do.
+        let armed = if case .options(_, _, true) = next { true } else { false }
+        let placeholder = armed ? String(localized: "Ask Browse for Me") : "Search or enter address"
+        if textField.placeholder != placeholder {
+            textField.attributedPlaceholder = NSAttributedString(
+                string: placeholder, attributes: [.foregroundColor: Palette.textSecondary]
+            )
+        }
+    }
+
+    private func show(rightView view: UIView) {
+        if textField.rightView !== view { textField.rightView = view }
+        textField.rightViewMode = .always
+        textField.clearButtonMode = .never
+    }
+
+    private func layOutOptions(_ buttons: [UIButton]) {
+        let size = Metrics.tapTarget
+        for view in optionsView.subviews where !buttons.contains(where: { $0 === view }) { view.removeFromSuperview() }
+        for (index, button) in buttons.enumerated() {
+            button.frame = CGRect(x: CGFloat(index) * size, y: 0, width: size, height: size)
+            if button.superview !== optionsView { optionsView.addSubview(button) }
+        }
+        let frame = CGRect(x: 0, y: 0, width: CGFloat(buttons.count) * size, height: size)
+        if optionsView.frame != frame {
+            optionsView.frame = frame
+            // A right view that changed size is measured again.
+            if textField.rightView === optionsView { textField.rightView = nil }
+        }
+    }
+
+    private func makeOption(symbol: String, identifier: String, label: String, action: @escaping () -> Void) -> UIButton {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: symbol)
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
+        configuration.baseForegroundColor = Palette.textSecondary
+        configuration.contentInsets = .zero
+        let button = UIButton(configuration: configuration)
+        button.accessibilityLabel = label
+        button.accessibilityIdentifier = identifier
+        button.maximumContentSizeCategory = .extraExtraExtraLarge
+        button.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        return button
+    }
+
+    private func setGlyph(_ button: UIButton, _ symbol: String, tint: UIColor) {
+        button.configuration?.image = UIImage(systemName: symbol)
+        button.configuration?.baseForegroundColor = tint
     }
 
     private func copyTapped() {
@@ -386,6 +499,21 @@ final class AddressPill: UIView {
         guard press.state == .began, !isEditing, !isCompact else { return }
         Haptic.threshold.play()
         onLongPress()
+    }
+}
+
+/// The pill's field. Escape on a hardware keyboard is the field's own key (the text system takes
+/// it before any key command up the responder chain), so it is caught here.
+private final class AddressField: UITextField {
+    var onEscape: () -> Void = {}
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        // Marked text (an input method composing): Escape is the input method's.
+        if markedTextRange == nil, presses.contains(where: { $0.key?.keyCode == .keyboardEscape }) {
+            onEscape()
+            return
+        }
+        super.pressesBegan(presses, with: event)
     }
 }
 #endif

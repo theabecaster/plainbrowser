@@ -468,9 +468,6 @@ extension BrowserViewController: GalleryHost {
             webContainer.bringSubviewToFront(start)
             webContainer.bringSubviewToFront(engineUI.pageState)
         }
-        // A fresh search over a page is clear too: the page shows through the frost.
-        let clear = (showsStart && !start.isReceded) || ((launchUI.isFreshSearch || focusUI.isEditingPage) && !showsStart)
-        sheet.backgroundColor = clear ? .clear : Paper.background
     }
 
     /// The start screen while typing (state rules §3): with a query, the mark and its shortcuts
@@ -488,9 +485,6 @@ extension BrowserViewController: GalleryHost {
         if !recedes, !isEditingAddress, let tab = currentTab,
            !session.tabs.isEmpty(tab.id) || engineUI.typedVisitTabs.contains(tab.id) { return }
         start.setReceded(recedes, animated: true)
-        guard !start.isHidden else { return }
-        let paper: UIColor = recedes ? Paper.background : .clear
-        Motion.animate(Motion.reflow, crossfading: sheet) { self.sheet.backgroundColor = paper }
     }
 
     /// The start screen's shortcuts under the mark (state rules §3): a private tab always, Reopen

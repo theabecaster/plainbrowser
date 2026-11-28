@@ -355,8 +355,7 @@ public final class SideTabsViewController: UIViewController, UICollectionViewDel
                   let section = transaction.finalSnapshot.sectionIdentifier(containingItem: id),
                   let index = transaction.finalSnapshot.itemIdentifiers(inSection: section).firstIndex(of: id) else { continue }
             Signposts.signposter.emitEvent(Signposts.galleryReorder, "sidebar")
-            // The drop (`.threshold` until the haptics lane adds a drop of its own).
-            Haptic.threshold.play()
+            Haptic.drop.play()
             dataSource.moveTab(id, to: index)
         }
         // The store may keep pinned tabs first: show its order. After the reorder has been

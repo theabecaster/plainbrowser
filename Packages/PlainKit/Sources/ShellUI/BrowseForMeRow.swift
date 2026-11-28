@@ -2,11 +2,11 @@
 import DesignSystem
 import UIKit
 
-/// Browse for Me in the search sheet: the row right above the field, where Arc Search puts its
-/// button beside Go, under the suggestions and apart from them (docs/state-rules.md §6). A tap
-/// reads the top results for what is typed and writes a summary on the phone.
+/// Browse for Me in the search sheet: the row right under the field, over the suggestions and
+/// apart from them (docs/state-rules.md §6). A tap reads the top results for what is typed and
+/// writes a summary on the phone.
 ///
-/// Its place is kept for as long as the field is open, so the suggestions above never move when
+/// Its place is kept for as long as the field is open, so the suggestions under it never move when
 /// it comes and goes: it fades in place, shown while the text would search, gone (and not
 /// tappable) while it is an address.
 final class BrowseForMeRow: UIControl {
@@ -22,7 +22,7 @@ final class BrowseForMeRow: UIControl {
         layer.cornerRadius = Radius.large
         layer.cornerCurve = .continuous
 
-        icon.image = UIImage(systemName: "sparkles")
+        icon.image = UIImage(systemName: "binoculars")
         icon.tintColor = Palette.accentOnPaper
         icon.contentMode = .center
         icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body, scale: .medium)
@@ -56,11 +56,11 @@ final class BrowseForMeRow: UIControl {
             icon.widthAnchor.constraint(equalToConstant: 24),
             text.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: Spacing.m),
             text.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Spacing.m),
-            text.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: Spacing.s),
-            text.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -Spacing.s),
+            text.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: SearchSheet.rowTextInset),
+            text.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -SearchSheet.rowTextInset),
             text.centerYAnchor.constraint(equalTo: centerYAnchor),
-            // The line that sets it apart from the suggestions above.
-            hairline.topAnchor.constraint(equalTo: topAnchor),
+            // The line that sets it apart from the suggestions under it.
+            hairline.bottomAnchor.constraint(equalTo: bottomAnchor),
             hairline.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Spacing.m),
             hairline.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Spacing.m),
             hairline.heightAnchor.constraint(equalToConstant: 1 / max(1, traitCollection.displayScale)),

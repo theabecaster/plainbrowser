@@ -85,7 +85,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Websites you allow can use the camera, for video calls and photos.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Websites you allow can use the microphone, for calls and voice.</string>
+	<string>Websites you allow can use the microphone, for calls and voice. The microphone in the search field turns what you say into text on your phone.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>The microphone in the search field turns what you say into text. It happens on your phone; nothing you say is sent anywhere.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Websites you allow can see your location, for maps and places nearby.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

@@ -34,6 +34,12 @@ final class TabCardView: UIView {
     private let faviconView = UIImageView()
     private let privateIcon = UIImageView(image: UIImage(systemName: "eye.slash.fill"))
     private let titleLabel = UILabel()
+    /// The × in the title row's trailing corner: a 44 pt target around a small plate. It is not
+    /// inside the title row (that row is masked and only as tall as the text); the gallery lists
+    /// it for VoiceOver next to the card.
+    let closeButton = UIButton(type: .custom)
+    private let closePlate = UIView()
+    private let closeGlyph = UIImageView()
     /// The lift: swipe up to close (`CardDrag`).
     private lazy var drag = CardDrag(body: body) { [unowned self] in size.height - headerHeight }
     private let tap = UITapGestureRecognizer()
@@ -44,6 +50,7 @@ final class TabCardView: UIView {
     private var marksSelection = true
     /// The tab has no page yet (a new tab).
     private var isBlankTab = false
+    private var isPrivateTab = false
     private let blankMark = MarkView()
     private var titleAlpha: CGFloat = 1
     private var visibleWidth: CGFloat = 0
@@ -99,6 +106,19 @@ final class TabCardView: UIView {
         titleLabel.lineBreakMode = .byTruncatingTail
         header.addSubview(titleLabel)
 
+        closeButton.addSubview(closePlate)
+        closePlate.isUserInteractionEnabled = false
+        closePlate.layer.cornerRadius = TabGalleryMetrics.closePlateSide / 2
+        closePlate.addSubview(closeGlyph)
+        closeGlyph.isUserInteractionEnabled = false
+        closeGlyph.contentMode = .center
+        closeGlyph.image = UIImage(
+            systemName: "xmark", withConfiguration: UIImage.SymbolConfiguration(pointSize: TabGalleryMetrics.closeGlyphSize, weight: .bold)
+        )
+        closeButton.accessibilityIdentifier = "closeTab"
+        closeButton.addAction(UIAction { [weak self] _ in self?.onClose?() }, for: .touchUpInside)
+        body.addSubview(closeButton)
+
         drag.onClose = { [weak self] in self?.onSwipeAway?() }
         tap.addTarget(self, action: #selector(handleTap))
         body.addGestureRecognizer(tap)
@@ -144,6 +164,8 @@ final class TabCardView: UIView {
         let font = Self.titleFont(for: traitCollection)
         let fontChanged = titleLabel.font != font
         if fontChanged { titleLabel.font = font }
+        isPrivateTab = item.isPrivate
+        closeButton.accessibilityLabel = String(localized: "Close \(item.displayTitle)")
         let badge = item.isPrivate && showsPrivateBadge
         let privateChanged = privateIcon.isHidden == badge
         privateIcon.isHidden = !badge
@@ -189,6 +211,7 @@ final class TabCardView: UIView {
     /// The whole title row's visibility, for transitions (see `TabGalleryViewController.headerFade`).
     func setHeaderFade(_ fade: CGFloat) {
         if header.alpha != fade { header.alpha = fade }
+        if closeButton.alpha != fade { closeButton.alpha = fade }
     }
 
     /// How much of the title shows (0 under a covering card) and how wide the uncovered part is.
@@ -205,7 +228,21 @@ final class TabCardView: UIView {
         if abs(iconAlpha - faviconView.alpha) > 0.01 || (iconAlpha != faviconView.alpha && (iconAlpha == 0 || iconAlpha == 1)) {
             faviconView.alpha = iconAlpha
         }
-        let maskWidth = max(Self.iconGap + MetricsValues.favicon, width - Self.iconGap)
+        // The × sits at the edge of the part of the card that shows (the next card covers the rest
+        // of a cascade card), and goes when less than half of the card shows: a covered corner
+        // offers no target. The title row stops before it.
+        let shownEdge = min(width, size.width)
+        let showsClose = shownEdge >= size.width * TabGalleryMetrics.closeMinimumShownFraction
+        if closeButton.isHidden == showsClose { closeButton.isHidden = !showsClose }
+        if showsClose {
+            let x = shownEdge - closeButton.bounds.width
+            if abs(closeButton.frame.minX - x) > 0.25 { closeButton.frame.origin.x = x }
+        }
+        var maskWidth = max(Self.iconGap + MetricsValues.favicon, width - Self.iconGap)
+        if showsClose {
+            let titleEnd = shownEdge - TabGalleryMetrics.closeInset - TabGalleryMetrics.closePlateSide - Spacing.xs
+            maskWidth = max(Self.iconGap + MetricsValues.favicon, min(maskWidth, titleEnd))
+        }
         if abs(maskWidth - visibleWidth) > 0.5 {
             visibleWidth = maskWidth
             CATransaction.begin()
@@ -247,6 +284,11 @@ final class TabCardView: UIView {
         // edge, so stacked dark pages stay apart.
         shadowView.layer.shadowColor = Palette.floatingShadow.resolvedColor(with: traitCollection).cgColor
         shadowView.layer.shadowOpacity = dark ? 0.5 : 0.16
+        // A quiet plate: a veil of ink on paper; private cards take the private chrome's violet.
+        closePlate.backgroundColor = isPrivateTab
+            ? Palette.privateGlassTint
+            : UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.16) : UIColor(white: 0, alpha: 0.07) }
+        closeGlyph.tintColor = Palette.textPrimary.withAlphaComponent(0.7)
         let layer = thumbnailContainer.layer
         if isSelectedTab, marksSelection {
             // Lagoon (the accent) marks the active tab, and only in the grid: in the cascade
@@ -302,7 +344,17 @@ final class TabCardView: UIView {
             titleX = privateIcon.frame.maxX + Spacing.xs
         }
         let titleHeight = ceil(titleLabel.font?.lineHeight ?? 18)
-        titleLabel.frame = CGRect(x: titleX, y: (midY - titleHeight / 2).rounded(), width: max(0, width - titleX - 2), height: titleHeight)
+        let plate = TabGalleryMetrics.closePlateSide
+        let titleEnd = width - TabGalleryMetrics.closeInset - plate - Spacing.xs
+        titleLabel.frame = CGRect(x: titleX, y: (midY - titleHeight / 2).rounded(), width: max(0, titleEnd - titleX), height: titleHeight)
+        // The target sits inside the card's bounds (touches outside them never reach it); the
+        // plate sits at the target's trailing edge, centered on the title row.
+        let target = min(Metrics.tapTarget, width)
+        closeButton.frame = CGRect(x: width - target, y: 0, width: target, height: Metrics.tapTarget)
+        closePlate.frame = CGRect(
+            x: target - TabGalleryMetrics.closeInset - plate, y: max(0, (midY - plate / 2).rounded()), width: plate, height: plate
+        )
+        closeGlyph.frame = closePlate.bounds
     }
 
     /// The preview is the top of the page at the card's width: pages are anchored at the top. A

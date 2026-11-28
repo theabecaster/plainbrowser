@@ -70,9 +70,14 @@ extension BrowserViewController {
             state.isUnreadLanguage = !PageLanguage.isRead(language.maximalIdentifier, preferred: Locale.preferredLanguages)
         }
         state.isTranslated = tab.translation != .original
-        // Both only while Plain is dark: the page reports `.inactive` otherwise.
-        state.isDarkened = tab.darkPages == .darkened
-        state.isDarkPagesOff = tab.darkPages == .offForSite
+        // Only while the page is dark: the page reports `.inactive` otherwise.
+        state.darkPages = tab.darkPages.page
+        if let site = tab.siteKey {
+            let choices = tab.pageAppearanceChoices
+            state.pageAppearance = choices.appearance(for: site)
+            state.pageAppearanceIsOwn = choices.hasOwnChoice(site)
+        }
+        state.isLightless = tab.isLightless
         if let page = session.pool.webView(for: tab) {
             state.isReaderAvailable = session.reader.isAvailable(in: page) == true
         }
@@ -130,6 +135,14 @@ extension BrowserViewController {
         if !tabsUI.start.isHidden { applyStartShortcuts() }
         applyToolbarItems()
         updateBarShapeIfNeeded()
+        let indicator = onPage ? rules.pageAppearanceIndicator : .hidden
+        let menu = indicator == .hidden ? nil : currentTab.flatMap { pageAppearanceMenu(for: $0, source: "indicator") }
+        pill.setPageAppearance(indicator, isOwn: rules.state.pageAppearanceIsOwn, menu: menu, animated: true)
+        // The suggestion gives way to the gallery, the reader, Find and the search field.
+        if darkPagesUI.suggestion?.isShowing == true || darkPagesUI.pending != nil,
+           isShowingGallery || isShowingReader || isFindOpen || isEditingAddress {
+            hideDarkPagesSuggestion()
+        }
     }
 
     /// The system's vertical bar (Duo) holds the page buttons only where the bar shows (state

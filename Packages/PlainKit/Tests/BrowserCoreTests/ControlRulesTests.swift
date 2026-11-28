@@ -252,25 +252,42 @@ import Testing
         #expect(!ControlRules.opensSavedCopy(errorDomain: "WebKitErrorDomain", code: NSURLErrorTimedOut))
     }
 
-    @Test func darkPagesItemOnlyWhereItSwitchesSomething() {
+    @Test func pageAppearanceMenuOnEveryWebPage() {
         var state = Self.page()
-        #expect(ControlRules(state).darkPages == .hidden, "light app or a site's own dark design")
-        state.isDarkened = true
-        #expect(ControlRules(state).darkPages == .turnOff)
+        #expect(ControlRules(state).pageAppearanceMenu, "in any colors of Plain's")
         state.isPrivate = true
-        #expect(ControlRules(state).darkPages == .turnOff, "private tabs keep it for the session")
-        state.isDarkened = false
-        state.isDarkPagesOff = true
-        #expect(ControlRules(state).darkPages == .turnOn)
-        state.condition = .loading
-        #expect(ControlRules(state).darkPages == .turnOn)
+        #expect(ControlRules(state).pageAppearanceMenu, "private tabs keep it for the session")
         for condition in [PageCondition.failed, .crashed, .awaitingResubmit] {
             state.condition = condition
-            #expect(ControlRules(state).darkPages == .hidden, "\(condition)")
+            #expect(!ControlRules(state).pageAppearanceMenu, "\(condition)")
         }
         state.condition = .loaded
         state.isReaderOpen = true
-        #expect(ControlRules(state).darkPages == .hidden, "under the reader it acts out of sight")
+        #expect(!ControlRules(state).pageAppearanceMenu, "under the reader it acts out of sight")
+    }
+
+    @Test func pageAppearanceIndicatorOnlyWhilePlainChangesThePage() {
+        var state = Self.page()
+        #expect(ControlRules(state).pageAppearanceIndicator == .hidden, "as the site made it, by default")
+        state.pageAppearance = .dark
+        #expect(ControlRules(state).pageAppearanceIndicator == .shown(.dark))
+        state.pageAppearance = .light
+        #expect(ControlRules(state).pageAppearanceIndicator == .shown(.light))
+        state.isLightless = true
+        #expect(ControlRules(state).pageAppearanceIndicator == .hidden, "a dark-only site has no light to show")
+        state.isLightless = false
+        state.pageAppearance = .off
+        #expect(ControlRules(state).pageAppearanceIndicator == .hidden)
+        state.pageAppearanceIsOwn = true
+        #expect(ControlRules(state).pageAppearanceIndicator == .shown(.off), "the way back stays where it was chosen")
+        state.isEditing = true
+        #expect(ControlRules(state).pageAppearanceIndicator == .hidden, "the field takes the pill")
+        state.isEditing = false
+        state.isReaderOpen = true
+        #expect(ControlRules(state).pageAppearanceIndicator == .hidden)
+        state.isReaderOpen = false
+        state.condition = .failed
+        #expect(ControlRules(state).pageAppearanceIndicator == .hidden)
     }
 
     @Test func crashedAndResendPagesAreReduced() {

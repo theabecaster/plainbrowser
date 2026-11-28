@@ -327,6 +327,7 @@ extension BrowserViewController {
     /// The settings changed (read at launch, or saved in Settings): side tabs follow Tab Layout.
     func settingsDidChange() {
         applyAppearance()
+        applyDarkPagesSetting()
         let layout = data.tabLayout ?? FixedChoices.defaultTabLayout
         guard layout != duo.tabLayout else { return }
         duo.tabLayout = layout

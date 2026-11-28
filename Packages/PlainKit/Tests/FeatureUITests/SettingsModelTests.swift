@@ -44,6 +44,35 @@ import Testing
         #expect(saved == BrowserSettings(searchEngine: .duckDuckGo, tabLayout: .right, archiveAfter: .oneWeek, appearance: .light))
     }
 
+    @Test func pageAppearanceIsSavedAndUnchosenByDefault() async throws {
+        let model = makeModel()
+        await model.load()
+        #expect(model.settings.pageAppearance == nil)
+        model.setPageAppearance(.dark)
+        await model.waitForSaves()
+        #expect(try await database.settings().pageAppearance == .dark)
+        #expect(try await database.settings().appearance == .system, "page appearance never touches Plain's Appearance")
+        model.setAppearance(.light)
+        await model.waitForSaves()
+        #expect(try await database.settings().pageAppearance == .dark, "and Plain's Appearance never touches it")
+        await model.setDefaultPageAppearance(nil)
+        #expect(try await database.settings().pageAppearance == nil, "an undone first pick clears it")
+    }
+
+    /// Two windows' Settings (or Settings and the Dark Pages suggestion): each change is saved over
+    /// what is stored, so neither writes the other's old value back.
+    @Test func twoModelsNeverUndoEachOther() async throws {
+        let first = makeModel(), second = makeModel()
+        await first.load()
+        await second.load()
+        first.setPageAppearance(.dark)
+        second.setTabLayout(.right)
+        await first.waitForSaves()
+        await second.waitForSaves()
+        let stored = try await database.settings()
+        #expect(stored.pageAppearance == .dark && stored.tabLayout == .right)
+    }
+
     @Test func customEngineIsValidatedNamedAndSaved() async throws {
         let model = makeModel()
         await model.load()

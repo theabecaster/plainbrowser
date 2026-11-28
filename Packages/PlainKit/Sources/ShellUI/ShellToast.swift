@@ -14,6 +14,8 @@ final class ShellToast: UIView {
     private var action: (() -> Void)?
     private var hideTask: Task<Void, Never>?
     private(set) var isShowing = false
+    /// Runs as a toast starts to show (the Dark Pages suggestion gives way to it).
+    var willShow: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -108,6 +110,7 @@ final class ShellToast: UIView {
     /// Shows `message` with an optional button, replacing a toast already up.
     func show(_ message: String, button title: String? = nil, action: (() -> Void)? = nil) {
         Signposts.signposter.emitEvent(Signposts.toast)
+        willShow?()
         label.text = message
         button.configuration?.title = title
         button.isHidden = title == nil

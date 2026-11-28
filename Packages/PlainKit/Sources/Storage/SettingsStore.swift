@@ -2,7 +2,7 @@ import BrowserCore
 import Foundation
 import GRDB
 
-/// Persists `BrowserSettings`: search engine, tab layout, archive interval and appearance. Nothing else is a
+/// Persists `BrowserSettings`: search engine, tab layout, archive interval, appearance and the default page appearance. Nothing else is a
 /// setting (docs/plan.md, section 4b), so there is no generic key-value API.
 ///
 /// Built-in engines are stored by id, so a template fix in the catalog reaches existing users. A
@@ -15,6 +15,7 @@ extension AppDatabase {
         case tabLayout
         case archiveAfter
         case appearance
+        case pageAppearance
     }
 
     private struct StoredCustomEngine: Codable {
@@ -23,7 +24,22 @@ extension AppDatabase {
     }
 
     public func settings() async throws -> BrowserSettings {
-        try await writer.read { db in
+        try await writer.read { db in try Self.readSettings(db) }
+    }
+
+    /// Changes stored settings in one write transaction: what another window saved a moment ago
+    /// is read and kept, and only `change` is applied over it. Returns what is stored now.
+    public func updateSettings(_ change: @escaping @Sendable (inout BrowserSettings) -> Void) async throws -> BrowserSettings {
+        try await writer.write { db in
+            var settings = try Self.readSettings(db)
+            change(&settings)
+            try Self.writeSettings(settings, db)
+            return settings
+        }
+    }
+
+    private static func readSettings(_ db: Database) throws -> BrowserSettings {
+        do {
             let values = try Dictionary(
                 uniqueKeysWithValues: Row.fetchAll(db, sql: "SELECT key, value FROM \(Schema.setting)")
                     .map { (row: Row) -> (String, String) in (row["key"], row["value"]) }
@@ -48,6 +64,11 @@ extension AppDatabase {
             if let raw = values[SettingKey.appearance.rawValue], let appearance = Appearance(rawValue: raw) {
                 settings.appearance = appearance
             }
+            // Absent or empty until the user first chooses: nil (as Off), for
+            // upgraders too (docs/research/dark-pages-optin.md, Migration).
+            if let raw = values[SettingKey.pageAppearance.rawValue] {
+                settings.pageAppearance = PageAppearance(rawValue: raw)
+            }
             return settings
         }
     }
@@ -64,25 +85,29 @@ extension AppDatabase {
     }
 
     public func saveSettings(_ settings: BrowserSettings) async throws {
+        try await writer.write { db in try Self.writeSettings(settings, db) }
+    }
+
+    private static func writeSettings(_ settings: BrowserSettings, _ db: Database) throws {
         var pairs: [(SettingKey, String)] = [
             (.searchEngine, settings.searchEngine.id),
             (.tabLayout, settings.tabLayout.rawValue),
             (.archiveAfter, settings.archiveAfter.rawValue),
             (.appearance, settings.appearance.rawValue),
         ]
+        // Empty while never chosen, so an undone first pick ("This Site Only") clears it again.
+        pairs.append((.pageAppearance, settings.pageAppearance?.rawValue ?? ""))
         if settings.searchEngine.isCustom {
             let stored = StoredCustomEngine(name: settings.searchEngine.name, template: settings.searchEngine.template)
             let json = String(decoding: try JSONEncoder().encode(stored), as: UTF8.self)
             pairs.append((.customSearchEngine, json))
         }
         let values = pairs.map { ($0.0.rawValue, $0.1) }
-        try await writer.write { db in
-            let statement = try db.cachedStatement(
-                sql: "INSERT INTO \(Schema.setting) (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-            )
-            for (key, value) in values {
-                try statement.execute(arguments: [key, value])
-            }
+        let statement = try db.cachedStatement(
+            sql: "INSERT INTO \(Schema.setting) (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        for (key, value) in values {
+            try statement.execute(arguments: [key, value])
         }
     }
 

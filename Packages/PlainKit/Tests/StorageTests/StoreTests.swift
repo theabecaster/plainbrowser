@@ -79,9 +79,23 @@ import Testing
 
     @Test func settingsRoundTrip() async throws {
         let database = try AppDatabase.inMemory()
-        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never, appearance: .dark)
+        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never, appearance: .dark, pageAppearance: .light)
         try await database.saveSettings(settings)
         #expect(try await database.settings() == settings)
+    }
+
+    /// No page appearance until the user chooses one, upgraders too; a choice comes back, and an
+    /// undone first pick clears it again.
+    @Test func pageAppearanceStartsUnchosenAndIsRemembered() async throws {
+        let database = try AppDatabase.inMemory()
+        #expect(try await database.settings().pageAppearance == nil)
+        var settings = BrowserSettings.defaults
+        settings.pageAppearance = .dark
+        try await database.saveSettings(settings)
+        #expect(try await database.settings().pageAppearance == .dark)
+        settings.pageAppearance = nil
+        try await database.saveSettings(settings)
+        #expect(try await database.settings().pageAppearance == nil)
     }
 
     @Test func customEngineIsKeptAfterSwitchingAway() async throws {

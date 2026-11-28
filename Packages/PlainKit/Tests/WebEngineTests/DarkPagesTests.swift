@@ -256,13 +256,23 @@ struct DarkPagesTests {
         }
     }
 
-    private func makeHarness(style: UIUserInterfaceStyle, darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore())
+    private func makeHarness(style: UIUserInterfaceStyle, darkPages: any PageAppearanceStore = InMemoryPageAppearanceStore(defaultAppearance: .dark))
         async throws -> Harness
     {
         let harness = try await Harness(darkPages: darkPages, pageScripts: HandlerPageScripts(), route: Self.route)
         harness.window.overrideUserInterfaceStyle = style
         harness.pool.interfaceStyle = style
         return harness
+    }
+
+    /// Plain's colors changing, with the page appearance a user who wants dark pages has: Dark
+    /// while Plain is dark, Off (each site as made, in Plain's colors) while light. Dark alone
+    /// keeps pages dark in a light Plain (docs/decisions.md, "Page appearance").
+    private func appColors(_ style: UIUserInterfaceStyle, _ store: InMemoryPageAppearanceStore, _ harness: Harness) async {
+        store.choices.defaultAppearance = style == .dark ? .dark : .off
+        harness.window.overrideUserInterfaceStyle = style
+        harness.pool.interfaceStyle = style
+        await harness.pool.darkPagesChoicesDidChange()
     }
 
     private func style(_ property: String, of selector: String, in tab: Tab, harness: Harness) async throws -> String {
@@ -577,7 +587,7 @@ struct DarkPagesTests {
             #expect(try await style("filter", of: id, in: tab, harness: harness) == "none", "\(id) keeps its colors")
         }
         // Off for the site: the pictures are as made again.
-        tab.setDarkPagesOff(true)
+        await tab.setPageAppearance(.off)
         try await waitUntil("off") { tab.darkPages == .offForSite }
         await capture("dark-logos-off", tab, harness: harness)
         #expect(try await style("filter", of: "#png", in: tab, harness: harness) == "none")
@@ -620,11 +630,11 @@ struct DarkPagesTests {
         #expect((stats?["shadowRoots"] as? Int ?? 0) >= 4)
         await capture("dark-shadow-darkened", tab, harness: harness)
         // Off and on again: the components are as made, then darkened again.
-        tab.setDarkPagesOff(true)
+        await tab.setPageAppearance(.off)
         try await waitUntil("off") { tab.darkPages == .offForSite }
         #expect(try await harness.evaluate(inner("#card", "#inner", "backgroundColor"), in: tab) as? String == "rgb(255, 255, 255)")
         #expect(try await harness.evaluate(inner("#card", "#sub", "backgroundColor"), in: tab) as? String == "rgb(244, 244, 244)")
-        tab.setDarkPagesOff(false)
+        await tab.setPageAppearance(nil)
         try await waitUntil("on") { tab.darkPages == .darkened }
         #expect(try await waitFor(condition.joined(separator: " && "), in: tab, harness: harness))
     }
@@ -632,7 +642,8 @@ struct DarkPagesTests {
     /// Same-origin frames are darkened with the page (one there from the start, one added later,
     /// and one there before the app turned dark); another origin's frame is left as made.
     @Test func sameOriginFramesAreDarkened() async throws {
-        let harness = try await makeHarness(style: .dark)
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .dark)
+        let harness = try await makeHarness(style: .dark, darkPages: store)
         defer { harness.cleanUp() }
         let other = try await TestServer(route: Self.route)
         defer { other.stop() }
@@ -655,19 +666,17 @@ struct DarkPagesTests {
         #expect(try await waitFor("window.__otherBg", in: tab, harness: harness))
         #expect(try await harness.evaluate("window.__otherBg", in: tab) as? String == "rgb(255, 255, 255)")
         // Off for the site: the frames follow the page.
-        tab.setDarkPagesOff(true)
+        await tab.setPageAppearance(.off)
         try await waitUntil("off") { tab.darkPages == .offForSite }
         #expect(try await waitFor("\(frame("same", "body", "backgroundColor")) === 'rgb(255, 255, 255)'", in: tab, harness: harness))
 
         // A frame that was there while the app was light is darkened when the app turns dark.
-        tab.setDarkPagesOff(false)
-        harness.window.overrideUserInterfaceStyle = .light
-        harness.pool.interfaceStyle = .light
+        await tab.setPageAppearance(nil)
+        await appColors(.light, store, harness)
         try await harness.load("/frames?port=\(other.port)&light", in: tab)
         try await waitUntil("light") { tab.darkPages == .inactive }
         #expect(try await waitFor("document.getElementById('same').contentDocument.body", in: tab, harness: harness))
-        harness.window.overrideUserInterfaceStyle = .dark
-        harness.pool.interfaceStyle = .dark
+        await appColors(.dark, store, harness)
         try await waitUntil("darkened live") { tab.darkPages == .darkened }
         #expect(try await waitFor(dark("same"), in: tab, harness: harness))
     }
@@ -713,7 +722,8 @@ struct DarkPagesTests {
     }
 
     @Test func lightAppLeavesPagesAloneAndDarkensLiveWithoutReload() async throws {
-        let harness = try await makeHarness(style: .light)
+        let store = InMemoryPageAppearanceStore()
+        let harness = try await makeHarness(style: .light, darkPages: store)
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab()
         harness.pool.attach(tab, to: harness.container)
@@ -725,32 +735,29 @@ struct DarkPagesTests {
         #expect(try await harness.evaluate("document.adoptedStyleSheets.length", in: tab) as? Int == 0)
         _ = try await harness.evaluate("window.__marker = 7", in: tab)
 
-        harness.window.overrideUserInterfaceStyle = .dark
-        harness.pool.interfaceStyle = .dark
+        await appColors(.dark, store, harness)
         try await waitUntil("darkened live") { tab.darkPages == .darkened }
         #expect(try await harness.evaluate("window.__marker", in: tab) as? Int == 7)
         #expect(try await luminance("backgroundColor", of: "body", in: tab, harness: harness) < 0.02)
 
-        harness.window.overrideUserInterfaceStyle = .light
-        harness.pool.interfaceStyle = .light
+        await appColors(.light, store, harness)
         try await waitUntil("light again") { tab.darkPages == .inactive }
         #expect(try await style("backgroundColor", of: "body", in: tab, harness: harness) == "rgb(255, 255, 255)")
         #expect(try await style("color", of: "#title", in: tab, harness: harness) == "rgb(17, 17, 17)")
     }
 
     @Test func eachSwitchToDarkJudgesThePageAsItIsNow() async throws {
-        let harness = try await makeHarness(style: .dark)
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .dark)
+        let harness = try await makeHarness(style: .dark, darkPages: store)
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab()
         harness.pool.attach(tab, to: harness.container)
         try await harness.load("/light", in: tab)
         try await waitUntil("darkened") { tab.darkPages == .darkened }
-        harness.window.overrideUserInterfaceStyle = .light
-        harness.pool.interfaceStyle = .light
+        await appColors(.light, store, harness)
         try await waitUntil("light") { tab.darkPages == .inactive }
         _ = try await harness.evaluate("document.body.style.background = '#101010'; 1", in: tab)
-        harness.window.overrideUserInterfaceStyle = .dark
-        harness.pool.interfaceStyle = .dark
+        await appColors(.dark, store, harness)
         try await waitUntil("judged again") { tab.darkPages == .native }
         #expect(try await style("backgroundColor", of: "body", in: tab, harness: harness) == "rgb(16, 16, 16)")
     }
@@ -779,7 +786,7 @@ struct DarkPagesTests {
     }
 
     @Test func aPageWithAnOldChoiceGetsTheSitesCurrentOne() async throws {
-        let store = InMemorySiteDarkPagesStore()
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .dark)
         let harness = try await makeHarness(style: .dark, darkPages: store)
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab()
@@ -788,14 +795,14 @@ struct DarkPagesTests {
         try await waitUntil("darkened") { tab.darkPages == .darkened }
         // As if the site were turned off in another tab while this page waited in the
         // back-forward cache: its next report brings it in line.
-        store.setDarkPagesOff(true, forSite: "127.0.0.1")
+        store.setAppearance(.off, forSite: "127.0.0.1")
         let webView = try #require(harness.pool.existingWebView(for: tab))
-        _ = try await webView.evaluateJavaScript(DarkPages.setOffSource(false), in: nil, contentWorld: UserScripts.world)
+        _ = try await webView.evaluateJavaScript(DarkPages.setChoiceSource(applies: true, siteOff: false), in: nil, contentWorld: UserScripts.world)
         try await waitUntil("corrected") { tab.darkPages == .offForSite }
     }
 
     @Test func turningItOffForASiteIsRememberedAndAppliesAtOnce() async throws {
-        let store = InMemorySiteDarkPagesStore()
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .dark)
         let harness = try await makeHarness(style: .dark, darkPages: store)
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab()
@@ -804,63 +811,178 @@ struct DarkPagesTests {
         try await waitUntil("darkened") { tab.darkPages == .darkened }
         _ = try await harness.evaluate("window.__marker = 3", in: tab)
 
-        tab.setDarkPagesOff(true)
+        await tab.setPageAppearance(.off)
         try await waitUntil("off") { tab.darkPages == .offForSite }
-        #expect(store.offSites == ["127.0.0.1"])
+        #expect(store.choices.sites == ["127.0.0.1": .off])
         #expect(try await style("backgroundColor", of: "body", in: tab, harness: harness) == "rgb(255, 255, 255)")
         #expect(try await harness.evaluate("window.__marker", in: tab) as? Int == 3)
 
-        // Another tab on the site, and a reload, stay off.
+        // Another tab on the site, and a reload, stay off. Off screen it is not even checked.
         let other = harness.pool.makeTab()
         try await harness.load("/unstyled", in: other)
-        try await waitUntil("other off") { other.darkPages == .offForSite }
+        #expect(try await style("backgroundColor", of: "html", in: other, harness: harness) != "rgb(24, 24, 24)")
+        #expect(other.darkPages != .darkened)
         tab.reload()
         try await waitUntil("reloaded off") { tab.darkPages == .offForSite && !tab.isLoading }
 
-        tab.setDarkPagesOff(false)
+        await tab.setPageAppearance(nil)
         try await waitUntil("on again") { tab.darkPages == .darkened }
-        #expect(store.offSites.isEmpty)
+        #expect(store.choices.sites.isEmpty)
         #expect(try await luminance("backgroundColor", of: "body", in: tab, harness: harness) < 0.02)
     }
 
     @Test func storedListArrivingAfterLaunchReachesOpenWebViews() async throws {
-        let store = InMemorySiteDarkPagesStore()
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .dark)
         let harness = try await makeHarness(style: .dark, darkPages: store)
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab()
         harness.pool.attach(tab, to: harness.container)
         try await harness.load("/light", in: tab)
         try await waitUntil("darkened") { tab.darkPages == .darkened }
-        store.setDarkPagesOff(true, forSite: "127.0.0.1")
-        harness.pool.darkPagesSitesDidChange()
+        store.setAppearance(.off, forSite: "127.0.0.1")
+        await harness.pool.darkPagesChoicesDidChange()
         tab.reload()
         try await waitUntil("off after the list arrived") { tab.darkPages == .offForSite }
     }
 
     @Test func privateChoicesStayInThePrivateSession() async throws {
-        let store = InMemorySiteDarkPagesStore()
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .dark)
         let harness = try await makeHarness(style: .dark, darkPages: store)
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab(isPrivate: true)
         harness.pool.attach(tab, to: harness.container)
         try await harness.load("/light", in: tab)
         try await waitUntil("darkened") { tab.darkPages == .darkened }
-        tab.setDarkPagesOff(true)
+        await tab.setPageAppearance(.off)
         try await waitUntil("off") { tab.darkPages == .offForSite }
-        #expect(store.offSites.isEmpty)
+        #expect(store.choices.sites.isEmpty)
         let regular = harness.pool.makeTab()
         try await harness.load("/light", in: regular)
         try await waitUntil("regular still darkened") { regular.darkPages == .darkened }
     }
 
+    // MARK: Off by default (docs/research/dark-pages-optin.md)
+
+    @Test func offByDefaultAPageThatCouldUseItIsOnlyReported() async throws {
+        let store = InMemoryPageAppearanceStore()
+        let harness = try await makeHarness(style: .dark, darkPages: store)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/light", in: tab)
+        try await waitUntil("checked") { tab.darkPages == .available }
+        #expect(tab.darkPagesDocument != nil)
+        // Nothing of Plain's touched it: the page as the site made it.
+        #expect(try await style("backgroundColor", of: "body", in: tab, harness: harness) == "rgb(255, 255, 255)")
+        #expect(try await harness.evaluate("document.adoptedStyleSheets.length", in: tab) as? Int == 0)
+
+        // The switch turned on: darkened at once, no reload.
+        _ = try await harness.evaluate("window.__marker = 7", in: tab)
+        store.choices.defaultAppearance = .dark
+        #expect(await harness.pool.darkPagesChoicesDidChange())
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        #expect(try await harness.evaluate("window.__marker", in: tab) as? Int == 7)
+        #expect(try await luminance("backgroundColor", of: "body", in: tab, harness: harness) < 0.02)
+    }
+
+    @Test func aSiteSetToDarkIsDarkenedAndSetToOffStaysOff() async throws {
+        let store = InMemoryPageAppearanceStore()
+        let harness = try await makeHarness(style: .dark, darkPages: store)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/light", in: tab)
+        try await waitUntil("checked") { tab.darkPages == .available }
+        // Dark for this site while there is no default.
+        #expect(await tab.setPageAppearance(.dark))
+        #expect(store.choices.sites == ["127.0.0.1": .dark])
+        try await waitUntil("darkened") { tab.darkPages == .darkened }
+        // Off for it: the page as made, and it still says it could use dark.
+        await tab.setPageAppearance(.off)
+        #expect(store.choices.sites == ["127.0.0.1": .off])
+        try await waitUntil("off") { tab.darkPages == .offForSite }
+        #expect(try await style("backgroundColor", of: "body", in: tab, harness: harness) == "rgb(255, 255, 255)")
+        tab.reload()
+        try await waitUntil("reloaded, checked, off") { tab.darkPages == .offForSite && !tab.isLoading }
+    }
+
+    @Test func offByDefaultAPageWithItsOwnDarkDesignIsNative() async throws {
+        let harness = try await makeHarness(style: .dark, darkPages: InMemoryPageAppearanceStore())
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        for path in ["/dark-media", "/dark-meta", "/already-dark", "/dark-property"] {
+            try await harness.load(path, in: tab)
+            try await waitUntil("checked \(path)") { tab.darkPages == .native }
+        }
+    }
+
+    @Test func offByDefaultALightAppReadsNothing() async throws {
+        let harness = try await makeHarness(style: .light, darkPages: InMemoryPageAppearanceStore())
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/light", in: tab)
+        try await Task.sleep(for: .milliseconds(800))
+        #expect(tab.darkPages == .inactive, "never available in light colors: no suggestion, no indicator")
+        // Dark, light before the check ran, dark again: the check is not lost.
+        harness.window.overrideUserInterfaceStyle = .dark
+        harness.pool.interfaceStyle = .dark
+        harness.window.overrideUserInterfaceStyle = .light
+        harness.pool.interfaceStyle = .light
+        harness.window.overrideUserInterfaceStyle = .dark
+        harness.pool.interfaceStyle = .dark
+        try await waitUntil("checked once dark") { tab.darkPages == .available }
+    }
+
+    // MARK: Page appearance apart from Plain's colors
+
+    @Test func darkInALightAppDarkensOnlyThatSite() async throws {
+        let store = InMemoryPageAppearanceStore()
+        let harness = try await makeHarness(style: .light, darkPages: store)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/light", in: tab)
+        #expect(try await harness.evaluate("matchMedia('(prefers-color-scheme: dark)').matches", in: tab) as? Bool == false)
+        await tab.setPageAppearance(.dark)
+        try await waitUntil("darkened in a light app") { tab.darkPages == .darkened }
+        #expect(try await harness.evaluate("matchMedia('(prefers-color-scheme: dark)').matches", in: tab) as? Bool == true)
+        #expect(harness.window.traitCollection.userInterfaceStyle == .light, "Plain's own colors never change")
+    }
+
+    @Test func lightInADarkAppShowsTheSitesLightDesign() async throws {
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .light)
+        let harness = try await makeHarness(style: .dark, darkPages: store)
+        defer { harness.cleanUp() }
+        let tab = harness.pool.makeTab()
+        harness.pool.attach(tab, to: harness.container)
+        try await harness.load("/dark-media", in: tab)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(try await harness.evaluate("matchMedia('(prefers-color-scheme: dark)').matches", in: tab) as? Bool == false,
+                "the default Light reaches a new site, in a dark app")
+        // The site's own choice survives the default.
+        store.setAppearance(.dark, forSite: "127.0.0.1")
+        await harness.pool.darkPagesChoicesDidChange()
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(try await harness.evaluate("matchMedia('(prefers-color-scheme: dark)').matches", in: tab) as? Bool == true)
+        store.choices.defaultAppearance = .off
+        await harness.pool.darkPagesChoicesDidChange()
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(try await harness.evaluate("matchMedia('(prefers-color-scheme: dark)').matches", in: tab) as? Bool == true,
+                "a site's own choice survives a change of the default")
+    }
+
     @Test func pagesLoadedOffScreenGetTheAppsColors() async throws {
-        let harness = try await makeHarness(style: .dark)
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .dark)
+        let harness = try await makeHarness(style: .dark, darkPages: store)
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab()
         try await harness.load("/dark-media", in: tab)
+        try await Task.sleep(for: .milliseconds(400))
         #expect(try await harness.evaluate("matchMedia('(prefers-color-scheme: dark)').matches", in: tab) as? Bool == true)
         try await waitUntil("judged off screen") { tab.darkPages == .native }
-        harness.pool.interfaceStyle = .light
+        await appColors(.light, store, harness)
         #expect(try await harness.evaluate("matchMedia('(prefers-color-scheme: dark)').matches", in: tab) as? Bool == false)
     }
 
@@ -871,7 +993,7 @@ struct DarkPagesTests {
     /// machine's load is printed with them.
     @Test(arguments: ["/big", "/apple-big"])
     func largePageCost(path: String) async throws {
-        let store = InMemorySiteDarkPagesStore()
+        let store = InMemoryPageAppearanceStore(defaultAppearance: .dark)
         let harness = try await makeHarness(style: .dark, darkPages: store)
         defer { harness.cleanUp() }
         let tab = harness.pool.makeTab()
@@ -892,7 +1014,11 @@ struct DarkPagesTests {
                 let start = clock.now
                 try await harness.load("\(path)?\(UUID().uuidString)", in: tab)
                 loads.append(clock.now - start)
-                try await waitUntil("\(label) state") { tab.darkPages == state }
+                // Off for the site, a page reports `off` only when its light check says it could
+                // use dark pages; one with a dark first screen (the apple-like hero) is `native`.
+                try await waitUntil("\(label) state") {
+                    tab.darkPages == state || (state == .offForSite && tab.darkPages == .native)
+                }
                 if state == .darkened { try await settle(tab, harness: harness) }
                 let stats = try await webView.evaluateJavaScript(
                     "globalThis.__plainDarkPages ? globalThis.__plainDarkPages.stats : null", in: nil, contentWorld: UserScripts.world
@@ -927,16 +1053,14 @@ struct DarkPagesTests {
         for round in 0..<3 {
             let tag = round == 0 ? " (warm-up)" : ""
             try await measure("darkened\(tag)", expect: .darkened)
-            store.setDarkPagesOff(true, forSite: "127.0.0.1")
-            harness.pool.darkPagesSitesDidChange()
+            store.setAppearance(.off, forSite: "127.0.0.1")
+            await harness.pool.darkPagesChoicesDidChange()
             try await measure("off for site\(tag)", expect: .offForSite)
-            store.setDarkPagesOff(false, forSite: "127.0.0.1")
-            harness.pool.darkPagesSitesDidChange()
-            harness.window.overrideUserInterfaceStyle = .light
-            harness.pool.interfaceStyle = .light
+            store.setAppearance(nil, forSite: "127.0.0.1")
+            await harness.pool.darkPagesChoicesDidChange()
+            await appColors(.light, store, harness)
             try await measure("light app\(tag)", expect: .inactive)
-            harness.window.overrideUserInterfaceStyle = .dark
-            harness.pool.interfaceStyle = .dark
+            await appColors(.dark, store, harness)
         }
     }
 

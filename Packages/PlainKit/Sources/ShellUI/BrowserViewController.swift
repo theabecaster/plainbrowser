@@ -75,6 +75,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     let summaryUI = SummaryUIState()
     /// The gallery, the bar swipe, neighbour previews and the toast.
     let tabsUI = TabsUIState()
+    /// Dark Pages' suggestion and crossfades (`+DarkPages`).
+    let darkPagesUI = DarkPagesUIState()
     /// What launch opened to: the last tab's picture and the fresh search's frost (`+Launch`).
     let launchUI = LaunchUIState()
     /// What the focused address bar offers before typing, and whether it edits the page's
@@ -639,8 +641,18 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         tabsUI.prefersLightStatusBar ? .lightContent : .default
     }
 
+    /// Every sheet, menu and alert the browser presents: the suggestion gives way to it.
+    override public func present(_ viewController: UIViewController, animated: Bool, completion: (() -> Void)? = nil) {
+        hideDarkPagesSuggestion()
+        super.present(viewController, animated: animated, completion: completion)
+    }
+
     override public func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
+        // A fold, unfold or rotation: the suggestion would point at the wrong place, and a
+        // crossfade's picture would no longer fit the page.
+        hideDarkPagesSuggestion()
+        removeDarkPagesFades()
         windowWillResize(to: size, with: coordinator)
     }
 
@@ -1137,6 +1149,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
 
     /// Places the pill and button bar for collapse `progress` with transform and alpha only.
     func applyCollapse(_ progress: CGFloat) {
+        // The suggestion sits by the whole bar; a bar on its way down takes it away.
+        if progress > 0 { hideDarkPagesSuggestion() }
         // While the search sheet holds the pill and the bar, their place is its progress.
         guard !sheetUI.isLaidOutOpen else { return applyFocusProgress(sheetUI.driver.value) }
         if let top = duo.topGeometry {
@@ -1181,6 +1195,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     }
 
     @objc private func keyboardWillShow() {
+        hideDarkPagesSuggestion()
         guard !isEditingAddress else { return }
         revealChrome(.keyboard)
     }
@@ -1713,7 +1728,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             keep.append(readLaterMenuItem(for: tab, url: url, isSaved: isSaved))
         }
         var siteItems = siteMenuItems(
-            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
+            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.pageAppearanceMenu
         )
         // The permissions the site asked for, with what iOS allows (Off in Settings).
         if !siteItems.isEmpty { siteItems += sitePermissionMenuItems(for: tab) }

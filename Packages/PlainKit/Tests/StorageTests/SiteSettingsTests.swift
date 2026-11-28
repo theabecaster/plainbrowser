@@ -1,3 +1,4 @@
+import BrowserCore
 import Foundation
 @testable import Storage
 import Testing
@@ -58,15 +59,15 @@ import Testing
         #expect(try await database.blockingAllowList() == ["b.example"])
     }
 
-    @Test func darkPagesOffSitesAreRemembered() async throws {
+    @Test func sitePageAppearancesAreRemembered() async throws {
         let database = try AppDatabase.inMemory()
-        #expect(try await database.darkPagesOffSites().isEmpty)
-        try await database.setDarkPagesOff(true, forSite: "a.example")
-        try await database.setDarkPagesOff(true, forSite: "a.example")
-        try await database.setDarkPagesOff(true, forSite: "b.example")
-        #expect(try await database.darkPagesOffSites() == ["a.example", "b.example"])
-        try await database.setDarkPagesOff(false, forSite: "a.example")
-        #expect(try await database.darkPagesOffSites() == ["b.example"])
+        #expect(try await database.sitePageAppearances().isEmpty)
+        try await database.setPageAppearance(.off, forSite: "a.example")
+        try await database.setPageAppearance(.dark, forSite: "b.example")
+        try await database.setPageAppearance(.light, forSite: "a.example")
+        #expect(try await database.sitePageAppearances() == ["a.example": .light, "b.example": .dark])
+        try await database.setPageAppearance(nil, forSite: "a.example")
+        #expect(try await database.sitePageAppearances() == ["b.example": .dark])
     }
 
     @Test func cookieBannersOffSitesAreRemembered() async throws {

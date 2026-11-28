@@ -1,9 +1,10 @@
+import BrowserCore
 import Foundation
 import GRDB
 
 /// Choices remembered per site, never configured (AGENTS.md, "Opinionated and simple"): the
 /// answer to each permission prompt, the desktop or mobile choice from the page menu, and the
-/// sites where content blocking or dark pages are off.
+/// sites where content blocking is off, and each site's page appearance.
 ///
 /// Values are plain strings: the engine's types (`SitePermission`, `ContentMode`) live above
 /// Storage, and adapters in the shell map them. A site is whatever key the caller uses (an origin
@@ -131,26 +132,33 @@ extension AppDatabase {
         }
     }
 
-    // MARK: Dark pages off per site
+    // MARK: Page appearance per site
 
-    /// The sites where the user turned dark pages off. Read once at launch: the engine builds each
-    /// page's dark-pages script from this list, so the shell answers from memory.
-    public func darkPagesOffSites() async throws -> Set<String> {
+    /// Each site's own page appearance. Read once at launch: the engine builds each page's script
+    /// from them, so the shell answers from memory.
+    public func sitePageAppearances() async throws -> [String: PageAppearance] {
         try await writer.read { db in
-            try Set(String.fetchAll(db, sql: "SELECT site FROM \(Schema.darkPagesOff)"))
+            var sites: [String: PageAppearance] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT site, appearance FROM \(Schema.sitePageAppearance)") {
+                if let appearance = PageAppearance(rawValue: row["appearance"]) { sites[row["site"]] = appearance }
+            }
+            return sites
         }
     }
 
-    /// Turns dark pages off for `site` (true) or back to automatic (false).
-    public func setDarkPagesOff(_ off: Bool, forSite site: String) async throws {
+    /// Sets `site`'s own page appearance, or clears it (nil: the site follows the default).
+    public func setPageAppearance(_ appearance: PageAppearance?, forSite site: String) async throws {
         try await writer.write { db in
-            if off {
+            if let appearance {
                 try db.execute(
-                    sql: "INSERT INTO \(Schema.darkPagesOff) (site) VALUES (?) ON CONFLICT(site) DO NOTHING",
-                    arguments: [site]
+                    sql: """
+                        INSERT INTO \(Schema.sitePageAppearance) (site, appearance) VALUES (?, ?)
+                        ON CONFLICT(site) DO UPDATE SET appearance = excluded.appearance
+                        """,
+                    arguments: [site, appearance.rawValue]
                 )
             } else {
-                try db.execute(sql: "DELETE FROM \(Schema.darkPagesOff) WHERE site = ?", arguments: [site])
+                try db.execute(sql: "DELETE FROM \(Schema.sitePageAppearance) WHERE site = ?", arguments: [site])
             }
         }
     }

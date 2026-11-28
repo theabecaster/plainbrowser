@@ -157,12 +157,36 @@ public enum FixedChoices {
 
     // MARK: Dark pages (docs/research/dark-mode.md)
 
-    /// While Plain is dark, pages without a dark design of their own are darkened, as Safari
-    /// does: a white page in a dark app is the brightest thing on screen at night. No setting:
-    /// Light and Dark in Settings > Appearance already say what the user wants, and a page that
-    /// looks wrong darkened gets "Turn Off Dark Pages for This Site" in its page menu, remembered
-    /// for that site.
-    public static let darkPagesOn = true
+    /// Page appearance starts unchosen, which shows every site as it was made (owner, 2026-11-27;
+    /// docs/decisions.md, "Page appearance"). Every darkening engine, Safari's included, gets some
+    /// pages wrong, and a user who chose Dark forgives a broken page and knows where the control
+    /// is. The first light page in dark colors suggests Dark once (`DarkPagesSuggestion`); the
+    /// first pick from the page's control becomes the default (`PageAppearanceChoices.choose`).
+    public static let defaultPageAppearance: PageAppearance? = nil
+    /// The light check on a page dark pages doesn't apply to waits this long after the page's
+    /// load event (ms), so it never competes with the page's own first work.
+    public static let darkPagesCheckDelay = 250
+    /// The light check's slices (ms of script each): the rule scan resumes in the next task, so a
+    /// page with tens of thousands of rules never holds a frame for it.
+    public static let darkPagesCheckSlice = 4.0
+    /// Points of the viewport the light check samples (each the first opaque background up its
+    /// ancestors; a picture, video or canvas is not light): the center and the four quarter
+    /// points. A page counts as mostly light when at least this many show a light background, so
+    /// a white root under a dark app shell, or a page of dark pictures, is not offered. The
+    /// darkening's own judgement reads only the root, so anything this check passes is darkened
+    /// when turned on.
+    public static let darkPagesLightSamplesNeeded = 3
+    /// The suggestion waits this long after the page was checked, so it never shows during a
+    /// load, and the page has a moment to be read first.
+    public static let darkPagesSuggestionDelay = Duration.seconds(2)
+    /// How long the suggestion stays: twice the toast's 4 s, since it asks a question with two
+    /// answers. While VoiceOver runs it stays until answered or the page changes.
+    public static let darkPagesSuggestionDuration = Duration.seconds(8)
+    /// The crossfade between a page's light and dark rendering when the user switches it: long
+    /// enough to read as one change, as short as the app's theme crossfade allows (0.3 s).
+    public static let darkPagesCrossfade: TimeInterval = 0.25
+    /// The longest the crossfade waits for the page to say it changed before fading anyway.
+    public static let darkPagesCrossfadeTimeout = Duration.milliseconds(600)
     /// A page counts as light, and is darkened, when its background's relative luminance (0 for
     /// black, 1 for white) is at least this: about #BCBCBC. Mid greys and every dark or colored
     /// background a site chose stay as they are; a page with no background of its own shows on

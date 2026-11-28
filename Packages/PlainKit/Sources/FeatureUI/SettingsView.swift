@@ -77,6 +77,20 @@ public struct SettingsView: View {
                         SettingsFooter(model.settings.appearance.footer)
                     }
 
+                    // Under Appearance, but its own row: it is how websites look, never Plain itself.
+                    Section {
+                        Picker("Page Appearance", selection: Binding(
+                            get: { model.settings.pageAppearance ?? .off }, set: { model.setPageAppearance($0) }
+                        )) {
+                            ForEach(PageAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(!model.isLoaded)
+                        .accessibilityIdentifier("settings.pageAppearance")
+                    } footer: {
+                        SettingsFooter(Wording.pageAppearanceFooter)
+                    }
+
                     if showsAppIcon {
                         Section {
                             NavigationLink {

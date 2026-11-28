@@ -134,8 +134,17 @@ public enum Signposts {
     public static let findOnPage: StaticString = "page.find"
     public static let copyLink: StaticString = "page.copyLink"
     public static let desktopSite: StaticString = "page.desktopSite"
-    /// Event: Turn Off / Turn On Dark Pages for This Site in the page menu.
+    /// Event: a site's Dark Pages choice changed ("on", "off", "automatic"), from the indicator in
+    /// the pill or Site Settings.
     public static let darkPagesToggle: StaticString = "page.darkPages"
+    /// Event: the Dark Pages switch changed ("on", "off") from outside Settings (the suggestion).
+    public static let darkPagesSwitch: StaticString = "page.darkPagesSwitch"
+    /// Interval: a page's crossfade between its light and dark rendering, from the snapshot to
+    /// the end of the fade.
+    public static let darkPagesCrossfade: StaticString = "page.darkPagesCrossfade"
+    /// Event: the Dark Pages suggestion "shown", then how it went ("turnOn", "noThanks",
+    /// "timedOut", "hidden").
+    public static let darkPagesSuggestion: StaticString = "page.darkPagesSuggestion"
     /// Event: the user turned cookie banner handling off ("off") or back on ("on") for a site.
     public static let cookieBannersToggle: StaticString = "page.cookieBanners"
     /// Event: the cookie banner engine answered a banner ("rejected") or gave up ("failed").

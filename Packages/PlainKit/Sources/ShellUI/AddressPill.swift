@@ -11,6 +11,9 @@ import UIKit
 ///
 /// Collapsed (`isCompact`), it takes taps only: it sits in the home-indicator zone, where swipes
 /// and holds belong to the system. Every other gesture attaches to the expanded pill.
+///
+/// At its leading edge, while Dark Pages is applied to the page (or the user turned it off on
+/// this site), a small indicator toggles it for the site (docs/state-rules.md, section 3).
 final class AddressPill: UIView {
     let textField: UITextField = AddressField()
     /// Escape on a hardware keyboard, while the field has the keyboard.
@@ -89,9 +92,42 @@ final class AddressPill: UIView {
         return backing
     }()
 
+    /// The page appearance control: the glyph of what the page shows (a moon for Dark, a sun for
+    /// Light, a slashed circle for Off), in the accent while Plain changes the page and in the ink
+    /// for Off. A tap opens its menu (Dark, Light, Off), set by the shell with each state.
+    private lazy var darkPagesButton: UIButton = {
+        var configuration = UIButton.Configuration.plain()
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .subheadline, scale: .medium)
+        configuration.contentInsets = .zero
+        let button = UIButton(configuration: configuration)
+        button.maximumContentSizeCategory = .extraExtraExtraLarge
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.accessibilityIdentifier = "pill.pageAppearance"
+        button.accessibilityLabel = String(localized: "Page Appearance")
+        button.showsMenuAsPrimaryAction = true
+        // Dark, Light, Off in that order wherever the menu opens (above the pill it would flip).
+        button.preferredMenuElementOrder = .fixed
+        button.alpha = 0
+        button.isHidden = true
+        return button
+    }()
+    /// What the control shows (`setPageAppearance`).
+    private(set) var darkPagesIndicator = PageAppearanceIndicator.hidden
+    /// The host gives way to the right of the indicator while it shows.
+    private var hostClearsIndicator: NSLayoutConstraint?
+    /// The resting pill for VoiceOver while the indicator is its own element beside it.
+    private lazy var addressElement = PillAccessibilityElement(pill: self)
+
     private(set) var isEditing = false
-    /// The bar is collapsed, or on its way there: only the tap works.
-    var isCompact = false
+    /// The bar is collapsed, or on its way there: only the tap works (and the indicator hides).
+    var isCompact = false {
+        didSet { if isCompact != oldValue { updateDarkPagesVisibility(animated: true) } }
+    }
+    /// A bar swipe between tabs is moving the hosts: the indicator belongs to the page leaving.
+    private var isSlidingHost = false
+    /// The resting pill's identifier, and the group's while the indicator and the stand-in show.
+    static let identifier = "addressPill"
+    static let groupIdentifier = "addressPillGroup"
     private var url: URL?
     private var notSecure = false
     /// What the resting pill says, and its short form for a pill too narrow for it.
@@ -179,7 +215,12 @@ final class AddressPill: UIView {
             rim.trailingAnchor.constraint(equalTo: trailingAnchor),
 
             hostLabel.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
-            hostLabel.centerXAnchor.constraint(equalTo: glass.contentView.centerXAnchor),
+            // Centered unless the indicator is in the way: a host shifts before it truncates.
+            {
+                let center = hostLabel.centerXAnchor.constraint(equalTo: glass.contentView.centerXAnchor)
+                center.priority = UILayoutPriority(740)
+                return center
+            }(),
             hostLabel.leadingAnchor.constraint(greaterThanOrEqualTo: glass.contentView.leadingAnchor, constant: Spacing.l),
             hostLabel.trailingAnchor.constraint(lessThanOrEqualTo: glass.contentView.trailingAnchor, constant: -Spacing.l),
 
@@ -196,10 +237,19 @@ final class AddressPill: UIView {
         ])
         progressBar.layer.cornerRadius = 1.25
 
+        glass.contentView.addSubview(darkPagesButton)
+        NSLayoutConstraint.activate([
+            darkPagesButton.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: Spacing.xxs),
+            darkPagesButton.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
+            darkPagesButton.widthAnchor.constraint(equalToConstant: Metrics.tapTarget),
+            darkPagesButton.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
+        ])
+        hostClearsIndicator = hostLabel.leadingAnchor.constraint(greaterThanOrEqualTo: darkPagesButton.trailingAnchor)
+
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
         addGestureRecognizer(UILongPressGestureRecognizer(target: self, action: #selector(pressed(_:))))
 
-        accessibilityIdentifier = "addressPill"
+        accessibilityIdentifier = Self.identifier
         accessibilityLabel = "Address"
         accessibilityTraits = .button
         accessibilityHint = "Search or enter an address. Long press for page actions."
@@ -218,6 +268,7 @@ final class AddressPill: UIView {
         rimMask.path = UIBezierPath(roundedRect: shape, cornerRadius: shape.height / 2).cgPath
         scrim.shapes = [bounds]
         fitHostText()
+        addressElement.accessibilityFrameInContainerSpace = bounds
     }
 
     /// A narrow pill (the inner screen's portrait with the side pane open) has no room for
@@ -239,6 +290,92 @@ final class AddressPill: UIView {
     /// does not fit becomes its symbol (`fitHostText`). The bottom pill keeps the words.
     var shortensWarning = false {
         didSet { if shortensWarning != oldValue { fitHostText() } }
+    }
+
+    // MARK: Dark Pages indicator
+
+    /// Shows the page appearance control with the glyph of what the page shows, or takes it away
+    /// (the state rules' answer, `ControlRules.pageAppearanceIndicator`); `isOwn` says whether it
+    /// is this site's own choice or the default, for VoiceOver; `menu` is what a tap opens. It
+    /// fades; nothing else moves unless the host was long enough to run under it.
+    func setPageAppearance(_ indicator: PageAppearanceIndicator, isOwn: Bool, menu: UIMenu?, animated: Bool) {
+        darkPagesButton.menu = menu
+        if case .shown(let appearance) = indicator {
+            let symbol = switch appearance {
+            case .dark: "moon.fill"
+            case .light: "sun.max.fill"
+            case .off: "circle.slash"
+            }
+            darkPagesButton.configuration?.image = UIImage(systemName: symbol)
+            darkPagesButton.configuration?.baseForegroundColor = appearance == .off ? Palette.textPrimary : Palette.accentOnGlass
+            let scope = isOwn ? String(localized: "this site") : String(localized: "all sites")
+            darkPagesButton.accessibilityValue = "\(Self.title(appearance)), \(scope)"
+            darkPagesButton.accessibilityHint = String(localized: "Shows Dark, Light and Off for this site.")
+        }
+        guard indicator != darkPagesIndicator else { return }
+        darkPagesIndicator = indicator
+        updateDarkPagesVisibility(animated: animated)
+    }
+
+    static func title(_ appearance: PageAppearance) -> String {
+        switch appearance {
+        case .dark: String(localized: "Dark")
+        case .light: String(localized: "Light")
+        case .off: String(localized: "Off")
+        }
+    }
+
+    /// The indicator is visible: it applies, the pill rests whole, and no bar swipe is moving.
+    private var showsDarkPages: Bool {
+        darkPagesIndicator != .hidden && !isEditing && !isCompact && !isSlidingHost
+    }
+
+    private func updateDarkPagesVisibility(animated: Bool) {
+        let shows = showsDarkPages
+        hostClearsIndicator?.isActive = shows
+        updateAccessibilityElements()
+        let changes = {
+            self.darkPagesButton.alpha = shows ? 1 : 0
+            self.glass.contentView.layoutIfNeeded()
+        }
+        if shows { darkPagesButton.isHidden = false }
+        let finish: () -> Void = { [weak self] in
+            guard let self, !self.showsDarkPages else { return }
+            self.darkPagesButton.isHidden = true
+        }
+        guard animated, window != nil else {
+            UIView.performWithoutAnimation(changes)
+            finish()
+            return
+        }
+        Motion.animate(Motion.quick, changes: changes, completion: finish)
+    }
+
+    /// Resting, the pill is one "Address" button for VoiceOver; with the indicator showing, the
+    /// indicator and a stand-in for that button (same name, value, hint and identifier) side by
+    /// side; editing, the field inside is reachable.
+    private func updateAccessibilityElements() {
+        // The stand-in carries the "addressPill" identifier while it stands in, so there is one
+        // address button, never two.
+        if isEditing {
+            isAccessibilityElement = false
+            accessibilityElements = nil
+            accessibilityIdentifier = Self.identifier
+        } else if showsDarkPages {
+            isAccessibilityElement = false
+            accessibilityElements = [darkPagesButton, addressElement]
+            accessibilityIdentifier = Self.groupIdentifier
+        } else {
+            accessibilityElements = nil
+            isAccessibilityElement = true
+            accessibilityIdentifier = Self.identifier
+        }
+    }
+
+    /// A tap from VoiceOver on the stand-in.
+    fileprivate func activateFromAccessibility() {
+        guard !isEditing else { return }
+        onTap()
     }
 
     private func resolveColors() {
@@ -455,6 +592,10 @@ final class AddressPill: UIView {
     /// inside the glass, which itself never moves.
     func beginHostSlide(to url: URL?) {
         incomingHost?.removeFromSuperview()
+        if !isSlidingHost {
+            isSlidingHost = true
+            updateDarkPagesVisibility(animated: true)
+        }
         let label = UILabel()
         label.font = hostLabel.font
         label.adjustsFontForContentSizeCategory = true
@@ -496,6 +637,10 @@ final class AddressPill: UIView {
         incomingHost = nil
         hostLabel.transform = .identity
         hostLabel.alpha = isEditing ? 0 : 1
+        if isSlidingHost {
+            isSlidingHost = false
+            updateDarkPagesVisibility(animated: true)
+        }
     }
 
     /// Switches between the resting pill and the search field. Animatable: call it inside an
@@ -509,8 +654,8 @@ final class AddressPill: UIView {
         }
         textField.isUserInteractionEnabled = editing
         progressBar.isHidden = editing
-        // Resting, the pill is one button for VoiceOver; editing, the field inside is reachable.
-        isAccessibilityElement = !editing
+        // At once, with the host: the field takes the pill's whole width.
+        updateDarkPagesVisibility(animated: false)
     }
 
     /// The focus rim follows the sheet's progress (0 resting, 1 open): alpha only.
@@ -661,6 +806,47 @@ private final class AddressField: UITextField {
             return
         }
         super.pressesBegan(presses, with: event)
+    }
+}
+
+/// The resting pill's "Address" button for VoiceOver while the Dark Pages indicator is an element
+/// of its own: it reads everything from the pill, so it never goes stale.
+private final class PillAccessibilityElement: UIAccessibilityElement {
+    private weak var pill: AddressPill?
+
+    init(pill: AddressPill) {
+        self.pill = pill
+        super.init(accessibilityContainer: pill)
+    }
+
+    override var accessibilityLabel: String? {
+        get { pill?.accessibilityLabel }
+        set {}
+    }
+
+    override var accessibilityValue: String? {
+        get { pill?.accessibilityValue }
+        set {}
+    }
+
+    override var accessibilityHint: String? {
+        get { pill?.accessibilityHint }
+        set {}
+    }
+
+    override var accessibilityTraits: UIAccessibilityTraits {
+        get { pill?.accessibilityTraits ?? .button }
+        set {}
+    }
+
+    override var accessibilityIdentifier: String? {
+        get { AddressPill.identifier }
+        set {}
+    }
+
+    override func accessibilityActivate() -> Bool {
+        pill?.activateFromAccessibility()
+        return pill != nil
     }
 }
 #endif

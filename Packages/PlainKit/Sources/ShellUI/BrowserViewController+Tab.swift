@@ -355,6 +355,7 @@ extension BrowserViewController {
             }
         }
         if old != nil, old?.canTranslate == false, new.canTranslate { offerTranslationOnce() }
+        darkPagesPageChanged(from: old, to: new)
         updateButtons()
         updatePageState()
         updateHandoff(page: new.isFailed ? nil : new.url, title: new.title, isPrivate: currentTab?.isPrivate ?? false)
@@ -527,7 +528,7 @@ extension BrowserViewController {
     /// controls and checked while it is on (clarity audit 20): under a menu titled Site Settings,
     /// "Turn Off … on This Site" said the same thing three ways and Desktop Site's state not at all.
     func siteMenuItems(
-        for tab: Tab, url: URL, desktop showsDesktop: Bool, blocking showsBlocking: Bool, darkPages: DarkPagesItem
+        for tab: Tab, url: URL, desktop showsDesktop: Bool, blocking showsBlocking: Bool, darkPages: Bool
     ) -> [UIMenuElement] {
         guard showsDesktop, let host = url.host() else { return [] }
         let isDesktop = tab.contentMode == .desktop
@@ -542,7 +543,7 @@ extension BrowserViewController {
         // (the rules leave the toggle out there). Private tabs follow the regular choice instead
         // (polish backlog: a private-only toggle).
         let cookies = cookieBannerMenuItems(for: tab, url: url)
-        guard showsBlocking else { return [desktop] + cookies + darkPagesMenuItems(for: tab, item: darkPages) }
+        guard showsBlocking else { return [desktop] + cookies + darkPagesMenuItems(for: tab, shown: darkPages) }
 
         let blocking = session.isBlockingEnabled(for: url)
         let toggle = UIAction(
@@ -552,7 +553,7 @@ extension BrowserViewController {
             tab?.reload()
         }
         toggle.accessibilityIdentifier = "menu.blocking"
-        return [desktop, toggle] + cookies + darkPagesMenuItems(for: tab, item: darkPages)
+        return [desktop, toggle] + cookies + darkPagesMenuItems(for: tab, shown: darkPages)
     }
 
     /// Cookie Banner Blocking for the site, checked while on (state rules §4, `cookieBanners`).
@@ -699,6 +700,11 @@ struct TabSnapshot: Equatable {
     var canTranslate: Bool
     /// Translated text is on screen (the pill's "Translated —").
     var isTranslated: Bool
+    /// What Dark Pages does on the page, and the document that said so, and whether the site has
+    /// no light design.
+    var darkPages: DarkPagesState
+    var darkPagesDocument: String?
+    var isLightless: Bool
 
     init(_ tab: Tab) {
         url = tab.url
@@ -711,6 +717,9 @@ struct TabSnapshot: Equatable {
         isAwaitingResubmit = tab.isAwaitingResubmit
         canTranslate = tab.translationTarget != nil && tab.translation == .original
         isTranslated = tab.translation == .translated
+        darkPages = tab.darkPages
+        darkPagesDocument = tab.darkPagesDocument
+        isLightless = tab.isLightless
     }
 
     /// The load failed and nothing newer is loading.

@@ -23,19 +23,12 @@ extension BrowserViewController {
         }
     }
 
-    /// Site Settings' "Dark Pages", checked while Plain darkens the page; a tap is the indicator's
-    /// (`toggleDarkPages`). `item` is the state rules' answer (`ControlRules.darkPages`, §4).
-    func darkPagesMenuItems(for tab: Tab, item: DarkPagesItem) -> [UIMenuElement] {
-        guard item != .hidden else { return [] }
-        let action = UIAction(
-            title: String(localized: "Dark Pages"), image: UIImage(systemName: "circle.lefthalf.filled"),
-            state: item == .on ? .on : .off
-        ) { [weak self, weak tab] _ in
-            guard let self, let tab else { return }
-            self.toggleDarkPages(for: tab, source: "menu")
-        }
-        action.accessibilityIdentifier = "menu.darkPages"
-        return [action]
+    /// Site Settings' "Page Appearance": the same menu as the control in the pill (Dark, Light,
+    /// Off), on every web page (`ControlRules.pageAppearanceMenu`, §4).
+    func darkPagesMenuItems(for tab: Tab, shown: Bool) -> [UIMenuElement] {
+        guard shown, let menu = pageAppearanceMenu(for: tab, source: "menu") else { return [] }
+        menu.accessibilityIdentifier = "menu.pageAppearance"
+        return [menu]
     }
 }
 #endif

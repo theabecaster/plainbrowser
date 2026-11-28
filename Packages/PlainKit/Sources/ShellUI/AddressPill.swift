@@ -92,27 +92,25 @@ final class AddressPill: UIView {
         return backing
     }()
 
-    /// A tap on the Dark Pages indicator.
-    var onDarkPagesTap: () -> Void = {}
-    /// The Dark Pages indicator: `circle.lefthalf.filled`, Apple's Dark Mode symbol, in the
-    /// accent while on and in the ink while off (a working switch, not a disabled one).
+    /// The page appearance control: the glyph of what the page shows (a moon for Dark, a sun for
+    /// Light, a slashed circle for Off), in the accent while Plain changes the page and in the ink
+    /// for Off. A tap opens its menu (Dark, Light, Off), set by the shell with each state.
     private lazy var darkPagesButton: UIButton = {
         var configuration = UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: "circle.lefthalf.filled")
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .subheadline, scale: .medium)
         configuration.contentInsets = .zero
         let button = UIButton(configuration: configuration)
         button.maximumContentSizeCategory = .extraExtraExtraLarge
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.accessibilityIdentifier = "pill.darkPages"
-        button.accessibilityLabel = String(localized: "Dark Pages")
-        button.addAction(UIAction { [weak self] _ in self?.onDarkPagesTap() }, for: .primaryActionTriggered)
+        button.accessibilityIdentifier = "pill.pageAppearance"
+        button.accessibilityLabel = String(localized: "Page Appearance")
+        button.showsMenuAsPrimaryAction = true
         button.alpha = 0
         button.isHidden = true
         return button
     }()
-    /// What the indicator shows (`setDarkPages`).
-    private(set) var darkPagesIndicator = DarkPagesIndicator.hidden
+    /// What the control shows (`setPageAppearance`).
+    private(set) var darkPagesIndicator = PageAppearanceIndicator.hidden
     /// The host gives way to the right of the indicator while it shows.
     private var hostClearsIndicator: NSLayoutConstraint?
     /// The resting pill for VoiceOver while the indicator is its own element beside it.
@@ -269,20 +267,35 @@ final class AddressPill: UIView {
 
     // MARK: Dark Pages indicator
 
-    /// Shows the Dark Pages indicator on (accent) or off (ink), or takes it away (the state rules'
-    /// answer, `ControlRules.darkPagesIndicator`). It fades; nothing else moves unless the host
-    /// was long enough to run under it.
-    func setDarkPages(_ indicator: DarkPagesIndicator, animated: Bool) {
+    /// Shows the page appearance control with the glyph of what the page shows, or takes it away
+    /// (the state rules' answer, `ControlRules.pageAppearanceIndicator`); `isOwn` says whether it
+    /// is this site's own choice or the default, for VoiceOver; `menu` is what a tap opens. It
+    /// fades; nothing else moves unless the host was long enough to run under it.
+    func setPageAppearance(_ indicator: PageAppearanceIndicator, isOwn: Bool, menu: UIMenu?, animated: Bool) {
+        darkPagesButton.menu = menu
+        if case .shown(let appearance) = indicator {
+            let symbol = switch appearance {
+            case .dark: "moon.fill"
+            case .light: "sun.max.fill"
+            case .off: "circle.slash"
+            }
+            darkPagesButton.configuration?.image = UIImage(systemName: symbol)
+            darkPagesButton.configuration?.baseForegroundColor = appearance == .off ? Palette.textPrimary : Palette.accentOnGlass
+            let scope = isOwn ? String(localized: "this site") : String(localized: "all sites")
+            darkPagesButton.accessibilityValue = "\(Self.title(appearance)), \(scope)"
+            darkPagesButton.accessibilityHint = String(localized: "Shows Dark, Light and Off for this site.")
+        }
         guard indicator != darkPagesIndicator else { return }
         darkPagesIndicator = indicator
-        if indicator != .hidden {
-            darkPagesButton.configuration?.baseForegroundColor = indicator == .on ? Palette.accentOnGlass : Palette.textPrimary
-            darkPagesButton.accessibilityValue = indicator == .on ? String(localized: "On") : String(localized: "Off")
-            darkPagesButton.accessibilityHint = indicator == .on
-                ? String(localized: "Turns Dark Pages off for this site.")
-                : String(localized: "Turns Dark Pages on for this site.")
-        }
         updateDarkPagesVisibility(animated: animated)
+    }
+
+    static func title(_ appearance: PageAppearance) -> String {
+        switch appearance {
+        case .dark: String(localized: "Dark")
+        case .light: String(localized: "Light")
+        case .off: String(localized: "Off")
+        }
     }
 
     /// The indicator is visible: it applies, the pill rests whole, and no bar swipe is moving.

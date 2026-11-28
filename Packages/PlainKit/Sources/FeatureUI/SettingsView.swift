@@ -77,16 +77,18 @@ public struct SettingsView: View {
                         SettingsFooter(model.settings.appearance.footer)
                     }
 
-                    // Under Appearance, but its own switch: it darkens pages, never the app.
+                    // Under Appearance, but its own row: it is how websites look, never Plain itself.
                     Section {
-                        Toggle("Dark Pages", isOn: Binding(
-                            get: { model.settings.darkPages }, set: { model.setDarkPages($0) }
-                        ))
-                        .tint(Style.accent)
-                        .disabled(!model.isLoaded || !model.isDarkPagesAvailable)
-                        .accessibilityIdentifier("settings.darkPages")
+                        Picker("Page Appearance", selection: Binding(
+                            get: { model.settings.pageAppearance ?? .off }, set: { model.setPageAppearance($0) }
+                        )) {
+                            ForEach(PageAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(!model.isLoaded)
+                        .accessibilityIdentifier("settings.pageAppearance")
                     } footer: {
-                        SettingsFooter(model.isDarkPagesAvailable ? Wording.darkPagesFooter : Wording.darkPagesLightFooter)
+                        SettingsFooter(Wording.pageAppearanceFooter)
                     }
 
                     if showsAppIcon {

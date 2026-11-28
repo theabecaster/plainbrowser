@@ -866,7 +866,70 @@ Research and sources: docs/research/dark-mode.md.
   off, and a user script cannot ask the app synchronously. The pool builds the script with the
   list and swaps it in every controller when the list changes (rare), keeping the other scripts.
 
+## Page appearance: Dark, Light or Off for websites, learned from the first pick (2026-11-28)
+
+Owner: "Plain's theme follows the setting Light, Dark or System. The new toggle should toggle
+Light, Dark or Off for the pages … doesn't mix the two features, and is clear", and "we save the
+choice for other pages that can support it". This replaces the on/off indicator of the section
+below; its engine, suggestion and per-site memory stay.
+
+- **Two features, two names.** *Appearance* (System, Light, Dark) colors Plain: its windows,
+  chrome, sheets. *Page Appearance* (Dark, Light, Off) is how websites look, nothing else. A page's
+  appearance is applied to its web view alone (a per-web-view `prefers-color-scheme`, plus Plain's
+  darkening for Dark), so the pill, the bar and the status bar never change with it, and Plain's
+  Appearance never changes a page's choice. In Settings they sit one under the other with their
+  own words.
+- **The three states.** **Dark:** the site's own dark design where it has one, Plain's darkening
+  where it doesn't. **Light:** the site's own light design. **Off:** the site as it was made (a
+  site with both designs follows Plain's colors, as every browser does by default).
+- **Light on a dark-only site: not offered.** Lightening a design made in dark is not the mirror of
+  darkening: dark designs carry light text on dark pictures and glows that only work on dark, and
+  no engine (Safari's, Chrome's, Dark Reader's) does it. Plain doesn't pretend: where a site has no
+  light design (a `color-scheme` of dark alone, or a dark page in light colors) Light shows
+  disabled in the menu, with "This site is made only in dark", and never in the pill.
+- **The default is learned, then deliberate** (`PageAppearanceChoices.choose`):
+  1. Nothing chosen: every site as made (`FixedChoices.defaultPageAppearance` is nil).
+  2. The **first pick** from the page's control (or Site Settings) becomes the default for every
+     site that can show it, and a toast says so: "Dark is now the default for websites", with
+     **This Site Only** to keep it for that site instead. The suggestion's Turn On sets Dark.
+  3. After that, a pick is **for that site only** (an exception), and the default stays. Picking
+     what the default already is clears the exception. **Use for All Sites** in the menu makes the
+     site's choice the default on purpose; Settings › Page Appearance changes it too.
+  4. Every other site's own choice survives a change of the default: it was the user's answer for
+     that site.
+  Why this rule: the owner wants one answer to carry ("save the choice for other pages") and a
+  broken site to be fixable without undoing that; the alternative (every pick sets the default)
+  turns a one-site fix into a global change, and the opposite (every pick per site) never learns.
+  The first pick is the only one that carries, it says so, and it can be undone in one tap.
+- **The control shows whose choice it is.** The menu's subtitle reads "This site only", "Default
+  for all sites" or "As each site was made"; VoiceOver reads "Dark, this site" / "Dark, all
+  sites". The checked item is what the page shows.
+- **Where it lives.** A glyph at the pill's leading edge while Plain changes the page (Dark or
+  Light), or while this site is Off against a default (the way back). Its tap opens a menu, not a
+  cycle: with three states a cycle makes the user tap through a state they don't want (Light
+  flashing a dark site) and can't be predicted; a menu shows all three, checked, and picks in two
+  taps, as Safari's page menu does. The same menu is Site Settings' **Page Appearance** on every
+  web page, the way in while the pill shows nothing.
+- **Glyphs that read at a glance:** a moon (`moon.fill`) for Dark, a sun (`sun.max.fill`) for
+  Light, in the accent; a slashed circle (`circle.slash`) for Off, in the ink. Three shapes, so a
+  state never depends on a tint, and the same glyphs in the menu. (The half circle, which reads as
+  "dark mode on or off", is gone: it changed meaning by color.)
+- **The suggestion** stays one-time, in dark colors, on a light page, before any default exists:
+  "Dark Pages" / "Show every website dark, even ones made only in light?" / No Thanks, Turn On.
+  Turn On makes Dark the default.
+- **Settings:** the Dark Pages switch becomes **Page Appearance** (Off, Dark, Light), the default,
+  under Appearance, footer "How websites look, apart from Plain's own colors. Off shows each site
+  as it was made; choose for one site from the address bar." It stays because the default needs
+  a place that isn't a page, and it replaces the switch rather than adding a row.
+- **Per site, private, motion, feel:** each site's choice is remembered (Storage
+  `sitePageAppearance`, the sites turned off before moved in as Off); a private tab's picks last
+  for its session and never set the default; every pick plays the selection tick and crossfades
+  the page from a snapshot (no reload, no white flash); the web view takes the site's scheme
+  before the page's first style, so a page never loads in the wrong one.
+
 ## Dark Pages: off by default, one suggestion, an indicator in the field (2026-11-27)
+
+(Superseded in part by "Page appearance" above: the indicator, the toggle and the Settings switch.)
 
 Owner: "By default keep it off … show a little banner as a suggestion … an indicator in the
 address text field." Research, plan and the Codex plan review: docs/research/dark-pages-optin.md.

@@ -125,22 +125,23 @@ final class StorageSitePageZoomStore: SitePageZoomStore {
     }
 }
 
-/// Dark Pages' switch and the sites with a choice of their own: the one owner of the policy the
-/// engine builds each page's script from (docs/research/dark-pages-optin.md, "State model").
+/// The default page appearance and each site's own: the one owner of the policy the engine
+/// builds each page's script from and the pool colors each web view by (docs/decisions.md, "Page
+/// appearance").
 ///
 /// The engine needs the whole policy at document start, before the database opens, so the last
 /// one is kept as a launch copy in user defaults (`TestIsolation.defaults`) and read as the app
-/// starts: a restored tab never darkens a site the user turned off, nor misses one turned on.
-/// Storage stays the store of record: the switch is a setting (`BrowserSettings.darkPages`, given
-/// here by the shell as it is read or saved), the site choices two tables, read once after the
-/// first frame to reconcile. Changes go to memory and the copy at once, to Storage behind them in
-/// order; a choice made before the stored list arrived wins over it. Private tabs never reach it
-/// (the pool keeps theirs in memory). Every window's pool follows it (`observe`).
-final class StorageSiteDarkPagesStore: SiteDarkPagesStore {
-    static let launchKey = "PlainDarkPages"
-    private(set) var choices: DarkPagesChoices
+/// starts: a restored tab never shows a site differently from what the user chose. Storage stays
+/// the store of record: the default is a setting (`BrowserSettings.pageAppearance`, given here by
+/// the shell as it is read or saved), the sites' choices a table, read once after the first frame
+/// to reconcile. Changes go to memory and the copy at once, to Storage behind them in order; a
+/// choice made before the stored list arrived wins over it. Private tabs never reach it (the pool
+/// keeps theirs in memory). Every window's pool follows it (`observe`).
+final class StoragePageAppearanceStore: PageAppearanceStore {
+    static let launchKey = "PlainPageAppearance"
+    private(set) var choices: PageAppearanceChoices
     /// Choices made before the stored list arrived, applied on top of it.
-    private var editsBeforeLoad: [String: DarkPagesSiteChoice] = [:]
+    private var editsBeforeLoad: [String: PageAppearance?] = [:]
     private var isLoaded = false
     private var lastWrite: Task<Void, Never>?
     private let database: DatabaseProvider
@@ -154,7 +155,7 @@ final class StorageSiteDarkPagesStore: SiteDarkPagesStore {
     }
 
     /// `observer` runs on the main thread after every change of the policy (each window's pool
-    /// rebuilds its scripts and tells the pages on screen).
+    /// recolors its pages and rebuilds its scripts).
     func observe(_ observer: @escaping () -> Void) {
         observers.append(observer)
     }
@@ -164,40 +165,40 @@ final class StorageSiteDarkPagesStore: SiteDarkPagesStore {
     func load() async -> Bool {
         guard !isLoaded, let database = await database() else { return false }
         // A failed read keeps the launch copy (and the next launch reads again): an empty list
-        // would darken sites the user turned off.
-        guard let stored = try? await database.darkPagesSiteChoices(), !isLoaded else { return false }
-        var loaded = DarkPagesChoices(enabled: choices.enabled, onSites: stored.on, offSites: stored.off)
-        for (site, choice) in editsBeforeLoad { loaded.setChoice(choice, for: site) }
+        // would show sites otherwise than the user chose.
+        guard let stored = try? await database.sitePageAppearances(), !isLoaded else { return false }
+        var loaded = PageAppearanceChoices(defaultAppearance: choices.defaultAppearance, sites: stored)
+        for (site, appearance) in editsBeforeLoad { loaded.sites[site] = appearance }
         editsBeforeLoad = [:]
         isLoaded = true
         return replace(with: loaded)
     }
 
-    func setChoice(_ choice: DarkPagesSiteChoice, forSite site: String) {
+    func setAppearance(_ appearance: PageAppearance?, forSite site: String) {
         var next = choices
-        next.setChoice(choice, for: site)
-        if !isLoaded { editsBeforeLoad[site] = choice }
+        next.sites[site] = appearance
+        if !isLoaded { editsBeforeLoad[site] = .some(appearance) }
         // Every window follows; the acting pool also awaits its own pages for the crossfade.
         _ = replace(with: next)
         let previous = lastWrite
         let database = database
         lastWrite = Task {
             await previous?.value
-            try? await database()?.setDarkPagesChoice(choice, forSite: site)
+            try? await database()?.setPageAppearance(appearance, forSite: site)
         }
     }
 
-    /// The switch, from the settings in effect (read at launch, or saved). Returns whether it
+    /// The default, from the settings in effect (read at launch, or saved). Returns whether it
     /// changed; the observers have run by then.
     @discardableResult
-    func setEnabled(_ enabled: Bool) -> Bool {
+    func setDefault(_ appearance: PageAppearance?) -> Bool {
         var next = choices
-        next.enabled = enabled
+        next.defaultAppearance = appearance
         return replace(with: next)
     }
 
     /// Puts `next` in effect, keeps the launch copy and tells the observers, when it changed.
-    private func replace(with next: DarkPagesChoices) -> Bool {
+    private func replace(with next: PageAppearanceChoices) -> Bool {
         guard next != choices else { return false }
         choices = next
         defaults.set(Self.launchCopy(next), forKey: Self.launchKey)
@@ -206,15 +207,15 @@ final class StorageSiteDarkPagesStore: SiteDarkPagesStore {
     }
 
     /// The launch copy as plain property-list values (no coding on the main thread).
-    private static func launchCopy(_ choices: DarkPagesChoices) -> [String: Any] {
-        ["enabled": choices.enabled, "on": Array(choices.onSites), "off": Array(choices.offSites)]
+    private static func launchCopy(_ choices: PageAppearanceChoices) -> [String: Any] {
+        ["default": choices.defaultAppearance?.rawValue ?? "", "sites": choices.sites.mapValues(\.rawValue)]
     }
 
-    private static func launchCopy(_ stored: [String: Any]?) -> DarkPagesChoices {
-        guard let stored else { return DarkPagesChoices() }
-        return DarkPagesChoices(
-            enabled: stored["enabled"] as? Bool ?? FixedChoices.darkPagesDefaultEnabled,
-            onSites: Set(stored["on"] as? [String] ?? []), offSites: Set(stored["off"] as? [String] ?? [])
+    private static func launchCopy(_ stored: [String: Any]?) -> PageAppearanceChoices {
+        guard let stored else { return PageAppearanceChoices(defaultAppearance: FixedChoices.defaultPageAppearance) }
+        let sites = (stored["sites"] as? [String: String] ?? [:]).compactMapValues(PageAppearance.init(rawValue:))
+        return PageAppearanceChoices(
+            defaultAppearance: (stored["default"] as? String).flatMap(PageAppearance.init(rawValue:)), sites: sites
         )
     }
 }

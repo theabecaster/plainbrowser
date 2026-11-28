@@ -157,12 +157,12 @@ public enum FixedChoices {
 
     // MARK: Dark pages (docs/research/dark-mode.md)
 
-    /// Dark Pages starts off (owner, 2026-11-27; docs/research/dark-pages-optin.md). Every
-    /// darkening engine, Safari's included, gets some pages wrong, and a user who chose it forgives
-    /// a broken page and knows where the switch is. The first light page in dark colors suggests
-    /// it once (`DarkPagesSuggestion`); Settings > Appearance has the switch, Site Settings and
-    /// the indicator in the field the per-site choice.
-    public static let darkPagesDefaultEnabled = false
+    /// Page appearance starts unchosen, which shows every site as it was made (owner, 2026-11-27;
+    /// docs/decisions.md, "Page appearance"). Every darkening engine, Safari's included, gets some
+    /// pages wrong, and a user who chose Dark forgives a broken page and knows where the control
+    /// is. The first light page in dark colors suggests Dark once (`DarkPagesSuggestion`); the
+    /// first pick from the page's control becomes the default (`PageAppearanceChoices.choose`).
+    public static let defaultPageAppearance: PageAppearance? = nil
     /// The light check on a page dark pages doesn't apply to waits this long after the page's
     /// load event (ms), so it never competes with the page's own first work.
     public static let darkPagesCheckDelay = 250

@@ -4,52 +4,64 @@ import Testing
 
 /// Dark Pages' choices and its one suggestion (docs/research/dark-pages-optin.md, "State model").
 @Suite struct DarkPagesRulesTests {
-    // MARK: Choices
+    // MARK: Page appearance
 
-    @Test func startsOffForEveryone() {
-        #expect(!FixedChoices.darkPagesDefaultEnabled)
-        #expect(!DarkPagesChoices().applies(to: "example.com"))
-        #expect(!BrowserSettings.defaults.darkPages)
+    @Test func startsUnchosenAndShowsSitesAsMade() {
+        #expect(FixedChoices.defaultPageAppearance == nil)
+        #expect(PageAppearanceChoices().appearance(for: "example.com") == .off)
+        #expect(!PageAppearanceChoices().darkens("example.com"))
+        #expect(BrowserSettings.defaults.pageAppearance == nil)
     }
 
-    @Test func aSiteChoiceBeatsTheSwitchEitherWay() {
-        var choices = DarkPagesChoices(enabled: false)
-        choices.setChoice(.on, for: "a.example")
-        #expect(choices.applies(to: "a.example"), "on for this site while the switch is off")
-        #expect(!choices.applies(to: "b.example"))
-        choices.enabled = true
-        choices.setChoice(.off, for: "b.example")
-        #expect(!choices.applies(to: "b.example"), "off for this site while the switch is on")
-        #expect(choices.applies(to: "c.example"))
-        choices.enabled = false
-        #expect(choices.applies(to: "a.example"), "the switch never clears a site's choice")
-        #expect(choices.choice(for: "b.example") == .off)
+    @Test func theFirstPickBecomesTheDefaultForEverySite() {
+        var choices = PageAppearanceChoices()
+        #expect(choices.choose(.dark, for: "a.example") == .becameDefault(previous: nil))
+        #expect(choices.defaultAppearance == .dark)
+        #expect(choices.appearance(for: "new.example") == .dark, "the default applies to a new site")
+        #expect(!choices.hasOwnChoice("a.example"))
     }
 
-    @Test func aSiteIsInOneListAtMost() {
-        var choices = DarkPagesChoices(onSites: ["a.example"], offSites: ["a.example"])
-        #expect(choices.choice(for: "a.example") == .off, "a conflicting pair resolves to the safe side")
-        choices.setChoice(.on, for: "a.example")
-        #expect(choices.onSites == ["a.example"] && choices.offSites.isEmpty)
-        choices.setChoice(.off, for: "a.example")
-        #expect(choices.onSites.isEmpty && choices.offSites == ["a.example"])
-        choices.setChoice(.automatic, for: "a.example")
-        #expect(choices.onSites.isEmpty && choices.offSites.isEmpty)
+    @Test func laterPicksAreForThatSiteOnly() {
+        var choices = PageAppearanceChoices(defaultAppearance: .dark)
+        #expect(choices.choose(.off, for: "broken.example") == .thisSite)
+        #expect(choices.appearance(for: "broken.example") == .off)
+        #expect(choices.hasOwnChoice("broken.example"))
+        #expect(choices.defaultAppearance == .dark, "a site's fix never changes the default")
+        #expect(choices.appearance(for: "other.example") == .dark)
+        // Picking what the default already is: the site follows the default again.
+        choices.choose(.dark, for: "broken.example")
+        #expect(!choices.hasOwnChoice("broken.example"))
     }
 
-    @Test func theIndicatorTogglesBetweenAppliedAndNot() {
-        var choices = DarkPagesChoices(enabled: true)
-        // Applied by the switch: off for this site, then back to following the switch.
-        #expect(choices.toggled(for: "a.example") == .off)
-        choices.setChoice(.off, for: "a.example")
-        #expect(choices.toggled(for: "a.example") == .automatic)
-        // The switch off: on for this site, then off for it.
-        choices = DarkPagesChoices(enabled: false)
-        #expect(choices.toggled(for: "a.example") == .on)
-        choices.setChoice(.on, for: "a.example")
-        #expect(choices.toggled(for: "a.example") == .off)
-        choices.setChoice(.off, for: "a.example")
-        #expect(choices.toggled(for: "a.example") == .on)
+    @Test func aSiteExceptionSurvivesADefaultChange() {
+        var choices = PageAppearanceChoices(defaultAppearance: .dark)
+        choices.choose(.off, for: "broken.example")
+        choices.choose(.light, for: "news.example")
+        choices.useForAllSites(from: "news.example")
+        #expect(choices.defaultAppearance == .light)
+        #expect(!choices.hasOwnChoice("news.example"))
+        #expect(choices.appearance(for: "broken.example") == .off, "another site's own choice stays")
+        #expect(choices.appearance(for: "new.example") == .light)
+    }
+
+    @Test func thisSiteOnlyUndoesAFirstPick() {
+        var choices = PageAppearanceChoices()
+        guard case .becameDefault(let previous) = choices.choose(.light, for: "a.example") else {
+            Issue.record("the first pick becomes the default")
+            return
+        }
+        choices.keepForThisSiteOnly(.light, site: "a.example", previous: previous)
+        #expect(choices.defaultAppearance == nil)
+        #expect(choices.appearance(for: "a.example") == .light)
+        #expect(choices.appearance(for: "b.example") == .off)
+    }
+
+    @Test func onlyDarkDarkens() {
+        let choices = PageAppearanceChoices(defaultAppearance: .dark, sites: ["l.example": .light, "o.example": .off])
+        #expect(choices.darkens("x.example"))
+        #expect(!choices.darkens("l.example"))
+        #expect(!choices.darkens("o.example"))
+        #expect(choices.sites(choosing: .light) == ["l.example"])
     }
 
     // MARK: The suggestion
@@ -101,6 +113,10 @@ import Testing
         #expect(!DarkPagesSuggestion.neverAsked.shouldShow(onSite: "a.example", session: 0, at: moment), "keyboard, sheet, toast")
         #expect(!DarkPagesSuggestion.declined.shouldShow(onSite: "a.example", session: 0, at: ready))
         #expect(!DarkPagesSuggestion.accepted.shouldShow(onSite: "a.example", session: 0, at: ready))
+        moment = ready
+        moment.hasDefault = true
+        #expect(!DarkPagesSuggestion.neverAsked.shouldShow(onSite: "a.example", session: 0, at: moment),
+                "a default page appearance is already an answer")
     }
 
     @Test func storeRemembersAndAnswersOnce() throws {

@@ -63,31 +63,28 @@ final class AppearanceTests: XCTestCase {
         app.buttons["Done"].tap()
     }
 
-    /// Settings > Appearance > Dark Pages on, then Done (Dark Pages starts off).
+    /// Settings > Page Appearance > Dark, then Done (no page appearance is chosen at first).
     private func turnOnDarkPages(_ app: XCUIApplication) {
         openSettings(app)
-        let toggle = app.switches["settings.darkPages"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 3))
-        if toggle.value as? String != "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap() }
+        let row = app.buttons["settings.pageAppearance"]
+        XCTAssertTrue(row.waitForExistence(timeout: 3))
+        row.tap()
+        XCTAssertTrue(app.buttons["Dark"].waitForExistence(timeout: 2))
+        app.buttons["Dark"].tap()
         app.buttons["Done"].tap()
     }
 
-    /// The Dark Pages indicator in the pill: the site's switch.
-    private func tapIndicator(_ app: XCUIApplication) {
-        let indicator = app.buttons["pill.darkPages"]
-        XCTAssertTrue(indicator.waitForExistence(timeout: 5))
-        indicator.tap()
+    /// Picks `appearance` ("dark", "light", "off") for this site from the control in the pill.
+    private func pickPageAppearance(_ app: XCUIApplication, _ appearance: String) {
+        let control = app.buttons["pill.pageAppearance"]
+        XCTAssertTrue(control.waitForExistence(timeout: 5))
+        control.tap()
+        let item = app.buttons["pageAppearance.\(appearance)"]
+        XCTAssertTrue(item.waitForExistence(timeout: 3))
+        item.tap()
     }
 
     /// The page menu's items, by label, while it is open.
-    /// Site Settings' Dark Pages item: nil when the menu leaves it out, else whether it is checked.
-    private func darkPages(_ app: XCUIApplication) -> Bool? {
-        let item = app.buttons["menu.darkPages"]
-        guard item.waitForExistence(timeout: 1) else { return nil }
-        XCTAssertEqual(item.label, "Dark Pages")
-        return item.isSelected
-    }
-
     private func openPageMenu(_ app: XCUIApplication) {
         let more = app.buttons["more"]
         XCTAssertTrue(more.waitForExistence(timeout: 2))
@@ -158,9 +155,9 @@ final class AppearanceTests: XCTestCase {
             Thread.sleep(forTimeInterval: 1)
         }
         run("darkened")
-        tapIndicator(app)
+        pickPageAppearance(app, "off")
         run("off")
-        tapIndicator(app)
+        pickPageAppearance(app, "dark")
         run("darkened-again")
         chooseAppearance(app, "System")
     }
@@ -177,7 +174,7 @@ final class AppearanceTests: XCTestCase {
         chooseAppearance(app, "Dark")
         turnOnDarkPages(app)
         go(app, to: "/light-site", heading: "Light Only")
-        if darkPagesOff { tapIndicator(app) }
+        if darkPagesOff { pickPageAppearance(app, "off") }
         Thread.sleep(forTimeInterval: 1)
         let web = app.webViews.firstMatch
         let options = XCTMeasureOptions()
@@ -210,17 +207,19 @@ final class AppearanceTests: XCTestCase {
         app.buttons["Dark"].tap()
         Thread.sleep(forTimeInterval: 1)
         shot("a4-settings-dark")
-        app.switches["settings.darkPages"].coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        app.buttons["settings.pageAppearance"].tap()
+        app.buttons["Dark"].tap()
         app.buttons["Done"].tap()
         Thread.sleep(forTimeInterval: 1.2)
         shot("a5-light-site-darkened")
         openPageMenu(app)
         Thread.sleep(forTimeInterval: 0.8)
         shot("a6-page-menu-dark-pages")
-        app.buttons["menu.darkPages"].tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+        pickPageAppearance(app, "off")
         Thread.sleep(forTimeInterval: 1)
         shot("a7-light-site-dark-pages-off")
-        tapIndicator(app)
+        pickPageAppearance(app, "dark")
         go(app, to: "/dark-site", heading: "Own Dark Design")
         Thread.sleep(forTimeInterval: 1)
         shot("a8-own-dark-design")

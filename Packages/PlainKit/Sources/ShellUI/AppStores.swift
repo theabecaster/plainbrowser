@@ -14,7 +14,7 @@ public final class AppStores {
     public let tabs: AppTabs
     let contentModes: StorageSiteContentModeStore
     let pageZooms: StorageSitePageZoomStore
-    let darkPages: StorageSiteDarkPagesStore
+    let darkPages: StoragePageAppearanceStore
     let cookieBannerSites: StorageSiteCookieBannersStore
     let blocker: ContentBlocker
     /// Each profile's history database (Personal's is the main one), opened once for every window.
@@ -30,7 +30,7 @@ public final class AppStores {
         self.profileData = ProfileDatabases(main: database, location: profileData)
         contentModes = StorageSiteContentModeStore(database: database)
         pageZooms = StorageSitePageZoomStore(database: database)
-        darkPages = StorageSiteDarkPagesStore(database: database)
+        darkPages = StoragePageAppearanceStore(database: database)
         cookieBannerSites = StorageSiteCookieBannersStore(database: database)
         blocker = ContentBlocker(allowListStore: StorageSiteAllowListStore(database: database))
     }

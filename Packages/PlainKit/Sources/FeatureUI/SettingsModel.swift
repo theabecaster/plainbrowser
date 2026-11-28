@@ -98,16 +98,23 @@ public final class SettingsModel {
         save { $0.appearance = appearance }
     }
 
-    /// Settings > Appearance > Dark Pages. Saved like the rest; the shell applies it to every page
-    /// as the save is handed to it, and counts turning it on as the suggestion's answer.
-    public func setDarkPages(_ on: Bool) {
-        guard isLoaded, on != settings.darkPages else { return }
-        settings.darkPages = on
-        save { $0.darkPages = on }
+    /// Settings > Page Appearance: the default for every website (each site's own choice stays).
+    /// Saved like the rest; the shell applies it to every page as the save is handed to it.
+    public func setPageAppearance(_ appearance: PageAppearance) {
+        guard isLoaded, appearance != settings.pageAppearance else { return }
+        settings.pageAppearance = appearance
+        save { $0.pageAppearance = appearance }
     }
 
-    /// Dark Pages does nothing while Plain is set to Light: the switch keeps its value, disabled.
-    public var isDarkPagesAvailable: Bool { settings.appearance != .light }
+    /// The same from outside Settings (the page's control, the suggestion): nil undoes a first
+    /// pick. Loads first when Settings never opened.
+    public func setDefaultPageAppearance(_ appearance: PageAppearance?) async {
+        if !isLoaded { await load() }
+        guard isLoaded, appearance != settings.pageAppearance else { return }
+        settings.pageAppearance = appearance
+        save { $0.pageAppearance = appearance }
+        await waitForSaves()
+    }
 
     /// Validates the typed address and, when it is good, makes it the search engine. Returns
     /// whether it was accepted; otherwise `customError` says why.
@@ -201,6 +208,17 @@ public final class SettingsModel {
     }
 }
 
+extension PageAppearance {
+    /// The picker's and the menus' word for it.
+    public var title: String {
+        switch self {
+        case .off: "Off"
+        case .dark: "Dark"
+        case .light: "Light"
+        }
+    }
+}
+
 // MARK: - Wording
 
 extension TabLayout {
@@ -288,8 +306,7 @@ enum Wording {
     /// Shown only where a tab list fits, which has a top bar and no swipe up from the address bar:
     /// the Tabs button shows them all.
     static let tabLayoutFooter = "Where your tabs show on this wide screen. The Tabs button shows them all."
-    static let darkPagesFooter = "Darkens websites that have no dark mode of their own, while Plain is dark. Choices you make for a site stay."
-    static let darkPagesLightFooter = "Plain is set to Light. Dark Pages works while Plain is dark."
+    static let pageAppearanceFooter = "How websites look, apart from Plain's own colors. Off shows each site as it was made; choose for one site from the address bar."
     static let tabLayoutUnavailableFooter = "This screen is too narrow for a tab list. Swipe up from the address bar to see your tabs."
     static let searchEngineFooter = "Searches from the address bar use this engine."
     static let customEngineFooter = "Paste a search results address with %s where the search words go."

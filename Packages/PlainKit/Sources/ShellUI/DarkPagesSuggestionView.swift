@@ -48,7 +48,7 @@ final class DarkPagesSuggestionView: UIView {
         title.adjustsFontForContentSizeCategory = true
         title.textColor = Palette.textPrimary
         title.numberOfLines = 0
-        message.text = String(localized: "Darken websites that have no dark mode of their own?")
+        message.text = String(localized: "Show every website dark, even ones made only in light?")
         message.font = .preferredFont(forTextStyle: .subheadline)
         message.adjustsFontForContentSizeCategory = true
         // The ink, not the secondary grey: on glass the grey read as disabled. The title's weight
@@ -88,7 +88,7 @@ final class DarkPagesSuggestionView: UIView {
 
         // VoiceOver reads the card as one sentence, then its two buttons.
         let words11y = UIAccessibilityElement(accessibilityContainer: self)
-        words11y.accessibilityLabel = String(localized: "Dark Pages. Darken websites that have no dark mode of their own?")
+        words11y.accessibilityLabel = String(localized: "Dark Pages. Show every website dark, even ones made only in light?")
         wordsElement = words11y
         accessibilityIdentifier = "darkPagesSuggestion"
         alpha = 0

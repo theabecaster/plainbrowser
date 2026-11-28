@@ -1536,7 +1536,18 @@ extension DarkPages {
     const post = (state, force) => {
       if (TOP || (state === posted && !force)) return;
       posted = state;
-      try { webkit.messageHandlers.\#(DarkPages.handlerName).postMessage({ state, applies: !off, siteOff, doc: DOC }); } catch (e) {}
+      try { webkit.messageHandlers.\#(DarkPages.handlerName).postMessage({ state, applies: !off, siteOff, doc: DOC, lightless: lightless() }); } catch (e) {}
+    };
+    // A site made only in dark (a `color-scheme` of dark alone, or a dark page while the colors
+    // are light): Light has nothing to show it in, so the app offers it disabled there.
+    const lightless = () => {
+      const meta = document.querySelector('meta[name="color-scheme" i]');
+      const scheme = (meta && meta.content) || '';
+      if (/\bdark\b/.test(scheme) && !/\blight\b/.test(scheme)) return true;
+      if (dark.matches || !document.body) return false;
+      let c = parseColor(getComputedStyle(document.documentElement).backgroundColor);
+      if (!c || c[3] < 0.5) c = parseColor(getComputedStyle(document.body).backgroundColor);
+      return !!(c && c[3] >= 0.5 && luminance(c) < LIGHT);
     };
 
     // Rules that apply in dark mode, in the style sheets this page can read: its own, the

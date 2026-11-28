@@ -79,23 +79,23 @@ import Testing
 
     @Test func settingsRoundTrip() async throws {
         let database = try AppDatabase.inMemory()
-        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never, appearance: .dark, darkPages: true)
+        let settings = BrowserSettings(searchEngine: .kagi, tabLayout: .right, archiveAfter: .never, appearance: .dark, pageAppearance: .light)
         try await database.saveSettings(settings)
         #expect(try await database.settings() == settings)
     }
 
-    /// Dark Pages starts off for everyone, upgraders too (no stored key reads as the default),
-    /// and a saved choice comes back either way.
-    @Test func darkPagesStartsOffAndIsRemembered() async throws {
+    /// No page appearance until the user chooses one, upgraders too; a choice comes back, and an
+    /// undone first pick clears it again.
+    @Test func pageAppearanceStartsUnchosenAndIsRemembered() async throws {
         let database = try AppDatabase.inMemory()
-        #expect(try await database.settings().darkPages == false)
+        #expect(try await database.settings().pageAppearance == nil)
         var settings = BrowserSettings.defaults
-        settings.darkPages = true
+        settings.pageAppearance = .dark
         try await database.saveSettings(settings)
-        #expect(try await database.settings().darkPages == true)
-        settings.darkPages = false
+        #expect(try await database.settings().pageAppearance == .dark)
+        settings.pageAppearance = nil
         try await database.saveSettings(settings)
-        #expect(try await database.settings().darkPages == false)
+        #expect(try await database.settings().pageAppearance == nil)
     }
 
     @Test func customEngineIsKeptAfterSwitchingAway() async throws {

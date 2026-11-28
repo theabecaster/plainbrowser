@@ -53,15 +53,11 @@ public enum SidePaneItem: Sendable, Equatable {
     case show, hide, hidden
 }
 
-/// The Dark Pages checkmark item in Site Settings (§4): checked while it is applied here.
-public enum DarkPagesItem: Sendable, Equatable {
-    case on, off, hidden
-}
-
-/// The Dark Pages indicator inside the resting pill (§3): on while Plain darkens the page, off
-/// (primary ink) on a page of a site the user turned off by hand, otherwise absent.
-public enum DarkPagesIndicator: Sendable, Equatable {
-    case on, off, hidden
+/// The page appearance control inside the resting pill (§3): the glyph of what the page shows
+/// (Dark, Light, or Off by the user's choice), or absent while Plain changes nothing.
+public enum PageAppearanceIndicator: Sendable, Equatable {
+    case shown(PageAppearance)
+    case hidden
 }
 
 /// What Dark Pages is doing on the page on screen, in the app's dark colors (in light colors it
@@ -131,8 +127,14 @@ public struct ChromeState: Sendable, Equatable {
     public var isWebPage = false
     public var isReaderAvailable = false
     public var isPDF = false
-    /// What Dark Pages is doing on the page (only ever anything while the app is dark).
+    /// What Dark Pages is doing on the page (only ever anything while the page is dark).
     public var darkPages = DarkPagesPage.none
+    /// The page appearance the page's site gets (its own choice, else the default), and whether
+    /// it is the site's own (`PageAppearanceChoices`).
+    public var pageAppearance = PageAppearance.off
+    public var pageAppearanceIsOwn = false
+    /// The site has no light design (made only in dark): Light can't apply to it.
+    public var isLightless = false
     /// The page's language is known, can be translated on the device, and is not one the user
     /// reads (their preferred languages).
     public var isForeignLanguage = false
@@ -331,29 +333,24 @@ public struct ControlRules: Sendable, Equatable {
     /// Like Desktop Site, regular tabs only (the allow-list is saved to disk).
     public var blockingToggle: Bool { desktopSite && !state.isPrivate }
 
-    /// Checked while Plain darkens the page; unchecked on a page that could use it (the switch is
-    /// off, or the user turned it off here). Only on the page itself (not under the reader, not on
-    /// an error page). In a light app, or on a page with its own dark design, there is nothing to
-    /// switch.
-    public var darkPages: DarkPagesItem {
-        guard isPageShowing, state.isWebPage, !state.isReaderOpen else { return .hidden }
-        switch state.darkPages {
-        case .darkened: return .on
-        case .off, .available: return .off
-        case .none: return .hidden
-        }
+    /// Site Settings' "Page Appearance" (Dark, Light, Off) on every web page itself (not under the
+    /// reader, not on an error page): how the site looks is the user's to choose in any colors of
+    /// Plain's, as it is separate from Plain's own Appearance.
+    public var pageAppearanceMenu: Bool {
+        isPageShowing && state.isWebPage && !state.isReaderOpen
     }
 
-    /// The indicator in the resting pill: only while Dark Pages is applied (on) or turned off here
-    /// by hand (off, so the way back is where the user left it). Never while editing (the field
-    /// takes the pill), under the reader, or on an error page; `.available` shows nothing, since
-    /// the feature is not being applied.
-    public var darkPagesIndicator: DarkPagesIndicator {
+    /// The control in the resting pill, while Plain changes how the page looks: Dark (forced dark,
+    /// or darkened), Light (forced light, on a site that has a light design), or Off when the user
+    /// chose it for this site against a default (so the way back is where it was left). Absent
+    /// when nothing is applied (the page as the site made it, by default), while editing (the
+    /// field takes the pill), under the reader and on error pages.
+    public var pageAppearanceIndicator: PageAppearanceIndicator {
         guard isPageShowing, state.isWebPage, !state.isReaderOpen, !state.isEditing else { return .hidden }
-        switch state.darkPages {
-        case .darkened: return .on
-        case .off: return .off
-        case .available, .none: return .hidden
+        switch state.pageAppearance {
+        case .dark: return .shown(.dark)
+        case .light: return state.isLightless ? .hidden : .shown(.light)
+        case .off: return state.pageAppearanceIsOwn ? .shown(.off) : .hidden
         }
     }
 

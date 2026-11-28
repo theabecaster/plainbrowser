@@ -2,7 +2,7 @@ import BrowserCore
 import Foundation
 import GRDB
 
-/// Persists `BrowserSettings`: search engine, tab layout, archive interval, appearance and Dark Pages. Nothing else is a
+/// Persists `BrowserSettings`: search engine, tab layout, archive interval, appearance and the default page appearance. Nothing else is a
 /// setting (docs/plan.md, section 4b), so there is no generic key-value API.
 ///
 /// Built-in engines are stored by id, so a template fix in the catalog reaches existing users. A
@@ -15,7 +15,7 @@ extension AppDatabase {
         case tabLayout
         case archiveAfter
         case appearance
-        case darkPages
+        case pageAppearance
     }
 
     private struct StoredCustomEngine: Codable {
@@ -64,10 +64,10 @@ extension AppDatabase {
             if let raw = values[SettingKey.appearance.rawValue], let appearance = Appearance(rawValue: raw) {
                 settings.appearance = appearance
             }
-            // Absent until the first save after this setting existed: the default (off), for
+            // Absent or empty until the user first chooses: nil (as Off), for
             // upgraders too (docs/research/dark-pages-optin.md, Migration).
-            if let raw = values[SettingKey.darkPages.rawValue] {
-                settings.darkPages = raw == "1"
+            if let raw = values[SettingKey.pageAppearance.rawValue] {
+                settings.pageAppearance = PageAppearance(rawValue: raw)
             }
             return settings
         }
@@ -94,8 +94,9 @@ extension AppDatabase {
             (.tabLayout, settings.tabLayout.rawValue),
             (.archiveAfter, settings.archiveAfter.rawValue),
             (.appearance, settings.appearance.rawValue),
-            (.darkPages, settings.darkPages ? "1" : "0"),
         ]
+        // Empty while never chosen, so an undone first pick ("This Site Only") clears it again.
+        pairs.append((.pageAppearance, settings.pageAppearance?.rawValue ?? ""))
         if settings.searchEngine.isCustom {
             let stored = StoredCustomEngine(name: settings.searchEngine.name, template: settings.searchEngine.template)
             let json = String(decoding: try JSONEncoder().encode(stored), as: UTF8.self)

@@ -21,7 +21,7 @@ enum Schema {
     static let blockingAllowList = "blockingAllowList"
     static let sitePageZoom = "sitePageZoom"
     static let darkPagesOff = "darkPagesOff"
-    static let darkPagesOn = "darkPagesOn"
+    static let sitePageAppearance = "sitePageAppearance"
     static let cookieBannersOff = "cookieBannersOff"
     static let readingListItem = "readingListItem"
     static let readingListCopy = "readingListCopy"
@@ -281,12 +281,15 @@ enum Schema {
             }
         }
 
-        // The sites where the user turned Dark Pages on by hand while the switch is off
-        // (docs/research/dark-pages-optin.md). A site is in at most one of the two tables.
-        migrator.registerMigration("v11.darkPagesOn") { db in
-            try db.create(table: darkPagesOn) { t in
+        // Each site's own page appearance (Off, Dark, Light; docs/decisions.md, "Page
+        // appearance"). The sites where dark pages was turned off move in as Off.
+        migrator.registerMigration("v11.sitePageAppearance") { db in
+            try db.create(table: sitePageAppearance) { t in
                 t.primaryKey("site", .text)
+                t.column("appearance", .text).notNull()
             }
+            try db.execute(sql: "INSERT INTO \(sitePageAppearance) (site, appearance) SELECT site, 'off' FROM \(darkPagesOff)")
+            try db.drop(table: darkPagesOff)
         }
     }
 }

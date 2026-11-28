@@ -201,10 +201,6 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         pill.textField.delegate = self
         pill.textField.addTarget(self, action: #selector(queryChanged), for: .editingChanged)
         pill.onTap = { [weak self] in self?.pillTapped() }
-        pill.onDarkPagesTap = { [weak self] in
-            guard let self, let tab = self.currentTab else { return }
-            self.toggleDarkPages(for: tab, source: "indicator")
-        }
         pill.onCopy = { [weak self] in self?.copyFieldAddress() }
         pill.onBrowse = { [weak self] in self?.toggleBrowseArmed() }
         pill.onMic = { [weak self] in self?.toggleDictation() }
@@ -1661,7 +1657,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             keep.append(readLaterMenuItem(for: tab, url: url, isSaved: isSaved))
         }
         var siteItems = siteMenuItems(
-            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.darkPages
+            for: tab, url: url, desktop: rules.desktopSite, blocking: rules.blockingToggle, darkPages: rules.pageAppearanceMenu
         )
         // The permissions the site asked for, with what iOS allows (Off in Settings).
         if !siteItems.isEmpty { siteItems += sitePermissionMenuItems(for: tab) }

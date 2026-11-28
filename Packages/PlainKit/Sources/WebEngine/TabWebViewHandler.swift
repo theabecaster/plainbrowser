@@ -82,6 +82,9 @@ final class TabWebViewHandler: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let slot = pool.slot(for: tab) {
             pool.applyContentRules(slot, mainFrameURL: url)
         }
+        // The page appearance of the site it goes to, before its first style is resolved (a page
+        // of the same site keeps it, so nothing changes under the page leaving).
+        pool.applyInterfaceStyle(to: webView, site: NavigationRules.siteKey(for: url), isPrivate: tab.isPrivate)
 
         // `.allow` also lets WebKit hand a tapped cross-site link to an app that claims it.
         decisionHandler(.allow, preferences)

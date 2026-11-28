@@ -29,45 +29,48 @@ public enum DarkPagesState: String, Sendable, Equatable {
     }
 }
 
-/// Dark Pages' switch and the sites with a choice of their own, remembered automatically like the
-/// other per-site choices. The engine builds each page's script from `choices`, so it must answer
-/// from memory, complete at launch (the shell keeps a launch copy), with writes behind it.
-public protocol SiteDarkPagesStore: AnyObject {
-    var choices: DarkPagesChoices { get }
-    func setChoice(_ choice: DarkPagesSiteChoice, forSite site: String)
+/// The default page appearance and each site's own, remembered automatically like the other
+/// per-site choices. The engine builds each page's script from `choices` and the pool sets each
+/// web view's colors from them, so it must answer from memory, complete at launch (the shell keeps
+/// a launch copy), with writes behind it.
+public protocol PageAppearanceStore: AnyObject {
+    var choices: PageAppearanceChoices { get }
+    /// Sets `site`'s own appearance, or clears it (nil: the site follows the default).
+    func setAppearance(_ appearance: PageAppearance?, forSite site: String)
 }
 
-/// Dark pages choices kept in memory: tests and previews.
-public final class InMemorySiteDarkPagesStore: SiteDarkPagesStore {
-    public var choices: DarkPagesChoices
+/// Page appearance kept in memory: tests and previews.
+public final class InMemoryPageAppearanceStore: PageAppearanceStore {
+    public var choices: PageAppearanceChoices
 
-    public init(enabled: Bool = FixedChoices.darkPagesDefaultEnabled) {
-        choices = DarkPagesChoices(enabled: enabled)
+    public init(defaultAppearance: PageAppearance? = FixedChoices.defaultPageAppearance) {
+        choices = PageAppearanceChoices(defaultAppearance: defaultAppearance)
     }
 
-    public func setChoice(_ choice: DarkPagesSiteChoice, forSite site: String) {
-        choices.setChoice(choice, for: site)
+    public func setAppearance(_ appearance: PageAppearance?, forSite site: String) {
+        choices.sites[site] = appearance
     }
 }
 
-/// A private session's choices over the persistent ones: the switch and the regular sites read
-/// through, the session's own site choices kept in memory and dropped with it.
-final class LayeredDarkPagesStore: SiteDarkPagesStore {
-    private let base: any SiteDarkPagesStore
-    private var own: [String: DarkPagesSiteChoice] = [:]
+/// A private session's choices over the persistent ones: the default and the regular sites read
+/// through, the session's own site choices kept in memory and dropped with it. Nothing a private
+/// tab picks is saved, and it never changes the default.
+final class LayeredPageAppearanceStore: PageAppearanceStore {
+    private let base: any PageAppearanceStore
+    private var own: [String: PageAppearance?] = [:]
 
-    init(base: any SiteDarkPagesStore) {
+    init(base: any PageAppearanceStore) {
         self.base = base
     }
 
-    var choices: DarkPagesChoices {
+    var choices: PageAppearanceChoices {
         var choices = base.choices
-        for (site, choice) in own { choices.setChoice(choice, for: site) }
+        for (site, appearance) in own { choices.sites[site] = appearance }
         return choices
     }
 
-    func setChoice(_ choice: DarkPagesSiteChoice, forSite site: String) {
-        own[site] = choice
+    func setAppearance(_ appearance: PageAppearance?, forSite site: String) {
+        own[site] = .some(appearance)
     }
 }
 
@@ -103,8 +106,8 @@ enum DarkPages {
     /// (`FixedChoices.darkPagesBackgroundLightness`, about #181818), so overscroll matches the page.
     static let overscrollColor = UIColor(white: 24 / 255, alpha: 1)
 
-    /// The script for one kind of tab, with the switch and the sites' choices.
-    static func userScript(choices: DarkPagesChoices) -> WKUserScript {
+    /// The script for one kind of tab, with the default and the sites' own page appearances.
+    static func userScript(choices: PageAppearanceChoices) -> WKUserScript {
         WKUserScript(
             source: source(choices: choices), injectionTime: .atDocumentStart, forMainFrameOnly: true,
             in: UserScripts.world
@@ -140,9 +143,10 @@ enum DarkPages {
     /// a new document: a single-page app).
     static let recheckSource = "globalThis.__plainDarkPages && globalThis.__plainDarkPages.recheck();"
 
-    static func source(choices: DarkPagesChoices) -> String {
-        let on = choices.onSites.sorted().map(jsString).joined(separator: ",")
-        let off = choices.offSites.sorted().map(jsString).joined(separator: ",")
+    static func source(choices: PageAppearanceChoices) -> String {
+        // Dark darkens; Off and Light never do (Light pages are shown in light colors anyway).
+        let on = choices.sites(choosing: .dark).sorted().map(jsString).joined(separator: ",")
+        let off = choices.sites(choosing: .off).union(choices.sites(choosing: .light)).sorted().map(jsString).joined(separator: ",")
         // In a frame (put there by `frameScript`'s request) the engine runs only when the top
         // page's engine is reachable: a frame of the same origin, in the same world. It follows
         // the top page's choice (TOP). Only HTML documents: an image or a PDF shows in WebKit's
@@ -157,7 +161,7 @@ enum DarkPages {
                 try { TOP = window.top.__plainDarkPages || null; } catch (e) {}
                 if (!TOP) return;
               }
-              const ENABLED = \(choices.enabled);
+              const ENABLED = \(choices.defaultAppearance == .dark);
               const ON_SITES = new Set([\(on)]);
               const OFF_SITES = new Set([\(off)]);
               \(engineConstants)

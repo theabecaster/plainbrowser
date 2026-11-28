@@ -189,7 +189,7 @@ final class Harness {
         tabStates: Bool = false,
         pageZooms: any SitePageZoomStore = InMemorySitePageZoomStore(),
         passkeysEnabled: Bool = false,
-        darkPages: any SiteDarkPagesStore = InMemorySiteDarkPagesStore(),
+        darkPages: any PageAppearanceStore = InMemoryPageAppearanceStore(),
         pageScripts: (any PageScripts)? = nil,
         translator: (any PageTranslator)? = nil,
         route: @escaping @Sendable (TestServer.Request) -> TestServer.Response = Pages.route

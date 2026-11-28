@@ -1,64 +1,88 @@
 import Foundation
 
-// Dark Pages' choices and its one suggestion, as plain values (docs/research/dark-pages-optin.md,
-// "State model"). The engine darkens; these say whether it may, and whether to ask.
+// Page appearance and its one suggestion, as plain values (docs/decisions.md, "Page appearance";
+// docs/research/dark-pages-optin.md). How websites look, separate from Plain's own Appearance
+// (System, Light, Dark), which only ever colors Plain. The engine darkens; these say what each
+// site gets and whether to ask.
 
-/// What the user chose for one site. A site's choice beats the switch either way.
-public enum DarkPagesSiteChoice: String, Sendable, Equatable, Codable {
-    /// Follow Settings > Appearance > Dark Pages.
-    case automatic
-    /// Darkened here even while the switch is off.
-    case on
-    /// Never darkened here: the user found it broken, or just prefers the site as made.
+/// How a website is shown.
+public enum PageAppearance: String, Sendable, Equatable, Codable, CaseIterable {
+    /// As the site made it: a site with a light and a dark design follows Plain's colors, one with
+    /// a single design shows it. Plain changes nothing.
     case off
+    /// Dark: the site's own dark design where it has one, Plain's darkening where it doesn't.
+    case dark
+    /// Light: the site's own light design. A site made only in dark stays as it is: there is no
+    /// faithful way to lighten a dark design (docs/decisions.md).
+    case light
 }
 
-/// The switch and the sites with a choice of their own: everything the engine needs to know
-/// whether dark pages applies to a site, at document start.
-public struct DarkPagesChoices: Sendable, Equatable, Codable {
-    /// Settings > Appearance > Dark Pages.
-    public var enabled: Bool
-    public var onSites: Set<String>
-    public var offSites: Set<String>
+/// The default for every site, and the sites with a choice of their own.
+public struct PageAppearanceChoices: Sendable, Equatable, Codable {
+    /// The default for every site that has no choice of its own; nil until the user first picks
+    /// one (it then behaves as `.off`).
+    public var defaultAppearance: PageAppearance?
+    /// Each site's own choice (an exception to the default).
+    public var sites: [String: PageAppearance]
 
-    public init(enabled: Bool = FixedChoices.darkPagesDefaultEnabled, onSites: Set<String> = [], offSites: Set<String> = []) {
-        self.enabled = enabled
-        // A site in both (never written so, but read from two tables): off wins, the safe side.
-        self.onSites = onSites.subtracting(offSites)
-        self.offSites = offSites
+    public init(defaultAppearance: PageAppearance? = nil, sites: [String: PageAppearance] = [:]) {
+        self.defaultAppearance = defaultAppearance
+        self.sites = sites
     }
 
-    public func choice(for site: String) -> DarkPagesSiteChoice {
-        if offSites.contains(site) { return .off }
-        if onSites.contains(site) { return .on }
-        return .automatic
+    /// What `site` gets: its own choice, else the default.
+    public func appearance(for site: String) -> PageAppearance {
+        sites[site] ?? defaultAppearance ?? .off
     }
 
-    /// Whether dark pages applies to `site` (it still darkens only a light page in dark colors).
-    public func applies(to site: String) -> Bool {
-        switch choice(for: site) {
-        case .on: true
-        case .off: false
-        case .automatic: enabled
+    /// Whether `site` has a choice of its own (the control says "This Site").
+    public func hasOwnChoice(_ site: String) -> Bool { sites[site] != nil }
+
+    /// Whether Plain may darken `site`'s pages (it still darkens only a page without a dark design).
+    public func darkens(_ site: String) -> Bool { appearance(for: site) == .dark }
+
+    /// The sites with each choice of their own, for the engine's script.
+    public func sites(choosing appearance: PageAppearance) -> Set<String> {
+        Set(sites.filter { $0.value == appearance }.keys)
+    }
+
+    /// What a pick from the control did.
+    public enum Outcome: Sendable, Equatable {
+        /// The first pick ever: it became the default for every site.
+        case becameDefault(previous: PageAppearance?)
+        /// It applies to this site only.
+        case thisSite
+    }
+
+    /// A pick from the control on a page of `site` (docs/decisions.md, "Page appearance"):
+    /// - The first pick ever, while there is no default yet, becomes the default for every site
+    ///   (the choice is learned: "save it for other pages").
+    /// - After that, a pick is for this site only; picking what the default already is clears the
+    ///   site's own choice, so it follows the default again.
+    @discardableResult
+    public mutating func choose(_ appearance: PageAppearance, for site: String) -> Outcome {
+        guard let current = defaultAppearance else {
+            defaultAppearance = appearance
+            sites[site] = nil
+            return .becameDefault(previous: nil)
         }
+        sites[site] = appearance == current ? nil : appearance
+        return .thisSite
     }
 
-    public mutating func setChoice(_ choice: DarkPagesSiteChoice, for site: String) {
-        onSites.remove(site)
-        offSites.remove(site)
-        switch choice {
-        case .automatic: break
-        case .on: onSites.insert(site)
-        case .off: offSites.insert(site)
-        }
+    /// Undoes a first pick that became the default: the default goes back to `previous` and the
+    /// pick stays for `site` only ("This Site Only" on the toast).
+    public mutating func keepForThisSiteOnly(_ appearance: PageAppearance, site: String, previous: PageAppearance?) {
+        defaultAppearance = previous
+        sites[site] = appearance == (previous ?? .off) ? nil : appearance
     }
 
-    /// The choice a tap on the indicator (or the Site Settings item) makes: off where dark pages
-    /// applies; where it doesn't, back to automatic when the switch would darken the site, on for
-    /// this site when the switch is off.
-    public func toggled(for site: String) -> DarkPagesSiteChoice {
-        if applies(to: site) { return .off }
-        return enabled ? .automatic : .on
+    /// "Use for All Sites": what `site` shows becomes the default. Other sites' own choices stay.
+    public mutating func useForAllSites(from site: String) {
+        defaultAppearance = appearance(for: site)
+        sites[site] = nil
+        // Every other site's own choice stays, even one that now matches: it was the user's
+        // answer for that site, and it must survive the next change of the default.
     }
 }
 
@@ -72,7 +96,7 @@ public enum DarkPagesSuggestion: Sendable, Equatable, Codable {
     case ignored(site: String, session: Int)
     /// No Thanks.
     case declined
-    /// Turn On, the switch turned on in Settings, or a per-site choice made by hand.
+    /// Turn On, a default chosen in Settings, or a page appearance picked by hand.
     case accepted
 
     /// Whether it may show on a page of `site` now. The page itself (dark colors, light, no
@@ -108,8 +132,14 @@ public enum DarkPagesSuggestion: Sendable, Equatable, Codable {
         public var isBarShowing: Bool
         /// The keyboard, a sheet, the gallery, a menu, the reader, Find or another toast is up.
         public var isBusy: Bool
+        /// The user already chose how websites look (a default page appearance): nothing to ask.
+        public var hasDefault: Bool
 
-        public init(page: DarkPagesPage, isPrivate: Bool, settingsLoaded: Bool, isBarShowing: Bool, isBusy: Bool) {
+        public init(
+            page: DarkPagesPage, isPrivate: Bool, settingsLoaded: Bool, isBarShowing: Bool, isBusy: Bool,
+            hasDefault: Bool = false
+        ) {
+            self.hasDefault = hasDefault
             self.page = page
             self.isPrivate = isPrivate
             self.settingsLoaded = settingsLoaded
@@ -122,7 +152,7 @@ public enum DarkPagesSuggestion: Sendable, Equatable, Codable {
     /// never `.available` there), never in a private tab (the answer is app-wide and remembered),
     /// never over something else.
     public func shouldShow(onSite site: String, session: Int, at moment: Moment) -> Bool {
-        moment.page == .available && !moment.isPrivate && moment.settingsLoaded && moment.isBarShowing
+        moment.page == .available && !moment.hasDefault && !moment.isPrivate && moment.settingsLoaded && moment.isBarShowing
             && !moment.isBusy && mayShow(onSite: site, session: session)
     }
 }

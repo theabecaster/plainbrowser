@@ -4,7 +4,7 @@ import GRDB
 
 /// Choices remembered per site, never configured (AGENTS.md, "Opinionated and simple"): the
 /// answer to each permission prompt, the desktop or mobile choice from the page menu, and the
-/// sites where content blocking is off, and each site's Dark Pages choice.
+/// sites where content blocking is off, and each site's page appearance.
 ///
 /// Values are plain strings: the engine's types (`SitePermission`, `ContentMode`) live above
 /// Storage, and adapters in the shell map them. A site is whatever key the caller uses (an origin
@@ -132,27 +132,33 @@ extension AppDatabase {
         }
     }
 
-    // MARK: Dark pages per site
+    // MARK: Page appearance per site
 
-    /// The sites with a Dark Pages choice of their own: on, and off. Read once at launch: the
-    /// engine builds each page's dark-pages script from them, so the shell answers from memory.
-    public func darkPagesSiteChoices() async throws -> (on: Set<String>, off: Set<String>) {
+    /// Each site's own page appearance. Read once at launch: the engine builds each page's script
+    /// from them, so the shell answers from memory.
+    public func sitePageAppearances() async throws -> [String: PageAppearance] {
         try await writer.read { db in
-            let off = try Set(String.fetchAll(db, sql: "SELECT site FROM \(Schema.darkPagesOff)"))
-            let on = try Set(String.fetchAll(db, sql: "SELECT site FROM \(Schema.darkPagesOn)")).subtracting(off)
-            return (on, off)
+            var sites: [String: PageAppearance] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT site, appearance FROM \(Schema.sitePageAppearance)") {
+                if let appearance = PageAppearance(rawValue: row["appearance"]) { sites[row["site"]] = appearance }
+            }
+            return sites
         }
     }
 
-    /// Sets `site`'s choice: on, off, or back to automatic (in neither table), in one transaction.
-    public func setDarkPagesChoice(_ choice: DarkPagesSiteChoice, forSite site: String) async throws {
+    /// Sets `site`'s own page appearance, or clears it (nil: the site follows the default).
+    public func setPageAppearance(_ appearance: PageAppearance?, forSite site: String) async throws {
         try await writer.write { db in
-            try db.execute(sql: "DELETE FROM \(Schema.darkPagesOff) WHERE site = ?", arguments: [site])
-            try db.execute(sql: "DELETE FROM \(Schema.darkPagesOn) WHERE site = ?", arguments: [site])
-            switch choice {
-            case .automatic: break
-            case .on: try db.execute(sql: "INSERT INTO \(Schema.darkPagesOn) (site) VALUES (?)", arguments: [site])
-            case .off: try db.execute(sql: "INSERT INTO \(Schema.darkPagesOff) (site) VALUES (?)", arguments: [site])
+            if let appearance {
+                try db.execute(
+                    sql: """
+                        INSERT INTO \(Schema.sitePageAppearance) (site, appearance) VALUES (?, ?)
+                        ON CONFLICT(site) DO UPDATE SET appearance = excluded.appearance
+                        """,
+                    arguments: [site, appearance.rawValue]
+                )
+            } else {
+                try db.execute(sql: "DELETE FROM \(Schema.sitePageAppearance) WHERE site = ?", arguments: [site])
             }
         }
     }

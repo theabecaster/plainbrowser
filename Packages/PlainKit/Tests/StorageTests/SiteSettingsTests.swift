@@ -59,22 +59,15 @@ import Testing
         #expect(try await database.blockingAllowList() == ["b.example"])
     }
 
-    @Test func darkPagesSiteChoicesAreRememberedAndExclusive() async throws {
+    @Test func sitePageAppearancesAreRemembered() async throws {
         let database = try AppDatabase.inMemory()
-        var choices = try await database.darkPagesSiteChoices()
-        #expect(choices.on.isEmpty && choices.off.isEmpty)
-        try await database.setDarkPagesChoice(.off, forSite: "a.example")
-        try await database.setDarkPagesChoice(.off, forSite: "a.example")
-        try await database.setDarkPagesChoice(.on, forSite: "b.example")
-        choices = try await database.darkPagesSiteChoices()
-        #expect(choices.off == ["a.example"] && choices.on == ["b.example"])
-        // A site is in one table at most: a new choice replaces the old one.
-        try await database.setDarkPagesChoice(.on, forSite: "a.example")
-        choices = try await database.darkPagesSiteChoices()
-        #expect(choices.off.isEmpty && choices.on == ["a.example", "b.example"])
-        try await database.setDarkPagesChoice(.automatic, forSite: "a.example")
-        choices = try await database.darkPagesSiteChoices()
-        #expect(choices.off.isEmpty && choices.on == ["b.example"])
+        #expect(try await database.sitePageAppearances().isEmpty)
+        try await database.setPageAppearance(.off, forSite: "a.example")
+        try await database.setPageAppearance(.dark, forSite: "b.example")
+        try await database.setPageAppearance(.light, forSite: "a.example")
+        #expect(try await database.sitePageAppearances() == ["a.example": .light, "b.example": .dark])
+        try await database.setPageAppearance(nil, forSite: "a.example")
+        #expect(try await database.sitePageAppearances() == ["b.example": .dark])
     }
 
     @Test func cookieBannersOffSitesAreRemembered() async throws {

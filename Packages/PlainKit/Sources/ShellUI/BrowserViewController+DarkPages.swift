@@ -7,8 +7,8 @@ import WebEngine
 
 // Dark Pages in the shell (docs/research/dark-pages-optin.md): the switch from Settings reaching
 // the engine, the indicator's tap, the crossfade between a page's light and dark rendering, and
-// the one suggestion by the address bar. The rules are BrowserCore's (`DarkPagesChoices`,
-// `DarkPagesSuggestion`, `ControlRules.darkPagesIndicator`); the engine darkens.
+// the one suggestion by the address bar. The rules are BrowserCore's (`PageAppearanceChoices`,
+// `DarkPagesSuggestion`, `ControlRules.pageAppearanceIndicator`); the engine darkens.
 
 /// The suggestion card, its pending moment, and the crossfades running.
 final class DarkPagesUIState {
@@ -54,29 +54,126 @@ enum DarkPagesSessions {
 }
 
 extension BrowserViewController {
-    // MARK: The switch
+    // MARK: The default
 
     /// The settings in effect changed (read at launch, or saved, here or in Settings): the engine
-    /// takes the switch. Turning it on anywhere answers the suggestion.
+    /// takes the default page appearance. A default chosen anywhere answers the suggestion.
     func applyDarkPagesSetting() {
         DarkPagesSessions.start(darkPagesUI.suggestions)
-        guard let on = data.darkPages else { return }
-        session.stores.darkPages.setEnabled(on)
-        if on { darkPagesUI.suggestions.answer(true) }
+        guard let appearance = data.pageAppearance else { return }
+        session.stores.darkPages.setDefault(appearance)
+        if appearance != nil { darkPagesUI.suggestions.answer(true) }
     }
 
-    // MARK: The indicator and Site Settings
+    // MARK: The control and Site Settings
 
-    /// A tap on the indicator, or on Site Settings' "Dark Pages": off for the site where it
-    /// applies, on where it doesn't, with a tick and a crossfade. Remembered for the site.
-    func toggleDarkPages(for tab: Tab, source: StaticString) {
+    /// The page appearance menu, for the control in the pill and Site Settings: Dark, Light and
+    /// Off for this site, the one it shows checked, and "Use for All Sites" while the site has a
+    /// choice of its own. Its subtitle says whose choice it shows: this site's, or the default.
+    func pageAppearanceMenu(for tab: Tab, source: String) -> UIMenu? {
+        guard let site = tab.siteKey else { return nil }
+        let choices = tab.pageAppearanceChoices
+        let current = choices.appearance(for: site)
+        let isOwn = choices.hasOwnChoice(site)
+        let picks = PageAppearance.allCases.sorted { $0.menuOrder < $1.menuOrder }.map { appearance -> UIAction in
+            let action = UIAction(
+                title: AddressPill.title(appearance), subtitle: appearance.menuSubtitle(lightless: tab.isLightless),
+                image: UIImage(systemName: appearance.symbol), state: appearance == current ? .on : .off
+            ) { [weak self, weak tab] _ in
+                guard let self, let tab else { return }
+                self.choosePageAppearance(appearance, for: tab, source: source)
+            }
+            action.accessibilityIdentifier = "pageAppearance.\(appearance.rawValue)"
+            if appearance == .light, tab.isLightless { action.attributes = .disabled }
+            return action
+        }
+        var children: [UIMenuElement] = [UIMenu(options: .displayInline, children: picks)]
+        if isOwn, !tab.isPrivate {
+            let all = UIAction(title: String(localized: "Use for All Sites"), image: UIImage(systemName: "square.on.square")) {
+                [weak self, weak tab] _ in
+                guard let self, let tab else { return }
+                self.usePageAppearanceForAllSites(from: tab)
+            }
+            all.accessibilityIdentifier = "pageAppearance.useForAll"
+            children.append(UIMenu(options: .displayInline, children: [all]))
+        }
+        let whose = isOwn
+            ? String(localized: "This site only")
+            : choices.defaultAppearance == nil ? String(localized: "As each site was made") : String(localized: "Default for all sites")
+        let menu = UIMenu(title: String(localized: "Page Appearance"), subtitle: whose, image: UIImage(systemName: current.symbol), children: children)
+        return menu
+    }
+
+    /// A pick from the menu (docs/decisions.md, "Page appearance"): the first pick ever becomes
+    /// the default for every site, with a toast to keep it for this site only; after that, a
+    /// pick is for this site. A private tab's picks stay in the private session and never set
+    /// the default. A tick and a crossfade either way.
+    func choosePageAppearance(_ appearance: PageAppearance, for tab: Tab, source: String) {
+        guard let site = tab.siteKey else { return }
         Haptic.selection.play(in: view)
         hideDarkPagesSuggestion()
-        // The user found the feature: no suggestion after this (a private tab teaches nothing).
-        if !tab.isPrivate { darkPagesUI.suggestions.answer(true) }
-        let source = String(describing: source)
-        crossfadeDarkPages(for: tab) { [weak tab] in
-            await tab?.toggleDarkPages(source: source) ?? false
+        var choices = tab.pageAppearanceChoices
+        if tab.isPrivate {
+            let own: PageAppearance? = appearance == choices.appearance(for: site) && !choices.hasOwnChoice(site) ? nil : appearance
+            crossfadeDarkPages(for: tab) { [weak tab] in await tab?.setPageAppearance(own, source: source) ?? false }
+            return
+        }
+        darkPagesUI.suggestions.answer(true)
+        switch choices.choose(appearance, for: site) {
+        case .becameDefault(let previous):
+            crossfadeDarkPages(for: tab) { [weak self, weak tab] in
+                guard let self else { return false }
+                await self.sheets.setDefaultPageAppearance(appearance)
+                await tab?.setPageAppearance(nil, source: source)
+                return await self.session.pool.darkPagesChoicesDidChange()
+            }
+            showToastWhenFree { [weak self, weak tab] in
+                guard let self else { return }
+                self.tabsUI.toast.show(
+                    String(localized: "\(AddressPill.title(appearance)) is now the default for websites"),
+                    button: String(localized: "This Site Only")
+                ) { [weak self, weak tab] in
+                    guard let self, let tab else { return }
+                    self.keepPageAppearanceForThisSite(appearance, tab: tab, site: site, previous: previous)
+                }
+            }
+        case .thisSite:
+            let own = choices.sites[site]
+            crossfadeDarkPages(for: tab) { [weak tab] in await tab?.setPageAppearance(own, source: source) ?? false }
+        }
+    }
+
+    /// "This Site Only" on the first pick's toast: the default goes back, the pick stays here.
+    private func keepPageAppearanceForThisSite(_ appearance: PageAppearance, tab: Tab, site: String, previous: PageAppearance?) {
+        Haptic.selection.play(in: view)
+        var choices = tab.pageAppearanceChoices
+        choices.keepForThisSiteOnly(appearance, site: site, previous: previous)
+        let own = choices.sites[site]
+        crossfadeDarkPages(for: tab) { [weak self, weak tab] in
+            guard let self else { return false }
+            await tab?.setPageAppearance(own, source: "thisSiteOnly")
+            await self.sheets.setDefaultPageAppearance(previous)
+            return await self.session.pool.darkPagesChoicesDidChange()
+        }
+    }
+
+    /// "Use for All Sites": what this site shows becomes the default; other sites keep their own.
+    func usePageAppearanceForAllSites(from tab: Tab) {
+        guard let site = tab.siteKey, !tab.isPrivate else { return }
+        Haptic.selection.play(in: view)
+        var choices = tab.pageAppearanceChoices
+        choices.useForAllSites(from: site)
+        let appearance = choices.defaultAppearance
+        crossfadeDarkPages(for: tab) { [weak self, weak tab] in
+            guard let self else { return false }
+            await self.sheets.setDefaultPageAppearance(appearance)
+            await tab?.setPageAppearance(nil, source: "useForAll")
+            return await self.session.pool.darkPagesChoicesDidChange()
+        }
+        if let appearance {
+            showToastWhenFree { [weak self] in
+                self?.tabsUI.toast.show(String(localized: "\(AddressPill.title(appearance)) is now the default for websites"))
+            }
         }
     }
 
@@ -195,11 +292,12 @@ extension BrowserViewController {
     private func showDarkPagesSuggestion(for tab: Tab, document: String, site: String) {
         guard tab === currentTab, tab.darkPagesDocument == document, tab.siteKey == site else { return }
         let moment = DarkPagesSuggestion.Moment(
-            page: tab.darkPages.page, isPrivate: tab.isPrivate, settingsLoaded: data.darkPages != nil,
+            page: tab.darkPages.page, isPrivate: tab.isPrivate, settingsLoaded: data.pageAppearance != nil,
             isBarShowing: !isChromeCollapsed && !isEditingAddress && !pill.isHidden && pill.alpha > 0.99,
             isBusy: presentedViewController != nil || isShowingGallery || isShowingReader || isFindOpen
                 || tabsUI.toast.isShowing || tab.isLoading || isKeyboardShowing
-                || view.window?.windowScene?.activationState != .foregroundActive
+                || view.window?.windowScene?.activationState != .foregroundActive,
+            hasDefault: tab.pageAppearanceChoices.defaultAppearance != nil
         )
         let store = darkPagesUI.suggestions
         guard store.state.shouldShow(onSite: site, session: store.session, at: moment) else { return }
@@ -215,12 +313,12 @@ extension BrowserViewController {
                 Signposts.signposter.emitEvent(Signposts.darkPagesSwitch, "on")
                 Haptic.selection.play(in: view)
                 guard let tab else {
-                    Task { await self.sheets.setDarkPages(true) }
+                    Task { await self.sheets.setDefaultPageAppearance(.dark) }
                     return
                 }
                 self.crossfadeDarkPages(for: tab) { [weak self] in
                     guard let self else { return false }
-                    await self.sheets.setDarkPages(true)
+                    await self.sheets.setDefaultPageAppearance(.dark)
                     return await self.session.pool.darkPagesChoicesDidChange()
                 }
             case .noThanks:
@@ -290,6 +388,34 @@ extension BrowserViewController {
         card.slideOffset = onTop ? -12 : 12
         NSLayoutConstraint.activate(darkPagesUI.placement)
         view.layoutIfNeeded()
+    }
+}
+extension PageAppearance {
+    /// The glyph that names it at a glance, the same in the pill and the menus.
+    var symbol: String {
+        switch self {
+        case .dark: "moon.fill"
+        case .light: "sun.max.fill"
+        case .off: "circle.slash"
+        }
+    }
+
+    /// Dark, Light, then Off: the two that change the page first.
+    var menuOrder: Int {
+        switch self {
+        case .dark: 0
+        case .light: 1
+        case .off: 2
+        }
+    }
+
+    /// The line under it in the menu.
+    func menuSubtitle(lightless: Bool) -> String? {
+        switch self {
+        case .off: String(localized: "As the site made it")
+        case .light: lightless ? String(localized: "This site is made only in dark") : nil
+        case .dark: nil
+        }
     }
 }
 #endif

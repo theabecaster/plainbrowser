@@ -211,6 +211,7 @@ final class FeatureSheetTests: XCTestCase {
                 let card = sheet.cells.firstMatch.frame
                 cards = (card.minX, card.maxX)
             }
+            // Within 4 pt: the header keeps 16 pt, and the largest iPhones' lists take 20.
             let edges = try XCTUnwrap(cards)
             print("SHEETFRAMES \(identifier) regular=\(regular) sheet=\(sheet.frame) cards=\(edges) done=\(done.frame)")
             XCTAssertEqual(done.frame.maxX, edges.maxX, accuracy: 4, "\(identifier): Done ends at \(done.frame.maxX), the cards at \(edges.maxX)")

@@ -97,11 +97,12 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
     let title: String
     let leading: Leading
     let trailing: Trailing
-    @Environment(\.horizontalSizeClass) private var sizeClass
     /// The header's safe area insets at its sides (the system's vertical bar, a landscape notch).
     @State private var safeInsets = EdgeInsets()
 
-    private var margin: CGFloat { sizeClass == .regular ? Spacing.l + Spacing.xs : Spacing.l }
+    /// The list's card margin: 16 pt, in a compact sheet and in the Duo's regular-width inner
+    /// sheet alike (measured, 2026-11-28; the largest iPhones' lists take 20).
+    private let margin = Spacing.l
 
     var body: some View {
         // Each side takes the same share of the width, so the title stays centered whatever the
@@ -123,11 +124,9 @@ struct SheetHeader<Leading: View, Trailing: View>: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(minHeight: Metrics.tapTarget)
-        // The system bar's margins: 16 pt in a compact width, 20 pt in a regular one (a sheet on
-        // the Duo's inner screen), so the controls sit where a system sheet's would. As for the
-        // list's cards, the safe area counts toward the margin: where the system's vertical bar
-        // takes a side (the Duo's outer screen) Done lines up with the cards' edge beside it
-        // instead of a margin further in.
+        // Done, Back and Clear line up with the edges of the list's cards. As for the cards, the
+        // safe area counts toward the margin: where the system's vertical bar takes a side (the
+        // Duo's outer screen) Done meets the cards' edge beside it instead of 16 pt further in.
         .padding(.leading, max(0, margin - safeInsets.leading))
         .padding(.trailing, max(0, margin - safeInsets.trailing))
         .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { safeInsets = $0 }

@@ -116,6 +116,8 @@ measure() {  # $1 metric, $2 the bundle's metrics JSON
 failures=()
 typeset -A value rsd
 json=$(metrics_json $result)
+# The report-only lines below read the first run: a rerun holds only the noisy tests.
+first_json=$json
 for m in $METRICS; do
   read -r v r <<<"$(measure $m $json)"
   value[$m]=$v; rsd[$m]=$r
@@ -225,6 +227,16 @@ for m in $METRICS; do
   fi
   echo $line
 done
+
+# Report only, not budgeted: the parts before the keyboard rises, and the perf reference (a bare
+# UIKit screen: the floor for launch, focus, a keystroke and memory on this device) when the run
+# asked for it with TEST_RUNNER_PLAIN_PERF_REFERENCE=1 (docs/research/perf-pass-3.md).
+jq -r '.[] | .testIdentifier as $t | select($t | test("testReference|testAddressBarFocus|testNewTabToSearchField|LeanField"))
+  | .testRuns[].metrics[] | select(.identifier | test("[kK]eyboardStart|reference|launch|physical_absolute"))
+  | (.measurements | sort) as $s | select($s | length > 0) | $s[$s | length / 2 | floor] as $m
+  | (if (.identifier | test("physical")) then "\($m / 1024 * 10 | round / 10) MB" else "\($m * 10000 | round / 10) ms" end) as $v
+  | "  \($t | sub("^PerfTests/"; "") | sub("\\(\\)$"; "")) \(.identifier | sub(".*OSSignpost-"; "") | sub("\\.duration$"; "") | sub(".*\\.plainbrowser\\."; "")): \($v)"' \
+  <<<"$first_json" 2>/dev/null | sort -u | { IFS= read -r first && { echo "== report only (not budgeted)"; echo "$first"; cat; } } || true
 
 verdict=pass
 (( ${#failures} == 0 )) || verdict=FAIL

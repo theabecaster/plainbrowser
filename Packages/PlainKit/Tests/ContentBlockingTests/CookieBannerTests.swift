@@ -43,6 +43,114 @@ import UIKit
         print("[plain-measure] cookie banner rule match per main frame: \(elapsed / urls.count)")
         #expect(elapsed / urls.count < .milliseconds(20))
     }
+
+    /// Addresses near every rule's host: on it, on subdomains, on hosts that only end with its
+    /// text, on hosts that go on past it, with ports, credentials, queries and both schemes.
+    static func probeAddresses(_ rules: CookieBannerRules) -> [String] {
+        var hosts: Set<String> = ["unrelated.example", "localhost", "127.0.0.1"]
+        for rule in rules.specific {
+            for key in HostKeys.keys(for: rule.pattern) ?? [] {
+                hosts.formUnion([key, "www.\(key)", "m.\(key)", "a.b.\(key)", "x\(key)", "\(key).evil", "user@\(key)", "u@x.\(key)"])
+            }
+            // Unindexed patterns: their literal runs, as hosts.
+            let literal = rule.pattern.replacingOccurrences(of: "\\.", with: ".")
+                .split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") })
+                .filter { $0.contains(".") }
+            hosts.formUnion(literal.flatMap { ["\($0)", "www.\($0)", "q.\($0)"] })
+        }
+        var addresses: [String] = []
+        for host in hosts.sorted() {
+            for scheme in ["https://", "http://"] {
+                addresses += [scheme + host + "/", scheme + host + "/path/page?q=1#f", scheme + host, scheme + host + ":8443/", scheme + host + "?x=/y"]
+            }
+        }
+        return addresses + ["", "about:blank", "data:text/html,x", "https://", "https:///", "ftp://deezer.com/"]
+    }
+
+    /// The host index finds exactly what checking every pattern finds, for main frames and
+    /// subframes, on addresses around every rule.
+    @Test func hostIndexMatchesTheFullCheck() throws {
+        let rules = try Self.rules()
+        // The index reads almost every pattern; the rest are checked for every address.
+        #expect(rules.indexedCount > 830)
+        var checked = 0
+        var matched = 0
+        for address in Self.probeAddresses(rules) {
+            for main in [true, false] {
+                let indexed = rules.specificRules(for: address, mainFrame: main)
+                #expect(indexed == rules.scannedRules(for: address, mainFrame: main), "\(address) main \(main)")
+                checked += 1
+                if !indexed.isEmpty { matched += 1 }
+            }
+        }
+        print("[plain-measure] cookie banner index: \(rules.indexedCount)/\(rules.specific.count) patterns indexed, \(checked) checks, \(matched) with rules")
+        #expect(matched > 1_000)
+    }
+
+    @Test func hostKeysReadOnlyTheProvableShape() {
+        #expect(HostKeys.keys(for: "^https?://(www\\.)?deezer\\.com/") == ["deezer.com"])
+        #expect(HostKeys.keys(for: "^https://(m|mbasic)\\.facebook\\.com/") == ["m.facebook.com", "mbasic.facebook.com"])
+        #expect(HostKeys.keys(for: "^https?://(\\w+\\.)?(fellow|fll)\\.pl/") == ["fellow.pl", "fll.pl"])
+        #expect(HostKeys.keys(for: "^https?://(www\\.)?lt\\.example(/|$)") == ["lt.example"])
+        // Alternatives at the top level: every one indexed, or none.
+        #expect(HostKeys.keys(for: "^https?://(www\\.)?galaxus\\.de/|^https?://(www\\.)?galaxus\\.fr/") == ["galaxus.de", "galaxus.fr"])
+        #expect(HostKeys.keys(for: "^https?://a\\.example/|^https://[a-z]*\\.b\\.example/") == nil)
+        // A terminator that is optional lets the host go on; an inline flag reaches the next
+        // alternative (both confirmed against ICU in review).
+        #expect(HostKeys.keys(for: "^https://example\\.com/?") == nil)
+        #expect(HostKeys.keys(for: "^https://a\\.com/(?i)|^https://b\\.com/") == nil)
+        #expect(HostKeys.keys(for: "^https?://(www\\.)?x\\.example(/|$)?") == nil)
+        // Not provable: an unescaped dot, a host that may go on, a quantified or repeated part,
+        // a character class in the host, a subdomain group not in the list.
+        #expect(HostKeys.keys(for: "^https://(www\\.)?(m\\.)?imdb.com/") == nil)
+        #expect(HostKeys.keys(for: "^https?://(www\\.)?deezer\\.com") == nil)
+        #expect(HostKeys.keys(for: "^https://(\\w+\\.)?xhamster\\d*\\.com/") == nil)
+        #expect(HostKeys.keys(for: "^https://[a-z]*\\.pinterest\\.com/") == nil)
+        #expect(HostKeys.keys(for: "^https://(?!www\\.)[\\w-]+\\.mercado(libre|livre|pago)\\.[a-z.]+/") == nil)
+        #expect(HostKeys.hostSuffixes(of: "https://a.b.deezer.com:443/x.y") == ["a.b.deezer.com:443", "b.deezer.com:443", "deezer.com:443", "com:443"])
+        #expect(HostKeys.hostSuffixes(of: "no scheme").isEmpty)
+    }
+
+    /// Time per main frame against the number of rules, with and without the index: the full check
+    /// grows with the rules, the index with the address's labels and its few candidates. The rules
+    /// are the bundled ones plus `n - 1` copies of the indexed ones, each copy on a host of its own
+    /// (`site<copy>x<rule>.example`), so the copies add sites, never candidates for the addresses
+    /// measured; the 35 the index can't read stay 35, as they would with more sites in the file.
+    @Test func ruleMatchScalesWithTheAddressNotTheRules() throws {
+        let directory = try #require(CookieBanners.bundledDirectory)
+        let data = try Data(contentsOf: directory.appending(path: "rules.json"))
+        let file = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let specific = try #require(file["specific"] as? [[String: Any]])
+        let urls = (0..<40).map { "https://news\($0).example/article/\($0)?ref=home" }
+            + ["https://www.deezer.com/en/", "https://www.acetool.com/products", "https://a.b.bcferries.com/x"]
+        var lines: [String] = []
+        for copies in [1, 4, 16] {
+            var entries: [[String: Any]] = []
+            for copy in 0..<copies {
+                for (index, entry) in specific.enumerated() {
+                    guard copy > 0 else { entries.append(entry); continue }
+                    guard HostKeys.keys(for: entry["p"] as? String ?? "") != nil else { continue }
+                    var renamed = entry
+                    renamed["p"] = "^https?://(www\\.)?site\(copy)x\(index)\\.example/"
+                    entries.append(renamed)
+                }
+            }
+            var scaled = file
+            scaled["specific"] = entries
+            let rules = try CookieBannerRules(data: JSONSerialization.data(withJSONObject: scaled))
+            // Warm: each pattern compiled once by the full check, so both sides time matching only.
+            for url in urls { _ = rules.scannedRules(for: url, mainFrame: true) }
+            let clock = ContinuousClock()
+            let rounds = 5
+            let indexed = clock.measure { for _ in 0..<rounds { for url in urls { _ = rules.specificRules(for: url, mainFrame: true) } } }
+            let scanned = clock.measure { for _ in 0..<rounds { for url in urls { _ = rules.scannedRules(for: url, mainFrame: true) } } }
+            let per = Double(rounds * urls.count)
+            func us(_ d: Duration) -> String { String(format: "%.1f µs", (Double(d.components.attoseconds) / 1e12 + Double(d.components.seconds) * 1e6) / per) }
+            lines.append("rules \(rules.specific.count): indexed \(us(indexed)), full check \(us(scanned)) per frame")
+            for url in urls { #expect(rules.specificRules(for: url, mainFrame: true) == rules.scannedRules(for: url, mainFrame: true)) }
+        }
+        print("[plain-measure] cookie banner match vs rules:\n  " + lines.joined(separator: "\n  "))
+    }
 }
 
 #if os(iOS)

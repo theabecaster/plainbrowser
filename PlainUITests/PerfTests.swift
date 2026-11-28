@@ -54,6 +54,117 @@ final class PerfTests: XCTestCase {
         }
     }
 
+    // MARK: The reference (not budgeted)
+
+    /// The perf reference runs only when asked (`TEST_RUNNER_PLAIN_PERF_REFERENCE=1`): it measures
+    /// UIKit's floor on the device, not Plain, so the gate's every run doesn't need it.
+    private func requireReference() throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["PLAIN_PERF_REFERENCE"] == "1", "the perf reference runs only when asked"
+        )
+    }
+
+    /// The bare UIKit screen's cold launch (`-PlainPerfReference`): `main` to the first frame and
+    /// to its field focused, the same intervals as `testLaunch` and `testLaunchToSearchFieldReady`.
+    func testReferenceLaunch() throws {
+        try requireReference()
+        measureReferenceLaunch([])
+    }
+
+    /// The same with the field left unfocused (no keyboard at launch): `testLaunchToLastTab`'s floor.
+    func testReferenceLaunchUnfocused() throws {
+        try requireReference()
+        measureReferenceLaunch(["-PlainPerfReferenceUnfocused"])
+    }
+
+    private func measureReferenceLaunch(_ extra: [String]) {
+        let names = [Signposts.launchFirstFrame, Signposts.launch]
+        let metrics = names.map {
+            XCTOSSignpostMetric(subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name($0))
+        }
+        measure(metrics: metrics, options: options) {
+            let app = XCUIApplication.introSeen()
+            app.launchArguments += ["-PlainPerfReference"] + extra
+            app.launch()
+        }
+    }
+
+    /// The bare UIKit screen's footprint with its keyboard up, read as `testMemoryWithTenTabs` reads
+    /// Plain's (XCTMemoryMetric's absolute physical): what UIKit, the keyboard and the test runner's
+    /// accessibility hold before an app adds anything.
+    func testReferenceMemory() throws {
+        try requireReference()
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainPerfReference"]
+        app.launch()
+        let focus = app.buttons["referenceFocus"]
+        let done = app.buttons["referenceDone"]
+        XCTAssertTrue(focus.waitForExistence(timeout: 5))
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard up")], timeout: Self.keyboardWait)
+        measure(metrics: [XCTMemoryMetric(application: app)], options: options) {
+            done.tap()
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard down")], timeout: Self.keyboardWait)
+            focus.tap()
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard up")], timeout: Self.keyboardWait)
+        }
+    }
+
+    /// `testMemoryWithTenTabs` with the address field's prediction traits off
+    /// (`-PlainPerfLeanField`, AddressPill): what inline predictions, Writing Tools, grammar
+    /// checking and smart punctuation hold in the keyboard on this device. Runs with the reference.
+    func testMemoryWithTenTabsLeanField() throws {
+        try requireReference()
+        try measureMemoryWithTenTabs(extraArguments: ["-PlainPerfLeanField"])
+    }
+
+    /// The bare UIKit field's keystroke (`reference.keystroke`), typed as `testKeystrokeToSuggestions`
+    /// types: its floor, the keyboard's and the test runner's own work per keystroke.
+    func testReferenceKeystroke() throws {
+        try requireReference()
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainPerfReference"]
+        app.launch()
+        let field = app.textFields["referenceField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard up")], timeout: Self.keyboardWait)
+        field.typeText("Plain Tes")
+        let metric = XCTOSSignpostMetric(
+            subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name(Signposts.referenceKeystroke)
+        )
+        let options = self.options
+        options.invocationOptions = [.manuallyStop]
+        measure(metrics: [metric], options: options) {
+            field.typeText("t")
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keystroke handled")], timeout: Self.suggestionsWait)
+            stopMeasuring()
+            field.typeText(XCUIKeyboardKey.delete.rawValue)
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keystroke handled")], timeout: Self.suggestionsWait)
+        }
+    }
+
+    /// The bare UIKit screen's button to its keyboard at rest (`reference.ready`), and to the
+    /// keyboard starting (`reference.keyboardStart`): `testAddressBarFocus`'s floor.
+    func testReferenceFocus() throws {
+        try requireReference()
+        let app = XCUIApplication.introSeen()
+        app.launchArguments += ["-PlainPerfReference"]
+        app.launch()
+        let focus = app.buttons["referenceFocus"]
+        let done = app.buttons["referenceDone"]
+        XCTAssertTrue(focus.waitForExistence(timeout: 5))
+        done.tap()
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard down")], timeout: Self.keyboardWait)
+        let metrics = [Signposts.referenceReady, Signposts.referenceKeyboardStart].map {
+            XCTOSSignpostMetric(subsystem: Signposts.subsystem, category: Signposts.category, name: Signposts.name($0))
+        }
+        measure(metrics: metrics, options: options) {
+            focus.tap()
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard up")], timeout: Self.keyboardWait)
+            done.tap()
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "keyboard down")], timeout: Self.keyboardWait)
+        }
+    }
+
     private static func emptyStoreApp() -> XCUIApplication {
         let app = XCUIApplication.introSeen()
         app.launchArguments += ["-PlainTestStore", "-PlainResetStore"]
@@ -198,8 +309,11 @@ final class PerfTests: XCTestCase {
     // MARK: Interactions after launch
 
     /// One local page, in an isolated in-memory store: the start of the interaction tests.
-    private func launchOnPage(_ server: TestServer, _ path: String, heading: String) -> XCUIApplication {
+    private func launchOnPage(
+        _ server: TestServer, _ path: String, heading: String, extraArguments: [String] = []
+    ) -> XCUIApplication {
         let app = XCUIApplication.introSeen()
+        app.launchArguments += extraArguments
         app.launch()
         let field = app.textFields["searchField"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -376,13 +490,17 @@ final class PerfTests: XCTestCase {
     /// peak over the block is reported too). The pages' own memory is in WebKit's processes, not
     /// counted here.
     func testMemoryWithTenTabs() throws {
+        try measureMemoryWithTenTabs()
+    }
+
+    private func measureMemoryWithTenTabs(extraArguments: [String] = []) throws {
         let server = try TestServer()
         try server.start()
         defer { server.stop() }
         let pages = [("/a", "Page A"), ("/b", "Page B"), ("/c", "Page C"), ("/long", "Long Read"), ("/article", "The Quiet Page"),
                      ("/footer", "Footer Page"), ("/light-site", "Light Only"), ("/dark-site", "Own Dark Design"),
                      ("/count", "Load 1"), ("/paint-start", "Paint Start")]
-        let app = launchOnPage(server, pages[0].0, heading: pages[0].1)
+        let app = launchOnPage(server, pages[0].0, heading: pages[0].1, extraArguments: extraArguments)
         let field = app.textFields["searchField"]
         let focused = NSPredicate(format: "hasKeyboardFocus == true")
         for (path, heading) in pages.dropFirst() {

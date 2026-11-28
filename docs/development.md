@@ -231,6 +231,17 @@ store and local TestServer pages; the heavy page test sets Appearance to Dark in
 A metric with no measurement fails the gate with its test's first failure lines from the run's
 log, so a device run says why (the result bundle stays in `build/perf/`).
 
+**The perf reference** (not budgeted): `TEST_RUNNER_PLAIN_PERF_REFERENCE=1 scripts/perf-gate.sh
+[--device]` also runs `testReferenceLaunch`, `testReferenceLaunchUnfocused`, `testReferenceFocus`,
+`testReferenceKeystroke` and `testReferenceMemory`, and `testMemoryWithTenTabsLeanField` (the
+ten-tab memory test with the address field's prediction traits off, `-PlainPerfLeanField`, an
+experiment for an owner decision). The references launch a bare UIKit screen instead of the
+browser (`-PlainPerfReference`, isolated runs only, `Plain/PerfReference.swift`): one text field
+with the address field's traits and two buttons, measured by the same signposts and metrics. Its
+numbers are the floor UIKit, the keyboard and the test runner set on that device. The gate prints
+them, with the keyboard-start parts of focus and New Tab, under "report only"
+(docs/research/perf-pass-3.md). Without the variable they skip.
+
 Exit codes: 0 pass, 1 budget breach, regression or test failure, 2 device not ready.
 
 ## Simulators

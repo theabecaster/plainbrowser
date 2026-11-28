@@ -3364,3 +3364,36 @@ Owner feedback from TestFlight on the Duo: the Settings sheet's Done sat too far
 - **Rejected: turning the vertical bar off for sheets.** A hosting controller returning `.disabled` from `preferredVerticalBarBehavior` changed nothing on the outer screen: the presenter's choice stands for a page sheet. Turning it off in the browser while a sheet shows would move the page's buttons behind the sheet for nothing.
 - **Style:** Done, Back, Clear and Favorites' Edit are plain accent text or symbols (`SheetHeaderButtonStyle`: `Palette.accentOnPaper`, a 44 pt target, dimmed while pressed, the Large Content Viewer on a long press), as the search sheet's Cancel, with Done in semibold (`.headline`), as the gallery's Done. They were glass capsules; Liquid Glass is for the floating controls over a page, and a capsule on the opaque paper header read as a pasted-on chip. The header's sides cap them at accessibility1 with the title (clarity pass).
 - **Cards:** `Palette.paperCard` by day is `#FFF9EE`, the cream's warmth a step lighter, in place of `#FFFBF4`. Still lighter than the ground (L* 98.1 against 97.2), so the cards read as raised. Ink 15.7:1, secondary ink 6.5:1 and the accent 4.7:1 on it (WCAG AA). Night and Increase Contrast are unchanged. One color, so the page sheet's cards and the summary's follow.
+
+## Perf pass 3: the floor, complexity, and what is left (2026-11-28)
+
+Owner: "get creative and investigate and research ... keep premium look, feel and motion";
+"obsess over the algorithmic complexity"; "keep it legal by Apple's eyes". Measurements and their
+limits: docs/research/perf-pass-3.md.
+
+- **A perf reference instead of guessing at floors.** `-PlainPerfReference` (isolated test runs
+  only) launches a bare UIKit screen, one text field with the address field's traits and two
+  buttons, measured by the same signposts and metrics as Plain (`testReference*`, run with
+  `TEST_RUNNER_PLAIN_PERF_REFERENCE=1`; the gate prints them as report-only). A budget below the
+  reference on the same device would need UIKit or the keyboard to do less than they do for a bare
+  screen; above it, the gap is Plain's.
+- **Cookie banner rules are indexed by host and compiled on first use.** Every frame used to run
+  all 882 regular expressions, all compiled at the first page. Now an address looks up its host
+  suffixes and runs only those rules plus the 35 the index can't read: per frame O(labels + C log C)
+  for its C = 35 + k candidates instead of O(R), and flat as the rules grow while C stays fixed (31 vs 373 µs at 882 rules, 35 vs 6,609 µs at
+  13,587). Equal to the full check on every rule's host and its look-alikes (a test, ~187k
+  checks). Memory at ten tabs: 68.6 vs 71.3 MB on the simulator.
+- **The warm web view is made again after a tab takes it**, `EngineChoices.rewarmDelay` after
+  the take, in the default run loop mode (not during a scroll or a tracked gesture; an animation
+  may still run, as for the gallery's spare), never while the keyboard rises or falls, only while
+  active and not after a memory warning.
+  So a New Tab that comes a second or more after the last one makes no `WKWebView` in its tap.
+- **The address field keeps its prediction traits** (inline predictions, Writing Tools, grammar
+  outside private tabs). Turning them off saved no time and, once one outlier run was repeated,
+  no memory on the simulators; a phone may load prediction models a simulator doesn't, so
+  `testMemoryWithTenTabsLeanField` measures it on the device. Only a real difference there
+  would make it the owner's decision.
+- **Not changed:** the start screen's shortcuts stay in the first frame (built after it: no gain);
+  the keystroke's rows are not moved ahead of the main queue's accessibility work (they would
+  reach the screen in the same commit: a metric game); fewer kept web views and smaller pictures
+  (little memory for a visible or felt loss).

@@ -140,6 +140,12 @@ public final class WebViewPool {
     /// Private tabs' dark pages choices, for the private session only.
     private var privatePageAppearanceStore: LayeredPageAppearanceStore?
     private var warm: (webView: WKWebView, controller: WKUserContentController)?
+    /// A rewarm is waiting for the app to be idle.
+    private var rewarmScheduled = false
+    /// Memory warnings received: a rewarm scheduled before the latest one never runs.
+    private var memoryWarnings = 0
+    /// Between `keyboardWill…` and `keyboardDid…`: the keyboard is rising or falling.
+    private var isKeyboardMoving = false
     /// Hidden web views lent out (`makeHiddenWebView`), with their controllers, so their content
     /// rules are released when they are.
     var hiddenWebViews: [ObjectIdentifier: WKUserContentController] = [:]
@@ -243,6 +249,11 @@ public final class WebViewPool {
             observe(UIApplication.didReceiveMemoryWarningNotification) { $0.handleMemoryWarning() },
             observe(UIApplication.willResignActiveNotification) { $0.applicationWillResignActive() },
             observe(UIApplication.didBecomeActiveNotification) { $0.applicationDidBecomeActive() },
+            // A rewarm waits out the keyboard's rise or fall (`rewarm`).
+            observe(UIResponder.keyboardWillShowNotification) { $0.isKeyboardMoving = true },
+            observe(UIResponder.keyboardWillHideNotification) { $0.isKeyboardMoving = true },
+            observe(UIResponder.keyboardDidShowNotification) { $0.isKeyboardMoving = false },
+            observe(UIResponder.keyboardDidHideNotification) { $0.isKeyboardMoving = false },
         ]
     }
 
@@ -470,11 +481,47 @@ public final class WebViewPool {
         Signposts.signposter.endInterval(Signposts.webViewWarmUp, state)
     }
 
+    /// The warm web view was taken: another is made once the app is idle (`EngineChoices.rewarmDelay`,
+    /// default run loop mode only, never while the keyboard moves), so the next tab that needs one
+    /// finds it ready. Not in the background, and not again after a memory warning dropped it (only
+    /// a later take rewarms).
+    private func scheduleRewarm() {
+        guard !rewarmScheduled else { return }
+        rewarmScheduled = true
+        waitToRewarm(EngineChoices.rewarmDelay, generation: memoryWarnings, retries: 0)
+    }
+
+    private func waitToRewarm(_ delay: Duration, generation: Int, retries: Int) {
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            RunLoop.main.perform(inModes: [.default]) { [weak self] in
+                MainActor.assumeIsolated { self?.rewarm(generation: generation, retries: retries) }
+            }
+        }
+    }
+
+    /// A memory warning since the take (`generation` behind) cancels it; so does the app not being
+    /// active (in the background, or covered by the app switcher or a system sheet). While the
+    /// keyboard rises or falls it waits a little more (at most `EngineChoices.rewarmRetries` times,
+    /// should a keyboard notification never come), so the web view is not made in that motion.
+    private func rewarm(generation: Int, retries: Int) {
+        guard warm == nil, generation == memoryWarnings, UIApplication.shared.applicationState == .active else {
+            rewarmScheduled = false
+            return
+        }
+        if isKeyboardMoving, retries < EngineChoices.rewarmRetries {
+            return waitToRewarm(EngineChoices.rewarmRetry, generation: generation, retries: retries + 1)
+        }
+        rewarmScheduled = false
+        warmUp()
+    }
+
     /// Takes the warmed web view, or makes a new one. Only Personal's tabs take the warm one: it
     /// uses Personal's data store.
     private func takeWebView(isPrivate: Bool, profile: ProfileID) -> (WKWebView, WKUserContentController) {
         if !isPrivate, profile == Profile.defaultID, let warm {
             self.warm = nil
+            scheduleRewarm()
             return warm
         }
         let (configuration, controller) = makeConfiguration(isPrivate: isPrivate, profile: profile)
@@ -699,6 +746,7 @@ public final class WebViewPool {
     /// `UIApplication.didReceiveMemoryWarningNotification`.
     public func handleMemoryWarning() {
         warm = nil
+        memoryWarnings += 1
         onMemoryWarning?()
         thumbnails.dropMemoryCache()
         favicons.dropMemoryCache()

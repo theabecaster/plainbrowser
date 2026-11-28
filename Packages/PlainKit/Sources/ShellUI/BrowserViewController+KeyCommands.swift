@@ -64,8 +64,14 @@ extension BrowserViewController {
     override public var canBecomeFirstResponder: Bool { true }
 
     /// The system's undo asks the responder chain: the field and a page's form keep their own
-    /// (typing is undone there), everything else gets the last tab close.
-    override public var undoManager: UndoManager? { gestureUI.closeUndo }
+    /// (typing is undone there), everything else gets the last tab close. A text field of Plain's
+    /// (the search field, the side pane's Find) asks up the chain too, so while one is typing it
+    /// gets the window's manager: its typing never lands in, or pushes out, the close.
+    override public var undoManager: UndoManager? {
+        let focused = KeyFocusProbe.current()
+        if focused is UITextField || focused is UITextView { return super.undoManager }
+        return gestureUI.closeUndo
+    }
 
     override public func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         if action == #selector(performShortcut(_:)) {

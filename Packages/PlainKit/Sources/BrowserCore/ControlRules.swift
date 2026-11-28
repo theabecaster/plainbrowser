@@ -42,6 +42,12 @@ public enum ReloadItem: Sendable, Equatable {
     case reload, stop, hidden
 }
 
+/// The reload control inside the resting pill (§3): Reload, Stop while the page loads, or
+/// nothing. Its long press offers Reload Without Cache.
+public enum PillReloadFace: Sendable, Equatable {
+    case reload, stop, hidden
+}
+
 /// The reader item in the page menu (§4).
 public enum ReaderItem: Sendable, Equatable {
     case show, hide, hidden
@@ -263,6 +269,22 @@ public struct ControlRules: Sendable, Equatable {
 
     /// Off on Start, in the reader, and on failed, crashed or resend pages (their button owns it).
     public var pullToRefresh: Bool { isPageShowing && !state.isReaderOpen }
+
+    /// The reload glyph at the resting pill's trailing end (owner, 2026-11-28: "easy access to
+    /// refresh"), with pull to refresh's predicate, so the button and the gesture never disagree
+    /// (principle 3): on a page that shows, Reload, or Stop while it loads. Not on Start (nothing
+    /// to reload), not in the reader (the article is already what the page has; Back leaves it),
+    /// not on a failed, crashed or resend page (its one button, Try Again or Reload, is the next
+    /// step; a second would repeat it), not while editing (the pill is the field). Private tabs
+    /// keep it. The collapsed pill and the inner screen's slim band leave it out on their own:
+    /// they take a tap that brings the bar back, nothing else.
+    public var pillReload: PillReloadFace {
+        guard pullToRefresh, !state.isEditing else { return .hidden }
+        return state.condition == .loading ? .stop : .reload
+    }
+
+    /// Reload Without Cache, the pill reload's long press: wherever Reload itself shows.
+    public var reloadFromOrigin: Bool { pillReload == .reload }
 
     // MARK: The tabs menu (§5)
 

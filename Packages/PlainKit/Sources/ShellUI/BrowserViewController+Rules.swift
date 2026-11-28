@@ -111,6 +111,8 @@ extension BrowserViewController {
         // The pill names the page's mode (Reader, Translated) where it says Not Secure: Translated
         // once translated text is on screen (the sheet's tile says "Translating…" before).
         pill.setMode(reader: rules.state.isReaderOpen, translated: currentTab?.translation == .translated)
+        // Reload, or Stop while loading, at the pill's trailing end (state rules §3).
+        pill.setReload(rules.pillReload)
         // A state that no longer lets the bar hide (a load, an error, VoiceOver) brings it back.
         chromeRulesChanged()
         // Under the gallery the page's own buttons rest; Tabs goes back to the page.

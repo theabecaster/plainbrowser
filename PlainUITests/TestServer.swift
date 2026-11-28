@@ -8,6 +8,8 @@ import Network
 /// - `/a`: "Page A", with a link to `/b`.
 /// - `/b`: "Page B".
 /// - `/count`: "Load N", where N counts this page's loads (pull to refresh reloads it).
+/// - `/fresh`: "Fresh N" and the request's cache headers ("Cache no-cache" for a reload from the
+///   origin), N counting its loads (the pill's Reload and Reload Without Cache).
 /// - `/long`: a long article, for scrolling and the toolbar collapse.
 /// - `/footer`: a long page with a `position: fixed` footer, for the page's bottom inset.
 /// - `/fixed-header`, `/sticky-header`, `/dark-header`: long pages with a fixed, a sticky, and a
@@ -40,6 +42,10 @@ final class TestServer: @unchecked Sendable {
     private var loads = 0
     /// Requests for `/long?reload=slow` so far: the first answers at once, later ones slowly.
     private var slowReloads = 0
+    private var freshLoads = 0
+    private var freshPictureLoads = 0
+    /// The last request's `Cache-Control` and `Pragma` values, for `/fresh`.
+    private var cacheHeaders = ""
     private(set) var port: UInt16 = 0
 
     init() throws {
@@ -85,6 +91,10 @@ final class TestServer: @unchecked Sendable {
             }
             let agent = request.split(separator: "\r\n")
                 .first { $0.lowercased().hasPrefix("user-agent:") }.map(String.init) ?? ""
+            self.cacheHeaders = request.split(separator: "\r\n")
+                .filter { $0.lowercased().hasPrefix("cache-control:") || $0.lowercased().hasPrefix("pragma:") }
+                .compactMap { $0.split(separator: ":", maxSplits: 1).last?.trimmingCharacters(in: .whitespaces) }
+                .joined(separator: " ")
             let (status, body) = self.page(for: path, userAgent: agent)
             let isFile = path.hasPrefix("/file.txt")
             let type = path.hasSuffix(".js") ? "application/javascript"
@@ -96,7 +106,7 @@ final class TestServer: @unchecked Sendable {
             Content-Type: \(type)\r
             \(disposition)\
             Content-Length: \(body.utf8.count)\r
-            Cache-Control: no-store\r
+            Cache-Control: \(path == "/fresh.svg" ? "max-age=3600" : "no-store")\r
             Connection: close\r
             \r
 
@@ -252,6 +262,16 @@ final class TestServer: @unchecked Sendable {
             return ("200 OK", html("Plain Files", "<h1>Files</h1><p><a href=\"/file.txt\">Download notes</a></p>"))
         case "/file.txt":
             return ("200 OK", "Notes from the Plain test server.\n")
+        case "/fresh":
+            freshLoads += 1
+            let cache = cacheHeaders.isEmpty ? "none" : cacheHeaders
+            // The picture may be cached for an hour; its count says how often it was fetched before
+            // this page (a reload from the origin fetches it again).
+            return ("200 OK", html("Plain Fresh", "<h1>Fresh \(freshLoads)</h1><p>Cache \(cache)</p>"
+                + "<p>Picture \(freshPictureLoads)</p><img src=\"/fresh.svg\" width=\"40\" height=\"40\" alt=\"\">"))
+        case "/fresh.svg":
+            freshPictureLoads += 1
+            return ("200 OK", "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\"><rect width=\"40\" height=\"40\" fill=\"#2973FF\"/></svg>")
         case "/count":
             loads += 1
             return ("200 OK", html("Plain Counter", "<h1>Load \(loads)</h1>"))

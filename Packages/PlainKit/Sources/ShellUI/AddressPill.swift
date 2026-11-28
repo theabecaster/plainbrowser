@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import BrowserCore
 import DesignSystem
+import PerfSignposts
 import UIKit
 
 /// The URL pill: a paper-tinted glass capsule at the bottom (Brand/identity.md, URL bar).
@@ -118,6 +119,20 @@ final class AddressPill: UIView {
     /// The resting pill for VoiceOver while the indicator is its own element beside it.
     private lazy var addressElement = PillAccessibilityElement(pill: self)
 
+    /// Reload at the resting pill's trailing end (`ControlRules.pillReload`), Stop (×) while the
+    /// page loads; its long press offers Reload Without Cache (docs/decisions.md, "Reload in the
+    /// pill"). Made the first time a page shows, so the start screen's launch builds nothing.
+    var onReload: () -> Void = {}
+    var onStop: () -> Void = {}
+    var onReloadFromOrigin: () -> Void = {}
+    private(set) var reloadFace = PillReloadFace.hidden
+    private var reloadButton: UIButton?
+    /// The bar's collapse fades the glyph (`setCollapse`): 1 at rest, 0 once it is gone.
+    private var reloadFade: CGFloat = 1
+    /// The host's ends: 16 pt in, and at the trailing end Reload's room while it shows.
+    private var hostLeading: NSLayoutConstraint!
+    private var hostTrailing: NSLayoutConstraint!
+
     private(set) var isEditing = false
     /// The bar is collapsed, or on its way there: only the tap works (and the indicator hides).
     var isCompact = false {
@@ -205,6 +220,8 @@ final class AddressPill: UIView {
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (pill: AddressPill, _) in pill.resolveColors() }
 
         let radius = ChromeGeometry.pillHeight / 2
+        hostLeading = hostLabel.leadingAnchor.constraint(greaterThanOrEqualTo: glass.contentView.leadingAnchor, constant: Spacing.l)
+        hostTrailing = hostLabel.trailingAnchor.constraint(lessThanOrEqualTo: glass.contentView.trailingAnchor, constant: -Spacing.l)
         NSLayoutConstraint.activate([
             glass.topAnchor.constraint(equalTo: topAnchor),
             glass.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -216,14 +233,14 @@ final class AddressPill: UIView {
             rim.trailingAnchor.constraint(equalTo: trailingAnchor),
 
             hostLabel.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
-            // Centered unless the indicator is in the way: a host shifts before it truncates.
+            // Centered unless the indicator or Reload is in the way: a host shifts before it truncates.
             {
                 let center = hostLabel.centerXAnchor.constraint(equalTo: glass.contentView.centerXAnchor)
                 center.priority = UILayoutPriority(740)
                 return center
             }(),
-            hostLabel.leadingAnchor.constraint(greaterThanOrEqualTo: glass.contentView.leadingAnchor, constant: Spacing.l),
-            hostLabel.trailingAnchor.constraint(lessThanOrEqualTo: glass.contentView.trailingAnchor, constant: -Spacing.l),
+            hostLeading,
+            hostTrailing,
 
             textField.topAnchor.constraint(equalTo: glass.contentView.topAnchor),
             textField.bottomAnchor.constraint(equalTo: glass.contentView.bottomAnchor),
@@ -278,13 +295,17 @@ final class AddressPill: UIView {
     private func fitHostText() {
         guard notSecure, let full = restingText, let compact = compactText, bounds.width > 0 else { return }
         var wanted = full
-        if shortensWarning {
+        // The top bar's narrow pill, or beside a glyph: the warning gives way before the host.
+        if shortensWarning || reloadFace != .hidden || showsDarkPages {
             // The label's own width follows its text, so measure against the capsule's room.
             let measured = NSMutableAttributedString(attributedString: full)
             measured.addAttribute(.font, value: hostLabel.font as Any, range: NSRange(location: 0, length: measured.length))
-            if ceil(measured.size().width) > bounds.width - Spacing.l * 2 { wanted = compact }
+            if ceil(measured.size().width) > hostRoom { wanted = compact }
         }
         if hostLabel.attributedText != wanted { hostLabel.attributedText = wanted }
+        // The short form's symbol is the warning: a long host loses its middle, never the symbol.
+        let mode: NSLineBreakMode = wanted == compact || isPrivateTint ? .byTruncatingMiddle : .byTruncatingHead
+        if hostLabel.lineBreakMode != mode { hostLabel.lineBreakMode = mode }
     }
 
     /// The top bar's pill, which a side pane or a sidebar can make narrow: there a warning that
@@ -342,6 +363,8 @@ final class AddressPill: UIView {
     private func updateDarkPagesVisibility(animated: Bool) {
         let shows = showsDarkPages
         hostClearsIndicator?.isActive = shows
+        // The host's room changed: the warning may need its short form, or may have room again.
+        fitHostText()
         updateAccessibilityElements()
         let changes = {
             self.darkPagesButton.alpha = shows ? 1 : 0
@@ -360,9 +383,9 @@ final class AddressPill: UIView {
         Motion.animate(Motion.quick, changes: changes, completion: finish)
     }
 
-    /// Resting, the pill is one "Address" button for VoiceOver; with the indicator showing, the
-    /// indicator and a stand-in for that button (same name, value, hint and identifier) side by
-    /// side; editing, the field inside is reachable.
+    /// Resting, the pill is one "Address" button for VoiceOver; with the indicator or Reload
+    /// showing, those and a stand-in for that button (same name, value, hint, actions and
+    /// identifier) side by side; editing, the field inside is reachable.
     private func updateAccessibilityElements() {
         // The stand-in carries the "addressPill" identifier while it stands in, so there is one
         // address button, never two.
@@ -370,9 +393,14 @@ final class AddressPill: UIView {
             isAccessibilityElement = false
             accessibilityElements = nil
             accessibilityIdentifier = Self.identifier
-        } else if showsDarkPages {
+        } else if showsDarkPages || reloadShown {
+            // Page Appearance, the address, then Reload or Stop: left to right.
             isAccessibilityElement = false
-            accessibilityElements = [darkPagesButton, addressElement]
+            var elements: [Any] = []
+            if showsDarkPages { elements.append(darkPagesButton) }
+            elements.append(addressElement)
+            if reloadShown, let reloadButton { elements.append(reloadButton) }
+            accessibilityElements = elements
             accessibilityIdentifier = Self.groupIdentifier
         } else {
             accessibilityElements = nil
@@ -409,6 +437,9 @@ final class AddressPill: UIView {
             ? Self.compactNotSecureText(for: url, font: hostLabel.font).map { isPrivateTint ? Self.privateMarked($0, onPage: true) : $0 }
             : nil
         hostLabel.attributedText = text
+        // The full text's truncation (`fitHostText` changes it for the short form).
+        let truncation: NSLineBreakMode = isPrivateTint ? .byTruncatingMiddle : .byTruncatingHead
+        if hostLabel.lineBreakMode != truncation { hostLabel.lineBreakMode = truncation }
         fitHostText()
         // VoiceOver hears a mode as the pill shows it ("Reader, https://…"), without the private
         // mark's attachment character: the label already says Private.
@@ -567,6 +598,7 @@ final class AddressPill: UIView {
             string: textField.placeholder ?? "",
             attributes: [.foregroundColor: isPrivate ? UIColor(white: 1, alpha: 0.6) : Palette.textSecondary]
         )
+        reloadButton?.configuration?.baseForegroundColor = reloadTint
         if isPrivate, textField.leftView == nil { textField.leftView = makeFieldMark() }
         textField.leftViewMode = isPrivate ? .always : .never
         // iOS has no "don't learn" flag for the keyboard (docs/research/private-mode.md). The field
@@ -640,9 +672,12 @@ final class AddressPill: UIView {
         label.alpha = 0
         label.isAccessibilityElement = false
         let height = max(hostLabel.bounds.height, label.font.lineHeight)
+        // Centred on the capsule, Reload's room kept at both ends, so the host lands where the
+        // resting one sits (a short host, the common case, without a sideways jump).
+        let inset = max(hostLeading.constant, -hostTrailing.constant)
         label.frame = CGRect(
-            x: Spacing.l, y: (hostLabel.center.y - height / 2).rounded(),
-            width: max(0, bounds.width - Spacing.l * 2), height: height
+            x: inset, y: (hostLabel.center.y - height / 2).rounded(),
+            width: max(0, bounds.width - inset * 2), height: height
         )
         glass.contentView.addSubview(label)
         incomingHost = label
@@ -686,8 +721,128 @@ final class AddressPill: UIView {
         }
         textField.isUserInteractionEnabled = editing
         progressBar.isHidden = editing
+        applyReloadShown()
         // At once, with the host: the field takes the pill's whole width.
         updateDarkPagesVisibility(animated: false)
+    }
+
+    // MARK: Reload
+
+    /// The glyph shows: a page (`reloadFace`), the pill resting and not collapsing.
+    private var reloadShown: Bool { reloadFace != .hidden && !isEditing && reloadFade > 0 }
+
+    /// Reload, Stop or nothing at the trailing end, from `ControlRules.pillReload`. Called with
+    /// each chrome update; only a change touches the views.
+    func setReload(_ face: PillReloadFace) {
+        guard face != reloadFace else { return }
+        let wasHidden = reloadFace == .hidden
+        reloadFace = face
+        if face != .hidden {
+            let button = reloadButton ?? makeReloadButton()
+            let reload = face == .reload
+            button.configuration?.image = UIImage(systemName: reload ? "arrow.clockwise" : "xmark")
+            button.accessibilityLabel = reload ? String(localized: "Reload") : String(localized: "Stop")
+            button.accessibilityIdentifier = reload ? "pill.reload" : "pill.stop"
+            // Reload Without Cache: the long press's menu, and VoiceOver's action.
+            button.menu = reload ? reloadMenu : nil
+            button.accessibilityCustomActions = reload ? [UIAccessibilityCustomAction(
+                name: String(localized: "Reload Without Cache")
+            ) { [weak self] _ in
+                self?.reloadFromOriginChosen()
+                return true
+            }] : nil
+        }
+        // The host's room changes only between a page and none; Reload and Stop share the slot.
+        if wasHidden != (face == .hidden) {
+            hostTrailing.constant = face == .hidden ? -Spacing.l : -Self.reloadReserve
+            fitHostText()
+        }
+        applyReloadShown()
+        updateAccessibilityElements()
+    }
+
+    /// The bar's collapse (0 at rest, 1 the compact pill): the glyph fades out over the first
+    /// third, so the compact pill is the host alone (it takes a tap that brings the bar back,
+    /// nothing else), and touches go to the pill once it starts to go. Alpha only.
+    func setCollapse(_ progress: CGFloat) {
+        let fade = max(0, 1 - min(max(progress, 0), 1) * 3)
+        guard fade != reloadFade else { return }
+        let wasShown = reloadShown
+        reloadFade = fade
+        applyReloadShown()
+        if wasShown != reloadShown { updateAccessibilityElements() }
+    }
+
+    /// The width the host may take: the capsule less its ends (Page Appearance's room at the
+    /// leading one, Reload's at the trailing one).
+    private var hostRoom: CGFloat {
+        let leading = showsDarkPages ? Spacing.xxs + Metrics.tapTarget : hostLeading.constant
+        return bounds.width - leading + hostTrailing.constant
+    }
+
+    /// Ink, or fixed white on the always-dark private glass (the glass picks its content's style
+    /// from the page behind it, which drew the glyph dark on the violet).
+    private var reloadTint: UIColor { isPrivateTint ? .white : Palette.textPrimary }
+
+    /// The room the host keeps at the trailing end while the glyph shows: its 44 pt target, 2 pt
+    /// in from the capsule's end, and a 4 pt gap.
+    private static let reloadReserve: CGFloat = Metrics.tapTarget + Spacing.xxs + Spacing.xs
+
+    private func applyReloadShown() {
+        guard let reloadButton else { return }
+        let alpha = reloadFace == .hidden || isEditing ? 0 : reloadFade
+        if reloadButton.alpha != alpha { reloadButton.alpha = alpha }
+        // Only at rest: a tap on a collapsing pill brings the bar back, never reloads.
+        let interactive = alpha == 1
+        if reloadButton.isUserInteractionEnabled != interactive { reloadButton.isUserInteractionEnabled = interactive }
+    }
+
+    private func makeReloadButton() -> UIButton {
+        var configuration = UIButton.Configuration.plain()
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body, scale: .medium)
+            .applying(UIImage.SymbolConfiguration(weight: .medium))
+        configuration.baseForegroundColor = reloadTint
+        configuration.contentInsets = .zero
+        let button = ReloadButton(configuration: configuration)
+        // Inside its 44 pt target at the accessibility sizes too, as the field's options.
+        button.maximumContentSizeCategory = .extraExtraExtraLarge
+        button.showsMenuAsPrimaryAction = false
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addAction(UIAction { [weak self] _ in self?.reloadTapped() }, for: .primaryActionTriggered)
+        glass.contentView.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: Metrics.tapTarget),
+            button.heightAnchor.constraint(equalToConstant: Metrics.tapTarget),
+            button.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
+            button.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -Spacing.xxs),
+        ])
+        reloadButton = button
+        return button
+    }
+
+    /// The long press's one choice, named for what it does (Safari calls it "Reload Page From
+    /// Origin", Chrome "Hard Reload"). The system's menu plays its own haptic as it opens.
+    private lazy var reloadMenu: UIMenu = {
+        let action = UIAction(
+            title: String(localized: "Reload Without Cache"), subtitle: String(localized: "Fresh from the site"),
+            image: UIImage(systemName: "arrow.clockwise")
+        ) { [weak self] _ in self?.reloadFromOriginChosen() }
+        action.accessibilityIdentifier = "pill.reloadFromOrigin"
+        return UIMenu(children: [action])
+    }()
+
+    /// No haptic: the progress bar answers at once (haptics rule 1, as the page sheet's Reload).
+    private func reloadTapped() {
+        switch reloadFace {
+        case .reload: onReload()
+        case .stop: onStop()
+        case .hidden: break
+        }
+    }
+
+    /// The shell plays its haptic (`reloadPageFromOrigin`).
+    private func reloadFromOriginChosen() {
+        onReloadFromOrigin()
     }
 
     /// The focus rim follows the sheet's progress (0 resting, 1 open): alpha only.
@@ -810,6 +965,13 @@ final class AddressPill: UIView {
     /// Collapsed, only the tap begins: no hold, no swipe (the context menu's and any later
     /// gesture's recognizers are turned away here, in one place).
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // A tap or hold on Reload is the glyph's own (its action, its menu), never the pill's
+        // search or page sheet. A swipe that starts there is still the bar's.
+        if gestureRecognizer.view === self, gestureRecognizer is UITapGestureRecognizer || gestureRecognizer is UILongPressGestureRecognizer,
+           let reloadButton, reloadButton.isUserInteractionEnabled,
+           reloadButton.bounds.contains(gestureRecognizer.location(in: reloadButton)) {
+            return false
+        }
         guard isCompact, !isEditing else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
         return gestureRecognizer is UITapGestureRecognizer && gestureRecognizer.view === self
     }
@@ -823,6 +985,17 @@ final class AddressPill: UIView {
         guard press.state == .began, !isEditing, !isCompact else { return }
         Haptic.threshold.play()
         onLongPress()
+    }
+}
+
+/// The pill's Reload: its long press's menu opening is an interaction of its own (signpost).
+private final class ReloadButton: UIButton {
+    override func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration,
+        animator: (any UIContextMenuInteractionAnimating)?
+    ) {
+        super.contextMenuInteraction(interaction, willDisplayMenuFor: configuration, animator: animator)
+        Signposts.signposter.emitEvent(Signposts.reload, "pill menu")
     }
 }
 
@@ -873,6 +1046,12 @@ private final class PillAccessibilityElement: UIAccessibilityElement {
 
     override var accessibilityIdentifier: String? {
         get { AddressPill.identifier }
+        set {}
+    }
+
+    /// The bar's gestures as actions (Previous and Next Tab, …), which the shell sets on the pill.
+    override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+        get { pill?.accessibilityCustomActions }
         set {}
     }
 

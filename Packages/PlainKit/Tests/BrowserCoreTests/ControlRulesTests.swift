@@ -232,6 +232,46 @@ import Testing
         #expect(!rules.favorite, "a page that never loaded is not a favorite")
     }
 
+    @Test func thePillReloadFollowsPullToRefresh() {
+        // A loaded page: Reload, and its long press Reload Without Cache; private the same.
+        for isPrivate in [false, true] {
+            let rules = ControlRules(Self.page(isPrivate: isPrivate))
+            #expect(rules.pillReload == .reload)
+            #expect(rules.reloadFromOrigin)
+        }
+        // Loading: Stop in the same place, and no hard reload behind it.
+        let loading = ControlRules(Self.page(condition: .loading))
+        #expect(loading.pillReload == .stop)
+        #expect(!loading.reloadFromOrigin)
+        // Start, error pages (their own button), the reader, the field: nothing.
+        #expect(ControlRules(Self.emptyTab()).pillReload == .hidden)
+        #expect(ControlRules(Self.firstRun).pillReload == .hidden)
+        for condition in [PageCondition.failed, .crashed, .awaitingResubmit] {
+            let rules = ControlRules(Self.page(condition: condition))
+            #expect(rules.pillReload == .hidden, "\(condition): its page's button reloads")
+            #expect(!rules.reloadFromOrigin)
+        }
+        var reader = Self.page()
+        reader.isReaderOpen = true
+        #expect(ControlRules(reader).pillReload == .hidden)
+        var editing = Self.page()
+        editing.isEditing = true
+        #expect(ControlRules(editing).pillReload == .hidden)
+        // One predicate with the gesture (principle 3), in every condition.
+        for condition in [PageCondition.loaded, .loading, .failed, .crashed, .awaitingResubmit] {
+            for readerOpen in [false, true] {
+                var state = Self.page(condition: condition)
+                state.isReaderOpen = readerOpen
+                let rules = ControlRules(state)
+                #expect((rules.pillReload != .hidden) == rules.pullToRefresh, "\(condition) reader \(readerOpen)")
+            }
+        }
+        // The vertical bar and the top bar change nothing: the glyph is in the pill.
+        var duo = Self.page()
+        duo.usesVerticalBar = true
+        #expect(ControlRules(duo).pillReload == .reload)
+    }
+
     @Test func failedPageKeepsWhatCanBeTheCause() {
         let rules = ControlRules(Self.page(condition: .failed))
         #expect(rules.reload == .reload)

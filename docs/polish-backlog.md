@@ -526,3 +526,8 @@ Newest feature last.
 - **Rotation through XCUIDevice.** It doesn't rotate the Duo's inner screen, so the UI test
   skips there; the lane's job rotated through Device Hub and checked shots (Half, portrait Narrow,
   Half again). An iPad simulator runs the test.
+- **A long host on a bar swipe beside Reload.** The incoming host is laid out centred with
+  Reload's room at both ends; a long resting host gives up its centre toward the free side
+  instead, so a long host can land a few points to the side when the swipe commits. Short hosts
+  (the common case) land exactly (code review 3, pill reload lane). Lay the incoming label out
+  with the resting label's constraints.

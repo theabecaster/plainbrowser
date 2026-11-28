@@ -128,6 +128,7 @@ tap follows the swipe up's predicate (principle 3), so the button and the gestur
 | Pill | placeholder "Search or enter address" | host, after one quiet lead word (`PillLead`): "Reader —" while the reader is open, "Translated —" on a translated page, else "Not Secure —" on http, mixed content or a passed certificate (a private page shows the private mark and "Private" before it); on a failed page the address that was tried | Never hidden by a mode; while reading it may sink away (below) | The one way to search. |
 | Page appearance control (in the pill, leading edge) | — | a moon (Dark) or a sun (Light) in the accent while Plain shows the page that way, by the default or this site's choice; a slashed circle (Off) in the ink while this site is Off against a default; otherwise absent | Absent while editing, during a bar swipe, in the collapsed pill, under the reader, on error pages; Light never on a site made only in dark | A tap opens its menu: Dark, Light, Off (the one shown checked; Light disabled on a dark-only site, "This site is made only in dark"), and Use for All Sites while the site has its own choice; its title says whose choice it shows ("Page Appearance · This Site" or "· All Sites"). A pick ticks and crossfades, no reload. The first pick ever becomes the default (toast with This Site Only); later picks are this site's. Never changes Plain's own colors. `ControlRules.pageAppearanceIndicator`; docs/decisions.md, "Page appearance". |
 | Pill long press | page menu (app items only) | page menu | | Same menu as More. |
+| Reload in the pill (`arrow.clockwise`, `ControlRules.pillReload`) | — | at the resting pill's trailing end on a loaded page; Stop (`xmark`) in the same place while it loads, the progress bar still along the bottom; its long press is a menu with one item, Reload Without Cache | Hide where pull to refresh is off (failed, crashed and resend pages, the reader), while editing, and as the bar collapses (gone by a third of the way: the compact pill and the inner screen's slim band are the host alone) | Owner (2026-11-28): "easy access to refresh/reload". Pull to refresh's predicate, so the button and the gesture never disagree (principle 3). An error page's Try Again and the crash page's Reload are its one button; in the reader the article is what the page has. Private tabs keep it. The host stays centred: it keeps the glyph's room at both ends. |
 | Progress bar | — | while loading only | Hide | ui-reference: controls show only while they apply. |
 | Start screen (mark, sentence, Search button) | shown; Search only while the keyboard is down | — | | The empty state: one sentence, one button. With two or more profiles the sentence names the window's profile ("Start with a search or an address in Work."), so a search never starts in the wrong one unnoticed. |
 | Start screen shortcuts (under the Search button) | Private Tab always ("Leave Private" on an empty private tab: it turns this tab regular); Reopen Closed Tab with `closed`; Archived Tabs with `archived`. Only while the keyboard is down. | — | | Small, quiet, one tap: the tabs items in plain sight when no switcher shows (owner). |
@@ -444,7 +445,7 @@ apply only to what it leaves open.
 Rows are states, columns are controls. Cells use the terms in section 2. A state not listed
 combines its base state with the rows that modify it (for example, private + loading).
 
-| State | Back | Fwd | Tabs slot | New Tab | More | Swipe up | Bar swipe | New Tab card | Pull to refresh | Progress | Start screen |
+| State | Back | Fwd | Tabs slot | New Tab | More | Swipe up | Bar swipe | New Tab card | Pull to refresh, the pill's Reload | Progress | Start screen |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | First run (no tabs, keyboard up) | — | — | — | — | — | off | off | — | off | — | ✓ (behind the field) |
 | Launch with a last tab, picture standing in | as the saved tab | as the saved tab | as the saved tab | ✓ | ✓ | waits for the tab | waits for the tab | — | off | — | — |
@@ -455,7 +456,7 @@ combines its base state with the rows that modify it (for example, private + loa
 | Several tabs | ✓ / dim | — / ✓ | Tabs | ✓ | ✓ | gallery | neighbours | when last | ✓ | while loading | — |
 | Private only (one private page) | ✓ / dim | — / ✓ | Tabs (private gallery: its card) | ✓ | ✓ | gallery (its card) | ≠ rubber-band | ✓ (private) | ✓ | while loading | — |
 | Private + regular | ✓ / dim | — / ✓ | Tabs | ✓ | ✓ | gallery (this list) | within this list | when last in this list | ✓ | while loading | — |
-| Page loading | ✓ / dim | — / ✓ | as above | ✓ | ✓, Stop | as above | as above | as above | ✓ | ✓ | — |
+| Page loading | ✓ / dim | — / ✓ | as above | ✓ | ✓, Stop | as above | as above | as above | ✓ (Stop in the pill) | ✓ | — |
 | Page failed / offline | ✓ / dim | — / ✓ | as above | ✓ | ✓, reduced (§4) | as above | as above | as above | off (Try Again) | — | — |
 | Crashed page | ✓ / dim | — / ✓ | as above | ✓ | ✓, reduced (§4) | as above | as above | as above | off (Reload) | — | — |
 | Reader open | ≠ closes reader | dim | as above | ✓ | ✓, reader items (§4) | as above | as above | as above | off | — | — |

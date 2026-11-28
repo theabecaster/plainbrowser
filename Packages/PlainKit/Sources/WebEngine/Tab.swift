@@ -210,6 +210,13 @@ public final class Tab: Identifiable {
         pool?.reload(self)
     }
 
+    /// Reload Without Cache (docs/decisions.md, "Reload in the pill"): WebKit's reload from the
+    /// origin, which asks the server again for the page and everything on it (`no-cache`) instead
+    /// of revalidating what it keeps. A discarded tab is restored first.
+    public func reloadFromOrigin() {
+        pool?.reloadFromOrigin(self)
+    }
+
     public func stopLoading() {
         pool?.existingWebView(for: self)?.stopLoading()
     }

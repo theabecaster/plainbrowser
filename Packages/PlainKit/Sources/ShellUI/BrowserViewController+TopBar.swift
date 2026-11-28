@@ -389,10 +389,13 @@ extension BrowserViewController {
             // The pill is the open sheet's field, in place: only the bar's buttons stay hidden.
             pill.transform = .identity
             pill.isCompact = false
+            pill.setCollapse(0)
         } else {
             let move = geometry.pillTransform(progress: reading)
             pill.transform = CGAffineTransform(translationX: 0, y: move.translationY).scaledBy(x: move.scale, y: move.scale)
             pill.isCompact = progress > 0
+            // The slim band shows the host alone: Reload fades out with the pill.
+            pill.setCollapse(reading)
         }
         applyTopBand(geometry, reading: editing ? 0 : reading, reveal: editing ? 1 : currentStripReveal(geometry))
         pill.alpha = editing ? 1 : TopChromeGeometry.pillAlpha(progress: reading)

@@ -42,6 +42,7 @@ import Testing
         #expect(has(.reopenClosedTab, "t", [.command, .shift]))
         #expect(has(.openLocation, "l", .command))
         #expect(has(.reload, "r", .command))
+        #expect(has(.reloadFromOrigin, "r", [.command, .option]))
         #expect(has(.back, "[", .command))
         #expect(has(.forward, "]", .command))
         #expect(has(.find, "f", .command))
@@ -70,6 +71,8 @@ import Testing
         #expect(page.allows(.closeTab))
         #expect(page.allows(.reload))
         #expect(!page.allows(.stop))
+        #expect(page.allows(.reloadFromOrigin))
+        #expect(!start.allows(.reloadFromOrigin))
         #expect(!page.allows(.back), "Back is dimmed, so ⌘[ does nothing")
         #expect(!page.allows(.forward))
         #expect(page.allows(.find))
@@ -88,6 +91,7 @@ import Testing
         loading.condition = .loading
         #expect(ControlRules(loading).allows(.stop))
         #expect(!ControlRules(loading).allows(.reload))
+        #expect(!ControlRules(loading).allows(.reloadFromOrigin))
 
         var finding = Self.page()
         finding.isFindOpen = true

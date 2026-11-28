@@ -616,7 +616,6 @@ public final class WebViewPool {
         guard let slot = slots[tab.id], slot.container != nil else { return }
         thumbnails.capture(slot.webView, for: tab)
         cancelSwitch(slot)
-        forgetPlace(of: slot)
         slot.webView.removeFromSuperview()
         slot.container = nil
         // Protected until WebKit says whether media is playing; then the limits apply again.

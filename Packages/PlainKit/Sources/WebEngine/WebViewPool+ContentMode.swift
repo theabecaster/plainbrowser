@@ -24,6 +24,8 @@ final class ContentModeCoordinator {
     /// When the pending check runs. A later, shorter request (a tab attached right after a fold)
     /// never brings it forward, so a pane change always gets its full settle time.
     var pendingDeadline: ContinuousClock.Instant?
+    /// Counts pane changes (a fold, a drag), not their passes: a place read belongs to one.
+    var changeID = 0
 }
 
 /// A tab's mode bookkeeping, kept on its slot.
@@ -46,6 +48,10 @@ struct SlotContentMode {
     /// Which read a reply belongs to: bumped by every read and every reset, so a late reply from
     /// an earlier change (or an earlier page) is dropped.
     var placeToken = 0
+    /// The pane change the place was read for (`ContentModeCoordinator.changeID`): a place from
+    /// an earlier change is never used, even if the page left the screen in between (a fold can
+    /// detach and attach it again, so leaving the screen does not forget it).
+    var placeChange = -1
     /// Someone typed in this document or one of its frames (each reports its first `input`
     /// event): what the probe can't read, such as cross-origin frames.
     var subframeTyped = false
@@ -145,8 +151,12 @@ extension WebViewPool {
     public func panesWillChange() {
         // Where each reader is, before the change reflows the pages (once per change: a fold's
         // several passes, a drag, read the place it started from). One message per page on screen.
+        if !modeChecks.panesChanging { modeChecks.changeID += 1 }
         if FixedChoices.contentModeFollowsFold {
-            for slot in attachedSlots() where !slot.contentMode.readsPlace { readPlace(of: slot) }
+            for slot in attachedSlots()
+            where !slot.contentMode.readsPlace || slot.contentMode.placeChange != modeChecks.changeID {
+                readPlace(of: slot)
+            }
         }
         modeChecks.panesChanging = true
         _ = modeChecks.debounce.paneDidChange()
@@ -185,6 +195,7 @@ extension WebViewPool {
         let webView = slot.webView
         guard let url = webView.url, url.scheme == "http" || url.scheme == "https", !webView.isLoading else { return }
         slot.contentMode.readsPlace = true
+        slot.contentMode.placeChange = modeChecks.changeID
         slot.contentMode.placeToken += 1
         let token = slot.contentMode.placeToken
         let zoom = max(webView.scrollView.zoomScale, 0.01)
@@ -198,9 +209,8 @@ extension WebViewPool {
         }
     }
 
-    /// The change is over for this page (checked, switched or kept), or the page left the screen
-    /// (`detach`, teardown): the next change reads afresh. A page moved to another pane during a
-    /// fold keeps it: that move is part of the change the place was read for.
+    /// The change is over for this page (checked, switched or kept), or its web view goes away:
+    /// the next change reads afresh.
     func forgetPlace(of slot: Slot) {
         slot.contentMode.readsPlace = false
         slot.contentMode.placeToken += 1
@@ -295,7 +305,8 @@ extension WebViewPool {
         case .reload(let target):
             // The place the reader saw before the change, else the one now. A page at its top
             // needs no restore: the reload starts there.
-            let place = slot.contentMode.placeBeforeChange ?? answer
+            let saved = slot.contentMode.placeChange == modeChecks.changeID ? slot.contentMode.placeBeforeChange : nil
+            let place = saved ?? answer
             forgetPlace(of: slot)
             let restore = place.flatMap { $0.isScrolled ? $0.restoreArguments(top: top) : nil } ?? [:]
             beginSwitch(slot, to: target, restore: restore, generation: generation)

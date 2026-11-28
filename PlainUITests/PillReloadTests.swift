@@ -209,8 +209,8 @@ final class PillReloadTests: XCTestCase {
         XCTAssertTrue(address.exists)
         XCTAssertLessThan(appearance.frame.maxX, reload.frame.minX)
 
-        let group = app.otherElements["addressPillGroup"]
-        XCTAssertTrue(group.waitForExistence(timeout: 3))
+        let group = app.descendants(matching: .any)["addressPillGroup"]
+        XCTAssertTrue(group.waitForExistence(timeout: 3), app.debugDescription)
         let order = group.children(matching: .any).allElementsBoundByIndex.map(\.identifier)
             .filter { ["pill.pageAppearance", "addressPill", "pill.reload"].contains($0) }
         XCTAssertEqual(order, ["pill.pageAppearance", "addressPill", "pill.reload"], "VoiceOver's order: \(order)")
@@ -369,6 +369,10 @@ final class PillReloadCaptureTests: XCTestCase {
             _ = field.waitForExistence(timeout: 2)
             pause(0.6)
         }
+        if !field.exists {
+            shot("debug-no-field")
+            print("HIERARCHY\n" + app.debugDescription)
+        }
         field.typeText(address + "\n")
     }
 
@@ -386,7 +390,8 @@ final class PillReloadCaptureTests: XCTestCase {
     /// Closes the page sheet (or popover) with taps above it until it is gone.
     private func dismissSheet(_ app: XCUIApplication) {
         for _ in 0..<3 where app.buttons["menu.settings"].exists {
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.06)).tap()
+            // The dimmed page above the sheet, clear of the status bar (whose tap scrolls the page).
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
             _ = app.buttons["menu.settings"].waitForNonExistence(timeout: 2)
         }
         pause(0.6)

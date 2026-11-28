@@ -54,7 +54,7 @@ background bar."
 | Safari | Plain (docs/decisions.md, "Duo inner screen: a glass band with the host while reading") |
 |---|---|
 | A glass band behind the whole bar | Taken: one band of Liquid Glass (`TopBand`), the pages' width, behind the floating capsules, which stay Plain's (owner: "I like our style, those floating controls"). |
-| Slim band with the host while reading | Taken: the band's bottom rises to the status row's (73 to 74 pt), the pill's text shrinks into the host ("apple.com", base domain) on the status row. |
+| Slim band with the host while reading | Taken: the band's bottom rises to the status row's (73 to 74 pt), the pill's text shrinks into the host ("apple.com": the host without "www.", never cut to a guessed registrable domain) on the status row. |
 | The page's top boundary is the band's bottom | Taken, without moving the page: the obscured top is the collapsed band's bottom in every state, so a header rests under the band mid-page and never moves. Safari moves the page's inset with its band; WebKit relayouts fixed elements on every inset change, so Plain keeps one. |
 | Status items hidden while collapsed (45 pt band) | Not taken: the owner asked for the host "aligned with the status row, clear of the status items", and hiding the status bar is a system-level change. The slim band is the status row's height (73 pt on the device), not 45. |
 | Host in a capsule | Not taken: the band is the glass; a capsule on it would be a third layer of glass. The host is text on the band. |

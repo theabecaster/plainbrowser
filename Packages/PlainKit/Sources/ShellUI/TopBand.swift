@@ -18,7 +18,7 @@ import UIKit
 final class TopBand: UIView {
     /// One rectangle of Liquid Glass, the page's width (`Glass.makeView`).
     let glass = Glass.makeView(shape: .rounded(0), tint: Palette.bandGlassTint)
-    /// The site's base domain while reading ("apple.com").
+    /// The site's host while reading, without "www." ("apple.com").
     let hostLabel = UILabel()
     /// A tap on the collapsed band.
     var onTap: () -> Void = {}
@@ -75,7 +75,7 @@ final class TopBand: UIView {
         hostLabel.font = .systemFont(ofSize: size, weight: .semibold)
     }
 
-    /// Shows `url`'s base domain while reading (`TopBandHost.baseDomain`), "Not Secure — " before it
+    /// Shows `url`'s host while reading (`TopBandHost.baseDomain`), "Not Secure — " before it
     /// when the page is not secure.
     func display(url: URL?, notSecure: Bool) {
         let domain = url?.host().map(TopBandHost.baseDomain) ?? url?.absoluteString

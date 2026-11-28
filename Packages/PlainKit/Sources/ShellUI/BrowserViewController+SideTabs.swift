@@ -53,7 +53,7 @@ extension BrowserViewController {
         addChild(strip)
         strip.view.translatesAutoresizingMaskIntoConstraints = false
         // Over the pages and the sidebar, under the chrome and the search sheet.
-        view.insertSubview(strip.view, aboveSubview: duo.top.band)
+        view.insertSubview(strip.view, aboveSubview: duo.sidebar?.view ?? duo.top.band)
         // Under the row, from the root view's top (`applyTopBarPlacement` keeps it there).
         let geometry = makeTopGeometry(stripHeight: layout.stripHeight)
         let top = strip.view.topAnchor.constraint(equalTo: view.topAnchor, constant: geometry.stripTop)
@@ -87,7 +87,7 @@ extension BrowserViewController {
 
     /// The topmost of the page area's views (panes, strip, sidebar): the gallery goes above it.
     var pageAreaTopView: UIView {
-        [panes.view, duo.sidebar?.view, duo.top.band as UIView, duo.strip?.view].compactMap { $0 }.last ?? panes.view
+        [panes.view, duo.top.band as UIView, duo.sidebar?.view, duo.strip?.view].compactMap { $0 }.last ?? panes.view
     }
 
     @discardableResult
@@ -102,7 +102,8 @@ extension BrowserViewController {
         addChild(sidebar)
         sidebar.view.translatesAutoresizingMaskIntoConstraints = false
         // Over the page (Expanded may float over it), under the strip, the chrome and the search sheet.
-        view.insertSubview(sidebar.view, aboveSubview: panes.view)
+        // Over the top band: an expanded sidebar floats over the pages' top (its New Tab row).
+        view.insertSubview(sidebar.view, aboveSubview: duo.top.band)
         let safe = view.safeAreaLayoutGuide
         let width = sidebar.view.widthAnchor.constraint(equalToConstant: 0)
         // Right sits inside the system's vertical bar, which is on the trailing edge too.

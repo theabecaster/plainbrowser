@@ -489,8 +489,8 @@ extension BrowserViewController {
         // The gallery hides the same container; it cannot open while the find bar is up.
         if !hidden { chromeGlass.isHidden = isShowingGallery }
         // The top band holds nothing while the find bar stands in for the bar.
-        let band = duo.top.band
-        Motion.animate(Motion.quick, changes: { content.alpha = alpha; band.alpha = alpha }) { [weak self] in
+        duo.top.isHiddenForFind = hidden
+        Motion.animate(Motion.quick, changes: { content.alpha = alpha; self.updateTopBandAlpha() }) { [weak self] in
             guard let self, content.alpha == 0, engineUI.findWatch != nil else { return }
             chromeGlass.isHidden = true
         }

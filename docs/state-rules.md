@@ -180,7 +180,7 @@ base URL, and that sets a boundary there"; docs/research/safari-duo-top.md).
 | State | On screen | Page's top |
 |---|---|---|
 | Expanded | a glass band across the pages from the top edge to under the row (and the strip, from the second tab), with the floating capsules on it: Back/Forward, the pill, Tabs/Share/More | a fresh page's first line starts under the band (`contentInset.top`, the expanded band's bottom); it scrolls under the glass |
-| Pill (reading) | the band's bottom rises to the status row's (73 pt on the device); the pill's text shrinks into the site's base domain ("apple.com") on the status row, clear of the status items; the capsules and the strip rise and fade | the band's bottom |
+| Pill (reading) | the band's bottom rises to the status row's (73 pt on the device); the pill's text shrinks into the site's host ("apple.com", no "www.") on the status row, clear of the status items; the capsules and the strip rise and fade | the band's bottom |
 
 - The page's obscured top (`obscuredContentInsets.top`) is the collapsed band's bottom in both
   states: a fixed or sticky header rests under the band mid-page and never moves when the bar

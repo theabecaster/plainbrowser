@@ -1117,6 +1117,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
             snap.jump(to: target)
             let crossfade = crossfades
             crossfadeTarget = target
+            // The top band is the chrome's sibling: it crossfades with it.
+            if chromeOnTop { Motion.crossfade(duo.top.band, changes: {}) }
             Motion.crossfade(chromeGlass, changes: {
                 self.collapse.place(at: target)
                 self.applyCollapse(target)

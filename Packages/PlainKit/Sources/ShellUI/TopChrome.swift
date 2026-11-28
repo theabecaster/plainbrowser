@@ -409,26 +409,17 @@ struct TopChromeGeometry: Equatable {
     }
 }
 
-/// What the collapsed top band says (`TopBand`): the page's base domain.
+/// What the collapsed top band says (`TopBand`): the page's site, nothing else.
 enum TopBandHost {
-    /// The registrable part of `host`, as Safari shows it while reading: "www.apple.com" and
-    /// "developer.apple.com" read "apple.com", "news.bbc.co.uk" reads "bbc.co.uk". Without the
-    /// public suffix list: the last two labels, or three where the second-to-last is a common
-    /// second-level suffix under a two-letter country code ("co.uk", "com.au"). An IP address or
-    /// a single label stays whole.
+    /// `host` as Safari shows it while reading: without "www." and a trailing dot, no scheme,
+    /// path or query ("www.apple.com" reads "apple.com", as in the owner's recording). Never cut
+    /// to the registrable domain: without the public suffix list that makes "alice.github.io"
+    /// read "github.io", the hosting service instead of the site (Codex review), and Safari keeps
+    /// "developer.apple.com" whole too.
     static func baseDomain(_ host: String) -> String {
-        let host = host.hasSuffix(".") ? String(host.dropLast()) : host
-        if host.contains(":") || host.allSatisfy({ $0.isNumber || $0 == "." }) { return host }
-        let labels = host.split(separator: ".")
-        guard labels.count > 2 else { return host }
-        let tld = labels[labels.count - 1]
-        let second = labels[labels.count - 2]
-        let count = tld.count == 2 && secondLevel.contains(String(second)) ? 3 : 2
-        return labels.suffix(count).joined(separator: ".")
+        var host = host.lowercased()
+        if host.hasSuffix(".") { host.removeLast() }
+        if host.hasPrefix("www."), host.count > 4 { host.removeFirst(4) }
+        return host
     }
-
-    /// Second-level labels that are a suffix under a country code, not a site.
-    private static let secondLevel: Set<String> = [
-        "co", "com", "org", "net", "ac", "gov", "edu", "ne", "or", "go", "gob", "nic", "mil", "ltd", "plc", "sch",
-    ]
 }

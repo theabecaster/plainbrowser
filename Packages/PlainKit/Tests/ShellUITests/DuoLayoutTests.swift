@@ -399,14 +399,15 @@ struct TopChromeGeometryTests {
 
     @Test func bandShowsTheBaseDomain() {
         #expect(TopBandHost.baseDomain("www.apple.com") == "apple.com")
-        #expect(TopBandHost.baseDomain("developer.apple.com") == "apple.com")
+        #expect(TopBandHost.baseDomain("WWW.Apple.com.") == "apple.com")
         #expect(TopBandHost.baseDomain("apple.com") == "apple.com")
-        #expect(TopBandHost.baseDomain("news.bbc.co.uk") == "bbc.co.uk")
-        #expect(TopBandHost.baseDomain("www.abc.net.au") == "abc.net.au")
-        #expect(TopBandHost.baseDomain("en.m.wikipedia.org") == "wikipedia.org")
+        // The site, never the hosting service or a guessed registrable domain.
+        #expect(TopBandHost.baseDomain("alice.github.io") == "alice.github.io")
+        #expect(TopBandHost.baseDomain("developer.apple.com") == "developer.apple.com")
+        #expect(TopBandHost.baseDomain("news.bbc.co.uk") == "news.bbc.co.uk")
         #expect(TopBandHost.baseDomain("127.0.0.1") == "127.0.0.1")
         #expect(TopBandHost.baseDomain("localhost") == "localhost")
-        #expect(TopBandHost.baseDomain("::1") == "::1")
+        #expect(TopBandHost.baseDomain("www.") == "www")
     }
 
     @Test func stripNeverRisesOverTheStatusCorner() {

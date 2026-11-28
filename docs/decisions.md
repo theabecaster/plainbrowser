@@ -2523,7 +2523,9 @@ docs/research/safari-duo-top.md.
 - **While reading the band stays, slim** (supersedes "Scroll chrome: expanded, pill, hidden" and
   "the bar in the status row" for the top bar): its bottom rises to the status row's (the row's
   or the status items' bottom + 4 pt: 73 pt on the device, the same as at rest with one tab), the
-  pill's text shrinks into the site's base domain ("apple.com", `TopBandHost.baseDomain`) on the
+  pill's text shrinks into the site's host ("apple.com": `TopBandHost.baseDomain` drops "www." only;
+  cutting to a registrable domain without the public suffix list made "alice.github.io" read
+  "github.io", Codex review) on the
   status row where the address was, clear of the status items, and the capsules and the strip
   rise and fade. Hidden is gone under a top bar: the slim band is the boundary Safari keeps. A
   tap anywhere on the collapsed band brings the bar back (one interruptible spring,

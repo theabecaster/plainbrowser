@@ -41,6 +41,10 @@ final class TopBarLayout {
     let band = TopBand()
     /// The band's height: the expanded chrome's bottom (`TopChromeGeometry.expandedBandBottom`).
     var bandHeight: NSLayoutConstraint!
+    /// The band's share of the gallery's fade (1 with no gallery), and the find bar standing in
+    /// for the bar: with editing, what `updateTopBandAlpha` reads.
+    var galleryFade: CGFloat = 1
+    var isHiddenForFind = false
 }
 
 // MARK: - The top bar (wide screens)
@@ -132,6 +136,15 @@ extension BrowserViewController {
         top.leadingClearance = [pillClearLeading, barClearLeading]
         top.trailingClearance = [pillClearTrailing, barClearTrailing]
         installTopBand()
+    }
+
+    /// The band's opacity from everything that takes the bar away: the search field above the
+    /// keyboard, the find bar, the gallery's fade. One place, so none of them undoes another (a
+    /// New Tab from the gallery opens the field while the gallery fades out).
+    func updateTopBandAlpha() {
+        let top = duo.top
+        let alpha = isEditingAddress || top.isHiddenForFind ? 0 : top.galleryFade
+        if top.band.alpha != alpha { top.band.alpha = alpha }
     }
 
     /// The band goes over the pages, across their width (beside the sidebar and the side pane),

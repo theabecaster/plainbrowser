@@ -207,7 +207,8 @@ extension BrowserViewController: GalleryHost {
         chromeGlass.alpha = max(0, 1 - t * 3)
         chromeGlass.transform = CGAffineTransform(translationX: 0, y: t * Spacing.xl)
         // The top band goes with the bar it backs (the gallery has its own bar).
-        duo.top.band.alpha = chromeGlass.alpha
+        duo.top.galleryFade = chromeGlass.alpha
+        updateTopBandAlpha()
     }
 
     func setChromeHiddenForGallery(_ hidden: Bool, animated: Bool) {

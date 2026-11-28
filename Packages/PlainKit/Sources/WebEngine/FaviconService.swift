@@ -101,8 +101,8 @@ public final class FaviconService {
             center.addObserver(forName: Self.storedIconsCleared, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    clearing = max(0, clearing - 1)
-                    clear()
+                    self.clearing = max(0, self.clearing - 1)
+                    self.clear()
                 }
             },
         ]

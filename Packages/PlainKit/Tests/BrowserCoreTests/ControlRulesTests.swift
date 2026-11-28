@@ -13,6 +13,8 @@ import Testing
         // The Duo's outer screen (vertical bar) and its inner screen (regular both ways).
         #expect(IntroRules.showsUnfoldRow(hasVerticalBarEdge: true, widthRegular: false, heightRegular: true))
         #expect(IntroRules.showsUnfoldRow(hasVerticalBarEdge: false, widthRegular: true, heightRegular: true))
+        // A hinge says it whatever the window's shape (a Duo folded in landscape, say).
+        #expect(IntroRules.showsUnfoldRow(hasHinge: true, hasVerticalBarEdge: false, widthRegular: false, heightRegular: false))
     }
 }
 

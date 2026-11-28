@@ -31,6 +31,8 @@ public final class IntroViewController: UIViewController {
     /// The bounds and safe area the dawn was last laid out for.
     private var laidOut: (CGRect, CGRect)?
     private var didStart = false
+    /// The window's hierarchy reports a hinge (`UIHingeInteraction`): the phone folds.
+    private var hasHinge = false
     private var isSplashing = false
     private let splashTap = UITapGestureRecognizer()
     /// Reads the on-device model's availability (ShellUI's `OnDeviceAI` in the app).
@@ -60,6 +62,15 @@ public final class IntroViewController: UIViewController {
         // The paper is the launch screen's color, so the launch hands over without a change.
         view.backgroundColor = Palette.background
         view.accessibilityIdentifier = "intro"
+        // UIKit's own answer to "does this phone fold": a hinge interaction gets a hinge only in a
+        // hierarchy that has one (nil elsewhere). It only reads; nothing here follows the angle.
+        view.addInteraction(UIHingeInteraction { [weak self] _, update in
+            guard let self else { return }
+            let hasHinge = update.hinge != nil
+            guard self.hasHinge != hasHinge else { return }
+            self.hasHinge = hasHinge
+            self.view.setNeedsLayout()
+        })
         let ground = IntroPaper.makeGround()
         ground.frame = view.bounds
         ground.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -106,7 +117,7 @@ public final class IntroViewController: UIViewController {
         // A fold or unfold changes the traits and the bounds together, so this pass sees it.
         let traits = traitCollection
         let canUnfold = IntroRules.showsUnfoldRow(
-            hasVerticalBarEdge: traits.verticalBarEdge != .unspecified,
+            hasHinge: hasHinge, hasVerticalBarEdge: traits.verticalBarEdge != .unspecified,
             widthRegular: traits.horizontalSizeClass == .regular, heightRegular: traits.verticalSizeClass == .regular
         )
         if model.canUnfold != canUnfold { model.canUnfold = canUnfold }

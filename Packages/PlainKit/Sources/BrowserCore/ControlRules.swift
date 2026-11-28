@@ -523,12 +523,15 @@ public struct GalleryRules: Sendable, Equatable {
 
 /// What the intro may promise on this screen.
 public enum IntroRules {
-    /// "Made for iPhone Duo — Unfold for two pages side by side" shows only where the window can
-    /// be a foldable's: the outer screen (the system gives it a vertical bar edge) or the inner one
-    /// (both size classes regular; Plain is iPhone-only, so no iPad takes that branch). Other
-    /// iPhones can't unfold, and the row would promise something they can't do. Traits only,
-    /// never the device model (AGENTS.md).
-    public static func showsUnfoldRow(hasVerticalBarEdge: Bool, widthRegular: Bool, heightRegular: Bool) -> Bool {
-        hasVerticalBarEdge || (widthRegular && heightRegular)
+    /// "Made for iPhone Duo — Unfold for two pages side by side" shows only on a phone that folds.
+    /// UIKit says so directly: a `UIHingeInteraction` gets a hinge only in a hierarchy that has
+    /// one (iOS 27.1). The traits back it up until that first answer: the outer screen (the system
+    /// gives it a vertical bar edge) or the inner one (both size classes regular; Plain is
+    /// iPhone-only, so no iPad takes that branch). Other iPhones can't unfold, and the row would
+    /// promise something they can't do. Never the device model (AGENTS.md).
+    public static func showsUnfoldRow(
+        hasHinge: Bool = false, hasVerticalBarEdge: Bool, widthRegular: Bool, heightRegular: Bool
+    ) -> Bool {
+        hasHinge || hasVerticalBarEdge || (widthRegular && heightRegular)
     }
 }

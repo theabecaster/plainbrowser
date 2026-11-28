@@ -170,16 +170,17 @@ change to make. Captures: `clarity/<config>/<shot>.jpg` in the session scratchpa
    "Private" on a page; over a white page the tint is faint. **Priv lane:** the pill's quiet lead
    word, as for "Not Secure —". [i17-fix/tabs-11-private-page against i17-light/page-01-loaded]
 
-6. **Fixed. At the accessibility text sizes the page sheet's captions were cut to "Rea…", "Su…",
-   "Sha…", "Hist…", "Fav…", "Setti…", Copy Link and Reload ran into each other, the zoom percent
-   wrapped ("100 / %"), and the start screen's shortcut read "Pri-vate Tab".** Three or four cells
-   share the width, so the text cannot grow without end. The sheet's fixed grids (address row,
-   tiles, keep row, chips, zoom row) and the start screen's shortcut captions now stop at the
-   Extra Large size (the shortcut at the largest standard size), where every caption is still a
-   whole word; the pill and the switcher's bar already stop the same way. The rows under them
-   ("New Private Tab", Site Settings) keep growing. [before: i17-xl/sheet-02-article-sheet,
-   sheet-03-favorited-saved, sheet-08-reader-sheet, start-02-empty; after:
-   i17-xl-fix, same names]
+6. **Fixed. As the text size grew, the page sheet's captions were cut:** "Summar…" and "Reading
+   L…" at Extra Large on the narrowest iPhone; "Rea…", "Su…", "Sha…", "Hist…", "Fav…", "Setti…"
+   at the accessibility sizes, where Copy Link and Reload also ran into each other and the zoom
+   percent wrapped ("100 / %"). The start screen's shortcut read "Pri-vate Tab". Three or four
+   cells share the width, so their text cannot grow without end. The sheet's fixed grids (address
+   row, tiles, keep row, chips, zoom row) now keep the default size, as a tab bar's items do, and
+   a long press shows a cell large (the large content viewer); the start screen's shortcut
+   captions stop at the largest standard size. The rows under the grids ("New Private Tab", Site
+   Settings) keep growing. [before: i17-xl/sheet-02-article-sheet, sheet-03-favorited-saved,
+   sheet-08-reader-sheet, start-02-empty, small-xlarge/sheet-02-article-sheet; after:
+   i17-ax-final2 and small-xlarge2, same names]
 
 ### Medium
 

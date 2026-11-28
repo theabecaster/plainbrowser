@@ -87,6 +87,7 @@ final class PageSheetController: UIViewController {
         super.viewDidLoad()
         Paper.apply(to: view)
         view.accessibilityIdentifier = "pageSheet"
+        view.addInteraction(UILargeContentViewerInteraction())
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.alwaysBounceVertical = false
         view.addSubview(scroll)
@@ -220,6 +221,7 @@ final class PageSheetController: UIViewController {
         button.isEnabled = !action.attributes.contains(.disabled)
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 72).isActive = true
         if isOn { button.accessibilityTraits.insert(.selected) }
+        Self.showLarge(button, title: caption, image: action.image)
         return button
     }
 
@@ -343,6 +345,7 @@ final class PageSheetController: UIViewController {
             if isOn { button.accessibilityTraits.insert(.selected) }
             button.isEnabled = !action.attributes.contains(.disabled)
         }
+        Self.showLarge(button, title: Self.caption(element.title), image: element.image)
         return button
     }
 
@@ -409,12 +412,19 @@ final class PageSheetController: UIViewController {
     }
 
     /// The largest text size of the sheet's fixed grids (the address row, the tiles, the chips and
-    /// the zoom row): three or four cells share the width, so past this size their captions were
-    /// cut to "Rea…" and "Su…" and the address row's buttons ran into each other. They stop at the
-    /// Extra Large size, where "Summarize" and "Reading List" still fit a quarter of the narrowest
-    /// iPhone (the pill and the switcher's bar stop too, docs/ui-reference.md); the
+    /// the zoom row): three or four cells share the width, so as the text grew their captions were
+    /// cut ("Summar…" at Extra Large on the narrowest iPhone, "Rea…" and "Su…" at the accessibility
+    /// sizes) and the address row's buttons ran into each other. They keep the default size, as a
+    /// tab bar's items do, and a long press shows a cell large (the large content viewer); the
     /// rows under them keep growing.
-    private static let gridLimit = UIContentSizeCategory.extraLarge
+    private static let gridLimit = UIContentSizeCategory.large
+
+    /// A cell of a fixed grid in the large content viewer, at the accessibility text sizes.
+    private static func showLarge(_ button: UIButton, title: String, image: UIImage?) {
+        button.showsLargeContentViewer = true
+        button.largeContentTitle = title
+        button.largeContentImage = image
+    }
 
     private static func gridFont(_ style: UIFont.TextStyle) -> UIFont {
         let category = UITraitCollection.current.preferredContentSizeCategory

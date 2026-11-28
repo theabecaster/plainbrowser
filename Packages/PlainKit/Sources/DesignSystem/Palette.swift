@@ -251,14 +251,15 @@ public enum Palette {
     /// order the icon's dawn runs (the shell keeps each in a lightness band that reads on its
     /// ground).
     public static let pullCycle: [UIColor] = [mint, accent, BrandArt.bloomViolet, coral]
-    /// The same loop in a private tab: its dusk violets and the sky's blue.
-    public static let privatePullCycle: [UIColor] = [BrandArt.bloomViolet, BrandArt.dawnViolet, Mark.sky[1]]
-    /// An armed pull's fill in a private tab, where a regular tab's is Lagoon: the violet bloom,
-    /// deep enough for the white arrow on it (`privateAccent` is the light mark on glass).
-    public static let privatePullFill = BrandArt.bloomViolet
-    /// The pull's one color under Reduce Motion in a private tab: deep by day, a light step by
-    /// night for contrast.
-    public static let privatePullRest = UIColor(light: BrandArt.dawnViolet, dark: UIColor(rgb: 0xB3A4FF))
+    /// The same loop in a private tab: Horizon and two deeper steps of the same dawn, warm light
+    /// only, as the private chrome (Night and Horizon, never violet).
+    public static let privatePullCycle: [UIColor] = [horizon, UIColor(rgb: 0xE8946A), UIColor(rgb: 0xC9775A)]
+    /// An armed pull's fill in a private tab, where a regular tab's is Lagoon: Night, with the
+    /// white arrow on it (17:1).
+    public static let privatePullFill = night
+    /// The pull's one color under Reduce Motion in a private tab: Night by day, Horizon by night,
+    /// for contrast on the page.
+    public static let privatePullRest = UIColor(light: night, dark: horizon)
 }
 
 extension UIColor {

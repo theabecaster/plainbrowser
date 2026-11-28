@@ -1001,12 +1001,17 @@ final class CaptureTests: XCTestCase {
 
     /// The largest screen: the Duo's inner screen when it is open (the outer one is dark then),
     /// the only screen elsewhere.
+    /// Every screen, named `<name>-<width>x<height>` when there is more than one (the Duo): the
+    /// closed Duo's inner screen is black, so the matrix keeps the largest one that shows something.
     private func shot(_ name: String) {
-        let shots = XCUIScreen.screens.map { $0.screenshot() }
-        let screenshot = shots.max { $0.image.size.width * $0.image.size.height < $1.image.size.width * $1.image.size.height }
-        let attachment = XCTAttachment(screenshot: screenshot ?? XCUIScreen.main.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        let screens = XCUIScreen.screens
+        for screen in screens {
+            let image = screen.screenshot()
+            let size = image.image.size
+            let attachment = XCTAttachment(screenshot: image)
+            attachment.name = screens.count > 1 ? "\(name)-\(Int(size.width))x\(Int(size.height))" : name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 }

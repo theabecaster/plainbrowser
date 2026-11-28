@@ -762,4 +762,29 @@ public enum FixedChoices {
     /// never competes with the first frame or the first page load. Favorites rarely change; a
     /// few seconds late costs nothing.
     public static let systemSyncLaunchDelay = Duration.seconds(5)
+
+    // MARK: Gestures and keys (docs/research/gestures.md)
+
+    /// A long press on Back or Forward lists this many pages of the tab's history, nearest first,
+    /// as Safari's does. More scrolls off a phone's menu and is never reached by hand.
+    public static let historyMenuLimit = 15
+    /// On a wide screen a pinch in on a page already at its smallest zoom opens the tab overview,
+    /// as on Safari for iPad: the fingers must close to this share of their start. Less is
+    /// WebKit's own zoom bounce, which a reader makes all the time.
+    public static let pinchToOverviewScale = 0.7
+    /// The trailing edge swipe on the Duo's inner screen goes forward while the page has somewhere
+    /// forward, as every browser's does, and opens the side pane only where forward has nothing
+    /// to do. Back's edge already works this way (the opener swipe takes over only without
+    /// history), so each edge keeps one meaning: the page's own history first.
+    public static let forwardSwipeBeforeSidePane = true
+    /// A tab closed by hand can be undone the system's way too: shake, three-finger swipe or ⌘Z
+    /// ("Undo Close Tab"), as in Safari. One step, the last close, as the Reopen toast.
+    public static let undoReopensClosedTab = true
+    /// Pull to refresh's arrow runs through the brand's colors as the pull nears the threshold,
+    /// faster the closer it gets, then rests on Lagoon once armed. Two turns of the cycle over
+    /// the full pull: enough to read as alive, not a strobe.
+    public static let pullTintTurns = 2.0
+    /// After an armed release the arrow spins until the page's load ends, at most this long (s):
+    /// the progress bar in the pill carries a slow load from there.
+    public static let pullSpinnerLongest = 1.5
 }

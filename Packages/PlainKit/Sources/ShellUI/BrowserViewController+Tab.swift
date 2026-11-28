@@ -341,7 +341,8 @@ extension BrowserViewController {
         // Try Again that failed again: the warning, as the error page shows again, unless the
         // gallery or a sheet covers it.
         if engineUI.retry.update(
-            tab: old == nil ? nil : currentTab?.id, isLoading: new.isLoading, failures: new.loadFailures,
+            tab: old == nil ? nil : currentTab?.id, isLoading: new.isLoading, isFailed: new.isFailed,
+            failures: new.loadFailures,
             failedAddress: new.loadError?.url
         ), !isShowingGallery, presentedViewController == nil {
             Haptic.failed.play(in: view)

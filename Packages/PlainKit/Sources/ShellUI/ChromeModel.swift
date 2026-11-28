@@ -414,10 +414,11 @@ struct RetryWatch: Equatable {
         started = false
     }
 
-    /// The on-screen tab's state changed (`tab` nil: none on screen). true once, when the retried
-    /// address failed again. A failure is told by the count, not the loading state, which one
-    /// observation can miss when a load fails at once.
-    mutating func update(tab id: UUID?, isLoading: Bool, failures: Int, failedAddress: URL?) -> Bool {
+    /// The on-screen tab's state changed (`tab` nil: none on screen; `isFailed`: an error page
+    /// shows). true once, when the retried address failed again. A failure is told by the count,
+    /// and a success by the error page gone, not by the loading state, which one observation can
+    /// miss when a load ends at once.
+    mutating func update(tab id: UUID?, isLoading: Bool, isFailed: Bool, failures: Int, failedAddress: URL?) -> Bool {
         guard let tab else { return false }
         guard id == tab else {
             self.tab = nil
@@ -429,7 +430,7 @@ struct RetryWatch: Equatable {
         }
         if isLoading {
             started = true
-        } else if started {
+        } else if started || !isFailed {
             // It loaded.
             self.tab = nil
         }

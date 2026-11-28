@@ -94,25 +94,45 @@ extension BrowserViewController {
             }
         }
         let rules = currentRules()
-        // Escape closes the field; the side pane's own close is its button.
-        return rules.allows(shortcut, tabsInList: shortcutTabList.count)
+        switch shortcut {
+        case .undoCloseTab:
+            // Only with a close to undo, and never over a page's form that has typing of its own
+            // to undo (the web view's undo manager comes first there).
+            guard rules.allows(shortcut), gestureUI.closeUndo.canUndo else { return false }
+            let focused = KeyFocusProbe.current()?.undoManager
+            return focused == nil || focused === gestureUI.closeUndo || focused?.canUndo != true
+        case .findNext, .findPrevious:
+            // The find bar's matches, or the side pane's Find list beside the page.
+            return rules.allows(shortcut) || (isSidePaneShown && sidePaneUI.controller?.findHasMatches == true)
+        default:
+            return rules.allows(shortcut, tabsInList: shortcutTabList.count)
+        }
     }
 
     @objc func performShortcut(_ command: UIKeyCommand) {
         guard let id = command.propertyList as? String, let shortcut = KeyShortcut(identifier: id),
               allowsShortcut(shortcut) else { return }
         Signposts.signposter.emitEvent(Signposts.keyShortcut, "\(id, privacy: .public)")
+        // haptics plan: withoutFeedback. Keys play no haptic (rule 8): wrap this call in
+        // `Haptic.withoutFeedback { }` once the haptics lane adds it.
         perform(shortcut)
     }
 
     /// Does what the control the shortcut stands for does, through the same path.
     func perform(_ shortcut: KeyShortcut) {
         switch shortcut {
-        case .newTab:
-            // The list on screen, as the bar swipe's New Tab card: ⌘T in a private tab stays private.
-            openNewTab(private: currentTab?.isPrivate ?? false)
-        case .newPrivateTab:
-            openNewTab(private: true)
+        case .newTab, .newPrivateTab:
+            if isShowingGallery, let shown = tabsUI.galleryTabs {
+                // The list the overview shows, as its own +: its privacy and its profile.
+                let isPrivate = shortcut == .newPrivateTab || shown.isShowingPrivateTabs
+                _ = galleryNewTab(private: isPrivate, profile: shown.shownProfile)
+            } else {
+                // The list on screen, as the bar swipe's New Tab card: ⌘T in a private tab stays
+                // private.
+                openNewTab(private: shortcut == .newPrivateTab || currentTab?.isPrivate == true)
+            }
+        case .undoCloseTab:
+            gestureUI.closeUndo.undo()
         case .closeTab:
             guard let tab = currentTab else { return }
             closeTab(tab, offerReopen: true)
@@ -137,8 +157,13 @@ extension BrowserViewController {
         case .find:
             findOnPage()
         case .findNext, .findPrevious:
+            let delta = shortcut == .findNext ? 1 : -1
+            if !isFindOpen, isSidePaneShown, let pane = sidePaneUI.controller {
+                pane.findStep(by: delta)
+                return
+            }
             let page = engineUI.reader.webView ?? currentTab.flatMap { session.pool.webView(for: $0) }
-            if shortcut == .findNext { page?.findInteraction?.findNext() } else { page?.findInteraction?.findPrevious() }
+            if delta > 0 { page?.findInteraction?.findNext() } else { page?.findInteraction?.findPrevious() }
         case .addFavorite:
             guard let url = pageAddress else { return }
             setFavorite(true, url: url, title: currentTab?.title)
@@ -209,10 +234,30 @@ extension BrowserViewController {
         claimKeyFocusIfFree()
     }
 
+    /// A shake while a web view holds the keys: its own undo manager (empty outside a form) is
+    /// the one the system asks, so no "Undo Close Tab" would show. The browser offers it then,
+    /// in the system's words.
+    override public func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+        super.motionEnded(motion, with: event)
+        guard motion == .motionShake, UIApplication.shared.applicationSupportsShakeToEdit,
+              gestureUI.closeUndo.canUndo, presentedViewController == nil, !isEditingAddress else { return }
+        let focused = KeyFocusProbe.current()?.undoManager
+        // The system's own alert already covers the browser's manager, and a form's typing wins.
+        guard let focused, focused !== gestureUI.closeUndo, !focused.canUndo else { return }
+        let alert = UIAlertController(title: gestureUI.closeUndo.undoMenuItemTitle, message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: String(localized: "Undo"), style: .default) { [weak self] _ in
+            self?.gestureUI.closeUndo.undo()
+        })
+        present(alert, animated: true)
+    }
+
     private func undoClose(_ batch: UUID) {
         Signposts.signposter.emitEvent(Signposts.undoCloseTab)
         if isShowingGallery { dismissGalleryFading() }
         guard !session.tabs.reopenClosed(batch).isEmpty, let tab = session.tabs.selected else {
+            // The bump is for shake and the three-finger swipe; from ⌘Z the haptics lane's
+            // `withoutFeedback` silences it (haptics plan, §4.12).
             return Haptic.nothingThere.play()
         }
         tabsUI.toast.hide(animated: true)

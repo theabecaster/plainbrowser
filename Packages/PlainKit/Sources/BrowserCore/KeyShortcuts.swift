@@ -19,6 +19,9 @@ public struct KeyModifiers: OptionSet, Sendable, Hashable {
 /// One keyboard shortcut and what it does.
 public enum KeyShortcut: Sendable, Hashable {
     case newTab, newPrivateTab, closeTab, reopenClosedTab
+    /// ⌘Z after a close: the system's undo, which a web view holding the keys would otherwise
+    /// answer with its own (empty) undo.
+    case undoCloseTab
     case openLocation, reload, stop
     case back, forward
     case find, findNext, findPrevious
@@ -35,7 +38,7 @@ public enum KeyShortcut: Sendable, Hashable {
 
     /// Every shortcut, in the order the ⌘ overlay lists them: tabs, the page, then the window.
     public static let all: [KeyShortcut] = [
-        .newTab, .newPrivateTab, .closeTab, .reopenClosedTab,
+        .newTab, .newPrivateTab, .closeTab, .reopenClosedTab, .undoCloseTab,
         .nextTab, .previousTab, .showAllTabs,
         .openLocation, .reload, .stop, .back, .forward,
         .find, .findNext, .findPrevious,
@@ -51,6 +54,7 @@ public enum KeyShortcut: Sendable, Hashable {
         case .newPrivateTab: [("n", [.command, .shift])]
         case .closeTab: [("w", .command)]
         case .reopenClosedTab: [("t", [.command, .shift])]
+        case .undoCloseTab: [("z", .command)]
         case .openLocation: [("l", .command)]
         case .reload: [("r", .command)]
         case .stop: [(".", .command)]
@@ -84,6 +88,7 @@ public enum KeyShortcut: Sendable, Hashable {
         case .newPrivateTab: "New Private Tab"
         case .closeTab: "Close Tab"
         case .reopenClosedTab: "Reopen Closed Tab"
+        case .undoCloseTab: "Undo Close Tab"
         case .openLocation: "Open Location"
         case .reload: "Reload Page"
         case .stop: "Stop Loading"
@@ -138,6 +143,8 @@ extension ControlRules {
         case .newPrivateTab: return true
         case .closeTab: return menuCloseTab
         case .reopenClosedTab: return menuReopenClosedTab
+        // The field undoes its own typing; the shell adds whether a close is there to undo.
+        case .undoCloseTab: return !state.isEditing
         case .openLocation: return true
         case .reload: return !state.isEditing && reload == .reload
         case .stop: return !state.isEditing && reload == .stop

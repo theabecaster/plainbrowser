@@ -8,8 +8,8 @@ import UIKit
 /// The pull-to-refresh indicator: an arrow that turns as the page is pulled and runs through the
 /// brand's colors on the way (Shallows Mint, Lagoon, the icon's violet, Curl Coral; the dusk
 /// violets in a private tab), faster the nearer the pull is to reloading. Once the pull is far
-/// enough it fills with Lagoon (a light haptic, from the shell); after release it spins in that one
-/// color until the page's load ends. Reduce Motion: one color, no spin.
+/// enough it fills with Lagoon (the threshold haptic, from the shell; a tick if pulled back);
+/// after release it spins in that one color until the page's load ends. Reduce Motion: one color, no spin.
 ///
 /// Cost per scroll callback: a table lookup and one layer color, no color math and no allocation.
 /// The arrow is a symbol used as a mask over a plain view, so a new color is a layer property, not
@@ -163,7 +163,7 @@ final class PullIndicator: UIView {
     }
 }
 
-/// The pull's color loops, built once on first use (four small tables of `CGColor`s).
+/// The pull's color loops: small tables of `CGColor`s, each built once on first use.
 enum PullTint {
     static let stops = Palette.pullCycle
     static let privateStops = Palette.privatePullCycle
@@ -175,23 +175,29 @@ enum PullTint {
     private static let dayBand = 0.0...0.62
     private static let nightBand = 0.74...1.0
 
-    private static let cycles: [Int: ColorCycle] = {
-        var cycles: [Int: ColorCycle] = [:]
-        for isPrivate in [false, true] {
-            for dark in [false, true] {
-                let stops = (isPrivate ? privateStops : PullTint.stops).map(srgb)
-                cycles[key(isPrivate, dark)] = ColorCycle(stops: stops, lightness: dark ? nightBand : dayBand)
-            }
-        }
-        return cycles
-    }()
+    /// Built on first use, one palette and appearance at a time: the first pull in a light
+    /// regular tab makes 96 samples (well under a millisecond), never all four loops at once.
+    private static var cycles: [Int: ColorCycle] = [:]
+    private static var tables: [Int: [CGColor]] = [:]
 
-    private static let tables: [Int: [CGColor]] = cycles.mapValues { cycle in
-        cycle.table.map { CGColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: 1) }
+    static func cycle(isPrivate: Bool, dark: Bool) -> ColorCycle {
+        let slot = key(isPrivate, dark)
+        if let cycle = cycles[slot] { return cycle }
+        let stops = (isPrivate ? privateStops : PullTint.stops).map(srgb)
+        let cycle = ColorCycle(stops: stops, lightness: dark ? nightBand : dayBand)
+        cycles[slot] = cycle
+        return cycle
     }
 
-    static func cycle(isPrivate: Bool, dark: Bool) -> ColorCycle { cycles[key(isPrivate, dark)]! }
-    static func table(isPrivate: Bool, dark: Bool) -> [CGColor] { tables[key(isPrivate, dark)]! }
+    static func table(isPrivate: Bool, dark: Bool) -> [CGColor] {
+        let slot = key(isPrivate, dark)
+        if let table = tables[slot] { return table }
+        let table = cycle(isPrivate: isPrivate, dark: dark).table.map {
+            CGColor(srgbRed: $0.red, green: $0.green, blue: $0.blue, alpha: 1)
+        }
+        tables[slot] = table
+        return table
+    }
 
     private static func key(_ isPrivate: Bool, _ dark: Bool) -> Int { (isPrivate ? 1 : 0) + (dark ? 2 : 0) }
 

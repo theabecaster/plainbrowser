@@ -2785,7 +2785,7 @@ before/after: docs/research/gestures.md; the table: docs/ui-reference.md, "Gestu
 - **Undo Close Tab is the system's undo** (`undoManager` on the browser, one level): shake, the
   three-finger swipe and ⌘Z reopen the last hand close, the same batch as the Reopen toast. The
   field and a page's form keep their own undo, as they come first in the responder chain.
-- **History on a long press of Back and Forward** (`Tab.historySteps`, `go(toHistoryOffset:)`):
+- **History on a long press of Back and Forward** (`Tab.historySteps`, `go(to:)`, which refuses a list that changed under the menu):
   the menu is a deferred element built when it opens, set on the button only while the page has
   history that way, so the plain tap never changes and the menu is never empty.
 - **Close All N Tabs joins the tabs menu**, as in Safari, confirmed first with the count

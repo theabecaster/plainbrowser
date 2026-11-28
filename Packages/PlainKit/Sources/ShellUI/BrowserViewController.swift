@@ -143,6 +143,8 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
     /// Where a running Reduce Motion crossfade takes the bar.
     private var crossfadeTarget: CGFloat?
     private var pullTracker = PullToRefreshTracker()
+    /// The pull's haptics are readied for this pull (once, past half the threshold).
+    private var pullHapticPrepared = false
     private var suggestionTask: Task<Void, Never>?
     /// Runs when the presented feature sheet closes, by Done or by a swipe.
     private var sheetClosed: (() -> Void)?
@@ -1328,6 +1330,7 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         _ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>
     ) {
         guard scrollView === pageScrollView else { return }
+        pullHapticPrepared = false
         if pullTracker.released() {
             refresh()
         } else {
@@ -1405,13 +1408,22 @@ public final class BrowserViewController: UIViewController, UITextFieldDelegate,
         // Off on Start, in the reader and on error pages, whose own button reloads (state rules §3).
         guard rules.pullToRefresh else { return }
         if distance > 0 { pullIndicator.follow(pull: distance, threshold: PullToRefreshTracker.threshold) }
-        if distance > PullToRefreshTracker.threshold / 2 { Haptic.selection.prepare() }
+        // Readied once per pull, when it passes half the threshold (haptics plan, §4).
+        if distance > PullToRefreshTracker.threshold / 2, !pullHapticPrepared {
+            pullHapticPrepared = true
+            Haptic.threshold.prepare()
+            Haptic.selection.prepare()
+        } else if distance <= 0 {
+            pullHapticPrepared = false
+        }
         switch pullTracker.pulled(distance) {
         case .armed:
-            Haptic.selection.play()
+            // Into the outcome: the threshold; back out of it: a tick (haptics plan, rule 4).
+            Haptic.threshold.play()
             Signposts.signposter.emitEvent(Signposts.pullToRefreshArm)
             pullIndicator.setArmed(true)
         case .disarmed:
+            Haptic.selection.play()
             pullIndicator.setArmed(false)
         case nil:
             break

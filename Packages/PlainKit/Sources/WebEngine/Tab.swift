@@ -182,11 +182,12 @@ public final class Tab: Identifiable {
         }
     }
 
-    /// Goes `offset` pages through the history (negative is back), as a pick from the long-press
-    /// list does. Nothing when the list changed and there is no page there any more.
-    public func go(toHistoryOffset offset: Int) {
+    /// Goes to `step`, a pick from the long-press list. Nothing when the list changed since it
+    /// was read (a navigation or `pushState` moved the pages): the row named one page, and a
+    /// different one must never open.
+    public func go(to step: HistoryStep) {
         pool?.perform(in: self) { webView in
-            guard let item = webView.backForwardList.item(at: offset) else { return }
+            guard let item = webView.backForwardList.item(at: step.offset), item.url == step.url else { return }
             webView.go(to: item)
         }
     }

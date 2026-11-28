@@ -68,7 +68,7 @@ extension BrowserViewController {
             Signposts.signposter.emitEvent(Signposts.historyJump, "\(step.offset)")
             if isShowingReader { closeReader(animated: false) }
             dropLaunchCover(animated: true)
-            tab.go(toHistoryOffset: step.offset)
+            tab.go(to: step)
         }
         action.accessibilityIdentifier = "history.\(step.offset)"
         return action
@@ -115,10 +115,16 @@ extension BrowserViewController {
     /// the regular tabs after the private ones, or the search field. Reopen and the system's undo
     /// bring the batch back.
     private func closeAllTabs(private isPrivate: Bool) {
+        // Once for the batch, on the destructive choice (haptics plan, §4: Close All).
+        Haptic.close.play()
         let before = session.tabs.lastClosedBatchID
         galleryCloseAll(private: isPrivate, profile: session.tabs.activeProfile)
         if currentTab == nil {
-            if isPrivate, let regular = session.tabs.mostRecent(private: false) {
+            // Pinned tabs stay: the first of them takes the page, then the regular tabs after
+            // the private ones, else the search field.
+            if let pinned = session.tabs.pageEntries(private: isPrivate).first {
+                show(session.tabs.tab(pinned.id))
+            } else if isPrivate, let regular = session.tabs.mostRecent(private: false) {
                 show(session.tabs.tab(regular))
             } else {
                 beginAddressEditing()

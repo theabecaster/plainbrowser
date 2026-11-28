@@ -2,7 +2,8 @@
 import BrowserCore
 import SwiftUI
 
-/// The Settings sheet: seven rows, each showing its value, and one Done button.
+/// The Settings sheet: seven rows (six where the icon can't change), each showing its value, and
+/// one Done button.
 ///
 /// Present it in a sheet. `onDone` runs when Done is tapped; without it the view dismisses itself.
 public struct SettingsView: View {
@@ -11,9 +12,14 @@ public struct SettingsView: View {
     @State private var confirmingClear = false
     /// The Home Screen icon. Read from the system, not stored: the system owns it.
     @State private var appIcon = AppIcons.current
+    /// The App Icon row shows only where the icon can change (`AppIconSupport`).
+    private let showsAppIcon: Bool
 
-    public init(model: SettingsModel, onDone: (() -> Void)? = nil) {
+    /// - Parameter showsAppIcon: whether the icon can change here; the system's answer unless a
+    ///   caller (a preview, a test) says otherwise.
+    public init(model: SettingsModel, showsAppIcon: Bool = AppIcons.isSupported, onDone: (() -> Void)? = nil) {
         self.model = model
+        self.showsAppIcon = showsAppIcon
         self.onDone = onDone
     }
 
@@ -71,13 +77,15 @@ public struct SettingsView: View {
                         Text(model.settings.appearance.footer).foregroundStyle(.secondary)
                     }
 
-                    Section {
-                        NavigationLink {
-                            AppIconView(current: $appIcon)
-                        } label: {
-                            ValueLabel("App Icon", value: appIcon.title)
+                    if showsAppIcon {
+                        Section {
+                            NavigationLink {
+                                AppIconView(current: $appIcon)
+                            } label: {
+                                ValueLabel("App Icon", value: appIcon.title)
+                            }
+                            .accessibilityIdentifier("settingsAppIcon")
                         }
-                        .accessibilityIdentifier("settingsAppIcon")
                     }
 
                     Section {

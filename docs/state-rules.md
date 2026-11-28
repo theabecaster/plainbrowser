@@ -377,6 +377,7 @@ has dark art; Night, Coral and Paper look the same in both.
 | Settings → Clear History and Data | Confirmation first (it is destructive and broad); the row dims while it runs; a failure says so in one sentence. |
 | Settings → Appearance | Always shown and enabled: it applies on every screen. Its footer is one sentence for the current choice. |
 | Settings → Tab Layout | Shown only where side tabs can show (width and height both regular) and only once side tabs are built. Elsewhere it would be a choice that changes nothing. |
+| Settings → App Icon, and the intro's icon step | Shown only where the icon can change (`AppIconSupport`: `supportsAlternateIcons`, and not an iPhone app on a Mac, whose Dock icon can't change). Elsewhere the row is not in Settings and the intro goes from What's inside straight to the blocking demo, its step rings one fewer. Decided from the capability, never the device model. |
 
 ## 7. When states overlap
 

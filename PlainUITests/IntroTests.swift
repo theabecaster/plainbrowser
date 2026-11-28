@@ -100,6 +100,53 @@ final class IntroTests: XCTestCase {
         assertSearchFieldFocused(again)
     }
 
+    /// Where the icon can't change (an iPhone app on a Mac; `-PlainAlternateIcons off` here), the
+    /// intro has no icon step: "What's inside" goes straight on to the blocking demo, and Settings
+    /// has no App Icon row.
+    func testNoIconPickerWhereTheIconCannotChange() {
+        let app = launch(["-PlainAlternateIcons", "off"])
+        tapNext(app, step: "promise")
+        XCTAssertTrue(app.otherElements["intro.inside"].waitForExistence(timeout: 5), "no What's inside step")
+        tapNext(app, step: "inside")
+        XCTAssertTrue(app.otherElements["intro.blocking"].waitForExistence(timeout: 5), "the blocking demo does not follow What's inside")
+        XCTAssertFalse(app.otherElements["intro.icon"].exists, "the icon step showed")
+        XCTAssertFalse(app.buttons["introIcon.Dawn"].exists, "an icon tile showed")
+        let go = app.buttons["introLetsGo"]
+        XCTAssertTrue(go.waitForExistence(timeout: 5))
+        go.tap()
+        assertSearchFieldFocused(app)
+
+        // Settings: the other rows, no App Icon.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        let more = app.buttons["more"]
+        XCTAssertTrue(more.waitForExistence(timeout: 3))
+        more.tap()
+        let settings = app.buttons["menu.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Appearance'")).firstMatch.waitForExistence(timeout: 5),
+                      "Settings did not open")
+        XCTAssertFalse(app.buttons["settingsAppIcon"].exists, "Settings offers App Icon where the icon can't change")
+    }
+
+    /// Where it can change, Settings has the App Icon row (the counterpart of the test above).
+    func testSettingsOffersAppIconWhereTheIconCanChange() {
+        let app = XCUIApplication.isolated()
+        app.launchArguments += ["-PlainInMemoryStore"]
+        app.launch()
+        let field = app.textFields["searchField"]
+        if field.waitForExistence(timeout: 5), field.hasKeyboardFocus {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.12)).tap()
+        }
+        let more = app.buttons["more"]
+        XCTAssertTrue(more.waitForExistence(timeout: 3))
+        more.tap()
+        let settings = app.buttons["menu.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 3))
+        settings.tap()
+        XCTAssertTrue(app.buttons["settingsAppIcon"].waitForExistence(timeout: 5), "no App Icon row in Settings")
+    }
+
     func testDefaultBrowserStepWhenPromptsAreOn() {
         let app = launch(["-PlainForceDefaultBrowserPrompts"])
         for step in ["promise", "inside", "icon", "blocking"] { tapNext(app, step: step) }

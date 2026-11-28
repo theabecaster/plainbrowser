@@ -15,7 +15,8 @@ esac
 
 open -a /Applications/Xcode.app/Contents/Applications/DeviceHub.app
 sleep 2
-timeout 60 osascript - "$name" "$state" <<'OSA'
+# perl's alarm, not timeout(1): macOS 26 has no timeout.
+perl -e 'alarm 60; exec @ARGV' osascript - "$name" "$state" <<'OSA'
 on run argv
   set simName to item 1 of argv
   set foldState to item 2 of argv

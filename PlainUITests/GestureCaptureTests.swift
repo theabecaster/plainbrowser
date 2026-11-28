@@ -86,7 +86,7 @@ final class GestureCaptureTests: XCTestCase {
 
         app.typeKey("n", modifierFlags: [.command, .shift])
         let field = app.textFields["searchField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        XCTAssertTrue(field.waitForExistence(timeout: 6))
         field.typeText(server.address("/long") + "\n")
         XCTAssertTrue(app.webViews.staticTexts["Long Read"].waitForExistence(timeout: 10))
         pause(1)

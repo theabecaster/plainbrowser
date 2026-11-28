@@ -55,6 +55,9 @@ final class GestureTests: XCTestCase {
     func testKeyboardShortcutsMoveThroughHistoryAndTabs() throws {
         let app = try launch()
         openAThenB(app)
+        // Back is enabled once the link's page committed: the key follows the button.
+        let back = app.buttons["back"].firstMatch
+        wait({ back.exists && back.isEnabled }, timeout: 6, "Back is enabled")
 
         // ⌘[ and ⌘]: Back and Forward.
         app.typeKey("[", modifierFlags: .command)
@@ -113,12 +116,19 @@ final class GestureTests: XCTestCase {
         waitForPage(app, "Load 2")
     }
 
+    /// ⌘T, then `path` in the new tab's field once it has the keys.
+    private func newTabWithKeys(_ app: XCUIApplication, to path: String, heading: String) {
+        app.typeKey("t", modifierFlags: .command)
+        let field = app.textFields["searchField"]
+        wait({ field.exists && field.hasKeyboardFocus }, timeout: 6, "⌘T opens the field")
+        field.typeText(server.address(path) + "\n")
+        waitForPage(app, heading)
+    }
+
     func testUndoReopensTheClosedTab() throws {
         let app = try launch()
         go(app, to: "/a", heading: "Page A")
-        app.typeKey("t", modifierFlags: .command)
-        app.textFields["searchField"].typeText(server.address("/b") + "\n")
-        waitForPage(app, "Page B")
+        newTabWithKeys(app, to: "/b", heading: "Page B")
         app.typeKey("w", modifierFlags: .command)
         waitForPage(app, "Page A")
         // The system's undo (shake, three fingers, ⌘Z): "Undo Close Tab".
@@ -151,9 +161,7 @@ final class GestureTests: XCTestCase {
     func testTabsButtonClosesAllTabsAfterAsking() throws {
         let app = try launch()
         go(app, to: "/a", heading: "Page A")
-        app.typeKey("t", modifierFlags: .command)
-        app.textFields["searchField"].typeText(server.address("/b") + "\n")
-        waitForPage(app, "Page B")
+        newTabWithKeys(app, to: "/b", heading: "Page B")
 
         let tabs = app.buttons["tabs"].firstMatch
         tabs.press(forDuration: 1.0)
@@ -193,7 +201,9 @@ final class GestureTests: XCTestCase {
     func testPinchInOnAPageOpensTheOverview() throws {
         let app = try launch()
         try skipUnlessWide(app)
-        go(app, to: "/long", heading: "Long Read")
+        // Two tabs: with a sidebar the overview needs another tab to show (Show All Tabs' rule).
+        go(app, to: "/a", heading: "Page A")
+        newTabWithKeys(app, to: "/long", heading: "Long Read")
         app.webViews.firstMatch.pinch(withScale: 0.4, velocity: -1)
         XCTAssertTrue(app.scrollViews["tabGallery"].waitForExistence(timeout: 3), "the pinch in shows all tabs")
     }
@@ -205,12 +215,19 @@ final class GestureTests: XCTestCase {
         app.buttons["back"].firstMatch.tap()
         waitForPage(app, "Page A")
         let window = app.windows.firstMatch
-        let edge = window.coordinate(withNormalizedOffset: CGVector(dx: 0.999, dy: 0.5))
-        edge.press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.5)))
+        // From the screen's very edge, as a thumb comes in, slowly enough for the edge recognizers.
+        let edge = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -1, dy: 0))
+        edge.press(
+            forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5)),
+            withVelocity: .default, thenHoldForDuration: 0.05
+        )
         waitForPage(app, "Page B")
         XCTAssertFalse(app.otherElements["sidePane"].exists, "with a page forward the edge goes forward")
         // Nothing forward now: the same swipe opens the side pane.
-        edge.press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.5)))
+        edge.press(
+            forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5)),
+            withVelocity: .default, thenHoldForDuration: 0.05
+        )
         XCTAssertTrue(app.otherElements["sidePane"].waitForExistence(timeout: 3), "then it opens the side pane")
     }
 }

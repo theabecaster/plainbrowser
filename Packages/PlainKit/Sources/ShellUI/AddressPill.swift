@@ -229,7 +229,9 @@ final class AddressPill: UIView {
         hostLabel.attributedText = Self.hostText(
             for: url, query: url.flatMap(searchQuery), lead: lead, placeholder: "Search or enter address"
         )
-        accessibilityValue = url?.absoluteString ?? hostLabel.text
+        // VoiceOver hears a mode as the pill shows it ("Reader, https://…").
+        let mode = lead == .reader || lead == .translated ? lead?.word : nil
+        accessibilityValue = [mode, url?.absoluteString ?? hostLabel.text].compactMap { $0 }.joined(separator: ", ")
     }
 
     /// The reader is open, or the page is translated: the pill names the mode in place of the

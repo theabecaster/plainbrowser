@@ -41,6 +41,10 @@ public struct HistoryView: View {
         }
         .tint(Style.accent)
         .task { await model.load() }
+        // The search field goes with the last visit: its query must not linger out of sight.
+        .onChange(of: model.hasHistory) { _, hasHistory in
+            if !hasHistory, !model.query.isEmpty { model.query = "" }
+        }
     }
 
     /// The sheet: a pinned header with Clear, the title and Done; the search field is the list's
@@ -127,7 +131,8 @@ public struct HistoryView: View {
             if model.loadFailed {
                 ReadFailedView(message: Wording.historyReadFailed, systemImage: "clock") { await model.load() }
             } else if model.isLoaded, model.isEmpty {
-                if model.query.isEmpty {
+                // No history at all says so even mid-search (Clear All during a search).
+                if model.query.isEmpty || !model.hasHistory {
                     PaperEmptyState(message: "Pages you visit show up here.", systemImage: "clock")
                 } else {
                     ContentUnavailableView.search(text: model.query)

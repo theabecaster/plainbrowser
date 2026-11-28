@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import DesignSystem
 import Foundation
 import PerfSignposts
 import UIKit
@@ -17,6 +18,8 @@ extension BrowserViewController {
         guard !isShowingGallery, root.presentedViewController == nil,
               tab === currentTab || isShownInOtherPane(tab.id) else { return false }
         tabsUI.toast.show(Self.passkeysUnavailableMessage)
+        // The soft refusal bump: the sign-in the user just tried did not happen.
+        Haptic.nothingThere.play()
         return true
     }
 

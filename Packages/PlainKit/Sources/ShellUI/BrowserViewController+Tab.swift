@@ -671,6 +671,8 @@ struct TabSnapshot: Equatable {
     var isAwaitingResubmit: Bool
     /// The page is in a language the user doesn't read (Translate Page applies).
     var canTranslate: Bool
+    /// Translated text is on screen (the pill's "Translated —").
+    var isTranslated: Bool
 
     init(_ tab: Tab) {
         url = tab.url
@@ -682,6 +684,7 @@ struct TabSnapshot: Equatable {
         loadError = tab.loadError
         isAwaitingResubmit = tab.isAwaitingResubmit
         canTranslate = tab.translationTarget != nil && tab.translation == .original
+        isTranslated = tab.translation == .translated
     }
 
     /// The load failed and nothing newer is loading.

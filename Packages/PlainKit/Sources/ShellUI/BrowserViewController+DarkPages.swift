@@ -406,12 +406,16 @@ extension BrowserViewController {
             // behind them and the tab strip when they show, as close under the lowest as it can be.
             var above: [NSLayoutYAxisAnchor] = [pill.bottomAnchor]
             if duo.top.isBarOnTop { above.append(buttonBar.bottomAnchor) }
-            let band = duo.top.band
-            if band.superview === view, !band.isHidden, band.alpha > 0.01 { above.append(band.bottomAnchor) }
             if let strip = duo.strip?.view, !strip.isHidden, strip.alpha > 0.01 { above.append(strip.bottomAnchor) }
             let close = card.topAnchor.constraint(equalTo: pill.bottomAnchor, constant: Spacing.s)
             close.priority = .defaultLow
             darkPagesUI.placement += above.map { card.topAnchor.constraint(greaterThanOrEqualTo: $0, constant: Spacing.s) } + [close]
+            // The band's glass moves by transform (it rises with the strip): under where it shows.
+            let band = duo.top.band
+            if band.superview === view, !band.isHidden, band.alpha > 0.01 {
+                let risen = min(0, band.glass.transform.ty)
+                darkPagesUI.placement.append(card.topAnchor.constraint(greaterThanOrEqualTo: band.bottomAnchor, constant: Spacing.s + risen))
+            }
         } else {
             darkPagesUI.placement.append(card.bottomAnchor.constraint(equalTo: pill.topAnchor, constant: -Spacing.s))
         }

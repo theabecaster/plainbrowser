@@ -30,7 +30,7 @@ final class AddressPill: UIView {
     var onTap: () -> Void = {}
     /// A long press on the resting pill: the page sheet.
     var onLongPress: () -> Void = {}
-    /// Copy inside the field, while it edits the page's own address.
+    /// Copy inside the field, while it shows the page's own address untouched.
     var onCopy: () -> Void = {}
     private lazy var copyButton: UIButton = {
         var configuration = UIButton.Configuration.plain()
@@ -554,6 +554,13 @@ final class AddressPill: UIView {
     private func setCopyGlyph(copied: Bool) {
         copyButton.configuration?.image = UIImage(systemName: copied ? "checkmark" : "link")
         copyButton.accessibilityLabel = copied ? String(localized: "Copied") : String(localized: "Copy Link")
+    }
+
+    /// Hides the field's selection and caret while the sheet grows (`true`), and shows them once
+    /// it is at rest (`false`). The selection itself is there throughout: only its highlight
+    /// waits, so the text sitting in the field does not flash a highlight mid-motion.
+    func holdSelectionHighlight(_ hold: Bool) {
+        textField.tintColor = hold ? .clear : nil
     }
 
     /// Makes the field first responder. Resting, the field takes no touches (taps belong to the

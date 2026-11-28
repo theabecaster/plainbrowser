@@ -13,10 +13,16 @@ final class AddressFocusState {
     var content = FocusContent.empty
     var loadTask: Task<Void, Never>?
     let copiedLink = CopiedLinkWatcher()
-    /// The field edits the page's own address: Return loads in the same tab, and the field has a
-    /// Copy button while it still shows that address. Otherwise a search over a page opens a new
-    /// tab (`LaunchUIState.isFreshSearch`).
-    var isEditingPage = false
+    /// What the field means while it opened on the page's address (docs/decisions.md, "The page's
+    /// address in the field"): untouched (Copy inside it), a new query (a submit opens a new tab,
+    /// `LaunchUIState.isFreshSearch`) or an edit of this page (same tab). Nil for a field that
+    /// opened without the page's address: a new tab, the start screen, a results page's query.
+    var intent: AddressFieldIntent?
+    /// The address the field opened with, which the intent compares against.
+    var openedAddress: String?
+    /// The field's text is selected as it opens (the pill); the page sheet's Edit puts the caret
+    /// at the end instead.
+    var selectsAllOnOpen = true
     /// Browse for Me was armed from the empty field's button: Return browses instead of searching.
     var browseArmed = false
     /// The field's microphone: speech to text on the phone only.
@@ -40,9 +46,6 @@ extension BrowserViewController {
         var items: [SheetItem] = []
         if let offer = focusUI.copiedLink.offer(excluding: page) {
             items.append(.copiedLink(offer.url))
-        }
-        if let page, !focusUI.isEditingPage {
-            items.append(.currentPage(url: page, title: tab?.title))
         }
         // Unread Reading List pages: saved on purpose to read next, so private tabs show them
         // too, as they show favorites.
@@ -140,13 +143,6 @@ extension BrowserViewController {
     func handleFocusPick(_ pick: SearchPick) -> Bool {
         let signposter = Signposts.signposter
         switch pick {
-        case .editAddress:
-            signposter.emitEvent(Signposts.focusAction, "edit")
-            beginEditingPageAddress()
-        case .copyAddress:
-            signposter.emitEvent(Signposts.focusAction, "copy")
-            copyPageAddress()
-            sheet.confirmCopied()
         case .copiedLink(let known):
             // The Paste button answers later: the field it was for must still be open.
             guard isEditingAddress else { return true }
@@ -160,6 +156,7 @@ extension BrowserViewController {
                 return true
             }
             focusUI.copiedLink.markUsed()
+            goingSomewhereNew()
             load(url, kind: .typed)
         case .reopen(let batch):
             signposter.emitEvent(Signposts.focusAction, "closed")
@@ -171,32 +168,56 @@ extension BrowserViewController {
         return true
     }
 
-    /// Copies the page's address (the field's Copy button, the page's row, the page sheet).
-    func copyPageAddress() {
-        guard let url = pageAddress else { return Haptic.nothingThere.play() }
+    /// Copies the page's address (the page sheet, the pill's menu), or `address`: the one the
+    /// field shows (its Copy button), even if the page moved on behind the sheet.
+    func copyPageAddress(_ address: URL? = nil) {
+        guard let url = address ?? pageAddress else { return Haptic.nothingThere.play() }
         Signposts.signposter.emitEvent(Signposts.copyLink)
         UIPasteboard.plain.url = url
         focusUI.copiedLink.noteCopied(url)
         Haptic.success.play()
     }
 
-    // MARK: Editing the page's address
+    // MARK: The page's address in the field
 
-    /// The page's address in the field, selected, with Copy inside it: Return loads in the same
-    /// tab. From an open search (the page's row) the field stays where it is; from the page sheet
-    /// it opens.
+    /// The field's intent changed: a new query over a page opens a new tab; an edit, or the
+    /// address untouched, loads in this one.
+    func setFieldIntent(_ next: AddressFieldIntent) {
+        guard next != focusUI.intent else { return }
+        let decided = focusUI.intent == .pageAddress
+        focusUI.intent = next
+        let overPage = currentTab.map { !session.tabs.isEmpty($0.id) } ?? false
+        launchUI.isFreshSearch = overPage && next.opensNewTab
+        if decided {
+            let kind = next == .newQuery ? "replace" : "edit"
+            Signposts.signposter.emitEvent(Signposts.focusAction, "\(kind, privacy: .public)")
+        }
+        // The hint and Copy follow the untouched address.
+        updateFieldAccessory()
+    }
+
+    /// A row or a favorite picked while the field still shows the page's address untouched:
+    /// somewhere new, so a new tab, as a typed query would be.
+    func goingSomewhereNew() {
+        if focusUI.intent == .pageAddress { setFieldIntent(.newQuery) }
+    }
+
+    /// The field's Copy: the address it shows.
+    func copyFieldAddress() {
+        copyPageAddress(focusUI.openedAddress.flatMap(URL.init(string:)))
+    }
+
+    /// The page sheet's Edit: the page's address in the field with the caret at its end, so what
+    /// is typed edits this page (same tab); Copy sits inside the field while it is untouched.
     func beginEditingPageAddress() {
-        guard let url = pageAddress else { return }
+        guard let url = pageAddress, !isEditingAddress else { return }
         Signposts.signposter.emitEvent(Signposts.editAddress)
-        focusUI.isEditingPage = true
+        focusUI.intent = .pageAddress
+        focusUI.openedAddress = url.absoluteString
+        focusUI.selectsAllOnOpen = false
         launchUI.isFreshSearch = false
         pill.textField.text = url.absoluteString
         updateFieldAccessory()
-        if isEditingAddress {
-            pill.textField.selectAll(nil)
-            queryChanged()
-            return
-        }
         applyEditingLayout(true, animated: true)
         if !pill.beginEditing() { applyEditingLayout(false, animated: false) }
     }
